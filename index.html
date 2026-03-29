@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bethlehem Clinic</title>
+
+    <!-- Compiled Tailwind CSS-->
+    <link rel="stylesheet" href="css/output.css" />
+  </head>
+  <body>
+    <!-- Alpine.js Hello World Test -->
+    <h1
+      class="text-3xl font-bold text-blue-500"
+      x-data="{ message: 'Hello Alpine'}"
+      x-text="message"
+    ></h1>
+
+    <!-- Alpine.js via CDN always load BEFORE closing /body -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+  </body>
+</html>
