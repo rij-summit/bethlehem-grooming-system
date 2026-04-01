@@ -14,9 +14,8 @@
   <body>
     <!-- NAVBAR -->
 
-    <!--PX 12-->
     <nav
-      class="bg-[#b6d4ee] shadow-md w-full px-12 py-5 flex justify-between items-center sticky top-0"
+      class="bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0"
     >
       <div class="flex items-center">
         <a href="index.html">
@@ -36,14 +35,49 @@
           FAQ
         </a>
 
-        <a
-          href="./pages/client/login.html"
+        <button
+          id="openLoginModal"
           class="bg-[#315b7e] text-white px-12 py-3 rounded-lg font-medium text-base hover:bg-[#254561] transition-colors shadow-sm"
         >
           Login
-        </a>
+        </button>
       </div>
     </nav>
+
+    <!-- Login Choice Modal -->
+    <div
+      id="loginChoiceModal"
+      class="fixed inset-0 z-50 hidden items-start pt-24 justify-center bg-black/30 backdrop-blur-sm px-4"
+    >
+      <div
+        class="relative w-full max-w-xl rounded-3xl bg-white p-10 shadow-2xl"
+      >
+        <button
+          id="closeLoginModal"
+          class="absolute right-5 top-4 text-3xl leading-none text-gray-700 hover:text-black"
+        >
+          &times;
+        </button>
+
+        <h2 class="mb-6 text-2xl font-bold text-gray-800">Log in</h2>
+
+        <div class="space-y-4">
+          <a
+            href="./pages/client/login.html"
+            class="block w-full rounded-xl bg-[#315b7e] py-3 text-center font-semibold text-white hover:bg-[#254561] transition-colors"
+          >
+            Customer Log in
+          </a>
+
+          <a
+            href="./pages/admin/login.html"
+            class="block w-full border border-gray-300 rounded-xl bg-white py-3 text-center font-semibold text-gray-700 hover:bg-[#D6D6D6] transition-colors"
+          >
+            Admin Log in
+          </a>
+        </div>
+      </div>
+    </div>
 
     <!--UPPER BODY CONTENT-->
 
@@ -183,6 +217,8 @@
     <i data-lucide="stethoscope"></i>
     <i data-lucide="scissors"></i>
     <i data-lucide="heart"></i>
+
+    <script src="scripts/main.js"></script>
 
     <!-- Alpine.js via CDN always load BEFORE closing /body -->
 
