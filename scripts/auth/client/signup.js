@@ -9,10 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
   signupForm.addEventListener("submit", function (e) {
     e.preventDefault();
 
-    const fullName = document.getElementById("fullName").value.trim();
+    const firstName = document.getElementById("firstName").value.trim();
+    const lastName = document.getElementById("lastName").value.trim();
     const email = document.getElementById("email").value.trim();
     const phone = document.getElementById("phone").value.trim();
-    const address = document.getElementById("address").value.trim();
     const password = document.getElementById("password").value;
     const confirmPassword = document.getElementById("confirmPassword").value;
 
@@ -74,10 +74,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
        ===================================================== */
     const userData = {
-      fullName,
+      firstName,
+      lastName,
       email,
       phone,
-      address,
       password,
     };
 
