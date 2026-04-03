@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const serviceRadios = document.querySelectorAll(
     'input[name="service_package"]',
   );
+  const alaCarteCheckboxes = document.querySelectorAll(
+    'input[name="ala_carte_services"]',
+  );
   const dogServicesSection = document.getElementById("dogServicesSection");
   const catServicesSection = document.getElementById("catServicesSection");
 
@@ -40,6 +43,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   serviceRadios.forEach((radio) => {
     radio.addEventListener("change", () => {
+      if (radio.checked) {
+        clearAlaCarteSelections();
+      }
+      updateServiceNotice();
+      saveCurrentStepDraft();
+    });
+  });
+
+  alaCarteCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        clearServiceSelection();
+      }
       updateServiceNotice();
       saveCurrentStepDraft();
     });
@@ -58,20 +74,20 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const selectedService = document.querySelector(
-      'input[name="service_package"]:checked',
-    );
+    const selectedService = getSelectedService();
+    const selectedAlaCarteServices = getSelectedAlaCarteServices();
 
-    if (!selectedService) {
+    if (!selectedService && selectedAlaCarteServices.length === 0) {
       serviceNotice.textContent =
-        "Please select one grooming service package before continuing.";
+        "Please select one grooming package or at least one a la carte service before continuing.";
       serviceNotice.className =
         "mb-6 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600";
       return;
     }
 
     const stepThreeData = {
-      servicePackage: selectedService.value,
+      servicePackage: selectedService ? selectedService.value : "",
+      alaCarteServices: selectedAlaCarteServices.map((item) => item.value),
       addOns: Array.from(
         document.querySelectorAll('input[name="add_ons"]:checked'),
       ).map((item) => item.value),
@@ -90,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
       - pet_id
       - pet_type
       - servicePackage
+      - alaCarteServices[]
       - addOns[]
       - specialInstructions
     */
@@ -232,11 +249,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const step3Data = JSON.parse(rawStep3);
 
-      if (step3Data.servicePackage) {
-        const savedRadio = document.querySelector(
+      const savedAlaCarteServices = Array.isArray(step3Data.alaCarteServices)
+        ? step3Data.alaCarteServices
+        : [];
+
+      if (savedAlaCarteServices.length > 0) {
+        savedAlaCarteServices.forEach((value) => {
+          const savedAlaCarte = document.querySelector(
+            `input[name="ala_carte_services"][value="${value}"]`,
+          );
+          if (savedAlaCarte) savedAlaCarte.checked = true;
+        });
+        clearServiceSelection();
+      } else if (
+        step3Data.servicePackage &&
+        step3Data.servicePackage !== "cat_alacarte"
+      ) {
+        const savedService = document.querySelector(
           `input[name="service_package"][value="${step3Data.servicePackage}"]`,
         );
-        if (savedRadio) savedRadio.checked = true;
+        if (savedService) savedService.checked = true;
       }
 
       if (Array.isArray(step3Data.addOns)) {
@@ -257,12 +289,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function saveCurrentStepDraft() {
-    const selectedService = document.querySelector(
-      'input[name="service_package"]:checked',
-    );
+    const selectedService = getSelectedService();
+    const selectedAlaCarteServices = getSelectedAlaCarteServices();
 
     const stepThreeData = {
       servicePackage: selectedService ? selectedService.value : "",
+      alaCarteServices: selectedAlaCarteServices.map((item) => item.value),
       addOns: Array.from(
         document.querySelectorAll('input[name="add_ons"]:checked'),
       ).map((item) => item.value),
@@ -272,10 +304,53 @@ document.addEventListener("DOMContentLoaded", () => {
     sessionStorage.setItem("bookingStep3", JSON.stringify(stepThreeData));
   }
 
-  function updateServiceNotice() {
-    const selectedService = document.querySelector(
-      'input[name="service_package"]:checked',
+  function getSelectedService() {
+    return document.querySelector('input[name="service_package"]:checked');
+  }
+
+  function getSelectedAlaCarteServices() {
+    return Array.from(
+      document.querySelectorAll('input[name="ala_carte_services"]:checked'),
     );
+  }
+
+  function clearServiceSelection() {
+    serviceRadios.forEach((radio) => {
+      radio.checked = false;
+    });
+  }
+
+  function clearAlaCarteSelections() {
+    alaCarteCheckboxes.forEach((checkbox) => {
+      checkbox.checked = false;
+    });
+  }
+
+  function updateServiceNotice() {
+    const selectedService = getSelectedService();
+    const selectedAlaCarteServices = getSelectedAlaCarteServices();
+
+    if (selectedService) {
+      const labelTitle =
+        selectedService.closest("label")?.querySelector("h4")?.textContent ||
+        "Selected service";
+
+      serviceNotice.textContent = `Selected service: ${labelTitle}`;
+      serviceNotice.className =
+        "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
+      return;
+    }
+
+    if (selectedAlaCarteServices.length > 0) {
+      const alaCarteLabels = selectedAlaCarteServices.map(
+        (item) => item.dataset.serviceLabel || item.value,
+      );
+
+      serviceNotice.textContent = `Selected a la carte services: ${alaCarteLabels.join(", ")}`;
+      serviceNotice.className =
+        "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
+      return;
+    }
 
     if (!selectedService) {
       serviceNotice.textContent = "No grooming service selected yet.";
@@ -283,14 +358,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
       return;
     }
-
-    const labelTitle =
-      selectedService.closest("label")?.querySelector("h4")?.textContent ||
-      "Selected service";
-
-    serviceNotice.textContent = `Selected service: ${labelTitle}`;
-    serviceNotice.className =
-      "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
   }
 
   function capitalizeFirstLetter(value) {

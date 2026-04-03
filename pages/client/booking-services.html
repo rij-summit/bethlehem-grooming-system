@@ -102,7 +102,8 @@
                   Service Package <span class="text-red-500">*</span>
                 </h3>
                 <p class="text-sm text-slate-500">
-                  Choose one package that matches the selected pet.
+                  Choose one package or select one or more a la carte services
+                  that match the selected pet.
                 </p>
               </div>
             </div>
@@ -401,16 +402,9 @@
                 </label>
 
                 <!-- Ala carte -->
-                <label
-                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                <div
+                  class="service-card flex h-full rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
                 >
-                  <input
-                    type="radio"
-                    name="service_package"
-                    value="cat_alacarte"
-                    data-pet-category="cat"
-                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
-                  />
                   <div class="service-card__content">
                     <div class="flex items-start justify-between gap-3">
                       <h4 class="font-semibold text-[#2f4b66]">
@@ -422,23 +416,70 @@
                         Cat
                       </span>
                     </div>
-                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
-                      <li>• Nail Clipping: P50 - P100</li>
-                      <li>• Ear Cleaning: P150+</li>
-                      <li>• Facial Trimming: P150</li>
-                      <li>• Anal Sac Draining: P150</li>
-                      <li>• Tooth Brushing: P100+</li>
-                    </ul>
-                    <div class="service-card__pricing">
-                      <span class="service-card__pricing-label"
-                        >Pricing Note</span
+                    <div class="mt-3 space-y-2">
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
                       >
-                      <p class="service-card__pricing-note">
-                        Individual service pricing applies.
-                      </p>
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="nail_clipping"
+                          data-service-label="Nail Clipping: P50 - P100"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Nail Clipping: P50 - P100</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="ear_cleaning"
+                          data-service-label="Ear Cleaning: P150+"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Ear Cleaning: P150+</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="facial_trimming"
+                          data-service-label="Facial Trimming: P150"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Facial Trimming: P150</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="anal_sac_draining"
+                          data-service-label="Anal Sac Draining: P150"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Anal Sac Draining: P150</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="tooth_brushing"
+                          data-service-label="Tooth Brushing: P100+"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Tooth Brushing: P100+</span>
+                      </label>
                     </div>
                   </div>
-                </label>
+                </div>
               </div>
             </div>
           </section>
