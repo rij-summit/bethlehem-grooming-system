@@ -8,7 +8,6 @@ import {
   addPetToSavedPets,
   addPetToBooking,
   removePetFromBooking,
-  isPetAlreadySelected,
 } from "../services/pet-service.js";
 
 /**
@@ -55,6 +54,8 @@ const elements = {
   nextBtn: document.getElementById("nextBtn"),
 };
 
+const BOOKING_STEP_TWO_KEY = "bookingStep2";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -87,6 +88,33 @@ function showMessage(message, variant = "default") {
   elements.petStepMessage.className = `mb-6 rounded-2xl border p-5 text-sm ${styleMap[variant]}`;
 
   elements.petStepMessage.textContent = message;
+}
+
+function buildStepTwoDraft() {
+  const schedule = getBookingSchedule();
+  const bookingPets = getBookingPets();
+  const firstPet = bookingPets[0] || null;
+  const petTypes = [
+    ...new Set(bookingPets.map((pet) => pet.petType).filter(Boolean)),
+  ];
+
+  return {
+    bookingDate: schedule?.date || "",
+    bookingTime: schedule?.time || "",
+    pets: bookingPets,
+    petIds: bookingPets.map((pet) => pet.id).filter(Boolean),
+    petTypes,
+    petId: firstPet?.id || "",
+    petType: firstPet?.petType || "",
+    petName: firstPet?.petName || "",
+    petBreed: firstPet?.breed || "",
+  };
+}
+
+function saveStepTwoDraft() {
+  const draft = buildStepTwoDraft();
+  sessionStorage.setItem(BOOKING_STEP_TWO_KEY, JSON.stringify(draft));
+  return draft;
 }
 
 function hideSections() {
@@ -228,6 +256,7 @@ function renderSelectedPets() {
 
   elements.selectedPetCards.innerHTML = "";
   elements.selectedPetCount.textContent = `${bookingPets.length} / ${MAX_PETS_PER_BOOKING} selected`;
+  saveStepTwoDraft();
 
   if (bookingPets.length === 0) {
     elements.selectedPetsEmptyState.classList.remove("hidden");
@@ -365,7 +394,16 @@ function handleBack() {
 }
 
 function handleNext() {
+  const bookingSchedule = getBookingSchedule();
   const bookingPets = getBookingPets();
+
+  if (!bookingSchedule?.date || !bookingSchedule?.time) {
+    showMessage(
+      "Please go back to Step 1 and select a valid date and time before continuing.",
+      "error",
+    );
+    return;
+  }
 
   if (bookingPets.length === 0) {
     showMessage(
@@ -375,8 +413,8 @@ function handleNext() {
     return;
   }
 
-  // Replace with your real Step 3 page later
-  alert("Proceed to Step 3: Service Selection");
+  saveStepTwoDraft();
+  window.location.href = "./booking-services.html";
 }
 
 function updateFurOptions(petType) {
