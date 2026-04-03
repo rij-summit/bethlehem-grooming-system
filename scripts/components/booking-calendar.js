@@ -454,7 +454,7 @@ function bindEvents() {
     if (!state.selectedDateKey || !state.selectedSlot) return;
 
     // Replace this later with your real Step 2 page if needed
-    window.location.href = "./booking-personal-details.html";
+    window.location.href = "./booking-pet-details.html";
   });
 }
 
