@@ -68,6 +68,7 @@ export function getBookingSchedule() {
 export function createPetObject(formData) {
   return {
     id: crypto.randomUUID(),
+    petType: formData.petType,
     petName: formData.petName.trim(),
     breed: formData.breed.trim(),
     weight: formData.weight.trim(),

@@ -2,3 +2,18 @@
 /* custom animations */
 /* custom scrollbar styles */
 /* very specific one-off styles */
+
+.booking-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 3rem;
+}
+
+.booking-select-icon {
+  pointer-events: none;
+  position: absolute;
+  right: 1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}

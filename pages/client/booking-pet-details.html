@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pet Information</title>
     <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+
+    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
 
   <body class="min-h-screen bg-[#f6fafd] text-slate-800">
@@ -135,6 +138,32 @@
               <div class="grid gap-5 md:grid-cols-2">
                 <div>
                   <label
+                    for="petType"
+                    class="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Pet Type <span class="text-red-500">*</span>
+                  </label>
+                  <div class="relative">
+                    <select
+                      id="petType"
+                      name="petType"
+                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                      required
+                    >
+                      <option value="">Select pet type</option>
+                      <option value="Dog">Dog</option>
+                      <option value="Cat">Cat</option>
+                    </select>
+                    <i
+                      data-lucide="chevron-down"
+                      class="booking-select-icon h-5 w-5 text-slate-500"
+                      aria-hidden="true"
+                    ></i>
+                  </div>
+                </div>
+
+                <div>
+                  <label
                     for="petName"
                     class="mb-2 block text-sm font-medium text-slate-700"
                   >
@@ -189,18 +218,20 @@
                   >
                     Fur Type
                   </label>
-                  <select
-                    id="furType"
-                    name="furType"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-                  >
-                    <option value="">Select fur type</option>
-                    <option value="Short">Short</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Long">Long</option>
-                    <option value="Curly">Curly</option>
-                    <option value="Double Coat">Double Coat</option>
-                  </select>
+                  <div class="relative">
+                    <select
+                      id="furType"
+                      name="furType"
+                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                    >
+                      <option value="">Select fur type</option>
+                    </select>
+                    <i
+                      data-lucide="chevron-down"
+                      class="booking-select-icon h-5 w-5 text-slate-500"
+                      aria-hidden="true"
+                    ></i>
+                  </div>
                 </div>
 
                 <div class="md:col-span-2">
@@ -210,17 +241,24 @@
                   >
                     Size
                   </label>
-                  <select
-                    id="size"
-                    name="size"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-                  >
-                    <option value="">Select size</option>
-                    <option value="Small">Small</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Large">Large</option>
-                    <option value="Extra Large">Extra Large</option>
-                  </select>
+                  <div class="relative">
+                    <select
+                      id="size"
+                      name="size"
+                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                    >
+                      <option value="">Select size</option>
+                      <option value="Small">Small</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Large">Large</option>
+                      <option value="Extra Large">Extra Large</option>
+                    </select>
+                    <i
+                      data-lucide="chevron-down"
+                      class="booking-select-icon h-5 w-5 text-slate-500"
+                      aria-hidden="true"
+                    ></i>
+                  </div>
                 </div>
 
                 <div class="md:col-span-2">
@@ -304,6 +342,10 @@
         </div>
       </section>
     </main>
+
+    <script>
+      lucide.createIcons();
+    </script>
 
     <script
       type="module"

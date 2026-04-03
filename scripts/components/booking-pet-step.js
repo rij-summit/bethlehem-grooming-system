@@ -44,6 +44,8 @@ const elements = {
 
   addPetSection: document.getElementById("addPetSection"),
   addPetForm: document.getElementById("addPetForm"),
+  petType: document.getElementById("petType"),
+  furType: document.getElementById("furType"),
 
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
@@ -106,6 +108,9 @@ function showAddPetSection() {
 function buildPetSummaryHtml(pet) {
   return `
     <div class="grid gap-2 text-sm text-slate-600">
+      <p><span class="font-semibold text-slate-700">Type:</span> ${escapeHtml(
+        pet.petType || "Not specified",
+      )}</p>
       <p><span class="font-semibold text-slate-700">Breed:</span> ${escapeHtml(
         pet.breed || "Not specified",
       )}</p>
@@ -292,6 +297,7 @@ function bindRemoveButtons() {
 
 function getFormValues(form) {
   return {
+    petType: form.petType.value,
     petName: form.petName.value,
     breed: form.breed.value,
     weight: form.weight.value,
@@ -302,6 +308,10 @@ function getFormValues(form) {
 }
 
 function validatePetForm(values) {
+  if (!values.petType.trim()) {
+    return "Pet type is required.";
+  }
+
   if (!values.petName.trim()) {
     return "Pet name is required.";
   }
@@ -315,6 +325,7 @@ function validatePetForm(values) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
+  elements.furType.innerHTML = `<option value="">Select fur type</option>`;
 }
 
 function handleAddPetSubmit(event) {
@@ -368,12 +379,34 @@ function handleNext() {
   alert("Proceed to Step 3: Service Selection");
 }
 
+function updateFurOptions(petType) {
+  const furOptionsByType = {
+    Dog: ["Short", "Medium", "Long", "Curly", "Double Coat"],
+    Cat: ["Short Hair", "Long Hair", "Hairless"],
+  };
+
+  const options = furOptionsByType[petType] || [];
+
+  elements.furType.innerHTML = `<option value="">Select fur type</option>`;
+
+  options.forEach((optionValue) => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = optionValue;
+    elements.furType.appendChild(option);
+  });
+}
+
 function bindEvents() {
   elements.showExistingPetBtn.addEventListener("click", showExistingPetSection);
   elements.showAddPetBtn.addEventListener("click", showAddPetSection);
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);
+
+  elements.petType.addEventListener("change", (event) => {
+    updateFurOptions(event.target.value);
+  });
 }
 
 function initStepState() {
