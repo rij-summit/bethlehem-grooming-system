@@ -45,6 +45,7 @@ const elements = {
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
   furType: document.getElementById("furType"),
+  size: document.getElementById("size"),
 
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
@@ -55,6 +56,10 @@ const elements = {
 };
 
 const BOOKING_STEP_TWO_KEY = "bookingStep2";
+const sizeOptionsByType = {
+  Dog: ["Small", "Medium", "Large", "Extra Large"],
+  Cat: ["Small", "Medium"],
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -345,6 +350,11 @@ function validatePetForm(values) {
     return "Pet name is required.";
   }
 
+  const allowedSizes = sizeOptionsByType[values.petType] || [];
+  if (values.size && !allowedSizes.includes(values.size)) {
+    return `${values.petType} size must be one of: ${allowedSizes.join(", ")}.`;
+  }
+
   if (getBookingPets().length >= MAX_PETS_PER_BOOKING) {
     return `Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`;
   }
@@ -355,6 +365,7 @@ function validatePetForm(values) {
 function resetAddPetForm() {
   elements.addPetForm.reset();
   elements.furType.innerHTML = `<option value="">Select fur type</option>`;
+  updateSizeOptions("");
 }
 
 function handleAddPetSubmit(event) {
@@ -435,6 +446,25 @@ function updateFurOptions(petType) {
   });
 }
 
+function updateSizeOptions(petType) {
+  const selectedSize = elements.size.value;
+  const options = sizeOptionsByType[petType] || [];
+
+  elements.size.innerHTML = `<option value="">Select size</option>`;
+
+  options.forEach((optionValue) => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = optionValue;
+
+    if (optionValue === selectedSize) {
+      option.selected = true;
+    }
+
+    elements.size.appendChild(option);
+  });
+}
+
 function bindEvents() {
   elements.showExistingPetBtn.addEventListener("click", showExistingPetSection);
   elements.showAddPetBtn.addEventListener("click", showAddPetSection);
@@ -444,11 +474,13 @@ function bindEvents() {
 
   elements.petType.addEventListener("change", (event) => {
     updateFurOptions(event.target.value);
+    updateSizeOptions(event.target.value);
   });
 }
 
 function initStepState() {
   renderScheduleSummary();
+  updateSizeOptions(elements.petType.value);
 
   // Start with a clean booking pet draft if needed.
   // Backend note:

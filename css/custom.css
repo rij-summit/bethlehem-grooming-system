@@ -60,6 +60,26 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
+.service-card--selected {
+  border-color: #315b7e;
+  box-shadow:
+    0 0 0 2px rgba(49, 91, 126, 0.16),
+    0 10px 24px rgba(49, 91, 126, 0.08);
+}
+
+.service-option--selected {
+  border-color: #315b7e !important;
+  background: #edf5fc;
+}
+
+.service-card__price-pill--active {
+  border-color: #315b7e;
+  background: linear-gradient(180deg, #d7ebfb 0%, #c5def3 100%);
+  box-shadow:
+    0 0 0 2px rgba(49, 91, 126, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
 .service-card__price-size {
   display: block;
   font-size: 0.72rem;
