@@ -16,6 +16,7 @@ import {
 } from "../services/grooming-service.js";
 
 const REVIEW_STORAGE_KEY = "bookingStep4Review";
+const LEGACY_REVIEW_STORAGE_KEY = "bookingReview";
 
 const elements = {
   scheduleReviewText: document.getElementById("scheduleReviewText"),
@@ -395,7 +396,10 @@ function saveReviewDraft() {
     notices: state.reviewPayload?.notices || [],
   };
 
-  sessionStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviewDraft));
+  const serializedReviewDraft = JSON.stringify(reviewDraft);
+
+  sessionStorage.setItem(REVIEW_STORAGE_KEY, serializedReviewDraft);
+  sessionStorage.setItem(LEGACY_REVIEW_STORAGE_KEY, serializedReviewDraft);
 }
 
 function handleConfirmClick() {
@@ -404,10 +408,5 @@ function handleConfirmClick() {
   }
 
   saveReviewDraft();
-
-  elements.reviewActionNotice.className =
-    "mt-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
-  elements.reviewActionNotice.textContent =
-    "Review saved successfully. This button is now ready for your teammate to connect to the final booking submit endpoint.";
-  elements.reviewActionNotice.classList.remove("hidden");
+  window.location.href = "./booking-consent.html";
 }

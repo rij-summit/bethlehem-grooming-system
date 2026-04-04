@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Booking Consent & Agreement</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- Back -->
+      <a
+        href="./booking-review.html"
+        class="inline-flex items-center gap-2 text-sm font-medium text-[#315b7e] hover:underline"
+      >
+        <span>&larr;</span>
+        <span>Back to Review</span>
+      </a>
+
+      <!-- Heading -->
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Book your Appointment</h1>
+        <p class="mt-2 text-sm text-slate-500">
+          Complete the form below to finish your booking request.
+        </p>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 5 of 5</span>
+            <span>100% Complete</span>
+          </div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full w-full rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Card -->
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Consent & Agreement</h2>
+          <p class="mt-2 text-sm text-slate-600">
+            Please review the agreement carefully before submitting your
+            booking.
+          </p>
+        </div>
+
+        <!-- Empty-state summary -->
+        <div class="mb-6 grid gap-4 md:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Schedule Summary
+            </p>
+            <p id="scheduleSummaryText" class="mt-2 text-sm text-slate-600">
+              No schedule selected yet.
+            </p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Booking Summary
+            </p>
+            <p id="bookingSummaryText" class="mt-2 text-sm text-slate-600">
+              No booking details available yet.
+            </p>
+          </div>
+        </div>
+
+        <!-- Status Message -->
+        <div
+          id="consentStatusMessage"
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          Please review the agreement, complete the digital signature, and
+          accept all required checkboxes.
+        </div>
+
+        <form id="bookingConsentForm" class="space-y-6">
+          <!-- Main Grooming Agreement -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Grooming Agreement
+              </h3>
+              <p class="mt-1 text-sm text-slate-500">
+                This section contains the main consent for grooming services.
+              </p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-sm leading-7 text-slate-700">
+                I hereby agree and consent to have my pet groomed at Bethlehem
+                Animal Clinic subject to the following conditions:
+              </p>
+
+              <ul class="mt-4 space-y-3 text-sm leading-7 text-slate-700">
+                <li>
+                  • That I confirm that my pet for grooming is at least / above
+                  six (6) months of age, apparently healthy, vaccinations up to
+                  date, no ongoing medication and/or is fit for grooming.
+                </li>
+                <li>
+                  • That I understand that my pet will be bathed, clipped,
+                  trimmed and given a basic health check.
+                </li>
+                <li>
+                  • That I agree that the clinic shall not be held responsible
+                  for irritations, abrasion, patchiness or hair loss due to
+                  pre-existing skin condition or as a result of dematting,
+                  thinning, stripping or shaving or any mishap caused by
+                  nondisclosure of my pet’s medical condition or behavior.
+                </li>
+                <li>
+                  • That if my pet bites or attempts to bite any person or pets,
+                  a muzzle may be used or other restrictions at the discretion
+                  of the groomer.
+                </li>
+                <li>
+                  • That if my pet harbours parasites or has health concern, I
+                  understand that the grooming will cease and I will be advised
+                  for treatment, collection, or return home.
+                </li>
+                <li>
+                  • That if in my absence, my representative is informed of my
+                  grooming request.
+                </li>
+                <li>
+                  • That I agree and am responsible for the payment of grooming
+                  for my pet.
+                </li>
+              </ul>
+            </div>
+
+            <label
+              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <input
+                id="mainConsentCheckbox"
+                type="checkbox"
+                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+              />
+              <span class="text-sm text-slate-700">
+                I have read and agree to the grooming agreement.
+                <span class="text-red-500">*</span>
+              </span>
+            </label>
+          </section>
+
+          <!-- Sedation Consent -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Consent for Sedation
+              </h3>
+              <p class="mt-1 text-sm text-slate-500">
+                This section is always visible based on your instruction.
+              </p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-sm leading-7 text-slate-700">
+                I hereby authorize the clinic and its staff to proceed with the
+                sedation as it is deemed necessary for my pet for grooming. I
+                confirm that the procedure was explained and my pet had
+                undergone necessary test / screening prior to sedation and
+                grooming.
+              </p>
+            </div>
+
+            <label
+              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <input
+                id="sedationConsentCheckbox"
+                type="checkbox"
+                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+              />
+              <span class="text-sm text-slate-700">
+                I have read and agree to the sedation consent.
+                <span class="text-red-500">*</span>
+              </span>
+            </label>
+          </section>
+
+          <!-- Digital Signature -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Digital Signature
+                <span class="text-red-500">*</span>
+              </h3>
+              <p class="mt-1 text-sm text-slate-500">
+                Type your full name to serve as your digital signature.
+              </p>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <label
+                  for="digitalSignature"
+                  class="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Full Name
+                </label>
+                <input
+                  id="digitalSignature"
+                  name="digital_signature"
+                  type="text"
+                  placeholder="Enter your full name"
+                  class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="consentDate"
+                  class="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Date
+                </label>
+                <input
+                  id="consentDate"
+                  name="consent_date"
+                  type="text"
+                  readonly
+                  class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+                />
+              </div>
+            </div>
+
+            <p class="mt-3 text-xs text-slate-500">
+              By typing your name, you are providing a digital confirmation for
+              this booking request.
+            </p>
+          </section>
+
+          <!-- Buttons -->
+          <div
+            class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <a
+              href="./booking-review.html"
+              class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white"
+            >
+              Back
+            </a>
+
+            <button
+              id="submitBookingButton"
+              type="submit"
+              disabled
+              class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white"
+            >
+              Submit Booking
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="../../scripts/components/booking-consent-step.js"></script>
+  </body>
+</html>
