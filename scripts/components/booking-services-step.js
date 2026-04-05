@@ -109,9 +109,6 @@ function hydrateServiceStepLayout() {
       <h3 class="text-base font-semibold text-[#2f4b66]">
         Service Selection per Pet
       </h3>
-      <p class="text-sm text-slate-500">
-        Each pet gets its own grooming choice, optional add-on, and special instructions so multi-pet bookings do not overwrite each other.
-      </p>
     </div>
 
     <div id="petServiceSelections" class="space-y-6"></div>

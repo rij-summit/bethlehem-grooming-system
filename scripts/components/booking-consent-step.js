@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
       - await submitBookingToAPI(...)
       - redirect to success page using backend response
     */
-    window.location.href = "./dashboard.html";
+    window.location.href = "./booking-confirmed.html";
   });
 
   function handleFormStateChange() {
