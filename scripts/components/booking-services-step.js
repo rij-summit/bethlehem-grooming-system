@@ -21,6 +21,20 @@ import {
   normalizeStepThreeDraft,
 } from "../services/grooming-service.js";
 
+/**
+ * Booking Services Step Controller
+ *
+ * Purpose:
+ * Renders Step 3 service choices for every pet in the active booking draft.
+ *
+ * Backend developer guide:
+ * This step currently reads the active draft from browser storage and saves the
+ * selected package/add-on choices in sessionStorage for later review pages.
+ * In production, the backend should:
+ * - return the current draft with stable pet IDs and schedule values
+ * - accept one service selection object per pet using those same IDs
+ * - recompute all pricing server-side instead of trusting browser totals
+ */
 const elements = {
   form: document.getElementById("bookingServicesForm"),
   scheduleSummaryText: document.getElementById("scheduleSummaryText"),

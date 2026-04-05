@@ -1,3 +1,20 @@
+/**
+ * Booking Draft Service
+ *
+ * Purpose:
+ * Centralizes the temporary browser-storage contract shared by booking Steps 2
+ * to 4.
+ *
+ * Backend developer guide:
+ * Replace these sessionStorage helpers with a real booking-draft source, or map
+ * your API response to the same field names so the existing UI can keep working
+ * during integration.
+ *
+ * Draft fields expected by the booking flow:
+ * - bookingDate / bookingTime
+ * - pets[] with id, petName, petType, breed, size, furType, weight, medicalNotes
+ * - derived petIds / petTypes values used by later steps
+ */
 export const BOOKING_STEP_TWO_KEY = "bookingStep2";
 export const BOOKING_STEP_THREE_KEY = "bookingStep3";
 

@@ -8,6 +8,13 @@
     <link rel="stylesheet" href="../../css/custom.css" />
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-800">
+    <!--
+      BACKEND HANDOFF:
+      This step collects the required booking consent fields before submission.
+      Persist the checkbox values, digital signature, and consent date with the
+      active draft or final appointment record, and reject final submission on the
+      server if any required consent field is missing or invalid.
+    -->
     <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
       <!-- Back -->
       <a

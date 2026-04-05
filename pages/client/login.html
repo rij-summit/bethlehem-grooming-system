@@ -17,6 +17,13 @@
           </p>
         </div>
 
+        <!--
+          BACKEND HANDOFF:
+          This form is wired to a temporary frontend login flow. Connect it to the
+          real customer authentication endpoint, return validation errors near the
+          form fields, and let the backend own remember-me, forgot-password, and
+          post-login session handling.
+        -->
         <form id="customerLoginForm" class="space-y-5">
           <div>
             <label

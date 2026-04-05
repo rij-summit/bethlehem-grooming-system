@@ -15,6 +15,19 @@ import {
   normalizeStepThreeDraft,
 } from "../services/grooming-service.js";
 
+/**
+ * Booking Review Step Controller
+ *
+ * Purpose:
+ * Builds the Step 4 review preview from the active booking draft and Step 3
+ * grooming selections.
+ *
+ * Backend developer guide:
+ * This page currently assembles a client-side review payload and stores it in
+ * sessionStorage. In production, rebuild the review from the saved draft on the
+ * backend, recompute totals and pricing notes there, and return the final review
+ * payload that consent and submission should use.
+ */
 const REVIEW_STORAGE_KEY = "bookingStep4Review";
 const LEGACY_REVIEW_STORAGE_KEY = "bookingReview";
 

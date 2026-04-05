@@ -8,6 +8,13 @@
   </head>
 
   <body class="min-h-screen bg-[#f6fafd] text-slate-800">
+    <!--
+      BACKEND HANDOFF:
+      Step 1 currently lets the browser choose and temporarily store the schedule.
+      Replace that client-side draft with an authenticated booking-draft record,
+      then revalidate slot availability, clinic hours, holiday blocking, and
+      double-booking on the server before the schedule is accepted.
+    -->
     <main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
       <!-- Page Header -->
       <section class="mb-6">

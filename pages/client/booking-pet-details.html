@@ -11,6 +11,14 @@
   </head>
 
   <body class="min-h-screen bg-[#f6fafd] text-slate-800">
+    <!--
+      BACKEND HANDOFF:
+      This page currently reads saved pets and the active booking draft from
+      temporary browser storage. In production, load the authenticated user's pet
+      list from the backend, validate that each selected pet belongs to that user,
+      create any newly added pet record, and attach the final pet IDs to the same
+      active booking draft.
+    -->
     <main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
       <!-- Page Header -->
       <section class="mb-6">
