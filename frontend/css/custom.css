@@ -1,0 +1,114 @@
+/*This is for later when Tailwind CSS cant produce style that it cant easily do like*/
+/* custom animations */
+/* custom scrollbar styles */
+/* very specific one-off styles */
+
+.booking-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 3rem;
+}
+
+.booking-select-icon {
+  pointer-events: none;
+  position: absolute;
+  right: 1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.service-card {
+  align-items: flex-start;
+}
+
+.service-card__content {
+  display: flex;
+  min-height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.service-card__pricing {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #d6e3ef;
+}
+
+.service-card__pricing-label {
+  display: block;
+  margin-bottom: 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5a7f9d;
+}
+
+.service-card__price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.65rem;
+}
+
+.service-card__price-pill {
+  border: 1px solid #c7daea;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #f8fbfe 0%, #edf5fb 100%);
+  padding: 0.75rem 0.85rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.service-card--selected {
+  border-color: #315b7e;
+  box-shadow:
+    0 0 0 2px rgba(49, 91, 126, 0.16),
+    0 10px 24px rgba(49, 91, 126, 0.08);
+}
+
+.service-option--selected {
+  border-color: #315b7e !important;
+  background: #edf5fc;
+}
+
+.service-card__price-pill--active {
+  border-color: #315b7e;
+  background: linear-gradient(180deg, #d7ebfb 0%, #c5def3 100%);
+  box-shadow:
+    0 0 0 2px rgba(49, 91, 126, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.service-card__price-size {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #63809a;
+}
+
+.service-card__price-value {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #244764;
+}
+
+.service-card__pricing-note {
+  border: 1px solid #c7daea;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #f8fbfe 0%, #edf5fb 100%);
+  padding: 0.85rem 1rem;
+  font-size: 0.93rem;
+  font-weight: 600;
+  color: #244764;
+}
+
+@media print {
+  .booking-confirmed-actions {
+    display: none !important;
+  }
+}

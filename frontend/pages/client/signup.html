@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customer Sign Up | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+  </head>
+  <body
+    class="min-h-screen bg-gradient-to-br from-[#eaf4fb] via-[#dcecf8] to-[#cfe4f7]"
+  >
+    <div class="min-h-screen flex items-center justify-center px-4 py-10">
+      <div
+        class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 overflow-hidden rounded-3xl shadow-2xl bg-white"
+      >
+        <!-- Left Side -->
+        <div
+          class="hidden lg:flex flex-col justify-center bg-[#315b7e] text-white p-12"
+        >
+          <h1 class="text-4xl font-bold leading-tight">Create Your Account</h1>
+          <p class="mt-4 text-white/85 text-lg leading-relaxed">
+            Book grooming appointments easily and manage your pet’s visits at
+            Bethlehem Animal Clinic.
+          </p>
+
+          <div class="mt-10 space-y-4">
+            <div class="flex items-start gap-3">
+              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <p>Quick and easy account registration</p>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <p>Track bookings and appointment status</p>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <p>Manage pet details in one place</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side -->
+        <div class="p-6 sm:p-8 md:p-10 lg:p-12">
+          <div class="mx-auto w-full max-w-xl">
+            <div class="mb-8">
+              <h2 class="text-3xl font-bold text-gray-800">Customer Sign Up</h2>
+              <p class="mt-2 text-sm text-gray-500">
+                Fill in your details to create a new account.
+              </p>
+            </div>
+
+            <!--
+              BACKEND HANDOFF:
+              This sign-up form is currently frontend-first. Wire it to the real
+              registration endpoint, keep server-side validation as the source of
+              truth, and use backend responses for duplicate email, phone, OTP,
+              and account-creation states.
+            -->
+            <form id="signupForm" class="space-y-5">
+              <!-- First Name + Last Name -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="firstName"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    placeholder="Enter your first name"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label
+                    for="lastName"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    placeholder="Enter your last name"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Email + Phone -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="email"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    placeholder="Enter your email"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label
+                    for="phone"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    placeholder="09XXXXXXXXX"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Password + Confirm Password -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="password"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="Create password"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label
+                    for="confirmPassword"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    placeholder="Confirm password"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Terms -->
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  name="terms"
+                  class="mt-1 h-4 w-4 rounded border-gray-300 text-[#315b7e] focus:ring-[#315b7e]"
+                  required
+                />
+                <label
+                  for="terms"
+                  class="text-sm text-gray-600 leading-relaxed"
+                >
+                  I agree to the
+                  <a href="#" class="font-medium text-[#315b7e] hover:underline"
+                    >Terms and Conditions</a
+                  >
+                  and
+                  <a href="#" class="font-medium text-[#315b7e] hover:underline"
+                    >Privacy Policy</a
+                  >.
+                </label>
+              </div>
+
+              <!-- Button -->
+              <button
+                type="submit"
+                class="w-full rounded-xl bg-[#315b7e] px-4 py-3 text-white font-semibold shadow-md transition hover:bg-[#264760]"
+              >
+                Create Account
+              </button>
+
+              <!-- Login Link -->
+              <p class="text-center text-sm text-gray-600">
+                Already have an account?
+                <a
+                  href="./login.html"
+                  class="font-semibold text-[#315b7e] hover:underline"
+                >
+                  Log in here
+                </a>
+              </p>
+            </form>
+
+            <!-- Message -->
+            <div
+              id="signupMessage"
+              class="mt-5 hidden rounded-xl border px-4 py-3 text-sm"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/auth/client/signup.js"></script>
+  </body>
+</html>
