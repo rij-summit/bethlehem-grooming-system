@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const userData = {
       firstName,
       lastName,
-      email,
+      email: email || null,
       phone,
       password,
     };
