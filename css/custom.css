@@ -107,6 +107,121 @@
   color: #244764;
 }
 
+body.client-sidebar-open {
+  overflow: hidden;
+}
+
+.client-sidebar {
+  transition:
+    transform 0.24s ease,
+    box-shadow 0.24s ease;
+  z-index: 40;
+}
+
+.client-dashboard-main {
+  transition: margin-left 0.24s ease;
+}
+
+.client-sidebar-toggle,
+.client-sidebar-close,
+.client-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .client-sidebar {
+    width: min(18rem, calc(100vw - 2.5rem));
+    transform: translateX(-110%);
+    box-shadow: none;
+  }
+
+  body.client-sidebar-open .client-sidebar {
+    transform: translateX(0);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+  }
+
+  .client-dashboard-main {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .client-dashboard-header {
+    padding-left: 5rem;
+  }
+
+  .client-sidebar-toggle {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 60;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid #d6e3ef;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #355c84;
+    box-shadow: 0 14px 30px rgba(53, 92, 132, 0.18);
+    transition:
+      background-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .client-sidebar-toggle:hover {
+    background: #f8fbff;
+    transform: translateY(-1px);
+  }
+
+  .client-sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    transition: background-color 0.2s ease;
+  }
+
+  .client-sidebar-close:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .client-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.42);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 0.24s ease,
+      visibility 0.24s ease;
+  }
+
+  body.client-sidebar-open .client-sidebar-backdrop {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .client-dashboard-header {
+    padding-left: 4.75rem;
+    padding-right: 1rem;
+  }
+}
+
 @media print {
   .booking-confirmed-actions {
     display: none !important;

@@ -13,34 +13,64 @@
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-slate-50 text-slate-800">
-    <div class="min-h-screen flex">
+    <div class="min-h-screen flex client-dashboard-shell">
+      <button
+        type="button"
+        id="clientSidebarToggle"
+        class="client-sidebar-toggle"
+        aria-controls="clientSidebar"
+        aria-expanded="false"
+        aria-label="Open navigation menu"
+      >
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+
+      <button
+        type="button"
+        id="clientSidebarBackdrop"
+        class="client-sidebar-backdrop"
+        aria-label="Close navigation menu"
+      ></button>
+
       <!-- ===================================================== -->
       <!-- SIDEBAR -->
       <!-- Fixed sidebar for client dashboard navigation -->
       <!-- Backend note: active page state can be set dynamically -->
       <!-- ===================================================== -->
       <aside
-        class="fixed left-0 top-0 h-screen w-72 bg-[#7fa2c9] text-white flex flex-col justify-between shadow-lg"
+        id="clientSidebar"
+        class="client-sidebar fixed left-0 top-0 h-screen w-72 bg-[#7fa2c9] text-white flex flex-col justify-between shadow-lg"
       >
         <div>
           <!-- Clinic Branding -->
           <div class="px-6 py-6 border-b border-white/20">
-            <a
-              href="../../pages/client/dashboard.html"
-              class="flex items-center gap-3"
-            >
-              <div
-                class="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center"
+            <div class="flex items-start justify-between gap-4">
+              <a
+                href="../../pages/client/dashboard.html"
+                class="flex items-center gap-3"
               >
-                <i data-lucide="paw-print" class="w-6 h-6"></i>
-              </div>
-              <div>
-                <h1 class="text-lg font-bold leading-tight">
-                  Bethlehem Animal Clinic
-                </h1>
-                <p class="text-sm text-white/80">Client Portal</p>
-              </div>
-            </a>
+                <div
+                  class="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center"
+                >
+                  <i data-lucide="paw-print" class="w-6 h-6"></i>
+                </div>
+                <div>
+                  <h1 class="text-lg font-bold leading-tight">
+                    Bethlehem Animal Clinic
+                  </h1>
+                  <p class="text-sm text-white/80">Client Portal</p>
+                </div>
+              </a>
+
+              <button
+                type="button"
+                id="clientSidebarClose"
+                class="client-sidebar-close"
+                aria-label="Close navigation menu"
+              >
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
           </div>
 
           <!-- Navigation -->
@@ -116,14 +146,14 @@
       <!-- MAIN CONTENT -->
       <!-- Margin-left matches sidebar width -->
       <!-- ===================================================== -->
-      <main class="ml-72 flex-1 min-h-screen">
+      <main class="client-dashboard-main ml-72 flex-1 min-h-screen">
         <!-- Top Header -->
         <!-- Backend note: notifications and search can be connected later -->
         <header
           class="top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200"
         >
           <div
-            class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between px-6 py-5"
+            class="client-dashboard-header flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between px-6 py-5"
           >
             <div>
               <h2 class="text-3xl font-bold text-[#2f4b66]">Dashboard</h2>
@@ -394,6 +424,54 @@
     <script>
       // Initialize Lucide icons
       lucide.createIcons();
+
+      const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
+      const sidebarToggle = document.getElementById("clientSidebarToggle");
+      const sidebarClose = document.getElementById("clientSidebarClose");
+      const sidebarBackdrop = document.getElementById("clientSidebarBackdrop");
+      const sidebar = document.getElementById("clientSidebar");
+      const sidebarLinks = sidebar.querySelectorAll("a");
+
+      function setSidebarState(isOpen) {
+        document.body.classList.toggle("client-sidebar-open", isOpen);
+        sidebarToggle.setAttribute("aria-expanded", String(isOpen));
+        sidebarToggle.setAttribute(
+          "aria-label",
+          isOpen ? "Close navigation menu" : "Open navigation menu",
+        );
+      }
+
+      function closeSidebar() {
+        setSidebarState(false);
+      }
+
+      function toggleSidebar() {
+        if (!mobileSidebarQuery.matches) return;
+        const isOpen = document.body.classList.contains("client-sidebar-open");
+        setSidebarState(!isOpen);
+      }
+
+      setSidebarState(false);
+
+      sidebarToggle.addEventListener("click", toggleSidebar);
+      sidebarClose.addEventListener("click", closeSidebar);
+      sidebarBackdrop.addEventListener("click", closeSidebar);
+
+      sidebarLinks.forEach((link) => {
+        link.addEventListener("click", closeSidebar);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeSidebar();
+        }
+      });
+
+      mobileSidebarQuery.addEventListener("change", (event) => {
+        if (!event.matches) {
+          closeSidebar();
+        }
+      });
 
       /*
         BACKEND READY NOTES:
