@@ -104,6 +104,16 @@
     logout(token = getToken()) {
       return request("/logout", { method: "POST", token });
     },
+    submitBooking(payload, token = getToken()) {
+      return request("/bookings/submit", {
+        method: "POST",
+        body: payload,
+        token,
+      });
+    },
+    getBooking(reference, token = getToken()) {
+      return request(`/bookings/${encodeURIComponent(reference)}`, { token });
+    },
     setSession,
     clearSession,
     getToken,

@@ -14,6 +14,7 @@ import {
   getPackageById,
   normalizeStepThreeDraft,
 } from "../services/grooming-service.js";
+import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js";
 
 /**
  * Booking Review Step Controller
@@ -50,6 +51,10 @@ const state = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (initBookingFormAccessGuard()) {
+    return;
+  }
+
   state.bookingDraft = getBookingDraft();
 
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
