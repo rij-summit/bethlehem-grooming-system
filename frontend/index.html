@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bethlehem Clinic</title>
+
+    <!-- Compiled Tailwind CSS-->
+    <link rel="stylesheet" href="css/output.css" />
+
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body>
+    <!-- NAVBAR -->
+
+    <nav
+      class="bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0"
+    >
+      <div class="flex items-center">
+        <a href="index.html">
+          <img
+            src="./assets/your-logo-file.png"
+            alt="Bethlehem Animal Clinic Logo"
+            class="h-12 w-auto"
+          />
+        </a>
+      </div>
+
+      <div class="flex items-center space-x-10">
+        <a
+          href="#"
+          class="text-gray-800 font-medium text-base hover:text-blue-600 transition-colors"
+        >
+          FAQ
+        </a>
+
+        <button
+          id="openLoginModal"
+          class="bg-[#315b7e] text-white px-12 py-3 rounded-lg font-medium text-base hover:bg-[#254561] transition-colors shadow-sm"
+        >
+          Login
+        </button>
+      </div>
+    </nav>
+
+    <!-- Login Choice Modal -->
+    <div
+      id="loginChoiceModal"
+      class="fixed inset-0 z-50 hidden items-start pt-24 justify-center bg-black/30 backdrop-blur-sm px-4"
+    >
+      <div
+        class="relative w-full max-w-xl rounded-3xl bg-white p-10 shadow-2xl"
+      >
+        <button
+          id="closeLoginModal"
+          class="absolute right-5 top-4 text-3xl leading-none text-gray-700 hover:text-black"
+        >
+          &times;
+        </button>
+
+        <h2 class="mb-6 text-2xl font-bold text-gray-800">Log in</h2>
+
+        <div class="space-y-4">
+          <a
+            href="./pages/client/login.html"
+            class="block w-full rounded-xl bg-[#315b7e] py-3 text-center font-semibold text-white hover:bg-[#254561] transition-colors"
+          >
+            Customer Log in
+          </a>
+
+          <a
+            href="./pages/admin/login.html"
+            class="block w-full border border-gray-300 rounded-xl bg-white py-3 text-center font-semibold text-gray-700 hover:bg-[#D6D6D6] transition-colors"
+          >
+            Admin Log in
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!--UPPER BODY CONTENT-->
+
+    <section class="bg-[#f4f8fb] w-full py-16 lg:py-24 px-6 lg:px-12">
+      <div
+        class="w-full mx-auto flex flex-col md:flex-row items-center justify-between gap-12 lg:gap-20"
+      >
+        <div
+          class="w-full md:w-1/2 flex flex-col items-start text-left space-y-6"
+        >
+          <h1
+            class="text-5xl lg:text-6xl font-bold text-[#2a3b4c] leading-tight"
+          >
+            Professional Care for Your <br />
+            Beloved Pets
+          </h1>
+
+          <p class="text-2xl text-gray-600 max-w-xl leading-relaxed">
+            Experience top-quality veterinary services and grooming for your
+            furry friends. Our expert team is dedicated to keeping your pets
+            healthy, happy, and looking their best.
+          </p>
+        </div>
+
+        <div class="w-full md:w-1/2 flex justify-center md:justify-end">
+          <div
+            class="w-full aspect-[4/3] rounded-[2.5rem] overflow-hidden shadow-sm"
+          >
+            <img
+              src="assets/images/clinic/cute-pet-collage-isolated.jpg"
+              alt="Dog and Cat"
+              class="w-full h-full object-cover object-center"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUR SERVICES -->
+    <section class="bg-[#f4f8fb] w-full py-16 px-6 lg:px-12">
+      <div class="max-w-6xl mx-auto">
+        <!-- Title -->
+        <h2 class="text-4xl font-bold text-[#2a3b4c] text-center mb-10">
+          Our Services
+        </h2>
+
+        <!-- Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-10 px-4 items-stretch">
+          <!-- Card 1 -->
+          <div
+            class="bg-[#dce9f5] rounded-2xl p-8 flex flex-col items-center text-center justify-between min-h-[260px]"
+          >
+            <h3
+              class="font-semibold text-[#2a3b4c] text-3xl text-center w-full h-[80px] flex items-center justify-center mb-6"
+            >
+              Veterinary Care
+            </h3>
+            <p class="text-lg text-gray-600 leading-relaxed text-center">
+              Comprehensive medical care including check-ups, vaccinations, and
+              emergency services.
+            </p>
+            <div class="w-full flex justify-center mt-10">
+              <i
+                data-lucide="stethoscope"
+                class="w-8 h-8 text-[#2a3b4c] mt-2"
+              ></i>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div
+            class="bg-[#dce9f5] rounded-2xl p-8 flex flex-col items-center text-center justify-between min-h-[260px]"
+          >
+            <h3
+              class="font-semibold text-[#2a3b4c] text-3xl text-center w-full h-[80px] flex items-center justify-center mb-6"
+            >
+              Professional Grooming
+            </h3>
+            <p class="text-lg text-gray-600 leading-relaxed text-center">
+              Full grooming services including baths, haircuts, nail trimming,
+              and styling.
+            </p>
+            <div class="w-full flex justify-center mt-10">
+              <i data-lucide="scissors" class="w-8 h-8 text-[#2a3b4c] mt-2"></i>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div
+            class="bg-[#dce9f5] rounded-2xl p-8 flex flex-col items-center text-center justify-between min-h-[260px]"
+          >
+            <h3
+              class="font-semibold text-[#2a3b4c] text-3xl text-center w-full h-[80px] flex items-center justify-center mb-6"
+            >
+              Special Care
+            </h3>
+            <p class="text-lg text-gray-600 leading-relaxed text-center">
+              Specialized treatments for pets with unique needs and medical
+              conditions.
+            </p>
+            <div class="w-full flex justify-center mt-10">
+              <i data-lucide="heart" class="w-8 h-8 text-[#2a3b4c] mt-2"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- READY TO BOOK -->
+
+    <section class="bg-[#7a9dbc] w-full py-16 px-6 text-center">
+      <h2 class="text-3xl font-bold text-white mb-3">
+        Ready to Book an Appointment?
+      </h2>
+      <p class="text-white text-lg mb-20">
+        Give your pet the care they deserve. Schedule your appointment today!
+      </p>
+      <a
+        href="./pages/client/booking.html"
+        class="bg-white text-[#2a3b4c] px-16 py-4 rounded-2xl font-medium text-xl hover:bg-gray-100 transition-colors shadow-sm"
+      >
+        Book Now
+      </a>
+    </section>
+
+    <!-- FOOTER -->
+
+    <footer class="bg-[#2a3b4c] py-5 text-center">
+      <p class="text-white text-base">
+        ©2026 Bethlehem Animal Clinic & Grooming. All rights reserved.
+      </p>
+    </footer>
+
+    <script>
+      lucide.createIcons();
+    </script>
+    <i data-lucide="stethoscope"></i>
+    <i data-lucide="scissors"></i>
+    <i data-lucide="heart"></i>
+
+    <script src="scripts/main.js"></script>
+
+    <!-- Alpine.js via CDN always load BEFORE closing /body -->
+
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+  </body>
+</html>
