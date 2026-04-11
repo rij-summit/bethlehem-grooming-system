@@ -1,5 +1,4 @@
 import { initBookingCalendar } from "./booking-calendar.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js";
 
 /**
  * Booking Flow Controller
@@ -13,9 +12,5 @@ import { initBookingFormAccessGuard } from "../services/booking-form-access-guar
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (initBookingFormAccessGuard()) {
-    return;
-  }
-
   await initBookingCalendar();
 });

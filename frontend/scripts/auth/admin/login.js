@@ -1,9 +1,6 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const adminLoginForm = document.getElementById("adminLoginForm");
-
-  if (!adminLoginForm || !window.BethlehemApi) return;
-
-  adminLoginForm.addEventListener("submit", async (e) => {
+// Connected to pages/admin/login.html
+if (adminLoginForm) {
+  adminLoginForm.addEventListener("submit", async function (e) {
     e.preventDefault();
 
     const email = document.getElementById("adminEmail").value.trim();
@@ -14,33 +11,37 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const submitButton = adminLoginForm.querySelector('button[type="submit"]');
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = "Logging in...";
-    }
+    /*
+    // USE THIS WHEN THE BACKEND ADMIN LOGIN API IS READY
+    const ADMIN_LOGIN_API_URL = "YOUR_BACKEND_ADMIN_LOGIN_URL";
 
     try {
-      const data = await window.BethlehemApi.login({ email, password });
+      const response = await fetch(ADMIN_LOGIN_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (data?.user?.role !== "admin") {
-        window.BethlehemApi.clearSession();
-        alert("This account is not authorized for admin access.");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        alert(data.message || "Admin login failed.");
         return;
       }
 
-      if (data?.token && data?.user) {
-        window.BethlehemApi.setSession(data.token, data.user);
-      }
-
       window.location.href = "./dashboard.html";
+      return;
     } catch (error) {
-      alert(error.message || "Admin login failed.");
-    } finally {
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = "Log In as Admin";
-      }
+      console.error("Admin login error:", error);
+      alert("Unable to reach the admin login service.");
+      return;
     }
+    */
+
+    // TEMPORARY: Delete this once the backend admin login API is ready.
+    alert("Temporary admin login only.");
+    window.location.href = "./dashboard.html";
   });
-});
+}

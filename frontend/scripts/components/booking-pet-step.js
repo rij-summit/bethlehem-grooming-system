@@ -9,7 +9,6 @@ import {
   addPetToBooking,
   removePetFromBooking,
 } from "../services/pet-service.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js";
 
 /**
  * Booking Pet Step Controller
@@ -507,10 +506,6 @@ function initStepState() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (initBookingFormAccessGuard()) {
-    return;
-  }
-
   bindEvents();
   initStepState();
 });

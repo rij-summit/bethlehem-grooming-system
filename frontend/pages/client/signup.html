@@ -64,7 +64,7 @@
                     for="firstName"
                     class="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    First Name
+                    First Name <span class="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -81,7 +81,7 @@
                     for="lastName"
                     class="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    Last Name
+                    Last Name <span class="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -94,8 +94,25 @@
                 </div>
               </div>
 
-              <!-- Email + Phone -->
+              <!-- Phone + Email -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="phone"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Phone Number <span class="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    placeholder="09XXXXXXXXX"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                    required
+                  />
+                </div>
+
                 <div>
                   <label
                     for="email"
@@ -109,24 +126,6 @@
                     name="email"
                     placeholder="Enter your email"
                     class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label
-                    for="phone"
-                    class="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    placeholder="09XXXXXXXXX"
-                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
                   />
                 </div>
               </div>
@@ -222,7 +221,6 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js"></script>
     <script src="../../scripts/auth/client/signup.js"></script>
   </body>
 </html>

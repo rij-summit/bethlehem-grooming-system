@@ -20,7 +20,6 @@ import {
   getPackagesByPetType,
   normalizeStepThreeDraft,
 } from "../services/grooming-service.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js";
 
 /**
  * Booking Services Step Controller
@@ -57,10 +56,6 @@ const state = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (initBookingFormAccessGuard()) {
-    return;
-  }
-
   state.bookingDraft = getBookingDraft();
 
   hydrateServiceStepLayout();

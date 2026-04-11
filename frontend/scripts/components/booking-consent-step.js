@@ -1,13 +1,4 @@
-import {
-  initBookingFormAccessGuard,
-  persistBookingFormLock,
-} from "../services/booking-form-access-guard.js";
-
 document.addEventListener("DOMContentLoaded", () => {
-  if (initBookingFormAccessGuard()) {
-    return;
-  }
-
   const form = document.getElementById("bookingConsentForm");
   const mainConsentCheckbox = document.getElementById("mainConsentCheckbox");
   const sedationConsentCheckbox = document.getElementById(
@@ -36,19 +27,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const bookingStep3 = getStoredData("bookingStep3");
   const bookingReview =
     getStoredData("bookingReview") || getStoredData("bookingStep4Review");
-  const BOOKING_SUBMISSION_STORAGE_KEY = "bookingSubmission";
 
-  sessionStorage.removeItem("bookingConsentStep");
   setCurrentDate();
-  resetConsentInputs();
   populateSummary();
+  restoreConsentDraft();
   validateConsentForm();
 
   mainConsentCheckbox.addEventListener("change", handleFormStateChange);
   sedationConsentCheckbox.addEventListener("change", handleFormStateChange);
   digitalSignatureInput.addEventListener("input", handleFormStateChange);
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
 
     if (!isFormValid()) {
@@ -63,58 +52,62 @@ document.addEventListener("DOMContentLoaded", () => {
       consentDate: consentDateInput.value,
     };
 
-    try {
-      if (
-        !window.BethlehemApi ||
-        typeof window.BethlehemApi.submitBooking !== "function"
-      ) {
-        throw new Error(
-          "Booking API is not available. Please include scripts/api.js on this page.",
-        );
-      }
+    /*
+      BACKEND NOTE:
+      Replace this temporary save with your real API submission.
 
-      const bookingPayload = {
+      Suggested final payload structure:
+      {
         bookingStep1,
         bookingStep2,
         bookingStep3,
         bookingReview,
-        consent: consentPayload,
-      };
-
-      setSubmittingState(true);
-
-      const response = await window.BethlehemApi.submitBooking(bookingPayload);
-      handleSuccessfulSubmission(response, consentPayload);
-    } catch (error) {
-      if (error?.status === 409 && error?.data?.code === "ACTIVE_BOOKING_EXISTS") {
-        await handleExistingBookingConflict(error, consentPayload);
-        return;
+        consent: {
+          groomingAgreementAccepted,
+          sedationConsentAccepted,
+          digitalSignature,
+          consentDate
+        }
       }
 
-      console.error("Booking submission failed:", error);
-      consentStatusMessage.textContent =
-        error?.message ||
-        "Booking submission failed. Please review the form and try again.";
-      consentStatusMessage.className =
-        "mb-6 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700";
-      setSubmittingState(false);
-      syncSubmitButtonState();
-    }
+      Example:
+      POST /api/bookings/submit
+    */
+    sessionStorage.setItem(
+      "bookingConsentStep",
+      JSON.stringify(consentPayload),
+    );
+
+    /*
+      TEMPORARY FRONT-END REDIRECT:
+      Delete or replace this line once backend booking submission is ready.
+      Suggested replacement:
+      - await submitBookingToAPI(...)
+      - redirect to success page using backend response
+    */
+    window.location.href = "./booking-confirmed.html";
   });
 
   function handleFormStateChange() {
+    saveConsentDraft();
     validateConsentForm();
   }
 
   function validateConsentForm() {
-    const valid = syncSubmitButtonState();
+    const valid = isFormValid();
 
     if (valid) {
+      submitBookingButton.disabled = false;
+      submitBookingButton.className =
+        "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
       consentStatusMessage.textContent =
         "All required fields are complete. You can now submit your booking.";
       consentStatusMessage.className =
         "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
     } else {
+      submitBookingButton.disabled = true;
+      submitBookingButton.className =
+        "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
       consentStatusMessage.textContent =
         "Please complete both consent checkboxes and enter your digital signature before submitting.";
       consentStatusMessage.className =
@@ -132,108 +125,26 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  function syncSubmitButtonState() {
-    const valid = isFormValid();
-
-    if (valid) {
-      submitBookingButton.disabled = false;
-      submitBookingButton.className =
-        "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
-      return true;
-    }
-
-    submitBookingButton.disabled = true;
-    submitBookingButton.className =
-      "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
-    return false;
-  }
-
-  function setSubmittingState(isSubmitting) {
-    if (isSubmitting) {
-      submitBookingButton.disabled = true;
-      submitBookingButton.className =
-        "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-400 px-5 py-3 text-sm font-semibold text-white";
-      submitBookingButton.textContent = "Submitting...";
-      consentStatusMessage.textContent =
-        "Submitting your booking. Please wait...";
-      consentStatusMessage.className =
-        "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
-      return;
-    }
-
-    submitBookingButton.textContent = "Submit Booking";
-  }
-
-  function resetConsentInputs() {
-    mainConsentCheckbox.checked = false;
-    sedationConsentCheckbox.checked = false;
-    digitalSignatureInput.value = "";
-  }
-
-  function handleSuccessfulSubmission(response, consentPayload) {
-    persistBookingFormLock(response?.booking || null);
-
-    sessionStorage.setItem(
-      "bookingConsentStep",
-      JSON.stringify(consentPayload),
-    );
-    sessionStorage.setItem(
-      BOOKING_SUBMISSION_STORAGE_KEY,
-      JSON.stringify(response),
-    );
-
-    const reference = response?.booking?.reference;
-    window.location.href = reference
-      ? `./booking-confirmed.html?reference=${encodeURIComponent(reference)}`
-      : "./booking-confirmed.html";
-  }
-
-  async function handleExistingBookingConflict(error, consentPayload) {
-    const existingBooking = error?.data?.existingBooking || {};
-    const bookingReference = existingBooking?.reference || "unknown reference";
-    const schedule = [existingBooking?.bookingDate, existingBooking?.bookingTime]
-      .filter(Boolean)
-      .join(" | ");
-
-    setSubmittingState(false);
-    syncSubmitButtonState();
-
-    const shouldBookDifferent = window.confirm(
-      `You already have an active booking (${bookingReference}${schedule ? ` | ${schedule}` : ""}). Click OK to book a different appointment now, or Cancel to reschedule your existing booking.`,
-    );
-
-    if (!shouldBookDifferent) {
-      const rescheduleQuery = existingBooking?.reference
-        ? `?reschedule=1&reference=${encodeURIComponent(existingBooking.reference)}`
-        : "?reschedule=1";
-      window.location.href = `./booking.html${rescheduleQuery}`;
-      return;
-    }
-
-    const retryPayload = {
-      bookingStep1,
-      bookingStep2,
-      bookingStep3,
-      bookingReview,
-      consent: consentPayload,
-      forceNewBooking: true,
+  function saveConsentDraft() {
+    const consentDraft = {
+      groomingAgreementAccepted: mainConsentCheckbox.checked,
+      sedationConsentAccepted: sedationConsentCheckbox.checked,
+      digitalSignature: digitalSignatureInput.value.trim(),
+      consentDate: consentDateInput.value,
     };
 
-    setSubmittingState(true);
+    sessionStorage.setItem("bookingConsentStep", JSON.stringify(consentDraft));
+  }
 
-    try {
-      const retryResponse = await window.BethlehemApi.submitBooking(retryPayload);
-      handleSuccessfulSubmission(retryResponse, consentPayload);
-    } catch (retryError) {
-      console.error("Booking retry failed:", retryError);
-      consentStatusMessage.textContent =
-        retryError?.message ||
-        "Unable to create a new booking. Please try again.";
-      consentStatusMessage.className =
-        "mb-6 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700";
-      setSubmittingState(false);
-      syncSubmitButtonState();
-    }
+  function restoreConsentDraft() {
+    const savedDraft = getStoredData("bookingConsentStep");
+    if (!savedDraft) return;
+
+    mainConsentCheckbox.checked = Boolean(savedDraft.groomingAgreementAccepted);
+    sedationConsentCheckbox.checked = Boolean(
+      savedDraft.sedationConsentAccepted,
+    );
+    digitalSignatureInput.value = savedDraft.digitalSignature || "";
   }
 
   function setCurrentDate() {
