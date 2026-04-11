@@ -124,21 +124,28 @@
         </div>
 
         <!-- Client Profile -->
-        <!-- Backend note: client name and email should come from logged-in session -->
-        <div class="p-4">
+        <div class="p-4 space-y-3">
           <div
             class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3"
           >
             <div
-              class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold"
+              id="clientInitials"
+              class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm"
             >
-              MR
+              ??
             </div>
             <div>
-              <p class="font-semibold">Maria Reyes</p>
+              <p class="font-semibold" id="clientName">Loading…</p>
               <p class="text-sm text-white/80">Pet Owner</p>
             </div>
           </div>
+          <button
+            id="logoutBtn"
+            class="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 text-sm font-medium hover:bg-white/10 transition"
+          >
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>Log Out</span>
+          </button>
         </div>
       </aside>
 
@@ -421,7 +428,26 @@
       </main>
     </div>
 
+    <script src="../../scripts/api.js"></script>
     <script>
+      // ── Auth guard ────────────────────────────────────────
+      API.requireAuth('./login.html');
+
+      // ── Populate user info ────────────────────────────────
+      const currentUser = API.getUser();
+      if (currentUser) {
+        const fullName = currentUser.first_name + ' ' + currentUser.last_name;
+        const initials = (currentUser.first_name[0] + currentUser.last_name[0]).toUpperCase();
+        document.getElementById('clientName').textContent     = fullName;
+        document.getElementById('clientInitials').textContent = initials;
+      }
+
+      // ── Logout ────────────────────────────────────────────
+      document.getElementById('logoutBtn').addEventListener('click', async function () {
+        await API.Auth.logout();
+        window.location.href = './login.html';
+      });
+
       // Initialize Lucide icons
       lucide.createIcons();
 
