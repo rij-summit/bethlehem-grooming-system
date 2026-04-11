@@ -52,16 +52,16 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
+            'phone'    => ['required', 'string', 'regex:/^(\+63|0)[0-9]{9,10}$/'],
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('phone', $request->phone)->first();
 
         if (!$user || !Hash::check($request->password, $user->password_hash)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid email or password',
+                'message' => 'Invalid phone number or password',
             ], 401);
         }
 
