@@ -1,78 +1,78 @@
 // Connected to pages/client/login.html
-const customerLoginForm = document.getElementById("customerLoginForm");
-const adminLoginForm = document.getElementById("adminLoginForm");
-const customerPhoneInput = document.getElementById("phone");
 
-if (customerPhoneInput && customerLoginForm) {
-  customerPhoneInput.addEventListener("input", function () {
-    const digitsOnlyValue = this.value.replace(/\D/g, "").slice(0, 11);
-    const isPotentialMobile =
-      digitsOnlyValue.length === 0 || /^09\d{0,9}$/.test(digitsOnlyValue);
+document.addEventListener('DOMContentLoaded', function () {
+    // Already logged in? Redirect to dashboard.
+    API.requireGuest('./dashboard.html');
 
-    this.value = digitsOnlyValue;
-    this.setCustomValidity(
-      isPotentialMobile
-        ? ""
-        : "Please enter a valid 11-digit mobile number starting with 09."
-    );
-  });
-}
+    const form = document.getElementById('customerLoginForm');
+    const phoneInput = document.getElementById('phone');
 
-if (customerLoginForm) {
-  customerLoginForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
+    if (!form) return;
 
-    const phone = customerPhoneInput.value.trim();
-    const password = document.getElementById("password").value.trim();
-    const phonePattern = /^09\d{9}$/;
+    // ── Inline error display ──────────────────────────────
+    const errorEl = document.createElement('div');
+    errorEl.className = 'hidden mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700';
+    form.insertAdjacentElement('afterend', errorEl);
 
-    if (!phone || !password) {
-      alert("Please fill in all fields.");
-      return;
+    function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.classList.remove('hidden');
     }
 
-    if (!phonePattern.test(phone)) {
-      customerPhoneInput.setCustomValidity(
-        "Please enter a valid 11-digit mobile number starting with 09."
-      );
-      customerPhoneInput.reportValidity();
-      customerPhoneInput.focus();
-      return;
+    function clearError() {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
     }
 
-    customerPhoneInput.setCustomValidity("");
-
-    /*
-    // USE THIS WHEN THE BACKEND LOGIN API IS READY
-    const CUSTOMER_LOGIN_API_URL = "YOUR_BACKEND_LOGIN_URL";
-
-    try {
-      const response = await fetch(CUSTOMER_LOGIN_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone, password }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        alert(data.message || "Customer login failed.");
-        return;
-      }
-
-      window.location.href = "./dashboard.html";
-      return;
-    } catch (error) {
-      console.error("Customer login error:", error);
-      alert("Unable to reach the customer login service.");
-      return;
+    // ── Phone input: digits-only mask ─────────────────────
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function () {
+            const digits = this.value.replace(/\D/g, '').slice(0, 11);
+            this.value = digits;
+            this.setCustomValidity(
+                digits.length === 0 || /^09\d{0,9}$/.test(digits)
+                    ? ''
+                    : 'Please enter a valid 11-digit mobile number starting with 09.'
+            );
+        });
     }
-    */
 
-    // TEMPORARY: Delete this once the backend login API is ready.
-    alert("Temporary customer login only.");
-    window.location.href = "./dashboard.html";
-  });
-}
+    // ── Form submit ───────────────────────────────────────
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        clearError();
+
+        const phone    = phoneInput.value.trim();
+        const password = document.getElementById('password').value;
+        const submitBtn = form.querySelector('[type="submit"]');
+
+        if (!phone || !password) {
+            showError('Please fill in all fields.');
+            return;
+        }
+
+        if (!/^09\d{9}$/.test(phone)) {
+            showError('Please enter a valid 11-digit mobile number starting with 09.');
+            phoneInput.focus();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in…';
+
+        const { ok, data } = await API.Auth.customerLogin(phone, password);
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log In';
+
+        if (!ok) {
+            showError(data.message || 'Invalid phone number or password.');
+            return;
+        }
+
+        API.setToken(data.token);
+        API.setUser(data.user);
+
+        window.location.href = './dashboard.html';
+    });
+});

@@ -90,6 +90,49 @@ class AuthController extends Controller
         ], 200);
     }
 
+    // ── ADMIN LOGIN ───────────────────────────────────────
+    public function adminLogin(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('email', $request->email)
+                    ->where('role', 'admin')
+                    ->first();
+
+        if (!$user || !Hash::check($request->password, $user->password_hash)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials or unauthorized access.',
+            ], 401);
+        }
+
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This account has been disabled.',
+            ], 403);
+        }
+
+        $user->tokens()->delete();
+        $token = $user->createToken('admin_token')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Admin login successful',
+            'token'   => $token,
+            'user'    => [
+                'user_id'    => $user->user_id,
+                'first_name' => $user->first_name,
+                'last_name'  => $user->last_name,
+                'email'      => $user->email,
+                'role'       => $user->role,
+            ]
+        ], 200);
+    }
+
     // ── LOGOUT ────────────────────────────────────────────
     public function logout(Request $request)
     {

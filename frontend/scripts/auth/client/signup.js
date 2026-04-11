@@ -1,141 +1,83 @@
 // Connected to pages/client/signup.html
-document.addEventListener("DOMContentLoaded", () => {
-  const signupForm = document.getElementById("signupForm");
-  const signupMessage = document.getElementById("signupMessage");
 
-  // Prevent errors when script runs on other pages
-  if (!signupForm) return;
+document.addEventListener('DOMContentLoaded', function () {
+    const form      = document.getElementById('signupForm');
+    const messageEl = document.getElementById('signupMessage');
 
-  signupForm.addEventListener("submit", function (e) {
-    e.preventDefault();
+    if (!form) return;
 
-    const firstName = document.getElementById("firstName").value.trim();
-    const lastName = document.getElementById("lastName").value.trim();
-    const email = document.getElementById("email").value.trim();
-    const phone = document.getElementById("phone").value.trim();
-    const password = document.getElementById("password").value;
-    const confirmPassword = document.getElementById("confirmPassword").value;
-
-    // Reset message styles
-    signupMessage.className = "mt-5 rounded-xl border px-4 py-3 text-sm";
-
-    /* =====================================================
-    🔒 FRONTEND VALIDATION (TEMPORARY / CLIENT-SIDE ONLY)
-    =====================================================
-    
-    NOTE FOR FUTURE (BACKEND INTEGRATION):
-    
-    - These validations are only for user experience.
-    - In production, validation MUST also be done in backend.
-    
-    FUTURE CHANGES:
-    ✔ Replace manual validation with API response validation
-    ✔ Backend will handle:
-    - Email uniqueness check
-    - Phone number validation (PH format)
-    - Password hashing (security)
-    - OTP verification (email/SMS)
-    
-    ✔ REMOVE / MODIFY:
-    - console.log(userData)
-    - Success message without real API response
-    
-    ===================================================== */
-
-    if (password !== confirmPassword) {
-      signupMessage.classList.add(
-        "border-red-200",
-        "bg-red-50",
-        "text-red-700",
-      );
-      signupMessage.textContent = "Passwords do not match.";
-      signupMessage.classList.remove("hidden");
-      return;
+    function showMessage(msg, type) {
+        messageEl.className = 'mt-5 rounded-xl border px-4 py-3 text-sm';
+        if (type === 'error') {
+            messageEl.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+        } else {
+            messageEl.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+        }
+        messageEl.textContent = msg;
+        messageEl.classList.remove('hidden');
     }
 
-    if (password.length < 8) {
-      signupMessage.classList.add(
-        "border-red-200",
-        "bg-red-50",
-        "text-red-700",
-      );
-      signupMessage.textContent =
-        "Password must be at least 8 characters long.";
-      signupMessage.classList.remove("hidden");
-      return;
+    function hideMessage() {
+        messageEl.classList.add('hidden');
     }
 
-    /* =====================================================
-       📦 USER DATA OBJECT (FRONTEND VERSION)
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideMessage();
 
-       FUTURE:
-       - This object will be sent to backend API using fetch()
-       - Example: POST /api/auth/signup
+        const firstName       = document.getElementById('firstName').value.trim();
+        const lastName        = document.getElementById('lastName').value.trim();
+        const email           = document.getElementById('email').value.trim();
+        const phone           = document.getElementById('phone').value.trim();
+        const password        = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const submitBtn       = form.querySelector('[type="submit"]');
 
-       ===================================================== */
-    const userData = {
-      firstName,
-      lastName,
-      email: email || null,
-      phone,
-      password,
-    };
+        // ── Client-side pre-checks ────────────────────────
+        if (password !== confirmPassword) {
+            showMessage('Passwords do not match.', 'error');
+            return;
+        }
 
-    // TEMP: For development only
-    console.log("Registered user:", userData);
+        if (password.length < 6) {
+            showMessage('Password must be at least 6 characters long.', 'error');
+            return;
+        }
 
-    /* =====================================================
-       🚀 FUTURE API INTEGRATION
+        submitBtn.disabled    = true;
+        submitBtn.textContent = 'Creating Account…';
 
-       Replace this section with:
+        const { ok, data } = await API.Auth.register({
+            first_name:            firstName,
+            last_name:             lastName,
+            email:                 email || undefined,
+            phone,
+            password,
+            password_confirmation: confirmPassword,
+        });
 
-       fetch("YOUR_BACKEND_API_URL", {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-         },
-         body: JSON.stringify(userData),
-       })
-       .then(res => res.json())
-       .then(data => {
-         // Handle success / error from backend
-       })
-       .catch(err => console.error(err));
+        submitBtn.disabled    = false;
+        submitBtn.textContent = 'Create Account';
 
-       ===================================================== */
+        if (!ok) {
+            // Laravel validation returns errors as an object keyed by field
+            if (data.errors) {
+                const first = Object.values(data.errors)[0];
+                showMessage(Array.isArray(first) ? first[0] : first, 'error');
+            } else {
+                showMessage(data.message || 'Registration failed. Please try again.', 'error');
+            }
+            return;
+        }
 
-    /* =====================================================
-       📱 FUTURE FEATURE: OTP VERIFICATION
+        // Auto-login: store token + user, then go to dashboard
+        API.setToken(data.token);
+        API.setUser(data.user);
 
-       After successful signup:
-       - Send OTP to email or phone
-       - Redirect to OTP verification page
+        showMessage('Account created successfully! Redirecting…', 'success');
 
-       Example future flow:
-       signup → send OTP → verify OTP → activate account
-
-       ===================================================== */
-
-    // TEMP SUCCESS MESSAGE (REMOVE AFTER API IS READY)
-    signupMessage.classList.add(
-      "border-green-200",
-      "bg-green-50",
-      "text-green-700",
-    );
-    signupMessage.textContent =
-      "Account created successfully. You can now log in.";
-    signupMessage.classList.remove("hidden");
-
-    signupForm.reset();
-
-    /* =====================================================
-       🔁 FUTURE REDIRECTION
-
-       AFTER REAL IMPLEMENTATION:
-       - Redirect user after successful API response
-       - Example:
-         window.location.href = "./login.html";
-
-       ===================================================== */
-  });
+        setTimeout(() => {
+            window.location.href = './dashboard.html';
+        }, 1200);
+    });
 });
