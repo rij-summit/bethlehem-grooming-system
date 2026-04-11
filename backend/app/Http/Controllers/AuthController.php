@@ -25,7 +25,7 @@ class AuthController extends Controller
             'last_name'     => $request->last_name,
             'email'         => $request->email,
             'phone'         => $request->phone,
-            'password' => Hash::make($request->password),
+            'password_hash' => Hash::make($request->password),
             'role'          => 'customer',
             'customer_tier' => 'new',
             'is_active'     => 1,
@@ -58,7 +58,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$user || !Hash::check($request->password, $user->password_hash)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid email or password',

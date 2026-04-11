@@ -15,7 +15,7 @@ class AdminSeeder extends Seeder
             'last_name'     => 'Bethlehem',
             'email'         => 'admin@bethlehem.com',
             'phone'         => '09000000000',
-            'password' => Hash::make('admin123'),
+            'password_hash' => Hash::make('admin123'),
             'role'          => 'admin',
             'customer_tier' => 'new',
             'is_active'     => 1,

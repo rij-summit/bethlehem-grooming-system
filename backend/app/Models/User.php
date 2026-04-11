@@ -18,19 +18,19 @@ class User extends Authenticatable
         'last_name',
         'email',
         'phone',
-        'password',
+        'password_hash',
         'role',
         'customer_tier',
         'is_active',
     ];
 
     protected $hidden = [
-        'password',
+        'password_hash',
     ];
 
-    // Tell Sanctum to use password instead of password_hash
+    // Tell Sanctum to use password_hash instead of password
     public function getAuthPassword()
     {
-        return $this->password;
+        return $this->password_hash;
     }
 }
