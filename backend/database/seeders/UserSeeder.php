@@ -6,17 +6,17 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 
-class AdminSeeder extends Seeder
+class UserSeeder extends Seeder
 {
     public function run(): void
     {
         User::create([
-            'first_name'    => 'Admin',
-            'last_name'     => 'Bethlehem',
-            'email'         => 'admin@bethlehem.com',
+            'first_name'    => 'Juan',
+            'last_name'     => 'Dela Cruz',
+            'email'         => 'juan23@test.com',
             'phone'         => '09000000000',
-            'password' => Hash::make('admin123'),
-            'role'          => 'admin',
+            'password' => Hash::make('juan2345'),
+            'role'          => 'customer',
             'customer_tier' => 'new',
             'is_active'     => 1,
         ]);
