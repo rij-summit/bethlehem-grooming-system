@@ -1,35 +1,25 @@
 /**
  * Pet Service
  *
- * Purpose:
- * Temporary frontend data service for saved pets and selected booking pets.
+ * Saved pets (clientPets) use localStorage so they persist across sessions.
+ * Booking pets (current booking draft) stay in sessionStorage — they only
+ * need to live for the duration of one booking flow.
  *
- * Backend developer guide:
- * Replace sessionStorage/localStorage usage with real API calls.
- *
- * Suggested backend endpoints:
- * - GET /api/pets
- * - POST /api/pets
- * - GET /api/bookings/draft
- * - PATCH /api/bookings/draft/pets
- *
- * Notes:
- * - "clientPets" simulates the pet list shown in dashboard / account pets
- * - "bookingPets" simulates the pets attached to the current booking draft
+ * On the pet step, call loadPetsFromApi() first to sync the user's pets
+ * from the database into localStorage before rendering.
  */
 
-const CLIENT_PETS_KEY = "clientPets";
-const BOOKING_PETS_KEY = "bookingPets";
+const CLIENT_PETS_KEY = "clientPets";     // localStorage — persists across tabs/sessions
+const BOOKING_PETS_KEY = "bookingPets";   // sessionStorage — current booking draft only
 const BOOKING_SCHEDULE_KEY = "bookingSchedule";
 
-/**
- * Use this max limit both in frontend and backend to avoid mismatch.
- */
 export const MAX_PETS_PER_BOOKING = 2;
+
+// ── Saved pets (localStorage) ─────────────────────────────────────────────
 
 export function getSavedPets() {
   try {
-    const raw = sessionStorage.getItem(CLIENT_PETS_KEY);
+    const raw = localStorage.getItem(CLIENT_PETS_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (error) {
     console.error("Failed to read saved pets:", error);
@@ -38,8 +28,41 @@ export function getSavedPets() {
 }
 
 export function saveSavedPets(pets) {
-  sessionStorage.setItem(CLIENT_PETS_KEY, JSON.stringify(pets));
+  localStorage.setItem(CLIENT_PETS_KEY, JSON.stringify(pets));
 }
+
+/**
+ * Fetch the user's pets from the backend and merge into localStorage.
+ * Backend pets take precedence — they are the source of truth.
+ * Any locally-added pets that don't exist in the DB yet are kept.
+ */
+export async function loadPetsFromApi() {
+  try {
+    const { pets: apiPets } = await API.getUserPets();
+
+    // Convert backend field names to frontend format
+    const mappedPets = apiPets.map((p) => ({
+      id: String(p.pet_id),
+      petName: p.pet_name || "",
+      petType: p.species || "Dog",
+      breed: p.breed || "",
+      weight: p.weight ? String(p.weight) : "",
+      furType: p.fur_type || "",
+      size: p.size || "",
+      medicalNotes: p.medical_conditions || "",
+    }));
+
+    // Merge: keep local pets whose id isn't in the API response
+    const apiIds = new Set(mappedPets.map((p) => p.id));
+    const localOnly = getSavedPets().filter((p) => !apiIds.has(p.id));
+
+    saveSavedPets([...mappedPets, ...localOnly]);
+  } catch {
+    // Network failure or not logged in — keep whatever is in localStorage
+  }
+}
+
+// ── Booking pets (sessionStorage) ────────────────────────────────────────
 
 export function getBookingPets() {
   try {
@@ -65,6 +88,8 @@ export function getBookingSchedule() {
   }
 }
 
+// ── Pet object helpers ────────────────────────────────────────────────────
+
 export function createPetObject(formData) {
   return {
     id: crypto.randomUUID(),
@@ -89,9 +114,7 @@ export function addPetToBooking(newPet) {
   const currentBookingPets = getBookingPets();
 
   if (currentBookingPets.length >= MAX_PETS_PER_BOOKING) {
-    throw new Error(
-      `Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`,
-    );
+    throw new Error(`Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`);
   }
 
   const alreadyExists = currentBookingPets.some((pet) => pet.id === newPet.id);
@@ -105,10 +128,7 @@ export function addPetToBooking(newPet) {
 }
 
 export function removePetFromBooking(petId) {
-  const currentBookingPets = getBookingPets();
-  const updatedBookingPets = currentBookingPets.filter(
-    (pet) => pet.id !== petId,
-  );
+  const updatedBookingPets = getBookingPets().filter((pet) => pet.id !== petId);
   saveBookingPets(updatedBookingPets);
   return updatedBookingPets;
 }

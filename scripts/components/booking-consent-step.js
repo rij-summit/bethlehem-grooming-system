@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   sedationConsentCheckbox.addEventListener("change", handleFormStateChange);
   digitalSignatureInput.addEventListener("input", handleFormStateChange);
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     if (!isFormValid()) {
@@ -52,41 +52,93 @@ document.addEventListener("DOMContentLoaded", () => {
       consentDate: consentDateInput.value,
     };
 
-    /*
-      BACKEND NOTE:
-      Replace this temporary save with your real API submission.
+    sessionStorage.setItem("bookingConsentStep", JSON.stringify(consentPayload));
 
-      Suggested final payload structure:
-      {
-        bookingStep1,
-        bookingStep2,
-        bookingStep3,
-        bookingReview,
-        consent: {
-          groomingAgreementAccepted,
-          sedationConsentAccepted,
-          digitalSignature,
-          consentDate
-        }
-      }
+    // ── Build and submit the booking payload to the backend ──
+    const schedule = getStoredData("bookingSchedule");
+    const bookingPets = getStoredData("bookingPets") || [];
+    const reviewData = getStoredData("bookingStep4Review") || getStoredData("bookingReview") || {};
 
-      Example:
-      POST /api/bookings/submit
-    */
-    sessionStorage.setItem(
-      "bookingConsentStep",
-      JSON.stringify(consentPayload),
-    );
+    if (!schedule?.window_id) {
+      alert("Booking schedule is missing. Please go back to Step 1 and select a date and time.");
+      return;
+    }
 
-    /*
-      TEMPORARY FRONT-END REDIRECT:
-      Delete or replace this line once backend booking submission is ready.
-      Suggested replacement:
-      - await submitBookingToAPI(...)
-      - redirect to success page using backend response
-    */
-    window.location.href = "./booking-confirmed.html";
+    // Map frontend pet format → backend field names
+    const petsPayload = bookingPets.map((pet) => {
+      // Find special instructions for this pet from the review data
+      const reviewPet = Array.isArray(reviewData.pets)
+        ? reviewData.pets.find((rp) => rp.petId === pet.id)
+        : null;
+
+      return {
+        pet_id: isNaN(Number(pet.id)) ? undefined : Number(pet.id),  // only send if it's a real DB id
+        pet_name: pet.petName,
+        species: pet.petType,
+        breed: pet.breed || null,
+        size: normalizeSizeForApi(pet.size),
+        fur_type: normalizeFurForApi(pet.furType),
+        weight: pet.weight ? parseFloat(pet.weight) : null,
+        medical_conditions: pet.medicalNotes || null,
+        special_instructions: reviewPet?.specialInstructions || null,
+      };
+    });
+
+    submitBookingButton.disabled = true;
+    submitBookingButton.textContent = "Submitting...";
+
+    try {
+      const response = await API.storeBooking({
+        booking_date: schedule.date,
+        window_id: schedule.window_id,
+        number_of_pets: bookingPets.length,
+        special_notes: null,
+        pets: petsPayload,
+      });
+
+      // Save the backend response so the confirmed page can read it
+      sessionStorage.setItem("bookingConfirmation", JSON.stringify({
+        booking_reference: response.booking.booking_reference,
+        booking_date: response.booking.booking_date,
+        booking_time: response.booking.window,
+        status: response.booking.status,
+        number_of_pets: response.booking.number_of_pets,
+        pets: bookingPets,
+        review: reviewData,
+        consent: consentPayload,
+      }));
+
+      window.location.href = "./booking-confirmed.html";
+    } catch (error) {
+      submitBookingButton.disabled = false;
+      submitBookingButton.textContent = "Submit Booking";
+      alert(error.message || "Booking submission failed. Please try again.");
+    }
   });
+
+  // "Small" → "small", "Extra Large" → "extra_large"
+  function normalizeSizeForApi(size) {
+    if (!size) return null;
+    return size.toLowerCase().replace(/\s+/g, "_");
+  }
+
+  // Fur type values from the dropdown may be verbose — normalize to backend enum
+  function normalizeFurForApi(furType) {
+    if (!furType) return null;
+    const map = {
+      "short": "short",
+      "short hair": "short",
+      "medium": "medium",
+      "long": "long",
+      "long hair": "long",
+      "curly": "curl",
+      "double coat": "wire",
+      "wire": "wire",
+      "curl": "curl",
+      "hairless": "short",
+    };
+    return map[furType.toLowerCase()] || null;
+  }
 
   function handleFormStateChange() {
     saveConsentDraft();

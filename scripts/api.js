@@ -2,7 +2,8 @@
 // All API calls live here. Auth scripts and components call these functions.
 // Loaded as a plain <script> tag before any auth script that needs it.
 
-const API = (() => {
+// var (not const) so this is accessible as a global from ES module scripts
+var API = (() => {
   const BASE_URL = "http://127.0.0.1:8000/api";
 
   // ── Token keys ────────────────────────────────────────────────────────────
@@ -132,6 +133,21 @@ const API = (() => {
     return request("GET", "/me", null, token);
   }
 
+  async function getTimeslots(date) {
+    // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
+    return request("GET", `/timeslots?date=${date}`);
+  }
+
+  async function getUserPets() {
+    // GET /api/pets  (protected)
+    return request("GET", "/pets", null, getCustomerToken());
+  }
+
+  async function storeBooking(payload) {
+    // POST /api/booking/store  (protected)
+    return request("POST", "/booking/store", payload, getCustomerToken());
+  }
+
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
@@ -148,5 +164,11 @@ const API = (() => {
     adminLogin,
     logout,
     getMe,
+    // Timeslots
+    getTimeslots,
+    // Pets
+    getUserPets,
+    // Booking
+    storeBooking,
   };
 })();

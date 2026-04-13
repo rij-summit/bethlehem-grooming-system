@@ -18,6 +18,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
 
+    // Pets
+    Route::get('/pets', [BookingController::class, 'getPets']);
+
     // Booking
     Route::post('/booking/store',    [BookingController::class, 'store']);
     Route::get('/booking/history',   [BookingController::class, 'history']);

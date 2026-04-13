@@ -8,6 +8,7 @@ import {
   addPetToSavedPets,
   addPetToBooking,
   removePetFromBooking,
+  loadPetsFromApi,
 } from "../services/pet-service.js";
 
 /**
@@ -478,18 +479,19 @@ function bindEvents() {
   });
 }
 
-function initStepState() {
+async function initStepState() {
   renderScheduleSummary();
   updateSizeOptions(elements.petType.value);
 
-  // Start with a clean booking pet draft if needed.
-  // Backend note:
-  // In production, this should load from the current booking draft instead.
   if (!Array.isArray(getBookingPets())) {
     saveBookingPets([]);
   }
 
   renderSelectedPets();
+
+  // Sync pets from the backend into localStorage before rendering the list
+  showMessage("Loading your saved pets...", "default");
+  await loadPetsFromApi();
 
   const savedPets = getSavedPets();
   if (savedPets.length > 0) {
