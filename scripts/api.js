@@ -1,119 +1,174 @@
-// Central API service — Bethlehem Animal Clinic & Grooming System
-const API_BASE = 'http://localhost:8000/api';
+// api.js — Central HTTP layer for all backend communication.
+// All API calls live here. Auth scripts and components call these functions.
+// Loaded as a plain <script> tag before any auth script that needs it.
 
-// ── Token / User Storage ──────────────────────────────────────────
+// var (not const) so this is accessible as a global from ES module scripts
+var API = (() => {
+  const BASE_URL = "http://127.0.0.1:8000/api";
 
-function getToken() {
-    return localStorage.getItem('auth_token');
-}
+  // ── Token keys ────────────────────────────────────────────────────────────
+  const CUSTOMER_TOKEN_KEY = "customer_token";
+  const ADMIN_TOKEN_KEY = "admin_token";
 
-function setToken(token) {
-    localStorage.setItem('auth_token', token);
-}
+  // ── Token helpers ─────────────────────────────────────────────────────────
 
-function getUser() {
-    const raw = localStorage.getItem('auth_user');
-    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
-}
+  function getCustomerToken() {
+    return localStorage.getItem(CUSTOMER_TOKEN_KEY);
+  }
 
-function setUser(user) {
-    localStorage.setItem('auth_user', JSON.stringify(user));
-}
+  function setCustomerToken(token) {
+    localStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+  }
 
-function clearAuth() {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-}
+  function clearCustomerToken() {
+    localStorage.removeItem(CUSTOMER_TOKEN_KEY);
+  }
 
-// ── Base Request ──────────────────────────────────────────────────
+  function getAdminToken() {
+    return localStorage.getItem(ADMIN_TOKEN_KEY);
+  }
 
-async function apiRequest(method, path, body) {
+  function setAdminToken(token) {
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  }
+
+  function clearAdminToken() {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  }
+
+  // ── Core request function ─────────────────────────────────────────────────
+  // Callers get back the parsed JSON on success.
+  // On failure, a structured Error is thrown with:
+  //   error.status  — HTTP status code (e.g. 401, 422, 500)
+  //   error.message — backend message or generic fallback
+  //   error.errors  — Laravel validation errors object (422 only), or null
+
+  async function request(method, endpoint, body = null, token = null) {
     const headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     };
 
-    const token = getToken();
-    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     const options = { method, headers };
-    if (body !== undefined) options.body = JSON.stringify(body);
+
+    if (body !== null) {
+      options.body = JSON.stringify(body);
+    }
+
+    let response;
 
     try {
-        const response = await fetch(API_BASE + path, options);
-        const data = await response.json().catch(() => ({}));
-        return { ok: response.ok, status: response.status, data };
-    } catch (err) {
-        return {
-            ok: false,
-            status: 0,
-            data: { message: 'Unable to connect to the server. Make sure the backend is running.' },
-        };
+      response = await fetch(`${BASE_URL}${endpoint}`, options);
+    } catch {
+      // Network failure (server down, no internet, CORS preflight killed)
+      const networkError = new Error(
+        "Unable to reach the server. Please check your connection."
+      );
+      networkError.status = 0;
+      networkError.errors = null;
+      throw networkError;
     }
-}
 
-// ── Auth Guards ───────────────────────────────────────────────────
+    const data = await response.json().catch(() => ({}));
 
-function requireAuth(redirectTo) {
-    if (!getToken() || !getUser()) {
-        window.location.replace(redirectTo || './login.html');
+    if (!response.ok) {
+      const error = new Error(data.message || "Something went wrong.");
+      error.status = response.status;
+      error.errors = data.errors || null;
+      throw error;
     }
-}
 
-function requireAdmin(redirectTo) {
-    const user = getUser();
-    if (!getToken() || !user || user.role !== 'admin') {
-        window.location.replace(redirectTo || './login.html');
+    return data;
+  }
+
+  // ── Auth API calls ────────────────────────────────────────────────────────
+
+  async function register(payload) {
+    // POST /api/register
+    // payload: { first_name, last_name, email, phone, password, password_confirmation }
+    return request("POST", "/register", payload);
+  }
+
+  async function customerLogin(phone, password) {
+    // POST /api/login
+    // Saves the returned token to localStorage under 'customer_token'.
+    const data = await request("POST", "/login", { phone, password });
+    setCustomerToken(data.token);
+    return data;
+  }
+
+  async function adminLogin(email, password) {
+    // POST /api/admin/login
+    // Saves the returned token to localStorage under 'admin_token'.
+    const data = await request("POST", "/admin/login", { email, password });
+    setAdminToken(data.token);
+    return data;
+  }
+
+  async function logout(role = "customer") {
+    // POST /api/logout  (protected — sends the correct token in the header)
+    // Token is always cleared locally even if the API call fails.
+    const token =
+      role === "admin" ? getAdminToken() : getCustomerToken();
+
+    try {
+      await request("POST", "/logout", null, token);
+    } finally {
+      if (role === "admin") {
+        clearAdminToken();
+      } else {
+        clearCustomerToken();
+      }
     }
-}
+  }
 
-function requireGuest(customerDash, adminDash) {
-    const user = getUser();
-    const token = getToken();
-    if (token && user) {
-        if (user.role === 'admin') {
-            window.location.replace(adminDash || '../../pages/admin/dashboard.html');
-        } else {
-            window.location.replace(customerDash || './dashboard.html');
-        }
-    }
-}
+  async function getMe(role = "customer") {
+    // GET /api/me  (protected)
+    const token =
+      role === "admin" ? getAdminToken() : getCustomerToken();
+    return request("GET", "/me", null, token);
+  }
 
-// ── Auth API Methods ──────────────────────────────────────────────
+  async function getTimeslots(date) {
+    // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
+    return request("GET", `/timeslots?date=${date}`);
+  }
 
-const Auth = {
-    customerLogin(phone, password) {
-        return apiRequest('POST', '/login', { phone, password });
-    },
+  async function getUserPets() {
+    // GET /api/pets  (protected)
+    return request("GET", "/pets", null, getCustomerToken());
+  }
 
-    adminLogin(email, password) {
-        return apiRequest('POST', '/admin/login', { email, password });
-    },
+  async function storeBooking(payload) {
+    // POST /api/booking/store  (protected)
+    return request("POST", "/booking/store", payload, getCustomerToken());
+  }
 
-    register(data) {
-        return apiRequest('POST', '/register', data);
-    },
+  // ── Public interface ──────────────────────────────────────────────────────
 
-    async logout() {
-        await apiRequest('POST', '/logout');
-        clearAuth();
-    },
-
-    me() {
-        return apiRequest('GET', '/me');
-    },
-};
-
-// ── Global Exposure ───────────────────────────────────────────────
-
-window.API = {
-    getToken,
-    setToken,
-    getUser,
-    setUser,
-    clearAuth,
-    requireAuth,
-    requireAdmin,
-    requireGuest,
-    Auth,
-};
+  return {
+    // Token access (used by other scripts that need to attach the token)
+    getCustomerToken,
+    setCustomerToken,
+    clearCustomerToken,
+    getAdminToken,
+    setAdminToken,
+    clearAdminToken,
+    // Auth
+    register,
+    customerLogin,
+    adminLogin,
+    logout,
+    getMe,
+    // Timeslots
+    getTimeslots,
+    // Pets
+    getUserPets,
+    // Booking
+    storeBooking,
+  };
+})();

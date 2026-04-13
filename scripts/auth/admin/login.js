@@ -1,4 +1,8 @@
 // Connected to pages/admin/login.html
+// Depends on: api.js (loaded before this script in the HTML)
+
+const adminLoginForm = document.getElementById("adminLoginForm");
+
 if (adminLoginForm) {
   adminLoginForm.addEventListener("submit", async function (e) {
     e.preventDefault();
@@ -11,37 +15,11 @@ if (adminLoginForm) {
       return;
     }
 
-    /*
-    // USE THIS WHEN THE BACKEND ADMIN LOGIN API IS READY
-    const ADMIN_LOGIN_API_URL = "YOUR_BACKEND_ADMIN_LOGIN_URL";
-
     try {
-      const response = await fetch(ADMIN_LOGIN_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        alert(data.message || "Admin login failed.");
-        return;
-      }
-
+      await API.adminLogin(email, password);
       window.location.href = "./dashboard.html";
-      return;
     } catch (error) {
-      console.error("Admin login error:", error);
-      alert("Unable to reach the admin login service.");
-      return;
+      alert(error.message);
     }
-    */
-
-    // TEMPORARY: Delete this once the backend admin login API is ready.
-    alert("Temporary admin login only.");
-    window.location.href = "./dashboard.html";
   });
 }

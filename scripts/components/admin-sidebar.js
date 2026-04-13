@@ -38,15 +38,13 @@ function adminSidebar() {
       }
     },
 
-    handleLogout() {
-      // TEMPORARY FRONTEND-ONLY LOGIC:
-      // Backend developer should replace this with actual logout API/session destroy logic.
-      // Example:
-      // 1. Call logout endpoint
-      // 2. Clear auth token/session
-      // 3. Redirect to login page after successful logout
-
-      window.location.href = "../client/login.html";
+    async handleLogout() {
+      try {
+        await API.logout("admin");
+      } finally {
+        // Always redirect even if the API call fails (token is already cleared by api.js)
+        window.location.href = "../../pages/admin/login.html";
+      }
     },
   };
 }
