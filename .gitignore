@@ -1,5 +1,9 @@
 *.log
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 .env
 .env.backup
 .env.production
@@ -13,6 +17,7 @@
 /.zed
 /auth.json
 /node_modules
+node_modules/
 /public/build
 /public/hot
 /public/storage
@@ -22,3 +27,4 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+ehthumbs.db

@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Booking - Grooming Services</title>
+    <link href="../../css/output.css" rel="stylesheet" />
+    <link href="../../css/custom.css" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <!--
+      BACKEND HANDOFF:
+      Step 3 is a frontend preview of per-pet service selections. Keep the pet,
+      package, and add-on IDs consistent with the backend contract, and always let
+      the server rebuild pricing and validate service availability instead of
+      trusting the hidden inputs or client-side totals shown on this page.
+    -->
+    <main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- Back button -->
+      <a
+        href="./booking-pet-details.html"
+        class="inline-flex items-center gap-2 text-sm font-medium text-[#315b7e] hover:underline"
+      >
+        <span>&larr;</span>
+        <span>Back to Pet Details</span>
+      </a>
+
+      <!-- Header -->
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Book your Appointment</h1>
+        <p class="mt-2 text-sm text-slate-500">
+          Complete the form below to schedule grooming services for your pet.
+        </p>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 3 of 4</span>
+            <span>75% Complete</span>
+          </div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full w-[75%] rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Booking card -->
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Grooming Services</h2>
+          <p class="mt-2 text-sm text-slate-600">
+            Select the service package for your pet and add any optional add-on.
+          </p>
+        </div>
+
+        <!-- Empty-state summary for backend integration -->
+        <div class="mb-6 grid gap-4 md:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Schedule Summary
+            </p>
+            <p id="scheduleSummaryText" class="mt-2 text-sm text-slate-600">
+              No schedule selected yet.
+            </p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Pet Summary
+            </p>
+            <p id="petSummaryText" class="mt-2 text-sm text-slate-600">
+              No pet selected yet.
+            </p>
+          </div>
+        </div>
+
+        <!-- Notice -->
+        <div
+          id="serviceNotice"
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          No grooming service selected yet.
+        </div>
+
+        <form id="bookingServicesForm" class="space-y-8">
+          <!--
+            BACKEND NOTE:
+            These hidden inputs are placeholders for values from previous steps.
+            Your backend can replace sessionStorage logic with real DB/session values.
+          -->
+          <input type="hidden" name="booking_date" id="bookingDate" />
+          <input type="hidden" name="booking_time" id="bookingTime" />
+          <input type="hidden" name="pet_id" id="petId" />
+          <input type="hidden" name="pet_type" id="petType" />
+
+          <!-- Main service package -->
+          <section>
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-base font-semibold text-[#2f4b66]">
+                  Service Package <span class="text-red-500">*</span>
+                </h3>
+                <p class="text-sm text-slate-500">
+                  Choose one package or select one or more a la carte services
+                  that match the selected pet.
+                </p>
+              </div>
+            </div>
+
+            <!-- Dog Services -->
+            <div id="dogServicesSection" class="space-y-4">
+              <div class="flex items-center gap-2">
+                <span
+                  class="rounded-full bg-[#315b7e] px-3 py-1 text-xs font-semibold text-white"
+                >
+                  Dog Grooming Menu
+                </span>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2">
+                <!-- Partial Grooming -->
+                <label
+                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <input
+                    type="radio"
+                    name="service_package"
+                    value="partial_grooming"
+                    data-pet-category="dog"
+                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+                  />
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">
+                        Partial Grooming
+                      </h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Dog
+                      </span>
+                    </div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                      <li>• Trimming, Nail Clipping and Ear Cleaning</li>
+                      <li>• Cologne Spritz and Dry Shampoo</li>
+                    </ul>
+                    <div class="service-card__pricing">
+                      <span class="service-card__pricing-label"
+                        >Size &amp; Price</span
+                      >
+                      <div class="service-card__price-grid">
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Small</span>
+                          <span class="service-card__price-value">P400</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Medium</span>
+                          <span class="service-card__price-value">P500</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Large</span>
+                          <span class="service-card__price-value">P600+</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size"
+                            >Extra Large</span
+                          >
+                          <span class="service-card__price-value">P700+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <!-- Regular Dog Grooming -->
+                <label
+                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <input
+                    type="radio"
+                    name="service_package"
+                    value="regular_dog_grooming"
+                    data-pet-category="dog"
+                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+                  />
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">
+                        Regular Dog Grooming
+                      </h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Dog
+                      </span>
+                    </div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                      <li>• Bathing with Shampoo and Blow Drying</li>
+                      <li>• Summer-cut, Semi-Kalbo, Kalbo or Haircut</li>
+                      <li>
+                        • Spot, Sanitary area trim, paw pads, face, belly, or
+                        rear
+                      </li>
+                      <li>• Nail Clipping, Ear Cleaning and Tooth-brushing</li>
+                    </ul>
+                    <div class="service-card__pricing">
+                      <span class="service-card__pricing-label"
+                        >Size &amp; Price</span
+                      >
+                      <div class="service-card__price-grid">
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Small</span>
+                          <span class="service-card__price-value">P550</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Medium</span>
+                          <span class="service-card__price-value">P650</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Large</span>
+                          <span class="service-card__price-value">P850+</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size"
+                            >Extra Large</span
+                          >
+                          <span class="service-card__price-value">P1,050+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <!-- Deluxe Dog Grooming -->
+                <label
+                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <input
+                    type="radio"
+                    name="service_package"
+                    value="deluxe_dog_grooming"
+                    data-pet-category="dog"
+                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+                  />
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">
+                        Deluxe Dog Grooming
+                      </h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Dog
+                      </span>
+                    </div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                      <li>• Bathing with Shampoo and Blow Drying</li>
+                      <li>
+                        • Special haircut (Puppy Cut or Hairstyle of choice)
+                      </li>
+                      <li>• Nail Clipping, Ear Cleaning and Tooth-brushing</li>
+                      <li>• Cologne Spritzes</li>
+                    </ul>
+                    <div class="service-card__pricing">
+                      <span class="service-card__pricing-label"
+                        >Size &amp; Price</span
+                      >
+                      <div class="service-card__price-grid">
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Small</span>
+                          <span class="service-card__price-value">P650</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Medium</span>
+                          <span class="service-card__price-value">P750</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Large</span>
+                          <span class="service-card__price-value">P1,000+</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size"
+                            >Extra Large</span
+                          >
+                          <span class="service-card__price-value">P1,200+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <!-- Bath and Go -->
+                <label
+                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <input
+                    type="radio"
+                    name="service_package"
+                    value="bath_and_go"
+                    data-pet-category="dog"
+                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+                  />
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">Bath and Go!</h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Dog
+                      </span>
+                    </div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                      <li>• Bathing with Shampoo and Blow Drying</li>
+                      <li>• Nail Clipping, Ear Cleaning and Tooth-brushing</li>
+                    </ul>
+                    <div class="service-card__pricing">
+                      <span class="service-card__pricing-label"
+                        >Size &amp; Price</span
+                      >
+                      <div class="service-card__price-grid">
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Small</span>
+                          <span class="service-card__price-value">P450</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Medium</span>
+                          <span class="service-card__price-value">P550</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Large</span>
+                          <span class="service-card__price-value">P650+</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size"
+                            >Extra Large</span
+                          >
+                          <span class="service-card__price-value">P750+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Cat Services -->
+            <div id="catServicesSection" class="mt-8 space-y-4">
+              <div class="flex items-center gap-2">
+                <span
+                  class="rounded-full bg-[#315b7e] px-3 py-1 text-xs font-semibold text-white"
+                >
+                  Cat Grooming Menu
+                </span>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2">
+                <!-- Full Grooming -->
+                <label
+                  class="service-card flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <input
+                    type="radio"
+                    name="service_package"
+                    value="cat_full_grooming"
+                    data-pet-category="cat"
+                    class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+                  />
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">
+                        Full Grooming
+                      </h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Cat
+                      </span>
+                    </div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                      <li>• Bathing with Shampoo and Blow Drying</li>
+                      <li>• Haircut (If requested)</li>
+                      <li>• Nail Clipping</li>
+                      <li>• Ear Cleaning</li>
+                    </ul>
+                    <div class="service-card__pricing">
+                      <span class="service-card__pricing-label"
+                        >Size &amp; Price</span
+                      >
+                      <div class="service-card__price-grid">
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Small</span>
+                          <span class="service-card__price-value">P500</span>
+                        </div>
+                        <div class="service-card__price-pill">
+                          <span class="service-card__price-size">Medium</span>
+                          <span class="service-card__price-value">P600</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <!-- Ala carte -->
+                <div
+                  class="service-card flex h-full rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+                >
+                  <div class="service-card__content">
+                    <div class="flex items-start justify-between gap-3">
+                      <h4 class="font-semibold text-[#2f4b66]">
+                        Alacarte Menu
+                      </h4>
+                      <span
+                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                      >
+                        Cat
+                      </span>
+                    </div>
+                    <div class="mt-3 space-y-2">
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="nail_clipping"
+                          data-service-label="Nail Clipping: P50 - P100"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Nail Clipping: P50 - P100</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="ear_cleaning"
+                          data-service-label="Ear Cleaning: P150+"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Ear Cleaning: P150+</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="facial_trimming"
+                          data-service-label="Facial Trimming: P150"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Facial Trimming: P150</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="anal_sac_draining"
+                          data-service-label="Anal Sac Draining: P150"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Anal Sac Draining: P150</span>
+                      </label>
+                      <label
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          name="ala_carte_services"
+                          value="tooth_brushing"
+                          data-service-label="Tooth Brushing: P100+"
+                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                        />
+                        <span>Tooth Brushing: P100+</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Add-on -->
+          <section>
+            <div class="mb-3">
+              <h3 class="text-base font-semibold text-[#2f4b66]">
+                Add-On (Optional)
+              </h3>
+              <p class="text-sm text-slate-500">
+                Only one placeholder add-on is shown for now.
+              </p>
+            </div>
+
+            <label
+              class="flex cursor-pointer gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
+            >
+              <input
+                type="checkbox"
+                name="add_ons"
+                value="add_on_placeholder"
+                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+              />
+              <div class="min-w-0">
+                <div class="flex items-start justify-between gap-3">
+                  <h4 class="font-semibold text-[#2f4b66]">
+                    Add-on Placeholder
+                  </h4>
+                  <span
+                    class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                  >
+                    Optional
+                  </span>
+                </div>
+                <p class="mt-2 text-sm text-slate-600">
+                  Add-on service will be updated once the clinic confirms the
+                  available option.
+                </p>
+              </div>
+            </label>
+          </section>
+
+          <!-- Special instructions -->
+          <section>
+            <div class="mb-3">
+              <h3 class="text-base font-semibold text-[#2f4b66]">
+                Grooming Preferences &amp; Special Instructions
+              </h3>
+              <p class="text-sm text-slate-500">
+                Add notes like haircut preference, sensitivity, or anything the
+                groomer should know.
+              </p>
+            </div>
+
+            <textarea
+              id="specialInstructions"
+              name="special_instructions"
+              rows="5"
+              maxlength="500"
+              placeholder="Please let us know any specific grooming preferences, style requests, or special instructions for your pet..."
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+            ></textarea>
+
+            <p class="mt-2 text-xs text-slate-500">
+              Example: “Keep the fur longer around the face” or “Very sensitive
+              around paws, please be gentle.”
+            </p>
+          </section>
+
+          <!-- Buttons -->
+          <div
+            class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <a
+              href="./booking-pet-details.html"
+              class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white"
+            >
+              Back
+            </a>
+
+            <button
+              type="submit"
+              class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+            >
+              Next: Consent Signing
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script
+      type="module"
+      src="../../scripts/components/booking-services-step.js"
+    ></script>
+  </body>
+</html>
