@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await API.register({
         first_name: firstName,
         last_name: lastName,
-        email: email || null,
+        email,
         phone,
         password,
         password_confirmation: confirmPassword,
