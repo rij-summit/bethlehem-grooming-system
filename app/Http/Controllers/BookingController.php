@@ -82,6 +82,7 @@ class BookingController extends Controller
             'number_of_pets'=> 'required|integer|min:1|max:3',
             'special_notes' => 'nullable|string',
             'pets'          => 'required|array|min:1|max:3',
+            'pets.*.pet_id' => 'nullable|integer|exists:pets,pet_id',
             'pets.*.pet_name'   => 'required|string|max:100',
             'pets.*.species'    => 'nullable|string|max:50',
             'pets.*.breed'      => 'nullable|string|max:100',
@@ -157,20 +158,31 @@ class BookingController extends Controller
 
         // ── Save pets ─────────────────────────────────────
         foreach ($request->pets as $petData) {
-            // Save pet to pets table
-            $pet = Pet::create([
-                'user_id'            => $user->user_id,
-                'pet_name'           => $petData['pet_name'],
-                'species'            => $petData['species'] ?? 'Dog',
-                'breed'              => $petData['breed'] ?? null,
-                'weight'             => $petData['weight'] ?? null,
-                'color'              => $petData['color'] ?? null,
-                'size'               => $petData['size'] ?? null,
-                'fur_type'           => $petData['fur_type'] ?? null,
-                'medical_conditions' => $petData['medical_conditions'] ?? null,
-            ]);
+            $pet = null;
 
-            // Link pet to booking
+            // Reuse existing pet if pet_id is provided and belongs to this user
+            if (!empty($petData['pet_id'])) {
+                $pet = Pet::where('pet_id', $petData['pet_id'])
+                          ->where('user_id', $user->user_id)
+                          ->first();
+            }
+
+            // Create a new pet record if none was found
+            if (!$pet) {
+                $pet = Pet::create([
+                    'user_id'            => $user->user_id,
+                    'pet_name'           => $petData['pet_name'],
+                    'species'            => $petData['species'] ?? 'Dog',
+                    'breed'              => $petData['breed'] ?? null,
+                    'weight'             => $petData['weight'] ?? null,
+                    'color'              => $petData['color'] ?? null,
+                    'size'               => $petData['size'] ?? null,
+                    'fur_type'           => $petData['fur_type'] ?? null,
+                    'medical_conditions' => $petData['medical_conditions'] ?? null,
+                ]);
+            }
+
+            // Link pet to this booking
             BookingPet::create([
                 'booking_id'           => $booking->booking_id,
                 'pet_id'               => $pet->pet_id,
@@ -261,6 +273,19 @@ class BookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Booking cancelled successfully.',
+        ]);
+    }
+
+    // ── GET USER'S SAVED PETS ─────────────────────────────
+    public function getPets(Request $request)
+    {
+        $pets = Pet::where('user_id', $request->user()->user_id)
+                   ->orderBy('created_at', 'desc')
+                   ->get();
+
+        return response()->json([
+            'success' => true,
+            'pets'    => $pets,
         ]);
     }
 }

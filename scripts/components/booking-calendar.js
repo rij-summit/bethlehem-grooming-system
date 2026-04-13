@@ -3,39 +3,17 @@ import { getPhilippineHolidays } from "../services/holidays.js";
 /**
  * Booking Calendar Component
  *
- * Purpose:
  * Handles Step 1 of the booking process:
- * - calendar display
- * - date selection
- * - time slot selection
- * - PH time validation
- * - holiday blocking
+ * - Calendar display and date selection
+ * - Time slot selection fetched from GET /api/timeslots?date=
+ * - PH time validation and holiday blocking
  * - 3-day booking window
  *
- * Important for backend developer:
- * Frontend validation is for UX only.
- * Backend must still validate:
- * - past date/time
- * - clinic hours
- * - holiday blocking
- * - actual slot availability / double booking
+ * Stores selected schedule in sessionStorage as:
+ * { date, time, startHour, endHour, window_id }
+ * window_id is required by the booking submission payload.
  */
 
-// =========================
-// CONFIGURATION
-// =========================
-
-// Clinic operating hours.
-// 8 means 8:00 AM, 17 means 5:00 PM.
-// Last selectable slot here is 4:00 PM - 5:00 PM.
-const CLINIC_OPEN_HOUR = 8;
-const CLINIC_CLOSE_HOUR = 17;
-
-// 1-hour time blocks
-const SLOT_DURATION_HOURS = 1;
-
-// Booking window rule:
-// User can only book within today + next 2 days = 3-day window total.
 const MAX_BOOKING_DAYS_AHEAD = 3;
 
 // =========================
@@ -45,8 +23,9 @@ const MAX_BOOKING_DAYS_AHEAD = 3;
 const state = {
   currentMonth: null,
   selectedDateKey: null,
-  selectedSlot: null,
+  selectedSlot: null,   // { window_id, window_label, start_time, end_time, is_full }
   holidays: new Map(),
+  timeslots: [],        // API response for the selected date
 };
 
 // =========================
@@ -79,11 +58,8 @@ function getManilaNowParts() {
   }).formatToParts(new Date());
 
   const result = {};
-
   for (const part of parts) {
-    if (part.type !== "literal") {
-      result[part.type] = part.value;
-    }
+    if (part.type !== "literal") result[part.type] = part.value;
   }
 
   return {
@@ -97,9 +73,7 @@ function getManilaNowParts() {
 
 function getTodayKeyInManila() {
   const now = getManilaNowParts();
-  return `${now.year}-${String(now.month).padStart(2, "0")}-${String(
-    now.day,
-  ).padStart(2, "0")}`;
+  return `${now.year}-${String(now.month).padStart(2, "0")}-${String(now.day).padStart(2, "0")}`;
 }
 
 function getCurrentMinutesInManila() {
@@ -112,9 +86,7 @@ function getCurrentMinutesInManila() {
 // =========================
 
 function toDateKey(year, monthIndex, day) {
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(
-    day,
-  ).padStart(2, "0")}`;
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function dateKeyToLocalDate(dateKey) {
@@ -123,14 +95,12 @@ function dateKeyToLocalDate(dateKey) {
 }
 
 function formatLongDate(dateKey) {
-  const date = dateKeyToLocalDate(dateKey);
-
   return new Intl.DateTimeFormat("en-PH", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-  }).format(date);
+  }).format(dateKeyToLocalDate(dateKey));
 }
 
 function isPastDate(dateKey) {
@@ -151,82 +121,65 @@ function getHolidayLabel(dateKey) {
   return holiday.localName || holiday.name || "Holiday";
 }
 
-/**
- * 3-day booking window logic:
- * Allowed:
- * - today
- * - tomorrow
- * - day after tomorrow
- *
- * Blocked:
- * - anything beyond that
- */
 function isBeyondBookingWindow(dateKey) {
   const todayParts = getManilaNowParts();
   const today = new Date(todayParts.year, todayParts.month - 1, todayParts.day);
   const target = dateKeyToLocalDate(dateKey);
-
-  const diffMs = target - today;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
+  const diffDays = Math.floor((target - today) / (1000 * 60 * 60 * 24));
   return diffDays >= MAX_BOOKING_DAYS_AHEAD;
 }
 
 function isDateDisabled(dateKey) {
-  return (
-    isPastDate(dateKey) || isHoliday(dateKey) || isBeyondBookingWindow(dateKey)
-  );
+  return isPastDate(dateKey) || isHoliday(dateKey) || isBeyondBookingWindow(dateKey);
 }
 
 // =========================
 // SLOT HELPERS
 // =========================
 
-function formatHour(hour24) {
-  const period = hour24 >= 12 ? "PM" : "AM";
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${hour12}:00 ${period}`;
+/**
+ * Parse "HH:MM:SS" time string and return total minutes since midnight.
+ */
+function timeStringToMinutes(timeStr) {
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
 }
 
-function buildSlotLabel(startHour, endHour) {
-  return `${formatHour(startHour)} - ${formatHour(endHour)}`;
-}
+/**
+ * Check if a slot from the API should be disabled for the selected date.
+ * For today, disable any slot whose start time has already passed in Manila time.
+ */
+function isSlotDisabled(slot) {
+  if (slot.is_full) return true;
 
-function getTimeSlots() {
-  const slots = [];
-
-  for (
-    let startHour = CLINIC_OPEN_HOUR;
-    startHour < CLINIC_CLOSE_HOUR;
-    startHour += SLOT_DURATION_HOURS
-  ) {
-    const endHour = startHour + SLOT_DURATION_HOURS;
-
-    slots.push({
-      startHour,
-      endHour,
-      label: buildSlotLabel(startHour, endHour),
-    });
-  }
-
-  return slots;
-}
-
-function isSlotDisabled(dateKey, slot) {
-  if (!dateKey) return true;
-  if (isDateDisabled(dateKey)) return true;
-
-  // For today in PH time, block time slots that already started or passed
-  if (isToday(dateKey)) {
+  if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
-    const slotStartMinutes = slot.startHour * 60;
-
-    if (currentMinutes >= slotStartMinutes) {
-      return true;
-    }
+    const slotStartMinutes = timeStringToMinutes(slot.start_time);
+    if (currentMinutes >= slotStartMinutes) return true;
   }
 
   return false;
+}
+
+// =========================
+// FETCH TIMESLOTS FROM API
+// =========================
+
+async function fetchTimeslots(dateKey) {
+  elements.timeSlots.innerHTML =
+    `<p class="col-span-full text-sm text-slate-400">Loading available times...</p>`;
+
+  try {
+    const data = await API.getTimeslots(dateKey);
+    state.timeslots = data.windows || [];
+  } catch {
+    state.timeslots = [];
+    elements.timeSlots.innerHTML =
+      `<p class="col-span-full text-sm text-red-500">Could not load time slots. Please try again.</p>`;
+    return false;
+  }
+
+  return true;
 }
 
 // =========================
@@ -237,7 +190,6 @@ async function loadHolidaysForVisibleYear() {
   const year = state.currentMonth.getFullYear();
   state.holidays = await getPhilippineHolidays(year);
 
-  // Clear invalid selected date if it became unavailable
   if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {
     state.selectedDateKey = null;
     state.selectedSlot = null;
@@ -262,32 +214,25 @@ function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
   button.type = "button";
   button.textContent = day;
 
-  const baseClasses = "h-12 w-full rounded-xl text-sm font-semibold transition";
-
-  const availableClasses =
-    "bg-white text-slate-700 shadow-sm hover:bg-[#d8eafb]";
-
-  const disabledClasses = "bg-slate-200 text-slate-400 cursor-not-allowed";
-
-  const selectedClasses = "ring-2 ring-[#315b7e] bg-[#b9d7f1] text-[#1f3d58]";
-
   button.className = [
-    baseClasses,
-    disabled ? disabledClasses : availableClasses,
-    selected ? selectedClasses : "",
+    "h-12 w-full rounded-xl text-sm font-semibold transition",
+    disabled
+      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+      : "bg-white text-slate-700 shadow-sm hover:bg-[#d8eafb]",
+    selected ? "ring-2 ring-[#315b7e] bg-[#b9d7f1] text-[#1f3d58]" : "",
   ].join(" ");
 
-  if (holidayLabel) {
-    button.title = holidayLabel;
-  }
-
+  if (holidayLabel) button.title = holidayLabel;
   if (disabled) {
     button.disabled = true;
   } else {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       state.selectedDateKey = dateKey;
       state.selectedSlot = null;
-      renderAll();
+      renderCalendarGrid();
+      updateSelectedSchedule();
+      const ok = await fetchTimeslots(dateKey);
+      if (ok) renderTimeSlots();
     });
   }
 
@@ -297,12 +242,8 @@ function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
 function renderCalendarGrid() {
   const year = state.currentMonth.getFullYear();
   const monthIndex = state.currentMonth.getMonth();
-
-  const firstDay = new Date(year, monthIndex, 1);
-  const lastDay = new Date(year, monthIndex + 1, 0);
-
-  const firstWeekday = firstDay.getDay(); // Sunday = 0
-  const daysInMonth = lastDay.getDate();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
   elements.calendarGrid.innerHTML = "";
 
@@ -312,76 +253,73 @@ function renderCalendarGrid() {
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateKey = toDateKey(year, monthIndex, day);
-    const disabled = isDateDisabled(dateKey);
-    const selected = state.selectedDateKey === dateKey;
-    const holidayLabel = getHolidayLabel(dateKey);
-
-    const button = createDateButton({
-      day,
-      dateKey,
-      disabled,
-      selected,
-      holidayLabel,
-    });
-
-    elements.calendarGrid.appendChild(button);
+    elements.calendarGrid.appendChild(
+      createDateButton({
+        day,
+        dateKey,
+        disabled: isDateDisabled(dateKey),
+        selected: state.selectedDateKey === dateKey,
+        holidayLabel: getHolidayLabel(dateKey),
+      }),
+    );
   }
 }
 
 // =========================
-// RENDER SLOTS
+// RENDER SLOTS (from API)
 // =========================
 
 function renderTimeSlots() {
   elements.timeSlots.innerHTML = "";
 
-  const slots = getTimeSlots();
+  if (state.timeslots.length === 0) {
+    elements.timeSlots.innerHTML =
+      `<p class="col-span-full text-sm text-slate-400">No time slots available for this date.</p>`;
+    return;
+  }
 
-  slots.forEach((slot) => {
-    const disabled = isSlotDisabled(state.selectedDateKey, slot);
-    const selected =
-      state.selectedSlot &&
-      state.selectedSlot.startHour === slot.startHour &&
-      state.selectedSlot.endHour === slot.endHour;
+  state.timeslots.forEach((slot) => {
+    const disabled = isSlotDisabled(slot);
+    const selected = state.selectedSlot?.window_id === slot.window_id;
 
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = slot.label;
 
-    const baseClasses =
-      "rounded-2xl border px-4 py-3 text-sm font-semibold transition";
+    // Show label + remaining slots
+    const remainingText = slot.is_full
+      ? "Full"
+      : `${slot.remaining} slot${slot.remaining !== 1 ? "s" : ""} left`;
 
-    const availableClasses =
-      "border-[#a8c8e6] bg-[#edf6fd] text-slate-700 hover:bg-[#dbeefe]";
-
-    const disabledClasses =
-      "border-slate-300 bg-slate-300 text-slate-500 cursor-not-allowed";
-
-    const selectedClasses =
-      "ring-2 ring-[#315b7e] border-[#315b7e] bg-[#315b7e] text-white";
+    button.innerHTML = `
+      <span class="block font-semibold">${slot.window_label}</span>
+      <span class="block text-xs mt-0.5 ${slot.is_full ? "text-red-400" : "text-slate-400"}">${remainingText}</span>
+      ${slot.recommended ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>` : ""}
+    `;
 
     button.className = [
-      baseClasses,
-      disabled ? disabledClasses : availableClasses,
-      selected ? selectedClasses : "",
+      "rounded-2xl border px-4 py-3 text-sm transition text-left",
+      disabled
+        ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
+        : "border-[#a8c8e6] bg-[#edf6fd] text-slate-700 hover:bg-[#dbeefe]",
+      selected ? "ring-2 ring-[#315b7e] border-[#315b7e] bg-[#315b7e] text-white" : "",
     ].join(" ");
-    button.setAttribute("aria-pressed", String(Boolean(selected)));
 
+    button.setAttribute("aria-pressed", String(selected));
     if (disabled) {
       button.disabled = true;
     } else {
       button.addEventListener("click", () => {
         state.selectedSlot = slot;
 
-        // Temporary frontend storage so next step can use selected schedule.
-        // Backend must still revalidate everything on submit.
+        // Store schedule including window_id for API submission
         sessionStorage.setItem(
           "bookingSchedule",
           JSON.stringify({
             date: state.selectedDateKey,
-            time: state.selectedSlot.label,
-            startHour: state.selectedSlot.startHour,
-            endHour: state.selectedSlot.endHour,
+            time: slot.window_label,
+            window_id: slot.window_id,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
           }),
         );
 
@@ -396,16 +334,14 @@ function renderTimeSlots() {
 
 function updateSelectedSchedule() {
   if (!state.selectedDateKey || !state.selectedSlot) {
-    elements.selectedScheduleText.textContent =
-      "Please select a date and time.";
+    elements.selectedScheduleText.textContent = "Please select a date and time.";
     elements.nextStepBtn.disabled = true;
     elements.nextStepBtn.classList.add("opacity-50", "cursor-not-allowed");
     return;
   }
 
-  elements.selectedScheduleText.textContent = `${formatLongDate(
-    state.selectedDateKey,
-  )} at ${state.selectedSlot.label}`;
+  elements.selectedScheduleText.textContent =
+    `${formatLongDate(state.selectedDateKey)} at ${state.selectedSlot.window_label}`;
 
   elements.nextStepBtn.disabled = false;
   elements.nextStepBtn.classList.remove("opacity-50", "cursor-not-allowed");
@@ -417,26 +353,23 @@ function updateSelectedSchedule() {
 
 function canGoToPreviousMonth() {
   const now = getManilaNowParts();
-  const currentVisibleYear = state.currentMonth.getFullYear();
-  const currentVisibleMonth = state.currentMonth.getMonth();
-
   return !(
-    currentVisibleYear === now.year && currentVisibleMonth === now.month - 1
+    state.currentMonth.getFullYear() === now.year &&
+    state.currentMonth.getMonth() === now.month - 1
   );
 }
 
 function bindEvents() {
   elements.prevMonthBtn.addEventListener("click", async () => {
     if (!canGoToPreviousMonth()) return;
-
     state.currentMonth = new Date(
       state.currentMonth.getFullYear(),
       state.currentMonth.getMonth() - 1,
       1,
     );
-
     await loadHolidaysForVisibleYear();
-    renderAll();
+    renderCalendarGrid();
+    renderMonthHeader();
   });
 
   elements.nextMonthBtn.addEventListener("click", async () => {
@@ -445,28 +378,15 @@ function bindEvents() {
       state.currentMonth.getMonth() + 1,
       1,
     );
-
     await loadHolidaysForVisibleYear();
-    renderAll();
+    renderCalendarGrid();
+    renderMonthHeader();
   });
 
   elements.nextStepBtn.addEventListener("click", () => {
     if (!state.selectedDateKey || !state.selectedSlot) return;
-
-    // Replace this later with your real Step 2 page if needed
     window.location.href = "./booking-pet-details.html";
   });
-}
-
-// =========================
-// MAIN RENDER
-// =========================
-
-function renderAll() {
-  renderMonthHeader();
-  renderCalendarGrid();
-  renderTimeSlots();
-  updateSelectedSchedule();
 }
 
 // =========================
@@ -479,5 +399,7 @@ export async function initBookingCalendar() {
 
   await loadHolidaysForVisibleYear();
   bindEvents();
-  renderAll();
+  renderMonthHeader();
+  renderCalendarGrid();
+  updateSelectedSchedule();
 }

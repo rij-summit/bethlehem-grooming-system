@@ -31,7 +31,7 @@ class Booking extends Model
 
     public function timeWindow()
     {
-        return $this->hasMany(Booking::class, 'window_id', 'window_id');
+        return $this->belongsTo(TimeWindow::class, 'window_id', 'window_id');
     }
 
     // Booking has many pets
