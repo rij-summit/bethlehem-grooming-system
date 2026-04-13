@@ -1,17 +1,18 @@
 // Connected to pages/client/login.html
+// Depends on: api.js (loaded before this script in the HTML)
+
 const customerLoginForm = document.getElementById("customerLoginForm");
-const adminLoginForm = document.getElementById("adminLoginForm");
 const customerPhoneInput = document.getElementById("phone");
 
 if (customerPhoneInput && customerLoginForm) {
   customerPhoneInput.addEventListener("input", function () {
-    const digitsOnlyValue = this.value.replace(/\D/g, "").slice(0, 11);
-    const isPotentialMobile =
-      digitsOnlyValue.length === 0 || /^09\d{0,9}$/.test(digitsOnlyValue);
+    const digitsOnly = this.value.replace(/\D/g, "").slice(0, 11);
+    const isValid =
+      digitsOnly.length === 0 || /^09\d{0,9}$/.test(digitsOnly);
 
-    this.value = digitsOnlyValue;
+    this.value = digitsOnly;
     this.setCustomValidity(
-      isPotentialMobile
+      isValid
         ? ""
         : "Please enter a valid 11-digit mobile number starting with 09."
     );
@@ -42,37 +43,11 @@ if (customerLoginForm) {
 
     customerPhoneInput.setCustomValidity("");
 
-    /*
-    // USE THIS WHEN THE BACKEND LOGIN API IS READY
-    const CUSTOMER_LOGIN_API_URL = "YOUR_BACKEND_LOGIN_URL";
-
     try {
-      const response = await fetch(CUSTOMER_LOGIN_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone, password }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        alert(data.message || "Customer login failed.");
-        return;
-      }
-
+      await API.customerLogin(phone, password);
       window.location.href = "./dashboard.html";
-      return;
     } catch (error) {
-      console.error("Customer login error:", error);
-      alert("Unable to reach the customer login service.");
-      return;
+      alert(error.message);
     }
-    */
-
-    // TEMPORARY: Delete this once the backend login API is ready.
-    alert("Temporary customer login only.");
-    window.location.href = "./dashboard.html";
   });
 }

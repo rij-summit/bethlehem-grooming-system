@@ -127,7 +127,7 @@
         <!-- Backend note: client name and email should come from logged-in session -->
         <div class="p-4">
           <div
-            class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3"
+            class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3 mb-3"
           >
             <div
               class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold"
@@ -139,6 +139,15 @@
               <p class="text-sm text-white/80">Pet Owner</p>
             </div>
           </div>
+
+          <button
+            type="button"
+            id="clientLogoutBtn"
+            class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 font-bold text-white transition hover:bg-white/20"
+          >
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+            <span>Logout</span>
+          </button>
         </div>
       </aside>
 
@@ -421,6 +430,7 @@
       </main>
     </div>
 
+    <script src="../../scripts/api.js"></script>
     <script>
       // Initialize Lucide icons
       lucide.createIcons();
@@ -470,6 +480,14 @@
       mobileSidebarQuery.addEventListener("change", (event) => {
         if (!event.matches) {
           closeSidebar();
+        }
+      });
+
+      document.getElementById("clientLogoutBtn").addEventListener("click", async () => {
+        try {
+          await API.logout("customer");
+        } finally {
+          window.location.href = "../../pages/client/login.html";
         }
       });
 
