@@ -298,6 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
       reference: reference || "",
       lockedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+      token: localStorage.getItem("customer_token") || "",
     });
 
     try {

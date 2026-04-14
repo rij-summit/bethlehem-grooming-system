@@ -148,6 +148,42 @@ var API = (() => {
     return request("POST", "/booking/store", payload, getCustomerToken());
   }
 
+  async function getBookingHistory() {
+    // GET /api/booking/history  (protected)
+    return request("GET", "/booking/history", null, getCustomerToken());
+  }
+
+  async function cancelBooking(bookingId, reason = null) {
+    // POST /api/booking/cancel  (protected)
+    return request("POST", "/booking/cancel", { booking_id: bookingId, reason }, getCustomerToken());
+  }
+
+  async function rescheduleBooking(bookingId, newDate, newWindowId) {
+    // POST /api/booking/reschedule  (protected)
+    return request("POST", "/booking/reschedule", {
+      booking_id:    bookingId,
+      new_date:      newDate,
+      new_window_id: newWindowId,
+    }, getCustomerToken());
+  }
+
+  // ── Admin ─────────────────────────────────────────────────────────────────
+
+  async function getNotifications() {
+    // GET /api/admin/notifications  (protected — admin token)
+    return request("GET", "/admin/notifications", null, getAdminToken());
+  }
+
+  async function markNotificationRead(notificationId) {
+    // PATCH /api/admin/notifications/{id}/read  (protected — admin token)
+    return request("PATCH", `/admin/notifications/${notificationId}/read`, null, getAdminToken());
+  }
+
+  async function markAllNotificationsRead() {
+    // PATCH /api/admin/notifications/read-all  (protected — admin token)
+    return request("PATCH", "/admin/notifications/read-all", null, getAdminToken());
+  }
+
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
@@ -170,5 +206,12 @@ var API = (() => {
     getUserPets,
     // Booking
     storeBooking,
+    getBookingHistory,
+    cancelBooking,
+    rescheduleBooking,
+    // Admin notifications
+    getNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
   };
 })();
