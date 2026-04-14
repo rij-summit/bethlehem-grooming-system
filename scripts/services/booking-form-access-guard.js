@@ -45,6 +45,13 @@ function isLockExpired(lock) {
   return Date.now() > expiresAt;
 }
 
+function isLockForCurrentUser(lock) {
+  // If the lock has no token, treat it as belonging to the current user (legacy)
+  if (!lock.token) return true;
+  const currentToken = localStorage.getItem("customer_token") || "";
+  return lock.token === currentToken;
+}
+
 function shouldBypassGuard() {
   const params = new URLSearchParams(window.location.search);
   return (
@@ -93,7 +100,7 @@ export function enforceBookingFormAccessGuard(options = {}) {
     return false;
   }
 
-  if (isLockExpired(lock)) {
+  if (isLockExpired(lock) || !isLockForCurrentUser(lock)) {
     clearBookingFormLock();
     return false;
   }

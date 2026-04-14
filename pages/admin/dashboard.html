@@ -257,18 +257,52 @@
                     ></span>
                   </div>
 
-                  <!-- BACKEND: replace with real notification count -->
-                  <button
-                    type="button"
-                    class="relative flex items-center justify-center rounded-xl bg-[#315b7e] p-3 text-white"
-                  >
-                    <i data-lucide="bell" class="h-5 w-5"></i>
-                    <span
-                      class="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold"
-                      x-text="notificationCount"
+                  <!-- Notification bell -->
+                  <div class="relative" @click.outside="closeNotifications()">
+                    <button
+                      type="button"
+                      @click="toggleNotifications()"
+                      class="relative flex items-center justify-center rounded-xl bg-[#315b7e] p-3 text-white"
                     >
-                    </span>
-                  </button>
+                      <i data-lucide="bell" class="h-5 w-5"></i>
+                      <span
+                        x-show="notificationCount > 0"
+                        x-text="notificationCount"
+                        class="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold"
+                      ></span>
+                    </button>
+
+                    <!-- Dropdown -->
+                    <div
+                      x-show="notificationsOpen"
+                      x-transition
+                      class="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-[#d7e3ef] bg-white shadow-xl"
+                    >
+                      <div class="flex items-center justify-between border-b border-[#e8f0f8] px-4 py-3">
+                        <span class="text-sm font-semibold text-slate-700">Notifications</span>
+                        <button
+                          type="button"
+                          @click="handleMarkAllRead()"
+                          class="text-xs text-[#315b7e] hover:underline"
+                        >Mark all as read</button>
+                      </div>
+
+                      <ul class="max-h-72 overflow-y-auto divide-y divide-[#f0f4f8]">
+                        <template x-if="notifications.length === 0">
+                          <li class="px-4 py-6 text-center text-sm text-slate-400">No notifications yet.</li>
+                        </template>
+                        <template x-for="notif in notifications" :key="notif.notification_id">
+                          <li
+                            class="px-4 py-3"
+                            :class="notif.is_read ? 'bg-white' : 'bg-[#eaf4fb]'"
+                          >
+                            <p class="text-sm text-slate-700" x-text="notif.message"></p>
+                            <p class="mt-1 text-xs text-slate-400" x-text="formatNotificationTime(notif.created_at)"></p>
+                          </li>
+                        </template>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

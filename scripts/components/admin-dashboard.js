@@ -12,6 +12,8 @@ function adminDashboard() {
     currentCapacity: 0,
     maxCapacity: 20,
     notificationCount: 0,
+    notificationsOpen: false,
+    notifications: [],
     pendingActions: {},
     config: {
       bootstrap: null,
@@ -67,6 +69,10 @@ function adminDashboard() {
       this.dispatchDashboardEvent("admin-dashboard:ready", {
         state: this.getState(),
       });
+
+      // Load notifications immediately, then poll every 30 seconds
+      await this.loadNotifications();
+      setInterval(() => this.loadNotifications(), 30000);
     },
 
     // Exposes a small runtime API so backend scripts can update the dashboard safely.
@@ -935,6 +941,48 @@ function adminDashboard() {
         if (window.lucide) {
           window.lucide.createIcons();
         }
+      });
+    },
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    async loadNotifications() {
+      try {
+        const data = await API.getNotifications();
+        this.notifications    = data.notifications || [];
+        this.notificationCount = data.unread_count  || 0;
+      } catch (error) {
+        // Silently fail — notifications are non-critical
+        console.error("Failed to load notifications:", error);
+      }
+    },
+
+    toggleNotifications() {
+      this.notificationsOpen = !this.notificationsOpen;
+    },
+
+    closeNotifications() {
+      this.notificationsOpen = false;
+    },
+
+    async handleMarkAllRead() {
+      try {
+        await API.markAllNotificationsRead();
+        this.notifications    = this.notifications.map((n) => ({ ...n, is_read: true }));
+        this.notificationCount = 0;
+      } catch (error) {
+        console.error("Failed to mark notifications as read:", error);
+      }
+    },
+
+    formatNotificationTime(createdAt) {
+      if (!createdAt) return "";
+      const date = new Date(createdAt);
+      return date.toLocaleString("en-PH", {
+        month: "short",
+        day:   "numeric",
+        hour:  "numeric",
+        minute: "2-digit",
       });
     },
   };

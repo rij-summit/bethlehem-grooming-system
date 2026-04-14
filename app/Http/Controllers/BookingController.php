@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Models\Booking;
+use App\Models\Notification;
 use App\Models\TimeWindow;
 use App\Models\Pet;
 use App\Models\BookingPet;
@@ -190,6 +191,15 @@ class BookingController extends Controller
             ]);
         }
 
+        // ── Create notification for admin ─────────────────
+        Notification::create([
+            'type'       => 'booked',
+            'booking_id' => $booking->booking_id,
+            'message'    => "New booking {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
+            'is_read'    => 0,
+            'created_at' => now(),
+        ]);
+
         return response()->json([
             'success'   => true,
             'message'   => 'Booking confirmed successfully!',
@@ -247,8 +257,9 @@ class BookingController extends Controller
             'reason'     => 'nullable|string',
         ]);
 
+        $user    = $request->user();
         $booking = Booking::where('booking_id', $request->booking_id)
-            ->where('user_id', $request->user()->user_id)
+            ->where('user_id', $user->user_id)
             ->first();
 
         if (!$booking) {
@@ -265,14 +276,109 @@ class BookingController extends Controller
             ], 422);
         }
 
+        if ($booking->cancel_count >= 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have reached the maximum number of cancellations (2) for this booking.',
+            ], 422);
+        }
+
         $booking->update([
             'status'              => 'cancelled',
             'cancellation_reason' => $request->reason,
+            'cancel_count'        => $booking->cancel_count + 1,
+        ]);
+
+        Notification::create([
+            'type'       => 'cancelled',
+            'booking_id' => $booking->booking_id,
+            'message'    => "Booking {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
+            'is_read'    => 0,
+            'created_at' => now(),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Booking cancelled successfully.',
+        ]);
+    }
+
+    // ── RESCHEDULE A BOOKING ──────────────────────────────
+    public function reschedule(Request $request)
+    {
+        $request->validate([
+            'booking_id'    => 'required|exists:bookings,booking_id',
+            'new_date'      => 'required|date|after_or_equal:today',
+            'new_window_id' => 'required|exists:time_windows,window_id',
+        ]);
+
+        $user    = $request->user();
+        $booking = Booking::where('booking_id', $request->booking_id)
+            ->where('user_id', $user->user_id)
+            ->first();
+
+        if (!$booking) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Booking not found.',
+            ], 404);
+        }
+
+        if ($booking->status === 'cancelled') {
+            return response()->json([
+                'success' => false,
+                'message' => 'A cancelled booking cannot be rescheduled.',
+            ], 422);
+        }
+
+        if ($booking->reschedule_count >= 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have reached the maximum number of reschedules (2) for this booking.',
+            ], 422);
+        }
+
+        // Check that the target window is not full
+        $newDate   = $request->new_date;
+        $newWindow = TimeWindow::find($request->new_window_id);
+
+        $windowBooked = Booking::where('window_id', $request->new_window_id)
+            ->where('booking_date', $newDate)
+            ->whereNotIn('status', ['cancelled'])
+            ->where('booking_id', '!=', $booking->booking_id)
+            ->count();
+
+        if ($windowBooked >= $newWindow->max_slots) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sorry, that time slot is already full. Please choose another.',
+            ], 422);
+        }
+
+        $booking->update([
+            'booking_date'     => $newDate,
+            'window_id'        => $request->new_window_id,
+            'reschedule_count' => $booking->reschedule_count + 1,
+            'status'           => 'waiting_to_arrive',
+        ]);
+
+        Notification::create([
+            'type'       => 'rescheduled',
+            'booking_id' => $booking->booking_id,
+            'message'    => "Booking {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
+            'is_read'    => 0,
+            'created_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking rescheduled successfully.',
+            'booking' => [
+                'booking_reference' => $booking->booking_reference,
+                'booking_date'      => $booking->booking_date,
+                'window'            => $newWindow->window_label,
+                'reschedule_count'  => $booking->reschedule_count,
+            ],
         ]);
     }
 

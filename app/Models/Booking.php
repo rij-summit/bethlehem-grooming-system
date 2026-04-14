@@ -22,6 +22,8 @@ class Booking extends Model
         'special_notes',
         'cancellation_reason',
         'total_amount',
+        'reschedule_count',
+        'cancel_count',
     ];
 
     public function user()
