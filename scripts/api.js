@@ -169,6 +169,26 @@ var API = (() => {
 
   // ── Admin ─────────────────────────────────────────────────────────────────
 
+  async function getAdminBookings() {
+    // GET /api/admin/bookings  (protected — admin token)
+    return request("GET", "/admin/bookings", null, getAdminToken());
+  }
+
+  async function adminCheckIn(bookingId) {
+    // POST /api/admin/bookings/{id}/check-in  (protected — admin token)
+    return request("POST", `/admin/bookings/${bookingId}/check-in`, null, getAdminToken());
+  }
+
+  async function adminStartGrooming(bookingId) {
+    // POST /api/admin/bookings/{id}/start-grooming  (protected — admin token)
+    return request("POST", `/admin/bookings/${bookingId}/start-grooming`, null, getAdminToken());
+  }
+
+  async function adminMarkDone(bookingId) {
+    // POST /api/admin/bookings/{id}/mark-done  (protected — admin token)
+    return request("POST", `/admin/bookings/${bookingId}/mark-done`, null, getAdminToken());
+  }
+
   async function getNotifications() {
     // GET /api/admin/notifications  (protected — admin token)
     return request("GET", "/admin/notifications", null, getAdminToken());
@@ -209,6 +229,11 @@ var API = (() => {
     getBookingHistory,
     cancelBooking,
     rescheduleBooking,
+    // Admin bookings
+    getAdminBookings,
+    adminCheckIn,
+    adminStartGrooming,
+    adminMarkDone,
     // Admin notifications
     getNotifications,
     markNotificationRead,

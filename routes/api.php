@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\NotificationController;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -33,4 +34,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/notifications',              [NotificationController::class, 'index']);
     Route::patch('/admin/notifications/read-all',   [NotificationController::class, 'markAllRead']);
     Route::patch('/admin/notifications/{id}/read',  [NotificationController::class, 'markRead']);
+
+    // Admin — Booking management
+    Route::get('/admin/bookings',                          [AdminBookingController::class, 'index']);
+    Route::post('/admin/bookings/{id}/check-in',           [AdminBookingController::class, 'checkIn']);
+    Route::post('/admin/bookings/{id}/start-grooming',     [AdminBookingController::class, 'startGrooming']);
+    Route::post('/admin/bookings/{id}/mark-done',          [AdminBookingController::class, 'markDone']);
 });
