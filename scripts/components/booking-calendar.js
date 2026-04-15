@@ -26,6 +26,7 @@ const state = {
   selectedSlot: null,   // { window_id, window_label, start_time, end_time, is_full }
   holidays: new Map(),
   timeslots: [],        // API response for the selected date
+  dayFull: false,       // true when the selected date has hit 20-booking capacity
 };
 
 // =========================
@@ -172,8 +173,10 @@ async function fetchTimeslots(dateKey) {
   try {
     const data = await API.getTimeslots(dateKey);
     state.timeslots = data.windows || [];
+    state.dayFull   = data.day_full === true;
   } catch {
     state.timeslots = [];
+    state.dayFull   = false;
     elements.timeSlots.innerHTML =
       `<p class="col-span-full text-sm text-red-500">Could not load time slots. Please try again.</p>`;
     return false;
@@ -228,7 +231,8 @@ function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
   } else {
     button.addEventListener("click", async () => {
       state.selectedDateKey = dateKey;
-      state.selectedSlot = null;
+      state.selectedSlot    = null;
+      state.dayFull         = false;
       renderCalendarGrid();
       updateSelectedSchedule();
       const ok = await fetchTimeslots(dateKey);
@@ -271,6 +275,16 @@ function renderCalendarGrid() {
 
 function renderTimeSlots() {
   elements.timeSlots.innerHTML = "";
+
+  if (state.dayFull) {
+    elements.timeSlots.innerHTML = `
+      <div class="col-span-full rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center">
+        <p class="font-semibold text-red-600">This date is fully booked (20/20).</p>
+        <p class="mt-1 text-sm text-red-500">Please choose a different date or time slot.</p>
+      </div>`;
+    updateSelectedSchedule();
+    return;
+  }
 
   if (state.timeslots.length === 0) {
     elements.timeSlots.innerHTML =

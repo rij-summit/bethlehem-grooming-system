@@ -1073,6 +1073,83 @@
               </article>
             </template>
           </section>
+          <!-- View Details Modal -->
+          <div
+            x-show="detailsModalOpen"
+            x-transition
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+            @click.self="closeDetailsModal()"
+          >
+            <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
+
+              <!-- Header -->
+              <div class="flex items-center justify-between bg-[#315b7e] px-6 py-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70">Booking Details</p>
+                  <h4 class="text-lg font-bold text-white" x-text="detailsBooking?.bookingReference ?? '—'"></h4>
+                </div>
+                <button type="button" @click="closeDetailsModal()" class="text-white/70 hover:text-white">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+
+              <!-- Body -->
+              <div class="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-5" x-show="detailsBooking">
+
+                <!-- Owner -->
+                <div>
+                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Owner</p>
+                  <p class="font-semibold text-slate-800" x-text="detailsBooking?.ownerName ?? '—'"></p>
+                  <p class="text-sm text-slate-500" x-text="detailsBooking?.contactNumber ?? '—'"></p>
+                </div>
+
+                <!-- Schedule -->
+                <div>
+                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Schedule</p>
+                  <p class="text-sm text-slate-700">
+                    <span x-text="detailsBooking?.appointmentDate ?? '—'"></span>
+                    &nbsp;&middot;&nbsp;
+                    <span x-text="detailsBooking?.appointmentTime ?? '—'"></span>
+                  </p>
+                </div>
+
+                <!-- Pets -->
+                <div>
+                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                    Pets (<span x-text="detailsBooking?.numberOfPets ?? 0"></span>)
+                  </p>
+                  <template x-for="(pet, index) in (detailsBooking?.pets ?? [])" :key="index">
+                    <div class="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <p class="font-semibold text-slate-800" x-text="pet.petName"></p>
+                      <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
+                        <p><span class="text-slate-400">Species:</span> <span x-text="pet.species"></span></p>
+                        <p><span class="text-slate-400">Breed:</span> <span x-text="pet.breed"></span></p>
+                        <p><span class="text-slate-400">Size:</span> <span x-text="pet.size"></span></p>
+                        <p><span class="text-slate-400">Fur:</span> <span x-text="pet.furType"></span></p>
+                        <p><span class="text-slate-400">Weight:</span> <span x-text="pet.weight"></span></p>
+                      </div>
+                      <template x-if="pet.medicalConditions">
+                        <p class="mt-2 text-sm"><span class="text-slate-400">Medical:</span> <span class="text-red-600" x-text="pet.medicalConditions"></span></p>
+                      </template>
+                      <template x-if="pet.specialInstructions">
+                        <p class="mt-1 text-sm"><span class="text-slate-400">Instructions:</span> <span x-text="pet.specialInstructions"></span></p>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Special Notes -->
+                <template x-if="detailsBooking?.specialNotes">
+                  <div>
+                    <p class="mb-1 text-xs font-bold uppercase tracking-widest text-slate-400">Special Notes</p>
+                    <p class="text-sm text-slate-700" x-text="detailsBooking.specialNotes"></p>
+                  </div>
+                </template>
+
+              </div>
+            </div>
+          </div>
+
         </main>
       </div>
     </div>

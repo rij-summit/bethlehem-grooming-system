@@ -14,6 +14,8 @@ function adminDashboard() {
     notificationCount: 0,
     notificationsOpen: false,
     notifications: [],
+    detailsModalOpen: false,
+    detailsBooking: null,
     pendingActions: {},
     config: {
       bootstrap: null,
@@ -69,6 +71,33 @@ function adminDashboard() {
       this.dispatchDashboardEvent("admin-dashboard:ready", {
         state: this.getState(),
       });
+
+      // Configure action handlers to call the real API
+      this.mergeConfig({
+        handlers: {
+          checkIn: async ({ booking }) => {
+            await API.adminCheckIn(booking.id);
+            await this.loadAdminBookings();
+          },
+          startGrooming: async ({ booking }) => {
+            await API.adminStartGrooming(booking.id);
+            await this.loadAdminBookings();
+          },
+          markDone: async ({ booking }) => {
+            await API.adminMarkDone(booking.id);
+            await this.loadAdminBookings();
+          },
+          viewDetails: ({ booking }) => {
+            this.detailsBooking   = booking;
+            this.detailsModalOpen = true;
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+          },
+        },
+      });
+
+      // Load bookings on init, then poll every 30 seconds
+      await this.loadAdminBookings();
+      setInterval(() => this.loadAdminBookings(), 30000);
 
       // Load notifications immediately, then poll every 30 seconds
       await this.loadNotifications();
@@ -942,6 +971,22 @@ function adminDashboard() {
           window.lucide.createIcons();
         }
       });
+    },
+
+    // ── Admin Bookings ────────────────────────────────────────────────────────
+
+    async loadAdminBookings() {
+      try {
+        const data = await API.getAdminBookings();
+        this.applyDashboardData(data);
+      } catch (error) {
+        console.error("Failed to load admin bookings:", error);
+      }
+    },
+
+    closeDetailsModal() {
+      this.detailsModalOpen = false;
+      this.detailsBooking   = null;
     },
 
     // ── Notifications ─────────────────────────────────────────────────────────
