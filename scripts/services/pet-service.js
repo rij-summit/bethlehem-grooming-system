@@ -52,11 +52,10 @@ export async function loadPetsFromApi() {
       medicalNotes: p.medical_conditions || "",
     }));
 
-    // Merge: keep local pets whose id isn't in the API response
-    const apiIds = new Set(mappedPets.map((p) => p.id));
-    const localOnly = getSavedPets().filter((p) => !apiIds.has(p.id));
-
-    saveSavedPets([...mappedPets, ...localOnly]);
+    // Replace entirely — the API is the source of truth for the logged-in user.
+    // Never merge with existing localStorage data because it may contain
+    // pets from a previously logged-in user on the same browser.
+    saveSavedPets(mappedPets);
   } catch {
     // Network failure or not logged in — keep whatever is in localStorage
   }
