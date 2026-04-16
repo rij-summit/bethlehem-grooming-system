@@ -222,6 +222,23 @@ body.client-sidebar-open {
   }
 }
 
+/* Admin notification dropdown */
+.notif-dropdown {
+  position: fixed;
+  top: 5rem;
+  right: 1rem;
+  z-index: 9999;
+  width: 20rem;
+}
+
+@media (max-width: 639px) {
+  .notif-dropdown {
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
+}
+
 @media print {
   .booking-confirmed-actions {
     display: none !important;
