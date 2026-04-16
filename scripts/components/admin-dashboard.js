@@ -17,6 +17,7 @@ function adminDashboard() {
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
+    selectedDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD, defaults to today
     config: {
       bootstrap: null,
       endpoints: {},
@@ -78,14 +79,17 @@ function adminDashboard() {
           checkIn: async ({ booking }) => {
             await API.adminCheckIn(booking.id);
             await this.loadAdminBookings();
+            this.setTab("queued");
           },
           startGrooming: async ({ booking }) => {
             await API.adminStartGrooming(booking.id);
             await this.loadAdminBookings();
+            this.setTab("in-progress");
           },
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
+            this.setTab("for-pickup");
           },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
@@ -749,8 +753,8 @@ function adminDashboard() {
     getActionLabel(actionName) {
       const labelMap = {
         checkIn: "Checking in...",
-        startGrooming: "Starting...",
-        markDone: "Saving...",
+        startGrooming: "Grooming...",
+        markDone: "Finishing...",
         archive: "Archiving...",
       };
 
@@ -977,11 +981,16 @@ function adminDashboard() {
 
     async loadAdminBookings() {
       try {
-        const data = await API.getAdminBookings();
+        const data = await API.getAdminBookings(this.selectedDate);
         this.applyDashboardData(data);
       } catch (error) {
         console.error("Failed to load admin bookings:", error);
       }
+    },
+
+    // Called when the date picker changes — reloads bookings for the new date
+    onDateChange() {
+      this.loadAdminBookings();
     },
 
     closeDetailsModal() {

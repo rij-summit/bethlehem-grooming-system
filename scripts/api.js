@@ -169,9 +169,10 @@ var API = (() => {
 
   // ── Admin ─────────────────────────────────────────────────────────────────
 
-  async function getAdminBookings() {
-    // GET /api/admin/bookings  (protected — admin token)
-    return request("GET", "/admin/bookings", null, getAdminToken());
+  async function getAdminBookings(date = null) {
+    // GET /api/admin/bookings?date=YYYY-MM-DD  (protected — admin token)
+    const query = date ? `?date=${date}` : "";
+    return request("GET", `/admin/bookings${query}`, null, getAdminToken());
   }
 
   async function adminCheckIn(bookingId) {

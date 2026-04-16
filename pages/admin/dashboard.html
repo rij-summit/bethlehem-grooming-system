@@ -238,6 +238,17 @@
                     />
                   </label>
 
+                  <!-- Date filter -->
+                  <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2">
+                    <i data-lucide="calendar" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
+                    <input
+                      type="date"
+                      x-model="selectedDate"
+                      @change="onDateChange()"
+                      class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
+                    />
+                  </div>
+
                   <button
                     type="button"
                     @click="handleWalkInBooking()"
@@ -515,18 +526,22 @@
                   <div
                     class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
                   >
-                    <!-- Queue Number -->
-                    <div
-                      class="text-4xl font-extrabold text-black"
-                      x-text="'#' + booking.queueNumber"
-                    ></div>
+                    <!-- Queue Number placeholder (not assigned yet) -->
+                    <div class="text-4xl font-extrabold text-slate-300">—</div>
 
                     <!-- Info -->
                     <div class="min-w-0">
-                      <h4
-                        class="text-2xl font-medium text-black lg:text-3xl"
-                        x-text="booking.ownerName"
-                      ></h4>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h4
+                          class="text-2xl font-medium text-black lg:text-3xl"
+                          x-text="booking.ownerName"
+                        ></h4>
+                        <!-- Status badge -->
+                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                          <i data-lucide="clock" class="h-3 w-3"></i>
+                          Scheduled
+                        </span>
+                      </div>
 
                       <p
                         class="text-sm text-slate-500"
@@ -571,7 +586,7 @@
                       :class="isActionBusy('checkIn', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
                     >
                       <span
-                        x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check-in'"
+                        x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
                       ></span>
                     </button>
 
@@ -670,16 +685,23 @@
                   >
                     <!-- Queue Number -->
                     <div
-                      class="text-4xl font-extrabold text-black"
+                      class="text-4xl font-extrabold text-[#e5a800]"
                       x-text="'#' + booking.queueNumber"
                     ></div>
 
                     <!-- Info -->
                     <div class="min-w-0">
-                      <h4
-                        class="text-2xl font-medium text-black lg:text-3xl"
-                        x-text="booking.ownerName"
-                      ></h4>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h4
+                          class="text-2xl font-medium text-black lg:text-3xl"
+                          x-text="booking.ownerName"
+                        ></h4>
+                        <!-- Status badge -->
+                        <span class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
+                          <i data-lucide="hourglass" class="h-3 w-3"></i>
+                          Waiting
+                        </span>
+                      </div>
 
                       <p
                         class="text-sm text-slate-500"
@@ -726,7 +748,7 @@
                       :class="isActionBusy('startGrooming', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
                     >
                       <span
-                        x-text="isActionBusy('startGrooming', booking.id) ? getActionLabel('startGrooming') : 'Start Grooming'"
+                        x-text="isActionBusy('startGrooming', booking.id) ? getActionLabel('startGrooming') : 'Groom'"
                       ></span>
                     </button>
 
@@ -826,16 +848,23 @@
                   >
                     <!-- Queue Number -->
                     <div
-                      class="text-4xl font-extrabold text-black"
+                      class="text-4xl font-extrabold text-[#315b7e]"
                       x-text="'#' + booking.queueNumber"
                     ></div>
 
                     <!-- Info -->
                     <div class="min-w-0">
-                      <h4
-                        class="text-2xl font-medium text-black lg:text-3xl"
-                        x-text="booking.ownerName"
-                      ></h4>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h4
+                          class="text-2xl font-medium text-black lg:text-3xl"
+                          x-text="booking.ownerName"
+                        ></h4>
+                        <!-- Status badge -->
+                        <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                          <i data-lucide="scissors" class="h-3 w-3"></i>
+                          In Progress
+                        </span>
+                      </div>
 
                       <p
                         class="text-sm text-slate-500"
@@ -876,11 +905,11 @@
                       type="button"
                       @click="markBookingDone(booking)"
                       :disabled="isActionBusy('markDone', booking.id)"
-                      class="rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-black transition hover:bg-slate-50"
+                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
                       :class="isActionBusy('markDone', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
                     >
                       <span
-                        x-text="isActionBusy('markDone', booking.id) ? getActionLabel('markDone') : 'Mark as done'"
+                        x-text="isActionBusy('markDone', booking.id) ? getActionLabel('markDone') : 'Finished'"
                       ></span>
                     </button>
 
@@ -993,16 +1022,23 @@
                   >
                     <!-- Queue Number -->
                     <div
-                      class="text-4xl font-extrabold text-black"
+                      class="text-4xl font-extrabold text-[#63c7bb]"
                       x-text="'#' + booking.queueNumber"
                     ></div>
 
                     <!-- Info -->
                     <div class="min-w-0">
-                      <h4
-                        class="text-2xl font-medium text-black lg:text-3xl"
-                        x-text="booking.ownerName"
-                      ></h4>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h4
+                          class="text-2xl font-medium text-black lg:text-3xl"
+                          x-text="booking.ownerName"
+                        ></h4>
+                        <!-- Status badge -->
+                        <span class="inline-flex items-center gap-1 rounded-full bg-teal-100 px-3 py-1 text-xs font-bold text-teal-700">
+                          <i data-lucide="check-circle" class="h-3 w-3"></i>
+                          Groomed
+                        </span>
+                      </div>
 
                       <p
                         class="text-sm text-slate-500"

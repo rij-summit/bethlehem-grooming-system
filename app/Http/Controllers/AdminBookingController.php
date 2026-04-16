@@ -10,44 +10,51 @@ class AdminBookingController extends Controller
 {
     private const MAX_CAPACITY = 20;
 
-    // ── GET TODAY'S BOOKINGS (split by status) ────────────
-    public function index()
+    // ── GET BOOKINGS (split by status, filterable by date) ────────────
+    public function index(Request $request)
     {
-        $today       = Carbon::today()->toDateString();
-        $maxAheadDate = Carbon::today()->addDays(3)->toDateString();
+        $today        = Carbon::today()->toDateString();
+        $selectedDate = $request->query('date', $today);
 
-        // Incoming: waiting_to_arrive within today + 3 days
-        $incoming = Booking::whereBetween('booking_date', [$today, $maxAheadDate])
+        // Validate the date; fall back to today if malformed
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate)) {
+            $selectedDate = $today;
+        }
+
+        $maxAheadDate = Carbon::parse($selectedDate)->addDays(3)->toDateString();
+
+        // Incoming: waiting_to_arrive within selectedDate + 3 days
+        $incoming = Booking::whereBetween('booking_date', [$selectedDate, $maxAheadDate])
             ->where('status', 'waiting_to_arrive')
             ->with(['user', 'timeWindow', 'bookingPets.pet'])
-            ->orderByRaw("CASE WHEN booking_date = ? THEN 0 ELSE 1 END", [$today])
+            ->orderByRaw("CASE WHEN booking_date = ? THEN 0 ELSE 1 END", [$selectedDate])
             ->orderBy('booking_date', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        // Queued, In-Progress, For Pickup: today only (physically in clinic)
-        $queued = Booking::where('booking_date', $today)
+        // Queued, In-Progress, For Pickup: filtered by selectedDate
+        $queued = Booking::where('booking_date', $selectedDate)
             ->where('status', 'checked_in')
             ->with(['user', 'timeWindow', 'bookingPets.pet'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $inProgress = Booking::where('booking_date', $today)
+        $inProgress = Booking::where('booking_date', $selectedDate)
             ->where('status', 'in_progress')
             ->with(['user', 'timeWindow', 'bookingPets.pet'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $forPickup = Booking::where('booking_date', $today)
+        $forPickup = Booking::where('booking_date', $selectedDate)
             ->where('status', 'for_pickup')
             ->with(['user', 'timeWindow', 'bookingPets.pet'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        // Summary metrics
+        // Summary metrics (always based on today, not the filter date)
         $todayCount = Booking::where('booking_date', $today)
             ->whereNotIn('status', ['cancelled'])
             ->count();
