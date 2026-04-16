@@ -581,9 +581,10 @@
                     <button
                       type="button"
                       @click="checkInBooking(booking)"
-                      :disabled="isActionBusy('checkIn', booking.id)"
+                      :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
                       class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                      :class="isActionBusy('checkIn', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
+                      :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
+                      :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
                     >
                       <span
                         x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"

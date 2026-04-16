@@ -140,9 +140,11 @@ class BookingController extends Controller
         }
 
         // ── Generate booking reference ────────────────────
-        $dateStr   = Carbon::parse($date)->format('Ymd');
-        $lastCount = Booking::whereDate('created_at', Carbon::today())->count() + 1;
-        $reference = 'BAC-' . $dateStr . '-' . str_pad($lastCount, 4, '0', STR_PAD_LEFT);
+        $dateStr  = Carbon::parse($date)->format('Ymd');
+        $prefix   = 'BAC-' . $dateStr . '-';
+        $maxRef   = Booking::where('booking_reference', 'like', $prefix . '%')->max('booking_reference');
+        $lastCount = $maxRef ? ((int) substr($maxRef, -4)) + 1 : 1;
+        $reference = $prefix . str_pad($lastCount, 4, '0', STR_PAD_LEFT);
 
         // ── Create the booking ────────────────────────────
         $booking = Booking::create([
