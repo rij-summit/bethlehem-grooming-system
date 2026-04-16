@@ -515,92 +515,109 @@
             <!-- ===================================================================================== -->
 
             <!-- CARD TEMPLATE (DO NOT DELETE) -->
-            <template x-for="booking in incomingList" :key="booking.id">
-              <article
-                class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
-              >
-                <div
-                  class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
-                >
-                  <!-- LEFT SIDE -->
-                  <div
-                    class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
-                  >
-                    <!-- Queue Number placeholder (not assigned yet) -->
-                    <div class="text-4xl font-extrabold text-slate-300">—</div>
+            <template x-for="group in groupedIncoming()" :key="group.date">
+              <div class="space-y-4">
 
-                    <!-- Info -->
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4
-                          class="text-2xl font-medium text-black lg:text-3xl"
-                          x-text="booking.ownerName"
-                        ></h4>
-                        <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                          <i data-lucide="clock" class="h-3 w-3"></i>
-                          Scheduled
-                        </span>
+                <!-- Date group header -->
+                <div class="flex items-center gap-3 pt-2">
+                  <span
+                    class="whitespace-nowrap text-sm font-bold uppercase tracking-wide"
+                    :class="group.isToday ? 'text-[#e5a800]' : 'text-slate-400'"
+                    x-text="group.label"
+                  ></span>
+                  <div class="h-px flex-1" :class="group.isToday ? 'bg-[#e5a800]/30' : 'bg-slate-200'"></div>
+                </div>
+
+                <!-- Cards for this date -->
+                <template x-for="booking in group.bookings" :key="booking.id">
+                  <article
+                    class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                  >
+                    <div
+                      class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
+                    >
+                      <!-- LEFT SIDE -->
+                      <div
+                        class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
+                      >
+                        <!-- Queue Number placeholder (not assigned yet) -->
+                        <div class="text-4xl font-extrabold text-slate-300">—</div>
+
+                        <!-- Info -->
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h4
+                              class="text-2xl font-medium text-black lg:text-3xl"
+                              x-text="booking.ownerName"
+                            ></h4>
+                            <!-- Status badge -->
+                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                              <i data-lucide="clock" class="h-3 w-3"></i>
+                              Scheduled
+                            </span>
+                          </div>
+
+                          <p
+                            class="text-sm text-slate-500"
+                            x-text="booking.contactNumber"
+                          ></p>
+
+                          <div
+                            class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
+                          >
+                            <p class="flex items-center gap-2">
+                              <i data-lucide="paw-print" class="h-4 w-4"></i>
+                              <span
+                                x-text="booking.petName + ' (' + booking.breed + ')'"
+                              ></span>
+                            </p>
+
+                            <p class="flex items-center gap-2">
+                              <i data-lucide="badge-info" class="h-4 w-4"></i>
+                              <span x-text="'Type: ' + booking.petType"></span>
+                            </p>
+
+                            <p class="flex items-center gap-2">
+                              <i data-lucide="clock-3" class="h-4 w-4"></i>
+                              <span x-text="booking.appointmentTime"></span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
-                      <p
-                        class="text-sm text-slate-500"
-                        x-text="booking.contactNumber"
-                      ></p>
+                      <!-- RIGHT SIDE -->
+                      <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                        <p
+                          class="text-base text-slate-700 lg:text-lg"
+                          x-text="booking.serviceLabel"
+                        ></p>
 
-                      <div
-                        class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
-                      >
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
+                        <button
+                          type="button"
+                          @click="checkInBooking(booking)"
+                          :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
+                          class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
+                          :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
+                          :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
+                        >
                           <span
-                            x-text="booking.petName + ' (' + booking.breed + ')'"
+                            x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
                           ></span>
-                        </p>
+                        </button>
 
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="booking.appointmentTime"></span>
-                        </p>
+                        <button
+                          type="button"
+                          @click="viewBookingDetails(booking)"
+                          class="text-lg font-medium text-black transition hover:text-[#315b7e]"
+                        >
+                          View Details
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  </article>
+                </template>
 
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p
-                      class="text-base text-slate-700 lg:text-lg"
-                      x-text="booking.serviceLabel"
-                    ></p>
-
-                    <button
-                      type="button"
-                      @click="checkInBooking(booking)"
-                      :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
-                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                      :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
-                      :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
-                    >
-                      <span
-                        x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
-                      ></span>
-                    </button>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
+              </div>
             </template>
           </section>
 

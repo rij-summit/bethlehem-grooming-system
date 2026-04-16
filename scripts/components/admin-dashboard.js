@@ -977,6 +977,44 @@ function adminDashboard() {
       });
     },
 
+    // ── Incoming list grouped by date (today first) ───────────────────────
+
+    groupedIncoming() {
+      const groups = {};
+      for (const booking of this.incomingList) {
+        const date = booking.appointmentDate || 'unknown';
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(booking);
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      return Object.keys(groups)
+        .sort((a, b) => a.localeCompare(b))
+        .map(date => ({
+          date,
+          label: this.formatDateGroupLabel(date),
+          isToday: date === today,
+          bookings: groups[date],
+        }));
+    },
+
+    formatDateGroupLabel(dateStr) {
+      const today    = new Date().toISOString().slice(0, 10);
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+      const formatted = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
+        weekday: 'long',
+        month:   'long',
+        day:     'numeric',
+        year:    'numeric',
+      });
+
+      if (dateStr === today)    return 'Today — ' + formatted;
+      if (dateStr === tomorrow) return 'Tomorrow — ' + formatted;
+      return formatted;
+    },
+
     // ── Admin Bookings ────────────────────────────────────────────────────────
 
     async loadAdminBookings() {
