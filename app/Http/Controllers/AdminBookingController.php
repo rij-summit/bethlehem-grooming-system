@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\Booking;
+use App\Models\BookingService;
 
 class AdminBookingController extends Controller
 {
@@ -26,7 +27,7 @@ class AdminBookingController extends Controller
         // Incoming: waiting_to_arrive within selectedDate + 3 days
         $incoming = Booking::whereBetween('booking_date', [$selectedDate, $maxAheadDate])
             ->where('status', 'waiting_to_arrive')
-            ->with(['user', 'timeWindow', 'bookingPets.pet'])
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderByRaw("CASE WHEN booking_date = ? THEN 0 ELSE 1 END", [$selectedDate])
             ->orderBy('booking_date', 'asc')
             ->get()
@@ -35,21 +36,21 @@ class AdminBookingController extends Controller
         // Queued, In-Progress, For Pickup: filtered by selectedDate
         $queued = Booking::where('booking_date', $selectedDate)
             ->where('status', 'checked_in')
-            ->with(['user', 'timeWindow', 'bookingPets.pet'])
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
         $inProgress = Booking::where('booking_date', $selectedDate)
             ->where('status', 'in_progress')
-            ->with(['user', 'timeWindow', 'bookingPets.pet'])
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
         $forPickup = Booking::where('booking_date', $selectedDate)
             ->where('status', 'for_pickup')
-            ->with(['user', 'timeWindow', 'bookingPets.pet'])
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
@@ -176,6 +177,18 @@ class AdminBookingController extends Controller
         $petType = ucfirst($firstPet?->species ?? 'Dog');
         $breed   = $firstPet?->breed ?? '—';
 
+        // Build service label from booked services
+        $bookedServices = $booking->bookingServices ?? collect();
+        $serviceNames   = $bookedServices
+            ->map(fn($bs) => $bs->service?->service_name)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $serviceLabel = $serviceNames->isNotEmpty()
+            ? $serviceNames->implode(', ')
+            : 'Grooming';
+
         return [
             // Fields the card templates read directly
             'id'              => $booking->booking_id,
@@ -185,7 +198,7 @@ class AdminBookingController extends Controller
             'petName'         => $petName,
             'petType'         => $petType,
             'breed'           => $breed,
-            'serviceLabel'    => 'Grooming',
+            'serviceLabel'    => $serviceLabel,
             'appointmentDate' => $booking->booking_date,
             'appointmentTime' => $window?->window_label ?? '—',
             'dropOffTime'     => '—',
@@ -211,6 +224,10 @@ class AdminBookingController extends Controller
                     'specialInstructions' => $bp->special_instructions ?? null,
                 ];
             })->values(),
+            'services' => $bookedServices->map(fn($bs) => [
+                'name'           => $bs->service?->service_name ?? '—',
+                'priceAtBooking' => $bs->price_at_booking,
+            ])->values(),
         ];
     }
 

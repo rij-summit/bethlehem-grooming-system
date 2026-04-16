@@ -1265,6 +1265,21 @@
                   </template>
                 </div>
 
+                <!-- Services -->
+                <template x-if="detailsBooking?.services?.length > 0">
+                  <div>
+                    <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
+                    <div class="space-y-2">
+                      <template x-for="(svc, index) in detailsBooking.services" :key="index">
+                        <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
+                          <p class="text-sm font-medium text-slate-700" x-text="svc.name"></p>
+                          <p class="text-sm text-slate-500" x-text="svc.priceAtBooking > 0 ? '₱' + Number(svc.priceAtBooking).toFixed(2) : 'TBD'"></p>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+
                 <!-- Special Notes -->
                 <template x-if="detailsBooking?.specialNotes">
                   <div>

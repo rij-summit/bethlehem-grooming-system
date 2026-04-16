@@ -11,6 +11,7 @@ use App\Models\TimeWindow;
 use App\Models\Pet;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\Service;
 
 class BookingController extends Controller
 {
@@ -91,8 +92,12 @@ class BookingController extends Controller
             'pets.*.fur_type'   => 'nullable|in:short,medium,long,wire,curl',
             'pets.*.weight'     => 'nullable|numeric',
             'pets.*.color'      => 'nullable|string|max:50',
-            'pets.*.medical_conditions' => 'nullable|string',
-            'pets.*.special_instructions' => 'nullable|string',
+            'pets.*.medical_conditions'    => 'nullable|string',
+            'pets.*.special_instructions'  => 'nullable|string',
+            'pets.*.services'              => 'nullable|array',
+            'pets.*.services.package'      => 'nullable|string',
+            'pets.*.services.ala_carte'    => 'nullable|array',
+            'pets.*.services.ala_carte.*'  => 'nullable|string',
         ]);
 
         $user = $request->user();
@@ -186,11 +191,49 @@ class BookingController extends Controller
             }
 
             // Link pet to this booking
-            BookingPet::create([
+            $bookingPet = BookingPet::create([
                 'booking_id'           => $booking->booking_id,
                 'pet_id'               => $pet->pet_id,
                 'special_instructions' => $petData['special_instructions'] ?? null,
             ]);
+
+            // ── Save services for this pet ────────────────
+            $petSize    = $petData['size'] ?? null;
+            $slugsToSave = [];
+
+            $packageSlug = $petData['services']['package'] ?? null;
+            if ($packageSlug) {
+                $slugsToSave[] = $packageSlug;
+            }
+
+            foreach ($petData['services']['ala_carte'] ?? [] as $slug) {
+                if ($slug) $slugsToSave[] = $slug;
+            }
+
+            if (!empty($slugsToSave)) {
+                $services = Service::whereIn('slug', $slugsToSave)->get()->keyBy('slug');
+
+                foreach ($slugsToSave as $slug) {
+                    $service = $services->get($slug);
+                    if (!$service) continue;
+
+                    $price = match ($petSize) {
+                        'small'       => $service->price_small  ?? $service->base_price,
+                        'medium'      => $service->price_medium ?? $service->base_price,
+                        'large',
+                        'extra_large' => $service->price_large  ?? $service->base_price,
+                        default       => $service->base_price,
+                    };
+
+                    BookingService::create([
+                        'booking_id'       => $booking->booking_id,
+                        'booking_pet_id'   => $bookingPet->booking_pet_id ?? null,
+                        'service_id'       => $service->service_id,
+                        'addon_id'         => null,
+                        'price_at_booking' => $price,
+                    ]);
+                }
+            }
         }
 
         // ── Create notification for admin ─────────────────

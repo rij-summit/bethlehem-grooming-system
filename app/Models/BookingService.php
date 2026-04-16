@@ -17,4 +17,9 @@ class BookingService extends Model
         'addon_id',
         'price_at_booking',
     ];
+
+    public function service()
+    {
+        return $this->belongsTo(Service::class, 'service_id', 'service_id');
+    }
 }

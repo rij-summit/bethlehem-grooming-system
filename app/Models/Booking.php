@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\BookingService;
 
 class Booking extends Model
 {
@@ -40,5 +41,11 @@ class Booking extends Model
     public function bookingPets()
     {
         return $this->hasMany(BookingPet::class, 'booking_id', 'booking_id');
+    }
+
+    // Booking has many services
+    public function bookingServices()
+    {
+        return $this->hasMany(BookingService::class, 'booking_id', 'booking_id');
     }
 }

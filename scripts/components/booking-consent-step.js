@@ -65,11 +65,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Map frontend pet format → backend field names
+    const step3Selections = (bookingStep3?.petSelections) || [];
+
     const petsPayload = bookingPets.map((pet) => {
       // Find special instructions for this pet from the review data
       const reviewPet = Array.isArray(reviewData.pets)
         ? reviewData.pets.find((rp) => rp.petId === pet.id)
         : null;
+
+      // Find service selections for this pet from step 3
+      const serviceSelection = step3Selections.find((s) => s.petId === pet.id) || {};
 
       return {
         pet_id: isNaN(Number(pet.id)) ? undefined : Number(pet.id),  // only send if it's a real DB id
@@ -81,6 +86,10 @@ document.addEventListener("DOMContentLoaded", () => {
         weight: pet.weight ? parseFloat(pet.weight) : null,
         medical_conditions: pet.medicalNotes || null,
         special_instructions: reviewPet?.specialInstructions || null,
+        services: {
+          package:   serviceSelection.servicePackage || null,
+          ala_carte: serviceSelection.alaCarteServices || [],
+        },
       };
     });
 
