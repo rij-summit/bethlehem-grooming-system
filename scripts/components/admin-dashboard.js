@@ -14,6 +14,7 @@ function adminDashboard() {
     notificationCount: 0,
     notificationsOpen: false,
     notifications: [],
+    notifTab: "all",
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
@@ -1060,20 +1061,46 @@ function adminDashboard() {
     async handleMarkAllRead() {
       try {
         await API.markAllNotificationsRead();
-        this.notifications    = this.notifications.map((n) => ({ ...n, is_read: true }));
+        this.notifications     = this.notifications.map((n) => ({ ...n, is_read: true }));
         this.notificationCount = 0;
       } catch (error) {
         console.error("Failed to mark notifications as read:", error);
       }
     },
 
+    async handleMarkOneRead(notif) {
+      if (notif.is_read) return;
+      try {
+        await API.markNotificationRead(notif.notification_id);
+        this.notifications = this.notifications.map((n) =>
+          n.notification_id === notif.notification_id ? { ...n, is_read: true } : n
+        );
+        this.notificationCount = Math.max(0, this.notificationCount - 1);
+      } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+      }
+    },
+
+    // Returns the list to show based on the active tab, grouped into Today / Earlier
+    groupedNotifications() {
+      const source = this.notifTab === "unread"
+        ? this.notifications.filter((n) => !n.is_read)
+        : this.notifications;
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const today    = source.filter((n) => (n.created_at || "").slice(0, 10) === todayStr);
+      const earlier  = source.filter((n) => (n.created_at || "").slice(0, 10) !== todayStr);
+
+      return { today, earlier };
+    },
+
     formatNotificationTime(createdAt) {
       if (!createdAt) return "";
       const date = new Date(createdAt);
       return date.toLocaleString("en-PH", {
-        month: "short",
-        day:   "numeric",
-        hour:  "numeric",
+        month:  "short",
+        day:    "numeric",
+        hour:   "numeric",
         minute: "2-digit",
       });
     },

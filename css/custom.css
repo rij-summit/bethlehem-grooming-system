@@ -228,7 +228,14 @@ body.client-sidebar-open {
   top: 5rem;
   right: 1rem;
   z-index: 9999;
-  width: 20rem;
+  width: 22rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-dropdown .notif-list {
+  max-height: 18rem; /* shows ~4-5 notifications before scrolling */
+  overflow-y: auto;
 }
 
 @media (max-width: 639px) {
