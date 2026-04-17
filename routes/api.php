@@ -37,7 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin — Booking management
     Route::get('/admin/bookings',                          [AdminBookingController::class, 'index']);
+    Route::get('/admin/bookings/archived',                 [AdminBookingController::class, 'archivedIndex']);
     Route::post('/admin/bookings/{id}/check-in',           [AdminBookingController::class, 'checkIn']);
     Route::post('/admin/bookings/{id}/start-grooming',     [AdminBookingController::class, 'startGrooming']);
     Route::post('/admin/bookings/{id}/mark-done',          [AdminBookingController::class, 'markDone']);
+    Route::post('/admin/bookings/{id}/archive',            [AdminBookingController::class, 'archive']);
 });

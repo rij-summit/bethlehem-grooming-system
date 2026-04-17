@@ -25,6 +25,7 @@ class Booking extends Model
         'total_amount',
         'reschedule_count',
         'cancel_count',
+        'archived_at',
     ];
 
     public function user()

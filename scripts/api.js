@@ -200,6 +200,20 @@ var API = (() => {
     return request("PATCH", `/admin/notifications/${notificationId}/read`, null, getAdminToken());
   }
 
+  async function adminArchiveBooking(bookingId) {
+    // POST /api/admin/bookings/{id}/archive  (protected — admin token)
+    return request("POST", `/admin/bookings/${bookingId}/archive`, null, getAdminToken());
+  }
+
+  async function getArchivedBookings({ search = "", date = "" } = {}) {
+    // GET /api/admin/bookings/archived  (protected — admin token)
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (date)   params.set("date", date);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/bookings/archived${query}`, null, getAdminToken());
+  }
+
   async function markAllNotificationsRead() {
     // PATCH /api/admin/notifications/read-all  (protected — admin token)
     return request("PATCH", "/admin/notifications/read-all", null, getAdminToken());
@@ -235,6 +249,9 @@ var API = (() => {
     adminCheckIn,
     adminStartGrooming,
     adminMarkDone,
+    // Admin archive
+    adminArchiveBooking,
+    getArchivedBookings,
     // Admin notifications
     getNotifications,
     markNotificationRead,

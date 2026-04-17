@@ -160,6 +160,67 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // ── ARCHIVE ───────────────────────────────────────────
+    // for_pickup → archived
+    public function archive($id)
+    {
+        $booking = Booking::find($id);
+
+        if (!$booking) {
+            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+        }
+
+        if ($booking->status !== 'for_pickup') {
+            return response()->json(['success' => false, 'message' => 'Only bookings in For Pickup status can be archived.'], 422);
+        }
+
+        $booking->update([
+            'status'      => 'archived',
+            'archived_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking archived successfully.',
+        ]);
+    }
+
+    // ── GET ARCHIVED BOOKINGS ────────────────────────────
+    public function archivedIndex(Request $request)
+    {
+        $search = $request->query('search', '');
+        $date   = $request->query('date', '');
+
+        $query = Booking::where('status', 'archived')
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->orderBy('archived_at', 'desc');
+
+        if ($date) {
+            $query->where('booking_date', $date);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('booking_reference', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($q2) use ($search) {
+                      $q2->where('first_name', 'like', "%{$search}%")
+                         ->orWhere('last_name',  'like', "%{$search}%");
+                  })
+                  ->orWhereHas('bookingPets.pet', function ($q2) use ($search) {
+                      $q2->where('pet_name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $archived = $query->get()->map(fn($b) => $this->formatArchivedBooking($b));
+
+        return response()->json([
+            'success'  => true,
+            'archived' => $archived->values(),
+            'total'    => $archived->count(),
+        ]);
+    }
+
     // ── FORMAT BOOKING FOR FRONTEND ───────────────────────
     private function formatBooking(Booking $booking): array
     {
@@ -229,6 +290,18 @@ class AdminBookingController extends Controller
                 'priceAtBooking' => $bs->price_at_booking,
             ])->values(),
         ];
+    }
+
+    // Formats a booking record for the archive page
+    private function formatArchivedBooking(Booking $booking): array
+    {
+        $base = $this->formatBooking($booking);
+
+        $base['archivedAt'] = $booking->archived_at
+            ? \Carbon\Carbon::parse($booking->archived_at)->format('M j, Y g:i A')
+            : '—';
+
+        return $base;
     }
 
     // Maps DB status values to the tab keys the frontend uses

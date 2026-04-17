@@ -92,6 +92,10 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab("for-pickup");
           },
+          archive: async ({ booking }) => {
+            await API.adminArchiveBooking(booking.id);
+            await this.loadAdminBookings();
+          },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
             this.detailsModalOpen = true;
