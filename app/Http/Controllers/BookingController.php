@@ -139,8 +139,11 @@ class BookingController extends Controller
         if ($duplicate) {
             return response()->json([
                 'success' => false,
-                'message' => 'You already have a booking on this date. Would you like to cancel it and rebook?',
-                'existing_booking' => $duplicate->booking_reference,
+                'message' => 'You already have a booking on this date.',
+                'errors'  => [
+                    'existing_booking_id'  => $duplicate->booking_id,
+                    'existing_booking_ref' => $duplicate->booking_reference,
+                ],
             ], 422);
         }
 

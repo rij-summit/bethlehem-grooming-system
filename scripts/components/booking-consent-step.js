@@ -124,7 +124,13 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       submitBookingButton.disabled = false;
       submitBookingButton.textContent = "Submit Booking";
-      alert(error.message || "Booking submission failed. Please try again.");
+
+      const existingBookingId = error.errors?.existing_booking_id;
+      if (existingBookingId) {
+        openDuplicateModal(existingBookingId, error.errors.existing_booking_ref, schedule);
+      } else {
+        showSubmitError(error.message || "Booking submission failed. Please try again.");
+      }
     }
   });
 
@@ -295,6 +301,76 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       console.error(`Failed to parse sessionStorage key: ${key}`, error);
       return null;
+    }
+  }
+
+  // ── Inline error banner (replaces alert for non-duplicate errors) ────────
+  function showSubmitError(message) {
+    consentStatusMessage.textContent = message;
+    consentStatusMessage.className =
+      "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+    consentStatusMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // ── Duplicate booking modal ───────────────────────────────────────────────
+  function openDuplicateModal(existingBookingId, existingBookingRef, schedule) {
+    const modal       = document.getElementById("duplicateBookingModal");
+    const refSpan     = document.getElementById("duplicateBookingRef");
+    const yesBtn      = document.getElementById("duplicateYesBtnModal");
+    const noBtn       = document.getElementById("duplicateNoBtnModal");
+    const errorMsg    = document.getElementById("duplicateModalError");
+    const modalBody   = document.getElementById("duplicateModalBody");
+    const successDiv  = document.getElementById("duplicateModalSuccess");
+    const successText = document.getElementById("duplicateSuccessText");
+
+    refSpan.textContent = existingBookingRef || "existing booking";
+    errorMsg.textContent = "";
+    errorMsg.classList.add("hidden");
+    modalBody.classList.remove("hidden");
+    successDiv.classList.add("hidden");
+
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+
+    noBtn.onclick = () => {
+      window.location.href = "./dashboard.html";
+    };
+
+    yesBtn.onclick = async () => {
+      yesBtn.disabled = true;
+      yesBtn.textContent = "Rescheduling...";
+      errorMsg.classList.add("hidden");
+
+      try {
+        const data = await API.rescheduleBooking(existingBookingId, schedule.date, schedule.window_id);
+
+        // Show success state
+        modalBody.classList.add("hidden");
+        successDiv.classList.remove("hidden");
+        successText.textContent =
+          `Booking ${data.booking.booking_reference} has been moved to ${formatScheduleLabel(data.booking.booking_date, data.booking.window)}.`;
+
+        setTimeout(() => {
+          window.location.href = "./dashboard.html";
+        }, 2000);
+      } catch (rescheduleError) {
+        errorMsg.textContent = rescheduleError.message || "Reschedule failed. Please try again.";
+        errorMsg.classList.remove("hidden");
+        yesBtn.disabled = false;
+        yesBtn.textContent = "Yes, Reschedule";
+      }
+    };
+  }
+
+  function formatScheduleLabel(date, windowLabel) {
+    if (!date) return windowLabel || "the new schedule";
+    try {
+      const formatted = new Intl.DateTimeFormat("en-PH", {
+        year: "numeric", month: "long", day: "numeric",
+      }).format(new Date(date + "T00:00:00"));
+      return windowLabel ? `${formatted} at ${windowLabel}` : formatted;
+    } catch {
+      return windowLabel || date;
     }
   }
 
