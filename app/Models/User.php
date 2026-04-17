@@ -22,6 +22,8 @@ class User extends Authenticatable
         'role',
         'customer_tier',
         'is_active',
+        'is_archived',
+        'archived_at',
     ];
 
     protected $hidden = [

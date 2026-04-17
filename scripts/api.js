@@ -200,6 +200,38 @@ var API = (() => {
     return request("PATCH", `/admin/notifications/${notificationId}/read`, null, getAdminToken());
   }
 
+  // ── Customer management (admin only) ─────────────────────────────────────
+
+  async function getCustomers({ status = "active", tier = "", search = "" } = {}) {
+    // GET /api/admin/customers  (protected — admin token)
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (tier)   params.set("tier",   tier);
+    if (search) params.set("search", search);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/customers${query}`, null, getAdminToken());
+  }
+
+  async function deactivateCustomer(customerId) {
+    // POST /api/admin/customers/{id}/deactivate  (protected — admin token)
+    return request("POST", `/admin/customers/${customerId}/deactivate`, null, getAdminToken());
+  }
+
+  async function reactivateCustomer(customerId) {
+    // POST /api/admin/customers/{id}/reactivate  (protected — admin token)
+    return request("POST", `/admin/customers/${customerId}/reactivate`, null, getAdminToken());
+  }
+
+  async function archiveCustomer(customerId) {
+    // POST /api/admin/customers/{id}/archive  (protected — admin token)
+    return request("POST", `/admin/customers/${customerId}/archive`, null, getAdminToken());
+  }
+
+  async function unarchiveCustomer(customerId) {
+    // POST /api/admin/customers/{id}/unarchive  (protected — admin token)
+    return request("POST", `/admin/customers/${customerId}/unarchive`, null, getAdminToken());
+  }
+
   async function adminArchiveBooking(bookingId) {
     // POST /api/admin/bookings/{id}/archive  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/archive`, null, getAdminToken());
@@ -249,6 +281,12 @@ var API = (() => {
     adminCheckIn,
     adminStartGrooming,
     adminMarkDone,
+    // Admin customers
+    getCustomers,
+    deactivateCustomer,
+    reactivateCustomer,
+    archiveCustomer,
+    unarchiveCustomer,
     // Admin archive
     adminArchiveBooking,
     getArchivedBookings,

@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\CustomerController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -29,6 +30,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/booking/{id}',        [BookingController::class, 'show']);
     Route::post('/booking/cancel',     [BookingController::class, 'cancel']);
     Route::post('/booking/reschedule', [BookingController::class, 'reschedule']);
+
+    // Admin — Customer management (admin role only)
+    Route::get('/admin/customers',                          [CustomerController::class, 'index']);
+    Route::post('/admin/customers/{id}/deactivate',         [CustomerController::class, 'deactivate']);
+    Route::post('/admin/customers/{id}/reactivate',         [CustomerController::class, 'reactivate']);
+    Route::post('/admin/customers/{id}/archive',            [CustomerController::class, 'archive']);
+    Route::post('/admin/customers/{id}/unarchive',          [CustomerController::class, 'unarchive']);
 
     // Admin — Notifications
     Route::get('/admin/notifications',              [NotificationController::class, 'index']);

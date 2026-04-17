@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customer Records | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div
+      x-data="adminSidebar()"
+      x-init="init()"
+      class="flex min-h-screen bg-[#f5f8fb]"
+    >
+      <!-- Mobile Backdrop -->
+      <div
+        x-show="sidebarOpen"
+        x-transition.opacity
+        class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+        @click="sidebarOpen = false"
+      ></div>
+
+      <!-- Sidebar -->
+      <aside
+        class="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0"
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <div class="border-b border-white/30 px-6 py-6">
+          <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f2b61f] shadow-sm">
+              <i data-lucide="paw-print" class="h-7 w-7 text-[#2f4b66]"></i>
+            </div>
+            <div class="min-w-0">
+              <h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1>
+              <p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p>
+            </div>
+          </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto px-4 py-6">
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p>
+            <div class="space-y-1.5">
+              <a href="./dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'dashboard' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+                <span>Dashboard</span>
+              </a>
+              <a href="./clients.html" class="flex items-center justify-between rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'customers' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <span class="flex items-center gap-3">
+                  <i data-lucide="users" class="h-5 w-5"></i>
+                  <span>Customers</span>
+                </span>
+              </a>
+              <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="calendar-days" class="h-5 w-5"></i>
+                <span>Appointments</span>
+              </a>
+              <a href="./ai-analytics.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'analytics' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="sparkles" class="h-5 w-5"></i>
+                <span>AI Analytics</span>
+              </a>
+            </div>
+          </div>
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p>
+            <div class="space-y-1.5">
+              <a href="./archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'archive' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="archive" class="h-5 w-5"></i>
+                <span>Archive</span>
+              </a>
+            </div>
+          </div>
+          <div>
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
+            <div class="space-y-1.5">
+              <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'settings' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="settings" class="h-5 w-5"></i>
+                <span>Settings</span>
+              </a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="border-t border-white/30 p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-white/25 p-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f2b61f] text-sm font-extrabold text-[#1f3850]">AD</div>
+            <div class="min-w-0">
+              <p class="truncate font-bold text-[#1f3850]">Admin</p>
+              <p class="truncate text-sm text-[#4a6784]">Clinic Manager</p>
+            </div>
+          </div>
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()">
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <div class="flex min-h-screen flex-1 flex-col">
+
+        <!-- Mobile Header -->
+        <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
+          <div>
+            <p class="text-sm font-semibold text-[#5c7690]">Admin Panel</p>
+            <h2 class="text-lg font-extrabold text-[#1f3850]">Customers</h2>
+          </div>
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen = true">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+        </header>
+
+        <!-- Page Body -->
+        <main
+          x-data="adminCustomers()"
+          x-init="init()"
+          class="flex-1 px-4 py-6 lg:px-6"
+        >
+
+          <!-- Top Banner -->
+          <section>
+            <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+              <div class="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Customer Records</h2>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">BETHLEHEM ANIMAL CLINIC &amp; GROOMING</p>
+                </div>
+
+                <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <!-- Search -->
+                  <label class="relative block min-w-0 flex-1 sm:min-w-[260px]">
+                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <i data-lucide="search" class="h-5 w-5"></i>
+                    </span>
+                    <input
+                      type="text"
+                      x-model="searchQuery"
+                      @input.debounce.400ms="loadCustomers()"
+                      placeholder="Search name or phone..."
+                      class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
+                    />
+                  </label>
+
+                  <!-- Tier toggle -->
+                  <div class="flex items-center gap-1 rounded-xl border border-[#c9d9e8] bg-white p-1">
+                    <button type="button" @click="setTier('')"
+                      class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                      :class="tierFilter === '' ? 'bg-[#315b7e] text-white' : 'text-[#2f4b66] hover:bg-slate-100'">
+                      All
+                    </button>
+                    <button type="button" @click="setTier('new')"
+                      class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                      :class="tierFilter === 'new' ? 'bg-[#315b7e] text-white' : 'text-[#2f4b66] hover:bg-slate-100'">
+                      New
+                    </button>
+                    <button type="button" @click="setTier('returning')"
+                      class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                      :class="tierFilter === 'returning' ? 'bg-[#315b7e] text-white' : 'text-[#2f4b66] hover:bg-slate-100'">
+                      Returning
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stats row -->
+              <div class="mt-5 flex flex-wrap gap-3">
+                <div class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
+                  <i data-lucide="users" class="h-4 w-4 text-[#315b7e]"></i>
+                  <span x-text="totalCount + ' customer' + (totalCount !== 1 ? 's' : '')"></span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Status Tabs -->
+          <section class="mt-6">
+            <div class="rounded-full bg-[#bdd6ec] p-1">
+              <div class="grid grid-cols-3 gap-1">
+                <button type="button" @click="setStatus('active')"
+                  class="rounded-full px-3 py-3 text-sm font-bold transition"
+                  :class="statusFilter === 'active' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
+                  Active (<span x-text="statusFilter === 'active' ? totalCount : '?'"></span>)
+                </button>
+                <button type="button" @click="setStatus('inactive')"
+                  class="rounded-full px-3 py-3 text-sm font-bold transition"
+                  :class="statusFilter === 'inactive' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
+                  Inactive (<span x-text="statusFilter === 'inactive' ? totalCount : '?'"></span>)
+                </button>
+                <button type="button" @click="setStatus('archived')"
+                  class="rounded-full px-3 py-3 text-sm font-bold transition"
+                  :class="statusFilter === 'archived' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
+                  Archived (<span x-text="statusFilter === 'archived' ? totalCount : '?'"></span>)
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Tab description -->
+          <section class="mt-4">
+            <div class="rounded-2xl border border-[#d9e6f1] bg-white/80 p-4 text-sm text-slate-600">
+              <template x-if="statusFilter === 'active'">
+                <p>Active customers can log in and book appointments. You can <strong>Deactivate</strong> to temporarily block their access or <strong>Archive</strong> to permanently remove them from the active list.</p>
+              </template>
+              <template x-if="statusFilter === 'inactive'">
+                <p>Inactive customers cannot log in. Use <strong>Reactivate</strong> to restore their access, or <strong>Archive</strong> to move them to permanent records.</p>
+              </template>
+              <template x-if="statusFilter === 'archived'">
+                <p>Archived customers are permanently removed from active operations. Use <strong>Unarchive</strong> to restore their account and reactivate their access.</p>
+              </template>
+            </div>
+          </section>
+
+          <!-- Loading -->
+          <section x-show="loading" class="mt-8 flex justify-center py-16">
+            <div class="flex flex-col items-center gap-3 text-slate-400">
+              <i data-lucide="loader-circle" class="h-10 w-10 animate-spin text-[#315b7e]"></i>
+              <p class="text-sm font-medium">Loading customers...</p>
+            </div>
+          </section>
+
+          <!-- Error -->
+          <section x-show="!loading && errorMessage" class="mt-6">
+            <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+              <p class="font-semibold">Failed to load customers</p>
+              <p class="mt-1" x-text="errorMessage"></p>
+              <button type="button" @click="loadCustomers()" class="mt-3 rounded-xl bg-red-100 px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-200">Try again</button>
+            </div>
+          </section>
+
+          <!-- Empty state -->
+          <section x-show="!loading && !errorMessage && customers.length === 0" class="mt-6">
+            <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-10 text-center">
+              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]">
+                <i data-lucide="users" class="h-8 w-8"></i>
+              </div>
+              <p class="mt-4 text-lg font-bold text-[#2f4b66]" x-text="searchQuery ? 'No customers match your search.' : 'No ' + statusFilter + ' customers found.'"></p>
+              <p class="mt-2 text-sm text-slate-500">Try adjusting your search or filter.</p>
+            </div>
+          </section>
+
+          <!-- Customer Cards -->
+          <section x-show="!loading && !errorMessage && customers.length > 0" class="mt-6 space-y-4">
+            <template x-for="customer in customers" :key="customer.id">
+              <article class="rounded-[24px] border-2 bg-white px-4 py-5 shadow-sm transition sm:px-6"
+                :class="{
+                  'border-[#7fa2c9]': statusFilter === 'active',
+                  'border-slate-300': statusFilter === 'inactive',
+                  'border-slate-200': statusFilter === 'archived'
+                }">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+                  <!-- LEFT: Avatar + Info -->
+                  <div class="flex items-start gap-4">
+                    <!-- Initials Avatar -->
+                    <div
+                      class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold text-white shadow-sm"
+                      :style="'background-color:' + getAvatarColor(customer.fullName)"
+                      x-text="getInitials(customer.fullName)"
+                    ></div>
+
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h4 class="text-xl font-bold text-[#1f3850]" x-text="customer.fullName"></h4>
+
+                        <!-- Tier badge -->
+                        <span
+                          class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold"
+                          :class="customer.tier === 'returning' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'"
+                        >
+                          <i :data-lucide="customer.tier === 'returning' ? 'repeat-2' : 'sparkles'" class="h-3 w-3"></i>
+                          <span x-text="customer.tier === 'returning' ? 'Returning' : 'New'"></span>
+                        </span>
+
+                        <!-- Status badge -->
+                        <span x-show="statusFilter === 'inactive'"
+                          class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
+                          <i data-lucide="ban" class="h-3 w-3"></i>
+                          Inactive
+                        </span>
+                        <span x-show="statusFilter === 'archived'"
+                          class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500">
+                          <i data-lucide="archive" class="h-3 w-3"></i>
+                          Archived
+                        </span>
+                      </div>
+
+                      <!-- Contact -->
+                      <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="phone" class="h-3.5 w-3.5"></i>
+                          <span x-text="customer.phone"></span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="mail" class="h-3.5 w-3.5"></i>
+                          <span x-text="customer.email"></span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="calendar" class="h-3.5 w-3.5"></i>
+                          <span x-text="'Joined ' + formatDate(customer.joinedAt)"></span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                          <i data-lucide="clipboard-list" class="h-3.5 w-3.5"></i>
+                          <span x-text="customer.bookingCount + ' booking' + (customer.bookingCount !== 1 ? 's' : '')"></span>
+                        </span>
+                      </div>
+
+                      <!-- Archived date -->
+                      <p x-show="statusFilter === 'archived' && customer.archivedAt"
+                        class="mt-1 text-xs text-slate-400"
+                        x-text="'Archived: ' + formatDate(customer.archivedAt)">
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- RIGHT: Actions -->
+                  <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
+
+                    <!-- Active tab actions -->
+                    <template x-if="statusFilter === 'active'">
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button"
+                          @click="openResetPassword(customer)"
+                          class="rounded-xl border border-[#315b7e] px-4 py-2 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]">
+                          Reset Password
+                        </button>
+                        <button type="button"
+                          @click="confirmAction('deactivate', customer)"
+                          :disabled="busyId === customer.id"
+                          class="rounded-xl border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-600 transition hover:bg-amber-50 disabled:opacity-50">
+                          Deactivate
+                        </button>
+                        <button type="button"
+                          @click="confirmAction('archive', customer)"
+                          :disabled="busyId === customer.id"
+                          class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50">
+                          Archive
+                        </button>
+                      </div>
+                    </template>
+
+                    <!-- Inactive tab actions -->
+                    <template x-if="statusFilter === 'inactive'">
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button"
+                          @click="openResetPassword(customer)"
+                          class="rounded-xl border border-[#315b7e] px-4 py-2 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]">
+                          Reset Password
+                        </button>
+                        <button type="button"
+                          @click="confirmAction('reactivate', customer)"
+                          :disabled="busyId === customer.id"
+                          class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274a67] disabled:opacity-50">
+                          Reactivate
+                        </button>
+                        <button type="button"
+                          @click="confirmAction('archive', customer)"
+                          :disabled="busyId === customer.id"
+                          class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50">
+                          Archive
+                        </button>
+                      </div>
+                    </template>
+
+                    <!-- Archived tab actions -->
+                    <template x-if="statusFilter === 'archived'">
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button"
+                          @click="confirmAction('unarchive', customer)"
+                          :disabled="busyId === customer.id"
+                          class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274a67] disabled:opacity-50">
+                          Unarchive
+                        </button>
+                      </div>
+                    </template>
+
+                  </div>
+                </div>
+              </article>
+            </template>
+          </section>
+
+          <!-- ── Confirm Action Modal ── -->
+          <div
+            x-show="confirmModal.open"
+            x-transition
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+            @click.self="closeConfirm()"
+          >
+            <div class="w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-6 shadow-xl">
+              <div class="mb-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                  :class="{
+                    'bg-amber-100': confirmModal.action === 'deactivate',
+                    'bg-green-100': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                    'bg-slate-100': confirmModal.action === 'archive'
+                  }">
+                  <i :data-lucide="confirmModal.action === 'deactivate' ? 'ban' : confirmModal.action === 'archive' ? 'archive' : 'check-circle'" class="h-5 w-5"
+                    :class="{
+                      'text-amber-600': confirmModal.action === 'deactivate',
+                      'text-green-600': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                      'text-slate-500': confirmModal.action === 'archive'
+                    }"></i>
+                </div>
+                <h3 class="text-lg font-bold text-[#2f4b66]" x-text="confirmModal.title"></h3>
+              </div>
+              <p class="text-sm text-slate-600" x-text="confirmModal.message"></p>
+              <p x-show="confirmModal.error" class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" x-text="confirmModal.error"></p>
+              <div class="mt-6 flex justify-end gap-3">
+                <button type="button" @click="closeConfirm()"
+                  class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button type="button" @click="executeAction()"
+                  :disabled="busyId !== null"
+                  class="rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50"
+                  :class="{
+                    'bg-amber-500 hover:bg-amber-600': confirmModal.action === 'deactivate',
+                    'bg-[#315b7e] hover:bg-[#274a67]': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                    'bg-slate-500 hover:bg-slate-600': confirmModal.action === 'archive'
+                  }"
+                  x-text="busyId !== null ? 'Please wait...' : confirmModal.confirmLabel">
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Reset Password Modal ── -->
+          <div
+            x-show="resetModal.open"
+            x-transition
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+            @click.self="closeReset()"
+          >
+            <div class="w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-6 shadow-xl">
+              <div class="mb-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef5fb]">
+                  <i data-lucide="key-round" class="h-5 w-5 text-[#315b7e]"></i>
+                </div>
+                <h3 class="text-lg font-bold text-[#2f4b66]">Reset Password</h3>
+              </div>
+              <p class="text-sm text-slate-600">
+                Resetting password for <strong x-text="resetModal.customer?.fullName ?? ''"></strong>.
+              </p>
+
+              <!-- Coming soon notice -->
+              <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <p class="font-semibold">Feature coming soon</p>
+                <p class="mt-1">Password reset functionality will be available in a future update.</p>
+              </div>
+
+              <div class="mt-6 flex justify-end">
+                <button type="button" @click="closeReset()"
+                  class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274a67]">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/components/admin-sidebar.js"></script>
+    <script src="../../scripts/components/admin-customers.js"></script>
+  </body>
+</html>
