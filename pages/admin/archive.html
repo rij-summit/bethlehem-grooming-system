@@ -232,27 +232,59 @@
                     <input
                       type="text"
                       x-model="searchQuery"
-                      @input.debounce.400ms="onFilterChange()"
+                      @input.debounce.400ms="onSearchChange()"
                       placeholder="Search owner, pet, or reference..."
                       class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
                     />
                   </label>
 
-                  <!-- Date filter -->
-                  <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
-                    <i data-lucide="calendar" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
-                    <input
-                      type="date"
-                      x-model="selectedDate"
-                      @change="onFilterChange()"
+                  <!-- Year filter -->
+                  <div x-show="availableYears.length > 0" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
+                    <i data-lucide="calendar-range" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                    <select
+                      x-model="selectedYear"
+                      @change="onYearChange()"
                       class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
-                    />
+                    >
+                      <option value="">All years</option>
+                      <template x-for="y in availableYears" :key="y">
+                        <option :value="y" x-text="y"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <!-- Month filter (only shown when a year is selected and has multiple months) -->
+                  <div x-show="selectedYear && availableMonths.length > 1" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
+                    <i data-lucide="calendar" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                    <select
+                      x-model="selectedMonth"
+                      class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
+                    >
+                      <option value="">All months</option>
+                      <template x-for="m in availableMonths" :key="m.value">
+                        <option :value="m.value" x-text="m.label"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <!-- Sort -->
+                  <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
+                    <i data-lucide="arrow-up-down" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                    <select
+                      x-model="sortOrder"
+                      class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
+                    >
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="az">Name A → Z</option>
+                      <option value="za">Name Z → A</option>
+                    </select>
                   </div>
 
                   <!-- Clear filters -->
                   <button
                     type="button"
-                    x-show="searchQuery || selectedDate"
+                    x-show="hasActiveFilters"
                     @click="clearFilters()"
                     class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-slate-50"
                   >
@@ -267,11 +299,11 @@
               <div class="mt-5 flex flex-wrap gap-3">
                 <div class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="archive" class="h-4 w-4 text-[#315b7e]"></i>
-                  <span x-text="totalCount + ' record' + (totalCount !== 1 ? 's' : '')"></span>
+                  <span x-text="filteredCount + ' of ' + totalCount + ' record' + (totalCount !== 1 ? 's' : '')"></span>
                 </div>
-                <div x-show="selectedDate" class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
+                <div x-show="selectedYear" class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="calendar-check" class="h-4 w-4 text-[#315b7e]"></i>
-                  <span x-text="'Filtered by: ' + formatDateLabel(selectedDate)"></span>
+                  <span x-text="selectedMonth ? (availableMonths.find(m => m.value === selectedMonth)?.label ?? selectedMonth) + ' ' + selectedYear : selectedYear"></span>
                 </div>
               </div>
             </div>
@@ -297,89 +329,96 @@
           </section>
 
           <!-- Empty state -->
-          <section x-show="!loading && !errorMessage && archivedList.length === 0" class="mt-8">
+          <section x-show="!loading && !errorMessage && filteredCount === 0" class="mt-8">
             <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-10 text-center">
               <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]">
                 <i data-lucide="archive-x" class="h-8 w-8"></i>
               </div>
-              <p class="mt-4 text-lg font-bold text-[#2f4b66]" x-text="searchQuery || selectedDate ? 'No records match your filters.' : 'No archived records yet.'"></p>
-              <p class="mt-2 text-sm text-slate-500" x-text="searchQuery || selectedDate ? 'Try adjusting your search or clearing the date filter.' : 'Completed grooming sessions will appear here after they are archived from the dashboard.'"></p>
+              <p class="mt-4 text-lg font-bold text-[#2f4b66]" x-text="hasActiveFilters ? 'No records match your filters.' : 'No archived records yet.'"></p>
+              <p class="mt-2 text-sm text-slate-500" x-text="hasActiveFilters ? 'Try adjusting your search or clearing the filters.' : 'Completed grooming sessions will appear here after they are archived from the dashboard.'"></p>
             </div>
           </section>
 
-          <!-- Archive cards -->
-          <section x-show="!loading && !errorMessage && archivedList.length > 0" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2">
-              <i data-lucide="archive" class="h-5 w-5 text-[#315b7e]"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">Archived Records</h3>
-            </div>
+          <!-- Archive cards — grouped by date -->
+          <section x-show="!loading && !errorMessage && filteredCount > 0" class="mt-6 space-y-8">
 
-            <template x-for="booking in archivedList" :key="booking.id">
-              <article class="rounded-[24px] border-2 border-slate-200 bg-white px-4 py-5 shadow-sm transition hover:border-[#9bb9d3] sm:px-6">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-
-                    <!-- Queue number -->
-                    <div class="text-4xl font-extrabold text-slate-300" x-text="booking.queueNumber ? '#' + booking.queueNumber : '—'"></div>
-
-                    <!-- Info -->
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                          <i data-lucide="archive" class="h-3 w-3"></i>
-                          Archived
-                        </span>
-                      </div>
-
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
-
-                      <!-- Booking reference -->
-                      <p class="mt-1 text-xs font-semibold text-[#315b7e]" x-text="booking.bookingReference"></p>
-
-                      <!-- Details row -->
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + (booking.breed ? ' (' + booking.breed + ')' : '')"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="calendar" class="h-4 w-4"></i>
-                          <span x-text="formatAppointmentDate(booking.appointmentDate)"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="booking.appointmentTime"></span>
-                        </p>
-                        <p x-show="booking.archivedAt" class="flex items-center gap-2 text-slate-400">
-                          <i data-lucide="archive" class="h-4 w-4"></i>
-                          <span x-text="'Archived: ' + booking.archivedAt"></span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p class="text-base text-slate-700 lg:text-lg" x-text="booking.serviceLabel || 'Grooming'"></p>
-                    <button
-                      type="button"
-                      @click="viewDetails(booking)"
-                      class="rounded-xl border border-[#315b7e] px-6 py-3 text-base font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-
+            <template x-for="group in groupedByDate" :key="group.date">
+              <div>
+                <!-- Date group header -->
+                <div class="mb-4 flex items-center gap-3">
+                  <div class="h-px flex-1 bg-slate-200"></div>
+                  <span class="flex items-center gap-2 rounded-full border border-[#c9d9e8] bg-white px-4 py-1.5 text-xs font-bold text-[#315b7e]">
+                    <i data-lucide="calendar" class="h-3.5 w-3.5"></i>
+                    <span x-text="group.label"></span>
+                  </span>
+                  <div class="h-px flex-1 bg-slate-200"></div>
                 </div>
-              </article>
+
+                <!-- Cards within this date group -->
+                <div class="space-y-4">
+                  <template x-for="booking in group.bookings" :key="booking.id">
+                    <article class="rounded-[24px] border-2 border-slate-200 bg-white px-4 py-5 shadow-sm transition hover:border-[#9bb9d3] sm:px-6">
+                      <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+
+                        <!-- LEFT SIDE -->
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+
+                          <!-- Queue number -->
+                          <div class="text-4xl font-extrabold text-slate-300" x-text="booking.queueNumber ? '#' + booking.queueNumber : '—'"></div>
+
+                          <!-- Info -->
+                          <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
+                              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                                <i data-lucide="archive" class="h-3 w-3"></i>
+                                Archived
+                              </span>
+                            </div>
+
+                            <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
+                            <p class="mt-1 text-xs font-semibold text-[#315b7e]" x-text="booking.bookingReference"></p>
+
+                            <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
+                              <p class="flex items-center gap-2">
+                                <i data-lucide="paw-print" class="h-4 w-4"></i>
+                                <span x-text="booking.petName + (booking.breed ? ' (' + booking.breed + ')' : '')"></span>
+                              </p>
+                              <p class="flex items-center gap-2">
+                                <i data-lucide="badge-info" class="h-4 w-4"></i>
+                                <span x-text="'Type: ' + booking.petType"></span>
+                              </p>
+                              <p class="flex items-center gap-2">
+                                <i data-lucide="clock-3" class="h-4 w-4"></i>
+                                <span x-text="booking.appointmentTime"></span>
+                              </p>
+                              <p x-show="booking.archivedAt" class="flex items-center gap-2 text-slate-400">
+                                <i data-lucide="archive" class="h-4 w-4"></i>
+                                <span x-text="'Archived: ' + booking.archivedAt"></span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- RIGHT SIDE -->
+                        <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                          <p class="text-base text-slate-700 lg:text-lg" x-text="booking.serviceLabel || 'Grooming'"></p>
+                          <button
+                            type="button"
+                            @click="viewDetails(booking)"
+                            class="rounded-xl border border-[#315b7e] px-6 py-3 text-base font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]"
+                          >
+                            View Details
+                          </button>
+                        </div>
+
+                      </div>
+                    </article>
+                  </template>
+                </div>
+              </div>
             </template>
+
           </section>
 
           <!-- View Details Modal -->

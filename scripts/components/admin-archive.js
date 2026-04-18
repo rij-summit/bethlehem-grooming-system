@@ -1,9 +1,13 @@
 function adminArchive() {
+  const currentYear = new Date().getFullYear().toString();
+
   return {
     archivedList: [],
     totalCount: 0,
     searchQuery: "",
-    selectedDate: "",
+    sortOrder: "newest",
+    selectedYear: currentYear,   // defaults to current year
+    selectedMonth: "",           // "YYYY-MM" or "" — resets when year changes
     loading: false,
     errorMessage: "",
     detailsModalOpen: false,
@@ -21,11 +25,9 @@ function adminArchive() {
       try {
         const data = await API.getArchivedBookings({
           search: this.searchQuery.trim(),
-          date:   this.selectedDate,
         });
-
-        this.archivedList = data.archived  || [];
-        this.totalCount   = data.total     ?? this.archivedList.length;
+        this.archivedList = data.archived || [];
+        this.totalCount   = data.total ?? this.archivedList.length;
       } catch (error) {
         this.errorMessage = error.message || "Failed to load archive. Please try again.";
         this.archivedList = [];
@@ -36,15 +38,108 @@ function adminArchive() {
       }
     },
 
-    onFilterChange() {
+    onSearchChange() {
       this.loadArchive();
+    },
+
+    onYearChange() {
+      this.selectedMonth = ""; // reset month when year switches
     },
 
     clearFilters() {
       this.searchQuery  = "";
-      this.selectedDate = "";
+      this.sortOrder    = "newest";
+      this.selectedYear  = currentYear;
+      this.selectedMonth = "";
       this.loadArchive();
     },
+
+    // ── Client-side derived state ─────────────────────────
+
+    // Years that have at least one record
+    get availableYears() {
+      const seen = new Set();
+      for (const b of this.archivedList) {
+        if (b.appointmentDate) seen.add(b.appointmentDate.slice(0, 4));
+      }
+      return [...seen].sort().reverse();
+    },
+
+    // Months within the selected year that have records
+    get availableMonths() {
+      const seen = new Set();
+      for (const b of this.archivedList) {
+        if (b.appointmentDate && b.appointmentDate.startsWith(this.selectedYear)) {
+          seen.add(b.appointmentDate.slice(0, 7));
+        }
+      }
+      return [...seen]
+        .sort()
+        .reverse()
+        .map(m => ({
+          value: m,
+          label: new Intl.DateTimeFormat("en-PH", { month: "long" }).format(
+            new Date(m + "-01T00:00:00"),
+          ),
+        }));
+    },
+
+    get filteredList() {
+      let list = this.archivedList;
+
+      // Year filter (always active — defaults to current year)
+      if (this.selectedYear) {
+        list = list.filter(b => (b.appointmentDate || "").startsWith(this.selectedYear));
+      }
+
+      // Month filter (optional)
+      if (this.selectedMonth) {
+        list = list.filter(b => (b.appointmentDate || "").startsWith(this.selectedMonth));
+      }
+
+      return [...list].sort((a, b) => {
+        switch (this.sortOrder) {
+          case "az":      return (a.ownerName || "").localeCompare(b.ownerName || "");
+          case "za":      return (b.ownerName || "").localeCompare(a.ownerName || "");
+          case "oldest":  return (a.appointmentDate || "").localeCompare(b.appointmentDate || "");
+          default:        return (b.appointmentDate || "").localeCompare(a.appointmentDate || "");
+        }
+      });
+    },
+
+    get groupedByDate() {
+      const groups = {};
+      for (const booking of this.filteredList) {
+        const date = booking.appointmentDate || "unknown";
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(booking);
+      }
+
+      const dateKeys = Object.keys(groups).sort((a, b) =>
+        this.sortOrder === "oldest" ? a.localeCompare(b) : b.localeCompare(a),
+      );
+
+      return dateKeys.map(date => ({
+        date,
+        label: this.formatGroupDate(date),
+        bookings: groups[date],
+      }));
+    },
+
+    get filteredCount() {
+      return this.filteredList.length;
+    },
+
+    get hasActiveFilters() {
+      return (
+        this.searchQuery ||
+        this.selectedMonth ||
+        this.sortOrder !== "newest" ||
+        this.selectedYear !== currentYear
+      );
+    },
+
+    // ── Actions ───────────────────────────────────────────
 
     viewDetails(booking) {
       this.detailsBooking   = booking;
@@ -59,6 +154,20 @@ function adminArchive() {
 
     // ── Formatting helpers ────────────────────────────────
 
+    formatGroupDate(dateStr) {
+      if (!dateStr || dateStr === "unknown") return "Unknown Date";
+      try {
+        return new Intl.DateTimeFormat("en-PH", {
+          weekday: "long",
+          year:    "numeric",
+          month:   "long",
+          day:     "numeric",
+        }).format(new Date(dateStr + "T00:00:00"));
+      } catch {
+        return dateStr;
+      }
+    },
+
     formatAppointmentDate(dateStr) {
       if (!dateStr) return "—";
       try {
@@ -67,19 +176,6 @@ function adminArchive() {
           year:    "numeric",
           month:   "short",
           day:     "numeric",
-        }).format(new Date(dateStr + "T00:00:00"));
-      } catch {
-        return dateStr;
-      }
-    },
-
-    formatDateLabel(dateStr) {
-      if (!dateStr) return "";
-      try {
-        return new Intl.DateTimeFormat("en-PH", {
-          year:  "numeric",
-          month: "long",
-          day:   "numeric",
         }).format(new Date(dateStr + "T00:00:00"));
       } catch {
         return dateStr;
