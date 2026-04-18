@@ -11,8 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('users', 'customer_tier')) return;
+
         Schema::table('users', function (Blueprint $table) {
-        $table->string('customer_tier')->default('new');
+            $table->string('customer_tier')->default('new');
         });
     }
 
