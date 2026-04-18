@@ -6,13 +6,15 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\ClinicClosureController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 
-// ── PUBLIC BOOKING ROUTES ─────────────────────────────
-Route::get('/timeslots', [BookingController::class, 'getTimeslots']);
+// ── PUBLIC ROUTES ─────────────────────────────────────
+Route::get('/timeslots',      [BookingController::class,   'getTimeslots']);
+Route::get('/clinic/status',  [ClinicClosureController::class, 'status']);
 
 // ── PROTECTED ROUTES (token required) ────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -50,4 +52,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/bookings/{id}/start-grooming',     [AdminBookingController::class, 'startGrooming']);
     Route::post('/admin/bookings/{id}/mark-done',          [AdminBookingController::class, 'markDone']);
     Route::post('/admin/bookings/{id}/archive',            [AdminBookingController::class, 'archive']);
+    Route::post('/admin/bookings/{id}/late-check-in',      [AdminBookingController::class, 'lateCheckIn']);
+
+    // Admin — No-show list
+    Route::get('/admin/bookings/no-shows',                 [AdminBookingController::class, 'noShowIndex']);
+
+    // Admin — Clinic closures
+    Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);
+    Route::post('/admin/clinic/reopen-today',              [ClinicClosureController::class, 'reopenToday']);
+    Route::get('/admin/clinic/blocked-dates',              [ClinicClosureController::class, 'blockedDates']);
+    Route::post('/admin/clinic/blocked-dates',             [ClinicClosureController::class, 'addBlockedDate']);
+    Route::delete('/admin/clinic/blocked-dates/{id}',      [ClinicClosureController::class, 'removeBlockedDate']);
 });

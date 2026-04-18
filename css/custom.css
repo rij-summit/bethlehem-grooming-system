@@ -222,6 +222,40 @@ body.client-sidebar-open {
   }
 }
 
+/* Stop Receiving / Reopen Today — sidebar button */
+.btn-clinic-stop {
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+}
+.btn-clinic-stop:hover {
+  background-color: #fecaca;
+}
+.btn-clinic-reopen {
+  background-color: #dcfce7;
+  border: 1px solid #86efac;
+  color: #15803d;
+}
+.btn-clinic-reopen:hover {
+  background-color: #bbf7d0;
+}
+
+/* Modal confirm button colours */
+.btn-confirm-stop {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+.btn-confirm-stop:hover {
+  background-color: #dc2626;
+}
+.btn-confirm-reopen {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+.btn-confirm-reopen:hover {
+  background-color: #15803d;
+}
+
 /* Admin notification dropdown */
 .notif-dropdown {
   position: fixed;

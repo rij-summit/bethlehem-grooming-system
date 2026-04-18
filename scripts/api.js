@@ -251,6 +251,49 @@ var API = (() => {
     return request("PATCH", "/admin/notifications/read-all", null, getAdminToken());
   }
 
+  // ── Clinic closures / no-show ─────────────────────────────────────────────
+
+  async function getClinicStatus() {
+    // GET /api/clinic/status  (public — no token needed)
+    return request("GET", "/clinic/status");
+  }
+
+  async function adminStopToday(reason = null) {
+    // POST /api/admin/clinic/stop-today  (protected — admin token)
+    return request("POST", "/admin/clinic/stop-today", { reason }, getAdminToken());
+  }
+
+  async function adminReopenToday() {
+    // POST /api/admin/clinic/reopen-today  (protected — admin token)
+    return request("POST", "/admin/clinic/reopen-today", null, getAdminToken());
+  }
+
+  async function getBlockedDates() {
+    // GET /api/admin/clinic/blocked-dates  (protected — admin token)
+    return request("GET", "/admin/clinic/blocked-dates", null, getAdminToken());
+  }
+
+  async function addBlockedDate(payload) {
+    // POST /api/admin/clinic/blocked-dates  (protected — admin token)
+    // payload: { start_date, end_date, reason }
+    return request("POST", "/admin/clinic/blocked-dates", payload, getAdminToken());
+  }
+
+  async function removeBlockedDate(id) {
+    // DELETE /api/admin/clinic/blocked-dates/{id}  (protected — admin token)
+    return request("DELETE", `/admin/clinic/blocked-dates/${id}`, null, getAdminToken());
+  }
+
+  async function getNoShows() {
+    // GET /api/admin/bookings/no-shows  (protected — admin token)
+    return request("GET", "/admin/bookings/no-shows", null, getAdminToken());
+  }
+
+  async function adminLateCheckIn(bookingId) {
+    // POST /api/admin/bookings/{id}/late-check-in  (protected — admin token)
+    return request("POST", `/admin/bookings/${bookingId}/late-check-in`, null, getAdminToken());
+  }
+
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
@@ -294,5 +337,14 @@ var API = (() => {
     getNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    // Clinic closures / no-show
+    getClinicStatus,
+    adminStopToday,
+    adminReopenToday,
+    getBlockedDates,
+    addBlockedDate,
+    removeBlockedDate,
+    getNoShows,
+    adminLateCheckIn,
   };
 })();

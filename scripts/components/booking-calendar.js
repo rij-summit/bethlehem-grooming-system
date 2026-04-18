@@ -27,6 +27,10 @@ const state = {
   holidays: new Map(),
   timeslots: [],        // API response for the selected date
   dayFull: false,       // true when the selected date has hit 20-booking capacity
+  clinicStatus: {
+    stoppedToday: false,
+    blockedDates: [],   // [{ id, start_date, end_date, reason }]
+  },
 };
 
 // =========================
@@ -41,6 +45,7 @@ const elements = {
   timeSlots: document.getElementById("timeSlots"),
   selectedScheduleText: document.getElementById("selectedScheduleText"),
   nextStepBtn: document.getElementById("nextStepBtn"),
+  clinicNotice: document.getElementById("clinicNotice"),
 };
 
 // =========================
@@ -130,8 +135,77 @@ function isBeyondBookingWindow(dateKey) {
   return diffDays >= MAX_BOOKING_DAYS_AHEAD;
 }
 
+// =========================
+// CLINIC CLOSURE HELPERS
+// =========================
+
+/**
+ * Returns the clinic block object if this date is blocked by the admin,
+ * or null if the date is open.
+ */
+function getClinicBlock(dateKey) {
+  const today = getTodayKeyInManila();
+
+  if (state.clinicStatus.stoppedToday && dateKey === today) {
+    return { type: "stop_today", start: today, end: today, reason: null };
+  }
+
+  for (const block of state.clinicStatus.blockedDates) {
+    if (dateKey >= block.start_date && dateKey <= block.end_date) {
+      return { type: "blocked_date", start: block.start_date, end: block.end_date, reason: block.reason };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns the customer-facing message for a clinic-blocked date.
+ */
+function getClinicBlockMessage(dateKey) {
+  const block = getClinicBlock(dateKey);
+  if (!block) return null;
+
+  if (block.type === "stop_today") {
+    return "We're taking a short break — check back tomorrow!";
+  }
+
+  // If the admin wrote a reason, show it
+  if (block.reason) return block.reason;
+
+  if (block.start === block.end) {
+    return "We're closed on this date.";
+  }
+
+  const fmt = (dk) =>
+    new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" }).format(
+      dateKeyToLocalDate(dk),
+    );
+  return `We're on a short break ${fmt(block.start)}–${fmt(block.end)}.`;
+}
+
+/**
+ * Updates the notice banner above the calendar when the clinic is stopped today.
+ */
+function updateClinicNotice() {
+  if (!elements.clinicNotice) return;
+
+  if (state.clinicStatus.stoppedToday) {
+    elements.clinicNotice.textContent =
+      "The clinic is not accepting bookings for today. Please select a different date.";
+    elements.clinicNotice.classList.remove("hidden");
+  } else {
+    elements.clinicNotice.classList.add("hidden");
+  }
+}
+
 function isDateDisabled(dateKey) {
-  return isPastDate(dateKey) || isHoliday(dateKey) || isBeyondBookingWindow(dateKey);
+  return (
+    isPastDate(dateKey) ||
+    isHoliday(dateKey) ||
+    isBeyondBookingWindow(dateKey) ||
+    getClinicBlock(dateKey) !== null
+  );
 }
 
 // =========================
@@ -160,6 +234,23 @@ function isSlotDisabled(slot) {
   }
 
   return false;
+}
+
+// =========================
+// FETCH CLINIC STATUS
+// =========================
+
+async function loadClinicStatus() {
+  try {
+    const data = await API.getClinicStatus();
+    state.clinicStatus = {
+      stoppedToday: Boolean(data.stopped_today),
+      blockedDates: Array.isArray(data.blocked_dates) ? data.blocked_dates : [],
+    };
+  } catch {
+    // Non-fatal — fall back to no restrictions
+    state.clinicStatus = { stoppedToday: false, blockedDates: [] };
+  }
 }
 
 // =========================
@@ -217,15 +308,28 @@ function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
   button.type = "button";
   button.textContent = day;
 
+  const clinicBlock = getClinicBlock(dateKey);
+
+  let disabledClass = "bg-slate-200 text-slate-400 cursor-not-allowed";
+  if (disabled && clinicBlock) {
+    // Amber tint for clinic closures so customers can tell them apart from past/full dates
+    disabledClass = "bg-[#fef9c3] text-[#854d0e] cursor-not-allowed";
+  }
+
   button.className = [
     "h-12 w-full rounded-xl text-sm font-semibold transition",
     disabled
-      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+      ? disabledClass
       : "bg-white text-slate-700 shadow-sm hover:bg-[#d8eafb]",
     selected ? "ring-2 ring-[#315b7e] bg-[#b9d7f1] text-[#1f3d58]" : "",
   ].join(" ");
 
-  if (holidayLabel) button.title = holidayLabel;
+  // Clinic closure message takes priority over the holiday label
+  const tooltip = clinicBlock
+    ? getClinicBlockMessage(dateKey)
+    : holidayLabel;
+  if (tooltip) button.title = tooltip;
+
   if (disabled) {
     button.disabled = true;
   } else {
@@ -411,9 +515,18 @@ export async function initBookingCalendar() {
   const now = getManilaNowParts();
   state.currentMonth = new Date(now.year, now.month - 1, 1);
 
-  await loadHolidaysForVisibleYear();
+  // Load both holidays and clinic closures in parallel
+  await Promise.all([loadHolidaysForVisibleYear(), loadClinicStatus()]);
+
+  // Clear any previously selected date if it is now clinic-blocked
+  if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {
+    state.selectedDateKey = null;
+    state.selectedSlot    = null;
+  }
+
   bindEvents();
   renderMonthHeader();
   renderCalendarGrid();
+  updateClinicNotice();
   updateSelectedSchedule();
 }

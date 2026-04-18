@@ -18,7 +18,23 @@ function adminDashboard() {
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
-    selectedDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD, defaults to today
+    // Use local date (not UTC) so the calendar defaults to the correct day in PH
+    selectedDate: (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })(),
+    get todayDate() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    },
+    get maxDate() {
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    },
+    noShowList: [],
+    clinicStopped: false,
+    stopModal: { open: false, title: "", message: "" },
     config: {
       bootstrap: null,
       endpoints: {},
@@ -96,6 +112,12 @@ function adminDashboard() {
             await API.adminArchiveBooking(booking.id);
             await this.loadAdminBookings();
           },
+          lateCheckIn: async ({ booking }) => {
+            await API.adminLateCheckIn(booking.id);
+            await this.loadAdminBookings();
+            await this.loadNoShows();
+            this.setTab("queued");
+          },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
             this.detailsModalOpen = true;
@@ -111,6 +133,14 @@ function adminDashboard() {
       // Load notifications immediately, then poll every 30 seconds
       await this.loadNotifications();
       setInterval(() => this.loadNotifications(), 30000);
+
+      // Load clinic status and no-show list on init, then poll every 60 seconds
+      await this.loadClinicStatus();
+      await this.loadNoShows();
+      setInterval(async () => {
+        await this.loadClinicStatus();
+        await this.loadNoShows();
+      }, 60000);
     },
 
     // Exposes a small runtime API so backend scripts can update the dashboard safely.
@@ -708,14 +738,11 @@ function adminDashboard() {
 
     // Removes a booking from every visible status list using its id.
     removeBookingFromLists(bookingId) {
-      this.incomingList = this.incomingList.filter((item) => item.id !== bookingId);
-      this.queuedList = this.queuedList.filter((item) => item.id !== bookingId);
-      this.inProgressList = this.inProgressList.filter(
-        (item) => item.id !== bookingId,
-      );
-      this.forPickupList = this.forPickupList.filter(
-        (item) => item.id !== bookingId,
-      );
+      this.incomingList  = this.incomingList.filter((item) => item.id !== bookingId);
+      this.queuedList    = this.queuedList.filter((item) => item.id !== bookingId);
+      this.inProgressList = this.inProgressList.filter((item) => item.id !== bookingId);
+      this.forPickupList = this.forPickupList.filter((item) => item.id !== bookingId);
+      this.noShowList    = this.noShowList.filter((item) => item.id !== bookingId);
     },
 
     // Maps a frontend action name to the next booking status.
@@ -984,6 +1011,12 @@ function adminDashboard() {
 
     // ── Incoming list grouped by date (today first) ───────────────────────
 
+    // Returns YYYY-MM-DD in local time (avoids UTC off-by-one at midnight PH)
+    localToday() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    },
+
     groupedIncoming() {
       const groups = {};
       for (const booking of this.incomingList) {
@@ -992,7 +1025,7 @@ function adminDashboard() {
         groups[date].push(booking);
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = this.localToday();
 
       return Object.keys(groups)
         .sort((a, b) => a.localeCompare(b))
@@ -1005,8 +1038,10 @@ function adminDashboard() {
     },
 
     formatDateGroupLabel(dateStr) {
-      const today    = new Date().toISOString().slice(0, 10);
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      const today    = this.localToday();
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
 
       const formatted = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
         weekday: 'long',
@@ -1091,7 +1126,7 @@ function adminDashboard() {
         ? this.notifications.filter((n) => !n.is_read)
         : this.notifications;
 
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = this.localToday();
       const today    = source.filter((n) => (n.created_at || "").slice(0, 10) === todayStr);
       const earlier  = source.filter((n) => (n.created_at || "").slice(0, 10) !== todayStr);
 
@@ -1107,6 +1142,74 @@ function adminDashboard() {
         hour:   "numeric",
         minute: "2-digit",
       });
+    },
+
+    // ── No-Show & Clinic Status ───────────────────────────────────────────────
+
+    async loadNoShows() {
+      try {
+        const data = await API.getNoShows();
+        this.noShowList = (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show"));
+      } catch (error) {
+        console.error("Failed to load no-show list:", error);
+      }
+    },
+
+    async lateCheckInBooking(booking) {
+      await this.runBookingAction("lateCheckIn", booking);
+    },
+
+    // Returns true when late check-in is still allowed (before 5 PM and clinic not stopped).
+    isLateCheckInAvailable() {
+      return new Date().getHours() < 17 && !this.clinicStopped;
+    },
+
+    async loadClinicStatus() {
+      try {
+        const data = await API.getClinicStatus();
+        this.clinicStopped = Boolean(data.stopped_today);
+      } catch (error) {
+        console.error("Failed to load clinic status:", error);
+      }
+    },
+
+    // Opens the confirmation modal before stopping / reopening.
+    handleStopReceivingClick() {
+      if (this.clinicStopped) {
+        this.stopModal = {
+          open:    true,
+          title:   "Reopen for Today?",
+          message: "This will allow new walk-ins and late check-ins for the rest of the day.",
+          action:  "reopen",
+        };
+      } else {
+        this.stopModal = {
+          open:    true,
+          title:   "Stop Receiving for Today?",
+          message: "Remaining walk-in bookings will be marked as no-show. This action can be undone before the day ends.",
+          action:  "stop",
+        };
+      }
+    },
+
+    // Called by the Confirm button inside the stop-receiving modal.
+    async executeStopReceiving() {
+      const action = this.stopModal.action;
+      this.stopModal = { open: false, title: "", message: "", action: "" };
+      try {
+        if (action === "stop") {
+          await API.adminStopToday();
+          this.clinicStopped = true;
+          await this.loadAdminBookings();
+          await this.loadNoShows();
+          await this.loadNotifications();
+        } else {
+          await API.adminReopenToday();
+          this.clinicStopped = false;
+        }
+      } catch (error) {
+        console.error("Failed to toggle clinic status:", error);
+      }
     },
   };
 }

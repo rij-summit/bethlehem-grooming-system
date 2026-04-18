@@ -163,6 +163,27 @@
             </div>
           </div>
 
+          <!-- Stop Receiving / Reopen toggle -->
+          <button
+            type="button"
+            @click="handleStopReceivingClick()"
+            class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
+            :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
+          >
+            <i :data-lucide="clinicStopped ? 'door-open' : 'door-closed'" class="h-4 w-4"></i>
+            <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
+          </button>
+
+          <!-- Block Dates (holidays / vacations) -->
+          <button
+            type="button"
+            @click="openBlockedDatesModal()"
+            class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] bg-white/20 px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/40"
+          >
+            <i data-lucide="calendar-off" class="h-4 w-4"></i>
+            <span>Block Dates</span>
+          </button>
+
           <button
             type="button"
             class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30"
@@ -173,6 +194,128 @@
           </button>
         </div>
       </aside>
+
+      <!-- Stop Receiving Confirmation Modal -->
+      <div
+        x-show="stopModal.open"
+        x-transition
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
+      >
+        <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
+          <div class="px-6 py-5">
+            <h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4>
+            <p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p>
+            <p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p>
+          </div>
+          <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+            <button
+              type="button"
+              @click="stopModal.open = false"
+              class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              @click="executeStopReceiving()"
+              :disabled="stopModal.busy"
+              class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition"
+              :class="clinicStopped ? 'btn-confirm-reopen' : 'btn-confirm-stop'"
+            >
+              <span x-text="stopModal.busy ? 'Please wait...' : stopModal.confirmLabel"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Block Dates Modal -->
+      <div
+        x-show="blockDatesModal.open"
+        x-transition
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
+      >
+        <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
+          <!-- Header -->
+          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+            <div>
+              <h4 class="text-lg font-bold text-slate-800">Block Dates</h4>
+              <p class="mt-0.5 text-sm text-slate-500">Holidays, vacations, or any closure period.</p>
+            </div>
+            <button type="button" @click="blockDatesModal.open = false" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
+              <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+          </div>
+
+          <!-- Existing blocked dates list -->
+          <div class="max-h-48 overflow-y-auto px-6 py-4">
+            <template x-if="blockedDates.length === 0">
+              <p class="text-sm text-slate-400">No blocked dates set.</p>
+            </template>
+            <template x-for="block in blockedDates" :key="block.id">
+              <div class="mb-2 flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                <div>
+                  <p class="text-sm font-semibold text-slate-700">
+                    <span x-text="block.start_date === block.end_date ? block.start_date : block.start_date + ' → ' + block.end_date"></span>
+                  </p>
+                  <p class="text-xs text-slate-400" x-text="block.reason || 'No reason given'"></p>
+                </div>
+                <button
+                  type="button"
+                  @click="removeBlockedDate(block.id)"
+                  class="ml-3 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- Add new blocked date form -->
+          <div class="border-t border-slate-100 px-6 py-5">
+            <p class="mb-3 text-sm font-semibold text-slate-700">Add New Closure</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-500">Start Date</label>
+                <input
+                  type="date"
+                  x-model="blockForm.startDate"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-500">End Date</label>
+                <input
+                  type="date"
+                  x-model="blockForm.endDate"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
+                />
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="mb-1 block text-xs font-semibold text-slate-500">Reason <span class="font-normal text-slate-400">(optional)</span></label>
+              <input
+                type="text"
+                x-model="blockForm.reason"
+                placeholder="e.g. Christmas holiday, Summer vacation"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
+              />
+            </div>
+            <p x-show="blockForm.error" class="mt-2 text-xs text-red-600" x-text="blockForm.error"></p>
+            <p x-show="blockForm.warning" class="mt-2 text-xs text-amber-600" x-text="blockForm.warning"></p>
+            <div class="mt-4 flex justify-end">
+              <button
+                type="button"
+                @click="submitBlockedDate()"
+                :disabled="blockForm.busy"
+                class="btn-confirm-reopen rounded-xl px-5 py-2.5 text-sm font-semibold transition"
+                :class="blockForm.busy ? 'opacity-60 cursor-not-allowed' : ''"
+              >
+                <span x-text="blockForm.busy ? 'Saving...' : 'Block These Dates'"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Main Content -->
       <div class="flex min-h-screen flex-1 flex-col">
@@ -244,6 +387,8 @@
                     <input
                       type="date"
                       x-model="selectedDate"
+                      :min="todayDate"
+                      :max="maxDate"
                       @change="onDateChange()"
                       class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
                     />
@@ -438,7 +583,7 @@
           <!-- Flow tabs -->
           <section class="mt-6">
             <div class="rounded-full bg-[#bdd6ec] p-1">
-              <div class="grid grid-cols-2 gap-1 lg:grid-cols-4">
+              <div class="grid grid-cols-2 gap-1 lg:grid-cols-5">
                 <button
                   type="button"
                   @click="setTab('incoming')"
@@ -473,6 +618,15 @@
                   :class="activeTab === 'for-pickup' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
                   For Pickup (<span x-text="forPickupList.length"></span>)
+                </button>
+
+                <button
+                  type="button"
+                  @click="setTab('no-show')"
+                  class="rounded-full px-3 py-3 text-sm font-bold transition"
+                  :class="activeTab === 'no-show' ? 'bg-red-500 text-white shadow-sm' : 'text-[#1f3850]'"
+                >
+                  No-Show (<span x-text="noShowList.length"></span>)
                 </button>
               </div>
             </div>
@@ -513,6 +667,14 @@
                   Clicking <strong>Mark as done</strong> should move a booking
                   from In-Progress to For Pickup and trigger backend SMS and
                   dashboard notification logic.
+                </p>
+              </template>
+
+              <template x-if="activeTab === 'no-show'">
+                <p>
+                  No-Show displays bookings that were automatically flagged because
+                  the customer did not check in 30 minutes after their time window ended.
+                  <strong>Late Check-in</strong> is available until 5:00 PM on the same day.
                 </p>
               </template>
             </div>
@@ -1200,6 +1362,86 @@
               </article>
             </template>
           </section>
+          <!-- No-Show -->
+          <section x-show="activeTab === 'no-show'" class="mt-6 space-y-4">
+            <div class="flex items-center gap-2 text-red-500">
+              <i data-lucide="user-x" class="h-5 w-5"></i>
+              <h3 class="text-2xl font-semibold text-black lg:text-3xl">No-Show</h3>
+            </div>
+
+            <!-- EMPTY STATE -->
+            <template x-if="noShowList.length === 0">
+              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-400">
+                  <i data-lucide="user-x" class="h-8 w-8"></i>
+                </div>
+                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No no-shows today</p>
+                <p class="mt-2 text-sm text-slate-500">Bookings automatically flagged as no-show will appear here.</p>
+              </div>
+            </template>
+
+            <!-- NO-SHOW CARDS -->
+            <template x-for="booking in noShowList" :key="booking.id">
+              <article class="rounded-[24px] border-2 border-red-200 bg-white px-4 py-5 shadow-sm sm:px-6">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <!-- LEFT SIDE -->
+                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+                    <div class="text-4xl font-extrabold text-red-300" x-text="'#' + booking.queueNumber"></div>
+                    <div class="min-w-0">
+                      <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
+                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
+                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
+                        <p class="flex items-center gap-2">
+                          <i data-lucide="paw-print" class="h-4 w-4"></i>
+                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
+                        </p>
+                        <p class="flex items-center gap-2">
+                          <i data-lucide="clock-3" class="h-4 w-4"></i>
+                          <span x-text="booking.appointmentTime"></span>
+                        </p>
+                        <p class="flex items-center gap-2 text-red-400">
+                          <i data-lucide="user-x" class="h-4 w-4"></i>
+                          <span>Did not show up</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- RIGHT SIDE -->
+                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                    <p class="text-base text-slate-700 lg:text-lg" x-text="booking.serviceLabel"></p>
+
+                    <!-- Late Check-in: only available before 5 PM -->
+                    <template x-if="isLateCheckInAvailable()">
+                      <button
+                        type="button"
+                        @click="lateCheckInBooking(booking)"
+                        :disabled="isActionBusy('lateCheckIn', booking.id)"
+                        class="rounded-xl bg-amber-500 px-6 py-3 text-base font-semibold text-white transition hover:bg-amber-600"
+                        :class="isActionBusy('lateCheckIn', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
+                      >
+                        <span x-text="isActionBusy('lateCheckIn', booking.id) ? 'Checking in...' : 'Late Check-in'"></span>
+                      </button>
+                    </template>
+                    <template x-if="!isLateCheckInAvailable()">
+                      <div class="rounded-xl border border-slate-200 px-6 py-3 text-center text-sm text-slate-400">
+                        Late check-in closed (after 5 PM)
+                      </div>
+                    </template>
+
+                    <button
+                      type="button"
+                      @click="viewBookingDetails(booking)"
+                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </template>
+          </section>
+
           <!-- View Details Modal -->
           <div
             x-show="detailsModalOpen"

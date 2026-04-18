@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\Booking;
 use App\Models\BookingService;
+use App\Models\ClinicClosure;
 
 class AdminBookingController extends Controller
 {
@@ -182,6 +183,77 @@ class AdminBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Booking archived successfully.',
+        ]);
+    }
+
+    // ── NO-SHOW LIST ──────────────────────────────────────
+    // GET /api/admin/bookings/no-shows
+    public function noShowIndex()
+    {
+        $today = Carbon::today()->toDateString();
+
+        $noShows = Booking::where('booking_date', $today)
+            ->where('status', 'no_show')
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->orderBy('queue_number', 'asc')
+            ->get()
+            ->map(fn($b) => $this->formatBooking($b));
+
+        return response()->json([
+            'success'    => true,
+            'noShowList' => $noShows->values(),
+        ]);
+    }
+
+    // ── LATE CHECK-IN ─────────────────────────────────────
+    // no_show → checked_in (same day only, before 5 PM, clinic not stopped)
+    public function lateCheckIn($id)
+    {
+        $booking = Booking::find($id);
+
+        if (!$booking) {
+            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+        }
+
+        if ($booking->status !== 'no_show') {
+            return response()->json(['success' => false, 'message' => 'Only no-show bookings can be late checked-in.'], 422);
+        }
+
+        $today = Carbon::today()->toDateString();
+
+        if ($booking->booking_date !== $today) {
+            return response()->json(['success' => false, 'message' => 'Late check-in is only available on the day of the booking.'], 422);
+        }
+
+        // Block if past 5 PM
+        if (Carbon::now()->hour >= 17) {
+            return response()->json(['success' => false, 'message' => 'Late check-in is no longer available after 5:00 PM.'], 422);
+        }
+
+        // Block if clinic stopped receiving today
+        $stoppedToday = ClinicClosure::where('type', 'stop_today')
+            ->where('start_date', $today)
+            ->where('is_active', 1)
+            ->exists();
+
+        if ($stoppedToday) {
+            return response()->json(['success' => false, 'message' => 'The clinic has stopped receiving for today.'], 422);
+        }
+
+        // Assign queue number at the back
+        $queueNumber = Booking::where('booking_date', $today)
+            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'no_show'])
+            ->count() + 1;
+
+        $booking->update([
+            'status'       => 'checked_in',
+            'queue_number' => $queueNumber,
+        ]);
+
+        return response()->json([
+            'success'      => true,
+            'message'      => 'Late check-in successful. Customer added to the back of the queue.',
+            'queue_number' => $queueNumber,
         ]);
     }
 
