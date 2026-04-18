@@ -353,7 +353,7 @@
                         <!-- Tier badge -->
                         <span
                           class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold"
-                          :class="customer.tier === 'returning' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'"
+                          :class="customer.tier === 'returning' ? 'badge-returning' : 'badge-new'"
                         >
                           <i :data-lucide="customer.tier === 'returning' ? 'repeat-2' : 'sparkles'" class="h-3 w-3"></i>
                           <span x-text="customer.tier === 'returning' ? 'Returning' : 'New'"></span>
@@ -414,7 +414,7 @@
                         <button type="button"
                           @click="confirmAction('deactivate', customer)"
                           :disabled="busyId === customer.id"
-                          class="rounded-xl border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-600 transition hover:bg-amber-50 disabled:opacity-50">
+                          class="btn-deactivate rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-50">
                           Deactivate
                         </button>
                         <button type="button"
@@ -478,14 +478,14 @@
               <div class="mb-4 flex items-center gap-3">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                   :class="{
-                    'bg-amber-100': confirmModal.action === 'deactivate',
-                    'bg-green-100': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
-                    'bg-slate-100': confirmModal.action === 'archive'
+                    'icon-bg-warn':    confirmModal.action === 'deactivate',
+                    'icon-bg-success': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                    'bg-slate-100':    confirmModal.action === 'archive'
                   }">
                   <i :data-lucide="confirmModal.action === 'deactivate' ? 'ban' : confirmModal.action === 'archive' ? 'archive' : 'check-circle'" class="h-5 w-5"
                     :class="{
-                      'text-amber-600': confirmModal.action === 'deactivate',
-                      'text-green-600': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                      'icon-warn':    confirmModal.action === 'deactivate',
+                      'icon-success': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
                       'text-slate-500': confirmModal.action === 'archive'
                     }"></i>
                 </div>
@@ -502,9 +502,9 @@
                   :disabled="busyId !== null"
                   class="rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50"
                   :class="{
-                    'bg-amber-500 hover:bg-amber-600': confirmModal.action === 'deactivate',
-                    'bg-[#315b7e] hover:bg-[#274a67]': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
-                    'bg-slate-500 hover:bg-slate-600': confirmModal.action === 'archive'
+                    'btn-confirm-deactivate': confirmModal.action === 'deactivate',
+                    'btn-confirm-reopen':     confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
+                    'btn-confirm-archive':    confirmModal.action === 'archive'
                   }"
                   x-text="busyId !== null ? 'Please wait...' : confirmModal.confirmLabel">
                 </button>

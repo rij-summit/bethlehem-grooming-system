@@ -222,6 +222,26 @@ body.client-sidebar-open {
   }
 }
 
+/* Customer tier badges */
+.badge-returning { background-color: #d1fae5; color: #047857; }
+.badge-new       { background-color: #e0f2fe; color: #0369a1; }
+
+/* Deactivate action button (on card) */
+.btn-deactivate       { border-color: #fbbf24; color: #d97706; }
+.btn-deactivate:hover { background-color: #fffbeb; }
+
+/* Confirm modal — icon container */
+.icon-bg-warn    { background-color: #fef3c7; }
+.icon-bg-success { background-color: #dcfce7; }
+.icon-warn       { color: #d97706; }
+.icon-success    { color: #16a34a; }
+
+/* Confirm modal — confirm button variants */
+.btn-confirm-deactivate       { background-color: #f59e0b; color: #ffffff; }
+.btn-confirm-deactivate:hover { background-color: #d97706; }
+.btn-confirm-archive          { background-color: #64748b; color: #ffffff; }
+.btn-confirm-archive:hover    { background-color: #475569; }
+
 /* Stop Receiving / Reopen Today — sidebar button */
 .btn-clinic-stop {
   background-color: #fee2e2;
