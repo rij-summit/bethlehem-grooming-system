@@ -7,6 +7,7 @@
 
     <!-- Compiled Tailwind CSS-->
     <link rel="stylesheet" href="css/output.css" />
+    <link rel="stylesheet" href="css/custom.css" />
 
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -15,29 +16,38 @@
     <!-- NAVBAR -->
 
     <nav
-      class="bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0"
+      class="site-nav bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0"
     >
       <div class="flex items-center">
-        <a href="index.html">
+        <a
+          href="index.html"
+          class="brand-lockup"
+          aria-label="Bethlehem Animal Clinic home"
+        >
           <img
-            src="./assets/your-logo-file.png"
+            src="./assets/images/clinic/Bethlehem_Logo.png"
             alt="Bethlehem Animal Clinic Logo"
-            class="h-12 w-auto"
+            class="brand-lockup__mark"
           />
+          <span class="brand-lockup__divider" aria-hidden="true"></span>
+          <span class="brand-lockup__text" aria-hidden="true">
+            <span class="brand-lockup__name">BETHLEHEM</span>
+            <span class="brand-lockup__service">ANIMAL CLINIC</span>
+          </span>
         </a>
       </div>
 
-      <div class="flex items-center space-x-10">
+      <div class="site-nav-actions flex items-center gap-10">
         <a
           href="#"
-          class="text-gray-800 font-medium text-base hover:text-blue-600 transition-colors"
+          class="site-nav-link text-gray-800 font-medium text-base hover:text-blue-600 transition-colors"
         >
           FAQ
         </a>
 
         <button
           id="openLoginModal"
-          class="bg-[#315b7e] text-white px-12 py-3 rounded-lg font-medium text-base hover:bg-[#254561] transition-colors shadow-sm"
+          class="site-nav-login text-white px-12 py-3 rounded-lg font-medium text-base transition-colors shadow-sm"
         >
           Login
         </button>

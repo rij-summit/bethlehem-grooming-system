@@ -5,8 +5,51 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signupForm");
   const signupMessage = document.getElementById("signupMessage");
   const phoneInput = document.getElementById("phone");
+  const passwordInput = document.getElementById("password");
+  const confirmPasswordInput = document.getElementById("confirmPassword");
+  const passwordVisibilityButtons = [
+    document.getElementById("togglePasswordVisibility"),
+    document.getElementById("toggleConfirmPasswordVisibility"),
+  ].filter(Boolean);
 
   if (!signupForm) return;
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+
+  if (passwordInput && confirmPasswordInput) {
+    passwordVisibilityButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        const shouldShowPassword =
+          passwordInput.type === "password" ||
+          confirmPasswordInput.type === "password";
+        const nextLabel = shouldShowPassword
+          ? "Hide password"
+          : "Show password";
+
+        passwordInput.type = shouldShowPassword ? "text" : "password";
+        confirmPasswordInput.type = shouldShowPassword ? "text" : "password";
+
+        passwordVisibilityButtons.forEach((visibilityButton) => {
+          const passwordIconClosed = visibilityButton.querySelector(
+            ".password-icon-closed"
+          );
+          const passwordIconOpen = visibilityButton.querySelector(
+            ".password-icon-open"
+          );
+
+          visibilityButton.setAttribute("aria-label", nextLabel);
+          visibilityButton.setAttribute("title", nextLabel);
+
+          if (passwordIconClosed && passwordIconOpen) {
+            passwordIconClosed.classList.toggle("hidden", shouldShowPassword);
+            passwordIconOpen.classList.toggle("hidden", !shouldShowPassword);
+          }
+        });
+      });
+    });
+  }
 
   // ── Phone input masking ───────────────────────────────────────────────────
   // Strip non-digits, cap at 11, enforce 09 prefix in real time
@@ -30,8 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const lastName = document.getElementById("lastName").value.trim();
     const email = document.getElementById("email").value.trim();
     const phone = phoneInput.value.trim();
-    const password = document.getElementById("password").value;
-    const confirmPassword = document.getElementById("confirmPassword").value;
+    const password = passwordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
 
     signupMessage.className = "mt-5 rounded-xl border px-4 py-3 text-sm";
 
