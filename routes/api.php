@@ -8,6 +8,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ClinicClosureController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\CustomerNotificationController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -45,6 +46,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/notifications',              [NotificationController::class, 'index']);
     Route::patch('/admin/notifications/read-all',   [NotificationController::class, 'markAllRead']);
     Route::patch('/admin/notifications/{id}/read',  [NotificationController::class, 'markRead']);
+
+    // Customer — Notifications
+    Route::get('/customer/notifications',              [CustomerNotificationController::class, 'index']);
+    Route::patch('/customer/notifications/read-all',   [CustomerNotificationController::class, 'markAllRead']);
+    Route::patch('/customer/notifications/{id}/read',  [CustomerNotificationController::class, 'markRead']);
 
     // Admin — Booking management
     Route::get('/admin/bookings',                          [AdminBookingController::class, 'index']);

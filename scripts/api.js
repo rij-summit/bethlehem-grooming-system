@@ -312,6 +312,21 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/release`, null, getAdminToken());
   }
 
+  async function getCustomerNotifications() {
+    // GET /api/customer/notifications  (protected — customer token)
+    return request("GET", "/customer/notifications", null, getCustomerToken());
+  }
+
+  async function markCustomerNotificationRead(id) {
+    // PATCH /api/customer/notifications/{id}/read  (protected — customer token)
+    return request("PATCH", `/customer/notifications/${id}/read`, null, getCustomerToken());
+  }
+
+  async function markAllCustomerNotificationsRead() {
+    // PATCH /api/customer/notifications/read-all  (protected — customer token)
+    return request("PATCH", "/customer/notifications/read-all", null, getCustomerToken());
+  }
+
   async function getTransactions({ search = "", date = "" } = {}) {
     // GET /api/admin/transactions  (protected — admin token)
     const params = new URLSearchParams();
@@ -373,6 +388,10 @@ var API = (() => {
     removeBlockedDate,
     getNoShows,
     adminLateCheckIn,
+    // Customer notifications
+    getCustomerNotifications,
+    markCustomerNotificationRead,
+    markAllCustomerNotificationsRead,
     // Payments
     processPayment,
     payNow,

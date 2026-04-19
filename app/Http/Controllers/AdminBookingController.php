@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
 use App\Models\Notification;
+use App\Models\CustomerNotification;
 
 class AdminBookingController extends Controller
 {
@@ -133,7 +134,22 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be checked in first.'], 422);
         }
 
+        $booking->load('user', 'bookingPets.pet');
+
         $booking->update(['status' => 'in_progress']);
+
+        // Notify the customer that grooming has started
+        if ($booking->user) {
+            $petName = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+            CustomerNotification::create([
+                'user_id'    => $booking->user->user_id,
+                'booking_id' => $booking->booking_id,
+                'type'       => 'grooming_started',
+                'message'    => "Great news! {$petName}'s grooming session has started. We'll let you know as soon as they're ready for pickup! 🐾",
+                'is_read'    => false,
+                'created_at' => now(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -169,16 +185,32 @@ class AdminBookingController extends Controller
         }
 
         // Normal path: move to for_payment and notify customer
+        $booking->load('bookingPets.pet');
         $booking->update(['status' => 'for_payment']);
 
-        // Admin notification so the front-desk knows to collect payment
+        $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
+        $petName   = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+
+        // Admin notification — front-desk knows to collect payment
         Notification::create([
             'type'       => 'payment_due',
             'booking_id' => $booking->booking_id,
-            'message'    => 'Grooming done for ' . trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? '')) . '. Pet is ready — please collect payment.',
+            'message'    => "Grooming done for {$ownerName}. Pet is ready — please collect payment.",
             'is_read'    => false,
             'created_at' => now(),
         ]);
+
+        // Customer notification — ready for pickup alert
+        if ($booking->user) {
+            CustomerNotification::create([
+                'user_id'    => $booking->user->user_id,
+                'booking_id' => $booking->booking_id,
+                'type'       => 'ready_for_pickup',
+                'message'    => "🐾 {$petName} is all done and looking fabulous! Please come to the clinic to pick them up.",
+                'is_read'    => false,
+                'created_at' => now(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,

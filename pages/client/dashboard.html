@@ -160,7 +160,7 @@
         <!-- Top Header -->
         <!-- Backend note: notifications and search can be connected later -->
         <header
-          class="top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200"
+          class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200"
         >
           <div
             class="client-dashboard-header flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between px-6 py-5"
@@ -185,12 +185,36 @@
                 />
               </div>
 
-              <!-- Notification -->
-              <button
-                class="h-12 w-12 rounded-full bg-slate-100 hover:bg-slate-200 transition flex items-center justify-center"
-              >
-                <i data-lucide="bell" class="w-5 h-5 text-[#355c84]"></i>
-              </button>
+              <!-- Notification Bell -->
+              <div class="relative" id="notifBellWrapper">
+                <button
+                  id="notifBellBtn"
+                  type="button"
+                  class="relative h-12 w-12 rounded-full bg-slate-100 hover:bg-slate-200 transition flex items-center justify-center"
+                >
+                  <i data-lucide="bell" class="w-5 h-5 text-[#355c84]"></i>
+                  <span
+                    id="notifBadge"
+                    class="absolute -right-1 -top-1 hidden min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                  ></span>
+                </button>
+
+                <!-- Dropdown — shown/hidden and positioned via JS inline styles -->
+                <div id="notifDropdown" class="notif-client-dropdown" style="display:none">
+                  <!-- Header -->
+                  <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 shrink-0">
+                    <span class="text-sm font-semibold text-slate-700">Notifications</span>
+                    <button type="button" id="notifMarkAllRead" class="text-xs text-[#355c84] hover:underline">
+                      Mark all as read
+                    </button>
+                  </div>
+
+                  <!-- List -->
+                  <div id="notifList" class="notif-list divide-y divide-slate-100">
+                    <p class="px-4 py-6 text-center text-sm text-slate-400">Loading...</p>
+                  </div>
+                </div>
+              </div>
 
               <!-- Book Grooming Button -->
               <a
@@ -464,6 +488,30 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- Ready for Pickup Popup -->
+    <div id="pickupPopup" class="pickup-popup-overlay hidden">
+      <div class="pickup-popup-card">
+        <!-- Animated paws -->
+        <div class="pickup-paw-ring">
+          <i data-lucide="paw-print" class="pickup-paw-icon"></i>
+        </div>
+
+        <h2 class="pickup-title">Your fur baby is ready!</h2>
+        <p class="pickup-subtitle" id="pickupMessage">
+          Please come to the clinic to pick them up now! 🎉
+        </p>
+
+        <div class="pickup-bounce-text">
+          <span>🐾</span> Please pick me up now! <span>🐾</span>
+        </div>
+
+        <button type="button" id="pickupDismissBtn" class="pickup-dismiss-btn">
+          <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+          Got it, on my way!
+        </button>
+      </div>
     </div>
 
     <script src="../../scripts/api.js"></script>

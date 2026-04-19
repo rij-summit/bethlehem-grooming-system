@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Flag no-show bookings every 5 minutes
 Schedule::command('bookings:flag-no-shows')->everyFiveMinutes();
+
+// Send 24-hour and 3-hour appointment reminders every 30 minutes
+Schedule::command('reminders:send')->everyThirtyMinutes();

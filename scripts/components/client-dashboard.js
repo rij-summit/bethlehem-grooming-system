@@ -1,6 +1,186 @@
 // Connected to pages/client/dashboard.html
 // Depends on: api.js (loaded before this script)
 
+// ── Customer Notification Bell ────────────────────────────────────────────────
+(function () {
+  const bellBtn        = document.getElementById("notifBellBtn");
+  const badge          = document.getElementById("notifBadge");
+  const dropdown       = document.getElementById("notifDropdown");
+  const list           = document.getElementById("notifList");
+  const markAllBtn     = document.getElementById("notifMarkAllRead");
+  const pickupPopup    = document.getElementById("pickupPopup");
+  const pickupMessage  = document.getElementById("pickupMessage");
+  const pickupDismiss  = document.getElementById("pickupDismissBtn");
+
+  const SHOWN_PICKUPS_KEY = "shownPickupNotifs";
+
+  function getShownPickups() {
+    try { return JSON.parse(localStorage.getItem(SHOWN_PICKUPS_KEY) || "[]"); }
+    catch { return []; }
+  }
+
+  function markPickupShown(id) {
+    const shown = getShownPickups();
+    if (!shown.includes(id)) {
+      shown.push(id);
+      localStorage.setItem(SHOWN_PICKUPS_KEY, JSON.stringify(shown));
+    }
+  }
+
+  // ── Toggle dropdown ────────────────────────────────────────────────────────
+  bellBtn.addEventListener("click", () => {
+    dropdown.style.display === "none" ? openDropdown() : closeDropdown();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (dropdown.style.display === "none") return;
+    const path = e.composedPath();
+    if (!path.includes(dropdown) && !path.includes(bellBtn)) {
+      closeDropdown();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (dropdown.style.display !== "none") positionDropdown();
+  });
+
+  function openDropdown() {
+    positionDropdown();
+    dropdown.style.display = "flex";
+  }
+
+  function closeDropdown() {
+    dropdown.style.display = "none";
+  }
+
+  function positionDropdown() {
+    const rect      = bellBtn.getBoundingClientRect();
+    const gap       = 8;
+    const margin    = 12;
+    const dropWidth = Math.min(320, window.innerWidth - margin * 2);
+
+    // Right-align to bell, clamped so it never clips the left edge
+    let right = window.innerWidth - rect.right;
+    right = Math.max(margin, right);
+
+    dropdown.style.top   = (rect.bottom + gap) + "px";
+    dropdown.style.right = right + "px";
+    dropdown.style.left  = "auto";
+    dropdown.style.width = dropWidth + "px";
+  }
+
+  // ── Mark all read ──────────────────────────────────────────────────────────
+  markAllBtn.addEventListener("click", async () => {
+    try {
+      await API.markAllCustomerNotificationsRead();
+      await loadNotifications();
+    } catch { /* silent */ }
+  });
+
+  // ── Pickup popup dismiss ───────────────────────────────────────────────────
+  pickupDismiss.addEventListener("click", async () => {
+    const notifId = pickupPopup.dataset.notifId;
+    pickupPopup.classList.add("hidden");
+    if (notifId) {
+      markPickupShown(notifId);
+      try { await API.markCustomerNotificationRead(notifId); } catch { /* silent */ }
+      await loadNotifications();
+    }
+  });
+
+  // ── Load notifications ─────────────────────────────────────────────────────
+  async function loadNotifications() {
+    try {
+      const data = await API.getCustomerNotifications();
+
+      // Badge
+      const count = data.unread_count || 0;
+      if (count > 0) {
+        badge.textContent = count > 9 ? "9+" : count;
+        badge.classList.remove("hidden");
+        badge.classList.add("inline-flex");
+      } else {
+        badge.classList.add("hidden");
+        badge.classList.remove("inline-flex");
+      }
+
+      // List
+      renderNotifList(data.notifications || []);
+
+      // Pickup alert popup
+      const pickup = data.pickup_alert;
+      if (pickup && !getShownPickups().includes(pickup.id)) {
+        pickupMessage.textContent = pickup.message;
+        pickupPopup.dataset.notifId = pickup.id;
+        pickupPopup.classList.remove("hidden");
+        if (window.lucide) lucide.createIcons();
+      }
+    } catch { /* silent — non-critical */ }
+  }
+
+  function renderNotifList(notifications) {
+    if (!notifications.length) {
+      list.innerHTML = '<p class="px-4 py-6 text-center text-sm text-slate-400">No notifications yet.</p>';
+      return;
+    }
+
+    list.innerHTML = notifications.map((n) => {
+      const icon = notifIcon(n.type);
+      const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
+      const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
+      const time = formatNotifTime(n.created_at);
+      return `
+        <div class="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-slate-50 ${bg}"
+             data-notif-id="${n.id}">
+          <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}"></span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start gap-2">
+              <span class="text-base">${icon}</span>
+              <p class="text-sm text-slate-700 leading-snug">${n.message}</p>
+            </div>
+            <p class="mt-1 text-xs text-slate-400">${time}</p>
+          </div>
+        </div>`;
+    }).join("");
+
+    // Mark single notification as read on click
+    list.querySelectorAll("[data-notif-id]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const id = el.dataset.notifId;
+        try {
+          await API.markCustomerNotificationRead(id);
+          await loadNotifications();
+        } catch { /* silent */ }
+      });
+    });
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function notifIcon(type) {
+    const icons = {
+      reminder_24h:    "📅",
+      reminder_3h:     "⏰",
+      grooming_started:"✂️",
+      ready_for_pickup:"🐾",
+    };
+    return icons[type] || "🔔";
+  }
+
+  function formatNotifTime(dateStr) {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleString("en-PH", {
+      month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit",
+    });
+  }
+
+  // Initial load + poll every 30 seconds
+  loadNotifications();
+  setInterval(loadNotifications, 30000);
+})();
+
+// ── Appointments & Reschedule ─────────────────────────────────────────────────
 (function () {
   const appointmentsList      = document.getElementById("appointmentsList");
   const rescheduleModal       = document.getElementById("rescheduleModal");
