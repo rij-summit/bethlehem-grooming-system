@@ -1,3 +1,5 @@
+import { formatBookingSchedule } from "../services/booking-format-service.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("bookingConsentForm");
   const mainConsentCheckbox = document.getElementById("mainConsentCheckbox");
@@ -233,14 +235,18 @@ document.addEventListener("DOMContentLoaded", () => {
       bookingReview?.bookingDate ||
       bookingStep2?.bookingDate ||
       bookingStep1?.bookingDate ||
-      "No date selected";
+      "";
     const bookingTime =
       bookingReview?.bookingTime ||
       bookingStep2?.bookingTime ||
       bookingStep1?.bookingTime ||
-      "No time selected";
+      "";
 
-    scheduleSummaryText.textContent = `${bookingDate} | ${bookingTime}`;
+    scheduleSummaryText.textContent =
+      bookingReview?.bookingScheduleText ||
+      bookingStep2?.bookingScheduleText ||
+      formatBookingSchedule(bookingDate, bookingTime) ||
+      "No schedule selected yet.";
 
     const reviewedPets = Array.isArray(bookingReview?.pets)
       ? bookingReview.pets

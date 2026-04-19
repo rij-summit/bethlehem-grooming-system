@@ -1,4 +1,5 @@
 import { getPhilippineHolidays } from "../services/holidays.js";
+import { formatBookingSchedule } from "../services/booking-format-service.js";
 
 /**
  * Booking Calendar Component
@@ -98,15 +99,6 @@ function toDateKey(year, monthIndex, day) {
 function dateKeyToLocalDate(dateKey) {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(year, month - 1, day);
-}
-
-function formatLongDate(dateKey) {
-  return new Intl.DateTimeFormat("en-PH", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(dateKeyToLocalDate(dateKey));
 }
 
 function isPastDate(dateKey) {
@@ -428,6 +420,10 @@ function renderTimeSlots() {
     } else {
       button.addEventListener("click", () => {
         state.selectedSlot = slot;
+        const scheduleText = formatBookingSchedule(
+          state.selectedDateKey,
+          slot.window_label,
+        );
 
         // Store schedule including window_id for API submission
         sessionStorage.setItem(
@@ -435,6 +431,7 @@ function renderTimeSlots() {
           JSON.stringify({
             date: state.selectedDateKey,
             time: slot.window_label,
+            scheduleText,
             window_id: slot.window_id,
             start_time: slot.start_time,
             end_time: slot.end_time,
@@ -458,8 +455,10 @@ function updateSelectedSchedule() {
     return;
   }
 
-  elements.selectedScheduleText.textContent =
-    `${formatLongDate(state.selectedDateKey)} at ${state.selectedSlot.window_label}`;
+  elements.selectedScheduleText.textContent = formatBookingSchedule(
+    state.selectedDateKey,
+    state.selectedSlot.window_label,
+  );
 
   elements.nextStepBtn.disabled = false;
   elements.nextStepBtn.classList.remove("opacity-50", "cursor-not-allowed");

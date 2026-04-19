@@ -1,3 +1,8 @@
+import {
+  formatBookingDate,
+  formatBookingTimeRange,
+} from "../services/booking-format-service.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const bookingReferenceNumber = document.getElementById("bookingReferenceNumber");
   const ownerName = document.getElementById("ownerName");
@@ -110,8 +115,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ── Schedule ──────────────────────────────────────────
-    appointmentDate.textContent = confirmation.booking_date || "No date selected.";
-    appointmentTime.textContent = confirmation.booking_time || "No time selected.";
+    appointmentDate.textContent =
+      formatBookingDate(confirmation.booking_date) || "No date selected.";
+    appointmentTime.textContent =
+      formatBookingTimeRange(confirmation.booking_time) || "No time selected.";
 
     // ── Consent ───────────────────────────────────────────
     groomingConsentStatus.textContent =

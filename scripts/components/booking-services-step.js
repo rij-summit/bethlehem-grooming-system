@@ -6,6 +6,7 @@ import {
   getBookingDraft,
   readSessionJson,
 } from "../services/booking-draft-service.js";
+import { formatBookingSchedule } from "../services/booking-format-service.js";
 import {
   ADD_ON_SERVICES,
   buildStepThreeDraftPayload,
@@ -146,9 +147,10 @@ function populateHiddenInputs(data) {
 
 function populateSummary(data) {
   if (data?.bookingDate || data?.bookingTime) {
-    elements.scheduleSummaryText.textContent = `${data.bookingDate || "No date"} | ${
-      data.bookingTime || "No time"
-    }`;
+    elements.scheduleSummaryText.textContent =
+      data.bookingScheduleText ||
+      formatBookingSchedule(data.bookingDate, data.bookingTime) ||
+      "No schedule selected yet.";
   }
 
   const selectedPets = Array.isArray(data?.pets) ? data.pets : [];
@@ -199,7 +201,6 @@ function renderPetSelectionCard(pet, index) {
   const selectedPackage = selection.servicePackage
     ? getPackageById(selection.servicePackage)
     : null;
-  const packageAlaCarteRules = getPackageAlaCarteRules(selection.servicePackage);
   const packageCards = getPackagesByPetType(pet.petType)
     .map((service) => renderPackageCard(pet, selection, service, allowsAlaCarteOnly))
     .join("");
@@ -241,8 +242,8 @@ function renderPetSelectionCard(pet, index) {
         <p class="mt-2 text-sm text-slate-600">
           ${
             allowsAlaCarteOnly
-              ? "Choose one package for this pet, or leave packages blank and use a la carte services only. The Next button stays disabled until this pet has at least one service."
-              : "Choose one grooming package for this pet before continuing to the next step."
+              ? "Choose one package, add À la carte services, or both. At least one service is required to proceed."
+              : "Choose one grooming package to proceed."
           }
         </p>
       </div>
@@ -256,17 +257,6 @@ function renderPetSelectionCard(pet, index) {
                 : 'Service Package <span class="text-red-500">*</span>'
             }
           </h4>
-          <p class="text-sm text-slate-500">
-            ${
-              allowsAlaCarteOnly
-                ? `Packages are optional for ${escapeHtml(
-                    pet.petName || "this pet",
-                  )}. If you only need a la carte services, leave this section unselected or clear the package later.`
-                : `Select one grooming package for ${escapeHtml(
-                    pet.petName || "this pet",
-                  )}. Dog bookings cannot continue without a package.`
-            }
-          </p>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2">
@@ -280,16 +270,6 @@ function renderPetSelectionCard(pet, index) {
             <section class="mt-8">
               <div class="mb-3">
                 <h4 class="text-base font-semibold text-[#2f4b66]">A la Carte Menu</h4>
-                <p class="text-sm text-slate-500">
-                  ${escapeHtml(
-                    getAlaCarteDescriptionText(
-                      pet,
-                      selection,
-                      selectedPackage,
-                      packageAlaCarteRules,
-                    ),
-                  )}
-                </p>
               </div>
 
               <div class="space-y-2">
@@ -322,9 +302,6 @@ function renderPetSelectionCard(pet, index) {
           <h4 class="text-base font-semibold text-[#2f4b66]">
             Grooming Preferences &amp; Special Instructions
           </h4>
-          <p class="text-sm text-slate-500">
-            Add pet-specific notes like haircut preference, sensitivity, or handling instructions.
-          </p>
         </div>
 
         <textarea
@@ -332,9 +309,7 @@ function renderPetSelectionCard(pet, index) {
           data-pet-id="${escapeHtml(pet.id)}"
           rows="4"
           maxlength="500"
-          placeholder="Add notes for ${escapeHtml(
-            pet.petName || "this pet",
-          )}..."
+          placeholder="Add pet-specific notes like haircut preference, sensitivity, or handling instructions."
           class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
         >${escapeHtml(selection.specialInstructions || "")}</textarea>
       </section>
@@ -345,6 +320,9 @@ function renderPetSelectionCard(pet, index) {
 function renderPackageCard(pet, selection, service, allowsAlaCarteOnly) {
   const isChecked = selection.servicePackage === service.id;
   const selectedSizeLabel = formatPetSizeLabel(pet.size);
+  const hasSinglePackageOption = getPackagesByPetType(pet.petType).length === 1;
+  const shouldShowSelectedPackageHint =
+    isChecked && allowsAlaCarteOnly && !hasSinglePackageOption;
 
   return `
     <div class="flex h-full flex-col gap-3">
@@ -381,7 +359,7 @@ function renderPackageCard(pet, selection, service, allowsAlaCarteOnly) {
             </div>
           </div>
           ${
-            isChecked && allowsAlaCarteOnly
+            shouldShowSelectedPackageHint
               ? `
                 <div class="mt-4 flex flex-wrap items-center gap-2">
                   <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
@@ -427,37 +405,6 @@ function renderPricePill(priceOption, selectedSizeLabel) {
       )}</span>
     </div>
   `;
-}
-
-function getAlaCarteDescriptionText(
-  pet,
-  selection,
-  selectedPackage,
-  packageAlaCarteRules,
-) {
-  const petName = pet.petName || "this pet";
-
-  if (!selection.servicePackage) {
-    return `${petName} can continue with a la carte services only. Selecting at least one item here counts as this pet's required service.`;
-  }
-
-  if (!packageAlaCarteRules.canCombineWithAlaCarte) {
-    return `Selecting an a la carte item for ${petName} will clear the package choice for this pet only.`;
-  }
-
-  const includedServiceNames = packageAlaCarteRules.includedAlaCarteServiceIds
-    .map((serviceId) => getAlaCarteServiceById(serviceId)?.name)
-    .filter(Boolean);
-
-  if (includedServiceNames.length === 0) {
-    return `Compatible a la carte extras can be added on top of ${
-      selectedPackage?.name || "the selected package"
-    } for ${petName}.`;
-  }
-
-  return `${selectedPackage?.name || "The selected package"} already includes ${includedServiceNames.join(
-    ", ",
-  )}, so those options stay disabled while the package is selected. Clear the package first if you want them as a la carte only.`;
 }
 
 function renderAlaCarteCard(pet, selection, service, selectedPackage) {

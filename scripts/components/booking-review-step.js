@@ -6,6 +6,7 @@ import {
   getBookingDraft,
   readSessionJson,
 } from "../services/booking-draft-service.js";
+import { formatBookingSchedule } from "../services/booking-format-service.js";
 import {
   buildBookingReviewPayload,
   formatAmountRange,
@@ -99,9 +100,13 @@ function renderEmptyState(message) {
 }
 
 function renderSummary() {
-  elements.scheduleReviewText.textContent = `${state.bookingDraft.bookingDate || "No date"} | ${
-    state.bookingDraft.bookingTime || "No time"
-  }`;
+  elements.scheduleReviewText.textContent =
+    state.bookingDraft.bookingScheduleText ||
+    formatBookingSchedule(
+      state.bookingDraft.bookingDate,
+      state.bookingDraft.bookingTime,
+    ) ||
+    "No schedule selected yet.";
 
   const petSummary = state.bookingDraft.pets
     .map(
@@ -385,6 +390,10 @@ function saveReviewDraft() {
   const reviewDraft = {
     bookingDate: state.reviewPayload?.bookingDate || "",
     bookingTime: state.reviewPayload?.bookingTime || "",
+    bookingScheduleText: formatBookingSchedule(
+      state.reviewPayload?.bookingDate,
+      state.reviewPayload?.bookingTime,
+    ),
     pets: state.reviewPayload?.items.map((item) => ({
       petId: item.pet.id,
       petName: item.pet.petName,

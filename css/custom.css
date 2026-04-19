@@ -3,6 +3,126 @@
 /* custom scrollbar styles */
 /* very specific one-off styles */
 
+.site-nav {
+  z-index: 30;
+  gap: 1.25rem;
+}
+
+.site-nav-login {
+  background: #124a78;
+}
+
+.site-nav-login:hover {
+  background: #0d3b62;
+}
+
+.brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  color: #155286;
+  text-decoration: none;
+}
+
+.brand-lockup__mark {
+  width: 3.35rem;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.brand-lockup__divider {
+  width: 0.13rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  background: #155286;
+}
+
+.brand-lockup__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.22rem;
+  line-height: 1;
+}
+
+.brand-lockup__name,
+.brand-lockup__service {
+  display: block;
+  white-space: nowrap;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.brand-lockup__name {
+  font-size: 1.05rem;
+  letter-spacing: 0.21rem;
+}
+
+.brand-lockup__service {
+  background: #155286;
+  color: #ffffff;
+  font-size: 1.28rem;
+  letter-spacing: 0.055rem;
+  padding: 0.22rem 0.42rem 0.27rem;
+}
+
+@media (min-width: 1180px) {
+  .brand-lockup {
+    gap: 0.56rem;
+  }
+
+  .brand-lockup__mark {
+    width: 3.65rem;
+  }
+
+  .brand-lockup__divider {
+    height: 3.25rem;
+  }
+
+  .brand-lockup__name {
+    font-size: 1.14rem;
+    letter-spacing: 0.25rem;
+  }
+
+  .brand-lockup__service {
+    font-size: 1.42rem;
+    letter-spacing: 0.065rem;
+    padding: 0.23rem 0.48rem 0.29rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .brand-lockup {
+    gap: 0.42rem;
+  }
+
+  .brand-lockup__mark {
+    width: 3rem;
+  }
+
+  .brand-lockup__divider {
+    width: 0.12rem;
+    height: 2.68rem;
+  }
+
+  .brand-lockup__text {
+    gap: 0.24rem;
+  }
+
+  .brand-lockup__name {
+    font-size: 0.82rem;
+    letter-spacing: 0.14rem;
+  }
+
+  .brand-lockup__service {
+    font-size: 0.96rem;
+    letter-spacing: 0.05rem;
+    padding: 0.19rem 0.34rem 0.23rem;
+  }
+}
+
 .booking-select {
   appearance: none;
   -webkit-appearance: none;
@@ -216,6 +336,40 @@ body.client-sidebar-open {
 }
 
 @media (max-width: 640px) {
+  .site-nav {
+    padding: 0.9rem 1rem !important;
+    flex-wrap: wrap;
+  }
+
+  .site-nav-actions {
+    gap: 1rem !important;
+    margin-left: auto;
+  }
+
+  .brand-lockup__mark {
+    width: 2.25rem;
+  }
+
+  .brand-lockup__divider {
+    width: 0.1rem;
+    height: 2.15rem;
+  }
+
+  .brand-lockup__text {
+    gap: 0.2rem;
+  }
+
+  .brand-lockup__name {
+    font-size: 0.48rem;
+    letter-spacing: 0.065rem;
+  }
+
+  .brand-lockup__service {
+    font-size: 0.55rem;
+    letter-spacing: 0.025rem;
+    padding: 0.13rem 0.22rem 0.16rem;
+  }
+
   .client-dashboard-header {
     padding-left: 4.75rem;
     padding-right: 1rem;

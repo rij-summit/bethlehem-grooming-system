@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="../../css/output.css" />
   </head>
   <body
-    class="min-h-screen bg-gradient-to-br from-[#eaf4fb] via-[#dcecf8] to-[#cfe4f7]"
+    class="bg-slate-100 min-h-screen flex items-center justify-center px-4"
   >
     <div class="min-h-screen flex items-center justify-center px-4 py-10">
       <div
@@ -15,25 +15,32 @@
       >
         <!-- Left Side -->
         <div
-          class="hidden lg:flex flex-col justify-center bg-[#315b7e] text-white p-12"
+          class="hidden lg:flex flex-col justify-center bg-[#eef7ff] text-[#315b7e] p-12"
+          style="border-right: 1px solid rgba(49, 91, 126, 0.2)"
         >
+          <img
+            src="../../assets/images/clinic/Bethlehem_Logo.png"
+            alt="Bethlehem Animal Clinic logo"
+            class="mx-auto mb-8 object-contain"
+            style="width: 150px; height: 150px"
+          />
           <h1 class="text-4xl font-bold leading-tight">Create Your Account</h1>
-          <p class="mt-4 text-white/85 text-lg leading-relaxed">
+          <p class="mt-4 text-[#315b7e] text-lg leading-relaxed">
             Book grooming appointments easily and manage your pet’s visits at
             Bethlehem Animal Clinic.
           </p>
 
           <div class="mt-10 space-y-4">
             <div class="flex items-start gap-3">
-              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <div class="mt-1 h-3 w-3 rounded-full bg-[#315b7e]"></div>
               <p>Quick and easy account registration</p>
             </div>
             <div class="flex items-start gap-3">
-              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <div class="mt-1 h-3 w-3 rounded-full bg-[#315b7e]"></div>
               <p>Track bookings and appointment status</p>
             </div>
             <div class="flex items-start gap-3">
-              <div class="mt-1 h-3 w-3 rounded-full bg-white"></div>
+              <div class="mt-1 h-3 w-3 rounded-full bg-[#315b7e]"></div>
               <p>Manage pet details in one place</p>
             </div>
           </div>
@@ -43,7 +50,7 @@
         <div class="p-6 sm:p-8 md:p-10 lg:p-12">
           <div class="mx-auto w-full max-w-xl">
             <div class="mb-8">
-              <h2 class="text-3xl font-bold text-gray-800">Customer Sign Up</h2>
+              <h2 class="text-3xl font-bold text-gray-800">Sign Up</h2>
               <p class="mt-2 text-sm text-gray-500">
                 Fill in your details to create a new account.
               </p>
@@ -142,14 +149,32 @@
                   >
                     Password
                   </label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    placeholder="Create password"
-                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
-                  />
+                  <div class="relative">
+                    <input
+                      type="password"
+                      id="password"
+                      name="password"
+                      placeholder="Create password"
+                      class="w-full rounded-xl border border-gray-300 px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                      required
+                    />
+                    <button
+                      id="togglePasswordVisibility"
+                      type="button"
+                      class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-500 hover:text-[#315b7e] focus:outline-none focus-visible:outline-none"
+                      aria-label="Show password"
+                      title="Show password"
+                    >
+                      <i
+                        data-lucide="eye-closed"
+                        class="password-icon-closed h-5 w-5"
+                      ></i>
+                      <i
+                        data-lucide="eye"
+                        class="password-icon-open hidden h-5 w-5"
+                      ></i>
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -159,14 +184,32 @@
                   >
                     Confirm Password
                   </label>
-                  <input
-                    type="password"
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    placeholder="Confirm password"
-                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
-                  />
+                  <div class="relative">
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      placeholder="Confirm password"
+                      class="w-full rounded-xl border border-gray-300 px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                      required
+                    />
+                    <button
+                      id="toggleConfirmPasswordVisibility"
+                      type="button"
+                      class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-500 hover:text-[#315b7e] focus:outline-none focus-visible:outline-none"
+                      aria-label="Show password"
+                      title="Show password"
+                    >
+                      <i
+                        data-lucide="eye-closed"
+                        class="password-icon-closed h-5 w-5"
+                      ></i>
+                      <i
+                        data-lucide="eye"
+                        class="password-icon-open hidden h-5 w-5"
+                      ></i>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -209,7 +252,7 @@
                   href="./login.html"
                   class="font-semibold text-[#315b7e] hover:underline"
                 >
-                  Log in here
+                  Sign in here
                 </a>
               </p>
             </form>
@@ -225,6 +268,7 @@
     </div>
 
     <script src="../../scripts/api.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script src="../../scripts/auth/client/signup.js"></script>
   </body>
 </html>

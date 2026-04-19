@@ -3,6 +3,17 @@
 
 const customerLoginForm = document.getElementById("customerLoginForm");
 const customerPhoneInput = document.getElementById("phone");
+const customerPasswordInput = document.getElementById("password");
+const togglePasswordVisibilityButton = document.getElementById(
+  "togglePasswordVisibility"
+);
+
+if (window.lucide) {
+  window.lucide.createIcons();
+}
+
+const passwordIconClosed = document.querySelector(".password-icon-closed");
+const passwordIconOpen = document.querySelector(".password-icon-open");
 
 if (customerPhoneInput && customerLoginForm) {
   customerPhoneInput.addEventListener("input", function () {
@@ -19,12 +30,28 @@ if (customerPhoneInput && customerLoginForm) {
   });
 }
 
+if (customerPasswordInput && togglePasswordVisibilityButton) {
+  togglePasswordVisibilityButton.addEventListener("click", function () {
+    const shouldShowPassword = customerPasswordInput.type === "password";
+    const nextLabel = shouldShowPassword ? "Hide password" : "Show password";
+
+    customerPasswordInput.type = shouldShowPassword ? "text" : "password";
+    this.setAttribute("aria-label", nextLabel);
+    this.setAttribute("title", nextLabel);
+
+    if (passwordIconClosed && passwordIconOpen) {
+      passwordIconClosed.classList.toggle("hidden", shouldShowPassword);
+      passwordIconOpen.classList.toggle("hidden", !shouldShowPassword);
+    }
+  });
+}
+
 if (customerLoginForm) {
   customerLoginForm.addEventListener("submit", async function (e) {
     e.preventDefault();
 
     const phone = customerPhoneInput.value.trim();
-    const password = document.getElementById("password").value.trim();
+    const password = customerPasswordInput.value.trim();
     const phonePattern = /^09\d{9}$/;
 
     if (!phone || !password) {
