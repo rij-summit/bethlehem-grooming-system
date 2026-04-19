@@ -31,11 +31,28 @@ document.addEventListener("DOMContentLoaded", () => {
   populateConfirmationData();
 
   printConfirmationButton.addEventListener("click", () => {
+    const originalTitle = document.title;
+    let titleRestored = false;
+
+    function restoreTitle() {
+      if (titleRestored) {
+        return;
+      }
+
+      titleRestored = true;
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    }
+
+    document.title = "";
+    window.addEventListener("afterprint", restoreTitle);
     window.print();
+    window.setTimeout(restoreTitle, 1000);
   });
 
   function populateConfirmationData() {
     if (!confirmation) {
+      confirmationStatus.hidden = false;
       confirmationStatus.textContent =
         "Booking data not found. Please complete the booking process from the beginning.";
       confirmationStatus.className =
@@ -141,11 +158,11 @@ document.addEventListener("DOMContentLoaded", () => {
       bookingConsentStep?.digitalSignature;
 
     if (hasReference && hasConsent) {
-      confirmationStatus.textContent =
-        "Your booking has been confirmed and saved. Please screenshot or print this page for your records.";
-      confirmationStatus.className =
-        "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
+      confirmationStatus.hidden = true;
+      confirmationStatus.textContent = "";
+      confirmationStatus.className = "hidden";
     } else {
+      confirmationStatus.hidden = false;
       confirmationStatus.textContent =
         "Some confirmation details are incomplete. Please contact the clinic if you believe this is an error.";
       confirmationStatus.className =
