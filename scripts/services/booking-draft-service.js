@@ -12,9 +12,12 @@
  *
  * Draft fields expected by the booking flow:
  * - bookingDate / bookingTime
+ * - bookingScheduleText for display-only summaries
  * - pets[] with id, petName, petType, breed, size, furType, weight, medicalNotes
  * - derived petIds / petTypes values used by later steps
  */
+import { formatBookingSchedule } from "./booking-format-service.js";
+
 export const BOOKING_STEP_TWO_KEY = "bookingStep2";
 export const BOOKING_STEP_THREE_KEY = "bookingStep3";
 
@@ -96,6 +99,8 @@ function normalizePetRecord(pet, index) {
 }
 
 export function normalizeBookingDraft(data) {
+  const bookingDate = data?.bookingDate || data?.date || "";
+  const bookingTime = data?.bookingTime || data?.time || "";
   const petsFromDraft = Array.isArray(data?.pets) ? data.pets.filter(Boolean) : [];
   const legacyPet =
     data?.petId || data?.petName || data?.petType || data?.petBreed
@@ -122,8 +127,12 @@ export function normalizeBookingDraft(data) {
   ];
 
   return {
-    bookingDate: data?.bookingDate || data?.date || "",
-    bookingTime: data?.bookingTime || data?.time || "",
+    bookingDate,
+    bookingTime,
+    bookingScheduleText:
+      data?.bookingScheduleText ||
+      data?.scheduleText ||
+      formatBookingSchedule(bookingDate, bookingTime),
     pets,
     petIds: pets.map((pet) => pet.id).filter(Boolean),
     petTypes,

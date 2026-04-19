@@ -6,6 +6,7 @@ import {
   getBookingDraft,
   readSessionJson,
 } from "../services/booking-draft-service.js";
+import { formatBookingSchedule } from "../services/booking-format-service.js";
 import {
   ADD_ON_SERVICES,
   buildStepThreeDraftPayload,
@@ -146,9 +147,10 @@ function populateHiddenInputs(data) {
 
 function populateSummary(data) {
   if (data?.bookingDate || data?.bookingTime) {
-    elements.scheduleSummaryText.textContent = `${data.bookingDate || "No date"} | ${
-      data.bookingTime || "No time"
-    }`;
+    elements.scheduleSummaryText.textContent =
+      data.bookingScheduleText ||
+      formatBookingSchedule(data.bookingDate, data.bookingTime) ||
+      "No schedule selected yet.";
   }
 
   const selectedPets = Array.isArray(data?.pets) ? data.pets : [];

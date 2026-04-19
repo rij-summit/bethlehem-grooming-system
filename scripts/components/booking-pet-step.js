@@ -10,6 +10,7 @@ import {
   removePetFromBooking,
   loadPetsFromApi,
 } from "../services/pet-service.js";
+import { formatBookingSchedule } from "../services/booking-format-service.js";
 
 /**
  * Booking Pet Step Controller
@@ -80,7 +81,10 @@ function renderScheduleSummary() {
     return;
   }
 
-  elements.bookingScheduleSummary.textContent = `${schedule.date} at ${schedule.time}`;
+  elements.bookingScheduleSummary.textContent = formatBookingSchedule(
+    schedule.date,
+    schedule.time,
+  );
 }
 
 function showMessage(message, variant = "default") {
@@ -104,9 +108,13 @@ function buildStepTwoDraft() {
     ...new Set(bookingPets.map((pet) => pet.petType).filter(Boolean)),
   ];
 
+  const bookingDate = schedule?.date || "";
+  const bookingTime = schedule?.time || "";
+
   return {
-    bookingDate: schedule?.date || "",
-    bookingTime: schedule?.time || "",
+    bookingDate,
+    bookingTime,
+    bookingScheduleText: formatBookingSchedule(bookingDate, bookingTime),
     pets: bookingPets,
     petIds: bookingPets.map((pet) => pet.id).filter(Boolean),
     petTypes,
