@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ClinicClosureController;
+use App\Http\Controllers\PaymentController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -56,6 +57,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin — No-show list
     Route::get('/admin/bookings/no-shows',                 [AdminBookingController::class, 'noShowIndex']);
+
+    // Admin — Payments
+    Route::post('/admin/bookings/{id}/pay',                [PaymentController::class, 'store']);
+    Route::post('/admin/bookings/{id}/pay-now',            [PaymentController::class, 'payNow']);
+    Route::post('/admin/bookings/{id}/release',            [PaymentController::class, 'release']);
+    Route::get('/admin/transactions',                      [PaymentController::class, 'index']);
 
     // Admin — Clinic closures
     Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);

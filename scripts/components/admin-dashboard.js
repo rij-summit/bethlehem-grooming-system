@@ -33,8 +33,32 @@ function adminDashboard() {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
     noShowList: [],
+    forPaymentList: [],
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
+    paymentModal: {
+      open: false,
+      booking: null,
+      isEarlyPayment: false,
+      finalPrice: "",
+      amountPaid: "",
+      paymentMethod: "cash",
+      notes: "",
+      busy: false,
+      error: "",
+    },
+    receiptModal: {
+      open: false,
+      ownerName: "",
+      petName: "",
+      serviceLabel: "",
+      finalPrice: 0,
+      amountPaid: 0,
+      change: 0,
+      paymentMethod: "",
+      paidAt: "",
+      isEarlyPayment: false,
+    },
     config: {
       bootstrap: null,
       endpoints: {},
@@ -73,6 +97,7 @@ function adminDashboard() {
     queuedList: [],
     inProgressList: [],
     forPickupList: [],
+    // forPickupList kept for backward-compat; new data comes as forPaymentList
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
@@ -106,7 +131,7 @@ function adminDashboard() {
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
-            this.setTab("for-pickup");
+            this.setTab("for-payment");
           },
           archive: async ({ booking }) => {
             await API.adminArchiveBooking(booking.id);
@@ -526,6 +551,10 @@ function adminDashboard() {
         this.forPickupList = nextPayload.forPickupList;
       }
 
+      if ("forPaymentList" in nextPayload) {
+        this.forPaymentList = nextPayload.forPaymentList;
+      }
+
       this.refreshIcons();
       this.dispatchDashboardEvent("admin-dashboard:data-applied", {
         state: this.getState(),
@@ -637,6 +666,21 @@ function adminDashboard() {
         );
       }
 
+      if (
+        "forPaymentList" in payload ||
+        "forPayment" in payload ||
+        "for_payment" in bookingsByStatus ||
+        "for-payment" in bookingsByStatus
+      ) {
+        nextPayload.forPaymentList = this.normalizeList(
+          payload.forPaymentList ??
+            payload.forPayment ??
+            bookingsByStatus["for_payment"] ??
+            bookingsByStatus["for-payment"],
+          "for-payment",
+        );
+      }
+
       return nextPayload;
     },
 
@@ -694,6 +738,7 @@ function adminDashboard() {
         startedAt: this.toStringValue(booking?.startedAt),
         completedAt: this.toStringValue(booking?.completedAt),
         clientNotified: Boolean(booking?.clientNotified),
+        paid: Boolean(booking?.paid),
         status: normalizedStatus,
       };
     },
@@ -738,11 +783,12 @@ function adminDashboard() {
 
     // Removes a booking from every visible status list using its id.
     removeBookingFromLists(bookingId) {
-      this.incomingList  = this.incomingList.filter((item) => item.id !== bookingId);
-      this.queuedList    = this.queuedList.filter((item) => item.id !== bookingId);
-      this.inProgressList = this.inProgressList.filter((item) => item.id !== bookingId);
-      this.forPickupList = this.forPickupList.filter((item) => item.id !== bookingId);
-      this.noShowList    = this.noShowList.filter((item) => item.id !== bookingId);
+      this.incomingList    = this.incomingList.filter((item) => item.id !== bookingId);
+      this.queuedList      = this.queuedList.filter((item) => item.id !== bookingId);
+      this.inProgressList  = this.inProgressList.filter((item) => item.id !== bookingId);
+      this.forPickupList   = this.forPickupList.filter((item) => item.id !== bookingId);
+      this.forPaymentList  = this.forPaymentList.filter((item) => item.id !== bookingId);
+      this.noShowList      = this.noShowList.filter((item) => item.id !== bookingId);
     },
 
     // Maps a frontend action name to the next booking status.
@@ -751,7 +797,7 @@ function adminDashboard() {
       const actionStatusMap = {
         checkIn: "queued",
         startGrooming: "in-progress",
-        markDone: "for-pickup",
+        markDone: "for-payment",
         archive: "archived",
       };
 
@@ -766,6 +812,7 @@ function adminDashboard() {
         queued: "queuedList",
         "in-progress": "inProgressList",
         "for-pickup": "forPickupList",
+        "for-payment": "forPaymentList",
       };
 
       return listMap[normalizedStatus] || "";
@@ -915,6 +962,7 @@ function adminDashboard() {
         queuedList: [...this.queuedList],
         inProgressList: [...this.inProgressList],
         forPickupList: [...this.forPickupList],
+        forPaymentList: [...this.forPaymentList],
       };
     },
 
@@ -929,10 +977,12 @@ function adminDashboard() {
         "queuedList" in value ||
         "inProgressList" in value ||
         "forPickupList" in value ||
+        "forPaymentList" in value ||
         "incoming" in value ||
         "queued" in value ||
         "inProgress" in value ||
         "forPickup" in value ||
+        "forPayment" in value ||
         "bookings" in value ||
         "summary" in value ||
         "metrics" in value ||
@@ -969,6 +1019,8 @@ function adminDashboard() {
         inprogress: "in-progress",
         for_pickup: "for-pickup",
         forpickup: "for-pickup",
+        for_payment: "for-payment",
+        forpayment: "for-payment",
       };
 
       return statusMap[normalizedStatus] || normalizedStatus;
@@ -1053,6 +1105,110 @@ function adminDashboard() {
       if (dateStr === today)    return 'Today — ' + formatted;
       if (dateStr === tomorrow) return 'Tomorrow — ' + formatted;
       return formatted;
+    },
+
+    // ── Payment ───────────────────────────────────────────────────────────────
+
+    get paymentChange() {
+      const final = parseFloat(this.paymentModal.finalPrice) || 0;
+      const paid  = parseFloat(this.paymentModal.amountPaid)  || 0;
+      return paid - final;
+    },
+
+    openPaymentModal(booking, isEarlyPayment = false) {
+      const servicesTotal = (booking.services || []).reduce(
+        (sum, s) => sum + parseFloat(s.priceAtBooking || 0), 0
+      );
+      this.paymentModal = {
+        open: true,
+        booking,
+        isEarlyPayment,
+        finalPrice: servicesTotal > 0 ? servicesTotal.toFixed(2) : "",
+        amountPaid: "",
+        paymentMethod: "cash",
+        notes: "",
+        busy: false,
+        error: "",
+      };
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    closePaymentModal() {
+      this.paymentModal = {
+        open: false, booking: null, isEarlyPayment: false,
+        finalPrice: "", amountPaid: "", paymentMethod: "cash", notes: "", busy: false, error: "",
+      };
+    },
+
+    async submitPayment() {
+      const { booking, isEarlyPayment, finalPrice, amountPaid, notes } = this.paymentModal;
+      const fp = parseFloat(finalPrice);
+      const ap = parseFloat(amountPaid);
+
+      if (!fp || fp <= 0) {
+        this.paymentModal.error = "Please enter a valid final price.";
+        return;
+      }
+      if (!ap || ap < fp) {
+        this.paymentModal.error = "Amount paid cannot be less than the final price.";
+        return;
+      }
+
+      this.paymentModal.busy  = true;
+      this.paymentModal.error = "";
+
+      try {
+        const payload = {
+          final_price:    fp,
+          amount_paid:    ap,
+          payment_method: this.paymentModal.paymentMethod || "cash",
+          notes:          notes || null,
+        };
+        const res = isEarlyPayment
+          ? await API.payNow(booking.id, payload)
+          : await API.processPayment(booking.id, payload);
+
+        this.closePaymentModal();
+        this.receiptModal = {
+          open: true,
+          ownerName:     booking.ownerName,
+          petName:       booking.petName,
+          serviceLabel:  booking.serviceLabel,
+          finalPrice:    fp,
+          amountPaid:    ap,
+          change:        res.change ?? (ap - fp),
+          paymentMethod: this.paymentModal.paymentMethod || "cash",
+          paidAt:        res.paid_at ?? new Date().toLocaleString("en-PH"),
+          isEarlyPayment,
+        };
+        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        await this.loadAdminBookings();
+        await this.loadNotifications();
+      } catch (err) {
+        this.paymentModal.error = err.message || "Payment failed. Please try again.";
+      } finally {
+        this.paymentModal.busy = false;
+      }
+    },
+
+    closeReceiptModal() {
+      this.receiptModal = {
+        open: false, ownerName: "", petName: "", serviceLabel: "",
+        finalPrice: 0, amountPaid: 0, change: 0, paymentMethod: "", paidAt: "", isEarlyPayment: false,
+      };
+    },
+
+    printReceipt() {
+      window.print();
+    },
+
+    async releaseBooking(booking) {
+      try {
+        await API.releaseBooking(booking.id);
+        await this.loadAdminBookings();
+      } catch (err) {
+        alert(err.message || "Release failed. Please try again.");
+      }
     },
 
     // ── Admin Bookings ────────────────────────────────────────────────────────

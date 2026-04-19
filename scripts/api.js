@@ -294,6 +294,33 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/late-check-in`, null, getAdminToken());
   }
 
+  async function processPayment(bookingId, payload) {
+    // POST /api/admin/bookings/{id}/pay  (protected — admin token)
+    // payload: { final_price, amount_paid, notes? }
+    return request("POST", `/admin/bookings/${bookingId}/pay`, payload, getAdminToken());
+  }
+
+  async function payNow(bookingId, payload) {
+    // POST /api/admin/bookings/{id}/pay-now  (protected — admin token)
+    // Early payment while booking is still checked_in
+    return request("POST", `/admin/bookings/${bookingId}/pay-now`, payload, getAdminToken());
+  }
+
+  async function releaseBooking(bookingId) {
+    // POST /api/admin/bookings/{id}/release  (protected — admin token)
+    // Archives an already-paid for_payment booking
+    return request("POST", `/admin/bookings/${bookingId}/release`, null, getAdminToken());
+  }
+
+  async function getTransactions({ search = "", date = "" } = {}) {
+    // GET /api/admin/transactions  (protected — admin token)
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (date)   params.set("date",   date);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/transactions${query}`, null, getAdminToken());
+  }
+
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
@@ -346,5 +373,10 @@ var API = (() => {
     removeBlockedDate,
     getNoShows,
     adminLateCheckIn,
+    // Payments
+    processPayment,
+    payNow,
+    releaseBooking,
+    getTransactions,
   };
 })();

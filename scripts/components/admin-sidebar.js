@@ -55,6 +55,8 @@ function adminSidebar() {
         this.activePage = "analytics";
       } else if (currentPath.includes("archive.html")) {
         this.activePage = "archive";
+      } else if (currentPath.includes("transactions.html")) {
+        this.activePage = "transactions";
       } else if (currentPath.includes("settings.html")) {
         this.activePage = "settings";
       }

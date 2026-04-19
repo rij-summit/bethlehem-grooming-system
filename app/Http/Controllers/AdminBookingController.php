@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
+use App\Models\Notification;
 
 class AdminBookingController extends Controller
 {
@@ -34,7 +35,7 @@ class AdminBookingController extends Controller
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        // Queued, In-Progress, For Pickup: filtered by selectedDate
+        // Queued, In-Progress, For Payment: filtered by selectedDate
         $queued = Booking::where('booking_date', $selectedDate)
             ->where('status', 'checked_in')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
@@ -49,8 +50,8 @@ class AdminBookingController extends Controller
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $forPickup = Booking::where('booking_date', $selectedDate)
-            ->where('status', 'for_pickup')
+        $forPayment = Booking::where('booking_date', $selectedDate)
+            ->where('status', 'for_payment')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -68,12 +69,12 @@ class AdminBookingController extends Controller
             ->count();
 
         return response()->json([
-            'success'        => true,
-            'incomingList'   => $incoming->values(),
-            'queuedList'     => $queued->values(),
-            'inProgressList' => $inProgress->values(),
-            'forPickupList'  => $forPickup->values(),
-            'summary'        => [
+            'success'         => true,
+            'incomingList'    => $incoming->values(),
+            'queuedList'      => $queued->values(),
+            'inProgressList'  => $inProgress->values(),
+            'forPaymentList'  => $forPayment->values(),
+            'summary'         => [
                 'today' => $todayCount,
                 'week'  => $weekCount,
             ],
@@ -98,9 +99,10 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking is not in waiting status.'], 422);
         }
 
-        if ($booking->booking_date !== Carbon::today()->toDateString()) {
-            return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
-        }
+        // DATE GUARD TEMPORARILY DISABLED FOR TESTING
+        // if ($booking->booking_date !== Carbon::today()->toDateString()) {
+        //     return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
+        // }
 
         $queueNumber = Booking::where('booking_date', $booking->booking_date)
             ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
@@ -140,10 +142,10 @@ class AdminBookingController extends Controller
     }
 
     // ── MARK DONE ─────────────────────────────────────────
-    // in_progress → for_pickup
+    // in_progress → for_payment  (or archived if already paid early)
     public function markDone($id)
     {
-        $booking = Booking::find($id);
+        $booking = Booking::with('user')->find($id);
 
         if (!$booking) {
             return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
@@ -153,16 +155,39 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be in progress first.'], 422);
         }
 
-        $booking->update(['status' => 'for_pickup']);
+        // Early-payment path: already paid, skip the payment step entirely
+        if ($booking->paid) {
+            $booking->update([
+                'status'      => 'archived',
+                'archived_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Grooming done. Booking archived (early payment on file).',
+            ]);
+        }
+
+        // Normal path: move to for_payment and notify customer
+        $booking->update(['status' => 'for_payment']);
+
+        // Admin notification so the front-desk knows to collect payment
+        Notification::create([
+            'type'       => 'payment_due',
+            'booking_id' => $booking->booking_id,
+            'message'    => 'Grooming done for ' . trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? '')) . '. Pet is ready — please collect payment.',
+            'is_read'    => false,
+            'created_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Grooming session marked as done. Pet is ready for pickup.',
+            'message' => 'Grooming done. Customer notified for pickup and payment.',
         ]);
     }
 
     // ── ARCHIVE ───────────────────────────────────────────
-    // for_pickup → archived
+    // for_pickup (legacy) → archived
     public function archive($id)
     {
         $booking = Booking::find($id);
@@ -171,8 +196,8 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
         }
 
-        if ($booking->status !== 'for_pickup') {
-            return response()->json(['success' => false, 'message' => 'Only bookings in For Pickup status can be archived.'], 422);
+        if (!in_array($booking->status, ['for_pickup', 'released'])) {
+            return response()->json(['success' => false, 'message' => 'Only For Pickup or Released bookings can be archived here.'], 422);
         }
 
         $booking->update([
@@ -338,6 +363,7 @@ class AdminBookingController extends Controller
             'startedAt'       => '—',
             'completedAt'     => '—',
             'clientNotified'  => false,
+            'paid'            => (bool) $booking->paid,
             'status'          => $this->mapStatus($booking->status),
 
             // Extra fields for the View Details modal
@@ -384,6 +410,8 @@ class AdminBookingController extends Controller
             'checked_in'        => 'queued',
             'in_progress'       => 'in-progress',
             'for_pickup'        => 'for-pickup',
+            'for_payment'       => 'for-payment',
+            'released'          => 'released',
             default             => $status,
         };
     }

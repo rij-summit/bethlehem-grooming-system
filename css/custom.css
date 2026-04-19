@@ -305,3 +305,68 @@ body.client-sidebar-open {
     display: none !important;
   }
 }
+
+/* ── Payment system ──────────────────────────────────────── */
+
+/* Pay Now button (on queued cards) */
+.btn-pay-now {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #15803d;
+}
+.btn-pay-now:hover {
+  background-color: #dcfce7;
+}
+
+/* Already Paid badge (on queued cards) */
+.btn-already-paid {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+/* For Payment tab — green icon empty state */
+.btn-icon-payment {
+  color: #16a34a;
+}
+
+/* Process Payment button (on for-payment cards) */
+.btn-process-payment {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+.btn-process-payment:hover {
+  background-color: #15803d;
+}
+
+/* Release button (already-paid for-payment cards) */
+.btn-release {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #15803d;
+}
+.btn-release:hover {
+  background-color: #dcfce7;
+}
+
+/* Confirm Payment button in modal */
+.btn-confirm-payment {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+.btn-confirm-payment:hover {
+  background-color: #15803d;
+}
+
+/* Awaiting Payment badge */
+.badge-awaiting-payment {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+/* Already Paid badge (on for-payment cards) */
+.badge-already-paid {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #15803d;
+}
