@@ -35,23 +35,23 @@ class AdminBookingController extends Controller
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        // Queued, In-Progress, For Payment: filtered by selectedDate
-        $queued = Booking::where('booking_date', $selectedDate)
-            ->where('status', 'checked_in')
+        // DATE GUARD TEMPORARILY DISABLED FOR TESTING
+        // Removed booking_date filter from active states so cards stay visible
+        // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
+        // on each query below when re-enabling the date guard for production.
+        $queued = Booking::where('status', 'checked_in')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $inProgress = Booking::where('booking_date', $selectedDate)
-            ->where('status', 'in_progress')
+        $inProgress = Booking::where('status', 'in_progress')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $forPayment = Booking::where('booking_date', $selectedDate)
-            ->where('status', 'for_payment')
+        $forPayment = Booking::where('status', 'for_payment')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
