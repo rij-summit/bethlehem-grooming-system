@@ -133,7 +133,7 @@ class BookingController extends Controller
         // ── Check duplicate booking ───────────────────────
         $duplicate = Booking::where('user_id', $user->user_id)
             ->where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled'])
+            ->whereNotIn('status', ['cancelled', 'archived', 'no_show'])
             ->first();
 
         if ($duplicate) {
