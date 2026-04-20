@@ -446,6 +446,10 @@ body.client-sidebar-open {
   overflow-y: auto;
 }
 
+#printNextSteps {
+  display: none;
+}
+
 @media (max-width: 639px) {
   .notif-dropdown {
     right: 0.75rem;
@@ -473,8 +477,376 @@ body.client-sidebar-open {
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body > main {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body > main > section:not(#printableConfirmation),
   .booking-confirmed-actions {
     display: none !important;
+  }
+
+  #printableConfirmation {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    padding: 12mm 14mm 42mm !important;
+    position: relative !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #334155 !important;
+    font-size: 9pt !important;
+    line-height: 1.25 !important;
+    box-sizing: border-box !important;
+    break-after: avoid !important;
+    break-before: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #printableConfirmation * {
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  #printableConfirmation [class*="bg-"] {
+    background: #ffffff !important;
+  }
+
+  #printableConfirmation [class*="text-green"],
+  #printableConfirmation [class*="text-red"],
+  #printableConfirmation [class*="text-amber"] {
+    color: #334155 !important;
+  }
+
+  #printableConfirmation [class*="border"] {
+    border-color: #d7dde6 !important;
+  }
+
+  #printableConfirmation > div:first-child {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 58mm !important;
+    align-items: end !important;
+    gap: 3.5mm 8mm !important;
+    margin-bottom: 4mm !important;
+    padding-bottom: 4mm !important;
+    border-bottom: 1px solid #111827 !important;
+    text-align: left !important;
+  }
+
+  #printableConfirmation > div:first-child::before {
+    content: "\2713";
+    order: 0;
+    grid-column: 1 / -1;
+    width: 17mm;
+    height: 17mm;
+    margin: 0 auto 1.5mm;
+    border-radius: 9999px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 15pt;
+    font-weight: 700;
+    line-height: 17mm;
+    text-align: center;
+  }
+
+  #printableConfirmation > div:first-child::after {
+    content: "Appointment Confirmed";
+    order: 1;
+    grid-column: 1 / -1;
+    margin-bottom: 2mm;
+    color: #2f4b66;
+    font-size: 14.5pt;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  #printableConfirmation .brand-lockup {
+    order: 2;
+    margin-right: 0;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  #printableConfirmation .brand-lockup__mark {
+    width: 13mm !important;
+  }
+
+  #printableConfirmation .brand-lockup__divider {
+    width: 0.5mm !important;
+    height: 12mm !important;
+  }
+
+  #printableConfirmation .brand-lockup__text {
+    align-items: flex-start;
+    gap: 1mm !important;
+  }
+
+  #printableConfirmation .brand-lockup__name,
+  #printableConfirmation .brand-lockup__service {
+    text-align: left;
+  }
+
+  #printableConfirmation .brand-lockup__name {
+    font-size: 8.5pt !important;
+    letter-spacing: 1.7pt !important;
+  }
+
+  #printableConfirmation .brand-lockup__service {
+    font-size: 10pt !important;
+    letter-spacing: 0.55pt !important;
+    padding: 1.2mm 2mm 1.35mm !important;
+  }
+
+  #printableConfirmation > div:first-child > div:last-child {
+    order: 3;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 0 0 auto;
+    padding: 2.5mm 3mm !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 1.5mm !important;
+    background: #ffffff !important;
+    text-align: left !important;
+  }
+
+  #bookingReferenceNumber,
+  #estimatedTotalPrice {
+    margin-top: 0.8mm !important;
+    font-size: 10.5pt !important;
+    line-height: 1.15 !important;
+  }
+
+  #confirmationStatus {
+    margin-bottom: 3mm !important;
+    padding: 0 0 3mm !important;
+    border: 0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #475569 !important;
+    font-size: 8.4pt !important;
+    line-height: 1.2 !important;
+  }
+
+  #printableConfirmation > .space-y-6 {
+    display: block !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #printableConfirmation > .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
+
+  #printableConfirmation > .space-y-6 > section {
+    display: grid !important;
+    grid-template-columns: 38mm minmax(0, 1fr) !important;
+    column-gap: 6mm !important;
+    padding: 3mm 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #printableConfirmation > .space-y-6 > section:last-child {
+    border-bottom: 0 !important;
+  }
+
+  #printableConfirmation h3 {
+    margin: 0 !important;
+    color: #111827 !important;
+    font-size: 8.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase !important;
+  }
+
+  #printableConfirmation section > div:first-child {
+    grid-column: 1 !important;
+    margin: 0 !important;
+  }
+
+  #printableConfirmation > .space-y-6 > section > div:not(:first-child) {
+    grid-column: 2 !important;
+  }
+
+  #printableConfirmation .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 2.2mm 7mm !important;
+  }
+
+  #printableConfirmation p,
+  #printableConfirmation span {
+    overflow-wrap: anywhere;
+  }
+
+  #printableConfirmation p {
+    margin: 0 !important;
+    color: #334155 !important;
+    font-size: 9pt !important;
+    line-height: 1.22 !important;
+  }
+
+  #printableConfirmation .text-xs {
+    color: #64748b !important;
+    font-size: 7.2pt !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.1 !important;
+  }
+
+  #printableConfirmation .text-lg {
+    font-size: 10.8pt !important;
+  }
+
+  #printableConfirmation .text-xs + p,
+  #printableConfirmation .text-xs + #bookingReferenceNumber,
+  #printableConfirmation .text-xs + #estimatedTotalPrice {
+    margin-top: 0.7mm !important;
+  }
+
+  #printableConfirmation [class*="rounded-2xl"] {
+    border-radius: 0 !important;
+  }
+
+  #printableConfirmation .rounded-full {
+    border-radius: 9999px !important;
+  }
+
+  #printableConfirmation [class*=" px-4"],
+  #printableConfirmation [class*="px-4"] {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  #printableConfirmation [class*=" py-4"],
+  #printableConfirmation [class*="py-4"] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  #printableConfirmation > div:first-child > div:last-child {
+    padding: 2.5mm 3mm !important;
+    border-radius: 1.5mm !important;
+  }
+
+  #printableConfirmation > .space-y-6 > section .grid > div {
+    padding: 0 !important;
+    border: 0 !important;
+    background: #ffffff !important;
+  }
+
+  #printableConfirmation > .space-y-6 > section:nth-child(3) > div:last-child {
+    margin-top: 2mm !important;
+    padding: 2mm 2.5mm !important;
+    border: 1px solid #d7dde6 !important;
+  }
+
+  #printableConfirmation [class*="mt-4"] {
+    margin-top: 2mm !important;
+  }
+
+  #printableConfirmation [class*="mt-5"] {
+    margin-top: 2.2mm !important;
+  }
+
+  #printableConfirmation .inline-flex {
+    max-width: 100%;
+    padding: 0 !important;
+    color: #64748b !important;
+    white-space: normal !important;
+  }
+
+  #printNextSteps {
+    position: absolute !important;
+    right: 14mm !important;
+    bottom: 11mm !important;
+    left: 14mm !important;
+    display: grid !important;
+    grid-template-columns: 38mm minmax(0, 1fr) !important;
+    column-gap: 6mm !important;
+    margin: 0 !important;
+    padding: 3mm 0 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-top: 1px solid #111827 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    color: #334155 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #printNextSteps h3 {
+    grid-column: 1 !important;
+    margin: 0 !important;
+    color: #111827 !important;
+    font-size: 8.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase !important;
+  }
+
+  #printNextSteps > div {
+    grid-column: 2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #printNextSteps p {
+    margin: 0 0 1.2mm !important;
+    color: #334155 !important;
+    font-size: 9pt !important;
+    line-height: 1.22 !important;
+    overflow-wrap: anywhere;
+  }
+
+  #printNextSteps p:last-child {
+    margin-bottom: 0 !important;
   }
 }
 

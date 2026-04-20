@@ -174,7 +174,7 @@ function renderPetReviewCard(item, index) {
     : "";
   const alaCarteCard =
     alaCarteLineItems.length > 0
-      ? renderAlaCarteReview(item, alaCarteLineItems, Boolean(selectedPackage))
+      ? renderAlaCarteReview(alaCarteLineItems)
       : "";
   const missingSelectionNotice =
     !selectedPackage && item.pricing.lineItems.length === 0
@@ -260,6 +260,9 @@ function renderPackageReview(selectedPackage, item) {
   }
 
   const pricingNote = getPackagePricingNote(item, packageLineItem);
+  const pricingNoteMarkup = pricingNote
+    ? `<p class="mt-3 text-sm text-slate-500">${escapeHtml(pricingNote)}</p>`
+    : "";
 
   return `
     <div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -284,7 +287,7 @@ function renderPackageReview(selectedPackage, item) {
             .join("")}
         </div>
       </div>
-      <p class="mt-3 text-sm text-slate-500">${escapeHtml(pricingNote)}</p>
+      ${pricingNoteMarkup}
     </div>
   `;
 }
@@ -305,7 +308,7 @@ function renderReviewPricePill(priceOption, selectedPriceOption) {
   `;
 }
 
-function renderAlaCarteReview(item, alaCarteLineItems, hasPackage) {
+function renderAlaCarteReview(alaCarteLineItems) {
   return `
     <div class="rounded-2xl border border-slate-200 bg-white p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -327,17 +330,6 @@ function renderAlaCarteReview(item, alaCarteLineItems, hasPackage) {
           )
           .join("")}
       </div>
-      <p class="mt-3 text-sm text-slate-500">
-        ${escapeHtml(
-          hasPackage
-            ? `These a la carte extras are added on top of the selected package and included in this pet total of ${formatAmountRange(
-                item.pricing.total,
-              )}.`
-            : `A la carte totals are combined into ${formatAmountRange(
-                item.pricing.total,
-              )}.`,
-        )}
-      </p>
     </div>
   `;
 }
@@ -345,14 +337,9 @@ function renderAlaCarteReview(item, alaCarteLineItems, hasPackage) {
 function getPackagePricingNote(item, packageLineItem) {
   if (packageLineItem.pricing.selectedPriceOption) {
     if (packageLineItem.pricing.selectedPriceOption.pricingType === "plus") {
-      return `Saved size "${formatPetSizeLabel(
-        item.pet.size,
-      )}" is highlighted, but the final rate will still be confirmed at the clinic.`;
+      return "Final rate will still be confirmed at the clinic.";
     }
-
-    return `Saved size "${formatPetSizeLabel(
-      item.pet.size,
-    )}" is highlighted because it matches the current pet size on file.`;
+    return "";
   }
 
   if (packageLineItem.pricing.missingSize) {
@@ -360,9 +347,7 @@ function getPackagePricingNote(item, packageLineItem) {
   }
 
   if (packageLineItem.pricing.unmatchedSize) {
-    return `Saved size "${formatPetSizeLabel(
-      item.pet.size,
-    )}" does not have a listed price in this menu, so the clinic will confirm the applicable rate.`;
+    return "The clinic will confirm the applicable rate for this pet size.";
   }
 
   return "The clinic will confirm the final applicable package rate during review.";
@@ -377,13 +362,14 @@ function renderTotalPricing() {
   elements.totalPriceText.textContent = formatAmountRange(totalPricing);
 
   if (state.reviewPayload.isEstimate) {
+    elements.totalPriceSubtext.classList.remove("hidden");
     elements.totalPriceSubtext.textContent =
       "This total includes at least one estimate because of a missing pet size, a price range, or a clinic-confirmed + rate.";
     return;
   }
 
-  elements.totalPriceSubtext.textContent =
-    "All selected services have an exact total based on the saved pet size and current menu pricing.";
+  elements.totalPriceSubtext.textContent = "";
+  elements.totalPriceSubtext.classList.add("hidden");
 }
 
 function saveReviewDraft() {
