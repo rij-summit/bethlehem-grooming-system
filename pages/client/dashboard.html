@@ -368,125 +368,76 @@
           <!-- LOWER GRID -->
           <!-- ===================================================== -->
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
             <!-- Appointments -->
-            <div
-              class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm"
-            >
+            <div class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
               <div class="flex items-center justify-between mb-6">
                 <h3 class="text-2xl font-bold text-[#2f4b66]">Appointments</h3>
-                <a
-                  href="./booking.html"
-                  class="text-[#355c84] font-semibold hover:underline"
-                >
-                  + New Booking
-                </a>
+                <a href="./booking.html" class="text-[#355c84] font-semibold hover:underline">+ New Booking</a>
               </div>
-
               <div id="appointmentsList">
                 <div class="text-center py-10">
                   <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
-                  <p class="mt-3 text-slate-400 text-sm">Loading appointments...</p>
+                  <p class="mt-3 text-slate-400 text-sm">Loading...</p>
                 </div>
               </div>
             </div>
 
-            <!-- Reschedule Modal -->
-            <div id="rescheduleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
-              <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-                <div class="flex items-center justify-between mb-5">
-                  <h4 class="text-lg font-bold text-[#2f4b66]">Reschedule Booking</h4>
-                  <button type="button" id="closeRescheduleModal" class="text-slate-400 hover:text-slate-600">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                  </button>
-                </div>
-
-                <p id="rescheduleBookingRef" class="mb-4 text-sm text-slate-500"></p>
-
-                <label class="block text-sm font-medium text-slate-700 mb-1">New Date</label>
-                <input
-                  type="date"
-                  id="rescheduleDate"
-                  class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e] mb-4"
-                />
-
-                <label class="block text-sm font-medium text-slate-700 mb-2">Available Time Slots</label>
-                <div id="rescheduleSlotsContainer" class="space-y-2 mb-5">
-                  <p class="text-sm text-slate-400">Select a date to see available slots.</p>
-                </div>
-
-                <div id="rescheduleMessage" class="hidden mb-4 rounded-xl border px-4 py-3 text-sm"></div>
-
-                <button
-                  type="button"
-                  id="submitRescheduleBtn"
-                  disabled
-                  class="w-full rounded-xl bg-slate-300 px-4 py-3 text-sm font-semibold text-white cursor-not-allowed transition"
-                >
-                  Confirm Reschedule
-                </button>
-              </div>
-            </div>
-
-            <!-- My Pets -->
-            <!-- Backend note:
-                 Each pet card can be rendered using a loop from backend data.
-                 Example structure:
-                 {
-                   name: "Buddy",
-                   breed: "Labrador Retriever",
-                   sex: "Male",
-                   age: "3 years old",
-                   dropOffTime: "9:30 AM",
-                   currentStage: "being_groomed"
-                 }
-            -->
-            <div
-              class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm"
-            >
+            <!-- Grooming Tracker (My Pets at clinic right now) -->
+            <div class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
               <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-bold text-[#2f4b66]">My Pets</h3>
-                <a
-                  href="#"
-                  class="text-[#355c84] font-semibold hover:underline"
-                >
-                  Manage
-                </a>
+                <h3 class="text-2xl font-bold text-[#2f4b66]">Grooming Tracker</h3>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Live</span>
               </div>
-
-              <!-- Status Guide -->
-              <div class="flex flex-wrap gap-2 mb-5">
-                <span
-                  class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700"
-                >
-                  Checked-In
-                </span>
-                <span
-                  class="rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700"
-                >
-                  Waiting
-                </span>
-                <span
-                  class="rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-700"
-                >
-                  Being Groomed
-                </span>
-                <span
-                  class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700"
-                >
-                  Ready for Pickup
-                </span>
+              <div id="groomingTracker">
+                <div class="text-center py-10">
+                  <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
+                  <p class="mt-3 text-slate-400 text-sm">Loading...</p>
+                </div>
               </div>
+            </div>
 
+          </div>
+
+          <!-- Grooming History -->
+          <div class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-2xl font-bold text-[#2f4b66]">Grooming History</h3>
+            </div>
+            <div id="groomingHistory">
               <div class="text-center py-10">
-                <i
-                  data-lucide="paw-print"
-                  class="w-10 h-10 mx-auto text-slate-400"
-                ></i>
-                <p class="mt-3 text-slate-500">No pets added yet</p>
+                <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
+                <p class="mt-3 text-slate-400 text-sm">Loading...</p>
               </div>
             </div>
           </div>
+
         </section>
+
+        <!-- Reschedule Modal -->
+        <div id="rescheduleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
+          <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-5">
+              <h4 class="text-lg font-bold text-[#2f4b66]">Reschedule Booking</h4>
+              <button type="button" id="closeRescheduleModal" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <p id="rescheduleBookingRef" class="mb-4 text-sm text-slate-500"></p>
+            <label class="block text-sm font-medium text-slate-700 mb-1">New Date</label>
+            <input type="date" id="rescheduleDate"
+              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e] mb-4" />
+            <label class="block text-sm font-medium text-slate-700 mb-2">Available Time Slots</label>
+            <div id="rescheduleSlotsContainer" class="space-y-2 mb-5">
+              <p class="text-sm text-slate-400">Select a date to see available slots.</p>
+            </div>
+            <div id="rescheduleMessage" class="hidden mb-4 rounded-xl border px-4 py-3 text-sm"></div>
+            <button type="button" id="submitRescheduleBtn" disabled
+              class="w-full rounded-xl bg-slate-300 px-4 py-3 text-sm font-semibold text-white cursor-not-allowed transition">
+              Confirm Reschedule
+            </button>
+          </div>
+        </div>
       </main>
     </div>
 

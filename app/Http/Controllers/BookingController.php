@@ -266,13 +266,40 @@ class BookingController extends Controller
     public function history(Request $request)
     {
         $bookings = Booking::where('user_id', $request->user()->user_id)
-            ->with('timeWindow')
+            ->with(['timeWindow', 'bookingPets.pet'])
             ->orderBy('booking_date', 'desc')
             ->get();
 
+        $active  = $bookings->whereNotIn('status', ['archived'])->values();
+        $history = $bookings->where('status', 'archived')->values();
+
+        $format = function ($b) {
+            $pets = ($b->bookingPets ?? collect())->map(fn($bp) => [
+                'pet_name' => $bp->pet?->pet_name ?? '—',
+                'breed'    => $bp->pet?->breed    ?? '—',
+            ])->values();
+
+            return [
+                'booking_id'        => $b->booking_id,
+                'booking_reference' => $b->booking_reference,
+                'booking_date'      => $b->booking_date,
+                'status'            => $b->status,
+                'paid'              => (bool) $b->paid,
+                'number_of_pets'    => $b->number_of_pets,
+                'reschedule_count'  => $b->reschedule_count ?? 0,
+                'cancel_count'      => $b->cancel_count     ?? 0,
+                'special_notes'     => $b->special_notes,
+                'time_window'       => $b->timeWindow ? [
+                    'window_label' => $b->timeWindow->window_label,
+                ] : null,
+                'pets'              => $pets,
+            ];
+        };
+
         return response()->json([
             'success'  => true,
-            'bookings' => $bookings,
+            'bookings' => $active->map($format)->values(),
+            'history'  => $history->map($format)->values(),
         ]);
     }
 
