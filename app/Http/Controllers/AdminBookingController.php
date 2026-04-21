@@ -171,36 +171,11 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be in progress first.'], 422);
         }
 
-        // Early-payment path: already paid, skip the payment step entirely
-        if ($booking->paid) {
-            $booking->update([
-                'status'      => 'archived',
-                'archived_at' => now(),
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Grooming done. Booking archived (early payment on file).',
-            ]);
-        }
-
-        // Normal path: move to for_payment and notify customer
         $booking->load('bookingPets.pet');
-        $booking->update(['status' => 'for_payment']);
-
         $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
         $petName   = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
 
-        // Admin notification — front-desk knows to collect payment
-        Notification::create([
-            'type'       => 'payment_due',
-            'booking_id' => $booking->booking_id,
-            'message'    => "Grooming done for {$ownerName}. Pet is ready — please collect payment.",
-            'is_read'    => false,
-            'created_at' => now(),
-        ]);
-
-        // Customer notification — ready for pickup alert
+        // Always notify the customer that their pet is ready for pickup
         if ($booking->user) {
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
@@ -211,6 +186,31 @@ class AdminBookingController extends Controller
                 'created_at' => now(),
             ]);
         }
+
+        // Early-payment path: already paid, archive directly (no payment step needed)
+        if ($booking->paid) {
+            $booking->update([
+                'status'      => 'archived',
+                'archived_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Grooming done. Customer notified for pickup (early payment on file).',
+            ]);
+        }
+
+        // Normal path: move to for_payment and notify admin
+        $booking->update(['status' => 'for_payment']);
+
+        // Admin notification — front-desk knows to collect payment
+        Notification::create([
+            'type'       => 'payment_due',
+            'booking_id' => $booking->booking_id,
+            'message'    => "Grooming done for {$ownerName}. Pet is ready — please collect payment.",
+            'is_read'    => false,
+            'created_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
