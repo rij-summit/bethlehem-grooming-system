@@ -19,6 +19,7 @@ return new class extends Migration
                 'checked_in',
                 'in_progress',
                 'for_pickup',
+                'archived',
                 'waiting',
                 'groomed',
                 'waiting_for_payment',

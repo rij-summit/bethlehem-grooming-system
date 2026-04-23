@@ -18,6 +18,7 @@ function adminDashboard() {
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
+    _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
       const d = new Date();
@@ -101,6 +102,14 @@ function adminDashboard() {
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
+      if (this._initialized) return;
+      this._initialized = true;
+
+      if (!localStorage.getItem("admin_token")) {
+        window.location.href = "../../pages/admin/login.html";
+        return;
+      }
+
       this.registerBridge();
       this.loadConfig();
 
@@ -153,19 +162,34 @@ function adminDashboard() {
 
       // Load bookings on init, then poll every 30 seconds
       await this.loadAdminBookings();
-      setInterval(() => this.loadAdminBookings(), 30000);
+      this._bookingInterval = setInterval(() => this.loadAdminBookings(), 30000);
 
       // Load notifications immediately, then poll every 30 seconds
       await this.loadNotifications();
-      setInterval(() => this.loadNotifications(), 30000);
+      this._notifInterval = setInterval(() => this.loadNotifications(), 30000);
 
       // Load clinic status and no-show list on init, then poll every 60 seconds
       await this.loadClinicStatus();
       await this.loadNoShows();
-      setInterval(async () => {
+      this._clinicInterval = setInterval(async () => {
         await this.loadClinicStatus();
         await this.loadNoShows();
       }, 60000);
+    },
+
+    // Stops a poll interval after 3 consecutive server errors.
+    _stopPollOnFailure(intervalProp, label, error) {
+      this._pollFailures[intervalProp] = (this._pollFailures[intervalProp] || 0) + 1;
+      console.error(`${label} failed (${this._pollFailures[intervalProp]}/3):`, error);
+      if (this._pollFailures[intervalProp] >= 3) {
+        clearInterval(this[intervalProp]);
+        this[intervalProp] = null;
+        console.warn(`[dashboard] Polling stopped for "${label}" after 3 consecutive failures. Reload the page to retry.`);
+      }
+    },
+
+    _resetPollFailures(intervalProp) {
+      this._pollFailures[intervalProp] = 0;
     },
 
     // Exposes a small runtime API so backend scripts can update the dashboard safely.
@@ -1216,9 +1240,10 @@ function adminDashboard() {
     async loadAdminBookings() {
       try {
         const data = await API.getAdminBookings(this.selectedDate);
+        this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
       } catch (error) {
-        console.error("Failed to load admin bookings:", error);
+        this._stopPollOnFailure("_bookingInterval", "loadAdminBookings", error);
       }
     },
 
@@ -1237,11 +1262,11 @@ function adminDashboard() {
     async loadNotifications() {
       try {
         const data = await API.getNotifications();
+        this._resetPollFailures("_notifInterval");
         this.notifications    = data.notifications || [];
         this.notificationCount = data.unread_count  || 0;
       } catch (error) {
-        // Silently fail — notifications are non-critical
-        console.error("Failed to load notifications:", error);
+        this._stopPollOnFailure("_notifInterval", "loadNotifications", error);
       }
     },
 
@@ -1305,9 +1330,10 @@ function adminDashboard() {
     async loadNoShows() {
       try {
         const data = await API.getNoShows();
+        this._resetPollFailures("_clinicInterval");
         this.noShowList = (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show"));
       } catch (error) {
-        console.error("Failed to load no-show list:", error);
+        this._stopPollOnFailure("_clinicInterval", "loadNoShows", error);
       }
     },
 
@@ -1323,9 +1349,10 @@ function adminDashboard() {
     async loadClinicStatus() {
       try {
         const data = await API.getClinicStatus();
+        this._resetPollFailures("_clinicInterval");
         this.clinicStopped = Boolean(data.stopped_today);
       } catch (error) {
-        console.error("Failed to load clinic status:", error);
+        this._stopPollOnFailure("_clinicInterval", "loadClinicStatus", error);
       }
     },
 
