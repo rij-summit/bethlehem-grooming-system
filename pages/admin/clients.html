@@ -101,7 +101,8 @@
             class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
             :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
           >
-            <i :data-lucide="clinicStopped ? 'door-open' : 'door-closed'" class="h-4 w-4"></i>
+            <template x-if="clinicStopped"><i data-lucide="door-open" class="h-4 w-4"></i></template>
+            <template x-if="!clinicStopped"><i data-lucide="door-closed" class="h-4 w-4"></i></template>
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
           </button>
 
@@ -359,7 +360,8 @@
                           class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold"
                           :class="customer.tier === 'returning' ? 'badge-returning' : 'badge-new'"
                         >
-                          <i :data-lucide="customer.tier === 'returning' ? 'repeat-2' : 'sparkles'" class="h-3 w-3"></i>
+                          <template x-if="customer.tier === 'returning'"><i data-lucide="repeat-2" class="h-3 w-3"></i></template>
+                          <template x-if="customer.tier !== 'returning'"><i data-lucide="sparkles" class="h-3 w-3"></i></template>
                           <span x-text="customer.tier === 'returning' ? 'Returning' : 'New'"></span>
                         </span>
 
@@ -486,12 +488,9 @@
                     'icon-bg-success': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
                     'bg-slate-100':    confirmModal.action === 'archive'
                   }">
-                  <i :data-lucide="confirmModal.action === 'deactivate' ? 'ban' : confirmModal.action === 'archive' ? 'archive' : 'check-circle'" class="h-5 w-5"
-                    :class="{
-                      'icon-warn':    confirmModal.action === 'deactivate',
-                      'icon-success': confirmModal.action === 'reactivate' || confirmModal.action === 'unarchive',
-                      'text-slate-500': confirmModal.action === 'archive'
-                    }"></i>
+                  <template x-if="confirmModal.action === 'deactivate'"><i data-lucide="ban" class="h-5 w-5 icon-warn"></i></template>
+                  <template x-if="confirmModal.action === 'archive'"><i data-lucide="archive" class="h-5 w-5 text-slate-500"></i></template>
+                  <template x-if="confirmModal.action !== 'deactivate' && confirmModal.action !== 'archive'"><i data-lucide="check-circle" class="h-5 w-5 icon-success"></i></template>
                 </div>
                 <h3 class="text-lg font-bold text-[#2f4b66]" x-text="confirmModal.title"></h3>
               </div>

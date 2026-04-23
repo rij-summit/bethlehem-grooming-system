@@ -26,17 +26,8 @@ function adminSidebar() {
     async init() {
       this.detectActivePage();
 
-      // BACKEND/FRONTEND NOTE:
-      // Lucide icons are re-rendered after Alpine initializes the DOM.
-      if (window.lucide) {
-        window.lucide.createIcons();
-      }
-
-      // Re-render icons whenever Alpine finishes updates.
       this.$nextTick(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
+        if (window.lucide) window.lucide.createIcons();
       });
 
       await this.loadClinicStatus();

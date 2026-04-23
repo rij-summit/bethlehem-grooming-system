@@ -179,7 +179,8 @@
             class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
             :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
           >
-            <i :data-lucide="clinicStopped ? 'door-open' : 'door-closed'" class="h-4 w-4"></i>
+            <template x-if="clinicStopped"><i data-lucide="door-open" class="h-4 w-4"></i></template>
+            <template x-if="!clinicStopped"><i data-lucide="door-closed" class="h-4 w-4"></i></template>
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
           </button>
 
