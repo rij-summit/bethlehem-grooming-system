@@ -531,7 +531,7 @@
             ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "--";
         } catch {
           // Token missing or expired — redirect to login
-          window.location.href = "../../pages/client/login.html";
+          window.location.href = "../../pages/sign-in/sign_in.html";
         }
       })();
 
@@ -539,7 +539,7 @@
         try {
           await API.logout("customer");
         } finally {
-          window.location.href = "../../pages/client/login.html";
+          window.location.href = "../../pages/sign-in/sign_in.html";
         }
       });
 

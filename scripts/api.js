@@ -89,8 +89,64 @@ var API = (() => {
 
   async function register(payload) {
     // POST /api/register
-    // payload: { first_name, last_name, email, phone, password, password_confirmation }
+    // payload: {
+    //   first_name,
+    //   last_name,
+    //   username?,
+    //   email?,
+    //   phone?,
+    //   password,
+    //   password_confirmation
+    // }
+    // Team note: frontend now allows an optional username and requires at least
+    // one contact field (email or phone). Backend /register validation should
+    // be updated to match before relying on this payload contract.
     return request("POST", "/register", payload);
+  }
+
+  async function signIn(identifier, password) {
+    /*
+      BACKEND HANDOFF:
+      This shared sign-in page now collects one identifier field for both admins
+      and customers. The current backend still has separate expectations:
+      - /api/login expects a customer mobile number
+      - /api/admin/login expects an admin email
+
+      Frontend is temporarily routing by input shape so the UI can be unified now.
+      Please replace this with one backend endpoint that accepts:
+        { identifier, password }
+      where identifier can be email, username, or mobile number for both roles,
+      and return the authenticated user's role so the frontend can redirect based
+      on admin/customer after a successful sign-in.
+    */
+    const normalizedIdentifier = String(identifier || "").trim();
+    const normalizedPhone = normalizePhoneLikeIdentifier(normalizedIdentifier);
+
+    if (normalizedPhone) {
+      const data = await customerLogin(normalizedPhone, password);
+
+      if (data?.user?.role === "admin" || data?.user?.role === "staff") {
+        clearCustomerToken();
+        setAdminToken(data.token);
+      } else {
+        clearAdminToken();
+      }
+
+      return data;
+    }
+
+    if (normalizedIdentifier.includes("@")) {
+      const data = await adminLogin(normalizedIdentifier, password);
+      clearCustomerToken();
+      return data;
+    }
+
+    const error = new Error(
+      "Username sign-in is ready in the UI, but the backend still needs the shared identifier login update."
+    );
+    error.status = 501;
+    error.errors = null;
+    throw error;
   }
 
   async function customerLogin(phone, password) {
@@ -336,6 +392,17 @@ var API = (() => {
     return request("GET", `/admin/transactions${query}`, null, getAdminToken());
   }
 
+  function normalizePhoneLikeIdentifier(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+
+    if (!digits) return null;
+    if (/^09\d{9}$/.test(digits)) return digits;
+    if (/^639\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+    if (/^9\d{9}$/.test(digits)) return `0${digits}`;
+
+    return null;
+  }
+
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
@@ -348,6 +415,7 @@ var API = (() => {
     clearAdminToken,
     // Auth
     register,
+    signIn,
     customerLogin,
     adminLogin,
     logout,

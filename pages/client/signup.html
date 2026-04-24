@@ -58,10 +58,14 @@
 
             <!--
               BACKEND HANDOFF:
-              This sign-up form is currently frontend-first. Wire it to the real
-              registration endpoint, keep server-side validation as the source of
-              truth, and use backend responses for duplicate email, phone, OTP,
-              and account-creation states.
+              Frontend now includes an optional username field and only requires
+              one contact method before submit: either mobile number or email.
+              Please update backend registration validation to match this UI.
+              Suggested backend rules:
+              - username: optional / nullable
+              - phone: required_without:email
+              - email: required_without:phone
+              - keep uniqueness checks only for fields that are actually provided
             -->
             <form id="signupForm" class="space-y-5">
               <!-- First Name + Last Name -->
@@ -101,14 +105,37 @@
                 </div>
               </div>
 
-              <!-- Phone + Email -->
+              <div class="rounded-xl bg-[#eef7ff] px-4 py-3 text-sm text-[#315b7e]">
+                Username is optional. Please provide at least one contact method:
+                mobile number or email address.
+              </div>
+
+              <!-- Username + Phone -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="username"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Username
+                    <span class="font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    autocomplete="username"
+                    placeholder="Enter a username"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                  />
+                </div>
+
                 <div>
                   <label
                     for="phone"
                     class="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    Phone Number <span class="text-red-500">*</span>
+                    Phone Number
                   </label>
                   <input
                     type="tel"
@@ -118,16 +145,18 @@
                     maxlength="11"
                     inputmode="numeric"
                     class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
                   />
                 </div>
+              </div>
 
+              <!-- Email -->
+              <div>
                 <div>
                   <label
                     for="email"
                     class="block text-sm font-medium text-gray-700 mb-2"
                   >
-                    Email Address <span class="text-red-500">*</span>
+                    Email Address
                   </label>
                   <input
                     type="email"
@@ -135,7 +164,6 @@
                     name="email"
                     placeholder="Enter your email"
                     class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
-                    required
                   />
                 </div>
               </div>
@@ -249,7 +277,7 @@
               <p class="text-center text-sm text-gray-600">
                 Already have an account?
                 <a
-                  href="./login.html"
+                  href="../sign-in/sign_in.html"
                   class="font-semibold text-[#315b7e] hover:underline"
                 >
                   Sign in here

@@ -106,7 +106,7 @@ function adminDashboard() {
       this._initialized = true;
 
       if (!localStorage.getItem("admin_token")) {
-        window.location.href = "../../pages/admin/login.html";
+        window.location.href = "../../pages/sign-in/sign_in.html";
         return;
       }
 
