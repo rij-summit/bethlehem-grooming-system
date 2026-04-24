@@ -48,6 +48,65 @@ class AuthController extends Controller
         ], 201);
     }
 
+    // ── UNIFIED SIGN-IN ───────────────────────────────────
+    public function signIn(Request $request)
+    {
+        $request->validate([
+            'identifier' => 'required|string',
+            'password'   => 'required|string',
+        ]);
+
+        $identifier = $request->identifier;
+
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            $field = 'email';
+        } elseif (preg_match('/^(09|\+639)\d{9}$/', $identifier)) {
+            $field = 'phone';
+        } else {
+            $field = 'username';
+        }
+
+        $user = User::where($field, $identifier)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password_hash)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials.',
+            ], 401);
+        }
+
+        if ($field === 'phone' && in_array($user->role, ['admin', 'staff'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Admin accounts must sign in with a username or email.',
+            ], 403);
+        }
+
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been disabled. Please contact the clinic.',
+            ], 403);
+        }
+
+        $user->tokens()->delete();
+        $tokenName = in_array($user->role, ['admin', 'staff']) ? 'admin_token' : 'auth_token';
+        $token = $user->createToken($tokenName)->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'token'   => $token,
+            'user'    => [
+                'user_id'    => $user->user_id,
+                'first_name' => $user->first_name,
+                'last_name'  => $user->last_name,
+                'email'      => $user->email,
+                'role'       => $user->role,
+            ]
+        ], 200);
+    }
+
     // ── LOGIN ─────────────────────────────────────────────
     public function login(Request $request)
     {

@@ -93,6 +93,19 @@ var API = (() => {
     return request("POST", "/register", payload);
   }
 
+  async function signIn(identifier, password) {
+    // POST /api/sign-in
+    // Accepts email or phone. Saves to the correct token key based on role.
+    const data = await request("POST", "/sign-in", { identifier, password });
+    const role = data?.user?.role;
+    if (role === "admin" || role === "staff") {
+      setAdminToken(data.token);
+    } else {
+      setCustomerToken(data.token);
+    }
+    return data;
+  }
+
   async function customerLogin(phone, password) {
     // POST /api/login
     // Saves the returned token to localStorage under 'customer_token'.
@@ -348,6 +361,7 @@ var API = (() => {
     clearAdminToken,
     // Auth
     register,
+    signIn,
     customerLogin,
     adminLogin,
     logout,

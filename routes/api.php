@@ -11,6 +11,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\CustomerNotificationController;
 
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/sign-in', [AuthController::class, 'signIn']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 
