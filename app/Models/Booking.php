@@ -26,6 +26,9 @@ class Booking extends Model
         'reschedule_count',
         'cancel_count',
         'archived_at',
+        'dropped_off_at',
+        'grooming_started_at',
+        'grooming_finished_at',
         'paid',
     ];
 

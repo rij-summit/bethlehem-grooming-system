@@ -289,10 +289,19 @@ class BookingController extends Controller
                 'reschedule_count'  => $b->reschedule_count ?? 0,
                 'cancel_count'      => $b->cancel_count     ?? 0,
                 'special_notes'     => $b->special_notes,
-                'time_window'       => $b->timeWindow ? [
+                'time_window'        => $b->timeWindow ? [
                     'window_label' => $b->timeWindow->window_label,
                 ] : null,
-                'pets'              => $pets,
+                'dropped_off_at'     => $b->dropped_off_at
+                    ? \Carbon\Carbon::parse($b->dropped_off_at)->format('g:i A')
+                    : null,
+                'grooming_started_at' => $b->grooming_started_at
+                    ? \Carbon\Carbon::parse($b->grooming_started_at)->format('g:i A')
+                    : null,
+                'grooming_finished_at' => $b->grooming_finished_at
+                    ? \Carbon\Carbon::parse($b->grooming_finished_at)->format('g:i A')
+                    : null,
+                'pets'               => $pets,
             ];
         };
 

@@ -395,6 +395,18 @@
                                 <i data-lucide="clock-3" class="h-4 w-4"></i>
                                 <span x-text="booking.appointmentTime"></span>
                               </p>
+                              <p x-show="booking.dropOffTime" class="flex items-center gap-2 text-slate-400">
+                                <i data-lucide="log-in" class="h-4 w-4"></i>
+                                <span x-text="'Dropped off: ' + booking.dropOffTime"></span>
+                              </p>
+                              <p x-show="booking.startedAt" class="flex items-center gap-2 text-slate-400">
+                                <i data-lucide="scissors" class="h-4 w-4"></i>
+                                <span x-text="'Grooming started: ' + booking.startedAt"></span>
+                              </p>
+                              <p x-show="booking.completedAt" class="flex items-center gap-2 text-slate-400">
+                                <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                                <span x-text="'Finished: ' + booking.completedAt"></span>
+                              </p>
                               <p x-show="booking.archivedAt" class="flex items-center gap-2 text-slate-400">
                                 <i data-lucide="archive" class="h-4 w-4"></i>
                                 <span x-text="'Archived: ' + booking.archivedAt"></span>
@@ -469,6 +481,27 @@
                     <span x-text="detailsBooking?.appointmentTime ?? '—'"></span>
                   </p>
                 </div>
+
+                <!-- Grooming Timeline -->
+                <template x-if="detailsBooking?.dropOffTime || detailsBooking?.startedAt || detailsBooking?.completedAt">
+                  <div>
+                    <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Grooming Timeline</p>
+                    <div class="space-y-1 text-sm text-slate-600">
+                      <p x-show="detailsBooking?.dropOffTime">
+                        <span class="text-slate-400">Dropped off:</span>
+                        <span x-text="detailsBooking?.dropOffTime"></span>
+                      </p>
+                      <p x-show="detailsBooking?.startedAt">
+                        <span class="text-slate-400">Grooming started:</span>
+                        <span x-text="detailsBooking?.startedAt"></span>
+                      </p>
+                      <p x-show="detailsBooking?.completedAt">
+                        <span class="text-slate-400">Finished:</span>
+                        <span x-text="detailsBooking?.completedAt"></span>
+                      </p>
+                    </div>
+                  </div>
+                </template>
 
                 <!-- Pets -->
                 <div>

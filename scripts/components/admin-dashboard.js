@@ -520,18 +520,6 @@ function adminDashboard() {
         status: nextStatus,
       };
 
-      if (nextStatus === "queued" && !updatedBooking.dropOffTime) {
-        updatedBooking.dropOffTime = this.formatCurrentTime();
-      }
-
-      if (nextStatus === "in-progress" && !updatedBooking.startedAt) {
-        updatedBooking.startedAt = this.formatCurrentTime();
-      }
-
-      if (nextStatus === "for-pickup" && !updatedBooking.completedAt) {
-        updatedBooking.completedAt = this.formatCurrentTime();
-      }
-
       this.applyBookingUpdate(actionName, booking, updatedBooking);
     },
 

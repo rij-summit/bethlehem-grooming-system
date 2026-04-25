@@ -110,8 +110,9 @@ class AdminBookingController extends Controller
             ->count() + 1;
 
         $booking->update([
-            'status'       => 'checked_in',
-            'queue_number' => $queueNumber,
+            'status'         => 'checked_in',
+            'queue_number'   => $queueNumber,
+            'dropped_off_at' => now(),
         ]);
 
         return response()->json([
@@ -136,7 +137,10 @@ class AdminBookingController extends Controller
 
         $booking->load('user', 'bookingPets.pet');
 
-        $booking->update(['status' => 'in_progress']);
+        $booking->update([
+            'status'             => 'in_progress',
+            'grooming_started_at' => now(),
+        ]);
 
         // Notify the customer that grooming has started
         if ($booking->user) {
@@ -190,8 +194,9 @@ class AdminBookingController extends Controller
         // Early-payment path: already paid, archive directly (no payment step needed)
         if ($booking->paid) {
             $booking->update([
-                'status'      => 'archived',
-                'archived_at' => now(),
+                'status'              => 'archived',
+                'archived_at'         => now(),
+                'grooming_finished_at' => now(),
             ]);
 
             return response()->json([
@@ -201,7 +206,10 @@ class AdminBookingController extends Controller
         }
 
         // Normal path: move to for_payment and notify admin
-        $booking->update(['status' => 'for_payment']);
+        $booking->update([
+            'status'              => 'for_payment',
+            'grooming_finished_at' => now(),
+        ]);
 
         // Admin notification — front-desk knows to collect payment
         Notification::create([
@@ -303,8 +311,9 @@ class AdminBookingController extends Controller
             ->count() + 1;
 
         $booking->update([
-            'status'       => 'checked_in',
-            'queue_number' => $queueNumber,
+            'status'         => 'checked_in',
+            'queue_number'   => $queueNumber,
+            'dropped_off_at' => now(),
         ]);
 
         return response()->json([
@@ -391,9 +400,15 @@ class AdminBookingController extends Controller
             'serviceLabel'    => $serviceLabel,
             'appointmentDate' => $booking->booking_date,
             'appointmentTime' => $window?->window_label ?? '—',
-            'dropOffTime'     => '—',
-            'startedAt'       => '—',
-            'completedAt'     => '—',
+            'dropOffTime'     => $booking->dropped_off_at
+                ? \Carbon\Carbon::parse($booking->dropped_off_at)->format('g:i A')
+                : null,
+            'startedAt'       => $booking->grooming_started_at
+                ? \Carbon\Carbon::parse($booking->grooming_started_at)->format('g:i A')
+                : null,
+            'completedAt'     => $booking->grooming_finished_at
+                ? \Carbon\Carbon::parse($booking->grooming_finished_at)->format('g:i A')
+                : null,
             'clientNotified'  => false,
             'paid'            => (bool) $booking->paid,
             'status'          => $this->mapStatus($booking->status),

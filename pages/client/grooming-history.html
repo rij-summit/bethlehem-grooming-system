@@ -331,6 +331,16 @@
           ? `<span class="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">Paid ✓</span>`
           : `<span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Unpaid</span>`;
 
+        const droppedOff    = b.dropped_off_at     ? `<span class="text-slate-400">Dropped off:</span> ${b.dropped_off_at}` : null;
+        const groomingStart = b.grooming_started_at ? `<span class="text-slate-400">Grooming started:</span> ${b.grooming_started_at}` : null;
+        const groomingEnd   = b.grooming_finished_at ? `<span class="text-slate-400">Finished:</span> ${b.grooming_finished_at}` : null;
+        const timelineItems = [droppedOff, groomingStart, groomingEnd].filter(Boolean);
+        const timeline = timelineItems.length
+          ? `<div class="mt-2 flex flex-col gap-0.5 text-xs text-slate-600">
+               ${timelineItems.map(item => `<p>${item}</p>`).join("")}
+             </div>`
+          : "";
+
         return `
           <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -348,6 +358,7 @@
                     ${breeds ? `<span class="text-slate-400"> &middot; ${breeds}</span>` : ""}
                   </p>
                   <p class="text-xs text-slate-400 mt-0.5">${b.number_of_pets} pet${b.number_of_pets !== 1 ? "s" : ""}</p>
+                  ${timeline}
                 </div>
               </div>
 
