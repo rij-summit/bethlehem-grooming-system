@@ -7,17 +7,28 @@ use Carbon\Carbon;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Notification;
+use App\Exceptions\PaymentLimitExceededException;
 
 class PaymentController extends Controller
 {
     private function validatePayload(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'final_price'    => 'required|numeric|min:0.01',
             'amount_paid'    => 'required|numeric|min:0.01',
             'payment_method' => 'nullable|in:cash,gcash,maya,card,others',
             'notes'          => 'nullable|string|max:500',
         ]);
+
+        if ($data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
+            throw new PaymentLimitExceededException('final price');
+        }
+
+        if ($data['amount_paid'] > PaymentLimitExceededException::MAX_VALUE) {
+            throw new PaymentLimitExceededException('amount paid');
+        }
+
+        return $data;
     }
 
     private function createPaymentRecord(Booking $booking, array $data): Payment

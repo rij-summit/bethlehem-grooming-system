@@ -105,48 +105,16 @@ var API = (() => {
   }
 
   async function signIn(identifier, password) {
-    /*
-      BACKEND HANDOFF:
-      This shared sign-in page now collects one identifier field for both admins
-      and customers. The current backend still has separate expectations:
-      - /api/login expects a customer mobile number
-      - /api/admin/login expects an admin email
-
-      Frontend is temporarily routing by input shape so the UI can be unified now.
-      Please replace this with one backend endpoint that accepts:
-        { identifier, password }
-      where identifier can be email, username, or mobile number for both roles,
-      and return the authenticated user's role so the frontend can redirect based
-      on admin/customer after a successful sign-in.
-    */
-    const normalizedIdentifier = String(identifier || "").trim();
-    const normalizedPhone = normalizePhoneLikeIdentifier(normalizedIdentifier);
-
-    if (normalizedPhone) {
-      const data = await customerLogin(normalizedPhone, password);
-
-      if (data?.user?.role === "admin" || data?.user?.role === "staff") {
-        clearCustomerToken();
-        setAdminToken(data.token);
-      } else {
-        clearAdminToken();
-      }
-
-      return data;
+    // POST /api/sign-in
+    // Accepts email or phone. Saves to the correct token key based on role.
+    const data = await request("POST", "/sign-in", { identifier, password });
+    const role = data?.user?.role;
+    if (role === "admin" || role === "staff") {
+      setAdminToken(data.token);
+    } else {
+      setCustomerToken(data.token);
     }
-
-    if (normalizedIdentifier.includes("@")) {
-      const data = await adminLogin(normalizedIdentifier, password);
-      clearCustomerToken();
-      return data;
-    }
-
-    const error = new Error(
-      "Username sign-in is ready in the UI, but the backend still needs the shared identifier login update."
-    );
-    error.status = 501;
-    error.errors = null;
-    throw error;
+    return data;
   }
 
   async function customerLogin(phone, password) {

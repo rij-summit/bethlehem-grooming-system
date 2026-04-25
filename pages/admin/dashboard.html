@@ -992,11 +992,9 @@
                           <span x-text="'Type: ' + booking.petType"></span>
                         </p>
 
-                        <p class="flex items-center gap-2">
+                        <p x-show="booking.dropOffTime" class="flex items-center gap-2">
                           <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span
-                            x-text="'Dropped off: ' + booking.dropOffTime"
-                          ></span>
+                          <span x-text="'Dropped off: ' + booking.dropOffTime"></span>
                         </p>
                       </div>
                     </div>
@@ -1172,7 +1170,7 @@
                           <span x-text="'Type: ' + booking.petType"></span>
                         </p>
 
-                        <p class="flex items-center gap-2">
+                        <p x-show="booking.startedAt" class="flex items-center gap-2">
                           <i data-lucide="clock-3" class="h-4 w-4"></i>
                           <span x-text="'Started: ' + booking.startedAt"></span>
                         </p>
@@ -1293,6 +1291,10 @@
                         <p class="flex items-center gap-2 text-[#16a34a]">
                           <i data-lucide="bell-ring" class="h-4 w-4"></i>
                           <span>Customer notified</span>
+                        </p>
+                        <p x-show="booking.completedAt" class="flex items-center gap-2">
+                          <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                          <span x-text="'Finished: ' + booking.completedAt"></span>
                         </p>
                       </div>
                     </div>

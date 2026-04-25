@@ -98,7 +98,7 @@ function hydrateServiceStepLayout() {
 
   if (elements.nextButton) {
     elements.nextButton.id = "reviewBookingBtn";
-    elements.nextButton.textContent = "Next: Review Booking";
+    elements.nextButton.textContent = "Next step";
   }
 
   if (elements.petServiceSelections) {
