@@ -1,6 +1,99 @@
 // Connected to pages/client/dashboard.html
 // Depends on: api.js (loaded before this script)
 
+// Client dashboard shell: Lucide icons, mobile sidebar, profile name, and logout.
+// Connected to the sidebar/profile controls in pages/client/dashboard.html.
+(function () {
+  if (window.lucide) window.lucide.createIcons();
+
+  const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
+  const sidebarToggle = document.getElementById("clientSidebarToggle");
+  const sidebarClose = document.getElementById("clientSidebarClose");
+  const sidebarBackdrop = document.getElementById("clientSidebarBackdrop");
+  const sidebar = document.getElementById("clientSidebar");
+  const profileName = document.getElementById("clientProfileName");
+  const profileInitials = document.getElementById("clientProfileInitials");
+  const logoutBtn = document.getElementById("clientLogoutBtn");
+
+  if (!sidebarToggle || !sidebarClose || !sidebarBackdrop || !sidebar) return;
+
+  const sidebarLinks = sidebar.querySelectorAll("a");
+
+  // Sidebar navigation section: open/close behavior for tablet and mobile.
+  function setSidebarState(isOpen) {
+    document.body.classList.toggle("client-sidebar-open", isOpen);
+    sidebarToggle.setAttribute("aria-expanded", String(isOpen));
+    sidebarToggle.setAttribute(
+      "aria-label",
+      isOpen ? "Close navigation menu" : "Open navigation menu",
+    );
+  }
+
+  function closeSidebar() {
+    setSidebarState(false);
+  }
+
+  function toggleSidebar() {
+    if (!mobileSidebarQuery.matches) return;
+    const isOpen = document.body.classList.contains("client-sidebar-open");
+    setSidebarState(!isOpen);
+  }
+
+  setSidebarState(false);
+
+  sidebarToggle.addEventListener("click", toggleSidebar);
+  sidebarClose.addEventListener("click", closeSidebar);
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+
+  sidebarLinks.forEach((link) => {
+    link.addEventListener("click", closeSidebar);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSidebar();
+    }
+  });
+
+  mobileSidebarQuery.addEventListener("change", (event) => {
+    if (!event.matches) {
+      closeSidebar();
+    }
+  });
+
+  // Client profile section: load the logged-in customer's name and initials.
+  (async () => {
+    try {
+      const { user } = await API.getMe("customer");
+      const firstName = user.first_name || "";
+      const lastName = user.last_name || "";
+
+      if (profileName) {
+        profileName.textContent = `${firstName} ${lastName}`.trim() || "Customer";
+      }
+
+      if (profileInitials) {
+        profileInitials.textContent =
+          ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "--";
+      }
+    } catch {
+      // Authentication section: token is missing or expired, so return to login.
+      window.location.href = "../../pages/sign-in/sign_in.html";
+    }
+  })();
+
+  // Logout section: end the customer session and return to sign in.
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await API.logout("customer");
+      } finally {
+        window.location.href = "../../pages/sign-in/sign_in.html";
+      }
+    });
+  }
+})();
+
 // ── Customer Notification Bell ────────────────────────────────────────────────
 (function () {
   const bellBtn        = document.getElementById("notifBellBtn");
@@ -326,25 +419,33 @@
     ];
     const stepOrder  = { checked_in: 0, in_progress: 1, for_payment: 2 };
     const current    = stepOrder[b.status] ?? 0;
-    const fillPct    = (current / (steps.length - 1)) * 100;
+    const stepThemes = {
+      checked_in:  { color: "#e5a800" },
+      in_progress: { color: "#1d4ed8" },
+      for_payment: { color: "#16a34a" },
+    };
 
     const stepCircles = steps.map((step, i) => {
-      const done   = i < current;
       const active = i === current;
-      const circleClass = (done || active)
-        ? "bg-[#315b7e] text-white border-[#315b7e]"
+      const stepTheme = stepThemes[step.key];
+      const circleClass = active
+        ? "text-white"
         : "bg-white text-slate-400 border-slate-300";
+      const circleStyle = active
+        ? `style="background-color: ${stepTheme.color}; border-color: ${stepTheme.color};"`
+        : "";
       const labelClass  = active
-        ? "text-[#315b7e] font-semibold"
-        : done
-          ? "text-slate-500"
-          : "text-slate-400";
+        ? "font-semibold"
+        : "text-slate-400";
+      const labelStyle = active
+        ? `style="color: ${stepTheme.color};"`
+        : "";
       return `
         <div class="flex flex-col items-center z-10">
-          <div class="w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-bold ${circleClass} bg-white">
-            ${done ? "✓" : i + 1}
+          <div class="w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-bold ${circleClass}" ${circleStyle}>
+            ${i + 1}
           </div>
-          <p class="mt-2 text-[11px] text-center ${labelClass} leading-tight max-w-[5rem]">${step.label}</p>
+          <p class="mt-2 text-[11px] text-center ${labelClass} leading-tight max-w-[5rem]" ${labelStyle}>${step.label}</p>
         </div>`;
     }).join("");
 
@@ -360,9 +461,6 @@
         <div class="relative flex justify-between items-start px-4">
           <!-- background track -->
           <div class="absolute top-[1.0625rem] left-4 right-4 h-1 bg-slate-200 rounded-full"></div>
-          <!-- filled track -->
-          <div class="absolute top-[1.0625rem] left-4 h-1 bg-[#315b7e] rounded-full transition-all duration-500"
-               style="width: calc((100% - 2rem) * ${fillPct / 100})"></div>
           ${stepCircles}
         </div>
       </div>`;

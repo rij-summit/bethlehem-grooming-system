@@ -63,6 +63,8 @@ export const GROOMING_PACKAGES = [
         amount: 700,
       }),
     ],
+    allowsAlaCarteServices: true,
+    includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
   },
   {
     id: "regular_dog_grooming",
@@ -88,6 +90,12 @@ export const GROOMING_PACKAGES = [
         sizeKey: "extra_large",
         amount: 1050,
       }),
+    ],
+    allowsAlaCarteServices: true,
+    includedAlaCarteServiceIds: [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing",
     ],
   },
   {
@@ -115,6 +123,12 @@ export const GROOMING_PACKAGES = [
         amount: 1200,
       }),
     ],
+    allowsAlaCarteServices: true,
+    includedAlaCarteServiceIds: [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing",
+    ],
   },
   {
     id: "bath_and_go",
@@ -139,6 +153,12 @@ export const GROOMING_PACKAGES = [
         amount: 750,
       }),
     ],
+    allowsAlaCarteServices: true,
+    includedAlaCarteServiceIds: [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing",
+    ],
   },
   {
     id: "cat_full_grooming",
@@ -159,7 +179,7 @@ export const GROOMING_PACKAGES = [
         amount: 600,
       }),
     ],
-    allowsAlaCarteAddOns: true,
+    allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
   },
 ];
@@ -168,7 +188,7 @@ export const ALA_CARTE_SERVICES = [
   {
     id: "nail_clipping",
     kind: "ala_carte",
-    petType: "cat",
+    petTypes: ["cat", "dog"],
     name: "Nail Clipping",
     descriptionItems: [],
     priceOptions: [
@@ -182,7 +202,7 @@ export const ALA_CARTE_SERVICES = [
   {
     id: "ear_cleaning",
     kind: "ala_carte",
-    petType: "cat",
+    petTypes: ["cat", "dog"],
     name: "Ear Cleaning",
     descriptionItems: [],
     priceOptions: [createPlusPriceOption({ label: "Standard", amount: 150 })],
@@ -190,7 +210,7 @@ export const ALA_CARTE_SERVICES = [
   {
     id: "facial_trimming",
     kind: "ala_carte",
-    petType: "cat",
+    petTypes: ["cat", "dog"],
     name: "Facial Trimming",
     descriptionItems: [],
     priceOptions: [createFixedPriceOption({ label: "Standard", amount: 150 })],
@@ -198,7 +218,7 @@ export const ALA_CARTE_SERVICES = [
   {
     id: "anal_sac_draining",
     kind: "ala_carte",
-    petType: "cat",
+    petTypes: ["cat", "dog"],
     name: "Anal Sac Draining",
     descriptionItems: [],
     priceOptions: [createFixedPriceOption({ label: "Standard", amount: 150 })],
@@ -206,21 +226,10 @@ export const ALA_CARTE_SERVICES = [
   {
     id: "tooth_brushing",
     kind: "ala_carte",
-    petType: "cat",
+    petTypes: ["cat", "dog"],
     name: "Tooth Brushing",
     descriptionItems: [],
     priceOptions: [createPlusPriceOption({ label: "Standard", amount: 100 })],
-  },
-];
-
-export const ADD_ON_SERVICES = [
-  {
-    id: "add_on_placeholder",
-    kind: "add_on",
-    name: "Add-on Placeholder",
-    description:
-      "Add-on service will be updated once the clinic confirms the available option.",
-    priceOptions: [],
   },
 ];
 
@@ -229,9 +238,6 @@ const PACKAGE_MAP = new Map(
 );
 const ALA_CARTE_MAP = new Map(
   ALA_CARTE_SERVICES.map((service) => [service.id, service]),
-);
-const ADD_ON_MAP = new Map(
-  ADD_ON_SERVICES.map((service) => [service.id, service]),
 );
 
 export function formatPhpAmount(amount) {
@@ -284,7 +290,10 @@ export function getPackagesByPetType(petType) {
 export function getAlaCarteServicesByPetType(petType) {
   const normalizedType = normalizePetType(petType);
   return ALA_CARTE_SERVICES.filter(
-    (service) => service.petType === normalizedType,
+    (service) =>
+      service.petType === normalizedType ||
+      service.petType === "all" ||
+      service.petTypes?.includes(normalizedType),
   );
 }
 
@@ -296,7 +305,7 @@ export function getPackageAlaCarteRules(packageId) {
   const selectedPackage = getPackageById(packageId);
 
   return {
-    canCombineWithAlaCarte: Boolean(selectedPackage?.allowsAlaCarteAddOns),
+    canCombineWithAlaCarte: Boolean(selectedPackage?.allowsAlaCarteServices),
     includedAlaCarteServiceIds: Array.from(
       new Set(
         Array.isArray(selectedPackage?.includedAlaCarteServiceIds)
@@ -309,10 +318,6 @@ export function getPackageAlaCarteRules(packageId) {
 
 export function getAlaCarteServiceById(serviceId) {
   return ALA_CARTE_MAP.get(serviceId) || null;
-}
-
-export function getAddOnById(serviceId) {
-  return ADD_ON_MAP.get(serviceId) || null;
 }
 
 export function createEmptyPetServiceSelection(pet) {
@@ -336,11 +341,7 @@ export function sanitizePetServiceSelection(selection) {
           : [],
       ),
     ),
-    addOns: Array.from(
-      new Set(
-        Array.isArray(selection?.addOns) ? selection.addOns.filter(Boolean) : [],
-      ),
-    ),
+    addOns: [],
     specialInstructions:
       typeof selection?.specialInstructions === "string"
         ? selection.specialInstructions
@@ -707,12 +708,6 @@ export function buildBookingReviewPayload(bookingDraft, petSelections) {
   ) {
     notices.push(
       "Some a la carte services use a price range. The final amount depends on the service condition confirmed at the clinic.",
-    );
-  }
-
-  if (items.some((item) => item.selection.addOns.length > 0)) {
-    notices.push(
-      "Selected add-ons are placeholders right now and are not included in the total until the clinic confirms their pricing.",
     );
   }
 

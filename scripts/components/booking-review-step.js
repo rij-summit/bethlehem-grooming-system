@@ -11,7 +11,6 @@ import {
   buildBookingReviewPayload,
   formatAmountRange,
   formatPriceOption,
-  getAddOnById,
   getPackageById,
   normalizeStepThreeDraft,
 } from "../services/grooming-service.js";
@@ -166,9 +165,6 @@ function renderPetReviewCard(item, index) {
   const alaCarteLineItems = item.pricing.lineItems.filter(
     (lineItem) => lineItem.kind === "ala_carte",
   );
-  const addOnNames = item.selection.addOns
-    .map((addOnId) => getAddOnById(addOnId)?.name)
-    .filter(Boolean);
   const packageCard = selectedPackage
     ? renderPackageReview(selectedPackage, item)
     : "";
@@ -214,21 +210,6 @@ function renderPetReviewCard(item, index) {
         ${packageCard}
         ${alaCarteCard}
         ${missingSelectionNotice}
-
-        ${
-          addOnNames.length > 0
-            ? `
-              <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Add-Ons
-                </p>
-                <p class="mt-2 text-sm text-slate-600">${escapeHtml(
-                  addOnNames.join(", "),
-                )}</p>
-              </div>
-            `
-            : ""
-        }
 
         ${
           item.selection.specialInstructions.trim()
