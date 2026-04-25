@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const bookingConsentStep = getStoredData("bookingConsentStep");
 
   populateConfirmationData();
+  populateOwnerInfo();
 
   printConfirmationButton.addEventListener("click", () => {
     const originalTitle = document.title;
@@ -64,10 +65,9 @@ document.addEventListener("DOMContentLoaded", () => {
     bookingReferenceNumber.textContent =
       confirmation.booking_reference || "Pending";
 
-    // ── Owner info (from logged-in user via consent signature) ──
-    ownerName.textContent =
-      bookingConsentStep?.digitalSignature || "Not provided";
-    ownerPhone.textContent = "See your account profile";
+    // ── Owner info (populated asynchronously via populateOwnerInfo) ──
+    ownerName.textContent = "Loading...";
+    ownerPhone.textContent = "Loading...";
 
     // ── Pet info (first pet in the booking) ──────────────
     const firstPet = Array.isArray(confirmation.pets) ? confirmation.pets[0] : null;
@@ -187,6 +187,21 @@ document.addEventListener("DOMContentLoaded", () => {
   function formatLabel(value) {
     if (!value) return "";
     return String(value).replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  async function populateOwnerInfo() {
+    try {
+      const data = await API.getMe("customer");
+      const user = data?.user;
+      const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ")
+        || user?.username
+        || "Not provided";
+      ownerName.textContent = fullName;
+      ownerPhone.textContent = user?.phone || "Not provided";
+    } catch {
+      ownerName.textContent = "Not provided";
+      ownerPhone.textContent = "Not provided";
+    }
   }
 
   function getStoredData(key) {
