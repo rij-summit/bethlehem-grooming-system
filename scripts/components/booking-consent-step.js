@@ -181,7 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBookingButton.className =
         "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
       consentStatusMessage.textContent =
-        "Please complete both consent checkboxes and enter your digital signature before submitting.";
+        "Please check the grooming consent and enter your digital signature before submitting.";
       consentStatusMessage.className =
         "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
     }
@@ -192,7 +192,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return (
       mainConsentCheckbox.checked &&
-      sedationConsentCheckbox.checked &&
       signatureValue.length > 0
     );
   }
