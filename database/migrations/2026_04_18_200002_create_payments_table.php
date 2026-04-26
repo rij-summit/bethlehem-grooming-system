@@ -15,7 +15,7 @@ return new class extends Migration
 
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('booking_id');
+            $table->unsignedInteger('booking_id');
             $table->decimal('total_amount', 10, 2);
             $table->decimal('amount_tendered', 10, 2)->nullable();
             $table->decimal('change_amount', 10, 2)->nullable();
