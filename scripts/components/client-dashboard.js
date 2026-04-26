@@ -108,7 +108,7 @@
 
       // Pickup alert popup
       const pickup = data.pickup_alert;
-      if (pickup && !getShownPickups().includes(pickup.id)) {
+      if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
         pickupMessage.textContent = pickup.message;
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
