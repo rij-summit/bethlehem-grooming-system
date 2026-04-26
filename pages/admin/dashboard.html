@@ -824,15 +824,12 @@
                               <span x-text="booking.appointmentTime"></span>
                             </p>
                           </div>
+                          <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
                         </div>
                       </div>
 
                       <!-- RIGHT SIDE -->
                       <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                        <p
-                          class="text-base text-slate-700 lg:text-lg"
-                          x-text="booking.serviceLabel"
-                        ></p>
 
                         <!-- DATE GUARD TEMPORARILY DISABLED FOR TESTING
                         <button
@@ -997,15 +994,12 @@
                           <span x-text="'Dropped off: ' + booking.dropOffTime"></span>
                         </p>
                       </div>
+                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
                     </div>
                   </div>
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p
-                      class="text-base text-slate-700 lg:text-lg"
-                      x-text="booking.serviceLabel"
-                    ></p>
 
                     <!-- Pay Now: early payment before grooming starts -->
                     <template x-if="!booking.paid">
@@ -1175,15 +1169,12 @@
                           <span x-text="'Started: ' + booking.startedAt"></span>
                         </p>
                       </div>
+                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
                     </div>
                   </div>
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p
-                      class="text-base text-slate-700 lg:text-lg"
-                      x-text="booking.serviceLabel"
-                    ></p>
 
                     <!-- Pay Now: early payment while grooming is in progress -->
                     <template x-if="!booking.paid">
@@ -1297,12 +1288,12 @@
                           <span x-text="'Finished: ' + booking.completedAt"></span>
                         </p>
                       </div>
+                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
                     </div>
                   </div>
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p class="text-base text-slate-700 lg:text-lg" x-text="booking.serviceLabel"></p>
 
                     <!-- Already paid → Release button -->
                     <template x-if="booking.paid">
@@ -1380,12 +1371,12 @@
                           <span>Did not show up</span>
                         </p>
                       </div>
+                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
                     </div>
                   </div>
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <p class="text-base text-slate-700 lg:text-lg" x-text="booking.serviceLabel"></p>
 
                     <!-- Late Check-in: only available before 5 PM -->
                     <template x-if="isLateCheckInAvailable()">
