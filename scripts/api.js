@@ -10,6 +10,26 @@ var API = (() => {
   const CUSTOMER_TOKEN_KEY = "customer_token";
   const ADMIN_TOKEN_KEY = "admin_token";
 
+  // ── Booking session keys to wipe on customer logout / login ──────────────
+  const BOOKING_SESSION_KEYS = [
+    "bookingStep2",
+    "bookingStep3",
+    "bookingStep4Review",
+    "bookingReview",
+    "bookingConsentStep",
+    "bookingConfirmation",
+    "bethlehem.bookingFormLock",
+  ];
+  const BOOKING_LOCAL_KEYS = [
+    "bethlehem.bookingFormLock",
+    "shownPickupNotifs",
+  ];
+
+  function clearBookingDraft() {
+    BOOKING_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
+    BOOKING_LOCAL_KEYS.forEach((k) => localStorage.removeItem(k));
+  }
+
   // ── Token helpers ─────────────────────────────────────────────────────────
 
   function getCustomerToken() {
@@ -109,6 +129,7 @@ var API = (() => {
   async function customerLogin(phone, password) {
     // POST /api/login
     // Saves the returned token to localStorage under 'customer_token'.
+    clearBookingDraft();
     const data = await request("POST", "/login", { phone, password });
     setCustomerToken(data.token);
     return data;
@@ -135,6 +156,7 @@ var API = (() => {
         clearAdminToken();
       } else {
         clearCustomerToken();
+        clearBookingDraft();
       }
     }
   }
