@@ -4,7 +4,9 @@
 document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signupForm");
   const signupMessage = document.getElementById("signupMessage");
+  const usernameInput = document.getElementById("username");
   const phoneInput = document.getElementById("phone");
+  const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
   const confirmPasswordInput = document.getElementById("confirmPassword");
   const passwordVisibilityButtons = [
@@ -12,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("toggleConfirmPasswordVisibility"),
   ].filter(Boolean);
 
-  if (!signupForm) return;
+  if (!signupForm || !phoneInput || !emailInput) return;
 
   if (window.lucide) {
     window.lucide.createIcons();
@@ -51,8 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ── Phone input masking ───────────────────────────────────────────────────
-  // Strip non-digits, cap at 11, enforce 09 prefix in real time
+  // Strip non-digits, cap at 11, enforce 09 prefix in real time.
   phoneInput.addEventListener("input", function () {
     const digitsOnly = this.value.replace(/\D/g, "").slice(0, 11);
     const isValid =
@@ -60,9 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     this.value = digitsOnly;
     this.setCustomValidity(
-      isValid
-        ? ""
-        : "Phone number must start with 09 and be 11 digits."
+      isValid ? "" : "Phone number must start with 09 and be 11 digits."
     );
   });
 
@@ -71,22 +70,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const firstName = document.getElementById("firstName").value.trim();
     const lastName = document.getElementById("lastName").value.trim();
-    const email = document.getElementById("email").value.trim();
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    const email = emailInput.value.trim();
     const phone = phoneInput.value.trim();
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
 
     signupMessage.className = "mt-5 rounded-xl border px-4 py-3 text-sm";
 
-    // ── Phone validation ──────────────────────────────────────────────────
+    if (!phone) {
+      showMessage(signupMessage, "error", "Mobile number is required.");
+      phoneInput.focus();
+      return;
+    }
+
+    if (!email) {
+      showMessage(signupMessage, "error", "Email address is required.");
+      emailInput.focus();
+      return;
+    }
+
     const phonePattern = /^09\d{9}$/;
-    if (!phonePattern.test(phone)) {
+    if (phone && !phonePattern.test(phone)) {
       showMessage(
         signupMessage,
         "error",
         "Phone number must start with 09 and be exactly 11 digits (e.g. 09XXXXXXXXX)."
       );
       phoneInput.focus();
+      return;
+    }
+
+    if (email && !emailInput.checkValidity()) {
+      emailInput.reportValidity();
+      emailInput.focus();
       return;
     }
 
@@ -108,8 +125,9 @@ document.addEventListener("DOMContentLoaded", () => {
       await API.register({
         first_name: firstName,
         last_name: lastName,
-        email,
-        phone,
+        username: username || null,
+        email: email || null,
+        phone: phone || null,
         password,
         password_confirmation: confirmPassword,
       });
@@ -122,10 +140,9 @@ document.addEventListener("DOMContentLoaded", () => {
       signupForm.reset();
 
       setTimeout(() => {
-        window.location.href = "./login.html";
+        window.location.href = "../sign-in/sign_in.html";
       }, 1500);
     } catch (error) {
-      // 422 from Laravel includes field-level validation errors
       if (error.errors) {
         const firstError = Object.values(error.errors)[0];
         showMessage(

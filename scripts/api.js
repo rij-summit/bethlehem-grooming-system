@@ -109,7 +109,18 @@ var API = (() => {
 
   async function register(payload) {
     // POST /api/register
-    // payload: { first_name, last_name, email, phone, password, password_confirmation }
+    // payload: {
+    //   first_name,
+    //   last_name,
+    //   username?,
+    //   email?,
+    //   phone?,
+    //   password,
+    //   password_confirmation
+    // }
+    // Team note: frontend now allows an optional username and requires at least
+    // one contact field (email or phone). Backend /register validation should
+    // be updated to match before relying on this payload contract.
     return request("POST", "/register", payload);
   }
 
@@ -375,6 +386,17 @@ var API = (() => {
     if (date)   params.set("date",   date);
     const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/admin/transactions${query}`, null, getAdminToken());
+  }
+
+  function normalizePhoneLikeIdentifier(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+
+    if (!digits) return null;
+    if (/^09\d{9}$/.test(digits)) return digits;
+    if (/^639\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+    if (/^9\d{9}$/.test(digits)) return `0${digits}`;
+
+    return null;
   }
 
   // ── Public interface ──────────────────────────────────────────────────────

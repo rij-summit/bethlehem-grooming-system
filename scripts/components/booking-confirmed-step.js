@@ -12,7 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const petBreed = document.getElementById("petBreed");
   const petSize = document.getElementById("petSize");
   const selectedService = document.getElementById("selectedService");
-  const selectedAddOn = document.getElementById("selectedAddOn");
+  const selectedAlaCarteMenu = document.getElementById("selectedAlaCarteMenu");
   const specialInstructions = document.getElementById("specialInstructions");
   const estimatedTotalPrice = document.getElementById("estimatedTotalPrice");
   const appointmentDate = document.getElementById("appointmentDate");
@@ -105,12 +105,12 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter(Boolean)
         .join(", ") || "No service selected.";
 
-      const allAddOns = reviewPets.flatMap((rp) =>
+      const allAlaCarteServices = reviewPets.flatMap((rp) =>
         Array.isArray(rp.alaCarteServices) ? rp.alaCarteServices : [],
       );
-      selectedAddOn.textContent = allAddOns.length > 0
-        ? allAddOns.map(formatServiceName).join(", ")
-        : "No add-on selected.";
+      selectedAlaCarteMenu.textContent = allAlaCarteServices.length > 0
+        ? allAlaCarteServices.map(formatServiceName).join(", ")
+        : "No A la Carte service selected.";
 
       const allInstructions = reviewPets
         .map((rp) => rp.specialInstructions?.trim())
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : "To be confirmed by clinic.";
     } else {
       selectedService.textContent = "No service selected.";
-      selectedAddOn.textContent = "No add-on selected.";
+      selectedAlaCarteMenu.textContent = "No A la Carte service selected.";
       specialInstructions.textContent = "No special instructions provided.";
       estimatedTotalPrice.textContent = "To be confirmed by clinic.";
     }

@@ -8,7 +8,6 @@ import {
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import {
-  ADD_ON_SERVICES,
   buildStepThreeDraftPayload,
   calculatePetSelectionPricing,
   createEmptyPetServiceSelection,
@@ -30,7 +29,7 @@ import {
  *
  * Backend developer guide:
  * This step currently reads the active draft from browser storage and saves the
- * selected package/add-on choices in sessionStorage for later review pages.
+ * selected package/A la Carte choices in sessionStorage for later review pages.
  * In production, the backend should:
  * - return the current draft with stable pet IDs and schedule values
  * - accept one service selection object per pet using those same IDs
@@ -80,22 +79,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function bindEvents() {
-  elements.petServiceSelections.addEventListener("click", handleSelectionClick);
   elements.petServiceSelections.addEventListener("change", handleSelectionChange);
   elements.petServiceSelections.addEventListener("input", handleSelectionInput);
   elements.form.addEventListener("submit", handleSubmit);
 }
 
 function hydrateServiceStepLayout() {
-  const cardDescription = document.querySelector(
-    "main section.mt-6 > div.mb-6 > p",
-  );
-
-  if (cardDescription) {
-    cardDescription.textContent =
-      "Select the required grooming service for each pet included in this booking.";
-  }
-
   if (elements.nextButton) {
     elements.nextButton.id = "reviewBookingBtn";
     elements.nextButton.textContent = "Next step";
@@ -202,10 +191,9 @@ function renderPetSelectionCard(pet, index) {
     ? getPackageById(selection.servicePackage)
     : null;
   const packageCards = getPackagesByPetType(pet.petType)
-    .map((service) => renderPackageCard(pet, selection, service, allowsAlaCarteOnly))
+    .map((service) => renderPackageCard(pet, selection, service))
     .join("");
   const alaCarteServices = getAlaCarteServicesByPetType(pet.petType);
-  const addOnCards = ADD_ON_SERVICES.map((addOn) => renderAddOnCard(pet, selection, addOn)).join("");
 
   return `
     <article
@@ -242,7 +230,7 @@ function renderPetSelectionCard(pet, index) {
         <p class="mt-2 text-sm text-slate-600">
           ${
             allowsAlaCarteOnly
-              ? "Choose one package, add À la carte services, or both. At least one service is required to proceed."
+              ? "Choose one package, A la Carte services, or both. Items already included in the selected package will be unavailable."
               : "Choose one grooming package to proceed."
           }
         </p>
@@ -286,19 +274,6 @@ function renderPetSelectionCard(pet, index) {
 
       <section class="mt-8">
         <div class="mb-3">
-          <h4 class="text-base font-semibold text-[#2f4b66]">Add-On (Optional)</h4>
-          <p class="text-sm text-slate-500">
-            Add-ons are prepared per pet and can be finalized later once clinic pricing is available.
-          </p>
-        </div>
-
-        <div class="space-y-2">
-          ${addOnCards}
-        </div>
-      </section>
-
-      <section class="mt-8">
-        <div class="mb-3">
           <h4 class="text-base font-semibold text-[#2f4b66]">
             Grooming Preferences &amp; Special Instructions
           </h4>
@@ -317,12 +292,9 @@ function renderPetSelectionCard(pet, index) {
   `;
 }
 
-function renderPackageCard(pet, selection, service, allowsAlaCarteOnly) {
+function renderPackageCard(pet, selection, service) {
   const isChecked = selection.servicePackage === service.id;
   const selectedSizeLabel = formatPetSizeLabel(pet.size);
-  const hasSinglePackageOption = getPackagesByPetType(pet.petType).length === 1;
-  const shouldShowSelectedPackageHint =
-    isChecked && allowsAlaCarteOnly && !hasSinglePackageOption;
 
   return `
     <div class="flex h-full flex-col gap-3">
@@ -358,38 +330,8 @@ function renderPackageCard(pet, selection, service, allowsAlaCarteOnly) {
                 .join("")}
             </div>
           </div>
-          ${
-            shouldShowSelectedPackageHint
-              ? `
-                <div class="mt-4 flex flex-wrap items-center gap-2">
-                  <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
-                    Selected package
-                  </span>
-                  <span class="text-xs text-slate-500">
-                    Clear this if ${escapeHtml(
-                      pet.petName || "this pet",
-                    )} only needs a la carte services.
-                  </span>
-                </div>
-              `
-              : ""
-          }
         </div>
       </label>
-      ${
-        isChecked && allowsAlaCarteOnly
-          ? `
-            <button
-              type="button"
-              data-role="clear-service-package"
-              data-pet-id="${escapeHtml(pet.id)}"
-              class="inline-flex items-center justify-center self-start rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]"
-            >
-              Clear package
-            </button>
-          `
-          : ""
-      }
     </div>
   `;
 }
@@ -456,34 +398,6 @@ function renderAlaCarteCard(pet, selection, service, selectedPackage) {
   `;
 }
 
-function renderAddOnCard(pet, selection, addOn) {
-  const isChecked = selection.addOns.includes(addOn.id);
-
-  return `
-    <label
-      class="${isChecked ? "service-option--selected" : ""} flex cursor-pointer gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
-    >
-      <input
-        type="checkbox"
-        value="${escapeHtml(addOn.id)}"
-        data-role="add-on"
-        data-pet-id="${escapeHtml(pet.id)}"
-        class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
-        ${isChecked ? "checked" : ""}
-      />
-      <div class="min-w-0">
-        <div class="flex items-start justify-between gap-3">
-          <h4 class="font-semibold text-[#2f4b66]">${escapeHtml(addOn.name)}</h4>
-          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-            Optional
-          </span>
-        </div>
-        <p class="mt-2 text-sm text-slate-600">${escapeHtml(addOn.description)}</p>
-      </div>
-    </label>
-  `;
-}
-
 function getSelectionByPetId(petId) {
   return (
     state.petSelections.find((selection) => selection.petId === petId) ||
@@ -524,7 +438,7 @@ function getPetSelectionSummaryText(pet, selection, petPricing) {
     const selectedPackage = getPackageById(selection.servicePackage);
     const summaryLabel =
       alaCarteLabels.length > 0
-        ? `${selectedPackage?.name || "Selected package"} + Extras: ${alaCarteLabels.join(
+        ? `${selectedPackage?.name || "Selected package"} + A la Carte: ${alaCarteLabels.join(
             ", ",
           )}`
         : selectedPackage?.name || "Selected package";
@@ -601,29 +515,6 @@ function syncNextButtonState(isEnabled) {
   elements.nextButton.classList.toggle("cursor-not-allowed", !isEnabled);
 }
 
-function handleSelectionClick(event) {
-  const clearButton = event.target.closest('[data-role="clear-service-package"]');
-
-  if (!clearButton) {
-    return;
-  }
-
-  const petId = clearButton.dataset.petId;
-  const pet = state.bookingDraft?.pets?.find((bookingPet) => bookingPet.id === petId);
-  const selection = state.petSelections.find(
-    (petSelection) => petSelection.petId === petId,
-  );
-
-  if (!selection || !petCanUseAlaCarteOnly(pet)) {
-    return;
-  }
-
-  selection.servicePackage = "";
-  renderPetServiceSelections();
-  updateServiceNotice();
-  saveCurrentStepDraft();
-}
-
 function handleSelectionChange(event) {
   const target = event.target;
   const petId = target.dataset.petId;
@@ -670,16 +561,6 @@ function handleSelectionChange(event) {
     if (selection.alaCarteServices.length > 0 && !packageAlaCarteRules.canCombineWithAlaCarte) {
       selection.servicePackage = "";
     }
-  }
-
-  if (target.dataset.role === "add-on") {
-    const petCard = elements.petServiceSelections.querySelector(
-      `[data-pet-card="${CSS.escape(petId)}"]`,
-    );
-
-    selection.addOns = Array.from(
-      petCard?.querySelectorAll('[data-role="add-on"]:checked') || [],
-    ).map((item) => item.value);
   }
 
   renderPetServiceSelections();

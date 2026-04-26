@@ -56,13 +56,6 @@
               </p>
             </div>
 
-            <!--
-              BACKEND HANDOFF:
-              This sign-up form is currently frontend-first. Wire it to the real
-              registration endpoint, keep server-side validation as the source of
-              truth, and use backend responses for duplicate email, phone, OTP,
-              and account-creation states.
-            -->
             <form id="signupForm" class="space-y-5">
               <!-- First Name + Last Name -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -101,8 +94,26 @@
                 </div>
               </div>
 
-              <!-- Phone + Email -->
+              <!-- Username + Phone -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label
+                    for="username"
+                    class="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Username
+                    <span class="font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    autocomplete="username"
+                    placeholder="Enter a username"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                  />
+                </div>
+
                 <div>
                   <label
                     for="phone"
@@ -121,7 +132,10 @@
                     required
                   />
                 </div>
+              </div>
 
+              <!-- Email -->
+              <div>
                 <div>
                   <label
                     for="email"

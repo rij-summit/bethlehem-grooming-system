@@ -11,7 +11,7 @@
     <!--
       BACKEND HANDOFF:
       Step 3 is a frontend preview of per-pet service selections. Keep the pet,
-      package, and add-on IDs consistent with the backend contract, and always let
+      package, and A la Carte IDs consistent with the backend contract, and always let
       the server rebuild pricing and validate service availability instead of
       trusting the hidden inputs or client-side totals shown on this page.
     -->
@@ -49,9 +49,6 @@
       >
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-[#2f4b66]">Grooming Services</h2>
-          <p class="mt-2 text-sm text-slate-600">
-            Select the service package for your pet and add any optional add-on.
-          </p>
         </div>
 
         <!-- Empty-state summary for backend integration -->
@@ -106,8 +103,8 @@
                   Service Package <span class="text-red-500">*</span>
                 </h3>
                 <p class="text-sm text-slate-500">
-                  Choose one package or select one or more a la carte services
-                  that match the selected pet.
+                  Choose one package, A la Carte services, or both for the
+                  selected pet.
                 </p>
               </div>
             </div>
@@ -405,126 +402,84 @@
                   </div>
                 </label>
 
-                <!-- Ala carte -->
-                <div
-                  class="service-card flex h-full rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
-                >
-                  <div class="service-card__content">
-                    <div class="flex items-start justify-between gap-3">
-                      <h4 class="font-semibold text-[#2f4b66]">
-                        Alacarte Menu
-                      </h4>
-                      <span
-                        class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
-                      >
-                        Cat
-                      </span>
-                    </div>
-                    <div class="mt-3 space-y-2">
-                      <label
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          name="ala_carte_services"
-                          value="nail_clipping"
-                          data-service-label="Nail Clipping: P50 - P100"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
-                        />
-                        <span>Nail Clipping: P50 - P100</span>
-                      </label>
-                      <label
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          name="ala_carte_services"
-                          value="ear_cleaning"
-                          data-service-label="Ear Cleaning: P150+"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
-                        />
-                        <span>Ear Cleaning: P150+</span>
-                      </label>
-                      <label
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          name="ala_carte_services"
-                          value="facial_trimming"
-                          data-service-label="Facial Trimming: P150"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
-                        />
-                        <span>Facial Trimming: P150</span>
-                      </label>
-                      <label
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          name="ala_carte_services"
-                          value="anal_sac_draining"
-                          data-service-label="Anal Sac Draining: P150"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
-                        />
-                        <span>Anal Sac Draining: P150</span>
-                      </label>
-                      <label
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          name="ala_carte_services"
-                          value="tooth_brushing"
-                          data-service-label="Tooth Brushing: P100+"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
-                        />
-                        <span>Tooth Brushing: P100+</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </section>
 
-          <!-- Add-on -->
+          <!-- A la Carte -->
           <section>
             <div class="mb-3">
               <h3 class="text-base font-semibold text-[#2f4b66]">
-                Add-On (Optional)
+                A la Carte Menu
               </h3>
               <p class="text-sm text-slate-500">
-                Only one placeholder add-on is shown for now.
+                These services are available for both cats and dogs. Items
+                already included in the selected package will be unavailable.
               </p>
             </div>
 
-            <label
-              class="flex cursor-pointer gap-3 rounded-2xl border border-[#91aeca] bg-white p-4 transition hover:border-[#315b7e] hover:shadow-sm"
-            >
-              <input
-                type="checkbox"
-                name="add_ons"
-                value="add_on_placeholder"
-                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
-              />
-              <div class="min-w-0">
-                <div class="flex items-start justify-between gap-3">
-                  <h4 class="font-semibold text-[#2f4b66]">
-                    Add-on Placeholder
-                  </h4>
-                  <span
-                    class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
-                  >
-                    Optional
-                  </span>
-                </div>
-                <p class="mt-2 text-sm text-slate-600">
-                  Add-on service will be updated once the clinic confirms the
-                  available option.
-                </p>
-              </div>
-            </label>
+            <div class="space-y-2">
+              <label
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="ala_carte_services"
+                  value="nail_clipping"
+                  data-service-label="Nail Clipping: P50 - P100"
+                  class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                />
+                <span>Nail Clipping: P50 - P100</span>
+              </label>
+              <label
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="ala_carte_services"
+                  value="ear_cleaning"
+                  data-service-label="Ear Cleaning: P150+"
+                  class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                />
+                <span>Ear Cleaning: P150+</span>
+              </label>
+              <label
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="ala_carte_services"
+                  value="facial_trimming"
+                  data-service-label="Facial Trimming: P150"
+                  class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                />
+                <span>Facial Trimming: P150</span>
+              </label>
+              <label
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="ala_carte_services"
+                  value="anal_sac_draining"
+                  data-service-label="Anal Sac Draining: P150"
+                  class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                />
+                <span>Anal Sac Draining: P150</span>
+              </label>
+              <label
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:border-[#315b7e] hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="ala_carte_services"
+                  value="tooth_brushing"
+                  data-service-label="Tooth Brushing: P100+"
+                  class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                />
+                <span>Tooth Brushing: P100+</span>
+              </label>
+            </div>
           </section>
 
           <!-- Special instructions -->
