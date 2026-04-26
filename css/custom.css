@@ -682,7 +682,7 @@ body.client-sidebar-open {
   overflow: hidden;
   color: #1f2937;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -706,7 +706,7 @@ body.client-sidebar-open {
   background: #ffffff;
   color: #334155;
   font-size: 0.88rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 0.65rem 0.8rem;
   outline: none;
 }
@@ -743,7 +743,7 @@ body.client-sidebar-open {
 .payment-service-name {
   color: #334155;
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .payment-service-description {
@@ -757,7 +757,7 @@ body.client-sidebar-open {
   margin-top: 0.35rem;
   color: #15803d;
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .payment-price-input {
@@ -770,7 +770,7 @@ body.client-sidebar-open {
 .payment-price-input span {
   color: #64748b;
   font-size: 0.85rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .payment-price-input input {
@@ -780,7 +780,7 @@ body.client-sidebar-open {
   border-radius: 8px;
   color: #334155;
   font-size: 0.9rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 0.7rem 0.75rem;
   outline: none;
 }
@@ -799,11 +799,12 @@ body.client-sidebar-open {
   padding: 0.85rem 1rem;
   color: #475569;
   font-size: 0.88rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .payment-pet-subtotal strong {
   color: #16a34a;
+  font-weight: 700;
 }
 
 .payment-total-due {
@@ -816,12 +817,17 @@ body.client-sidebar-open {
   color: #ffffff;
   padding: 1rem;
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .payment-total-due strong {
   font-size: 1.45rem;
+  font-weight: 700;
   line-height: 1;
+}
+
+.payment-change-amount {
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {

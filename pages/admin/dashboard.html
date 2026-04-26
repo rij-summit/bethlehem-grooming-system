@@ -1537,7 +1537,7 @@
                 <div class="rounded-xl border px-4 py-3"
                   :class="paymentChange >= 0 ? 'border-[#86efac] bg-[#f0fdf4]' : 'border-red-200 bg-red-50'">
                   <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Change</p>
-                  <p class="text-2xl font-extrabold"
+                  <p class="payment-change-amount text-2xl"
                     :class="paymentChange >= 0 ? 'text-[#16a34a]' : 'text-red-500'"
                     x-text="paymentChange >= 0 ? formatPeso(paymentChange) : '-'"></p>
                 </div>
