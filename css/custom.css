@@ -1724,3 +1724,54 @@ body.client-sidebar-open {
   background: #15803d;
   transform: translateY(-1px);
 }
+
+
+.btn-pickup {
+  background-color: #0e7490;
+  color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.btn-pickup:hover {
+  background-color: #0c6280;
+}
+.btn-pickup:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.pickup-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.pickup-confirm-card {
+  width: 100%;
+  max-width: 24rem;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+
+.pickup-confirm-icon-wrap {
+  margin: 0 auto 1rem;
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #ecfeff;
+}

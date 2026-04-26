@@ -59,7 +59,6 @@ class AdminBookingController extends Controller
             ->map(fn($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
-            ->where('booking_date', $today)
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()

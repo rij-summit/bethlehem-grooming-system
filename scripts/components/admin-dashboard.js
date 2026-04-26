@@ -424,6 +424,7 @@ function adminDashboard() {
     forPaymentList: [],
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
+    pickupModal: { open: false, booking: null, busy: false },
     paymentModal: {
       open: false,
       booking: null,
@@ -534,7 +535,7 @@ function adminDashboard() {
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
-            this.setTab("for-payment");
+            this.setTab(booking.paid ? "to-be-picked-up" : "for-payment");
           },
           archive: async ({ booking }) => {
             await API.adminArchiveBooking(booking.id);
@@ -959,6 +960,10 @@ function adminDashboard() {
 
       if ("forPaymentList" in nextPayload) {
         this.forPaymentList = nextPayload.forPaymentList;
+      }
+
+      if ("releasedList" in nextPayload) {
+        this.releasedList = nextPayload.releasedList;
       }
 
       this.refreshIcons();
@@ -2024,15 +2029,23 @@ function adminDashboard() {
       }
     },
 
-    async confirmPickedUp(booking) {
-      const confirmed = window.confirm(
-        `Confirm that ${booking.ownerName} has picked up ${booking.petName}?`
-      );
-      if (!confirmed) return;
+    confirmPickedUp(booking) {
+      this.pickupModal = { open: true, booking, busy: false };
+    },
 
-      await this.runBookingAction("pickedUp", booking, async () => {
+    async executePickedUp() {
+      const booking = this.pickupModal.booking;
+      if (!booking) return;
+
+      this.pickupModal.busy = true;
+      try {
         await API.markPickedUp(booking.id);
-      });
+        this.pickupModal = { open: false, booking: null, busy: false };
+        await this.loadAdminBookings();
+      } catch (err) {
+        this.pickupModal.busy = false;
+        alert(err.message || "Failed to mark as picked up. Please try again.");
+      }
     },
 
     // ── Admin Bookings ────────────────────────────────────────────────────────
