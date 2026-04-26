@@ -162,6 +162,8 @@
       reminder_3h:     "⏰",
       grooming_started:"✂️",
       ready_for_pickup:"🐾",
+      pickup_reminder: "⏳",
+      picked_up:       "🏠",
     };
     return icons[type] || "🔔";
   }

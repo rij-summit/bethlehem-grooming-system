@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/bookings/{id}/start-grooming',     [AdminBookingController::class, 'startGrooming']);
     Route::post('/admin/bookings/{id}/mark-done',          [AdminBookingController::class, 'markDone']);
     Route::post('/admin/bookings/{id}/archive',            [AdminBookingController::class, 'archive']);
+    Route::post('/admin/bookings/{id}/picked-up',          [AdminBookingController::class, 'markPickedUp']);
     Route::post('/admin/bookings/{id}/late-check-in',      [AdminBookingController::class, 'lateCheckIn']);
 
     // Admin — No-show list

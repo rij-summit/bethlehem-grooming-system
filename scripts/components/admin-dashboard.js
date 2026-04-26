@@ -99,6 +99,7 @@ function adminDashboard() {
     inProgressList: [],
     forPickupList: [],
     // forPickupList kept for backward-compat; new data comes as forPaymentList
+    releasedList: [],
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
@@ -693,6 +694,16 @@ function adminDashboard() {
         );
       }
 
+      if (
+        "releasedList" in payload ||
+        "released" in bookingsByStatus
+      ) {
+        nextPayload.releasedList = this.normalizeList(
+          payload.releasedList ?? bookingsByStatus["released"],
+          "to-be-picked-up",
+        );
+      }
+
       return nextPayload;
     },
 
@@ -811,6 +822,7 @@ function adminDashboard() {
         startGrooming: "in-progress",
         markDone: "for-payment",
         archive: "archived",
+        pickedUp: "archived",
       };
 
       return actionStatusMap[actionName] || normalizedCurrentStatus;
@@ -825,6 +837,7 @@ function adminDashboard() {
         "in-progress": "inProgressList",
         "for-pickup": "forPickupList",
         "for-payment": "forPaymentList",
+        "to-be-picked-up": "releasedList",
       };
 
       return listMap[normalizedStatus] || "";
@@ -1221,6 +1234,17 @@ function adminDashboard() {
       } catch (err) {
         alert(err.message || "Release failed. Please try again.");
       }
+    },
+
+    async confirmPickedUp(booking) {
+      const confirmed = window.confirm(
+        `Confirm that ${booking.ownerName} has picked up ${booking.petName}?`
+      );
+      if (!confirmed) return;
+
+      await this.runBookingAction("pickedUp", booking, async () => {
+        await API.markPickedUp(booking.id);
+      });
     },
 
     // ── Admin Bookings ────────────────────────────────────────────────────────

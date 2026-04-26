@@ -343,8 +343,14 @@ var API = (() => {
 
   async function releaseBooking(bookingId) {
     // POST /api/admin/bookings/{id}/release  (protected — admin token)
-    // Archives an already-paid for_payment booking
+    // Moves an already-paid for_payment booking to released (To Be Picked Up)
     return request("POST", `/admin/bookings/${bookingId}/release`, null, getAdminToken());
+  }
+
+  async function markPickedUp(bookingId) {
+    // POST /api/admin/bookings/{id}/picked-up  (protected — admin token)
+    // Archives a released booking and notifies the customer
+    return request("POST", `/admin/bookings/${bookingId}/picked-up`, null, getAdminToken());
   }
 
   async function getCustomerNotifications() {
@@ -432,6 +438,7 @@ var API = (() => {
     processPayment,
     payNow,
     releaseBooking,
+    markPickedUp,
     getTransactions,
   };
 })();

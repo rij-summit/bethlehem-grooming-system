@@ -58,6 +58,13 @@ class AdminBookingController extends Controller
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
+        $released = Booking::where('status', 'released')
+            ->where('booking_date', $today)
+            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->orderBy('queue_number', 'asc')
+            ->get()
+            ->map(fn($b) => $this->formatBooking($b));
+
         // Summary metrics (always based on today, not the filter date)
         $todayCount = Booking::where('booking_date', $today)
             ->whereNotIn('status', ['cancelled'])
@@ -75,6 +82,7 @@ class AdminBookingController extends Controller
             'queuedList'      => $queued->values(),
             'inProgressList'  => $inProgress->values(),
             'forPaymentList'  => $forPayment->values(),
+            'releasedList'    => $released->values(),
             'summary'         => [
                 'today' => $todayCount,
                 'week'  => $weekCount,
@@ -191,11 +199,10 @@ class AdminBookingController extends Controller
             ]);
         }
 
-        // Early-payment path: already paid, archive directly (no payment step needed)
+        // Early-payment path: already paid, move to released (To Be Picked Up)
         if ($booking->paid) {
             $booking->update([
-                'status'              => 'archived',
-                'archived_at'         => now(),
+                'status'               => 'released',
                 'grooming_finished_at' => now(),
             ]);
 
@@ -223,6 +230,44 @@ class AdminBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Grooming done. Customer notified for pickup and payment.',
+        ]);
+    }
+
+    // ── MARK PICKED UP ────────────────────────────────────
+    // released → archived + customer notification
+    public function markPickedUp($id)
+    {
+        $booking = Booking::with(['user', 'bookingPets.pet'])->find($id);
+
+        if (!$booking) {
+            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+        }
+
+        if ($booking->status !== 'released') {
+            return response()->json(['success' => false, 'message' => 'Booking must be in Released status.'], 422);
+        }
+
+        $petName = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+
+        $booking->update([
+            'status'      => 'archived',
+            'archived_at' => now(),
+        ]);
+
+        if ($booking->user) {
+            CustomerNotification::create([
+                'user_id'    => $booking->user->user_id,
+                'booking_id' => $booking->booking_id,
+                'type'       => 'picked_up',
+                'message'    => "Your pet {$petName} has been released. Thank you for visiting Bethlehem Animal Clinic!",
+                'is_read'    => false,
+                'created_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking marked as picked up and archived.',
         ]);
     }
 
