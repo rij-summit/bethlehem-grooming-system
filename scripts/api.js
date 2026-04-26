@@ -184,9 +184,31 @@ var API = (() => {
     return request("GET", `/timeslots?date=${date}`);
   }
 
-  async function getUserPets() {
-    // GET /api/pets  (protected)
-    return request("GET", "/pets", null, getCustomerToken());
+  async function getUserPets({ archived = 0 } = {}) {
+    // GET /api/pets?archived=0|1  (protected)
+    // archived=0 → active pets (booking form default)
+    // archived=1 → archived pets (My Pets page toggle)
+    return request("GET", `/pets?archived=${archived}`, null, getCustomerToken());
+  }
+
+  async function addPet(payload) {
+    // POST /api/pets  (protected)
+    return request("POST", "/pets", payload, getCustomerToken());
+  }
+
+  async function updatePet(petId, payload) {
+    // PUT /api/pets/{id}  (protected)
+    return request("PUT", `/pets/${petId}`, payload, getCustomerToken());
+  }
+
+  async function archivePet(petId) {
+    // POST /api/pets/{id}/archive  (protected)
+    return request("POST", `/pets/${petId}/archive`, null, getCustomerToken());
+  }
+
+  async function unarchivePet(petId) {
+    // POST /api/pets/{id}/unarchive  (protected)
+    return request("POST", `/pets/${petId}/unarchive`, null, getCustomerToken());
   }
 
   async function storeBooking(payload) {
@@ -420,6 +442,10 @@ var API = (() => {
     getTimeslots,
     // Pets
     getUserPets,
+    addPet,
+    updatePet,
+    archivePet,
+    unarchivePet,
     // Booking
     storeBooking,
     getBookingHistory,

@@ -9,6 +9,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ClinicClosureController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\CustomerNotificationController;
+use App\Http\Controllers\PetController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/sign-in', [AuthController::class, 'signIn']);
@@ -27,7 +28,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);
 
     // Pets
-    Route::get('/pets', [BookingController::class, 'getPets']);
+    Route::get('/pets',                    [PetController::class, 'index']);
+    Route::post('/pets',                   [PetController::class, 'store']);
+    Route::put('/pets/{id}',               [PetController::class, 'update']);
+    Route::post('/pets/{id}/archive',      [PetController::class, 'archive']);
+    Route::post('/pets/{id}/unarchive',    [PetController::class, 'unarchive']);
 
     // Booking
     Route::post('/booking/store',      [BookingController::class, 'store']);

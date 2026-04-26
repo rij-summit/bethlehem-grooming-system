@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Pets | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <div class="min-h-screen flex client-dashboard-shell">
+
+      <button type="button" id="clientSidebarToggle" class="client-sidebar-toggle"
+        aria-controls="clientSidebar" aria-expanded="false" aria-label="Open navigation menu">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+
+      <button type="button" id="clientSidebarBackdrop" class="client-sidebar-backdrop"
+        aria-label="Close navigation menu"></button>
+
+      <!-- SIDEBAR -->
+      <aside id="clientSidebar"
+        class="client-sidebar fixed left-0 top-0 h-screen w-72 bg-[#7fa2c9] text-white flex flex-col justify-between shadow-lg">
+        <div>
+          <div class="px-6 py-6 border-b border-white/20">
+            <div class="flex items-start justify-between gap-4">
+              <a href="./dashboard.html" class="flex items-center gap-3">
+                <div class="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <i data-lucide="paw-print" class="w-6 h-6"></i>
+                </div>
+                <div>
+                  <h1 class="text-lg font-bold leading-tight">Bethlehem Animal Clinic</h1>
+                  <p class="text-sm text-white/80">Client Portal</p>
+                </div>
+              </a>
+              <button type="button" id="clientSidebarClose" class="client-sidebar-close"
+                aria-label="Close navigation menu">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+          </div>
+
+          <nav class="px-4 py-6 space-y-2">
+            <p class="px-3 mb-2 text-xs tracking-[0.2em] uppercase text-white/70">Menu</p>
+
+            <a href="./dashboard.html"
+              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
+              <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+              <span>Dashboard</span>
+            </a>
+
+            <a href="./booking.html"
+              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
+              <i data-lucide="calendar-days" class="w-5 h-5"></i>
+              <span>Appointments</span>
+            </a>
+
+            <a href="./my-pets.html"
+              class="flex items-center gap-3 rounded-2xl bg-[#355c84] px-4 py-3 font-medium shadow-sm">
+              <i data-lucide="paw-print" class="w-5 h-5"></i>
+              <span>My Pets</span>
+            </a>
+
+            <a href="./grooming-history.html"
+              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
+              <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+              <span>Grooming History</span>
+            </a>
+
+            <a href="#"
+              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
+              <i data-lucide="settings" class="w-5 h-5"></i>
+              <span>Settings</span>
+            </a>
+          </nav>
+        </div>
+
+        <div class="p-4">
+          <div class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3 mb-3">
+            <div id="clientProfileInitials"
+              class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold">--</div>
+            <div>
+              <p id="clientProfileName" class="font-semibold">Loading...</p>
+              <p class="text-sm text-white/80">Pet Owner</p>
+            </div>
+          </div>
+          <button type="button" id="clientLogoutBtn"
+            class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 font-bold text-white transition hover:bg-white/20">
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT -->
+      <main class="client-dashboard-main ml-72 flex-1 min-h-screen">
+        <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+          <div class="client-dashboard-header flex items-center justify-between px-6 py-5">
+            <div>
+              <h2 class="text-3xl font-bold text-[#2f4b66]">My Pets</h2>
+              <p class="text-slate-500 mt-1">Manage your registered pet profiles.</p>
+            </div>
+            <button type="button" id="addPetBtn"
+              class="flex items-center gap-2 rounded-2xl bg-[#355c84] px-5 py-3 text-white font-semibold hover:bg-[#2d4f73] transition shadow-sm">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              Add Pet
+            </button>
+          </div>
+        </header>
+
+        <section class="p-6">
+
+          <!-- Toolbar -->
+          <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
+              <input type="text" id="petSearch" placeholder="Search by name..."
+                class="w-full bg-transparent outline-none text-sm" />
+            </div>
+
+            <div class="flex gap-2">
+              <button type="button" id="filterActiveBtn"
+                class="rounded-full px-5 py-2.5 text-sm font-semibold bg-[#355c84] text-white transition">
+                Active
+              </button>
+              <button type="button" id="filterArchivedBtn"
+                class="rounded-full px-5 py-2.5 text-sm font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
+                Archived
+              </button>
+            </div>
+          </div>
+
+          <!-- Pet Grid -->
+          <div id="petsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div class="col-span-full text-center py-16">
+              <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
+              <p class="mt-3 text-slate-400 text-sm">Loading...</p>
+            </div>
+          </div>
+
+        </section>
+      </main>
+    </div>
+
+    <!-- Pet Modal (Add / Edit) -->
+    <div id="petModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
+      <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
+          <h3 id="petModalTitle" class="text-xl font-bold text-[#2f4b66]">Add Pet</h3>
+          <button type="button" id="closePetModal" class="text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <form id="petForm" class="px-6 py-5 space-y-4">
+          <input type="hidden" id="petId" />
+
+          <!-- Name + Species -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                Pet Name <span class="text-red-500">*</span>
+              </label>
+              <input type="text" id="petName" placeholder="e.g. Buddy"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                required />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Species</label>
+              <select id="petSpecies"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
+                <option value="Dog">Dog</option>
+                <option value="Cat">Cat</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Breed + Color -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Breed</label>
+              <input type="text" id="petBreed" placeholder="e.g. Shih Tzu"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Color</label>
+              <input type="text" id="petColor" placeholder="e.g. White"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+            </div>
+          </div>
+
+          <!-- Size + Fur Type -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Size</label>
+              <select id="petSize"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
+                <option value="">— Not specified —</option>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+                <option value="extra_large">Extra Large</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Fur Type</label>
+              <select id="petFurType"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
+                <option value="">— Not specified —</option>
+                <option value="short">Short</option>
+                <option value="medium">Medium</option>
+                <option value="long">Long</option>
+                <option value="wire">Wire</option>
+                <option value="curl">Curl</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Weight -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Weight (kg)</label>
+            <input type="number" id="petWeight" placeholder="e.g. 5.5" min="0" step="0.1"
+              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+          </div>
+
+          <!-- Medical Conditions -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Medical Conditions / Special Needs</label>
+            <textarea id="petMedical" rows="3" placeholder="e.g. allergic to certain shampoos, has heart condition..."
+              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e] resize-none"></textarea>
+          </div>
+
+          <!-- Error -->
+          <div id="petFormError" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+
+          <!-- Submit -->
+          <button type="submit" id="petFormSubmit"
+            class="w-full rounded-xl bg-[#355c84] px-4 py-3 text-white font-semibold hover:bg-[#2d4f73] transition">
+            Save Pet
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/components/my-pets.js"></script>
+  </body>
+</html>
