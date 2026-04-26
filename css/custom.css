@@ -231,7 +231,17 @@ body.client-sidebar-open {
   overflow: hidden;
 }
 
+.admin-sidebar-menu {
+  overflow-y: auto;
+}
+
+.admin-sidebar-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
 .client-sidebar {
+  overflow-y: auto;
   transition:
     transform 0.24s ease,
     box-shadow 0.24s ease;

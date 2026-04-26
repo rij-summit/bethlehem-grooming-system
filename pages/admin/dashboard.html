@@ -24,19 +24,20 @@
       <!-- Sidebar -->
       <!-- NOTE: Keep using your already existing sidebar structure/script -->
       <aside
-        class="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0"
+        class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0"
         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
         <!-- Brand -->
-        <div class="border-b border-white/30 px-6 py-6">
+        <div class="px-6 py-6">
           <div class="flex items-start gap-4">
             <div
-              class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f2b61f] shadow-sm"
+              class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"
             >
-              <!-- BACKEND/ASSET NOTE:
-                Replace with actual clinic logo if needed.
-              -->
-              <i data-lucide="paw-print" class="h-7 w-7 text-[#2f4b66]"></i>
+              <img
+                src="../../assets/images/clinic/Bethlehem_Logo.png"
+                alt="Bethlehem Animal Clinic logo"
+                class="h-full w-full object-contain"
+              />
             </div>
 
             <div class="min-w-0">
@@ -51,7 +52,7 @@
         </div>
 
         <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto px-4 py-6">
+        <nav class="px-4 py-6">
           <div class="mb-8">
             <p
               class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]"
@@ -81,7 +82,7 @@
 
                 <!-- BACKEND: Replace with real badge count if needed -->
                 <span
-                  class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-[#f2b61f] px-2 text-xs font-bold text-[#1f3850]"
+                  class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full border border-[#9db9d5] bg-[#dbe8f5] px-2 text-xs font-bold text-[#315b7e]"
                 >
                   0
                 </span>
@@ -156,18 +157,18 @@
         </nav>
 
         <!-- Admin Info -->
-        <div class="border-t border-white/30 p-4">
-          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-white/25 p-3">
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
             <div
-              class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f2b61f] text-sm font-extrabold text-[#1f3850]"
+              class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white"
             >
               AD
             </div>
 
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
-              <p class="truncate font-bold text-[#1f3850]">Admin</p>
-              <p class="truncate text-sm text-[#4a6784]">Clinic Manager</p>
+              <p class="truncate font-bold text-white">Admin</p>
+              <p class="truncate text-sm text-white/80">Clinic Manager</p>
             </div>
           </div>
 
@@ -327,7 +328,7 @@
       </div>
 
       <!-- Main Content -->
-      <div class="flex min-h-screen flex-1 flex-col">
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
         <!-- Mobile Header -->
         <header
           class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden"
@@ -349,10 +350,10 @@
         <!-- Dashboard Body -->
         <main
           x-data="adminDashboard()"
-          class="flex-1 px-4 py-6 lg:px-6"
+          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
           <!-- Top banner -->
-          <section>
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
             <div
               class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6"
             >
