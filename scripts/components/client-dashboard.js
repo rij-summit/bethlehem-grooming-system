@@ -83,7 +83,6 @@
     pickupPopup.classList.add("hidden");
     if (notifId) {
       markPickupShown(notifId);
-      try { await API.markCustomerNotificationRead(notifId); } catch { /* silent */ }
       await loadNotifications();
     }
   });
