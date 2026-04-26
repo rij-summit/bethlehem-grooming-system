@@ -1,3 +1,390 @@
+const PAYMENT_SIZE_OPTIONS = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+  { value: "extra_large", label: "Extra Large" },
+];
+
+/*
+ * Payment modal service rules mirror scripts/services/grooming-service.js.
+ * This dashboard is loaded as a classic script, so keep these values in sync
+ * until the admin page can read the same catalog from an API/shared bundle.
+ */
+function createPaymentFixedPrice({ label, sizeKey = "", amount }) {
+  return {
+    label,
+    sizeKey,
+    pricingType: "fixed",
+    minAmount: amount,
+    maxAmount: amount,
+  };
+}
+
+function createPaymentPlusPrice({ label, sizeKey = "", amount }) {
+  return {
+    label,
+    sizeKey,
+    pricingType: "plus",
+    minAmount: amount,
+    maxAmount: null,
+  };
+}
+
+function createPaymentRangePrice({ label, sizeKey = "", minAmount, maxAmount }) {
+  return {
+    label,
+    sizeKey,
+    pricingType: "range",
+    minAmount,
+    maxAmount,
+  };
+}
+
+const PAYMENT_GROOMING_SERVICES = [
+  {
+    id: "partial_grooming",
+    kind: "package",
+    petType: "dog",
+    name: "Partial Grooming",
+    descriptionItems: [
+      "Trimming, nail clipping and ear cleaning",
+      "Cologne spritz and dry shampoo",
+    ],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 400 }),
+      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 500 }),
+      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 600 }),
+      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 700 }),
+    ],
+  },
+  {
+    id: "regular_dog_grooming",
+    kind: "package",
+    petType: "dog",
+    name: "Regular Dog Grooming",
+    descriptionItems: [
+      "Bathing with shampoo and blow drying",
+      "Haircut, trims, nail clipping, ear cleaning and tooth-brushing",
+    ],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 550 }),
+      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 650 }),
+      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 850 }),
+      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 1050 }),
+    ],
+  },
+  {
+    id: "deluxe_dog_grooming",
+    kind: "package",
+    petType: "dog",
+    name: "Deluxe Dog Grooming",
+    descriptionItems: [
+      "Bathing with shampoo and blow drying",
+      "Special haircut, nail clipping, ear cleaning and tooth-brushing",
+    ],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 650 }),
+      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 750 }),
+      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 1000 }),
+      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 1200 }),
+    ],
+  },
+  {
+    id: "bath_and_go",
+    kind: "package",
+    petType: "dog",
+    name: "Bath and Go!",
+    descriptionItems: [
+      "Bathing with shampoo and blow drying",
+      "Nail clipping, ear cleaning and tooth-brushing",
+    ],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 450 }),
+      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 550 }),
+      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 650 }),
+      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 750 }),
+    ],
+  },
+  {
+    id: "cat_full_grooming",
+    kind: "package",
+    petType: "cat",
+    name: "Full Grooming",
+    descriptionItems: [
+      "Bathing with shampoo and blow drying",
+      "Haircut if requested, nail clipping and ear cleaning",
+    ],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 500 }),
+      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 600 }),
+    ],
+  },
+  {
+    id: "nail_clipping",
+    kind: "ala_carte",
+    petTypes: ["cat", "dog"],
+    name: "Nail Clipping",
+    descriptionItems: [],
+    priceOptions: [
+      createPaymentRangePrice({ label: "Standard", minAmount: 50, maxAmount: 100 }),
+    ],
+  },
+  {
+    id: "ear_cleaning",
+    kind: "ala_carte",
+    petTypes: ["cat", "dog"],
+    name: "Ear Cleaning",
+    descriptionItems: [],
+    priceOptions: [
+      createPaymentPlusPrice({ label: "Standard", amount: 150 }),
+    ],
+  },
+  {
+    id: "facial_trimming",
+    kind: "ala_carte",
+    petTypes: ["cat", "dog"],
+    name: "Facial Trimming",
+    descriptionItems: [],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Standard", amount: 150 }),
+    ],
+  },
+  {
+    id: "anal_sac_draining",
+    kind: "ala_carte",
+    petTypes: ["cat", "dog"],
+    name: "Anal Sac Draining",
+    descriptionItems: [],
+    priceOptions: [
+      createPaymentFixedPrice({ label: "Standard", amount: 150 }),
+    ],
+  },
+  {
+    id: "tooth_brushing",
+    kind: "ala_carte",
+    petTypes: ["cat", "dog"],
+    name: "Tooth Brushing",
+    descriptionItems: [],
+    priceOptions: [
+      createPaymentPlusPrice({ label: "Standard", amount: 100 }),
+    ],
+  },
+];
+
+const PAYMENT_SERVICE_BY_ID = new Map(
+  PAYMENT_GROOMING_SERVICES.map((service) => [service.id, service]),
+);
+const PAYMENT_SERVICE_BY_NAME = new Map(
+  PAYMENT_GROOMING_SERVICES.map((service) => [
+    normalizePaymentText(service.name),
+    service,
+  ]),
+);
+
+function normalizePaymentText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizePaymentSize(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const sizeMap = {
+    small: "small",
+    medium: "medium",
+    large: "large",
+    "extra large": "extra_large",
+    "extra-large": "extra_large",
+    extra_large: "extra_large",
+    extralarge: "extra_large",
+    xl: "extra_large",
+  };
+
+  return sizeMap[normalized] || "";
+}
+
+function normalizePaymentPetType(value) {
+  const normalized = normalizePaymentText(value);
+
+  if (normalized.includes("cat")) {
+    return "cat";
+  }
+
+  if (normalized.includes("dog")) {
+    return "dog";
+  }
+
+  return normalized;
+}
+
+function getPaymentBaseSizeOptions(petType) {
+  return normalizePaymentPetType(petType) === "cat"
+    ? PAYMENT_SIZE_OPTIONS.filter((option) => ["small", "medium"].includes(option.value))
+    : PAYMENT_SIZE_OPTIONS;
+}
+
+function normalizePaymentSizeForPet(size, petType) {
+  const options = getPaymentBaseSizeOptions(petType);
+  const sizeKey = normalizePaymentSize(size);
+
+  return options.some((option) => option.value === sizeKey)
+    ? sizeKey
+    : options[0]?.value || "";
+}
+
+function formatPaymentSizeLabel(value) {
+  const normalized = normalizePaymentSize(value);
+  const labels = {
+    small: "Small",
+    medium: "Medium",
+    large: "Large",
+    extra_large: "Extra Large",
+  };
+
+  return labels[normalized] || "Size not specified";
+}
+
+function getPaymentServiceDefinition(rawService) {
+  const serviceId = String(
+    rawService?.slug ??
+      rawService?.serviceSlug ??
+      rawService?.service_slug ??
+      rawService?.serviceId ??
+      rawService?.id ??
+      "",
+  );
+
+  if (PAYMENT_SERVICE_BY_ID.has(serviceId)) {
+    return PAYMENT_SERVICE_BY_ID.get(serviceId);
+  }
+
+  const nameKey = normalizePaymentText(
+    rawService?.name ?? rawService?.serviceName ?? rawService?.service_name,
+  );
+
+  return PAYMENT_SERVICE_BY_NAME.get(nameKey) || null;
+}
+
+function formatPaymentAmount(amount) {
+  return `\u20b1${Number(amount || 0).toLocaleString("en-PH")}`;
+}
+
+function formatPaymentPriceOption(priceOption, includeCurrency = true) {
+  if (!priceOption) {
+    return "";
+  }
+
+  const minAmount = includeCurrency
+    ? formatPaymentAmount(priceOption.minAmount)
+    : Number(priceOption.minAmount || 0).toLocaleString("en-PH");
+
+  if (priceOption.pricingType === "plus") {
+    return `${minAmount}+`;
+  }
+
+  if (priceOption.pricingType === "range") {
+    const maxAmount = includeCurrency
+      ? formatPaymentAmount(priceOption.maxAmount)
+      : Number(priceOption.maxAmount || 0).toLocaleString("en-PH");
+    return `${minAmount}-${maxAmount}`;
+  }
+
+  return minAmount;
+}
+
+function summarizePaymentPriceOptions(priceOptions) {
+  let minimumAmount = Number.POSITIVE_INFINITY;
+  let maximumAmount = 0;
+  let hasMaximumAmount = false;
+  let hasOpenEndedMaximum = false;
+
+  priceOptions.forEach((priceOption) => {
+    if (!Number.isFinite(priceOption?.minAmount)) {
+      return;
+    }
+
+    minimumAmount = Math.min(minimumAmount, priceOption.minAmount);
+
+    if (priceOption.maxAmount === null) {
+      hasOpenEndedMaximum = true;
+      return;
+    }
+
+    maximumAmount = Math.max(maximumAmount, priceOption.maxAmount);
+    hasMaximumAmount = true;
+  });
+
+  return {
+    minAmount: minimumAmount === Number.POSITIVE_INFINITY ? 0 : minimumAmount,
+    maxAmount: hasOpenEndedMaximum ? null : hasMaximumAmount ? maximumAmount : 0,
+    pricingType: hasOpenEndedMaximum ? "plus" : "range",
+  };
+}
+
+function getPaymentServicePricing(serviceDefinition, petSize) {
+  if (!serviceDefinition) {
+    return {
+      minAmount: 0.01,
+      displayPrice: "Enter price",
+      placeholder: "0.00",
+      selectedPriceOption: null,
+    };
+  }
+
+  const options = Array.isArray(serviceDefinition.priceOptions)
+    ? serviceDefinition.priceOptions
+    : [];
+
+  if (serviceDefinition.kind === "package") {
+    const sizeKey = normalizePaymentSize(petSize);
+    const selectedPriceOption = options.find((option) => option.sizeKey === sizeKey);
+
+    if (selectedPriceOption) {
+      return {
+        minAmount: selectedPriceOption.minAmount || 0.01,
+        displayPrice: formatPaymentPriceOption(selectedPriceOption),
+        placeholder: formatPaymentPriceOption(selectedPriceOption, false),
+        selectedPriceOption,
+      };
+    }
+
+    const summary = summarizePaymentPriceOptions(options);
+    return {
+      minAmount: summary.minAmount || 0.01,
+      displayPrice:
+        summary.maxAmount === null
+          ? `${formatPaymentAmount(summary.minAmount)}+`
+          : `${formatPaymentAmount(summary.minAmount)}-${formatPaymentAmount(summary.maxAmount)}`,
+      placeholder:
+        summary.maxAmount === null
+          ? `${Number(summary.minAmount || 0).toLocaleString("en-PH")}+`
+          : `${Number(summary.minAmount || 0).toLocaleString("en-PH")}-${Number(summary.maxAmount || 0).toLocaleString("en-PH")}`,
+      selectedPriceOption: null,
+    };
+  }
+
+  const option = options[0] || null;
+
+  if (!option) {
+    return {
+      minAmount: 0.01,
+      displayPrice: "Enter price",
+      placeholder: "0.00",
+      selectedPriceOption: null,
+    };
+  }
+
+  return {
+    minAmount: option.minAmount || 0.01,
+    displayPrice: formatPaymentPriceOption(option),
+    placeholder: formatPaymentPriceOption(option, false),
+    selectedPriceOption: option,
+  };
+}
+
 /*
  * Backend integration contract:
  * - Optional preload config: window.ADMIN_DASHBOARD_CONFIG = { bootstrap, endpoints, handlers, ... }
@@ -42,6 +429,7 @@ function adminDashboard() {
       booking: null,
       isEarlyPayment: false,
       finalPrice: "",
+      petBreakdown: [],
       amountPaid: "",
       paymentMethod: "cash",
       notes: "",
@@ -50,9 +438,14 @@ function adminDashboard() {
     },
     receiptModal: {
       open: false,
+      bookingReference: "",
       ownerName: "",
+      contactNumber: "",
       petName: "",
       serviceLabel: "",
+      appointmentDate: "",
+      appointmentTime: "",
+      pets: [],
       finalPrice: 0,
       amountPaid: 0,
       change: 0,
@@ -1121,21 +1514,43 @@ function adminDashboard() {
 
     // ── Payment ───────────────────────────────────────────────────────────────
 
+    get paymentTotalDue() {
+      return this.paymentModal.petBreakdown.reduce(
+        (sum, pet) => sum + this.paymentPetSubtotal(pet),
+        0,
+      );
+    },
+
+    get paymentLineCount() {
+      return this.paymentModal.petBreakdown.reduce(
+        (count, pet) => count + (Array.isArray(pet.lines) ? pet.lines.length : 0),
+        0,
+      );
+    },
+
     get paymentChange() {
-      const final = parseFloat(this.paymentModal.finalPrice) || 0;
-      const paid  = parseFloat(this.paymentModal.amountPaid)  || 0;
-      return paid - final;
+      const paid = parseFloat(this.paymentModal.amountPaid) || 0;
+      return paid - this.paymentTotalDue;
+    },
+
+    get canSubmitPayment() {
+      return (
+        !this.paymentModal.busy &&
+        this.paymentLineCount > 0 &&
+        this.paymentTotalDue > 0 &&
+        !this.hasMissingPaymentPrices() &&
+        !this.getInvalidPaymentLine() &&
+        this.paymentChange >= 0
+      );
     },
 
     openPaymentModal(booking, isEarlyPayment = false) {
-      const servicesTotal = (booking.services || []).reduce(
-        (sum, s) => sum + parseFloat(s.priceAtBooking || 0), 0
-      );
       this.paymentModal = {
         open: true,
         booking,
         isEarlyPayment,
-        finalPrice: servicesTotal > 0 ? servicesTotal.toFixed(2) : "",
+        finalPrice: "",
+        petBreakdown: this.buildPaymentBreakdown(booking),
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -1148,21 +1563,345 @@ function adminDashboard() {
     closePaymentModal() {
       this.paymentModal = {
         open: false, booking: null, isEarlyPayment: false,
-        finalPrice: "", amountPaid: "", paymentMethod: "cash", notes: "", busy: false, error: "",
+        finalPrice: "", petBreakdown: [], amountPaid: "", paymentMethod: "cash", notes: "", busy: false, error: "",
       };
     },
 
+    buildPaymentBreakdown(booking) {
+      const pets = this.normalizePaymentPets(booking);
+      const services = this.normalizePaymentServices(booking?.services);
+
+      /*
+       * Backend handoff:
+       * Multi-pet payment cards need either pets[].services or services[] items
+       * that include bookingPetId/booking_pet_id. Service slug fields are also
+       * preferred so the frontend can show the exact minimum price rule.
+       */
+      return pets.map((pet, petIndex) => {
+        const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
+        const lines = petServices.map((service, serviceIndex) =>
+          this.normalizePaymentLine(service, pet, `${petIndex}-${serviceIndex}`),
+        );
+
+        return {
+          ...pet,
+          lines,
+        };
+      });
+    },
+
+    normalizePaymentPets(booking) {
+      const sourcePets = Array.isArray(booking?.pets) && booking.pets.length > 0
+        ? booking.pets
+        : [{
+            petName: booking?.petName,
+            petType: booking?.petType,
+            species: booking?.petType,
+            breed: booking?.breed,
+            size: booking?.petSize ?? booking?.size,
+          }];
+
+      return sourcePets.map((pet, index) => {
+        const petTypeKey = normalizePaymentPetType(
+          pet?.species ?? pet?.petType ?? pet?.pet_type,
+        );
+        const sizeKey = normalizePaymentSizeForPet(
+          pet?.size ?? pet?.petSize ?? pet?.pet_size,
+          petTypeKey,
+        );
+
+        return {
+          id: pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id ?? `pet-${index + 1}`,
+          bookingPetId: pet?.bookingPetId ?? pet?.booking_pet_id ?? null,
+          petId: pet?.petId ?? pet?.pet_id ?? pet?.id ?? null,
+          name: this.toStringValue(
+            pet?.petName ?? pet?.pet_name ?? pet?.name ?? `Pet ${index + 1}`,
+          ),
+          species: this.toStringValue(pet?.species ?? pet?.petType ?? pet?.pet_type),
+          petTypeKey,
+          breed: this.toStringValue(pet?.breed),
+          sizeKey,
+          sizeLabel: formatPaymentSizeLabel(sizeKey),
+          services: Array.isArray(pet?.services) ? pet.services : [],
+        };
+      });
+    },
+
+    normalizePaymentServices(services) {
+      if (!Array.isArray(services)) {
+        return [];
+      }
+
+      return services.map((service, index) => ({
+        ...service,
+        id: service?.bookingServiceId ?? service?.booking_service_id ?? service?.id ?? `service-${index + 1}`,
+        bookingPetId: service?.bookingPetId ?? service?.booking_pet_id ?? null,
+        petId: service?.petId ?? service?.pet_id ?? null,
+        petName: service?.petName ?? service?.pet_name ?? "",
+      }));
+    },
+
+    getPaymentServicesForPet(booking, pet, pets, services) {
+      const directPetServices = this.normalizePaymentServices(pet?.services);
+
+      if (directPetServices.length > 0) {
+        return directPetServices;
+      }
+
+      const matchedServices = services.filter((service) => {
+        if (service.bookingPetId && pet.bookingPetId) {
+          return String(service.bookingPetId) === String(pet.bookingPetId);
+        }
+
+        if (service.petId && pet.petId) {
+          return String(service.petId) === String(pet.petId);
+        }
+
+        if (service.petName && pet.name) {
+          return normalizePaymentText(service.petName) === normalizePaymentText(pet.name);
+        }
+
+        return false;
+      });
+
+      if (matchedServices.length > 0) {
+        return matchedServices;
+      }
+
+      if (pets.length === 1) {
+        return services;
+      }
+
+      const unscopedServices = services.filter(
+        (service) => !service.bookingPetId && !service.petId && !service.petName,
+      );
+      const petIndex = pets.findIndex((candidate) => candidate.id === pet.id);
+
+      /*
+       * Frontend fallback:
+       * when the API only sends a flat services[] list, split it across pets
+       * only if the count makes the grouping unambiguous. Backend should still
+       * expose bookingPetId/booking_pet_id for exact multi-pet association.
+       */
+      if (
+        petIndex >= 0 &&
+        unscopedServices.length >= pets.length &&
+        unscopedServices.length % pets.length === 0
+      ) {
+        const servicesPerPet = unscopedServices.length / pets.length;
+        const startIndex = petIndex * servicesPerPet;
+
+        return unscopedServices.slice(startIndex, startIndex + servicesPerPet);
+      }
+
+      return pets[0]?.id === pet.id ? unscopedServices : [];
+    },
+
+    normalizePaymentLine(rawService, pet, fallbackId) {
+      const serviceDefinition = getPaymentServiceDefinition(rawService);
+      const fallbackAmount = parseFloat(rawService?.priceAtBooking ?? rawService?.price_at_booking ?? 0);
+      const pricing = serviceDefinition
+        ? getPaymentServicePricing(serviceDefinition, pet.sizeKey)
+        : fallbackAmount > 0
+          ? {
+              minAmount: fallbackAmount,
+              displayPrice: formatPaymentAmount(fallbackAmount),
+              placeholder: Number(fallbackAmount).toLocaleString("en-PH"),
+              selectedPriceOption: null,
+            }
+          : getPaymentServicePricing(null, pet.sizeKey);
+
+      return {
+        id: rawService?.id ?? fallbackId,
+        bookingServiceId: rawService?.bookingServiceId ?? rawService?.booking_service_id ?? null,
+        serviceDefinition,
+        serviceId: serviceDefinition?.id ?? rawService?.slug ?? rawService?.serviceSlug ?? rawService?.service_slug ?? "",
+        kind: serviceDefinition?.kind ?? rawService?.kind ?? "service",
+        name: this.toStringValue(
+          rawService?.name ??
+            rawService?.serviceName ??
+            rawService?.service_name ??
+            serviceDefinition?.name ??
+            "Grooming Service",
+        ),
+        description: this.toStringValue(
+          rawService?.description ??
+            rawService?.notes ??
+            serviceDefinition?.descriptionItems?.[0] ??
+            (serviceDefinition?.kind === "package" ? "Package service" : "A la carte service"),
+        ),
+        minAmount: pricing.minAmount,
+        priceHint: pricing.displayPrice,
+        placeholder: pricing.placeholder,
+        amount: "",
+      };
+    },
+
+    updatePaymentPetSize(pet) {
+      pet.sizeKey = normalizePaymentSizeForPet(pet.sizeKey, pet.petTypeKey);
+      pet.sizeLabel = formatPaymentSizeLabel(pet.sizeKey);
+
+      pet.lines.forEach((line) => {
+        this.refreshPaymentLinePricing(pet, line);
+        this.enforcePaymentMinimum(pet, line);
+      });
+
+      this.paymentModal.error = "";
+    },
+
+    refreshPaymentLinePricing(pet, line) {
+      const pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
+      line.minAmount = pricing.minAmount;
+      line.priceHint = pricing.displayPrice;
+      line.placeholder = pricing.placeholder;
+    },
+
+    getPaymentSizeOptions(pet) {
+      const baseOptions = getPaymentBaseSizeOptions(pet?.petTypeKey ?? pet?.species);
+      const packageLines = (pet?.lines || []).filter(
+        (line) => line.serviceDefinition?.kind === "package",
+      );
+      const allowedSizes = new Set();
+
+      packageLines.forEach((line) => {
+        (line.serviceDefinition?.priceOptions || []).forEach((option) => {
+          if (option.sizeKey) {
+            allowedSizes.add(option.sizeKey);
+          }
+        });
+      });
+
+      const options = allowedSizes.size > 0
+        ? baseOptions.filter((option) => allowedSizes.has(option.value))
+        : baseOptions;
+
+      if (pet?.sizeKey && !options.some((option) => option.value === pet.sizeKey)) {
+        return [
+          ...options,
+          { value: pet.sizeKey, label: formatPaymentSizeLabel(pet.sizeKey) },
+        ];
+      }
+
+      return options;
+    },
+
+    paymentPetSubtotal(pet) {
+      return (pet?.lines || []).reduce((sum, line) => {
+        const amount = parseFloat(line.amount);
+        return Number.isFinite(amount) ? sum + amount : sum;
+      }, 0);
+    },
+
+    enforcePaymentMinimum(pet, line) {
+      if (line.amount === "" || line.amount === null || line.amount === undefined) {
+        return;
+      }
+
+      const amount = parseFloat(line.amount);
+      const minimum = parseFloat(line.minAmount) || 0.01;
+
+      if (!Number.isFinite(amount)) {
+        line.amount = "";
+        return;
+      }
+
+      if (amount < minimum) {
+        line.amount = minimum.toFixed(2);
+      }
+    },
+
+    hasMissingPaymentPrices() {
+      return this.paymentModal.petBreakdown.some((pet) =>
+        (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
+      );
+    },
+
+    getInvalidPaymentLine() {
+      for (const pet of this.paymentModal.petBreakdown) {
+        for (const line of pet.lines || []) {
+          const amount = parseFloat(line.amount);
+          const minimum = parseFloat(line.minAmount) || 0.01;
+
+          if (!Number.isFinite(amount)) {
+            return { pet, line, reason: "missing" };
+          }
+
+          if (amount < minimum) {
+            return { pet, line, reason: "minimum" };
+          }
+        }
+      }
+
+      return null;
+    },
+
+    clearPaymentError() {
+      this.paymentModal.error = "";
+    },
+
+    formatPeso(amount) {
+      return `\u20b1${Number(amount || 0).toFixed(2)}`;
+    },
+
+    formatReceiptValue(value, fallbackValue = "Not specified") {
+      const text = this.toStringValue(value).trim();
+      return text ? text : fallbackValue;
+    },
+
+    buildPaymentReceiptPets(petBreakdown) {
+      const pets = Array.isArray(petBreakdown) ? petBreakdown : [];
+
+      return pets.map((pet, petIndex) => {
+        const lines = (Array.isArray(pet?.lines) ? pet.lines : []).map((line, lineIndex) => {
+          const amount = parseFloat(line?.amount);
+
+          return {
+            id: `${pet?.id ?? `pet-${petIndex + 1}`}-${line?.id ?? lineIndex}`,
+            name: this.formatReceiptValue(line?.name, "Grooming Service"),
+            price: Number.isFinite(amount) ? amount : 0,
+          };
+        });
+
+        return {
+          id: pet?.id ?? `receipt-pet-${petIndex + 1}`,
+          name: this.formatReceiptValue(pet?.name, `Pet ${petIndex + 1}`),
+          species: this.formatReceiptValue(pet?.species || pet?.petTypeKey),
+          breed: this.formatReceiptValue(pet?.breed),
+          sizeLabel: this.formatReceiptValue(pet?.sizeLabel || formatPaymentSizeLabel(pet?.sizeKey)),
+          lines,
+          subtotal: lines.reduce((sum, line) => sum + line.price, 0),
+        };
+      });
+    },
+
     async submitPayment() {
-      const { booking, isEarlyPayment, finalPrice, amountPaid, notes } = this.paymentModal;
-      const fp = parseFloat(finalPrice);
+      const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
+      const fp = Number(this.paymentTotalDue.toFixed(2));
       const ap = parseFloat(amountPaid);
+      const paymentMethod = this.paymentModal.paymentMethod || "cash";
+
+      if (this.paymentLineCount === 0) {
+        this.paymentModal.error = "No booked services were found for this payment.";
+        return;
+      }
+
+      if (this.hasMissingPaymentPrices()) {
+        this.paymentModal.error = "Please enter the confirmed price for every service.";
+        return;
+      }
+
+      const invalidLine = this.getInvalidPaymentLine();
+      if (invalidLine) {
+        this.paymentModal.error = `${invalidLine.line.name} for ${invalidLine.pet.name} cannot be less than ${this.formatPeso(invalidLine.line.minAmount)}.`;
+        return;
+      }
 
       if (!fp || fp <= 0) {
-        this.paymentModal.error = "Please enter a valid final price.";
+        this.paymentModal.error = "Please enter service prices before confirming payment.";
         return;
       }
       if (!ap || ap < fp) {
-        this.paymentModal.error = "Amount paid cannot be less than the final price.";
+        this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
         return;
       }
 
@@ -1173,23 +1912,46 @@ function adminDashboard() {
         const payload = {
           final_price:    fp,
           amount_paid:    ap,
-          payment_method: this.paymentModal.paymentMethod || "cash",
+          payment_method: paymentMethod,
           notes:          notes || null,
         };
         const res = isEarlyPayment
           ? await API.payNow(booking.id, payload)
           : await API.processPayment(booking.id, payload);
 
+        /*
+         * Frontend-only receipt snapshot:
+         * the payment API currently persists the final total, while this modal
+         * displays the admin-entered per-service amounts from the form above.
+         * If line-level paid prices need storage later, backend can accept these
+         * line amounts explicitly; no backend contract is changed here.
+         */
+        const receiptPets = this.buildPaymentReceiptPets(this.paymentModal.petBreakdown);
+        const receiptPetNames = receiptPets.map((pet) => pet.name).filter(Boolean).join(", ");
+        const receiptServiceNames = [
+          ...new Set(
+            receiptPets.flatMap((pet) => pet.lines.map((line) => line.name)).filter(Boolean),
+          ),
+        ].join(", ");
+
         this.closePaymentModal();
         this.receiptModal = {
           open: true,
-          ownerName:     booking.ownerName,
-          petName:       booking.petName,
-          serviceLabel:  booking.serviceLabel,
+          bookingReference: this.formatReceiptValue(
+            booking.bookingReference ?? booking.booking_reference ?? booking.reference ?? booking.id,
+            "Pending",
+          ),
+          ownerName:     this.formatReceiptValue(booking.ownerName, "Not provided"),
+          contactNumber: this.formatReceiptValue(booking.contactNumber, "Not provided"),
+          petName:       receiptPetNames || this.formatReceiptValue(booking.petName, "No pet selected"),
+          serviceLabel:  receiptServiceNames || this.formatReceiptValue(booking.serviceLabel, "Grooming"),
+          appointmentDate: this.formatReceiptValue(booking.appointmentDate, "No date selected"),
+          appointmentTime: this.formatReceiptValue(booking.appointmentTime, "No time selected"),
+          pets:          receiptPets,
           finalPrice:    fp,
           amountPaid:    ap,
           change:        res.change ?? (ap - fp),
-          paymentMethod: this.paymentModal.paymentMethod || "cash",
+          paymentMethod: paymentMethod,
           paidAt:        res.paid_at ?? new Date().toLocaleString("en-PH"),
           isEarlyPayment,
         };
@@ -1205,13 +1967,39 @@ function adminDashboard() {
 
     closeReceiptModal() {
       this.receiptModal = {
-        open: false, ownerName: "", petName: "", serviceLabel: "",
-        finalPrice: 0, amountPaid: 0, change: 0, paymentMethod: "", paidAt: "", isEarlyPayment: false,
+        open: false, bookingReference: "", ownerName: "", contactNumber: "",
+        petName: "", serviceLabel: "", appointmentDate: "", appointmentTime: "",
+        pets: [], finalPrice: 0, amountPaid: 0, change: 0,
+        paymentMethod: "", paidAt: "", isEarlyPayment: false,
       };
     },
 
     printReceipt() {
+      const printClass = "payment-receipt-printing";
+      const receiptSummary = document.getElementById("paymentReceiptSummary");
+      const printClone = receiptSummary?.cloneNode(true) ?? null;
+      let classRestored = false;
+
+      function restorePrintClass() {
+        if (classRestored) {
+          return;
+        }
+
+        classRestored = true;
+        printClone?.remove();
+        document.body.classList.remove(printClass);
+        window.removeEventListener("afterprint", restorePrintClass);
+      }
+
+      if (printClone) {
+        printClone.classList.add("payment-print-clone");
+        document.body.appendChild(printClone);
+      }
+
+      document.body.classList.add(printClass);
+      window.addEventListener("afterprint", restorePrintClass);
       window.print();
+      window.setTimeout(restorePrintClass, 1000);
     },
 
     async releaseBooking(booking) {
