@@ -19,10 +19,12 @@ var API = (() => {
     "bookingConsentStep",
     "bookingConfirmation",
     "bethlehem.bookingFormLock",
+    "bookingPets",
   ];
   const BOOKING_LOCAL_KEYS = [
     "bethlehem.bookingFormLock",
     "shownPickupNotifs",
+    "clientPets",
   ];
 
   function clearBookingDraft() {
@@ -126,12 +128,13 @@ var API = (() => {
 
   async function signIn(identifier, password) {
     // POST /api/sign-in
-    // Accepts email or phone. Saves to the correct token key based on role.
+    // Accepts email, phone, or username. Saves to the correct token key based on role.
     const data = await request("POST", "/sign-in", { identifier, password });
     const role = data?.user?.role;
     if (role === "admin" || role === "staff") {
       setAdminToken(data.token);
     } else {
+      clearBookingDraft();
       setCustomerToken(data.token);
     }
     return data;
