@@ -106,6 +106,12 @@
   const pickupDismiss  = document.getElementById("pickupDismissBtn");
 
   const SHOWN_PICKUPS_KEY = "shownPickupNotifs";
+  const PICKUP_READY_STATUSES = new Set([
+    "for_payment",
+    "for_pickup",
+    "for-pickup",
+    "ready_for_pickup",
+  ]);
 
   function getShownPickups() {
     try { return JSON.parse(localStorage.getItem(SHOWN_PICKUPS_KEY) || "[]"); }
@@ -202,7 +208,7 @@
       // Pickup alert popup
       const pickup = data.pickup_alert;
       if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
-        pickupMessage.textContent = pickup.message;
+        pickupMessage.textContent = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
         if (window.lucide) lucide.createIcons();
@@ -218,6 +224,7 @@
 
     list.innerHTML = notifications.map((n) => {
       const icon = notifIcon(n.type);
+      const message = formatNotificationMessage(n.message);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
@@ -228,7 +235,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-start gap-2">
               <span class="text-base">${icon}</span>
-              <p class="text-sm text-slate-700 leading-snug">${n.message}</p>
+              <p class="text-sm text-slate-700 leading-snug">${message}</p>
             </div>
             <p class="mt-1 text-xs text-slate-400">${time}</p>
           </div>
@@ -261,12 +268,104 @@
     return icons[type] || "🔔";
   }
 
+  function formatNotificationMessage(message) {
+    return escapeHtml(stripDecorativePaws(message));
+  }
+
+  function stripDecorativePaws(message) {
+    return String(message || "")
+      .replace(/\s*🐾\s*/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    })[char]);
+  }
+
   function formatNotifTime(dateStr) {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleString("en-PH", {
       month: "short", day: "numeric",
       hour: "numeric", minute: "2-digit",
     });
+  }
+
+  async function buildPickupMessage(pickup) {
+    try {
+      const booking = await findPickupBooking(pickup);
+      const petNames = getBookingPetNames(booking);
+
+      if (petNames.length > 0) {
+        const subject = formatNameList(petNames);
+        const verb = petNames.length === 1 ? "is" : "are";
+        return `${subject} ${verb} all done and looking fabulous! Please come to the clinic to pick them up.`;
+      }
+    } catch { /* use API-provided message below */ }
+
+    return stripDecorativePaws(pickup.message) || "Please come to the clinic to pick them up now!";
+  }
+
+  async function findPickupBooking(pickup) {
+    const data = await API.getBookingHistory();
+    const activeBookings = Array.isArray(data?.bookings) ? data.bookings : [];
+    const pickupBookingId = getPickupBookingId(pickup);
+
+    if (pickupBookingId) {
+      const matchedBooking = activeBookings.find((booking) =>
+        String(getBookingId(booking)) === String(pickupBookingId)
+      );
+      if (matchedBooking) return matchedBooking;
+    }
+
+    const readyBookings = activeBookings.filter((booking) =>
+      PICKUP_READY_STATUSES.has(String(booking?.status || "").toLowerCase())
+    );
+
+    return readyBookings.length === 1 ? readyBookings[0] : null;
+  }
+
+  function getPickupBookingId(pickup) {
+    return (
+      pickup?.booking_id ??
+      pickup?.bookingId ??
+      pickup?.booking?.booking_id ??
+      pickup?.booking?.id ??
+      null
+    );
+  }
+
+  function getBookingId(booking) {
+    return booking?.booking_id ?? booking?.bookingId ?? booking?.id ?? null;
+  }
+
+  function getBookingPetNames(booking) {
+    if (!booking) return [];
+
+    const names = [];
+    if (Array.isArray(booking.pets)) {
+      booking.pets.forEach((pet) => {
+        names.push(pet?.pet_name ?? pet?.petName ?? pet?.name ?? "");
+      });
+    }
+
+    if (Array.isArray(booking.pet_names)) names.push(...booking.pet_names);
+    if (Array.isArray(booking.petNames)) names.push(...booking.petNames);
+    names.push(booking.pet_name ?? booking.petName ?? "");
+
+    return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
+  }
+
+  function formatNameList(names) {
+    if (names.length <= 1) return names[0] || "Your pet";
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
   }
 
   // Initial load + poll every 30 seconds
