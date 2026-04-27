@@ -20,6 +20,7 @@ class Pet extends Model
         'size',
         'fur_type',
         'medical_conditions',
+        'is_archived',
     ];
 
     // Pet belongs to a user

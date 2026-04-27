@@ -424,6 +424,7 @@ function adminDashboard() {
     forPaymentList: [],
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
+    pickupModal: { open: false, booking: null, busy: false },
     paymentModal: {
       open: false,
       booking: null,
@@ -492,6 +493,7 @@ function adminDashboard() {
     inProgressList: [],
     forPickupList: [],
     // forPickupList kept for backward-compat; new data comes as forPaymentList
+    releasedList: [],
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
@@ -533,7 +535,7 @@ function adminDashboard() {
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
-            this.setTab("for-payment");
+            this.setTab(booking.paid ? "to-be-picked-up" : "for-payment");
           },
           archive: async ({ booking }) => {
             await API.adminArchiveBooking(booking.id);
@@ -960,6 +962,10 @@ function adminDashboard() {
         this.forPaymentList = nextPayload.forPaymentList;
       }
 
+      if ("releasedList" in nextPayload) {
+        this.releasedList = nextPayload.releasedList;
+      }
+
       this.refreshIcons();
       this.dispatchDashboardEvent("admin-dashboard:data-applied", {
         state: this.getState(),
@@ -1086,6 +1092,16 @@ function adminDashboard() {
         );
       }
 
+      if (
+        "releasedList" in payload ||
+        "released" in bookingsByStatus
+      ) {
+        nextPayload.releasedList = this.normalizeList(
+          payload.releasedList ?? bookingsByStatus["released"],
+          "to-be-picked-up",
+        );
+      }
+
       return nextPayload;
     },
 
@@ -1204,6 +1220,7 @@ function adminDashboard() {
         startGrooming: "in-progress",
         markDone: "for-payment",
         archive: "archived",
+        pickedUp: "archived",
       };
 
       return actionStatusMap[actionName] || normalizedCurrentStatus;
@@ -1218,6 +1235,7 @@ function adminDashboard() {
         "in-progress": "inProgressList",
         "for-pickup": "forPickupList",
         "for-payment": "forPaymentList",
+        "to-be-picked-up": "releasedList",
       };
 
       return listMap[normalizedStatus] || "";
@@ -2008,6 +2026,25 @@ function adminDashboard() {
         await this.loadAdminBookings();
       } catch (err) {
         alert(err.message || "Release failed. Please try again.");
+      }
+    },
+
+    confirmPickedUp(booking) {
+      this.pickupModal = { open: true, booking, busy: false };
+    },
+
+    async executePickedUp() {
+      const booking = this.pickupModal.booking;
+      if (!booking) return;
+
+      this.pickupModal.busy = true;
+      try {
+        await API.markPickedUp(booking.id);
+        this.pickupModal = { open: false, booking: null, busy: false };
+        await this.loadAdminBookings();
+      } catch (err) {
+        this.pickupModal.busy = false;
+        alert(err.message || "Failed to mark as picked up. Please try again.");
       }
     },
 

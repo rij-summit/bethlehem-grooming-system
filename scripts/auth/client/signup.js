@@ -78,17 +78,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     signupMessage.className = "mt-5 rounded-xl border px-4 py-3 text-sm";
 
-    // BACKEND HANDOFF:
-    // Frontend now treats username as optional and only requires one contact
-    // field (phone or email). Backend registration validation should be updated
-    // to mirror this before the new sign-up contract is considered complete.
-    if (!phone && !email) {
-      showMessage(
-        signupMessage,
-        "error",
-        "Please provide either a mobile number or an email address."
-      );
+    if (!phone) {
+      showMessage(signupMessage, "error", "Mobile number is required.");
       phoneInput.focus();
+      return;
+    }
+
+    if (!email) {
+      showMessage(signupMessage, "error", "Email address is required.");
+      emailInput.focus();
       return;
     }
 

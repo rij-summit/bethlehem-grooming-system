@@ -10,6 +10,28 @@ var API = (() => {
   const CUSTOMER_TOKEN_KEY = "customer_token";
   const ADMIN_TOKEN_KEY = "admin_token";
 
+  // ── Booking session keys to wipe on customer logout / login ──────────────
+  const BOOKING_SESSION_KEYS = [
+    "bookingStep2",
+    "bookingStep3",
+    "bookingStep4Review",
+    "bookingReview",
+    "bookingConsentStep",
+    "bookingConfirmation",
+    "bethlehem.bookingFormLock",
+    "bookingPets",
+  ];
+  const BOOKING_LOCAL_KEYS = [
+    "bethlehem.bookingFormLock",
+    "shownPickupNotifs",
+    "clientPets",
+  ];
+
+  function clearBookingDraft() {
+    BOOKING_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
+    BOOKING_LOCAL_KEYS.forEach((k) => localStorage.removeItem(k));
+  }
+
   // ── Token helpers ─────────────────────────────────────────────────────────
 
   function getCustomerToken() {
@@ -106,12 +128,13 @@ var API = (() => {
 
   async function signIn(identifier, password) {
     // POST /api/sign-in
-    // Accepts email or phone. Saves to the correct token key based on role.
+    // Accepts email, phone, or username. Saves to the correct token key based on role.
     const data = await request("POST", "/sign-in", { identifier, password });
     const role = data?.user?.role;
     if (role === "admin" || role === "staff") {
       setAdminToken(data.token);
     } else {
+      clearBookingDraft();
       setCustomerToken(data.token);
     }
     return data;
@@ -120,6 +143,7 @@ var API = (() => {
   async function customerLogin(phone, password) {
     // POST /api/login
     // Saves the returned token to localStorage under 'customer_token'.
+    clearBookingDraft();
     const data = await request("POST", "/login", { phone, password });
     setCustomerToken(data.token);
     return data;
@@ -146,6 +170,7 @@ var API = (() => {
         clearAdminToken();
       } else {
         clearCustomerToken();
+        clearBookingDraft();
       }
     }
   }
@@ -162,9 +187,31 @@ var API = (() => {
     return request("GET", `/timeslots?date=${date}`);
   }
 
-  async function getUserPets() {
-    // GET /api/pets  (protected)
-    return request("GET", "/pets", null, getCustomerToken());
+  async function getUserPets({ archived = 0 } = {}) {
+    // GET /api/pets?archived=0|1  (protected)
+    // archived=0 → active pets (booking form default)
+    // archived=1 → archived pets (My Pets page toggle)
+    return request("GET", `/pets?archived=${archived}`, null, getCustomerToken());
+  }
+
+  async function addPet(payload) {
+    // POST /api/pets  (protected)
+    return request("POST", "/pets", payload, getCustomerToken());
+  }
+
+  async function updatePet(petId, payload) {
+    // PUT /api/pets/{id}  (protected)
+    return request("PUT", `/pets/${petId}`, payload, getCustomerToken());
+  }
+
+  async function archivePet(petId) {
+    // POST /api/pets/{id}/archive  (protected)
+    return request("POST", `/pets/${petId}/archive`, null, getCustomerToken());
+  }
+
+  async function unarchivePet(petId) {
+    // POST /api/pets/{id}/unarchive  (protected)
+    return request("POST", `/pets/${petId}/unarchive`, null, getCustomerToken());
   }
 
   async function storeBooking(payload) {
@@ -332,8 +379,14 @@ var API = (() => {
 
   async function releaseBooking(bookingId) {
     // POST /api/admin/bookings/{id}/release  (protected — admin token)
-    // Archives an already-paid for_payment booking
+    // Moves an already-paid for_payment booking to released (To Be Picked Up)
     return request("POST", `/admin/bookings/${bookingId}/release`, null, getAdminToken());
+  }
+
+  async function markPickedUp(bookingId) {
+    // POST /api/admin/bookings/{id}/picked-up  (protected — admin token)
+    // Archives a released booking and notifies the customer
+    return request("POST", `/admin/bookings/${bookingId}/picked-up`, null, getAdminToken());
   }
 
   async function getCustomerNotifications() {
@@ -392,6 +445,10 @@ var API = (() => {
     getTimeslots,
     // Pets
     getUserPets,
+    addPet,
+    updatePet,
+    archivePet,
+    unarchivePet,
     // Booking
     storeBooking,
     getBookingHistory,
@@ -432,6 +489,7 @@ var API = (() => {
     processPayment,
     payNow,
     releaseBooking,
+    markPickedUp,
     getTransactions,
   };
 })();

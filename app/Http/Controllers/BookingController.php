@@ -466,16 +466,4 @@ class BookingController extends Controller
         ]);
     }
 
-    // ── GET USER'S SAVED PETS ─────────────────────────────
-    public function getPets(Request $request)
-    {
-        $pets = Pet::where('user_id', $request->user()->user_id)
-                   ->orderBy('created_at', 'desc')
-                   ->get();
-
-        return response()->json([
-            'success' => true,
-            'pets'    => $pets,
-        ]);
-    }
 }
