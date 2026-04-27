@@ -175,16 +175,6 @@
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
           </button>
 
-          <!-- Block Dates (holidays / vacations) -->
-          <button
-            type="button"
-            @click="openBlockedDatesModal()"
-            class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] bg-white/20 px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/40"
-          >
-            <i data-lucide="calendar-off" class="h-4 w-4"></i>
-            <span>Block Dates</span>
-          </button>
-
           <button
             type="button"
             class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30"
@@ -228,96 +218,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Block Dates Modal -->
-      <div
-        x-show="blockDatesModal.open"
-        x-transition
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
-      >
-        <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
-          <!-- Header -->
-          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-            <div>
-              <h4 class="text-lg font-bold text-slate-800">Block Dates</h4>
-              <p class="mt-0.5 text-sm text-slate-500">Holidays, vacations, or any closure period.</p>
-            </div>
-            <button type="button" @click="blockDatesModal.open = false" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
-              <i data-lucide="x" class="h-5 w-5"></i>
-            </button>
-          </div>
-
-          <!-- Existing blocked dates list -->
-          <div class="max-h-48 overflow-y-auto px-6 py-4">
-            <template x-if="blockedDates.length === 0">
-              <p class="text-sm text-slate-400">No blocked dates set.</p>
-            </template>
-            <template x-for="block in blockedDates" :key="block.id">
-              <div class="mb-2 flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                <div>
-                  <p class="text-sm font-semibold text-slate-700">
-                    <span x-text="block.start_date === block.end_date ? block.start_date : block.start_date + ' → ' + block.end_date"></span>
-                  </p>
-                  <p class="text-xs text-slate-400" x-text="block.reason || 'No reason given'"></p>
-                </div>
-                <button
-                  type="button"
-                  @click="removeBlockedDate(block.id)"
-                  class="ml-3 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                >
-                  Remove
-                </button>
-              </div>
-            </template>
-          </div>
-
-          <!-- Add new blocked date form -->
-          <div class="border-t border-slate-100 px-6 py-5">
-            <p class="mb-3 text-sm font-semibold text-slate-700">Add New Closure</p>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-500">Start Date</label>
-                <input
-                  type="date"
-                  x-model="blockForm.startDate"
-                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-500">End Date</label>
-                <input
-                  type="date"
-                  x-model="blockForm.endDate"
-                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-                />
-              </div>
-            </div>
-            <div class="mt-3">
-              <label class="mb-1 block text-xs font-semibold text-slate-500">Reason <span class="font-normal text-slate-400">(optional)</span></label>
-              <input
-                type="text"
-                x-model="blockForm.reason"
-                placeholder="e.g. Christmas holiday, Summer vacation"
-                class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-              />
-            </div>
-            <p x-show="blockForm.error" class="mt-2 text-xs text-red-600" x-text="blockForm.error"></p>
-            <p x-show="blockForm.warning" class="mt-2 text-xs text-amber-600" x-text="blockForm.warning"></p>
-            <div class="mt-4 flex justify-end">
-              <button
-                type="button"
-                @click="submitBlockedDate()"
-                :disabled="blockForm.busy"
-                class="btn-confirm-reopen rounded-xl px-5 py-2.5 text-sm font-semibold transition"
-                :class="blockForm.busy ? 'opacity-60 cursor-not-allowed' : ''"
-              >
-                <span x-text="blockForm.busy ? 'Saving...' : 'Block These Dates'"></span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Main Content -->
       <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
         <!-- Mobile Header -->

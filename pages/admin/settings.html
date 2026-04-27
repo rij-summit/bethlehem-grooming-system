@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div
+      x-data="adminSidebar()"
+      class="flex min-h-screen bg-[#f5f8fb]"
+    >
+      <!-- Mobile Backdrop -->
+      <div
+        x-show="sidebarOpen"
+        x-transition.opacity
+        class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+        @click="sidebarOpen = false"
+      ></div>
+
+      <!-- Sidebar -->
+      <aside
+        class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0"
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <div class="px-6 py-6">
+          <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm">
+              <img
+                src="../../assets/images/clinic/Bethlehem_Logo.png"
+                alt="Bethlehem Animal Clinic logo"
+                class="h-full w-full object-contain"
+              />
+            </div>
+            <div class="min-w-0">
+              <h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1>
+              <p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p>
+            </div>
+          </div>
+        </div>
+
+        <nav class="px-4 py-6">
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p>
+            <div class="space-y-1.5">
+              <a href="./dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'dashboard' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+                <span>Dashboard</span>
+              </a>
+              <a href="./clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'customers' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="users" class="h-5 w-5"></i>
+                <span>Customers</span>
+              </a>
+              <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="calendar-days" class="h-5 w-5"></i>
+                <span>Appointments</span>
+              </a>
+              <a href="./ai-analytics.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'analytics' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="sparkles" class="h-5 w-5"></i>
+                <span>AI Analytics</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p>
+            <div class="space-y-1.5">
+              <a href="./archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'archive' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="archive" class="h-5 w-5"></i>
+                <span>Archive</span>
+              </a>
+              <a href="./transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'transactions' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="receipt" class="h-5 w-5"></i>
+                <span>Transactions</span>
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
+            <div class="space-y-1.5">
+              <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'settings' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="settings" class="h-5 w-5"></i>
+                <span>Settings</span>
+              </a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white">AD</div>
+            <div class="min-w-0">
+              <!-- BACKEND: Replace with logged-in admin data. -->
+              <p class="truncate font-bold text-white">Admin</p>
+              <p class="truncate text-sm text-white/80">Clinic Manager</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            @click="handleStopReceivingClick()"
+            class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
+            :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
+          >
+            <template x-if="clinicStopped"><i data-lucide="door-open" class="h-4 w-4"></i></template>
+            <template x-if="!clinicStopped"><i data-lucide="door-closed" class="h-4 w-4"></i></template>
+            <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
+          </button>
+
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()">
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Stop Receiving Confirmation Modal -->
+      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
+        <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div class="px-6 py-5">
+            <h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4>
+            <p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p>
+            <p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p>
+          </div>
+          <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+            <button type="button" @click="stopModal.open = false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+            <button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped ? 'btn-confirm-reopen' : 'btn-confirm-stop'">
+              <span x-text="stopModal.busy ? 'Please wait...' : stopModal.confirmLabel"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+        <!-- Mobile Header -->
+        <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
+          <div>
+            <p class="text-sm font-semibold text-[#5c7690]">Admin Panel</p>
+            <h2 class="text-lg font-bold text-[#1f3850]">Settings</h2>
+          </div>
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen = true">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+        </header>
+
+        <main
+          x-data="{ activeSettingsTab: 'general', sundayOpen: true, sundayStart: '09:00 AM', sundayEnd: '04:00 PM', appointmentReminders: true, noShowAlerts: true, walkInNotifications: true, paymentReceipt: true }"
+          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
+        >
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-4 lg:backdrop-blur">
+            <div class="rounded-[24px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-4 lg:px-6 lg:py-4">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <h2 class="text-2xl font-bold text-[#1f3850] lg:text-3xl">Settings</h2>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">ADMIN SYSTEM PREFERENCES</p>
+                </div>
+
+                <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white/75 px-4 py-2.5 text-sm font-semibold text-[#1f3850]">
+                  <i data-lucide="settings-2" class="h-4 w-4 text-[#315b7e]"></i>
+                  <span>Clinic Profile</span>
+                </div>
+              </div>
+
+              <div class="mt-5 overflow-x-auto pb-1">
+                <div class="inline-flex min-w-full gap-1 rounded-2xl border border-[#cfe0ee] bg-white/70 p-1 shadow-sm sm:min-w-0">
+                  <button
+                    type="button"
+                    @click="activeSettingsTab = 'general'"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'general' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
+                    aria-current="page"
+                  >
+                    <i data-lucide="building-2" class="h-4 w-4"></i>
+                    <span>General</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    @click="activeSettingsTab = 'availability'"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'availability' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
+                  >
+                    <i data-lucide="clock-3" class="h-4 w-4"></i>
+                    <span>Availability</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    @click="activeSettingsTab = 'capacity'"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'capacity' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
+                  >
+                    <i data-lucide="users-round" class="h-4 w-4"></i>
+                    <span>Capacity</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    @click="activeSettingsTab = 'notifications'"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'notifications' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
+                  >
+                    <i data-lucide="bell" class="h-4 w-4"></i>
+                    <span>Notifications</span>
+                  </button>
+                  <button
+                    type="button"
+                    @click="activeSettingsTab = 'security'"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'security' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
+                  >
+                    <i data-lucide="shield-check" class="h-4 w-4"></i>
+                    <span>Security</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="mt-6 space-y-6">
+            <form x-show="activeSettingsTab === 'general'" class="space-y-6">
+              <!-- BACKEND: Replace hardcoded values with clinic settings data once the endpoint is available. -->
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">General</p>
+                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">General Information</h3>
+                  </div>
+                  <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
+                    <i data-lucide="badge-check" class="h-3.5 w-3.5"></i>
+                    <span>Visible Profile</span>
+                  </div>
+                </div>
+
+                <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Name</span>
+                      <input
+                        type="text"
+                        value="Bethlehem Animal Clinic"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Business Type</span>
+                      <input
+                        type="text"
+                        value="Clinic &amp; Grooming"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Contact Number</span>
+                      <input
+                        type="tel"
+                        value="+63 900 000 0000"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email Address</span>
+                      <input
+                        type="email"
+                        value="bethlehemclinic@example.com"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+
+                    <label class="block md:col-span-2">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Address</span>
+                      <textarea
+                        rows="3"
+                        class="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      >Bethlehem Animal Clinic &amp; Grooming, Philippines</textarea>
+                    </label>
+
+                    <label class="block md:col-span-2">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Description</span>
+                      <textarea
+                        rows="4"
+                        class="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      >Compassionate veterinary care and grooming services for pets and their families.</textarea>
+                    </label>
+                  </div>
+
+                  <aside class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#5c7690]">Clinic Logo</p>
+                    <div class="mt-4 flex aspect-square items-center justify-center rounded-2xl border border-[#d7e3ef] bg-white p-6">
+                      <img
+                        src="../../assets/images/clinic/Bethlehem_Logo.png"
+                        alt="Bethlehem Animal Clinic logo"
+                        class="h-full w-full object-contain"
+                      />
+                    </div>
+                    <div class="mt-4 grid gap-2">
+                      <button type="button" class="flex items-center justify-center gap-2 rounded-xl border border-[#315b7e] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]">
+                        <i data-lucide="upload" class="h-4 w-4"></i>
+                        <span>Upload Logo</span>
+                      </button>
+                      <button type="button" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
+                        <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                        <span>Reset</span>
+                      </button>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="mb-5 flex items-center gap-3">
+                  <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
+                    <i data-lucide="map-pin" class="h-5 w-5"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-bold text-[#1f3850]">Public Contact Details</h3>
+                    <p class="text-sm text-slate-500">These fields are prepared for the customer-facing clinic profile.</p>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Website</span>
+                    <input
+                      type="url"
+                      value="https://bethlehemanimalclinic.example"
+                      class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Facebook Page</span>
+                    <input
+                      type="url"
+                      value="https://facebook.com/bethlehemanimalclinic"
+                      class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+                <!-- BACKEND: Wire this button to save General Information only. -->
+                <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                  <i data-lucide="save" class="h-4 w-4"></i>
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+
+            <form x-show="activeSettingsTab === 'availability'" class="space-y-6">
+              <!-- BACKEND: Replace static operating hours with clinic availability data once endpoints are ready. -->
+              <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+                <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Availability</p>
+                      <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Operating Hours</h3>
+                      <p class="mt-1 text-sm text-slate-500">Toggle off days the clinic is closed.</p>
+                    </div>
+                    <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                      <i data-lucide="save" class="h-4 w-4"></i>
+                      <span>Save Hours</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="px-5 py-5 lg:px-6">
+                  <div class="hidden border-b border-slate-100 pb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid lg:grid-cols-4 lg:gap-4">
+                    <span>Day</span>
+                    <span>Open</span>
+                    <span>Close</span>
+                    <span class="text-right">Open</span>
+                  </div>
+
+                  <div class="divide-y divide-slate-100">
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Monday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Monday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Tuesday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Tuesday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Wednesday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Wednesday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Thursday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Thursday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Friday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Friday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Saturday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input type="text" value="09:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input type="text" value="04:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button type="button" aria-label="Saturday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
+                      <div class="text-sm font-semibold text-[#315b7e]">Sunday</div>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <input
+                          type="text"
+                          x-model="sundayStart"
+                          :readonly="!sundayOpen"
+                          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none"
+                          :class="sundayOpen ? 'bg-[#f8fbfe] text-slate-700 focus:border-[#315b7e]' : 'bg-slate-100 text-slate-400'"
+                        />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
+                        <input
+                          type="text"
+                          x-model="sundayEnd"
+                          :readonly="!sundayOpen"
+                          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none"
+                          :class="sundayOpen ? 'bg-[#f8fbfe] text-slate-700 focus:border-[#315b7e]' : 'bg-slate-100 text-slate-400'"
+                        />
+                      </label>
+                      <div class="flex items-center justify-between gap-3 lg:justify-end">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
+                        <button
+                          type="button"
+                          @click="sundayOpen = !sundayOpen"
+                          :aria-label="sundayOpen ? 'Sunday is open' : 'Sunday is closed'"
+                          class="flex h-8 w-14 items-center rounded-full p-1 transition"
+                          :class="sundayOpen ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
+                        >
+                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border-t border-[#e8f0f8] bg-[#f8fbfe] px-5 py-5 lg:px-6">
+                  <!-- BACKEND: Wire this footer to the blocked dates feature after availability APIs are ready. -->
+                  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                        <i data-lucide="calendar-off" class="h-5 w-5"></i>
+                      </div>
+                      <div>
+                        <h4 class="text-lg font-bold text-[#1f3850]">Block Dates</h4>
+                        <p class="mt-1 text-sm text-slate-500">Set holidays, vacations, or clinic closure periods.</p>
+                      </div>
+                    </div>
+
+                    <div class="grid flex-1 gap-3 sm:grid-cols-2">
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Start Date</span>
+                        <input type="date" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">End Date</span>
+                        <input type="date" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 grid gap-3 lg:grid-cols-2 lg:items-end">
+                    <label class="block">
+                      <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Reason</span>
+                      <input type="text" placeholder="e.g. Clinic holiday" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#315b7e]" />
+                    </label>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
+                        Clear
+                      </button>
+                      <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                        <i data-lucide="calendar-plus" class="h-4 w-4"></i>
+                        <span>Block Dates</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 rounded-2xl border border-dashed border-[#bfd3e3] bg-white px-4 py-3 text-sm text-slate-500">
+                    No blocked dates added yet.
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            <form x-show="activeSettingsTab === 'capacity'" class="space-y-6">
+              <!-- BACKEND: Replace static capacity values with real clinic capacity settings and persist changes here. -->
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Capacity</p>
+                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Capacity &amp; Booking Limits</h3>
+                    <p class="mt-1 text-sm text-slate-500">Control how many bookings the clinic accepts each day.</p>
+                  </div>
+                  <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
+                    <i data-lucide="calendar-days" class="h-3.5 w-3.5"></i>
+                    <span>Booking Rules</span>
+                  </div>
+                </div>
+
+                <div class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  <div class="flex items-start gap-2">
+                    <i data-lucide="alert-triangle" class="mt-0.5 h-4 w-4 shrink-0"></i>
+                    <p class="font-medium">Changes here will affect the booking options customers see.</p>
+                  </div>
+                </div>
+
+                <div class="grid gap-5 md:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Max Daily Capacity</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value="20"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                    <span class="mt-1.5 block text-xs font-medium text-slate-500">Total pets accepted per day.</span>
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Advance Booking Window</span>
+                    <select class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10">
+                      <option>Up to 3 days ahead</option>
+                      <option>Up to 7 days ahead</option>
+                      <option>Up to 14 days ahead</option>
+                      <option>Up to 30 days ahead</option>
+                    </select>
+                    <span class="mt-1.5 block text-xs font-medium text-slate-500">How far in advance customers can book.</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+                <!-- BACKEND: Wire this button to save capacity and advance booking window only. -->
+                <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                  <i data-lucide="save" class="h-4 w-4"></i>
+                  <span>Save Capacity</span>
+                </button>
+              </div>
+            </form>
+
+            <form x-show="activeSettingsTab === 'notifications'" class="space-y-6">
+              <!-- BACKEND: Replace local toggle values with saved notification preferences and persist changes here. -->
+              <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+                <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Notifications</p>
+                      <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Alert Preferences</h3>
+                      <p class="mt-1 text-sm text-slate-500">Choose which alerts are active.</p>
+                    </div>
+                    <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
+                      <i data-lucide="bell-ring" class="h-3.5 w-3.5"></i>
+                      <span>Active Alerts</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divide-y divide-slate-100">
+                  <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
+                    <div class="min-w-0">
+                      <h4 class="text-sm font-semibold text-[#1f3850]">Appointment Reminders</h4>
+                      <p class="mt-1 text-xs font-normal text-slate-400">Notify customers 1 hour before their schedule.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="appointmentReminders = !appointmentReminders"
+                      :aria-label="appointmentReminders ? 'Appointment reminders enabled' : 'Appointment reminders disabled'"
+                      class="flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition"
+                      :class="appointmentReminders ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
+                    >
+                      <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
+                    <div class="min-w-0">
+                      <h4 class="text-sm font-semibold text-[#1f3850]">No-show Alerts</h4>
+                      <p class="mt-1 text-xs font-normal text-slate-400">Notify admin when a customer misses their slot.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="noShowAlerts = !noShowAlerts"
+                      :aria-label="noShowAlerts ? 'No-show alerts enabled' : 'No-show alerts disabled'"
+                      class="flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition"
+                      :class="noShowAlerts ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
+                    >
+                      <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
+                    <div class="min-w-0">
+                      <h4 class="text-sm font-semibold text-[#1f3850]">Walk-in Notifications</h4>
+                      <p class="mt-1 text-xs font-normal text-slate-400">Alert staff when a walk-in booking is added.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="walkInNotifications = !walkInNotifications"
+                      :aria-label="walkInNotifications ? 'Walk-in notifications enabled' : 'Walk-in notifications disabled'"
+                      class="flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition"
+                      :class="walkInNotifications ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
+                    >
+                      <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
+                    <div class="min-w-0">
+                      <h4 class="text-sm font-semibold text-[#1f3850]">Payment Receipt</h4>
+                      <p class="mt-1 text-xs font-normal text-slate-400">Auto-send receipt after payment is marked.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="paymentReceipt = !paymentReceipt"
+                      :aria-label="paymentReceipt ? 'Payment receipt enabled' : 'Payment receipt disabled'"
+                      class="flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition"
+                      :class="paymentReceipt ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
+                    >
+                      <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+                <!-- BACKEND: Wire this button to save notification preferences only. -->
+                <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                  <i data-lucide="save" class="h-4 w-4"></i>
+                  <span>Save Notifications</span>
+                </button>
+              </div>
+            </form>
+
+            <form x-show="activeSettingsTab === 'security'" class="space-y-6">
+              <!-- BACKEND: Wire these fields to the admin password update endpoint and validate password rules server-side. -->
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Security</p>
+                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Change Password</h3>
+                    <p class="mt-1 text-sm text-slate-500">Update your admin account password.</p>
+                  </div>
+                  <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
+                    <i data-lucide="lock-keyhole" class="h-3.5 w-3.5"></i>
+                    <span>Admin Account</span>
+                  </div>
+                </div>
+
+                <div class="grid gap-4">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Current Password</span>
+                    <input
+                      type="password"
+                      placeholder="Enter current password"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">New Password</span>
+                    <input
+                      type="password"
+                      placeholder="Enter new password"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Confirm New Password</span>
+                    <input
+                      type="password"
+                      placeholder="Re-enter new password"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
+                  Cancel
+                </button>
+                <!-- BACKEND: Wire this button to submit the password change only. -->
+                <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                  <i data-lucide="shield-check" class="h-4 w-4"></i>
+                  <span>Update Password</span>
+                </button>
+              </div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/components/admin-sidebar.js"></script>
+  </body>
+</html>
