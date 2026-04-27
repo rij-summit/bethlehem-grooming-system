@@ -72,20 +72,11 @@
 
               <a
                 href="./clients.html"
-                class="flex items-center justify-between rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40"
+                class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40"
                 :class="activePage === 'customers' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
-                <span class="flex items-center gap-3">
-                  <i data-lucide="users" class="h-5 w-5"></i>
-                  <span>Customers</span>
-                </span>
-
-                <!-- BACKEND: Replace with real badge count if needed -->
-                <span
-                  class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full border border-[#9db9d5] bg-[#dbe8f5] px-2 text-xs font-bold text-[#315b7e]"
-                >
-                  0
-                </span>
+                <i data-lucide="users" class="h-5 w-5"></i>
+                <span>Customers</span>
               </a>
 
               <a
