@@ -440,6 +440,130 @@ body.client-sidebar-open {
   background-color: #15803d;
 }
 
+/* Admin dashboard incoming appointment actions */
+.admin-appointment-action {
+  display: inline-flex;
+  min-width: 9rem;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 2rem;
+  border: 1px solid transparent;
+  line-height: 1.1;
+}
+
+.admin-appointment-action:disabled {
+  cursor: not-allowed;
+}
+
+.admin-appointment-checkin-action {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-appointment-checkin-action:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-appointment-cancel-action {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.admin-appointment-cancel-action:hover:not(:disabled) {
+  background-color: #fecaca;
+}
+
+.admin-confirm-checkin-button {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-confirm-checkin-button:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-confirm-cancel-button {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.admin-confirm-cancel-button:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.admin-action-confirm-footer {
+  border-top: 0 !important;
+  box-shadow: none;
+  padding-top: 0.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.admin-queued-main-action {
+  display: inline-flex;
+  width: 12rem;
+  min-width: 12rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  line-height: 1.1;
+}
+
+.admin-queued-start-action {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-queued-start-action:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-queued-secondary-row {
+  width: 12rem;
+}
+
+.admin-queued-secondary-action {
+  display: inline-flex;
+  min-height: 2.45rem;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  line-height: 1.1;
+}
+
+.admin-queued-revert-action {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #2f4b66;
+}
+
+.admin-queued-revert-action:hover {
+  background-color: #edf5fc;
+  border-color: #9bb7d2;
+}
+
+.admin-queued-cancel-action {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.admin-queued-cancel-action:hover {
+  background-color: #fecaca;
+}
+
+@media (max-width: 640px) {
+  .admin-queued-main-action,
+  .admin-queued-secondary-row {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 /* Admin notification dropdown — positioned by Alpine x-show */
 .notif-dropdown {
   position: fixed;

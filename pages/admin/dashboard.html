@@ -843,23 +843,32 @@
                         <!-- DATE GUARD TEMPORARILY DISABLED FOR TESTING
                         <button
                           type="button"
-                          @click="checkInBooking(booking)"
+                          @click="confirmCheckInBooking(booking)"
                           :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
-                          class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
+                          class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
                           :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
                           :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
                         >
                         -->
                         <button
                           type="button"
-                          @click="checkInBooking(booking)"
+                          @click="confirmCheckInBooking(booking)"
                           :disabled="isActionBusy('checkIn', booking.id)"
-                          class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
+                          class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
                           :class="isActionBusy('checkIn', booking.id) ? 'cursor-not-allowed opacity-40' : ''"
                         >
                           <span
                             x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
                           ></span>
+                        </button>
+
+                        <!-- Frontend-only cancellation. Backend should replace this with a real cancel status/API when ready. -->
+                        <button
+                          type="button"
+                          @click="confirmCancelBooking(booking)"
+                          class="admin-appointment-action admin-appointment-cancel-action rounded-xl text-base font-semibold transition"
+                        >
+                          Cancel
                         </button>
 
                         <button
@@ -1009,35 +1018,54 @@
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                    <button
+                      type="button"
+                      @click="confirmStartGroomingBooking(booking)"
+                      :disabled="isActionBusy('startGrooming', booking.id)"
+                      class="admin-queued-main-action admin-queued-start-action rounded-xl text-base font-semibold transition"
+                      :class="isActionBusy('startGrooming', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
+                    >
+                      <span
+                        x-text="isActionBusy('startGrooming', booking.id) ? getActionLabel('startGrooming') : 'Start Grooming'"
+                      ></span>
+                    </button>
 
                     <!-- Pay Now: early payment before grooming starts -->
                     <template x-if="!booking.paid">
                       <button
                         type="button"
                         @click="openPaymentModal(booking, true)"
-                        class="btn-pay-now rounded-xl px-6 py-3 text-base font-semibold transition"
+                        class="admin-queued-main-action btn-pay-now rounded-xl text-base font-semibold transition"
                       >
                         Pay Now
                       </button>
                     </template>
                     <template x-if="booking.paid">
-                      <div class="inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold btn-already-paid">
+                      <div class="admin-queued-main-action inline-flex items-center gap-1.5 rounded-xl border text-sm font-semibold btn-already-paid">
                         <i data-lucide="check-circle-2" class="h-4 w-4"></i>
                         Already Paid
                       </div>
                     </template>
 
-                    <button
-                      type="button"
-                      @click="startGroomingBooking(booking)"
-                      :disabled="isActionBusy('startGrooming', booking.id)"
-                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                      :class="isActionBusy('startGrooming', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
-                    >
-                      <span
-                        x-text="isActionBusy('startGrooming', booking.id) ? getActionLabel('startGrooming') : 'Groom'"
-                      ></span>
-                    </button>
+                    <div class="admin-queued-secondary-row flex gap-2">
+                      <!-- Frontend-only revert. Backend should replace this with a real queued -> incoming status/API if needed. -->
+                      <button
+                        type="button"
+                        @click="confirmRevertQueuedBooking(booking)"
+                        class="admin-queued-secondary-action admin-queued-revert-action rounded-xl text-sm font-semibold transition"
+                      >
+                        Revert
+                      </button>
+
+                      <!-- Frontend-only cancellation. Backend should replace this with a real cancel status/API when ready. -->
+                      <button
+                        type="button"
+                        @click="confirmCancelBooking(booking)"
+                        class="admin-queued-secondary-action admin-queued-cancel-action rounded-xl text-sm font-semibold transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
 
                     <button
                       type="button"
@@ -1184,35 +1212,54 @@
 
                   <!-- RIGHT SIDE -->
                   <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Pay Now: early payment while grooming is in progress -->
-                    <template x-if="!booking.paid">
-                      <button
-                        type="button"
-                        @click="openPaymentModal(booking, true)"
-                        class="btn-pay-now rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Pay Now
-                      </button>
-                    </template>
-                    <template x-if="booking.paid">
-                      <div class="inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold btn-already-paid">
-                        <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                        Already Paid
-                      </div>
-                    </template>
-
                     <button
                       type="button"
-                      @click="markBookingDone(booking)"
+                      @click="confirmMarkBookingDone(booking)"
                       :disabled="isActionBusy('markDone', booking.id)"
-                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
+                      class="admin-queued-main-action admin-queued-start-action rounded-xl text-base font-semibold transition"
                       :class="isActionBusy('markDone', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
                     >
                       <span
                         x-text="isActionBusy('markDone', booking.id) ? getActionLabel('markDone') : 'Finished'"
                       ></span>
                     </button>
+
+                    <!-- Pay Now: early payment while grooming is in progress -->
+                    <template x-if="!booking.paid">
+                      <button
+                        type="button"
+                        @click="openPaymentModal(booking, true)"
+                        class="admin-queued-main-action btn-pay-now rounded-xl text-base font-semibold transition"
+                      >
+                        Pay Now
+                      </button>
+                    </template>
+                    <template x-if="booking.paid">
+                      <div class="admin-queued-main-action inline-flex items-center gap-1.5 rounded-xl border text-sm font-semibold btn-already-paid">
+                        <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                        Already Paid
+                      </div>
+                    </template>
+
+                    <div class="admin-queued-secondary-row flex gap-2">
+                      <!-- Frontend-only revert. Backend should replace this with a real in_progress -> queued status/API if needed. -->
+                      <button
+                        type="button"
+                        @click="confirmRevertInProgressBooking(booking)"
+                        class="admin-queued-secondary-action admin-queued-revert-action rounded-xl text-sm font-semibold transition"
+                      >
+                        Revert
+                      </button>
+
+                      <!-- Frontend-only cancellation. Backend should replace this with a real cancel status/API when ready. -->
+                      <button
+                        type="button"
+                        @click="confirmCancelBooking(booking)"
+                        class="admin-queued-secondary-action admin-queued-cancel-action rounded-xl text-sm font-semibold transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
 
                     <button
                       type="button"
@@ -1876,6 +1923,61 @@
             </div>
           </div>
 
+          <!-- Shared secondary action confirmation modal -->
+          <div
+            x-show="actionConfirmModal.open"
+            x-transition
+            style="display:none"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+            @click.self="closeActionConfirmModal()"
+          >
+            <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div class="px-6 py-5 text-center">
+                <div
+                  class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+                  :class="actionConfirmModal.variant === 'danger' ? 'bg-red-50 text-red-500' : 'bg-[#eaf4fb] text-[#315b7e]'"
+                >
+                  <span x-show="actionConfirmModal.icon === 'cancel'">
+                    <i data-lucide="calendar-x" class="h-7 w-7"></i>
+                  </span>
+                  <span x-show="actionConfirmModal.icon === 'revert'">
+                    <i data-lucide="rotate-ccw" class="h-7 w-7"></i>
+                  </span>
+                  <span x-show="actionConfirmModal.icon === 'grooming'">
+                    <i data-lucide="scissors" class="h-7 w-7"></i>
+                  </span>
+                  <span x-show="actionConfirmModal.icon === 'finished'">
+                    <i data-lucide="check-circle-2" class="h-7 w-7"></i>
+                  </span>
+                  <span x-show="actionConfirmModal.icon === 'checkIn'">
+                    <i data-lucide="calendar-check-2" class="h-7 w-7"></i>
+                  </span>
+                </div>
+                <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
+                <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+              </div>
+              <div class="admin-action-confirm-footer flex gap-3 px-6">
+                <button
+                  type="button"
+                  @click="closeActionConfirmModal()"
+                  :disabled="actionConfirmModal.busy"
+                  class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  @click="executeConfirmedBookingAction()"
+                  :disabled="actionConfirmModal.busy"
+                  class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition"
+                  :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : 'admin-confirm-checkin-button'"
+                >
+                  <span x-text="actionConfirmModal.busy ? actionConfirmModal.busyLabel : actionConfirmModal.confirmLabel"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- View Details Modal -->
           <div
             x-show="detailsModalOpen"
@@ -1989,7 +2091,7 @@
                 </p>
                 <p style="margin-top:0.25rem;font-size:0.75rem;color:#94a3b8">This will archive the booking and notify the customer.</p>
               </div>
-              <div style="display:flex;gap:0.75rem;border-top:1px solid #f1f5f9;padding:1rem 1.5rem">
+              <div style="display:flex;gap:0.75rem;border-top:0;padding:0.25rem 1.5rem 1.25rem">
                 <button
                   type="button"
                   @click="pickupModal.open = false"

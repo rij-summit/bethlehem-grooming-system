@@ -405,6 +405,9 @@ function adminDashboard() {
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
+    localCancelledBookingIds: [],
+    localRevertedToIncomingBookings: [],
+    localRevertedToQueuedBookings: [],
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -425,6 +428,18 @@ function adminDashboard() {
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
     pickupModal: { open: false, booking: null, busy: false },
+    actionConfirmModal: {
+      open: false,
+      action: "",
+      booking: null,
+      title: "",
+      message: "",
+      confirmLabel: "",
+      busyLabel: "",
+      icon: "checkIn",
+      variant: "primary",
+      busy: false,
+    },
     paymentModal: {
       open: false,
       booking: null,
@@ -698,9 +713,255 @@ function adminDashboard() {
       }
     },
 
+    // Opens a second confirmation before moving an Incoming booking into Queued.
+    confirmCheckInBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "checkIn",
+        booking,
+        title: "Confirm Check In",
+        message: ownerName
+          ? `Are you sure you want to check in ${ownerName}?`
+          : "Are you sure you want to check in this appointment?",
+        confirmLabel: "Yes, Check In",
+        busyLabel: "Checking in...",
+        icon: "checkIn",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving a Queued booking into In-Progress.
+    confirmStartGroomingBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "startGrooming",
+        booking,
+        title: "Confirm Start Grooming",
+        message: ownerName
+          ? `Are you sure you want to start grooming for ${ownerName}?`
+          : "Are you sure you want to start grooming this appointment?",
+        confirmLabel: "Yes, Start",
+        busyLabel: "Starting...",
+        icon: "grooming",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before finishing an In-Progress booking.
+    confirmMarkBookingDone(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "markDone",
+        booking,
+        title: "Confirm Finished",
+        message: ownerName
+          ? `Are you sure you want to mark ${ownerName}'s appointment as finished?`
+          : "Are you sure you want to mark this appointment as finished?",
+        confirmLabel: "Yes, Finished",
+        busyLabel: "Finishing...",
+        icon: "finished",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving a Queued booking back to Incoming in this UI.
+    confirmRevertQueuedBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "revertQueued",
+        booking,
+        title: "Revert to Incoming",
+        message: ownerName
+          ? `Are you sure you want to move ${ownerName}'s appointment back to Incoming?`
+          : "Are you sure you want to move this appointment back to Incoming?",
+        confirmLabel: "Yes, Revert",
+        busyLabel: "Reverting...",
+        icon: "revert",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving an In-Progress booking back to Queued in this UI.
+    confirmRevertInProgressBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "revertInProgress",
+        booking,
+        title: "Revert to Queued",
+        message: ownerName
+          ? `Are you sure you want to move ${ownerName}'s appointment back to Queued?`
+          : "Are you sure you want to move this appointment back to Queued?",
+        confirmLabel: "Yes, Revert",
+        busyLabel: "Reverting...",
+        icon: "revert",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before hiding a booking as cancelled in this UI.
+    confirmCancelBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "cancel",
+        booking,
+        title: "Cancel Appointment",
+        message: ownerName
+          ? `Are you sure you want to cancel ${ownerName}'s appointment?`
+          : "Are you sure you want to cancel this appointment?",
+        confirmLabel: "Yes, Cancel",
+        busyLabel: "Cancelling...",
+        icon: "cancel",
+        variant: "danger",
+      });
+    },
+
+    openActionConfirmModal({
+      action,
+      booking,
+      title,
+      message,
+      confirmLabel,
+      busyLabel,
+      icon = "checkIn",
+      variant = "primary",
+    }) {
+      this.actionConfirmModal = {
+        open: true,
+        action,
+        booking: this.cloneBooking(booking),
+        title,
+        message,
+        confirmLabel,
+        busyLabel,
+        icon,
+        variant,
+        busy: false,
+      };
+    },
+
+    closeActionConfirmModal(force = false) {
+      if (this.actionConfirmModal.busy && !force) {
+        return;
+      }
+
+      this.actionConfirmModal = {
+        open: false,
+        action: "",
+        booking: null,
+        title: "",
+        message: "",
+        confirmLabel: "",
+        busyLabel: "",
+        icon: "checkIn",
+        variant: "primary",
+        busy: false,
+      };
+    },
+
+    async executeConfirmedBookingAction() {
+      const { action, booking } = this.actionConfirmModal;
+      if (!action || !booking) {
+        return;
+      }
+
+      this.actionConfirmModal.busy = true;
+
+      try {
+        if (action === "checkIn") {
+          await this.checkInBooking(booking);
+        } else if (action === "startGrooming") {
+          await this.startGroomingBooking(booking);
+        } else if (action === "markDone") {
+          await this.markBookingDone(booking);
+        } else if (action === "cancel") {
+          this.cancelBookingFrontendOnly(booking);
+        } else if (action === "revertQueued") {
+          this.revertQueuedBookingFrontendOnly(booking);
+        } else if (action === "revertInProgress") {
+          this.revertInProgressBookingFrontendOnly(booking);
+        }
+      } finally {
+        this.closeActionConfirmModal(true);
+      }
+    },
+
     // Starts the Incoming -> Queued transition for a booking.
     async checkInBooking(booking) {
       await this.runBookingAction("checkIn", booking);
+    },
+
+    // Frontend-only cancellation: hides the card in this browser session.
+    // BACKEND: replace this with a real cancel endpoint/status when cancellation is ready server-side.
+    cancelBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      this.rememberLocalCancellation(booking.id);
+      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== String(booking.id),
+      );
+      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== String(booking.id),
+      );
+      this.removeBookingFromLists(booking.id);
+      this.dispatchDashboardEvent("admin-dashboard:booking-cancelled-ui-only", {
+        booking: this.cloneBooking(booking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
+    },
+
+    // Frontend-only revert: moves a queued card back into Incoming in this browser session.
+    // BACKEND: replace this with a real queued -> incoming endpoint/status when this workflow is supported server-side.
+    revertQueuedBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      const incomingBooking = this.normalizeBooking(
+        {
+          ...booking,
+          status: "incoming",
+        },
+        "incoming",
+      );
+
+      this.rememberLocalRevertToIncoming(incomingBooking);
+      this.removeBookingFromLists(incomingBooking.id);
+      this.incomingList = this.insertBookingSorted(this.incomingList, incomingBooking);
+      this.setTab("incoming");
+      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
+        booking: this.cloneBooking(incomingBooking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
+    },
+
+    // Frontend-only revert: moves an in-progress card back into Queued in this browser session.
+    // BACKEND: replace this with a real in_progress -> queued endpoint/status when this workflow is supported server-side.
+    revertInProgressBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      const queuedBooking = this.normalizeBooking(
+        {
+          ...booking,
+          status: "queued",
+        },
+        "queued",
+      );
+
+      this.rememberLocalRevertToQueued(queuedBooking);
+      this.removeBookingFromLists(queuedBooking.id);
+      this.queuedList = this.insertBookingSorted(this.queuedList, queuedBooking);
+      this.setTab("queued");
+      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
+        booking: this.cloneBooking(queuedBooking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
     },
 
     // Starts the Queued -> In-Progress transition for a booking.
@@ -943,29 +1204,30 @@ function adminDashboard() {
       }
 
       if ("incomingList" in nextPayload) {
-        this.incomingList = nextPayload.incomingList;
+        this.incomingList = this.filterLocalCancelledBookings(nextPayload.incomingList);
       }
 
       if ("queuedList" in nextPayload) {
-        this.queuedList = nextPayload.queuedList;
+        this.queuedList = this.filterLocalCancelledBookings(nextPayload.queuedList);
       }
 
       if ("inProgressList" in nextPayload) {
-        this.inProgressList = nextPayload.inProgressList;
+        this.inProgressList = this.filterLocalCancelledBookings(nextPayload.inProgressList);
       }
 
       if ("forPickupList" in nextPayload) {
-        this.forPickupList = nextPayload.forPickupList;
+        this.forPickupList = this.filterLocalCancelledBookings(nextPayload.forPickupList);
       }
 
       if ("forPaymentList" in nextPayload) {
-        this.forPaymentList = nextPayload.forPaymentList;
+        this.forPaymentList = this.filterLocalCancelledBookings(nextPayload.forPaymentList);
       }
 
       if ("releasedList" in nextPayload) {
-        this.releasedList = nextPayload.releasedList;
+        this.releasedList = this.filterLocalCancelledBookings(nextPayload.releasedList);
       }
 
+      this.applyLocalRevertedBookings();
       this.refreshIcons();
       this.dispatchDashboardEvent("admin-dashboard:data-applied", {
         state: this.getState(),
@@ -1204,12 +1466,118 @@ function adminDashboard() {
 
     // Removes a booking from every visible status list using its id.
     removeBookingFromLists(bookingId) {
-      this.incomingList    = this.incomingList.filter((item) => item.id !== bookingId);
-      this.queuedList      = this.queuedList.filter((item) => item.id !== bookingId);
-      this.inProgressList  = this.inProgressList.filter((item) => item.id !== bookingId);
-      this.forPickupList   = this.forPickupList.filter((item) => item.id !== bookingId);
-      this.forPaymentList  = this.forPaymentList.filter((item) => item.id !== bookingId);
-      this.noShowList      = this.noShowList.filter((item) => item.id !== bookingId);
+      const id = String(bookingId);
+      this.incomingList    = this.incomingList.filter((item) => String(item.id) !== id);
+      this.queuedList      = this.queuedList.filter((item) => String(item.id) !== id);
+      this.inProgressList  = this.inProgressList.filter((item) => String(item.id) !== id);
+      this.forPickupList   = this.forPickupList.filter((item) => String(item.id) !== id);
+      this.forPaymentList  = this.forPaymentList.filter((item) => String(item.id) !== id);
+      this.releasedList    = this.releasedList.filter((item) => String(item.id) !== id);
+      this.noShowList      = this.noShowList.filter((item) => String(item.id) !== id);
+    },
+
+    rememberLocalCancellation(bookingId) {
+      const id = String(bookingId);
+      if (!this.localCancelledBookingIds.includes(id)) {
+        this.localCancelledBookingIds = [...this.localCancelledBookingIds, id];
+      }
+    },
+
+    isLocallyCancelled(booking) {
+      return this.localCancelledBookingIds.includes(String(booking?.id));
+    },
+
+    filterLocalCancelledBookings(list) {
+      return Array.isArray(list)
+        ? list.filter((booking) => !this.isLocallyCancelled(booking))
+        : [];
+    },
+
+    rememberLocalRevertToIncoming(booking) {
+      const id = String(booking?.id);
+      const nextRevertedBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+
+      this.localRevertedToIncomingBookings = [
+        ...nextRevertedBookings,
+        this.cloneBooking(booking),
+      ];
+      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+    },
+
+    rememberLocalRevertToQueued(booking) {
+      const id = String(booking?.id);
+      const nextRevertedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+
+      this.localRevertedToQueuedBookings = [
+        ...nextRevertedBookings,
+        this.cloneBooking(booking),
+      ];
+      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+    },
+
+    applyLocalRevertedBookings() {
+      const incomingRevertedBookings = this.localRevertedToIncomingBookings.filter(
+        (booking) => !this.isLocallyCancelled(booking),
+      );
+      const queuedRevertedBookings = this.localRevertedToQueuedBookings.filter(
+        (booking) => !this.isLocallyCancelled(booking),
+      );
+      const revertedBookings = [
+        ...incomingRevertedBookings,
+        ...queuedRevertedBookings,
+      ];
+
+      if (revertedBookings.length === 0) {
+        return;
+      }
+
+      const revertedIds = new Set(
+        revertedBookings.map((booking) => String(booking.id)),
+      );
+
+      this.incomingList = this.incomingList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.queuedList = this.queuedList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.inProgressList = this.inProgressList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.forPickupList = this.forPickupList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.forPaymentList = this.forPaymentList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.releasedList = this.releasedList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.noShowList = this.noShowList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+
+      for (const booking of incomingRevertedBookings) {
+        this.incomingList = this.insertBookingSorted(
+          this.incomingList,
+          this.normalizeBooking(booking, "incoming"),
+        );
+      }
+
+      for (const booking of queuedRevertedBookings) {
+        this.queuedList = this.insertBookingSorted(
+          this.queuedList,
+          this.normalizeBooking(booking, "queued"),
+        );
+      }
     },
 
     // Maps a frontend action name to the next booking status.
@@ -2144,7 +2512,10 @@ function adminDashboard() {
       try {
         const data = await API.getNoShows();
         this._resetPollFailures("_clinicInterval");
-        this.noShowList = (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show"));
+        this.noShowList = this.filterLocalCancelledBookings(
+          (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show")),
+        );
+        this.applyLocalRevertedBookings();
       } catch (error) {
         this._stopPollOnFailure("_clinicInterval", "loadNoShows", error);
       }
