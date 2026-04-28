@@ -246,13 +246,13 @@
           document.getElementById("clientProfileInitials").textContent =
             ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "--";
         } catch {
-          window.location.href = "../../pages/sign-in/sign_in.html";
+          window.location.href = "./sign-in.html";
         }
       })();
 
       document.getElementById("clientLogoutBtn").addEventListener("click", async () => {
         try { await API.logout("customer"); } finally {
-          window.location.href = "../../pages/sign-in/sign_in.html";
+          window.location.href = "./sign-in.html";
         }
       });
 

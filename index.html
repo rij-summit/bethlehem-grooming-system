@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bethlehem Clinic</title>
+    <title>Bethlehem Animal Clinic &amp; Grooming</title>
 
     <!-- Compiled Tailwind CSS-->
     <link rel="stylesheet" href="css/output.css" />
@@ -16,7 +16,7 @@
     <!-- NAVBAR -->
 
     <nav
-      class="site-nav bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0"
+      class="site-nav bg-[#b6d4ee] w-full px-12 py-5 flex justify-between items-center sticky top-0 z-10"
     >
       <div class="flex items-center">
         <a
@@ -38,6 +38,8 @@
       </div>
 
       <div class="site-nav-actions flex items-center gap-10">
+        <!-- TODO: FAQ page not yet built. href="#" is a placeholder.
+             Wire this to a dedicated FAQ page or an anchor section when ready. -->
         <a
           href="#"
           class="site-nav-link text-gray-800 font-medium text-base hover:text-blue-600 transition-colors"
@@ -45,8 +47,13 @@
           FAQ
         </a>
 
+        <!-- TODO: Auth-aware redirect not implemented on the home page.
+             If a customer_token or admin_token already exists in localStorage,
+             these links should redirect straight to the appropriate dashboard
+             instead of going to sign-in. Add a small inline script in <head>
+             that checks the token and redirects before the page renders. -->
         <a
-          href="./pages/sign-in/sign_in.html"
+          href="./pages/client/sign-in.html"
           class="site-nav-login text-white px-12 py-3 rounded-lg font-medium text-base transition-colors shadow-sm"
         >
           Sign In
@@ -174,7 +181,7 @@
         Give your pet the care they deserve. Schedule your appointment today!
       </p>
       <a
-        href="./pages/sign-in/sign_in.html"
+        href="./pages/client/sign-in.html"
         class="bg-white text-[#2a3b4c] px-16 py-4 rounded-2xl font-medium text-xl hover:bg-gray-100 transition-colors shadow-sm"
       >
         Book Now
@@ -192,15 +199,5 @@
     <script>
       lucide.createIcons();
     </script>
-    <i data-lucide="dog"></i>
-    <i data-lucide="cat"></i>
-    <i data-lucide="scissors-line-dashed"></i>
-
-    <!-- Alpine.js via CDN always load BEFORE closing /body -->
-
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
-    ></script>
   </body>
 </html>

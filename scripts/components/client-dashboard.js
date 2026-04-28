@@ -78,7 +78,7 @@
       }
     } catch {
       // Authentication section: token is missing or expired, so return to login.
-      window.location.href = "../../pages/sign-in/sign_in.html";
+      window.location.href = "./sign-in.html";
     }
   })();
 
@@ -88,7 +88,7 @@
       try {
         await API.logout("customer");
       } finally {
-        window.location.href = "../../pages/sign-in/sign_in.html";
+        window.location.href = "./sign-in.html";
       }
     });
   }

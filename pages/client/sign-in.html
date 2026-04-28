@@ -85,11 +85,18 @@
             </div>
 
             <div class="flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <!-- TODO: "Remember me" checkbox is rendered but has no logic attached.
+                   When checked, it should extend the token lifetime or keep the token
+                   in localStorage vs sessionStorage. Needs backend support (longer-lived
+                   token) and a handler in sign-in.js to apply the preference. -->
               <label class="inline-flex items-center gap-2 text-slate-600">
                 <input type="checkbox" class="m-0" />
                 <span>Remember me</span>
               </label>
 
+              <!-- TODO: "Forgot password?" has no password reset flow yet (href="#").
+                   Needs a dedicated reset page and a backend endpoint:
+                   POST /api/password/forgot → sends reset link to the user's email. -->
               <a href="#" class="text-[#315b7e] transition hover:text-[#274a66]">
                 Forgot password?
               </a>
@@ -113,7 +120,7 @@
             <p class="m-0">
               Don't have an account?
               <a
-                href="../client/signup.html"
+                href="./signup.html"
                 class="font-semibold text-[#315b7e] transition hover:text-[#274a66]"
               >
                 Sign Up

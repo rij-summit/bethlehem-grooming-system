@@ -1,4 +1,4 @@
-// Connected to pages/sign-in/sign_in.html
+// Connected to pages/client/sign-in.html
 // Depends on: api.js (loaded before this script in the HTML)
 // Team note: pages/admin/login.html and pages/client/login.html were removed
 // intentionally. All frontend login entry points and auth redirects should

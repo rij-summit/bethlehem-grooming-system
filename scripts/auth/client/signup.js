@@ -140,7 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
       signupForm.reset();
 
       setTimeout(() => {
-        window.location.href = "../sign-in/sign_in.html";
+        window.location.href = "./sign-in.html";
       }, 1500);
     } catch (error) {
       if (error.errors) {
