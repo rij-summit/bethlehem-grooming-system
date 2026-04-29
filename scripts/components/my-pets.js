@@ -4,7 +4,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   // ── Auth guard ───────────────────────────────────────
   if (!API.getCustomerToken()) {
-    window.location.href = "../sign-in/sign_in.html";
+    window.location.href = "./sign-in.html";
     return;
   }
 
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Logout ────────────────────────────────────────────
   logoutBtn?.addEventListener("click", async () => {
     await API.logout("customer");
-    window.location.href = "../sign-in/sign_in.html";
+    window.location.href = "./sign-in.html";
   });
 
   // ── Sidebar toggle (mobile) ───────────────────────────

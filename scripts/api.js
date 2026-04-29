@@ -97,6 +97,20 @@ var API = (() => {
 
     const data = await response.json().catch(() => ({}));
 
+    if (response.status === 401) {
+      if (token === getAdminToken()) {
+        clearAdminToken();
+      } else if (token === getCustomerToken()) {
+        clearCustomerToken();
+        clearBookingDraft();
+      }
+      const depth = window.location.pathname.split("/").filter(Boolean).length;
+      window.location.href = depth >= 2
+        ? "../client/sign-in.html"
+        : "./pages/client/sign-in.html";
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+
     if (!response.ok) {
       const error = new Error(data.message || "Something went wrong.");
       error.status = response.status;

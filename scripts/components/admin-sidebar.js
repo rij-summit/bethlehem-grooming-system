@@ -58,7 +58,7 @@ function adminSidebar() {
         await API.logout("admin");
       } finally {
         // Always redirect even if the API call fails (token is already cleared by api.js)
-        window.location.href = "../../pages/sign-in/sign_in.html";
+        window.location.href = "../../pages/client/sign-in.html";
       }
     },
 
