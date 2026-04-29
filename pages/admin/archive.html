@@ -59,6 +59,7 @@
               <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
                 <span>Appointments</span>
+                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming appointments"></span>
               </a>
               <a href="./ai-analytics.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'analytics' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="sparkles" class="h-5 w-5"></i>
@@ -246,7 +247,7 @@
               <div class="mt-4 flex flex-wrap gap-3">
                 <div class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="archive" class="h-4 w-4 text-[#315b7e]"></i>
-                  <span x-text="filteredCount + ' of ' + totalCount + ' record' + (totalCount !== 1 ? 's' : '')"></span>
+                  <span x-text="filteredCount + ' record' + (filteredCount !== 1 ? 's' : '')"></span>
                 </div>
                 <div x-show="selectedYear" class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="calendar-check" class="h-4 w-4 text-[#315b7e]"></i>

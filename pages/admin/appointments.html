@@ -86,6 +86,12 @@
               >
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
                 <span>Appointments</span>
+                <span
+                  x-show="hasIncomingAppointments"
+                  style="display: none"
+                  class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"
+                  aria-label="Incoming appointments"
+                ></span>
               </a>
 
               <a

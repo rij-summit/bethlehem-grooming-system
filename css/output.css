@@ -872,6 +872,10 @@ video {
   height: 100vh;
 }
 
+.h-2\.5 {
+  height: 0.625rem;
+}
+
 .max-h-\[70vh\] {
   max-height: 70vh;
 }
@@ -991,6 +995,10 @@ video {
 
 .w-full {
   width: 100%;
+}
+
+.w-2\.5 {
+  width: 0.625rem;
 }
 
 .min-w-0 {
@@ -2530,6 +2538,11 @@ video {
 .ring-\[\#315b7e\] {
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(49 91 126 / var(--tw-ring-opacity, 1));
+}
+
+.ring-white {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(255 255 255 / var(--tw-ring-opacity, 1));
 }
 
 .filter {

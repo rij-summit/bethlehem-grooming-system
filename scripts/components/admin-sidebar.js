@@ -3,6 +3,9 @@ function adminSidebar() {
     sidebarOpen: false,
     activePage: "dashboard",
     clinicStopped: false,
+    incomingAppointmentCount: 0,
+    _incomingAppointmentInterval: null,
+    _incomingAppointmentListener: null,
     stopModal: {
       open: false,
       title: "",
@@ -23,14 +26,40 @@ function adminSidebar() {
       warning: "",
     },
 
+    get hasIncomingAppointments() {
+      return this.incomingAppointmentCount > 0;
+    },
+
     async init() {
       this.detectActivePage();
+      this.registerIncomingAppointmentListener();
 
       this.$nextTick(() => {
         if (window.lucide) window.lucide.createIcons();
       });
 
-      await this.loadClinicStatus();
+      await Promise.all([
+        this.loadClinicStatus(),
+        this.loadIncomingAppointmentCount(),
+      ]);
+
+      this._incomingAppointmentInterval = setInterval(
+        () => this.loadIncomingAppointmentCount(),
+        30000,
+      );
+    },
+
+    destroy() {
+      if (this._incomingAppointmentInterval) {
+        clearInterval(this._incomingAppointmentInterval);
+      }
+
+      if (this._incomingAppointmentListener) {
+        window.removeEventListener(
+          "admin-dashboard:data-applied",
+          this._incomingAppointmentListener,
+        );
+      }
     },
 
     detectActivePage() {
@@ -50,6 +79,56 @@ function adminSidebar() {
         this.activePage = "transactions";
       } else if (currentPath.includes("settings.html")) {
         this.activePage = "settings";
+      }
+    },
+
+    registerIncomingAppointmentListener() {
+      this._incomingAppointmentListener = (event) => {
+        if (this.activePage !== "appointments") return;
+
+        const incomingList = event.detail?.state?.incomingList;
+        if (Array.isArray(incomingList)) {
+          this.setIncomingAppointmentCount(incomingList.length);
+        }
+      };
+
+      window.addEventListener(
+        "admin-dashboard:data-applied",
+        this._incomingAppointmentListener,
+      );
+    },
+
+    todayDate() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    },
+
+    setIncomingAppointmentCount(count) {
+      const nextCount = Number(count);
+      this.incomingAppointmentCount =
+        Number.isFinite(nextCount) && nextCount > 0 ? nextCount : 0;
+    },
+
+    async loadIncomingAppointmentCount() {
+      if (
+        !window.API ||
+        typeof API.getAdminBookings !== "function" ||
+        typeof API.getAdminToken !== "function" ||
+        !API.getAdminToken()
+      ) {
+        return;
+      }
+
+      try {
+        const data = await API.getAdminBookings(this.todayDate(), {
+          includeFuture: true,
+        });
+        const incomingList = data?.incomingList ?? data?.incoming ?? [];
+        this.setIncomingAppointmentCount(
+          Array.isArray(incomingList) ? incomingList.length : 0,
+        );
+      } catch {
+        // Non-fatal: the sidebar should stay usable even if the count cannot load.
       }
     },
 
