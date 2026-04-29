@@ -1,4 +1,3 @@
-import { getPhilippineHolidays } from "../services/holidays.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 
 /**
@@ -7,7 +6,7 @@ import { formatBookingSchedule } from "../services/booking-format-service.js";
  * Handles Step 1 of the booking process:
  * - Calendar display and date selection
  * - Time slot selection fetched from GET /api/timeslots?date=
- * - PH time validation and holiday blocking
+ * - PH time validation and clinic closure blocking
  * - 3-day booking window
  *
  * Stores selected schedule in sessionStorage as:
@@ -25,7 +24,6 @@ const state = {
   currentMonth: null,
   selectedDateKey: null,
   selectedSlot: null,   // { window_id, window_label, start_time, end_time, is_full }
-  holidays: new Map(),
   timeslots: [],        // API response for the selected date
   dayFull: false,       // true when the selected date has hit 20-booking capacity
   clinicStatus: {
@@ -109,16 +107,6 @@ function isToday(dateKey) {
   return dateKey === getTodayKeyInManila();
 }
 
-function isHoliday(dateKey) {
-  return state.holidays.has(dateKey);
-}
-
-function getHolidayLabel(dateKey) {
-  const holiday = state.holidays.get(dateKey);
-  if (!holiday) return "";
-  return holiday.localName || holiday.name || "Holiday";
-}
-
 function isBeyondBookingWindow(dateKey) {
   const todayParts = getManilaNowParts();
   const today = new Date(todayParts.year, todayParts.month - 1, todayParts.day);
@@ -194,7 +182,6 @@ function updateClinicNotice() {
 function isDateDisabled(dateKey) {
   return (
     isPastDate(dateKey) ||
-    isHoliday(dateKey) ||
     isBeyondBookingWindow(dateKey) ||
     getClinicBlock(dateKey) !== null
   );
@@ -272,16 +259,6 @@ async function fetchTimeslots(dateKey) {
 // RENDER CALENDAR
 // =========================
 
-async function loadHolidaysForVisibleYear() {
-  const year = state.currentMonth.getFullYear();
-  state.holidays = await getPhilippineHolidays(year);
-
-  if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {
-    state.selectedDateKey = null;
-    state.selectedSlot = null;
-  }
-}
-
 function renderMonthHeader() {
   elements.monthLabel.textContent = new Intl.DateTimeFormat("en-PH", {
     month: "long",
@@ -295,7 +272,7 @@ function createEmptyCell() {
   return emptyCell;
 }
 
-function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
+function createDateButton({ day, dateKey, disabled, selected }) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = day;
@@ -316,10 +293,7 @@ function createDateButton({ day, dateKey, disabled, selected, holidayLabel }) {
     selected ? "ring-2 ring-[#315b7e] bg-[#b9d7f1] text-[#1f3d58]" : "",
   ].join(" ");
 
-  // Clinic closure message takes priority over the holiday label
-  const tooltip = clinicBlock
-    ? getClinicBlockMessage(dateKey)
-    : holidayLabel;
+  const tooltip = clinicBlock ? getClinicBlockMessage(dateKey) : "";
   if (tooltip) button.title = tooltip;
 
   if (disabled) {
@@ -359,7 +333,6 @@ function renderCalendarGrid() {
         dateKey,
         disabled: isDateDisabled(dateKey),
         selected: state.selectedDateKey === dateKey,
-        holidayLabel: getHolidayLabel(dateKey),
       }),
     );
   }
@@ -477,25 +450,23 @@ function canGoToPreviousMonth() {
 }
 
 function bindEvents() {
-  elements.prevMonthBtn.addEventListener("click", async () => {
+  elements.prevMonthBtn.addEventListener("click", () => {
     if (!canGoToPreviousMonth()) return;
     state.currentMonth = new Date(
       state.currentMonth.getFullYear(),
       state.currentMonth.getMonth() - 1,
       1,
     );
-    await loadHolidaysForVisibleYear();
     renderCalendarGrid();
     renderMonthHeader();
   });
 
-  elements.nextMonthBtn.addEventListener("click", async () => {
+  elements.nextMonthBtn.addEventListener("click", () => {
     state.currentMonth = new Date(
       state.currentMonth.getFullYear(),
       state.currentMonth.getMonth() + 1,
       1,
     );
-    await loadHolidaysForVisibleYear();
     renderCalendarGrid();
     renderMonthHeader();
   });
@@ -514,8 +485,7 @@ export async function initBookingCalendar() {
   const now = getManilaNowParts();
   state.currentMonth = new Date(now.year, now.month - 1, 1);
 
-  // Load both holidays and clinic closures in parallel
-  await Promise.all([loadHolidaysForVisibleYear(), loadClinicStatus()]);
+  await loadClinicStatus();
 
   // Clear any previously selected date if it is now clinic-blocked
   if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {

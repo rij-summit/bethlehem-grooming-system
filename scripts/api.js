@@ -276,9 +276,12 @@ var API = (() => {
 
   // ── Admin ─────────────────────────────────────────────────────────────────
 
-  async function getAdminBookings(date = null) {
-    // GET /api/admin/bookings?date=YYYY-MM-DD  (protected — admin token)
-    const query = date ? `?date=${date}` : "";
+  async function getAdminBookings(date = null, { includeFuture = false } = {}) {
+    // GET /api/admin/bookings?date=YYYY-MM-DD&include_future=1
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    if (includeFuture) params.set("include_future", "1");
+    const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/admin/bookings${query}`, null, getAdminToken());
   }
 

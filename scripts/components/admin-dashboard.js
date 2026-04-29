@@ -396,15 +396,23 @@ function adminDashboard() {
     activeTab: "incoming",
     todayCount: 0,
     weekCount: 0,
+    revenueToday: 0,
+    revenuePaymentCount: 0,
+    noShowWeekCount: 0,
+    noShowWeekRate: 0,
     currentCapacity: 0,
     maxCapacity: 20,
     notificationCount: 0,
     notificationsOpen: false,
     notifications: [],
+    recentActivity: [],
     notifTab: "all",
     detailsModalOpen: false,
     detailsBooking: null,
     pendingActions: {},
+    localCancelledBookingIds: [],
+    localRevertedToIncomingBookings: [],
+    localRevertedToQueuedBookings: [],
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -425,6 +433,18 @@ function adminDashboard() {
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
     pickupModal: { open: false, booking: null, busy: false },
+    actionConfirmModal: {
+      open: false,
+      action: "",
+      booking: null,
+      title: "",
+      message: "",
+      confirmLabel: "",
+      busyLabel: "",
+      icon: "checkIn",
+      variant: "primary",
+      busy: false,
+    },
     paymentModal: {
       open: false,
       booking: null,
@@ -461,6 +481,7 @@ function adminDashboard() {
       walkInBookingUrl: "",
       detailPageUrl: "",
       enableOptimisticUpdates: false,
+      includeFutureAppointments: false,
     },
 
     /*****************************************************************************************
@@ -494,6 +515,10 @@ function adminDashboard() {
     forPickupList: [],
     // forPickupList kept for backward-compat; new data comes as forPaymentList
     releasedList: [],
+
+    get showFutureAppointments() {
+      return Boolean(this.config.includeFutureAppointments);
+    },
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
@@ -698,9 +723,255 @@ function adminDashboard() {
       }
     },
 
+    // Opens a second confirmation before moving an Incoming booking into Queued.
+    confirmCheckInBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "checkIn",
+        booking,
+        title: "Confirm Check In",
+        message: ownerName
+          ? `Are you sure you want to check in ${ownerName}?`
+          : "Are you sure you want to check in this appointment?",
+        confirmLabel: "Yes, Check In",
+        busyLabel: "Checking in...",
+        icon: "checkIn",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving a Queued booking into In-Progress.
+    confirmStartGroomingBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "startGrooming",
+        booking,
+        title: "Confirm Start Grooming",
+        message: ownerName
+          ? `Are you sure you want to start grooming for ${ownerName}?`
+          : "Are you sure you want to start grooming this appointment?",
+        confirmLabel: "Yes, Start",
+        busyLabel: "Starting...",
+        icon: "grooming",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before finishing an In-Progress booking.
+    confirmMarkBookingDone(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "markDone",
+        booking,
+        title: "Confirm Finished",
+        message: ownerName
+          ? `Are you sure you want to mark ${ownerName}'s appointment as finished?`
+          : "Are you sure you want to mark this appointment as finished?",
+        confirmLabel: "Yes, Finished",
+        busyLabel: "Finishing...",
+        icon: "finished",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving a Queued booking back to Incoming in this UI.
+    confirmRevertQueuedBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "revertQueued",
+        booking,
+        title: "Revert to Incoming",
+        message: ownerName
+          ? `Are you sure you want to move ${ownerName}'s appointment back to Incoming?`
+          : "Are you sure you want to move this appointment back to Incoming?",
+        confirmLabel: "Yes, Revert",
+        busyLabel: "Reverting...",
+        icon: "revert",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before moving an In-Progress booking back to Queued in this UI.
+    confirmRevertInProgressBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "revertInProgress",
+        booking,
+        title: "Revert to Queued",
+        message: ownerName
+          ? `Are you sure you want to move ${ownerName}'s appointment back to Queued?`
+          : "Are you sure you want to move this appointment back to Queued?",
+        confirmLabel: "Yes, Revert",
+        busyLabel: "Reverting...",
+        icon: "revert",
+        variant: "primary",
+      });
+    },
+
+    // Opens a second confirmation before hiding a booking as cancelled in this UI.
+    confirmCancelBooking(booking) {
+      const ownerName = String(booking?.ownerName || "").trim();
+      this.openActionConfirmModal({
+        action: "cancel",
+        booking,
+        title: "Cancel Appointment",
+        message: ownerName
+          ? `Are you sure you want to cancel ${ownerName}'s appointment?`
+          : "Are you sure you want to cancel this appointment?",
+        confirmLabel: "Yes, Cancel",
+        busyLabel: "Cancelling...",
+        icon: "cancel",
+        variant: "danger",
+      });
+    },
+
+    openActionConfirmModal({
+      action,
+      booking,
+      title,
+      message,
+      confirmLabel,
+      busyLabel,
+      icon = "checkIn",
+      variant = "primary",
+    }) {
+      this.actionConfirmModal = {
+        open: true,
+        action,
+        booking: this.cloneBooking(booking),
+        title,
+        message,
+        confirmLabel,
+        busyLabel,
+        icon,
+        variant,
+        busy: false,
+      };
+    },
+
+    closeActionConfirmModal(force = false) {
+      if (this.actionConfirmModal.busy && !force) {
+        return;
+      }
+
+      this.actionConfirmModal = {
+        open: false,
+        action: "",
+        booking: null,
+        title: "",
+        message: "",
+        confirmLabel: "",
+        busyLabel: "",
+        icon: "checkIn",
+        variant: "primary",
+        busy: false,
+      };
+    },
+
+    async executeConfirmedBookingAction() {
+      const { action, booking } = this.actionConfirmModal;
+      if (!action || !booking) {
+        return;
+      }
+
+      this.actionConfirmModal.busy = true;
+
+      try {
+        if (action === "checkIn") {
+          await this.checkInBooking(booking);
+        } else if (action === "startGrooming") {
+          await this.startGroomingBooking(booking);
+        } else if (action === "markDone") {
+          await this.markBookingDone(booking);
+        } else if (action === "cancel") {
+          this.cancelBookingFrontendOnly(booking);
+        } else if (action === "revertQueued") {
+          this.revertQueuedBookingFrontendOnly(booking);
+        } else if (action === "revertInProgress") {
+          this.revertInProgressBookingFrontendOnly(booking);
+        }
+      } finally {
+        this.closeActionConfirmModal(true);
+      }
+    },
+
     // Starts the Incoming -> Queued transition for a booking.
     async checkInBooking(booking) {
       await this.runBookingAction("checkIn", booking);
+    },
+
+    // Frontend-only cancellation: hides the card in this browser session.
+    // BACKEND: replace this with a real cancel endpoint/status when cancellation is ready server-side.
+    cancelBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      this.rememberLocalCancellation(booking.id);
+      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== String(booking.id),
+      );
+      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== String(booking.id),
+      );
+      this.removeBookingFromLists(booking.id);
+      this.dispatchDashboardEvent("admin-dashboard:booking-cancelled-ui-only", {
+        booking: this.cloneBooking(booking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
+    },
+
+    // Frontend-only revert: moves a queued card back into Incoming in this browser session.
+    // BACKEND: replace this with a real queued -> incoming endpoint/status when this workflow is supported server-side.
+    revertQueuedBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      const incomingBooking = this.normalizeBooking(
+        {
+          ...booking,
+          status: "incoming",
+        },
+        "incoming",
+      );
+
+      this.rememberLocalRevertToIncoming(incomingBooking);
+      this.removeBookingFromLists(incomingBooking.id);
+      this.incomingList = this.insertBookingSorted(this.incomingList, incomingBooking);
+      this.setTab("incoming");
+      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
+        booking: this.cloneBooking(incomingBooking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
+    },
+
+    // Frontend-only revert: moves an in-progress card back into Queued in this browser session.
+    // BACKEND: replace this with a real in_progress -> queued endpoint/status when this workflow is supported server-side.
+    revertInProgressBookingFrontendOnly(booking) {
+      if (!booking || booking.id === undefined || booking.id === null) {
+        return;
+      }
+
+      const queuedBooking = this.normalizeBooking(
+        {
+          ...booking,
+          status: "queued",
+        },
+        "queued",
+      );
+
+      this.rememberLocalRevertToQueued(queuedBooking);
+      this.removeBookingFromLists(queuedBooking.id);
+      this.queuedList = this.insertBookingSorted(this.queuedList, queuedBooking);
+      this.setTab("queued");
+      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
+        booking: this.cloneBooking(queuedBooking),
+        state: this.getState(),
+      });
+      this.refreshIcons();
     },
 
     // Starts the Queued -> In-Progress transition for a booking.
@@ -930,6 +1201,22 @@ function adminDashboard() {
         this.weekCount = nextPayload.weekCount;
       }
 
+      if ("revenueToday" in nextPayload) {
+        this.revenueToday = nextPayload.revenueToday;
+      }
+
+      if ("revenuePaymentCount" in nextPayload) {
+        this.revenuePaymentCount = nextPayload.revenuePaymentCount;
+      }
+
+      if ("noShowWeekCount" in nextPayload) {
+        this.noShowWeekCount = nextPayload.noShowWeekCount;
+      }
+
+      if ("noShowWeekRate" in nextPayload) {
+        this.noShowWeekRate = nextPayload.noShowWeekRate;
+      }
+
       if ("currentCapacity" in nextPayload) {
         this.currentCapacity = nextPayload.currentCapacity;
       }
@@ -942,30 +1229,35 @@ function adminDashboard() {
         this.notificationCount = nextPayload.notificationCount;
       }
 
+      if ("recentActivity" in nextPayload) {
+        this.recentActivity = nextPayload.recentActivity;
+      }
+
       if ("incomingList" in nextPayload) {
-        this.incomingList = nextPayload.incomingList;
+        this.incomingList = this.filterLocalCancelledBookings(nextPayload.incomingList);
       }
 
       if ("queuedList" in nextPayload) {
-        this.queuedList = nextPayload.queuedList;
+        this.queuedList = this.filterLocalCancelledBookings(nextPayload.queuedList);
       }
 
       if ("inProgressList" in nextPayload) {
-        this.inProgressList = nextPayload.inProgressList;
+        this.inProgressList = this.filterLocalCancelledBookings(nextPayload.inProgressList);
       }
 
       if ("forPickupList" in nextPayload) {
-        this.forPickupList = nextPayload.forPickupList;
+        this.forPickupList = this.filterLocalCancelledBookings(nextPayload.forPickupList);
       }
 
       if ("forPaymentList" in nextPayload) {
-        this.forPaymentList = nextPayload.forPaymentList;
+        this.forPaymentList = this.filterLocalCancelledBookings(nextPayload.forPaymentList);
       }
 
       if ("releasedList" in nextPayload) {
-        this.releasedList = nextPayload.releasedList;
+        this.releasedList = this.filterLocalCancelledBookings(nextPayload.releasedList);
       }
 
+      this.applyLocalRevertedBookings();
       this.refreshIcons();
       this.dispatchDashboardEvent("admin-dashboard:data-applied", {
         state: this.getState(),
@@ -999,6 +1291,56 @@ function adminDashboard() {
       }
 
       if (
+        this.hasValue(payload.revenueToday) ||
+        this.hasValue(summary.revenueToday) ||
+        this.hasValue(summary.revenue_today)
+      ) {
+        nextPayload.revenueToday = this.toNumber(
+          payload.revenueToday ?? summary.revenueToday ?? summary.revenue_today,
+          this.revenueToday,
+        );
+      }
+
+      if (
+        this.hasValue(payload.revenuePaymentCount) ||
+        this.hasValue(summary.revenuePaymentCount) ||
+        this.hasValue(summary.revenue_payment_count)
+      ) {
+        nextPayload.revenuePaymentCount = this.toNumber(
+          payload.revenuePaymentCount ??
+            summary.revenuePaymentCount ??
+            summary.revenue_payment_count,
+          this.revenuePaymentCount,
+        );
+      }
+
+      if (
+        this.hasValue(payload.noShowWeekCount) ||
+        this.hasValue(summary.noShowWeek) ||
+        this.hasValue(summary.noShowWeekCount) ||
+        this.hasValue(summary.no_show_week)
+      ) {
+        nextPayload.noShowWeekCount = this.toNumber(
+          payload.noShowWeekCount ??
+            summary.noShowWeekCount ??
+            summary.noShowWeek ??
+            summary.no_show_week,
+          this.noShowWeekCount,
+        );
+      }
+
+      if (
+        this.hasValue(payload.noShowWeekRate) ||
+        this.hasValue(summary.noShowWeekRate) ||
+        this.hasValue(summary.no_show_week_rate)
+      ) {
+        nextPayload.noShowWeekRate = this.toNumber(
+          payload.noShowWeekRate ?? summary.noShowWeekRate ?? summary.no_show_week_rate,
+          this.noShowWeekRate,
+        );
+      }
+
+      if (
         this.hasValue(payload.currentCapacity) ||
         this.hasValue(capacity.current)
       ) {
@@ -1022,6 +1364,12 @@ function adminDashboard() {
         nextPayload.notificationCount = this.toNumber(
           payload.notificationCount ?? notifications.count,
           this.notificationCount,
+        );
+      }
+
+      if ("recentActivity" in payload || "recent_activity" in payload) {
+        nextPayload.recentActivity = this.normalizeRecentActivity(
+          payload.recentActivity ?? payload.recent_activity,
         );
       }
 
@@ -1204,12 +1552,118 @@ function adminDashboard() {
 
     // Removes a booking from every visible status list using its id.
     removeBookingFromLists(bookingId) {
-      this.incomingList    = this.incomingList.filter((item) => item.id !== bookingId);
-      this.queuedList      = this.queuedList.filter((item) => item.id !== bookingId);
-      this.inProgressList  = this.inProgressList.filter((item) => item.id !== bookingId);
-      this.forPickupList   = this.forPickupList.filter((item) => item.id !== bookingId);
-      this.forPaymentList  = this.forPaymentList.filter((item) => item.id !== bookingId);
-      this.noShowList      = this.noShowList.filter((item) => item.id !== bookingId);
+      const id = String(bookingId);
+      this.incomingList    = this.incomingList.filter((item) => String(item.id) !== id);
+      this.queuedList      = this.queuedList.filter((item) => String(item.id) !== id);
+      this.inProgressList  = this.inProgressList.filter((item) => String(item.id) !== id);
+      this.forPickupList   = this.forPickupList.filter((item) => String(item.id) !== id);
+      this.forPaymentList  = this.forPaymentList.filter((item) => String(item.id) !== id);
+      this.releasedList    = this.releasedList.filter((item) => String(item.id) !== id);
+      this.noShowList      = this.noShowList.filter((item) => String(item.id) !== id);
+    },
+
+    rememberLocalCancellation(bookingId) {
+      const id = String(bookingId);
+      if (!this.localCancelledBookingIds.includes(id)) {
+        this.localCancelledBookingIds = [...this.localCancelledBookingIds, id];
+      }
+    },
+
+    isLocallyCancelled(booking) {
+      return this.localCancelledBookingIds.includes(String(booking?.id));
+    },
+
+    filterLocalCancelledBookings(list) {
+      return Array.isArray(list)
+        ? list.filter((booking) => !this.isLocallyCancelled(booking))
+        : [];
+    },
+
+    rememberLocalRevertToIncoming(booking) {
+      const id = String(booking?.id);
+      const nextRevertedBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+
+      this.localRevertedToIncomingBookings = [
+        ...nextRevertedBookings,
+        this.cloneBooking(booking),
+      ];
+      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+    },
+
+    rememberLocalRevertToQueued(booking) {
+      const id = String(booking?.id);
+      const nextRevertedBookings = this.localRevertedToQueuedBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+
+      this.localRevertedToQueuedBookings = [
+        ...nextRevertedBookings,
+        this.cloneBooking(booking),
+      ];
+      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
+        (item) => String(item.id) !== id,
+      );
+    },
+
+    applyLocalRevertedBookings() {
+      const incomingRevertedBookings = this.localRevertedToIncomingBookings.filter(
+        (booking) => !this.isLocallyCancelled(booking),
+      );
+      const queuedRevertedBookings = this.localRevertedToQueuedBookings.filter(
+        (booking) => !this.isLocallyCancelled(booking),
+      );
+      const revertedBookings = [
+        ...incomingRevertedBookings,
+        ...queuedRevertedBookings,
+      ];
+
+      if (revertedBookings.length === 0) {
+        return;
+      }
+
+      const revertedIds = new Set(
+        revertedBookings.map((booking) => String(booking.id)),
+      );
+
+      this.incomingList = this.incomingList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.queuedList = this.queuedList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.inProgressList = this.inProgressList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.forPickupList = this.forPickupList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.forPaymentList = this.forPaymentList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.releasedList = this.releasedList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+      this.noShowList = this.noShowList.filter(
+        (booking) => !revertedIds.has(String(booking.id)),
+      );
+
+      for (const booking of incomingRevertedBookings) {
+        this.incomingList = this.insertBookingSorted(
+          this.incomingList,
+          this.normalizeBooking(booking, "incoming"),
+        );
+      }
+
+      for (const booking of queuedRevertedBookings) {
+        this.queuedList = this.insertBookingSorted(
+          this.queuedList,
+          this.normalizeBooking(booking, "queued"),
+        );
+      }
     },
 
     // Maps a frontend action name to the next booking status.
@@ -1378,9 +1832,14 @@ function adminDashboard() {
         activeTab: this.activeTab,
         todayCount: this.todayCount,
         weekCount: this.weekCount,
+        revenueToday: this.revenueToday,
+        revenuePaymentCount: this.revenuePaymentCount,
+        noShowWeekCount: this.noShowWeekCount,
+        noShowWeekRate: this.noShowWeekRate,
         currentCapacity: this.currentCapacity,
         maxCapacity: this.maxCapacity,
         notificationCount: this.notificationCount,
+        recentActivity: [...this.recentActivity],
         incomingList: [...this.incomingList],
         queuedList: [...this.queuedList],
         inProgressList: [...this.inProgressList],
@@ -1410,6 +1869,8 @@ function adminDashboard() {
         "summary" in value ||
         "metrics" in value ||
         "capacity" in value ||
+        "recentActivity" in value ||
+        "recent_activity" in value ||
         "notifications" in value
       );
     },
@@ -1423,6 +1884,88 @@ function adminDashboard() {
     toNumber(value, fallbackValue = 0) {
       const parsedValue = Number(value);
       return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+    },
+
+    formatDashboardCurrency(amount) {
+      return `\u20b1${Number(amount || 0).toLocaleString("en-PH", {
+        maximumFractionDigits: 0,
+      })}`;
+    },
+
+    formatPercent(value) {
+      return `${Number(value || 0).toFixed(1)}%`;
+    },
+
+    normalizeRecentActivity(activity) {
+      return (Array.isArray(activity) ? activity : [])
+        .map((item, index) => ({
+          id: item?.id ?? `activity-${index}`,
+          type: this.toStringValue(item?.type || "activity"),
+          title: this.toStringValue(item?.title || "Activity"),
+          subtitle: this.toStringValue(item?.subtitle || item?.message),
+          createdAt: this.toStringValue(item?.createdAt ?? item?.created_at ?? item?.time),
+          timeLabel: this.toStringValue(item?.timeLabel ?? item?.time_label),
+        }))
+        .filter((item) => item.title);
+    },
+
+    todayQueuePreview() {
+      const today = this.localToday();
+      return [...this.inProgressList, ...this.queuedList]
+        .filter((booking) => booking.appointmentDate === today)
+        .sort((left, right) => {
+          const statusOrder = { "in-progress": 0, queued: 1 };
+          const leftStatus = statusOrder[left.status] ?? 2;
+          const rightStatus = statusOrder[right.status] ?? 2;
+          if (leftStatus !== rightStatus) return leftStatus - rightStatus;
+          return String(left.appointmentTime || "").localeCompare(String(right.appointmentTime || ""));
+        })
+        .slice(0, 5);
+    },
+
+    queuePreviewStatusLabel(status) {
+      return this.normalizeStatus(status) === "in-progress" ? "In progress" : "Queued";
+    },
+
+    queuePreviewBadgeClass(status) {
+      return this.normalizeStatus(status) === "in-progress"
+        ? "bg-sky-100 text-sky-700"
+        : "bg-amber-100 text-amber-700";
+    },
+
+    queuePreviewAccentClass(status) {
+      return this.normalizeStatus(status) === "in-progress"
+        ? "bg-sky-100 text-sky-700"
+        : "bg-amber-100 text-amber-700";
+    },
+
+    queuePreviewDetail(booking) {
+      const action = this.normalizeStatus(booking?.status) === "in-progress"
+        ? "Grooming"
+        : "Checkup";
+      return `${action} - ${booking?.appointmentTime || "Time pending"}`;
+    },
+
+    activityDotClass(type) {
+      const normalizedType = this.toStringValue(type);
+      if (normalizedType === "completed") return "admin-activity-dot-pickup";
+      if (normalizedType === "in_progress") return "bg-sky-600";
+      if (normalizedType === "queued" || normalizedType === "check_in") return "bg-amber-700";
+      if (normalizedType === "payment") return "bg-green-600";
+      return "bg-slate-400";
+    },
+
+    activityTimeLabel(activity) {
+      if (activity?.timeLabel) return activity.timeLabel;
+      if (!activity?.createdAt) return "";
+
+      const date = new Date(activity.createdAt);
+      if (Number.isNaN(date.getTime())) return "";
+
+      return date.toLocaleTimeString("en-PH", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
     },
 
     // Converts nullable values into template-safe strings.
@@ -2052,7 +2595,9 @@ function adminDashboard() {
 
     async loadAdminBookings() {
       try {
-        const data = await API.getAdminBookings(this.selectedDate);
+        const data = await API.getAdminBookings(this.selectedDate, {
+          includeFuture: this.showFutureAppointments,
+        });
         this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
       } catch (error) {
@@ -2144,7 +2689,10 @@ function adminDashboard() {
       try {
         const data = await API.getNoShows();
         this._resetPollFailures("_clinicInterval");
-        this.noShowList = (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show"));
+        this.noShowList = this.filterLocalCancelledBookings(
+          (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show")),
+        );
+        this.applyLocalRevertedBookings();
       } catch (error) {
         this._stopPollOnFailure("_clinicInterval", "loadNoShows", error);
       }

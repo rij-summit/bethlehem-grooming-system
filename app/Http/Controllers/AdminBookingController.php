@@ -9,6 +9,7 @@ use App\Models\BookingService;
 use App\Models\ClinicClosure;
 use App\Models\Notification;
 use App\Models\CustomerNotification;
+use App\Models\Payment;
 
 class AdminBookingController extends Controller
 {
@@ -17,21 +18,34 @@ class AdminBookingController extends Controller
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
     public function index(Request $request)
     {
-        $today        = Carbon::today()->toDateString();
-        $selectedDate = $request->query('date', $today);
+        $today         = Carbon::today();
+        $selectedDate  = $request->query('date', $today->toDateString());
+        $includeFuture = $request->boolean('include_future', false);
 
         // Validate the date; fall back to today if malformed
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate)) {
-            $selectedDate = $today;
+            $selectedDate = $today->toDateString();
         }
 
-        $maxAheadDate = Carbon::parse($selectedDate)->addDays(3)->toDateString();
+        $rangeStart = Carbon::parse($selectedDate)->startOfDay();
+        if ($rangeStart->lt($today)) {
+            $rangeStart = $today->copy();
+        }
 
-        // Incoming: waiting_to_arrive within selectedDate + 3 days
-        $incoming = Booking::whereBetween('booking_date', [$selectedDate, $maxAheadDate])
+        $maxAheadDate = $today->copy()->addDays(3);
+        $rangeEnd = $includeFuture ? $maxAheadDate : $rangeStart->copy();
+        if ($rangeStart->gt($rangeEnd)) {
+            $rangeStart = $rangeEnd->copy();
+        }
+
+        // Incoming: dashboard sees only the selected day; appointments can opt in to today + future.
+        $incoming = Booking::whereBetween('booking_date', [
+                $rangeStart->toDateString(),
+                $rangeEnd->toDateString(),
+            ])
             ->where('status', 'waiting_to_arrive')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
-            ->orderByRaw("CASE WHEN booking_date = ? THEN 0 ELSE 1 END", [$selectedDate])
+            ->orderByRaw("CASE WHEN booking_date = ? THEN 0 ELSE 1 END", [$rangeStart->toDateString()])
             ->orderBy('booking_date', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
@@ -65,7 +79,7 @@ class AdminBookingController extends Controller
             ->map(fn($b) => $this->formatBooking($b));
 
         // Summary metrics (always based on today, not the filter date)
-        $todayCount = Booking::where('booking_date', $today)
+        $todayCount = Booking::where('booking_date', $today->toDateString())
             ->whereNotIn('status', ['cancelled'])
             ->count();
 
@@ -74,6 +88,18 @@ class AdminBookingController extends Controller
         $weekCount  = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
             ->whereNotIn('status', ['cancelled'])
             ->count();
+        $revenueToday = Payment::whereDate('paid_at', $today->toDateString())
+            ->where('payment_status', 'paid')
+            ->sum('total_amount');
+        $revenuePaymentCount = Payment::whereDate('paid_at', $today->toDateString())
+            ->where('payment_status', 'paid')
+            ->count();
+        $noShowWeekCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
+            ->where('status', 'no_show')
+            ->count();
+        $noShowWeekRate = $weekCount > 0
+            ? round(($noShowWeekCount / $weekCount) * 100, 1)
+            : 0;
 
         return response()->json([
             'success'         => true,
@@ -83,9 +109,14 @@ class AdminBookingController extends Controller
             'forPaymentList'  => $forPayment->values(),
             'releasedList'    => $released->values(),
             'summary'         => [
-                'today' => $todayCount,
-                'week'  => $weekCount,
+                'today'               => $todayCount,
+                'week'                => $weekCount,
+                'revenueToday'        => (float) $revenueToday,
+                'revenuePaymentCount' => $revenuePaymentCount,
+                'noShowWeek'          => $noShowWeekCount,
+                'noShowWeekRate'      => $noShowWeekRate,
             ],
+            'recentActivity'  => $this->recentActivity(),
             'capacity'       => [
                 'current' => $todayCount,
                 'max'     => self::MAX_CAPACITY,
@@ -491,6 +522,122 @@ class AdminBookingController extends Controller
             : '—';
 
         return $base;
+    }
+
+    private function recentActivity(): array
+    {
+        $payments = Payment::with(['booking.user', 'booking.bookingPets.pet'])
+            ->where('payment_status', 'paid')
+            ->whereNotNull('paid_at')
+            ->orderBy('paid_at', 'desc')
+            ->limit(6)
+            ->get()
+            ->map(function (Payment $payment) {
+                $booking = $payment->booking;
+                $ownerLastName = $booking?->user?->last_name ?: $this->ownerName($booking);
+
+                return [
+                    'id'        => 'payment-' . $payment->payment_id,
+                    'type'      => 'payment',
+                    'title'     => 'Payment collected',
+                    'subtitle'  => "\u{20B1}" . number_format((float) $payment->total_amount) . ' - ' . ($ownerLastName ?: 'Customer'),
+                    'time'      => $payment->paid_at,
+                ];
+            });
+
+        $checkIns = Booking::with(['user', 'bookingPets.pet'])
+            ->whereNotNull('dropped_off_at')
+            ->orderBy('dropped_off_at', 'desc')
+            ->limit(6)
+            ->get()
+            ->map(function (Booking $booking) {
+                return [
+                    'id'        => 'check-in-' . $booking->booking_id,
+                    'type'      => 'queued',
+                    'title'     => 'Checked in',
+                    'subtitle'  => $this->petNames($booking) . ' - ' . ($this->ownerName($booking) ?: 'Customer'),
+                    'time'      => $booking->dropped_off_at,
+                ];
+            });
+
+        $groomingStarted = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service'])
+            ->whereNotNull('grooming_started_at')
+            ->orderBy('grooming_started_at', 'desc')
+            ->limit(6)
+            ->get()
+            ->map(function (Booking $booking) {
+                return [
+                    'id'        => 'grooming-started-' . $booking->booking_id,
+                    'type'      => 'in_progress',
+                    'title'     => 'Grooming started',
+                    'subtitle'  => $this->petNames($booking) . ' - ' . $this->serviceLabel($booking),
+                    'time'      => $booking->grooming_started_at,
+                ];
+            });
+
+        $completed = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service'])
+            ->whereNotNull('grooming_finished_at')
+            ->orderBy('grooming_finished_at', 'desc')
+            ->limit(6)
+            ->get()
+            ->map(function (Booking $booking) {
+                return [
+                    'id'        => 'completed-' . $booking->booking_id,
+                    'type'      => 'completed',
+                    'title'     => 'Appointment completed',
+                    'subtitle'  => $this->petNames($booking) . ' - ' . $this->serviceLabel($booking),
+                    'time'      => $booking->grooming_finished_at,
+                ];
+            });
+
+        return $payments
+            ->concat($checkIns)
+            ->concat($groomingStarted)
+            ->concat($completed)
+            ->filter(fn($activity) => !empty($activity['time']))
+            ->sortByDesc(fn($activity) => Carbon::parse($activity['time'])->timestamp)
+            ->take(5)
+            ->map(function ($activity) {
+                $time = Carbon::parse($activity['time']);
+
+                return [
+                    ...$activity,
+                    'createdAt' => $time->toIso8601String(),
+                    'timeLabel' => $time->format('g:i A'),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function ownerName(?Booking $booking): string
+    {
+        if (!$booking?->user) {
+            return '';
+        }
+
+        return trim(($booking->user->first_name ?? '') . ' ' . ($booking->user->last_name ?? ''));
+    }
+
+    private function petNames(Booking $booking): string
+    {
+        $names = ($booking->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->values();
+
+        return $names->isNotEmpty() ? $names->implode(', ') : 'Pet';
+    }
+
+    private function serviceLabel(Booking $booking): string
+    {
+        $services = ($booking->bookingServices ?? collect())
+            ->map(fn($bookingService) => $bookingService->service?->service_name)
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $services->isNotEmpty() ? $services->implode(', ') : 'Grooming';
     }
 
     // Maps DB status values to the tab keys the frontend uses

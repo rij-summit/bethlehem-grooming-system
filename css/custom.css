@@ -3,6 +3,10 @@
 /* custom scrollbar styles */
 /* very specific one-off styles */
 
+.admin-activity-dot-pickup {
+  background-color: #0e7490;
+}
+
 .site-nav {
   z-index: 30;
   gap: 1.25rem;
@@ -231,7 +235,17 @@ body.client-sidebar-open {
   overflow: hidden;
 }
 
+.admin-sidebar-menu {
+  overflow-y: auto;
+}
+
+.admin-sidebar-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
 .client-sidebar {
+  overflow-y: auto;
   transition:
     transform 0.24s ease,
     box-shadow 0.24s ease;
@@ -428,6 +442,130 @@ body.client-sidebar-open {
 }
 .btn-confirm-reopen:hover {
   background-color: #15803d;
+}
+
+/* Admin dashboard incoming appointment actions */
+.admin-appointment-action {
+  display: inline-flex;
+  min-width: 9rem;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 2rem;
+  border: 1px solid transparent;
+  line-height: 1.1;
+}
+
+.admin-appointment-action:disabled {
+  cursor: not-allowed;
+}
+
+.admin-appointment-checkin-action {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-appointment-checkin-action:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-appointment-cancel-action {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.admin-appointment-cancel-action:hover:not(:disabled) {
+  background-color: #fecaca;
+}
+
+.admin-confirm-checkin-button {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-confirm-checkin-button:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-confirm-cancel-button {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.admin-confirm-cancel-button:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.admin-action-confirm-footer {
+  border-top: 0 !important;
+  box-shadow: none;
+  padding-top: 0.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.admin-queued-main-action {
+  display: inline-flex;
+  width: 12rem;
+  min-width: 12rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  line-height: 1.1;
+}
+
+.admin-queued-start-action {
+  background-color: #315b7e;
+  color: #ffffff;
+}
+
+.admin-queued-start-action:hover:not(:disabled) {
+  background-color: #284a67;
+}
+
+.admin-queued-secondary-row {
+  width: 12rem;
+}
+
+.admin-queued-secondary-action {
+  display: inline-flex;
+  min-height: 2.45rem;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  line-height: 1.1;
+}
+
+.admin-queued-revert-action {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #2f4b66;
+}
+
+.admin-queued-revert-action:hover {
+  background-color: #edf5fc;
+  border-color: #9bb7d2;
+}
+
+.admin-queued-cancel-action {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.admin-queued-cancel-action:hover {
+  background-color: #fecaca;
+}
+
+@media (max-width: 640px) {
+  .admin-queued-main-action,
+  .admin-queued-secondary-row {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 /* Admin notification dropdown — positioned by Alpine x-show */
@@ -1638,7 +1776,7 @@ body.client-sidebar-open {
   width: 100%;
   text-align: center;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
-  border: 3px solid #22c55e;
+  border: 3px solid #355c84;
   animation: pickup-card-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -1653,27 +1791,27 @@ body.client-sidebar-open {
   justify-content: center;
   width: 5rem;
   height: 5rem;
-  background: #dcfce7;
+  background: #dbe8f5;
   border-radius: 9999px;
   margin-bottom: 1.25rem;
   animation: pickup-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes pickup-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
-  50%       { box-shadow: 0 0 0 18px rgba(34, 197, 94, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(53, 92, 132, 0.35); }
+  50%       { box-shadow: 0 0 0 18px rgba(53, 92, 132, 0); }
 }
 
 .pickup-paw-icon {
   width: 2.5rem;
   height: 2.5rem;
-  color: #16a34a;
+  color: #355c84;
 }
 
 .pickup-title {
   font-size: 1.6rem;
   font-weight: 800;
-  color: #15803d;
+  color: #2f4b66;
   margin-bottom: 0.6rem;
   line-height: 1.2;
 }
@@ -1689,9 +1827,9 @@ body.client-sidebar-open {
   display: inline-block;
   font-size: 1.1rem;
   font-weight: 700;
-  color: #16a34a;
-  background: #f0fdf4;
-  border: 2px dashed #86efac;
+  color: #355c84;
+  background: #edf5fc;
+  border: 2px dashed #9bb7d2;
   border-radius: 1rem;
   padding: 0.6rem 1.2rem;
   margin-bottom: 1.5rem;
@@ -1710,7 +1848,7 @@ body.client-sidebar-open {
   gap: 0.5rem;
   width: 100%;
   padding: 0.85rem 1.5rem;
-  background: #16a34a;
+  background: #355c84;
   color: #ffffff;
   font-size: 1rem;
   font-weight: 700;
@@ -1721,7 +1859,7 @@ body.client-sidebar-open {
 }
 
 .pickup-dismiss-btn:hover {
-  background: #15803d;
+  background: #2d4f73;
   transform: translateY(-1px);
 }
 

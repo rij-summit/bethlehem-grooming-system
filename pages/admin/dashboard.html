@@ -24,19 +24,20 @@
       <!-- Sidebar -->
       <!-- NOTE: Keep using your already existing sidebar structure/script -->
       <aside
-        class="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0"
+        class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0"
         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
         <!-- Brand -->
-        <div class="border-b border-white/30 px-6 py-6">
+        <div class="px-6 py-6">
           <div class="flex items-start gap-4">
             <div
-              class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f2b61f] shadow-sm"
+              class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"
             >
-              <!-- BACKEND/ASSET NOTE:
-                Replace with actual clinic logo if needed.
-              -->
-              <i data-lucide="paw-print" class="h-7 w-7 text-[#2f4b66]"></i>
+              <img
+                src="../../assets/images/clinic/Bethlehem_Logo.png"
+                alt="Bethlehem Animal Clinic logo"
+                class="h-full w-full object-contain"
+              />
             </div>
 
             <div class="min-w-0">
@@ -51,7 +52,7 @@
         </div>
 
         <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto px-4 py-6">
+        <nav class="px-4 py-6">
           <div class="mb-8">
             <p
               class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]"
@@ -71,20 +72,11 @@
 
               <a
                 href="./clients.html"
-                class="flex items-center justify-between rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40"
+                class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40"
                 :class="activePage === 'customers' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
-                <span class="flex items-center gap-3">
-                  <i data-lucide="users" class="h-5 w-5"></i>
-                  <span>Customers</span>
-                </span>
-
-                <!-- BACKEND: Replace with real badge count if needed -->
-                <span
-                  class="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-[#f2b61f] px-2 text-xs font-bold text-[#1f3850]"
-                >
-                  0
-                </span>
+                <i data-lucide="users" class="h-5 w-5"></i>
+                <span>Customers</span>
               </a>
 
               <a
@@ -94,6 +86,12 @@
               >
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
                 <span>Appointments</span>
+                <span
+                  x-show="hasIncomingAppointments"
+                  style="display: none"
+                  class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"
+                  aria-label="Incoming appointments"
+                ></span>
               </a>
 
               <a
@@ -156,18 +154,18 @@
         </nav>
 
         <!-- Admin Info -->
-        <div class="border-t border-white/30 p-4">
-          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-white/25 p-3">
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
             <div
-              class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f2b61f] text-sm font-extrabold text-[#1f3850]"
+              class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white"
             >
               AD
             </div>
 
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
-              <p class="truncate font-bold text-[#1f3850]">Admin</p>
-              <p class="truncate text-sm text-[#4a6784]">Clinic Manager</p>
+              <p class="truncate font-bold text-white">Admin</p>
+              <p class="truncate text-sm text-white/80">Clinic Manager</p>
             </div>
           </div>
 
@@ -182,17 +180,6 @@
             <template x-if="clinicStopped"><i data-lucide="door-open" class="h-4 w-4"></i></template>
             <template x-if="!clinicStopped"><i data-lucide="door-closed" class="h-4 w-4"></i></template>
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
-          </button>
-
-          <!-- Block Dates — hidden from staff (admin only) -->
-          <button
-            type="button"
-            x-show="isAdmin"
-            @click="openBlockedDatesModal()"
-            class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] bg-white/20 px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/40"
-          >
-            <i data-lucide="calendar-off" class="h-4 w-4"></i>
-            <span>Block Dates</span>
           </button>
 
           <button
@@ -238,98 +225,8 @@
           </div>
         </div>
       </div>
-
-      <!-- Block Dates Modal -->
-      <div
-        x-show="blockDatesModal.open"
-        x-transition
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
-      >
-        <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
-          <!-- Header -->
-          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-            <div>
-              <h4 class="text-lg font-bold text-slate-800">Block Dates</h4>
-              <p class="mt-0.5 text-sm text-slate-500">Holidays, vacations, or any closure period.</p>
-            </div>
-            <button type="button" @click="blockDatesModal.open = false" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
-              <i data-lucide="x" class="h-5 w-5"></i>
-            </button>
-          </div>
-
-          <!-- Existing blocked dates list -->
-          <div class="max-h-48 overflow-y-auto px-6 py-4">
-            <template x-if="blockedDates.length === 0">
-              <p class="text-sm text-slate-400">No blocked dates set.</p>
-            </template>
-            <template x-for="block in blockedDates" :key="block.id">
-              <div class="mb-2 flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                <div>
-                  <p class="text-sm font-semibold text-slate-700">
-                    <span x-text="block.start_date === block.end_date ? block.start_date : block.start_date + ' → ' + block.end_date"></span>
-                  </p>
-                  <p class="text-xs text-slate-400" x-text="block.reason || 'No reason given'"></p>
-                </div>
-                <button
-                  type="button"
-                  @click="removeBlockedDate(block.id)"
-                  class="ml-3 rounded-lg px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                >
-                  Remove
-                </button>
-              </div>
-            </template>
-          </div>
-
-          <!-- Add new blocked date form -->
-          <div class="border-t border-slate-100 px-6 py-5">
-            <p class="mb-3 text-sm font-semibold text-slate-700">Add New Closure</p>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-500">Start Date</label>
-                <input
-                  type="date"
-                  x-model="blockForm.startDate"
-                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-xs font-semibold text-slate-500">End Date</label>
-                <input
-                  type="date"
-                  x-model="blockForm.endDate"
-                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-                />
-              </div>
-            </div>
-            <div class="mt-3">
-              <label class="mb-1 block text-xs font-semibold text-slate-500">Reason <span class="font-normal text-slate-400">(optional)</span></label>
-              <input
-                type="text"
-                x-model="blockForm.reason"
-                placeholder="e.g. Christmas holiday, Summer vacation"
-                class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
-              />
-            </div>
-            <p x-show="blockForm.error" class="mt-2 text-xs text-red-600" x-text="blockForm.error"></p>
-            <p x-show="blockForm.warning" class="mt-2 text-xs text-amber-600" x-text="blockForm.warning"></p>
-            <div class="mt-4 flex justify-end">
-              <button
-                type="button"
-                @click="submitBlockedDate()"
-                :disabled="blockForm.busy"
-                class="btn-confirm-reopen rounded-xl px-5 py-2.5 text-sm font-semibold transition"
-                :class="blockForm.busy ? 'opacity-60 cursor-not-allowed' : ''"
-              >
-                <span x-text="blockForm.busy ? 'Saving...' : 'Block These Dates'"></span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Main Content -->
-      <div class="flex min-h-screen flex-1 flex-col">
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
         <!-- Mobile Header -->
         <header
           class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden"
@@ -351,10 +248,10 @@
         <!-- Dashboard Body -->
         <main
           x-data="adminDashboard()"
-          class="flex-1 px-4 py-6 lg:px-6"
+          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
           <!-- Top banner -->
-          <section>
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
             <div
               class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6"
             >
@@ -390,19 +287,6 @@
                       class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
                     />
                   </label>
-
-                  <!-- Date filter -->
-                  <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2">
-                    <i data-lucide="calendar" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
-                    <input
-                      type="date"
-                      x-model="selectedDate"
-                      :min="todayDate"
-                      :max="maxDate"
-                      @change="onDateChange()"
-                      class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
-                    />
-                  </div>
 
                   <button
                     type="button"
@@ -549,1477 +433,144 @@
 
           <!-- Summary cards -->
           <section class="mt-6">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <article
-                class="rounded-2xl border border-[#7fa2c9] bg-white px-5 py-4 shadow-sm"
-              >
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <article class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-sm text-slate-600">Today</p>
-                    <!-- BACKEND: count all appointments scheduled today -->
-                    <h3
-                      class="mt-1 text-4xl font-extrabold text-black"
-                      x-text="todayCount"
-                    ></h3>
-                  </div>
-
-                  <div class="text-[#63c7bb]">
-                    <i data-lucide="calendar-check-2" class="h-8 w-8"></i>
+                  <div class="min-w-0">
+                    <p class="flex items-center gap-1 text-sm font-medium text-[#355674]">
+                      <i data-lucide="calendar-days" class="h-4 w-4 text-sky-700"></i>
+                      Today's appointments
+                    </p>
+                    <h3 class="mt-2 text-3xl font-semibold text-[#1f3850]" x-text="todayCount"></h3>
+                    <p class="mt-1 text-sm font-medium text-[#355674]">
+                      <span x-text="'of ' + maxCapacity + ' capacity'"></span>
+                    </p>
                   </div>
                 </div>
               </article>
 
-              <article
-                class="rounded-2xl border border-[#7fa2c9] bg-white px-5 py-4 shadow-sm"
-              >
+              <article class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                 <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-sm text-slate-600">This Week</p>
-                    <!-- BACKEND: count all appointments scheduled this week -->
-                    <h3
-                      class="mt-1 text-4xl font-extrabold text-black"
-                      x-text="weekCount"
-                    ></h3>
+                  <div class="min-w-0">
+                    <p class="flex items-center gap-1 text-sm font-medium text-[#355674]">
+                      <i data-lucide="calendar-range" class="h-4 w-4 text-sky-700"></i>
+                      This week
+                    </p>
+                    <h3 class="mt-2 text-3xl font-semibold text-[#1f3850]" x-text="weekCount"></h3>
+                    <p class="mt-1 text-sm font-medium text-[#355674]">across 6 days</p>
                   </div>
+                </div>
+              </article>
 
-                  <div class="text-[#b14dff]">
-                    <i data-lucide="trending-up" class="h-8 w-8"></i>
+              <article class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <p class="flex items-center gap-1 text-sm font-medium text-[#355674]">
+                      <i data-lucide="coins" class="h-4 w-4 text-amber-700"></i>
+                      Revenue today
+                    </p>
+                    <h3 class="mt-2 text-3xl font-semibold text-[#1f3850]" x-text="formatDashboardCurrency(revenueToday)"></h3>
+                    <p class="mt-1 text-sm font-medium text-[#355674]">
+                      <span x-text="revenuePaymentCount + (revenuePaymentCount === 1 ? ' payment' : ' payments') + ' collected'"></span>
+                    </p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <p class="flex items-center gap-1 text-sm font-medium text-[#355674]">
+                      <i data-lucide="ban" class="h-4 w-4 text-red-500"></i>
+                      No-shows this week
+                    </p>
+                    <h3 class="mt-2 text-3xl font-semibold text-[#1f3850]" x-text="noShowWeekCount"></h3>
+                    <p class="mt-1 text-sm font-medium text-[#355674]">
+                      <span x-text="formatPercent(noShowWeekRate) + ' no-show rate'"></span>
+                    </p>
                   </div>
                 </div>
               </article>
             </div>
           </section>
 
-          <!-- Flow tabs -->
-          <section class="mt-6">
-            <div class="rounded-full bg-[#bdd6ec] p-1">
-              <div class="grid grid-cols-2 gap-1 lg:grid-cols-6">
-                <button
-                  type="button"
-                  @click="setTab('incoming')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'incoming' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
-                >
-                  Incoming (<span x-text="incomingList.length"></span>)
-                </button>
-
-                <button
-                  type="button"
-                  @click="setTab('queued')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'queued' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
-                >
-                  Queued (<span x-text="queuedList.length"></span>)
-                </button>
-
-                <button
-                  type="button"
-                  @click="setTab('in-progress')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'in-progress' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
-                >
-                  In-Progress (<span x-text="inProgressList.length"></span>)
-                </button>
-
-                <button
-                  type="button"
-                  @click="setTab('for-payment')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'for-payment' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
-                >
-                  For Payment (<span x-text="forPaymentList.length"></span>)
-                </button>
-
-                <button
-                  type="button"
-                  @click="setTab('to-be-picked-up')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'to-be-picked-up' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
-                >
-                  To Pick Up (<span x-text="releasedList.length"></span>)
-                </button>
-
-                <button
-                  type="button"
-                  @click="setTab('no-show')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'no-show' ? 'bg-red-500 text-white shadow-sm' : 'text-[#1f3850]'"
-                >
-                  No-Show (<span x-text="noShowList.length"></span>)
-                </button>
+          <!-- Queue and activity preview -->
+          <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="border-b border-slate-200 px-5 py-4">
+                <h3 class="text-lg font-semibold text-[#1f3850]">Today's queue (preview)</h3>
               </div>
-            </div>
-          </section>
 
-          <!-- Optional helper description -->
-          <section class="mt-5">
-            <div
-              class="rounded-2xl border border-[#d9e6f1] bg-white/80 p-4 text-sm text-slate-600"
-            >
-              <template x-if="activeTab === 'incoming'">
-                <p>
-                  Incoming displays bookings made up to three days in advance.
-                  Same-day bookings should be prioritized first, then sorted by
-                  appointment time from earliest to latest.
-                </p>
-              </template>
+              <div>
+                <template x-if="todayQueuePreview().length === 0">
+                  <div class="px-5 py-10 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                      <i data-lucide="clock-3" class="h-6 w-6"></i>
+                    </div>
+                    <p class="mt-3 text-sm font-medium text-[#2f4b66]">No queued pets yet</p>
+                    <p class="mt-1 text-xs text-slate-400">Checked-in and in-progress appointments will appear here.</p>
+                  </div>
+                </template>
 
-              <template x-if="activeTab === 'queued'">
-                <p>
-                  Queued displays pets already present in the clinic and waiting
-                  for their turn. Clicking <strong>Check-in</strong> should move
-                  a booking from Incoming to Queued.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'in-progress'">
-                <p>
-                  In-Progress displays pets currently receiving grooming
-                  services. Clicking <strong>Start Grooming</strong> should move
-                  a booking from Queued to In-Progress.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'for-payment'">
-                <p>
-                  For Payment displays pets whose grooming is complete and are ready for pickup.
-                  The customer has been notified. Click <strong>Process Payment</strong> to collect
-                  payment. If the customer paid early, click <strong>Release</strong> instead.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'to-be-picked-up'">
-                <p>
-                  To Be Picked Up displays pets that are groomed and paid for, waiting for the customer to collect them.
-                  Click <strong>Picked Up</strong> once the customer has taken their pet home.
-                  The customer is reminded every hour until pickup is confirmed.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'no-show'">
-                <p>
-                  No-Show displays bookings that were automatically flagged because
-                  the customer did not check in 30 minutes after their time window ended.
-                  <strong>Late Check-in</strong> is available until 5:00 PM on the same day.
-                </p>
-              </template>
-            </div>
-          </section>
-
-          <!-- Incoming -->
-          <section x-show="activeTab === 'incoming'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#315b7e]">
-              <i data-lucide="calendar-clock" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                Incoming
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="incomingList.length === 0">
-              <div
-                class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10"
-              >
-                <div
-                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]"
-                >
-                  <i data-lucide="calendar-clock" class="h-8 w-8"></i>
-                </div>
-
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No incoming bookings yet
-                </p>
-
-                <p class="mt-2 text-sm text-slate-500">
-                  Bookings scheduled up to 3 days ahead will appear here.
-                </p>
-              </div>
-            </template>
-
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders Incoming appointment cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (incomingList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              queueNumber: number,
-              ownerName: string,
-              contactNumber: string,
-              petName: string,
-              petType: "Dog" | "Cat",
-              breed: string,
-              serviceLabel: string,
-              appointmentDate: string,
-              appointmentTime: string,
-              status: "incoming"
-            }
-
-            BUSINESS RULES:
-            - Same-day bookings FIRST
-            - Then sort by appointment time (earliest first)
-            - Then future dates
-
-            NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - serviceLabel comes from client booking selection
-            - petType must be Dog or Cat
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- CARD TEMPLATE (DO NOT DELETE) -->
-            <template x-for="group in groupedIncoming()" :key="group.date">
-              <div class="space-y-4">
-
-                <!-- Date group header -->
-                <div class="flex items-center gap-3 pt-2">
-                  <span
-                    class="whitespace-nowrap text-sm font-bold uppercase tracking-wide"
-                    :class="group.isToday ? 'text-[#e5a800]' : 'text-slate-400'"
-                    x-text="group.label"
-                  ></span>
-                  <div class="h-px flex-1" :class="group.isToday ? 'bg-[#e5a800]/30' : 'bg-slate-200'"></div>
-                </div>
-
-                <!-- Cards for this date -->
-                <template x-for="booking in group.bookings" :key="booking.id">
-                  <article
-                    class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
-                  >
+                <template x-for="booking in todayQueuePreview()" :key="'queue-preview-' + booking.id">
+                  <div class="flex gap-4 px-5 py-4">
                     <div
-                      class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
+                      class="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                      :class="queuePreviewAccentClass(booking.status)"
                     >
-                      <!-- LEFT SIDE -->
-                      <div
-                        class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
-                      >
-                        <!-- Queue Number placeholder (not assigned yet) -->
-                        <div class="text-4xl font-extrabold text-slate-300">—</div>
+                      <i data-lucide="paw-print" class="h-5 w-5"></i>
+                    </div>
 
-                        <!-- Info -->
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <h4
-                              class="text-2xl font-medium text-black lg:text-3xl"
-                              x-text="booking.ownerName"
-                            ></h4>
-                            <!-- Status badge -->
-                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                              <i data-lucide="clock" class="h-3 w-3"></i>
-                              Scheduled
-                            </span>
-                          </div>
-
-                          <p
-                            class="text-sm text-slate-500"
-                            x-text="booking.contactNumber"
-                          ></p>
-
-                          <div
-                            class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
-                          >
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="paw-print" class="h-4 w-4"></i>
-                              <span
-                                x-text="booking.petName + ' (' + booking.breed + ')'"
-                              ></span>
-                            </p>
-
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="badge-info" class="h-4 w-4"></i>
-                              <span x-text="'Type: ' + booking.petType"></span>
-                            </p>
-
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="clock-3" class="h-4 w-4"></i>
-                              <span x-text="booking.appointmentTime"></span>
-                            </p>
-                          </div>
-                          <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                        </div>
-                      </div>
-
-                      <!-- RIGHT SIDE -->
-                      <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                        <!-- DATE GUARD TEMPORARILY DISABLED FOR TESTING
-                        <button
-                          type="button"
-                          @click="checkInBooking(booking)"
-                          :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
-                          class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                          :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
-                          :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
-                        >
-                        -->
-                        <button
-                          type="button"
-                          @click="checkInBooking(booking)"
-                          :disabled="isActionBusy('checkIn', booking.id)"
-                          class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                          :class="isActionBusy('checkIn', booking.id) ? 'cursor-not-allowed opacity-40' : ''"
-                        >
-                          <span
-                            x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
-                          ></span>
-                        </button>
-
-                        <button
-                          type="button"
-                          @click="viewBookingDetails(booking)"
-                          class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                        >
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                </template>
-
-              </div>
-            </template>
-          </section>
-
-          <!-- Queued -->
-          <section x-show="activeTab === 'queued'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#e5a800]">
-              <i data-lucide="clock-3" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                Queued
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="queuedList.length === 0">
-              <div
-                class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10"
-              >
-                <div
-                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fff8e8] text-[#e5a800]"
-                >
-                  <i data-lucide="clock-3" class="h-8 w-8"></i>
-                </div>
-
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No pets are queued right now
-                </p>
-
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets that are already in the clinic and checked in will appear
-                  here.
-                </p>
-              </div>
-            </template>
-
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders Queued appointment cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (queuedList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              queueNumber: number,
-              ownerName: string,
-              contactNumber: string,
-              petName: string,
-              petType: "Dog" | "Cat",
-              breed: string,
-              serviceLabel: string,
-              dropOffTime: string,
-              status: "queued"
-            }
-
-            BUSINESS RULE:
-            - A booking enters this tab after admin clicks "Check-in" from the Incoming tab.
-
-            NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - serviceLabel comes from client booking selection
-            - petType must be Dog or Cat
-            - dropOffTime should reflect the actual check-in/drop-off time saved by backend
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- CARD TEMPLATE (DO NOT DELETE) -->
-            <template x-for="booking in queuedList" :key="booking.id">
-              <article
-                class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
-              >
-                <div
-                  class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
-                >
-                  <!-- LEFT SIDE -->
-                  <div
-                    class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
-                  >
-                    <!-- Queue Number -->
-                    <div
-                      class="text-4xl font-extrabold text-[#e5a800]"
-                      x-text="'#' + booking.queueNumber"
-                    ></div>
-
-                    <!-- Info -->
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4
-                          class="text-2xl font-medium text-black lg:text-3xl"
-                          x-text="booking.ownerName"
-                        ></h4>
-                        <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
-                          <i data-lucide="hourglass" class="h-3 w-3"></i>
-                          Waiting
-                        </span>
-                      </div>
-
-                      <p
-                        class="text-sm text-slate-500"
-                        x-text="booking.contactNumber"
-                      ></p>
-
-                      <div
-                        class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
-                      >
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span
-                            x-text="booking.petName + ' (' + booking.breed + ')'"
-                          ></span>
-                        </p>
-
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-
-                        <p x-show="booking.dropOffTime" class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="'Dropped off: ' + booking.dropOffTime"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Pay Now: early payment before grooming starts -->
-                    <template x-if="!booking.paid">
-                      <button
-                        type="button"
-                        @click="openPaymentModal(booking, true)"
-                        class="btn-pay-now rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Pay Now
-                      </button>
-                    </template>
-                    <template x-if="booking.paid">
-                      <div class="inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold btn-already-paid">
-                        <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                        Already Paid
-                      </div>
-                    </template>
-
-                    <button
-                      type="button"
-                      @click="startGroomingBooking(booking)"
-                      :disabled="isActionBusy('startGrooming', booking.id)"
-                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                      :class="isActionBusy('startGrooming', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
-                    >
-                      <span
-                        x-text="isActionBusy('startGrooming', booking.id) ? getActionLabel('startGrooming') : 'Groom'"
-                      ></span>
-                    </button>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- In Progress -->
-          <section x-show="activeTab === 'in-progress'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#315b7e]">
-              <i data-lucide="scissors" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                In Progress
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="inProgressList.length === 0">
-              <div
-                class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10"
-              >
-                <div
-                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]"
-                >
-                  <i data-lucide="scissors" class="h-8 w-8"></i>
-                </div>
-
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No ongoing grooming right now
-                </p>
-
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets actively receiving grooming services will appear here.
-                </p>
-              </div>
-            </template>
-
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders In-Progress appointment cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (inProgressList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              queueNumber: number,
-              ownerName: string,
-              contactNumber: string,
-              petName: string,
-              petType: "Dog" | "Cat",
-              breed: string,
-              serviceLabel: string,
-              startedAt: string,
-              status: "in_progress"
-            }
-
-            BUSINESS RULE:
-            - A booking enters this tab after admin clicks "Start Grooming"
-              from the Queued tab.
-
-            NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - serviceLabel comes from client booking selection
-            - petType must be Dog or Cat
-            - startedAt should reflect the actual grooming start time saved by backend
-            - clicking "Mark as done" should move this record to the For Pickup tab
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- CARD TEMPLATE (DO NOT DELETE) -->
-            <template x-for="booking in inProgressList" :key="booking.id">
-              <article
-                class="rounded-[24px] border-2 border-[#315b7e] bg-white px-4 py-5 shadow-sm sm:px-6"
-              >
-                <div
-                  class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
-                >
-                  <!-- LEFT SIDE -->
-                  <div
-                    class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
-                  >
-                    <!-- Queue Number -->
-                    <div
-                      class="text-4xl font-extrabold text-[#315b7e]"
-                      x-text="'#' + booking.queueNumber"
-                    ></div>
-
-                    <!-- Info -->
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4
-                          class="text-2xl font-medium text-black lg:text-3xl"
-                          x-text="booking.ownerName"
-                        ></h4>
-                        <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-                          <i data-lucide="scissors" class="h-3 w-3"></i>
-                          In Progress
-                        </span>
-                      </div>
-
-                      <p
-                        class="text-sm text-slate-500"
-                        x-text="booking.contactNumber"
-                      ></p>
-
-                      <div
-                        class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
-                      >
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span
-                            x-text="booking.petName + ' (' + booking.breed + ')'"
-                          ></span>
-                        </p>
-
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-
-                        <p x-show="booking.startedAt" class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="'Started: ' + booking.startedAt"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Pay Now: early payment while grooming is in progress -->
-                    <template x-if="!booking.paid">
-                      <button
-                        type="button"
-                        @click="openPaymentModal(booking, true)"
-                        class="btn-pay-now rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Pay Now
-                      </button>
-                    </template>
-                    <template x-if="booking.paid">
-                      <div class="inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold btn-already-paid">
-                        <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                        Already Paid
-                      </div>
-                    </template>
-
-                    <button
-                      type="button"
-                      @click="markBookingDone(booking)"
-                      :disabled="isActionBusy('markDone', booking.id)"
-                      class="rounded-xl bg-[#315b7e] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#284a67]"
-                      :class="isActionBusy('markDone', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
-                    >
-                      <span
-                        x-text="isActionBusy('markDone', booking.id) ? getActionLabel('markDone') : 'Finished'"
-                      ></span>
-                    </button>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- For Payment -->
-          <section x-show="activeTab === 'for-payment'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#16a34a]">
-              <i data-lucide="banknote" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                For Payment
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="forPaymentList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#dcfce7] btn-icon-payment">
-                  <i data-lucide="banknote" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No pending payments</p>
-                <p class="mt-2 text-sm text-slate-500">
-                  Completed grooming sessions awaiting payment will appear here.
-                </p>
-              </div>
-            </template>
-
-            <!-- FOR PAYMENT CARDS -->
-            <template x-for="booking in forPaymentList" :key="booking.id">
-              <article class="rounded-[24px] border-2 bg-white px-4 py-5 shadow-sm sm:px-6"
-                :class="booking.paid ? 'border-[#86efac]' : 'border-[#16a34a]'">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold" :class="booking.paid ? 'text-[#86efac]' : 'text-[#16a34a]'"
-                      x-text="'#' + booking.queueNumber"></div>
-
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <!-- Badge: already paid vs awaiting payment -->
-                        <template x-if="booking.paid">
-                          <span class="badge-already-paid inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold">
-                            <i data-lucide="check-circle-2" class="h-3 w-3"></i>
-                            Already Paid
-                          </span>
-                        </template>
-                        <template x-if="!booking.paid">
-                          <span class="badge-awaiting-payment inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold">
-                            <i data-lucide="banknote" class="h-3 w-3"></i>
-                            Awaiting Payment
-                          </span>
-                        </template>
-                      </div>
-
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
-
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-                        <p class="flex items-center gap-2 text-[#16a34a]">
-                          <i data-lucide="bell-ring" class="h-4 w-4"></i>
-                          <span>Customer notified</span>
-                        </p>
-                        <p x-show="booking.completedAt" class="flex items-center gap-2">
-                          <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                          <span x-text="'Finished: ' + booking.completedAt"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Already paid → Release button -->
-                    <template x-if="booking.paid">
-                      <button
-                        type="button"
-                        @click="releaseBooking(booking)"
-                        class="btn-release rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Release
-                      </button>
-                    </template>
-
-                    <!-- Not yet paid → Process Payment button -->
-                    <template x-if="!booking.paid">
-                      <button
-                        type="button"
-                        @click="openPaymentModal(booking, false)"
-                        class="btn-process-payment rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Process Payment
-                      </button>
-                    </template>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-          <!-- To Be Picked Up -->
-          <section x-show="activeTab === 'to-be-picked-up'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#0e7490]">
-              <i data-lucide="package-check" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">To Be Picked Up</h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="releasedList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cyan-50 text-cyan-500">
-                  <i data-lucide="package-check" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No pets awaiting pickup</p>
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets that are groomed and paid for will appear here until the customer collects them.
-                </p>
-              </div>
-            </template>
-
-            <!-- TO BE PICKED UP CARDS -->
-            <template x-for="booking in releasedList" :key="booking.id">
-              <article class="rounded-[24px] border-2 border-cyan-200 bg-white px-4 py-5 shadow-sm sm:px-6">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold text-cyan-300" x-text="'#' + booking.queueNumber"></div>
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <span class="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-700 border border-cyan-200">
-                          <i data-lucide="check-circle-2" class="h-3 w-3"></i>
-                          Paid &amp; Ready
-                        </span>
-                      </div>
-
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
-
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-                        <p x-show="booking.completedAt" class="flex items-center gap-2">
-                          <i data-lucide="scissors" class="h-4 w-4"></i>
-                          <span x-text="'Finished: ' + booking.completedAt"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <button
-                      type="button"
-                      @click="confirmPickedUp(booking)"
-                      :disabled="isActionBusy('pickedUp', booking.id)"
-                      class="btn-pickup"
-                    >
-                      <span x-text="isActionBusy('pickedUp', booking.id) ? 'Processing...' : 'Picked Up'"></span>
-                    </button>
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- No-Show -->
-          <section x-show="activeTab === 'no-show'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-red-500">
-              <i data-lucide="user-x" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">No-Show</h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="noShowList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-400">
-                  <i data-lucide="user-x" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No no-shows today</p>
-                <p class="mt-2 text-sm text-slate-500">Bookings automatically flagged as no-show will appear here.</p>
-              </div>
-            </template>
-
-            <!-- NO-SHOW CARDS -->
-            <template x-for="booking in noShowList" :key="booking.id">
-              <article class="rounded-[24px] border-2 border-red-200 bg-white px-4 py-5 shadow-sm sm:px-6">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold text-red-300" x-text="'#' + booking.queueNumber"></div>
-                    <div class="min-w-0">
-                      <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="booking.appointmentTime"></span>
-                        </p>
-                        <p class="flex items-center gap-2 text-red-400">
-                          <i data-lucide="user-x" class="h-4 w-4"></i>
-                          <span>Did not show up</span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Late Check-in: only available before 5 PM -->
-                    <template x-if="isLateCheckInAvailable()">
-                      <button
-                        type="button"
-                        @click="lateCheckInBooking(booking)"
-                        :disabled="isActionBusy('lateCheckIn', booking.id)"
-                        class="rounded-xl bg-amber-500 px-6 py-3 text-base font-semibold text-white transition hover:bg-amber-600"
-                        :class="isActionBusy('lateCheckIn', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
-                      >
-                        <span x-text="isActionBusy('lateCheckIn', booking.id) ? 'Checking in...' : 'Late Check-in'"></span>
-                      </button>
-                    </template>
-                    <template x-if="!isLateCheckInAvailable()">
-                      <div class="rounded-xl border border-slate-200 px-6 py-3 text-center text-sm text-slate-400">
-                        Late check-in closed (after 5 PM)
-                      </div>
-                    </template>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- Payment Modal -->
-          <div
-            x-show="paymentModal.open"
-            x-transition
-            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
-            @click.self="closePaymentModal()"
-          >
-            <div class="payment-modal-card w-full bg-white shadow-2xl overflow-hidden">
-              <!-- Header -->
-              <div class="flex items-center justify-between bg-[#16a34a] px-6 py-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70"
-                    x-text="paymentModal.isEarlyPayment ? 'Early Payment' : 'Process Payment'"></p>
-                  <h4 class="text-lg font-bold text-white" x-text="paymentModal.booking?.ownerName ?? '—'"></h4>
-                </div>
-                <button type="button" @click="closePaymentModal()" class="text-white/70 hover:text-white">
-                  <i data-lucide="x" class="h-5 w-5"></i>
-                </button>
-              </div>
-
-              <!-- Body -->
-              <div class="payment-modal-body px-6 py-5 space-y-4">
-                <section>
-                  <p class="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">Services &amp; Breakdown</p>
-                  <!--
-                    Backend handoff:
-                    For accurate multi-pet payment cards, the admin bookings API should expose
-                    either pets[].services or services[] with bookingPetId/booking_pet_id plus
-                    service slug fields. The frontend already reads those keys when present.
-                    To preselect the size dropdown, each pet should include size and species/petType
-                    from the booking pet details response.
-                  -->
-                  <div class="space-y-4">
-                    <template x-for="(pet, petIndex) in paymentModal.petBreakdown" :key="pet.id">
-                      <article class="payment-pet-card">
-                        <div class="payment-pet-card__header">
-                          <div class="payment-pet-identity">
-                            <div class="payment-pet-icon">
-                              <i data-lucide="paw-print" class="h-4 w-4"></i>
-                            </div>
-                            <div class="min-w-0">
-                              <h5 class="payment-pet-name" x-text="pet.name || ('Pet ' + (petIndex + 1))"></h5>
-                              <p class="payment-pet-meta">
-                                <span x-text="'Pet ' + (petIndex + 1)"></span>
-                                <template x-if="pet.breed">
-                                  <span x-text="' | ' + pet.breed"></span>
-                                </template>
-                              </p>
-                            </div>
-                          </div>
-
-                          <label class="payment-size-select">
-                            <select x-model="pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
-                              <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
-                                <option :value="option.value" x-text="option.label"></option>
-                              </template>
-                            </select>
-                          </label>
+                          <p class="font-semibold leading-tight text-[#1f3850]" x-text="booking.petName + ' - ' + booking.breed"></p>
+                          <p class="mt-1 text-sm text-slate-600" x-text="booking.ownerName"></p>
                         </div>
 
-                        <template x-if="pet.lines.length === 0">
-                          <p class="payment-empty-lines">No services were found for this pet.</p>
-                        </template>
-
-                        <div class="payment-service-lines">
-                          <template x-for="line in pet.lines" :key="line.id">
-                            <div class="payment-service-line">
-                              <div class="payment-service-copy">
-                                <p class="payment-service-name" x-text="line.name"></p>
-                                <p class="payment-service-description" x-text="line.description"></p>
-                                <p class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
-                              </div>
-
-                              <label class="payment-price-input">
-                                <span>&#8369;</span>
-                                <input
-                                  type="number"
-                                  x-model="line.amount"
-                                  :min="line.minAmount"
-                                  step="0.01"
-                                  :placeholder="line.placeholder"
-                                  @input="clearPaymentError()"
-                                  @blur="enforcePaymentMinimum(pet, line)"
-                                />
-                              </label>
-                            </div>
-                          </template>
-                        </div>
-
-                        <div class="payment-pet-subtotal">
-                          <span x-text="'Subtotal - ' + (pet.name || ('Pet ' + (petIndex + 1)))"></span>
-                          <strong x-text="formatPeso(paymentPetSubtotal(pet))"></strong>
-                        </div>
-                      </article>
-                    </template>
-                  </div>
-                </section>
-
-                <div class="payment-total-due">
-                  <span>Total Amount Due</span>
-                  <strong x-text="formatPeso(paymentTotalDue)"></strong>
-                </div>
-
-                <div>
-                  <label class="mb-1 block text-xs font-semibold text-slate-500">Amount Paid (&#8369;)</label>
-                  <input
-                    type="number"
-                    x-model="paymentModal.amountPaid"
-                    :min="paymentTotalDue"
-                    step="0.01"
-                    placeholder="0.00"
-                    @input="clearPaymentError()"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 outline-none focus:border-[#16a34a]"
-                  />
-                </div>
-
-                <div class="rounded-xl border px-4 py-3"
-                  :class="paymentChange >= 0 ? 'border-[#86efac] bg-[#f0fdf4]' : 'border-red-200 bg-red-50'">
-                  <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Change</p>
-                  <p class="payment-change-amount text-2xl"
-                    :class="paymentChange >= 0 ? 'text-[#16a34a]' : 'text-red-500'"
-                    x-text="paymentChange >= 0 ? formatPeso(paymentChange) : '-'"></p>
-                </div>
-
-                <div>
-                  <label class="mb-1 block text-xs font-semibold text-slate-500">Payment Method</label>
-                  <select
-                    x-model="paymentModal.paymentMethod"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-[#16a34a] bg-white"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="gcash">GCash</option>
-                    <option value="maya">Maya</option>
-                    <option value="card">Card</option>
-                    <option value="others">Others</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label class="mb-1 block text-xs font-semibold text-slate-500">Notes <span class="font-normal text-slate-400">(optional)</span></label>
-                  <input
-                    type="text"
-                    x-model="paymentModal.notes"
-                    placeholder="e.g. reference number, remarks"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 outline-none focus:border-[#16a34a]"
-                  />
-                </div>
-
-                <p x-show="paymentModal.error" class="text-sm text-red-600" x-text="paymentModal.error"></p>
-              </div>
-
-              <!-- Footer -->
-              <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
-                <button
-                  type="button"
-                  @click="closePaymentModal()"
-                  class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  @click="submitPayment()"
-                  :disabled="!canSubmitPayment"
-                  class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition btn-confirm-payment"
-                  :class="!canSubmitPayment ? 'opacity-50 cursor-not-allowed' : ''"
-                >
-                  <span x-text="paymentModal.busy ? 'Processing...' : 'Confirm Payment'"></span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Receipt Modal -->
-          <div
-            x-show="receiptModal.open"
-            x-transition
-            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
-            @click.self="closeReceiptModal()"
-          >
-            <div class="receipt-modal-card w-full bg-white shadow-2xl overflow-hidden">
-              <header class="receipt-success-header">
-                <div class="receipt-success-icon">
-                  <i data-lucide="check-circle-2" class="h-7 w-7"></i>
-                </div>
-                <div class="min-w-0">
-                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Booking archived'"></p>
-                  <h4 class="receipt-success-title">Payment Successful</h4>
-                  <p class="receipt-success-ref">
-                    Ref: <span x-text="receiptModal.bookingReference"></span>
-                  </p>
-                </div>
-              </header>
-
-              <div class="receipt-modal-scroll px-4 py-5 sm:px-5">
-                <section
-                  id="paymentReceiptSummary"
-                  class="space-y-4"
-                >
-                  <div class="receipt-detail-card flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div class="brand-lockup" role="img" aria-label="Bethlehem Animal Clinic">
-                      <img
-                        src="../../assets/images/clinic/Bethlehem_Logo.png"
-                        alt=""
-                        class="brand-lockup__mark"
-                      />
-                      <span class="brand-lockup__divider" aria-hidden="true"></span>
-                      <span class="brand-lockup__text" aria-hidden="true">
-                        <span class="brand-lockup__name">BETHLEHEM</span>
-                        <span class="brand-lockup__service">ANIMAL CLINIC</span>
-                      </span>
-                    </div>
-
-                    <div class="text-left md:text-right">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Booking Ref No.</p>
-                      <p class="mt-2 text-lg font-bold text-[#2f4b66]" x-text="receiptModal.bookingReference"></p>
-                    </div>
-                  </div>
-
-                  <div class="space-y-4">
-                    <section class="receipt-detail-card receipt-pets-section">
-                      <div class="mb-4">
-                        <h5 class="text-lg font-semibold text-[#2f4b66]">Owner Information</h5>
-                      </div>
-                      <div class="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Full Name</p>
-                          <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.ownerName"></p>
-                        </div>
-                        <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact Number</p>
-                          <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.contactNumber"></p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section class="receipt-detail-card">
-                      <div class="mb-4 flex items-center justify-between gap-3">
-                        <h5 class="text-lg font-semibold text-[#2f4b66]">Pet Information</h5>
-                        <span class="receipt-count-pill" x-text="receiptModal.pets.length + (receiptModal.pets.length === 1 ? ' pet' : ' pets')"></span>
+                        <span
+                          class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold"
+                          :class="queuePreviewBadgeClass(booking.status)"
+                          x-text="queuePreviewStatusLabel(booking.status)"
+                        ></span>
                       </div>
 
-                      <div class="grid gap-3 md:grid-cols-2">
-                        <template x-for="(pet, petIndex) in receiptModal.pets" :key="pet.id">
-                          <article class="receipt-inner-card receipt-pet-card">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400" x-text="'Pet ' + (petIndex + 1)"></p>
-                            <p class="mt-2 text-base font-bold text-[#2f4b66]" x-text="pet.name"></p>
-                            <div class="receipt-pet-details mt-3 grid gap-3 sm:grid-cols-3">
-                              <div>
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Type</p>
-                                <p class="mt-1 text-sm text-slate-700" x-text="pet.species"></p>
-                              </div>
-                              <div>
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Breed</p>
-                                <p class="mt-1 text-sm text-slate-700" x-text="pet.breed"></p>
-                              </div>
-                              <div>
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Size</p>
-                                <p class="mt-1 text-sm text-slate-700" x-text="pet.sizeLabel"></p>
-                              </div>
-                            </div>
-                          </article>
-                        </template>
-                      </div>
-
-                      <template x-if="receiptModal.pets.length === 0">
-                        <p class="receipt-inner-card text-sm text-slate-500">No pet information recorded.</p>
-                      </template>
-                    </section>
-
-                    <section class="receipt-detail-card">
-                      <div class="mb-4">
-                        <h5 class="text-lg font-semibold text-[#2f4b66]">Service Information</h5>
-                      </div>
-
-                      <!-- Frontend-only: prices shown here are the admin-entered amounts from the payment form. -->
-                      <div class="space-y-3">
-                        <template x-for="pet in receiptModal.pets" :key="'services-' + pet.id">
-                          <article class="receipt-inner-card">
-                            <div class="mb-3">
-                              <p class="font-semibold text-[#2f4b66]" x-text="pet.name"></p>
-                            </div>
-
-                            <div class="space-y-2">
-                              <template x-for="line in pet.lines" :key="line.id">
-                                <div class="receipt-service-row">
-                                  <p class="font-medium text-slate-700" x-text="line.name"></p>
-                                  <p class="receipt-price shrink-0" x-text="formatPeso(line.price)"></p>
-                                </div>
-                              </template>
-
-                              <template x-if="pet.lines.length === 0">
-                                <p class="receipt-service-row text-sm text-slate-500">No priced services recorded for this pet.</p>
-                              </template>
-                            </div>
-
-                            <div class="receipt-service-subtotal">
-                              <span>Subtotal</span>
-                              <strong x-text="formatPeso(pet.subtotal)"></strong>
-                            </div>
-                          </article>
-                        </template>
-                      </div>
-                    </section>
-
-                    <section class="receipt-detail-card">
-                      <div class="mb-4">
-                        <h5 class="text-lg font-semibold text-[#2f4b66]">Booking Schedule</h5>
-                      </div>
-                      <div class="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Appointment Date</p>
-                          <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.appointmentDate"></p>
-                        </div>
-                        <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Appointment Time</p>
-                          <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.appointmentTime"></p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section class="receipt-detail-card receipt-payment-card">
-                      <div class="mb-4">
-                        <h5 class="text-lg font-semibold text-[#2f4b66]">Payment Summary</h5>
-                      </div>
-                      <div class="receipt-price-grid">
-                        <div class="receipt-total-row">
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Amount Due</p>
-                          <p class="receipt-total-price" x-text="formatPeso(receiptModal.finalPrice)"></p>
-                        </div>
-                        <div class="receipt-payment-columns">
-                          <div class="space-y-4">
-                            <div>
-                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Amount Paid</p>
-                              <p class="receipt-price mt-2 text-lg" x-text="formatPeso(receiptModal.amountPaid)"></p>
-                            </div>
-                            <div>
-                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Change</p>
-                              <p class="receipt-price mt-2 text-lg" x-text="formatPeso(receiptModal.change)"></p>
-                            </div>
-                          </div>
-
-                          <div class="space-y-4">
-                            <div>
-                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payment Method</p>
-                              <p class="mt-2 text-sm capitalize text-slate-700" x-text="receiptModal.paymentMethod"></p>
-                            </div>
-                            <div>
-                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payment Time</p>
-                              <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.paidAt"></p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                </section>
-              </div>
-
-              <div class="receipt-modal-actions booking-confirmed-actions flex flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row">
-                <button
-                  type="button"
-                  @click="printReceipt()"
-                  class="receipt-print-button flex-1 rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
-                >
-                  <i data-lucide="printer" class="h-4 w-4"></i>
-                  Print
-                </button>
-                <button
-                  type="button"
-                  @click="closeReceiptModal()"
-                  class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white btn-confirm-payment"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- View Details Modal -->
-          <div
-            x-show="detailsModalOpen"
-            x-transition
-            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
-            @click.self="closeDetailsModal()"
-          >
-            <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
-
-              <!-- Header -->
-              <div class="flex items-center justify-between bg-[#315b7e] px-6 py-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70">Booking Details</p>
-                  <h4 class="text-lg font-bold text-white" x-text="detailsBooking?.bookingReference ?? '—'"></h4>
-                </div>
-                <button type="button" @click="closeDetailsModal()" class="text-white/70 hover:text-white">
-                  <i data-lucide="x" class="h-5 w-5"></i>
-                </button>
-              </div>
-
-              <!-- Body -->
-              <div class="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-5" x-show="detailsBooking">
-
-                <!-- Owner -->
-                <div>
-                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Owner</p>
-                  <p class="font-semibold text-slate-800" x-text="detailsBooking?.ownerName ?? '—'"></p>
-                  <p class="text-sm text-slate-500" x-text="detailsBooking?.contactNumber ?? '—'"></p>
-                </div>
-
-                <!-- Schedule -->
-                <div>
-                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Schedule</p>
-                  <p class="text-sm text-slate-700">
-                    <span x-text="detailsBooking?.appointmentDate ?? '—'"></span>
-                    &nbsp;&middot;&nbsp;
-                    <span x-text="detailsBooking?.appointmentTime ?? '—'"></span>
-                  </p>
-                </div>
-
-                <!-- Pets -->
-                <div>
-                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-                    Pets (<span x-text="detailsBooking?.numberOfPets ?? 0"></span>)
-                  </p>
-                  <template x-for="(pet, index) in (detailsBooking?.pets ?? [])" :key="index">
-                    <div class="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                      <p class="font-semibold text-slate-800" x-text="pet.petName"></p>
-                      <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
-                        <p><span class="text-slate-400">Species:</span> <span x-text="pet.species"></span></p>
-                        <p><span class="text-slate-400">Breed:</span> <span x-text="pet.breed"></span></p>
-                        <p><span class="text-slate-400">Size:</span> <span x-text="pet.size"></span></p>
-                        <p><span class="text-slate-400">Fur:</span> <span x-text="pet.furType"></span></p>
-                        <p><span class="text-slate-400">Weight:</span> <span x-text="pet.weight"></span></p>
-                      </div>
-                      <template x-if="pet.medicalConditions">
-                        <p class="mt-2 text-sm"><span class="text-slate-400">Medical:</span> <span class="text-red-600" x-text="pet.medicalConditions"></span></p>
-                      </template>
-                      <template x-if="pet.specialInstructions">
-                        <p class="mt-1 text-sm"><span class="text-slate-400">Instructions:</span> <span x-text="pet.specialInstructions"></span></p>
-                      </template>
-                    </div>
-                  </template>
-                </div>
-
-                <!-- Services -->
-                <template x-if="detailsBooking?.services?.length > 0">
-                  <div>
-                    <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
-                    <div class="space-y-2">
-                      <template x-for="(svc, index) in detailsBooking.services" :key="index">
-                        <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
-                          <p class="text-sm font-medium text-slate-700" x-text="svc.name"></p>
-                          <p class="text-sm text-slate-500" x-text="svc.priceAtBooking > 0 ? '₱' + Number(svc.priceAtBooking).toFixed(2) : 'TBD'"></p>
-                        </div>
-                      </template>
+                      <p class="mt-1 text-sm text-slate-500" x-text="queuePreviewDetail(booking)"></p>
                     </div>
                   </div>
                 </template>
+              </div>
+            </article>
 
-                <!-- Special Notes -->
-                <template x-if="detailsBooking?.specialNotes">
-                  <div>
-                    <p class="mb-1 text-xs font-bold uppercase tracking-widest text-slate-400">Special Notes</p>
-                    <p class="text-sm text-slate-700" x-text="detailsBooking.specialNotes"></p>
+            <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="border-b border-slate-200 px-5 py-4">
+                <h3 class="text-lg font-semibold text-[#1f3850]">Recent activity</h3>
+              </div>
+
+              <div>
+                <template x-if="recentActivity.length === 0">
+                  <div class="px-5 py-10 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                      <i data-lucide="activity" class="h-6 w-6"></i>
+                    </div>
+                    <p class="mt-3 text-sm font-medium text-[#2f4b66]">No recent activity yet</p>
+                    <p class="mt-1 text-xs text-slate-400">Check-ins, completed appointments, and payments will appear here.</p>
                   </div>
                 </template>
 
+                <template x-for="activity in recentActivity" :key="activity.id">
+                  <div class="flex items-center gap-4 px-5 py-4">
+                    <span class="h-2 w-2 shrink-0 rounded-full" :class="activityDotClass(activity.type)"></span>
+                    <div class="min-w-0 flex-1">
+                      <p class="font-semibold leading-tight text-[#1f3850]" x-text="activity.title"></p>
+                      <p class="mt-1 text-sm text-slate-500" x-text="activity.subtitle"></p>
+                    </div>
+                    <span class="shrink-0 text-sm font-medium text-[#355674]" x-text="activityTimeLabel(activity)"></span>
+                  </div>
+                </template>
               </div>
-            </div>
-          </div>
-
-          <!-- Pickup Confirmation Modal -->
-          <div
-            x-show="pickupModal.open"
-            style="display:none"
-            class="pickup-confirm-overlay"
-            @click.self="pickupModal.open = false"
-          >
-            <div class="pickup-confirm-card">
-              <div style="padding:1.5rem;text-align:center">
-                <div class="pickup-confirm-icon-wrap">
-                  <i data-lucide="package-check" style="width:1.75rem;height:1.75rem;color:#0e7490"></i>
-                </div>
-                <h4 style="font-size:1.125rem;font-weight:700;color:#1e293b">Confirm Pickup</h4>
-                <p style="margin-top:0.5rem;font-size:0.875rem;color:#64748b">
-                  Has
-                  <span style="font-weight:600;color:#334155" x-text="pickupModal.booking?.ownerName"></span>
-                  collected
-                  <span style="font-weight:600;color:#334155" x-text="pickupModal.booking?.petName"></span>?
-                </p>
-                <p style="margin-top:0.25rem;font-size:0.75rem;color:#94a3b8">This will archive the booking and notify the customer.</p>
-              </div>
-              <div style="display:flex;gap:0.75rem;border-top:1px solid #f1f5f9;padding:1rem 1.5rem">
-                <button
-                  type="button"
-                  @click="pickupModal.open = false"
-                  :disabled="pickupModal.busy"
-                  style="flex:1;border-radius:0.75rem;border:1px solid #e2e8f0;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;color:#374151;background:#fff;cursor:pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  @click="executePickedUp()"
-                  :disabled="pickupModal.busy"
-                  class="btn-pickup"
-                  style="flex:1;font-size:0.875rem"
-                >
-                  <span x-text="pickupModal.busy ? 'Processing...' : 'Yes, Picked Up'"></span>
-                </button>
-              </div>
-            </div>
-          </div>
+            </article>
+          </section>
 
         </main>
       </div>
