@@ -3,6 +3,10 @@
 /* custom scrollbar styles */
 /* very specific one-off styles */
 
+.admin-activity-dot-pickup {
+  background-color: #0e7490;
+}
+
 .site-nav {
   z-index: 30;
   gap: 1.25rem;

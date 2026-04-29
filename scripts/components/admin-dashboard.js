@@ -396,11 +396,16 @@ function adminDashboard() {
     activeTab: "incoming",
     todayCount: 0,
     weekCount: 0,
+    revenueToday: 0,
+    revenuePaymentCount: 0,
+    noShowWeekCount: 0,
+    noShowWeekRate: 0,
     currentCapacity: 0,
     maxCapacity: 20,
     notificationCount: 0,
     notificationsOpen: false,
     notifications: [],
+    recentActivity: [],
     notifTab: "all",
     detailsModalOpen: false,
     detailsBooking: null,
@@ -476,6 +481,7 @@ function adminDashboard() {
       walkInBookingUrl: "",
       detailPageUrl: "",
       enableOptimisticUpdates: false,
+      includeFutureAppointments: false,
     },
 
     /*****************************************************************************************
@@ -509,6 +515,10 @@ function adminDashboard() {
     forPickupList: [],
     // forPickupList kept for backward-compat; new data comes as forPaymentList
     releasedList: [],
+
+    get showFutureAppointments() {
+      return Boolean(this.config.includeFutureAppointments);
+    },
 
     // Boots the dashboard, loads any backend config/data, and exposes the UI bridge.
     async init() {
@@ -1191,6 +1201,22 @@ function adminDashboard() {
         this.weekCount = nextPayload.weekCount;
       }
 
+      if ("revenueToday" in nextPayload) {
+        this.revenueToday = nextPayload.revenueToday;
+      }
+
+      if ("revenuePaymentCount" in nextPayload) {
+        this.revenuePaymentCount = nextPayload.revenuePaymentCount;
+      }
+
+      if ("noShowWeekCount" in nextPayload) {
+        this.noShowWeekCount = nextPayload.noShowWeekCount;
+      }
+
+      if ("noShowWeekRate" in nextPayload) {
+        this.noShowWeekRate = nextPayload.noShowWeekRate;
+      }
+
       if ("currentCapacity" in nextPayload) {
         this.currentCapacity = nextPayload.currentCapacity;
       }
@@ -1201,6 +1227,10 @@ function adminDashboard() {
 
       if ("notificationCount" in nextPayload) {
         this.notificationCount = nextPayload.notificationCount;
+      }
+
+      if ("recentActivity" in nextPayload) {
+        this.recentActivity = nextPayload.recentActivity;
       }
 
       if ("incomingList" in nextPayload) {
@@ -1261,6 +1291,56 @@ function adminDashboard() {
       }
 
       if (
+        this.hasValue(payload.revenueToday) ||
+        this.hasValue(summary.revenueToday) ||
+        this.hasValue(summary.revenue_today)
+      ) {
+        nextPayload.revenueToday = this.toNumber(
+          payload.revenueToday ?? summary.revenueToday ?? summary.revenue_today,
+          this.revenueToday,
+        );
+      }
+
+      if (
+        this.hasValue(payload.revenuePaymentCount) ||
+        this.hasValue(summary.revenuePaymentCount) ||
+        this.hasValue(summary.revenue_payment_count)
+      ) {
+        nextPayload.revenuePaymentCount = this.toNumber(
+          payload.revenuePaymentCount ??
+            summary.revenuePaymentCount ??
+            summary.revenue_payment_count,
+          this.revenuePaymentCount,
+        );
+      }
+
+      if (
+        this.hasValue(payload.noShowWeekCount) ||
+        this.hasValue(summary.noShowWeek) ||
+        this.hasValue(summary.noShowWeekCount) ||
+        this.hasValue(summary.no_show_week)
+      ) {
+        nextPayload.noShowWeekCount = this.toNumber(
+          payload.noShowWeekCount ??
+            summary.noShowWeekCount ??
+            summary.noShowWeek ??
+            summary.no_show_week,
+          this.noShowWeekCount,
+        );
+      }
+
+      if (
+        this.hasValue(payload.noShowWeekRate) ||
+        this.hasValue(summary.noShowWeekRate) ||
+        this.hasValue(summary.no_show_week_rate)
+      ) {
+        nextPayload.noShowWeekRate = this.toNumber(
+          payload.noShowWeekRate ?? summary.noShowWeekRate ?? summary.no_show_week_rate,
+          this.noShowWeekRate,
+        );
+      }
+
+      if (
         this.hasValue(payload.currentCapacity) ||
         this.hasValue(capacity.current)
       ) {
@@ -1284,6 +1364,12 @@ function adminDashboard() {
         nextPayload.notificationCount = this.toNumber(
           payload.notificationCount ?? notifications.count,
           this.notificationCount,
+        );
+      }
+
+      if ("recentActivity" in payload || "recent_activity" in payload) {
+        nextPayload.recentActivity = this.normalizeRecentActivity(
+          payload.recentActivity ?? payload.recent_activity,
         );
       }
 
@@ -1746,9 +1832,14 @@ function adminDashboard() {
         activeTab: this.activeTab,
         todayCount: this.todayCount,
         weekCount: this.weekCount,
+        revenueToday: this.revenueToday,
+        revenuePaymentCount: this.revenuePaymentCount,
+        noShowWeekCount: this.noShowWeekCount,
+        noShowWeekRate: this.noShowWeekRate,
         currentCapacity: this.currentCapacity,
         maxCapacity: this.maxCapacity,
         notificationCount: this.notificationCount,
+        recentActivity: [...this.recentActivity],
         incomingList: [...this.incomingList],
         queuedList: [...this.queuedList],
         inProgressList: [...this.inProgressList],
@@ -1778,6 +1869,8 @@ function adminDashboard() {
         "summary" in value ||
         "metrics" in value ||
         "capacity" in value ||
+        "recentActivity" in value ||
+        "recent_activity" in value ||
         "notifications" in value
       );
     },
@@ -1791,6 +1884,88 @@ function adminDashboard() {
     toNumber(value, fallbackValue = 0) {
       const parsedValue = Number(value);
       return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+    },
+
+    formatDashboardCurrency(amount) {
+      return `\u20b1${Number(amount || 0).toLocaleString("en-PH", {
+        maximumFractionDigits: 0,
+      })}`;
+    },
+
+    formatPercent(value) {
+      return `${Number(value || 0).toFixed(1)}%`;
+    },
+
+    normalizeRecentActivity(activity) {
+      return (Array.isArray(activity) ? activity : [])
+        .map((item, index) => ({
+          id: item?.id ?? `activity-${index}`,
+          type: this.toStringValue(item?.type || "activity"),
+          title: this.toStringValue(item?.title || "Activity"),
+          subtitle: this.toStringValue(item?.subtitle || item?.message),
+          createdAt: this.toStringValue(item?.createdAt ?? item?.created_at ?? item?.time),
+          timeLabel: this.toStringValue(item?.timeLabel ?? item?.time_label),
+        }))
+        .filter((item) => item.title);
+    },
+
+    todayQueuePreview() {
+      const today = this.localToday();
+      return [...this.inProgressList, ...this.queuedList]
+        .filter((booking) => booking.appointmentDate === today)
+        .sort((left, right) => {
+          const statusOrder = { "in-progress": 0, queued: 1 };
+          const leftStatus = statusOrder[left.status] ?? 2;
+          const rightStatus = statusOrder[right.status] ?? 2;
+          if (leftStatus !== rightStatus) return leftStatus - rightStatus;
+          return String(left.appointmentTime || "").localeCompare(String(right.appointmentTime || ""));
+        })
+        .slice(0, 5);
+    },
+
+    queuePreviewStatusLabel(status) {
+      return this.normalizeStatus(status) === "in-progress" ? "In progress" : "Queued";
+    },
+
+    queuePreviewBadgeClass(status) {
+      return this.normalizeStatus(status) === "in-progress"
+        ? "bg-sky-100 text-sky-700"
+        : "bg-amber-100 text-amber-700";
+    },
+
+    queuePreviewAccentClass(status) {
+      return this.normalizeStatus(status) === "in-progress"
+        ? "bg-sky-100 text-sky-700"
+        : "bg-amber-100 text-amber-700";
+    },
+
+    queuePreviewDetail(booking) {
+      const action = this.normalizeStatus(booking?.status) === "in-progress"
+        ? "Grooming"
+        : "Checkup";
+      return `${action} - ${booking?.appointmentTime || "Time pending"}`;
+    },
+
+    activityDotClass(type) {
+      const normalizedType = this.toStringValue(type);
+      if (normalizedType === "completed") return "admin-activity-dot-pickup";
+      if (normalizedType === "in_progress") return "bg-sky-600";
+      if (normalizedType === "queued" || normalizedType === "check_in") return "bg-amber-700";
+      if (normalizedType === "payment") return "bg-green-600";
+      return "bg-slate-400";
+    },
+
+    activityTimeLabel(activity) {
+      if (activity?.timeLabel) return activity.timeLabel;
+      if (!activity?.createdAt) return "";
+
+      const date = new Date(activity.createdAt);
+      if (Number.isNaN(date.getTime())) return "";
+
+      return date.toLocaleTimeString("en-PH", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
     },
 
     // Converts nullable values into template-safe strings.
@@ -2420,7 +2595,9 @@ function adminDashboard() {
 
     async loadAdminBookings() {
       try {
-        const data = await API.getAdminBookings(this.selectedDate);
+        const data = await API.getAdminBookings(this.selectedDate, {
+          includeFuture: this.showFutureAppointments,
+        });
         this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
       } catch (error) {
