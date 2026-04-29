@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
 
@@ -58,7 +59,17 @@ class AuthController extends Controller
             'password'   => 'required|string',
         ]);
 
-        $identifier = $request->identifier;
+        $identifier  = $request->identifier;
+        $throttleKey = 'sign-in:' . strtolower($identifier);
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return response()->json([
+                'success'     => false,
+                'message'     => "Too many sign-in attempts. Try again in {$seconds} seconds.",
+                'retry_after' => $seconds,
+            ], 429);
+        }
 
         if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
             $field = 'email';
@@ -71,17 +82,11 @@ class AuthController extends Controller
         $user = User::where($field, $identifier)->first();
 
         if (!$user || !Hash::check($request->password, $user->password_hash)) {
+            RateLimiter::hit($throttleKey, 60);
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials.',
             ], 401);
-        }
-
-        if ($field === 'phone' && in_array($user->role, ['admin', 'staff'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Admin accounts must sign in with a username or email.',
-            ], 403);
         }
 
         if (!$user->is_active) {
@@ -91,6 +96,7 @@ class AuthController extends Controller
             ], 403);
         }
 
+        RateLimiter::clear($throttleKey);
         $user->tokens()->delete();
         $tokenName = in_array($user->role, ['admin', 'staff']) ? 'admin_token' : 'auth_token';
         $token = $user->createToken($tokenName)->plainTextToken;
@@ -104,91 +110,7 @@ class AuthController extends Controller
                 'first_name' => $user->first_name,
                 'last_name'  => $user->last_name,
                 'email'      => $user->email,
-                'role'       => $user->role,
-            ]
-        ], 200);
-    }
-
-    // ── LOGIN ─────────────────────────────────────────────
-    public function login(Request $request)
-    {
-        $request->validate([
-            'phone'    => ['required', 'string', 'regex:/^(\+63|0)[0-9]{9,10}$/'],
-            'password' => 'required|string',
-        ]);
-
-        $user = User::where('phone', $request->phone)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password_hash)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid phone number or password',
-            ], 401);
-        }
-
-        if (!$user->is_active) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your account has been disabled. Please contact the clinic.',
-            ], 403);
-        }
-
-        // Delete old tokens and create new one
-        $user->tokens()->delete();
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'token'   => $token,
-            'user'    => [
-                'user_id'    => $user->user_id,
-                'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email'      => $user->email,
-                'role'       => $user->role,
-            ]
-        ], 200);
-    }
-
-    // ── ADMIN LOGIN ───────────────────────────────────────
-    public function adminLogin(Request $request)
-    {
-        $request->validate([
-            'email'    => 'required|email',
-            'password' => 'required|string',
-        ]);
-
-        $user = User::where('email', $request->email)
-                    ->where('role', 'admin')
-                    ->first();
-
-        if (!$user || !Hash::check($request->password, $user->password_hash)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid credentials or unauthorized access.',
-            ], 401);
-        }
-
-        if (!$user->is_active) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This account has been disabled.',
-            ], 403);
-        }
-
-        $user->tokens()->delete();
-        $token = $user->createToken('admin_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Admin login successful',
-            'token'   => $token,
-            'user'    => [
-                'user_id'    => $user->user_id,
-                'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email'      => $user->email,
+                'phone'      => $user->phone,
                 'role'       => $user->role,
             ]
         ], 200);
@@ -208,9 +130,17 @@ class AuthController extends Controller
     // ── GET CURRENT USER ──────────────────────────────────
     public function me(Request $request)
     {
+        $user = $request->user();
         return response()->json([
             'success' => true,
-            'user'    => $request->user(),
+            'user'    => [
+                'user_id'    => $user->user_id,
+                'first_name' => $user->first_name,
+                'last_name'  => $user->last_name,
+                'email'      => $user->email,
+                'phone'      => $user->phone,
+                'role'       => $user->role,
+            ],
         ], 200);
     }
 }

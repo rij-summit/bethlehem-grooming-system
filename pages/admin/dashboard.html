@@ -171,9 +171,10 @@
             </div>
           </div>
 
-          <!-- Stop Receiving / Reopen toggle -->
+          <!-- Stop Receiving / Reopen toggle — hidden from staff (admin only) -->
           <button
             type="button"
+            x-show="isAdmin"
             @click="handleStopReceivingClick()"
             class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
             :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
@@ -183,9 +184,10 @@
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
           </button>
 
-          <!-- Block Dates (holidays / vacations) -->
+          <!-- Block Dates — hidden from staff (admin only) -->
           <button
             type="button"
+            x-show="isAdmin"
             @click="openBlockedDatesModal()"
             class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] bg-white/20 px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/40"
           >

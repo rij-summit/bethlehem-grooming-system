@@ -2,6 +2,7 @@ function adminSidebar() {
   return {
     sidebarOpen: false,
     activePage: "dashboard",
+    isAdmin: false,
     clinicStopped: false,
     stopModal: {
       open: false,
@@ -25,6 +26,7 @@ function adminSidebar() {
 
     async init() {
       this.detectActivePage();
+      this.isAdmin = API.getUserRole() === "admin";
 
       this.$nextTick(() => {
         if (window.lucide) window.lucide.createIcons();

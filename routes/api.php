@@ -12,9 +12,7 @@ use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PetController;
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/sign-in', [AuthController::class, 'signIn']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/admin/login', [AuthController::class, 'adminLogin']);
+Route::post('/sign-in',  [AuthController::class, 'signIn']);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots',      [BookingController::class,   'getTimeslots']);

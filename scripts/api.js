@@ -8,7 +8,8 @@ var API = (() => {
 
   // ── Token keys ────────────────────────────────────────────────────────────
   const CUSTOMER_TOKEN_KEY = "customer_token";
-  const ADMIN_TOKEN_KEY = "admin_token";
+  const ADMIN_TOKEN_KEY    = "admin_token";
+  const USER_ROLE_KEY      = "user_role";
 
   // ── Booking session keys to wipe on customer logout / login ──────────────
   const BOOKING_SESSION_KEYS = [
@@ -35,15 +36,37 @@ var API = (() => {
   // ── Token helpers ─────────────────────────────────────────────────────────
 
   function getCustomerToken() {
-    return localStorage.getItem(CUSTOMER_TOKEN_KEY);
+    return localStorage.getItem(CUSTOMER_TOKEN_KEY) || sessionStorage.getItem(CUSTOMER_TOKEN_KEY);
   }
 
-  function setCustomerToken(token) {
-    localStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+  function setCustomerToken(token, remember = true) {
+    if (remember) {
+      localStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+    } else {
+      sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+    }
   }
 
   function clearCustomerToken() {
     localStorage.removeItem(CUSTOMER_TOKEN_KEY);
+    sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+  }
+
+  function getUserRole() {
+    return localStorage.getItem(USER_ROLE_KEY) || sessionStorage.getItem(USER_ROLE_KEY);
+  }
+
+  function setUserRole(role, remember = true) {
+    if (remember) {
+      localStorage.setItem(USER_ROLE_KEY, role);
+    } else {
+      sessionStorage.setItem(USER_ROLE_KEY, role);
+    }
+  }
+
+  function clearUserRole() {
+    localStorage.removeItem(USER_ROLE_KEY);
+    sessionStorage.removeItem(USER_ROLE_KEY);
   }
 
   function getAdminToken() {
@@ -104,11 +127,20 @@ var API = (() => {
         clearCustomerToken();
         clearBookingDraft();
       }
+      clearUserRole();
       const depth = window.location.pathname.split("/").filter(Boolean).length;
       window.location.href = depth >= 2
         ? "../client/sign-in.html"
         : "./pages/client/sign-in.html";
       throw new Error("Your session has expired. Please sign in again.");
+    }
+
+    if (response.status === 429) {
+      const error = new Error(data.message || "Too many attempts. Please wait before trying again.");
+      error.status = 429;
+      error.retryAfter = data.retry_after ?? null;
+      error.errors = null;
+      throw error;
     }
 
     if (!response.ok) {
@@ -140,34 +172,23 @@ var API = (() => {
     return request("POST", "/register", payload);
   }
 
-  async function signIn(identifier, password) {
+  async function signIn(identifier, password, remember = true) {
     // POST /api/sign-in
-    // Accepts email, phone, or username. Saves to the correct token key based on role.
-    const data = await request("POST", "/sign-in", { identifier, password });
+    // Accepts email, phone (09... or +639...), or username. Saves to the
+    // correct token key based on role. remember=false uses sessionStorage so
+    // the session dies when the tab closes.
+    const normalized = normalizePhoneLikeIdentifier(identifier);
+    const resolvedIdentifier = normalized || identifier;
+    const data = await request("POST", "/sign-in", { identifier: resolvedIdentifier, password });
     const role = data?.user?.role;
     if (role === "admin" || role === "staff") {
       setAdminToken(data.token);
+      setUserRole(role, true); // admin session always persists
     } else {
       clearBookingDraft();
-      setCustomerToken(data.token);
+      setCustomerToken(data.token, remember);
+      setUserRole(role, remember);
     }
-    return data;
-  }
-
-  async function customerLogin(phone, password) {
-    // POST /api/login
-    // Saves the returned token to localStorage under 'customer_token'.
-    clearBookingDraft();
-    const data = await request("POST", "/login", { phone, password });
-    setCustomerToken(data.token);
-    return data;
-  }
-
-  async function adminLogin(email, password) {
-    // POST /api/admin/login
-    // Saves the returned token to localStorage under 'admin_token'.
-    const data = await request("POST", "/admin/login", { email, password });
-    setAdminToken(data.token);
     return data;
   }
 
@@ -180,6 +201,7 @@ var API = (() => {
     try {
       await request("POST", "/logout", null, token);
     } finally {
+      clearUserRole();
       if (role === "admin") {
         clearAdminToken();
       } else {
@@ -448,11 +470,13 @@ var API = (() => {
     getAdminToken,
     setAdminToken,
     clearAdminToken,
+    // Role access (used by admin dashboard for staff role-based UI hiding)
+    getUserRole,
+    setUserRole,
+    clearUserRole,
     // Auth
     register,
     signIn,
-    customerLogin,
-    adminLogin,
     logout,
     getMe,
     // Timeslots

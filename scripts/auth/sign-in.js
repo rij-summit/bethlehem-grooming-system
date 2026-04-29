@@ -5,11 +5,12 @@
 // point to the shared sign-in page above.
 
 document.addEventListener("DOMContentLoaded", () => {
-  const signInForm = document.getElementById("sharedSignInForm");
+  const signInForm   = document.getElementById("sharedSignInForm");
   const identifierInput = document.getElementById("identifier");
-  const passwordInput = document.getElementById("password");
-  const messageBox = document.getElementById("sharedSignInMessage");
-  const submitButton = document.getElementById("sharedSignInSubmit");
+  const passwordInput   = document.getElementById("password");
+  const messageBox      = document.getElementById("sharedSignInMessage");
+  const submitButton    = document.getElementById("sharedSignInSubmit");
+  const rememberMeCheckbox = document.getElementById("rememberMeCheckbox");
   const togglePasswordVisibilityButton = document.getElementById(
     "toggleSharedPasswordVisibility"
   );
@@ -20,10 +21,8 @@ document.addEventListener("DOMContentLoaded", () => {
     window.lucide.createIcons();
   }
 
-  const passwordIconClosed = document.querySelector(
-    ".shared-password-icon-closed"
-  );
-  const passwordIconOpen = document.querySelector(".shared-password-icon-open");
+  const passwordIconClosed = document.querySelector(".shared-password-icon-closed");
+  const passwordIconOpen   = document.querySelector(".shared-password-icon-open");
 
   if (togglePasswordVisibilityButton) {
     togglePasswordVisibilityButton.addEventListener("click", function () {
@@ -41,11 +40,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  let countdownTimer = null;
+
   signInForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (countdownTimer) return; // rate-limit lockout still active
 
     const identifier = identifierInput.value.trim();
-    const password = passwordInput.value;
+    const password   = passwordInput.value;
+    const rememberMe = rememberMeCheckbox?.checked ?? true;
 
     if (!identifier || !password) {
       showMessage("error", "Please fill in both fields.");
@@ -56,14 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showMessage(null, "");
 
     try {
-      /*
-        BACKEND HANDOFF:
-        API.signIn currently does temporary frontend routing so this shared page
-        can work against the existing split login endpoints. Once backend ships a
-        real identifier-aware sign-in endpoint, this page should keep calling
-        API.signIn, but the helper can stop guessing based on input shape.
-      */
-      const response = await API.signIn(identifier, password);
+      const response = await API.signIn(identifier, password, rememberMe);
       const role = response?.user?.role;
 
       if (role === "admin" || role === "staff") {
@@ -73,15 +69,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
       window.location.href = "../client/dashboard.html";
     } catch (error) {
-      showMessage("error", error.message || "Unable to sign in.");
+      if (error.status === 429 && error.retryAfter) {
+        startCountdown(error.retryAfter);
+      } else {
+        showMessage("error", error.message || "Unable to sign in.");
+      }
     } finally {
-      setBusyState(false);
+      if (!countdownTimer) setBusyState(false);
     }
   });
 
+  function startCountdown(seconds) {
+    clearInterval(countdownTimer);
+    setBusyState(true);
+    let remaining = seconds;
+
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        setBusyState(false);
+        showMessage(null, "");
+        return;
+      }
+      showMessage("lockout", `Too many attempts. Try again in ${remaining}s.`);
+      remaining--;
+    }
+
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
   function setBusyState(isBusy) {
     submitButton.disabled = isBusy;
-    submitButton.textContent = isBusy ? "Signing In..." : "Sign In";
+    const label = document.getElementById("signInBtnLabel");
+    if (label) label.textContent = isBusy ? "Signing In..." : "Sign In";
   }
 
   function showMessage(type, text) {
@@ -92,9 +114,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const styles = {
-      error: "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700",
-      success:
-        "rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700",
+      error:   "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700",
+      success: "rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700",
+      lockout: "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700",
     };
 
     messageBox.className = styles[type] || styles.error;
