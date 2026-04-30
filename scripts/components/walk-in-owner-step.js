@@ -145,7 +145,7 @@ function handleSubmit(event) {
   elements.phone.value = values.phone;
   elements.email.value = values.email;
 
-  showMessage("Owner information is ready for the next step.", "success");
+  window.location.href = "./walk-in-pet-details.html";
 }
 
 function guardAdminAccess() {
