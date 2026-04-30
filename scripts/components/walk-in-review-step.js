@@ -9,6 +9,7 @@ import {
   formatPriceOption,
   getPackageById,
 } from "../services/grooming-service.js";
+import { renderWalkInConsentStep } from "./walk-in-consent-step.js";
 
 const state = {
   bookingDraft: null,
@@ -160,10 +161,18 @@ function handleConfirmClick() {
     return;
   }
 
-  elements.reviewActionNotice.className =
-    "mt-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
-  elements.reviewActionNotice.textContent =
-    "Booking review is ready for the next step.";
+  window.history.pushState(null, "", "./walk-in-consent.html");
+  renderWalkInConsentStep({
+    reviewPayload: state.reviewPayload,
+    onBack: () => {
+      window.history.pushState(null, "", "./walk-in-booking-review.html");
+      renderWalkInReviewStep({
+        pets: state.bookingDraft.pets,
+        petSelections: state.petSelections,
+        onBack: state.onBack,
+      });
+    },
+  });
 }
 
 function renderEmptyState(message) {
