@@ -14,6 +14,7 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
 } from "../services/grooming-service.js";
+import { renderWalkInReviewStep } from "./walk-in-review-step.js";
 
 const state = {
   pets: [],
@@ -627,10 +628,18 @@ function handleSubmit(event) {
     return;
   }
 
-  elements.serviceNotice.className =
-    "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
-  elements.serviceNotice.textContent =
-    "Grooming services are ready for the next step.";
+  window.history.pushState(null, "", "./walk-in-booking-review.html");
+  renderWalkInReviewStep({
+    pets: state.pets,
+    petSelections: state.petSelections,
+    onBack: () => {
+      window.history.pushState(null, "", "./walk-in-grooming-services.html");
+      renderWalkInServicesStep({
+        pets: state.pets,
+        petSelections: state.petSelections,
+      });
+    },
+  });
 }
 
 function guardAdminAccess() {
@@ -645,18 +654,24 @@ function guardAdminAccess() {
   return false;
 }
 
-function initServicesState(pets) {
+function initServicesState(pets, petSelections = []) {
   state.pets = Array.isArray(pets) ? pets.map(normalizePet) : [];
-  state.petSelections = state.pets.map((pet) => createEmptyPetServiceSelection(pet));
+  state.petSelections = state.pets.map((pet) => {
+    const existingSelection = petSelections.find(
+      (selection) => selection?.petId === pet.id,
+    );
+
+    return existingSelection || createEmptyPetServiceSelection(pet);
+  });
 }
 
-export function renderWalkInServicesStep({ pets = [] } = {}) {
+export function renderWalkInServicesStep({ pets = [], petSelections = [] } = {}) {
   document.title = "Walk-in Booking - Grooming Services";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getServicesMainMarkup();
 
   refreshElements();
-  initServicesState(pets);
+  initServicesState(pets, petSelections);
   populateSummary();
   bindEvents();
 
