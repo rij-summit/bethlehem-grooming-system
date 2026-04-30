@@ -3,6 +3,17 @@ const state = {
   onBack: null,
 };
 
+const WALK_IN_OWNER_STORAGE_KEY = "walkInOwnerStep";
+const WALK_IN_REVIEW_STORAGE_KEY = "walkInReviewStep";
+const WALK_IN_CONSENT_STORAGE_KEY = "walkInConsentStep";
+const WALK_IN_CONFIRMATION_STORAGE_KEY = "walkInBookingConfirmation";
+
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  These keys are temporary browser storage for the walk-in flow. Replace them
+  with a database-backed walk-in draft and final booking response when ready.
+*/
+
 let elements = {};
 
 function getConsentMainMarkup() {
@@ -252,7 +263,7 @@ function populateSummary() {
 }
 
 function getSelectedServiceSummary(item) {
-  const selectedServices = item.pricing.lineItems
+  const selectedServices = (item?.pricing?.lineItems || [])
     .map((lineItem) => lineItem.serviceName)
     .filter(Boolean);
 
@@ -283,7 +294,7 @@ function validateConsentForm() {
     elements.submitBookingButton.className =
       "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
     elements.consentStatusMessage.textContent =
-      "All required fields are complete. You can now submit this walk-in booking when backend saving is ready.";
+      "All required fields are complete. You can now submit this walk-in booking.";
     elements.consentStatusMessage.className =
       "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
     return;
@@ -299,6 +310,7 @@ function validateConsentForm() {
 }
 
 function handleFormStateChange() {
+  saveConsentDraft();
   validateConsentForm();
 }
 
@@ -310,10 +322,24 @@ function handleSubmit(event) {
     return;
   }
 
-  elements.consentStatusMessage.textContent =
-    "Consent and agreement are ready. Walk-in booking submission is not connected yet.";
-  elements.consentStatusMessage.className =
-    "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
+  const consentPayload = getConsentPayload();
+  saveConsentDraft(consentPayload);
+
+  elements.submitBookingButton.disabled = true;
+  elements.submitBookingButton.textContent = "Submitting...";
+
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This submit currently builds a frontend-only confirmation for the visible
+    admin/staff flow. Swap this block for the real walk-in booking API call,
+    then save the API response for the confirmation page to render.
+  */
+  sessionStorage.setItem(
+    WALK_IN_CONFIRMATION_STORAGE_KEY,
+    JSON.stringify(buildWalkInConfirmation(consentPayload)),
+  );
+
+  window.location.href = "./walk-in-booking-confirmed.html";
 }
 
 function handleBackClick() {
@@ -323,6 +349,137 @@ function handleBackClick() {
   }
 
   window.location.href = "./walk-in-booking-review.html";
+}
+
+function getConsentPayload() {
+  return {
+    groomingAgreementAccepted: elements.mainConsentCheckbox.checked,
+    sedationConsentAccepted: elements.sedationConsentCheckbox.checked,
+    digitalSignature: elements.digitalSignatureInput.value.trim(),
+    consentDate: elements.consentDateInput.value,
+  };
+}
+
+function saveConsentDraft(consentPayload = getConsentPayload()) {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    Consent is saved only in browser storage right now. Persist the signed
+    consent snapshot with the final walk-in booking record later.
+  */
+  sessionStorage.setItem(
+    WALK_IN_CONSENT_STORAGE_KEY,
+    JSON.stringify(consentPayload),
+  );
+}
+
+function restoreConsentDraft() {
+  const savedDraft = getStoredData(WALK_IN_CONSENT_STORAGE_KEY);
+
+  if (!savedDraft) {
+    return;
+  }
+
+  elements.mainConsentCheckbox.checked = Boolean(
+    savedDraft.groomingAgreementAccepted,
+  );
+  elements.sedationConsentCheckbox.checked = Boolean(
+    savedDraft.sedationConsentAccepted,
+  );
+  elements.digitalSignatureInput.value = savedDraft.digitalSignature || "";
+  elements.consentDateInput.value =
+    savedDraft.consentDate || elements.consentDateInput.value;
+}
+
+function buildWalkInConfirmation(consentPayload) {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    The reference number, date, and status below are frontend placeholders.
+    Replace them with the official booking fields returned after database save.
+  */
+  const submittedAt = new Date();
+  const reviewPayload =
+    state.reviewPayload || getStoredData(WALK_IN_REVIEW_STORAGE_KEY);
+  const owner = getStoredData(WALK_IN_OWNER_STORAGE_KEY);
+  const items = Array.isArray(reviewPayload?.items) ? reviewPayload.items : [];
+
+  return {
+    booking_reference: createFrontEndReference(submittedAt),
+    booking_date: formatLocalDateKey(submittedAt),
+    booking_time: "Walk-in / Queue",
+    booking_type: "walk_in",
+    status: "confirmed",
+    number_of_pets: items.length,
+    owner,
+    pets: items.map((item) => item.pet).filter(Boolean),
+    review: buildConfirmationReview(reviewPayload),
+    consent: consentPayload,
+  };
+}
+
+function buildConfirmationReview(reviewPayload) {
+  const items = Array.isArray(reviewPayload?.items) ? reviewPayload.items : [];
+
+  return {
+    pets: items.map((item) => {
+      const lineItems = Array.isArray(item.pricing?.lineItems)
+        ? item.pricing.lineItems
+        : [];
+      const packageLine = lineItems.find(
+        (lineItem) => lineItem.kind === "package",
+      );
+
+      return {
+        petId: item.pet?.id || "",
+        petName: item.pet?.petName || "",
+        petType: item.pet?.petType || "",
+        breed: item.pet?.breed || "",
+        size: item.pet?.size || "",
+        servicePackage:
+          packageLine?.serviceName || item.selection?.servicePackage || "",
+        alaCarteServices: lineItems
+          .filter((lineItem) => lineItem.kind === "ala_carte")
+          .map((lineItem) => lineItem.serviceName),
+        specialInstructions: String(
+          item.selection?.specialInstructions || "",
+        ).trim(),
+        pricing: item.pricing?.total || null,
+      };
+    }),
+    totalPricing: reviewPayload?.totalPricing || null,
+    notices: reviewPayload?.notices || [],
+    isEstimate: Boolean(reviewPayload?.isEstimate),
+  };
+}
+
+function createFrontEndReference(date) {
+  const datePart = formatLocalDateKey(date).replaceAll("-", "");
+  const timePart = [
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+  ]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("");
+
+  return `WALK-IN-${datePart}-${timePart}`;
+}
+
+function formatLocalDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getStoredData(key) {
+  try {
+    const rawValue = sessionStorage.getItem(key);
+    return rawValue ? JSON.parse(rawValue) : null;
+  } catch (error) {
+    console.error(`Failed to parse sessionStorage key: ${key}`, error);
+    return null;
+  }
 }
 
 function bindEvents() {
@@ -336,6 +493,11 @@ function bindEvents() {
 }
 
 function guardAdminAccess() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This only redirects unauthenticated users in the UI. Backend walk-in submit
+    and draft endpoints should still validate the admin/staff token.
+  */
   const token = API.getAdminToken?.();
   const role = API.getUserRole?.();
 
@@ -348,7 +510,8 @@ function guardAdminAccess() {
 }
 
 function initConsentState({ reviewPayload = null, onBack = null } = {}) {
-  state.reviewPayload = reviewPayload;
+  state.reviewPayload =
+    reviewPayload || getStoredData(WALK_IN_REVIEW_STORAGE_KEY);
   state.onBack = onBack;
 }
 
@@ -360,6 +523,7 @@ export function renderWalkInConsentStep(options = {}) {
   refreshElements();
   initConsentState(options);
   setCurrentDate();
+  restoreConsentDraft();
   populateSummary();
   bindEvents();
   validateConsentForm();
@@ -377,6 +541,7 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshElements();
   initConsentState();
   setCurrentDate();
+  restoreConsentDraft();
   populateSummary();
   bindEvents();
   validateConsentForm();

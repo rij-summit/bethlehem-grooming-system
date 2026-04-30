@@ -9,6 +9,20 @@ const elements = {
   nextButton: document.getElementById("walkInOwnerNextBtn"),
 };
 
+const WALK_IN_OWNER_STORAGE_KEY = "walkInOwnerStep";
+const WALK_IN_FLOW_STORAGE_KEYS = [
+  "walkInConsentStep",
+  "walkInReviewStep",
+  "walkInBookingConfirmation",
+];
+
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  Owner information is only kept as a browser-side walk-in draft for now.
+  Replace this with a persisted customer / walk-in draft record when the
+  backend flow is ready.
+*/
+
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -67,6 +81,28 @@ function getOwnerDisplayName(values) {
     .join(" ");
 }
 
+function clearWalkInContinuationDraft() {
+  WALK_IN_FLOW_STORAGE_KEYS.forEach((key) => {
+    sessionStorage.removeItem(key);
+  });
+}
+
+function saveOwnerDraft(values) {
+  sessionStorage.setItem(
+    WALK_IN_OWNER_STORAGE_KEY,
+    JSON.stringify({
+      ...values,
+      fullName: getOwnerDisplayName(values),
+      bookingType: "walk_in",
+    }),
+  );
+}
+
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  These checks mirror the expected required fields for the UI. Server-side
+  validation should still enforce the final owner rules before saving.
+*/
 function validateOwner(values) {
   if (!values.firstName) {
     return "First name is required.";
@@ -145,10 +181,18 @@ function handleSubmit(event) {
   elements.phone.value = values.phone;
   elements.email.value = values.email;
 
+  clearWalkInContinuationDraft();
+  saveOwnerDraft(values);
+
   window.location.href = "./walk-in-pet-details.html";
 }
 
 function guardAdminAccess() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This is only a frontend route guard using the locally stored admin/staff
+    token and role. Keep real authorization on the backend walk-in endpoints.
+  */
   const token = API.getAdminToken?.();
   const role = API.getUserRole?.();
 

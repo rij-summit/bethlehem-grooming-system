@@ -21,6 +21,13 @@ const state = {
   pets: [],
 };
 
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  Walk-in pet records are held in memory while the staff/admin user moves
+  through the frontend flow. Persist these pets under the walk-in booking draft
+  once a database-backed draft endpoint exists.
+*/
+
 const sizeOptionsByType = {
   Dog: ["Small", "Medium", "Large", "Extra Large"],
   Cat: ["Small", "Medium"],
@@ -40,6 +47,11 @@ function normalizeText(value) {
 }
 
 function createPetId() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This temporary browser ID only links pets between frontend steps. Replace
+    it with the database pet ID or draft pet ID returned by the backend.
+  */
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
   }
@@ -74,6 +86,11 @@ function getFormValues(form) {
 }
 
 function validatePetForm(values) {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    These are UI-level pet checks only. Mirror the final allowed species, size,
+    and per-booking pet limit in backend validation before storing walk-ins.
+  */
   if (!values.petType.trim()) {
     return "Pet type is required.";
   }
@@ -272,6 +289,11 @@ function updateSizeOptions(petType) {
 }
 
 function guardAdminAccess() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This only protects the page in the browser. Backend walk-in pet APIs should
+    still require an authorized admin/staff token.
+  */
   const token = API.getAdminToken?.();
   const role = API.getUserRole?.();
 

@@ -18,6 +18,15 @@ const state = {
   onBack: null,
 };
 
+const WALK_IN_REVIEW_STORAGE_KEY = "walkInReviewStep";
+
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  The review payload is a frontend snapshot of the walk-in draft. When database
+  support is ready, load this page from the saved draft and use backend-priced
+  totals as the source of truth.
+*/
+
 let elements = {};
 
 function getReviewMainMarkup() {
@@ -161,6 +170,7 @@ function handleConfirmClick() {
     return;
   }
 
+  saveReviewDraft();
   window.history.pushState(null, "", "./walk-in-consent.html");
   renderWalkInConsentStep({
     reviewPayload: state.reviewPayload,
@@ -173,6 +183,18 @@ function handleConfirmClick() {
       });
     },
   });
+}
+
+function saveReviewDraft() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    sessionStorage keeps the review available for the consent and confirmation
+    screens only. Replace this with a walk-in draft save / fetch when available.
+  */
+  sessionStorage.setItem(
+    WALK_IN_REVIEW_STORAGE_KEY,
+    JSON.stringify(state.reviewPayload),
+  );
 }
 
 function renderEmptyState(message) {
@@ -421,6 +443,11 @@ function getPackagePricingNote(packageLineItem) {
 }
 
 function renderTotalPricing() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    These totals are display estimates calculated in the browser. Recompute and
+    return the final trusted price from the backend before creating a booking.
+  */
   const totalPricing = state.reviewPayload.totalPricing;
 
   elements.totalPriceHeading.textContent = state.reviewPayload.isEstimate
@@ -440,6 +467,11 @@ function renderTotalPricing() {
 }
 
 function guardAdminAccess() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This browser-only guard should not replace backend authorization on review,
+    draft, or submit endpoints.
+  */
   const token = API.getAdminToken?.();
   const role = API.getUserRole?.();
 

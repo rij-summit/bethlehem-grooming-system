@@ -4,6 +4,9 @@ import {
 } from "../services/booking-format-service.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  const confirmationContext =
+    document.body.dataset.confirmationContext || "customer";
+  const isWalkInConfirmation = confirmationContext === "walk-in";
   const bookingReferenceNumber = document.getElementById("bookingReferenceNumber");
   const ownerName = document.getElementById("ownerName");
   const ownerPhone = document.getElementById("ownerPhone");
@@ -24,9 +27,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const printConfirmationButton = document.getElementById("printConfirmationButton");
   const confirmationStatus = document.getElementById("confirmationStatus");
 
-  // Primary source: backend confirmation saved by booking-consent-step.js
-  const confirmation = getStoredData("bookingConfirmation");
-  const bookingConsentStep = getStoredData("bookingConsentStep");
+  if (isWalkInConfirmation && !guardAdminAccess()) {
+    return;
+  }
+
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    Customer bookings already read their saved confirmation payload. Walk-in
+    confirmations still read a frontend-only payload until the backend returns
+    the official walk-in booking response.
+  */
+  const confirmation = getStoredData(
+    isWalkInConfirmation ? "walkInBookingConfirmation" : "bookingConfirmation",
+  );
+  const bookingConsentStep = getStoredData(
+    isWalkInConfirmation ? "walkInConsentStep" : "bookingConsentStep",
+  );
 
   populateConfirmationData();
   populateOwnerInfo();
@@ -101,7 +117,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (reviewPets.length > 0) {
       selectedService.textContent = reviewPets
-        .map((rp) => formatServiceName(rp.servicePackage))
+        .map((rp) => {
+          if (Array.isArray(rp.selectedServiceNames)) {
+            return rp.selectedServiceNames.map(formatServiceName).join(", ");
+          }
+
+          return formatServiceName(rp.servicePackage);
+        })
         .filter(Boolean)
         .join(", ") || "No service selected.";
 
@@ -154,7 +176,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasReference = Boolean(confirmation?.booking_reference);
     const hasConsent =
       bookingConsentStep?.groomingAgreementAccepted &&
-      bookingConsentStep?.sedationConsentAccepted &&
       bookingConsentStep?.digitalSignature;
 
     if (hasReference && hasConsent) {
@@ -190,6 +211,30 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function populateOwnerInfo() {
+    const owner = confirmation?.owner;
+
+    if (owner) {
+      const fullName = owner.fullName ||
+        [
+          owner.firstName,
+          owner.middleInitial ? `${owner.middleInitial}.` : "",
+          owner.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ") ||
+        "Not provided";
+
+      ownerName.textContent = fullName;
+      ownerPhone.textContent = owner.phone || "Not provided";
+      return;
+    }
+
+    if (isWalkInConfirmation) {
+      ownerName.textContent = "Not provided";
+      ownerPhone.textContent = "Not provided";
+      return;
+    }
+
     try {
       const data = await API.getMe("customer");
       const user = data?.user;
@@ -211,5 +256,22 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return null;
     }
+  }
+
+  function guardAdminAccess() {
+    /*
+      BACKEND TEAMMATE + CLAUDE CODE:
+      This browser guard only keeps the admin confirmation page out of casual
+      navigation. The real walk-in confirmation API should enforce permissions.
+    */
+    const token = API.getAdminToken?.();
+    const role = API.getUserRole?.();
+
+    if (token && (role === "admin" || role === "staff")) {
+      return true;
+    }
+
+    window.location.href = "../client/sign-in.html";
+    return false;
   }
 });

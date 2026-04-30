@@ -21,6 +21,13 @@ const state = {
   petSelections: [],
 };
 
+/*
+  BACKEND TEAMMATE + CLAUDE CODE:
+  Service selections and pricing are currently calculated from frontend state.
+  When backend persistence is added, store selected package IDs, a la carte IDs,
+  and pet notes on the walk-in draft, then recalculate trusted totals server-side.
+*/
+
 let elements = {};
 
 function getServicesMainMarkup() {
@@ -628,6 +635,11 @@ function handleSubmit(event) {
     return;
   }
 
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    This only passes in-memory selections to the review screen. Replace or pair
+    it with a draft-save call once walk-in service selections are database-backed.
+  */
   window.history.pushState(null, "", "./walk-in-booking-review.html");
   renderWalkInReviewStep({
     pets: state.pets,
@@ -643,6 +655,11 @@ function handleSubmit(event) {
 }
 
 function guardAdminAccess() {
+  /*
+    BACKEND TEAMMATE + CLAUDE CODE:
+    Frontend access checks are for navigation only. The eventual service-draft
+    endpoint should authorize admin/staff users independently.
+  */
   const token = API.getAdminToken?.();
   const role = API.getUserRole?.();
 
