@@ -1001,6 +1001,10 @@ video {
   width: 100%;
 }
 
+.w-1\/5 {
+  width: 20%;
+}
+
 .min-w-0 {
   min-width: 0px;
 }

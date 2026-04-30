@@ -478,7 +478,7 @@ function adminDashboard() {
       bootstrap: null,
       endpoints: {},
       handlers: {},
-      walkInBookingUrl: "",
+      walkInBookingUrl: "./walk-in-booking.html",
       detailPageUrl: "",
       enableOptimisticUpdates: false,
       includeFutureAppointments: false,
