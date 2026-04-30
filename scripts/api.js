@@ -10,6 +10,7 @@ var API = (() => {
   const CUSTOMER_TOKEN_KEY = "customer_token";
   const ADMIN_TOKEN_KEY    = "admin_token";
   const USER_ROLE_KEY      = "user_role";
+  const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
 
   // ── Booking session keys to wipe on customer logout / login ──────────────
   const BOOKING_SESSION_KEYS = [
@@ -79,6 +80,69 @@ var API = (() => {
 
   function clearAdminToken() {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
+  }
+
+  function isAdminPage() {
+    return window.location.pathname.replace(/\\/g, "/").includes("/pages/admin/");
+  }
+
+  function isSignInPage() {
+    return window.location.pathname.replace(/\\/g, "/").includes("/pages/client/sign-in.html");
+  }
+
+  function signInPath() {
+    const depth = window.location.pathname.split("/").filter(Boolean).length;
+    return depth >= 2 ? "../client/sign-in.html" : "./pages/client/sign-in.html";
+  }
+
+  function redirectToSignIn() {
+    if (!isSignInPage()) {
+      window.location.href = signInPath();
+    }
+  }
+
+  function notifyLogout(role) {
+    try {
+      localStorage.setItem(
+        AUTH_LOGOUT_EVENT_KEY,
+        JSON.stringify({ role, at: Date.now() })
+      );
+    } catch {
+      // Non-fatal: removing the token still syncs logout in supported browsers.
+    }
+  }
+
+  function handleCrossTabLogout(role) {
+    if (role !== "admin" && role !== "staff") return;
+
+    clearAdminToken();
+    if (getUserRole() === "admin" || getUserRole() === "staff" || isAdminPage()) {
+      clearUserRole();
+    }
+
+    if (isAdminPage()) {
+      redirectToSignIn();
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (event.storageArea !== localStorage) return;
+
+      if (event.key === ADMIN_TOKEN_KEY && event.oldValue && !event.newValue) {
+        handleCrossTabLogout("admin");
+        return;
+      }
+
+      if (event.key !== AUTH_LOGOUT_EVENT_KEY || !event.newValue) return;
+
+      try {
+        const data = JSON.parse(event.newValue);
+        handleCrossTabLogout(data?.role);
+      } catch {
+        // Ignore malformed auth sync events.
+      }
+    });
   }
 
   // ── Core request function ─────────────────────────────────────────────────
@@ -205,6 +269,7 @@ var API = (() => {
       clearUserRole();
       if (role === "admin") {
         clearAdminToken();
+        notifyLogout(role);
       } else {
         clearCustomerToken();
         clearBookingDraft();
