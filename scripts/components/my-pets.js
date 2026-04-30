@@ -352,4 +352,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Init ──────────────────────────────────────────────
   loadPets();
+
+  if (new URLSearchParams(window.location.search).get("add") === "1") {
+    openAddModal();
+  }
 });

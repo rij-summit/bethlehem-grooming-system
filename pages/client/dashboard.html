@@ -344,7 +344,7 @@
 
               <div class="grid grid-cols-1 gap-4">
                 <a
-                  href="#"
+                  href="./my-pets.html?add=1"
                   class="rounded-2xl border border-slate-200 bg-[#f7fafc] p-5 hover:bg-[#eef4fa] transition"
                 >
                   <div class="flex items-center gap-3">
@@ -440,6 +440,31 @@
               class="w-full rounded-xl bg-slate-300 px-4 py-3 text-sm font-semibold text-white cursor-not-allowed transition">
               Confirm Reschedule
             </button>
+          </div>
+        </div>
+
+        <!-- Cancel Confirmation Modal -->
+        <div id="cancelModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
+          <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-lg font-bold text-[#2f4b66]">Cancel Booking</h4>
+              <button type="button" id="closeCancelModal" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <p id="cancelBookingRef" class="mb-1 text-sm font-semibold text-slate-700"></p>
+            <p class="mb-5 text-sm text-slate-500">Are you sure you want to cancel this booking? This action cannot be undone.</p>
+            <div id="cancelMessage" class="hidden mb-4 rounded-xl border px-4 py-3 text-sm"></div>
+            <div class="flex gap-3">
+              <button type="button" id="keepBookingBtn"
+                class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                Keep It
+              </button>
+              <button type="button" id="confirmCancelBtn"
+                class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-600 transition">
+                Cancel Booking
+              </button>
+            </div>
           </div>
         </div>
       </main>

@@ -205,9 +205,11 @@
       // List
       renderNotifList(data.notifications || []);
 
-      // Pickup alert popup
+      // Pickup alert popup — refresh the tracker first so the booking shows
+      // its updated status before the popup fires.
       const pickup = data.pickup_alert;
       if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
+        await window._refreshAppointments?.();
         pickupMessage.textContent = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
@@ -385,9 +387,16 @@
   const rescheduleSlotsContainer = document.getElementById("rescheduleSlotsContainer");
   const rescheduleMessage        = document.getElementById("rescheduleMessage");
   const submitRescheduleBtn      = document.getElementById("submitRescheduleBtn");
+  const cancelModal              = document.getElementById("cancelModal");
+  const closeCancelModalBtn      = document.getElementById("closeCancelModal");
+  const cancelBookingRefEl       = document.getElementById("cancelBookingRef");
+  const confirmCancelBtn         = document.getElementById("confirmCancelBtn");
+  const keepBookingBtn           = document.getElementById("keepBookingBtn");
+  const cancelMessageEl          = document.getElementById("cancelMessage");
 
-  let activeBookingId  = null;
-  let selectedWindowId = null;
+  let activeBookingId     = null;
+  let selectedWindowId    = null;
+  let cancelTargetBooking = null;
 
   const today = new Date().toISOString().split("T")[0];
   rescheduleDate.min = today;
@@ -406,7 +415,7 @@
         ["waiting_to_arrive", "cancelled", "no_show"].includes(b.status)
       );
       const atClinic  = active.filter(b =>
-        ["checked_in", "in_progress", "for_payment"].includes(b.status)
+        ["checked_in", "in_progress", "for_payment", "released"].includes(b.status)
       );
 
       renderAppointments(scheduled);
@@ -447,23 +456,10 @@
     const statusConfig  = getStatusConfig(b.status);
     const timeLabel     = b.time_window?.window_label ?? "—";
     const isActionable  = b.status === "waiting_to_arrive";
-    const canReschedule = isActionable && (b.reschedule_count ?? 0) < 2;
-    const canCancel     = isActionable && (b.cancel_count ?? 0) < 2;
-
-    const rescheduleAttrs = canReschedule
-      ? `id="reschedule-${b.booking_id}" class="flex-1 rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-[#315b7e] hover:text-white transition"`
-      : `disabled class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-300 cursor-not-allowed"`;
-
-    const cancelAttrs = canCancel
-      ? `id="cancel-${b.booking_id}" class="flex-1 rounded-xl border border-red-300 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition"`
-      : `disabled class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-300 cursor-not-allowed"`;
-
-    const rescheduleLabel = canReschedule
-      ? "Reschedule"
-      : `Reschedule (${b.reschedule_count ?? 0}/2)`;
-    const cancelLabel = canCancel
-      ? "Cancel"
-      : (b.status === "cancelled" ? "Cancelled" : `Cancel (${b.cancel_count ?? 0}/2)`);
+    const rescheduleAttrs = `id="reschedule-${b.booking_id}" class="flex-1 rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-[#315b7e] hover:text-white transition"`;
+    const cancelAttrs     = `id="cancel-${b.booking_id}" class="flex-1 rounded-xl border border-red-300 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition"`;
+    const rescheduleLabel = "Reschedule";
+    const cancelLabel     = "Cancel";
 
     const buttons = isActionable
       ? `<div class="flex gap-2 mt-3">
@@ -517,12 +513,13 @@
       { key: "in_progress", label: "Being Groomed"     },
       { key: "for_payment", label: "Ready for Pickup"  },
     ];
-    const stepOrder  = { checked_in: 0, in_progress: 1, for_payment: 2 };
+    const stepOrder  = { checked_in: 0, in_progress: 1, for_payment: 2, released: 2 };
     const current    = stepOrder[b.status] ?? 0;
     const stepThemes = {
       checked_in:  { color: "#e5a800" },
       in_progress: { color: "#1d4ed8" },
       for_payment: { color: "#16a34a" },
+      released:    { color: "#16a34a" },
     };
 
     const stepCircles = steps.map((step, i) => {
@@ -612,6 +609,7 @@
       checked_in:        { label: "Checked In",         classes: "bg-amber-100 text-amber-700" },
       in_progress:       { label: "In Progress",        classes: "bg-violet-100 text-violet-700" },
       for_payment:       { label: "Ready for Pickup",   classes: "bg-emerald-100 text-emerald-700" },
+      released:          { label: "Ready for Pickup",   classes: "bg-emerald-100 text-emerald-700" },
       cancelled:         { label: "Cancelled",          classes: "bg-red-100 text-red-600" },
       no_show:           { label: "No Show",            classes: "bg-orange-100 text-orange-600" },
       archived:          { label: "Completed",          classes: "bg-green-100 text-green-700" },
@@ -719,22 +717,65 @@
     rescheduleMessage.textContent = "";
   }
 
-  async function handleCancel(booking) {
-    const confirmed = window.confirm(
-      `Cancel booking ${booking.booking_reference}?\n\nThis action counts as 1 of your 2 allowed cancellations.`,
-    );
-    if (!confirmed) return;
+  function handleCancel(booking) {
+    openCancelModal(booking);
+  }
+
+  function openCancelModal(booking) {
+    cancelTargetBooking = booking;
+    cancelBookingRefEl.textContent = booking.booking_reference;
+    hideCancelMessage();
+    confirmCancelBtn.disabled = false;
+    confirmCancelBtn.textContent = "Cancel Booking";
+    cancelModal.classList.remove("hidden");
+    cancelModal.classList.add("flex");
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeCancelModal() {
+    cancelModal.classList.add("hidden");
+    cancelModal.classList.remove("flex");
+    cancelTargetBooking = null;
+  }
+
+  function showCancelMessage(type, text) {
+    const styles = { error: "border-red-200 bg-red-50 text-red-700" };
+    cancelMessageEl.className = `mb-4 rounded-xl border px-4 py-3 text-sm ${styles[type] || styles.error}`;
+    cancelMessageEl.textContent = text;
+    cancelMessageEl.classList.remove("hidden");
+  }
+
+  function hideCancelMessage() {
+    cancelMessageEl.classList.add("hidden");
+    cancelMessageEl.textContent = "";
+  }
+
+  closeCancelModalBtn.addEventListener("click", closeCancelModal);
+  keepBookingBtn.addEventListener("click", closeCancelModal);
+  cancelModal.addEventListener("click", (e) => { if (e.target === cancelModal) closeCancelModal(); });
+
+  confirmCancelBtn.addEventListener("click", async () => {
+    if (!cancelTargetBooking) return;
+    confirmCancelBtn.disabled = true;
+    confirmCancelBtn.textContent = "Cancelling...";
     try {
-      await API.cancelBooking(booking.booking_id);
+      await API.cancelBooking(cancelTargetBooking.booking_id);
+      closeCancelModal();
       await loadAppointments();
     } catch (error) {
-      alert(error.message || "Cancellation failed. Please try again.");
+      showCancelMessage("error", error.message || "Cancellation failed. Please try again.");
+      confirmCancelBtn.disabled = false;
+      confirmCancelBtn.textContent = "Cancel Booking";
     }
-  }
+  });
 
   function formatDate(dateStr) {
     if (!dateStr) return "—";
     const d = new Date(dateStr + "T00:00:00");
     return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
   }
+
+  // Expose for coordination with the notification poller (pickup popup sequencing).
+  window._refreshAppointments = loadAppointments;
+  setInterval(loadAppointments, 15000);
 })();
