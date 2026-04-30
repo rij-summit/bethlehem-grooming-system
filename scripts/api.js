@@ -121,18 +121,23 @@ var API = (() => {
     const data = await response.json().catch(() => ({}));
 
     if (response.status === 401) {
-      if (token === getAdminToken()) {
-        clearAdminToken();
-      } else if (token === getCustomerToken()) {
-        clearCustomerToken();
-        clearBookingDraft();
+      if (token) {
+        // Only redirect when an authenticated request loses its session.
+        // Public endpoints (sign-in, register) return 401 on bad credentials
+        // and must fall through so the caller can surface the error message.
+        if (token === getAdminToken()) {
+          clearAdminToken();
+        } else if (token === getCustomerToken()) {
+          clearCustomerToken();
+          clearBookingDraft();
+        }
+        clearUserRole();
+        const depth = window.location.pathname.split("/").filter(Boolean).length;
+        window.location.href = depth >= 2
+          ? "../client/sign-in.html"
+          : "./pages/client/sign-in.html";
+        throw new Error("Your session has expired. Please sign in again.");
       }
-      clearUserRole();
-      const depth = window.location.pathname.split("/").filter(Boolean).length;
-      window.location.href = depth >= 2
-        ? "../client/sign-in.html"
-        : "./pages/client/sign-in.html";
-      throw new Error("Your session has expired. Please sign in again.");
     }
 
     if (response.status === 429) {
@@ -157,19 +162,15 @@ var API = (() => {
 
   async function register(payload) {
     // POST /api/register
-    // payload: {
-    //   first_name,
-    //   last_name,
-    //   username?,
-    //   email?,
-    //   phone?,
-    //   password,
-    //   password_confirmation
-    // }
-    // Team note: frontend now allows an optional username and requires at least
-    // one contact field (email or phone). Backend /register validation should
-    // be updated to match before relying on this payload contract.
-    return request("POST", "/register", payload);
+    // payload: { first_name, last_name, username?, email, phone, password, password_confirmation }
+    // Saves the returned token so the caller can redirect straight to the dashboard.
+    const data = await request("POST", "/register", payload);
+    if (data?.token) {
+      clearBookingDraft();
+      setCustomerToken(data.token, true);
+      setUserRole(data.user?.role ?? "customer", true);
+    }
+    return data;
   }
 
   async function signIn(identifier, password, remember = true) {

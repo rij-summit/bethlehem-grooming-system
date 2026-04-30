@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Customer Sign Up | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
   </head>
   <body
     class="bg-slate-100 min-h-screen flex items-center justify-center px-4"
@@ -253,10 +254,11 @@
 
               <!-- Button -->
               <button
+                id="signupSubmit"
                 type="submit"
-                class="w-full rounded-xl bg-[#315b7e] px-4 py-3 text-white font-semibold shadow-md transition hover:bg-[#264760]"
+                class="w-full rounded-xl bg-[#315b7e] px-4 py-3 text-white font-semibold shadow-md transition hover:bg-[#264760] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Create Account
+                <span id="signupBtnLabel">Create Account</span>
               </button>
 
               <!-- Login Link -->
@@ -281,8 +283,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js"></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="../../scripts/auth/client/signup.js"></script>
+    <script src="../../scripts/api.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="../../scripts/auth/client/signup.js" defer></script>
   </body>
 </html>

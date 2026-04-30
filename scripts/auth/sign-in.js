@@ -5,6 +5,15 @@
 // point to the shared sign-in page above.
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (API.getAdminToken()) {
+    window.location.href = "../admin/dashboard.html";
+    return;
+  }
+  if (API.getCustomerToken()) {
+    window.location.href = "./dashboard.html";
+    return;
+  }
+
   const signInForm   = document.getElementById("sharedSignInForm");
   const identifierInput = document.getElementById("identifier");
   const passwordInput   = document.getElementById("password");
@@ -55,8 +64,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    setBusyState(true);
     showMessage(null, "");
+    setBusyState(true);
 
     try {
       const response = await API.signIn(identifier, password, rememberMe);
@@ -67,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      window.location.href = "../client/dashboard.html";
+      window.location.href = "./dashboard.html";
     } catch (error) {
       if (error.status === 429 && error.retryAfter) {
         startCountdown(error.retryAfter);

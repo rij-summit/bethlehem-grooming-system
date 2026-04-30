@@ -23,18 +23,6 @@
             </p>
           </div>
 
-          <!--
-            BACKEND HANDOFF:
-            This shared page now uses one identifier field for both customer
-            and admin sign-in. Frontend temporarily routes based on the input
-            format so the UI can be unified right now.
-
-            To fully support the requested behavior, backend should expose one
-            shared sign-in endpoint that accepts:
-              { identifier, password }
-            where identifier can be email, username, or mobile number for
-            both admin and client accounts.
-          -->
           <form id="sharedSignInForm" class="space-y-5">
             <div>
               <label
