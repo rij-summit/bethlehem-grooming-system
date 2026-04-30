@@ -79,7 +79,7 @@
             </div>
           </div>
 
-          <div>
+          <div x-show="isAdmin">
             <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
             <div class="space-y-1.5">
               <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'settings' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
@@ -92,11 +92,11 @@
 
         <div class="admin-sidebar-footer p-4">
           <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white">AD</div>
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin ? 'AD' : 'ST'">AD</div>
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data. -->
-              <p class="truncate font-bold text-white">Admin</p>
-              <p class="truncate text-sm text-white/80">Clinic Manager</p>
+              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
             </div>
           </div>
 
@@ -740,7 +740,7 @@
                 <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Security</p>
-                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Change Password</h3>
+                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Admin Account Change Password</h3>
                     <p class="mt-1 text-sm text-slate-500">Update your admin account password.</p>
                   </div>
                   <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
@@ -779,14 +779,58 @@
                 </div>
               </div>
 
+              <!-- BACKEND: Wire these fields to the staff account password update endpoint. Validate staff lookup and password rules server-side. -->
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Security</p>
+                    <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Staff Account Change Password</h3>
+                    <p class="mt-1 text-sm text-slate-500">Update a staff account password.</p>
+                  </div>
+                  <div class="inline-flex w-fit items-center gap-2 rounded-full bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e]">
+                    <i data-lucide="user-round-cog" class="h-3.5 w-3.5"></i>
+                    <span>Staff Account</span>
+                  </div>
+                </div>
+
+                <div class="grid gap-4">
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Staff Email or Username</span>
+                    <input
+                      type="text"
+                      placeholder="Enter staff email or username"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">New Password</span>
+                    <input
+                      type="password"
+                      placeholder="Enter new password"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+
+                  <label class="block">
+                    <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Confirm New Password</span>
+                    <input
+                      type="password"
+                      placeholder="Re-enter new password"
+                      class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
                 <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
                   Cancel
                 </button>
-                <!-- BACKEND: Wire this button to submit the password change only. -->
+                <!-- BACKEND: Wire this button to submit the changed security password fields once the endpoint is available. -->
                 <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
-                  <i data-lucide="shield-check" class="h-4 w-4"></i>
-                  <span>Update Password</span>
+                  <i data-lucide="save" class="h-4 w-4"></i>
+                  <span>Update Changes</span>
                 </button>
               </div>
             </form>

@@ -82,7 +82,7 @@
             </div>
           </div>
 
-          <div>
+          <div x-show="isAdmin">
             <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
             <div class="space-y-1.5">
               <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'settings' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
@@ -96,11 +96,11 @@
         <!-- Admin Info -->
         <div class="admin-sidebar-footer p-4">
           <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white">AD</div>
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin ? 'AD' : 'ST'">AD</div>
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
-              <p class="truncate font-bold text-white">Admin</p>
-              <p class="truncate text-sm text-white/80">Clinic Manager</p>
+              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
             </div>
           </div>
           <!-- Stop Receiving / Reopen toggle — hidden from staff (admin only) -->

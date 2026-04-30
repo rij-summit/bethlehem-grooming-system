@@ -133,7 +133,7 @@
             </div>
           </div>
 
-          <div>
+          <div x-show="isAdmin">
             <p
               class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]"
             >
@@ -158,14 +158,15 @@
           <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
             <div
               class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white"
+              x-text="isAdmin ? 'AD' : 'ST'"
             >
               AD
             </div>
 
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
-              <p class="truncate font-bold text-white">Admin</p>
-              <p class="truncate text-sm text-white/80">Clinic Manager</p>
+              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
             </div>
           </div>
 
@@ -261,6 +262,7 @@
                 <div>
                   <h2
                     class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl"
+                    x-text="API.getUserRole() === 'staff' ? 'Staff Dashboard' : 'Admin Dashboard'"
                   >
                     Admin Dashboard
                   </h2>
@@ -498,7 +500,7 @@
           <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div class="border-b border-slate-200 px-5 py-4">
-                <h3 class="text-lg font-semibold text-[#1f3850]">Today's queue (preview)</h3>
+                <h3 class="text-lg font-semibold text-[#1f3850]">Today's queue</h3>
               </div>
 
               <div>
