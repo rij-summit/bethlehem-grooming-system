@@ -299,16 +299,6 @@
                     <span>Walk-in Booking</span>
                   </button>
 
-                  <!-- BACKEND: replace with real clinic capacity -->
-                  <div
-                    class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-semibold text-white"
-                  >
-                    <i data-lucide="users-round" class="h-4 w-4"></i>
-                    <span
-                      x-text="'Capacity: ' + currentCapacity + '/' + maxCapacity"
-                    ></span>
-                  </div>
-
                   <!-- Notification bell -->
                   <div class="relative" @click.outside="closeNotifications()">
                     <button
