@@ -442,6 +442,7 @@ class AdminBookingController extends Controller
         $bpets    = $booking->bookingPets ?? collect();
         $firstBp  = $bpets->first();
         $firstPet = $firstBp?->pet;
+        $bpetsById = $bpets->keyBy('booking_pet_id');
 
         $petName = $firstPet?->pet_name ?? '—';
         if ($bpets->count() > 1) {
@@ -472,6 +473,8 @@ class AdminBookingController extends Controller
             'petName'         => $petName,
             'petType'         => $petType,
             'breed'           => $breed,
+            'petSize'         => $firstPet?->size,
+            'size'            => $firstPet?->size,
             'serviceLabel'    => $serviceLabel,
             'appointmentDate' => $booking->booking_date,
             'appointmentTime' => $window?->window_label ?? '—',
@@ -495,6 +498,17 @@ class AdminBookingController extends Controller
             'pets'             => $bpets->map(function ($bp) {
                 $pet = $bp->pet;
                 return [
+                    'id'                  => $bp->booking_pet_id,
+                    'bookingPetId'        => $bp->booking_pet_id,
+                    'booking_pet_id'      => $bp->booking_pet_id,
+                    'petId'               => $pet?->pet_id,
+                    'pet_id'              => $pet?->pet_id,
+                    'pet_name'            => $pet?->pet_name,
+                    'name'                => $pet?->pet_name,
+                    'petType'             => ucfirst($pet?->species ?? 'Dog'),
+                    'pet_type'            => $pet?->species,
+                    'petSize'             => $pet?->size,
+                    'pet_size'            => $pet?->size,
                     'petName'             => $pet?->pet_name ?? '—',
                     'species'             => ucfirst($pet?->species ?? '—'),
                     'breed'               => $pet?->breed ?? '—',
@@ -505,10 +519,33 @@ class AdminBookingController extends Controller
                     'specialInstructions' => $bp->special_instructions ?? null,
                 ];
             })->values(),
-            'services' => $bookedServices->map(fn($bs) => [
-                'name'           => $bs->service?->service_name ?? '—',
-                'priceAtBooking' => $bs->price_at_booking,
-            ])->values(),
+            'services' => $bookedServices->map(function ($bs) use ($bpetsById) {
+                $bookingPet = $bpetsById->get($bs->booking_pet_id);
+                $pet = $bookingPet?->pet;
+
+                return [
+                    'id'                 => $bs->booking_service_id,
+                    'bookingServiceId'   => $bs->booking_service_id,
+                    'booking_service_id' => $bs->booking_service_id,
+                    'bookingPetId'       => $bs->booking_pet_id,
+                    'booking_pet_id'     => $bs->booking_pet_id,
+                    'petId'              => $pet?->pet_id,
+                    'pet_id'             => $pet?->pet_id,
+                    'petName'            => $pet?->pet_name ?? '',
+                    'pet_name'           => $pet?->pet_name ?? '',
+                    'serviceId'          => $bs->service?->service_id,
+                    'service_id'         => $bs->service?->service_id,
+                    'slug'               => $bs->service?->slug,
+                    'serviceSlug'        => $bs->service?->slug,
+                    'service_slug'       => $bs->service?->slug,
+                    'serviceName'        => $bs->service?->service_name ?? 'Grooming Service',
+                    'service_name'       => $bs->service?->service_name ?? 'Grooming Service',
+                    'description'        => $bs->service?->description,
+                    'name'               => $bs->service?->service_name ?? '—',
+                    'priceAtBooking'     => $bs->price_at_booking,
+                    'price_at_booking'   => $bs->price_at_booking,
+                ];
+            })->values(),
         ];
     }
 

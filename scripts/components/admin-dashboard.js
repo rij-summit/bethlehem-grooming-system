@@ -247,6 +247,30 @@ function formatPaymentSizeLabel(value) {
   return labels[normalized] || "Size not specified";
 }
 
+function parsePaymentNumber(value) {
+  const amount = Number.parseFloat(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function getPaymentPetSizeCandidate(source) {
+  if (!source) {
+    return "";
+  }
+
+  return [
+    source.size,
+    source.petSize,
+    source.pet_size,
+    source.sizeKey,
+    source.size_key,
+    source.selectedSize,
+    source.selected_size,
+    source.pet?.size,
+    source.pet?.petSize,
+    source.pet?.pet_size,
+  ].find((value) => normalizePaymentSize(value)) || "";
+}
+
 function getPaymentServiceDefinition(rawService) {
   const serviceId = String(
     rawService?.slug ??
@@ -266,6 +290,45 @@ function getPaymentServiceDefinition(rawService) {
   );
 
   return PAYMENT_SERVICE_BY_NAME.get(nameKey) || null;
+}
+
+function inferPaymentSizeFromServices(services, petType) {
+  if (!Array.isArray(services) || services.length === 0) {
+    return "";
+  }
+
+  const allowedSizes = new Set(
+    getPaymentBaseSizeOptions(petType).map((option) => option.value),
+  );
+
+  for (const rawService of services) {
+    const serviceDefinition = getPaymentServiceDefinition(rawService);
+
+    if (serviceDefinition?.kind !== "package") {
+      continue;
+    }
+
+    const bookedAmount = parsePaymentNumber(
+      rawService?.priceAtBooking ?? rawService?.price_at_booking,
+    );
+
+    if (!Number.isFinite(bookedAmount) || bookedAmount <= 0) {
+      continue;
+    }
+
+    const matchedPriceOption = (serviceDefinition.priceOptions || []).find(
+      (option) =>
+        option.sizeKey &&
+        allowedSizes.has(option.sizeKey) &&
+        Math.abs(Number(option.minAmount || 0) - bookedAmount) < 0.01,
+    );
+
+    if (matchedPriceOption) {
+      return matchedPriceOption.sizeKey;
+    }
+  }
+
+  return "";
 }
 
 function formatPaymentAmount(amount) {
@@ -2140,12 +2203,20 @@ function adminDashboard() {
        */
       return pets.map((pet, petIndex) => {
         const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
+        const inferredSizeKey = inferPaymentSizeFromServices(petServices, pet.petTypeKey);
+        const pricedPet = inferredSizeKey
+          ? {
+              ...pet,
+              sizeKey: inferredSizeKey,
+              sizeLabel: formatPaymentSizeLabel(inferredSizeKey),
+            }
+          : pet;
         const lines = petServices.map((service, serviceIndex) =>
-          this.normalizePaymentLine(service, pet, `${petIndex}-${serviceIndex}`),
+          this.normalizePaymentLine(service, pricedPet, `${petIndex}-${serviceIndex}`),
         );
 
         return {
-          ...pet,
+          ...pricedPet,
           lines,
         };
       });
@@ -2161,13 +2232,17 @@ function adminDashboard() {
             breed: booking?.breed,
             size: booking?.petSize ?? booking?.size,
           }];
+      const bookingSizeCandidate = sourcePets.length === 1
+        ? getPaymentPetSizeCandidate(booking)
+        : "";
 
       return sourcePets.map((pet, index) => {
         const petTypeKey = normalizePaymentPetType(
           pet?.species ?? pet?.petType ?? pet?.pet_type,
         );
+        const sizeCandidate = getPaymentPetSizeCandidate(pet) || bookingSizeCandidate;
         const sizeKey = normalizePaymentSizeForPet(
-          pet?.size ?? pet?.petSize ?? pet?.pet_size,
+          sizeCandidate,
           petTypeKey,
         );
 

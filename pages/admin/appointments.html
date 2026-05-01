@@ -1511,9 +1511,9 @@
                           </div>
 
                           <label class="payment-size-select">
-                            <select x-model="pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
+                            <select x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
                               <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
-                                <option :value="option.value" x-text="option.label"></option>
+                                <option :value="option.value" :selected="option.value === pet.sizeKey" x-text="option.label"></option>
                               </template>
                             </select>
                           </label>
