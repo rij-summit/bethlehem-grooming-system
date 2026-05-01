@@ -182,12 +182,12 @@ class AdminBookingController extends Controller
 
         // Notify the customer that grooming has started
         if ($booking->user) {
-            $petName = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+            $petName = $this->petNames($booking);
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'grooming_started',
-                'message'    => "Great news! {$petName}'s grooming session has started. We'll let you know as soon as they're ready for pickup! 🐾",
+                'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -215,7 +215,8 @@ class AdminBookingController extends Controller
 
         $booking->load('bookingPets.pet');
         $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
-        $petName   = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+        $petName   = $this->petNames($booking);
+        $petVerb   = $this->hasMultiplePets($booking) ? 'are' : 'is';
 
         // Always notify the customer that their pet is ready for pickup
         if ($booking->user) {
@@ -223,7 +224,7 @@ class AdminBookingController extends Controller
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'ready_for_pickup',
-                'message'    => "🐾 {$petName} is all done and looking fabulous! Please come to the clinic to pick them up.",
+                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -277,7 +278,8 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be in Released status.'], 422);
         }
 
-        $petName = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+        $petName = $this->petNames($booking);
+        $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
 
         $booking->update([
             'status'      => 'archived',
@@ -289,7 +291,7 @@ class AdminBookingController extends Controller
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'picked_up',
-                'message'    => "Your pet {$petName} has been released. Thank you for visiting Bethlehem Animal Clinic!",
+                'message'    => "{$petName} {$petVerb} been released. Thank you for visiting Bethlehem Animal Clinic!",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -663,7 +665,28 @@ class AdminBookingController extends Controller
             ->filter()
             ->values();
 
-        return $names->isNotEmpty() ? $names->implode(', ') : 'Pet';
+        if ($names->isEmpty()) {
+            return 'your pet';
+        }
+
+        if ($names->count() === 1) {
+            return $names->first();
+        }
+
+        if ($names->count() === 2) {
+            return $names->implode(' and ');
+        }
+
+        return $names->slice(0, -1)->implode(', ') . ', and ' . $names->last();
+    }
+
+    private function hasMultiplePets(Booking $booking): bool
+    {
+        return ($booking->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->unique()
+            ->count() > 1;
     }
 
     private function serviceLabel(Booking $booking): string

@@ -42,7 +42,7 @@ class SendAppointmentReminders extends Command
                 continue;
             }
 
-            $petName   = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+            $petName   = $this->petNames($booking);
             $timeLabel = $booking->timeWindow->window_label;
 
             // ── 24-hour reminder: between 23h and 25h from now ──────────────
@@ -87,5 +87,28 @@ class SendAppointmentReminders extends Command
         }
 
         $this->info("Reminders sent — 24h: {$sent24h}, 3h: {$sent3h}");
+    }
+
+    private function petNames(Booking $booking): string
+    {
+        $names = ($booking->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return 'your pet';
+        }
+
+        if ($names->count() === 1) {
+            return $names->first();
+        }
+
+        if ($names->count() === 2) {
+            return $names->implode(' and ');
+        }
+
+        return $names->slice(0, -1)->implode(', ') . ', and ' . $names->last();
     }
 }

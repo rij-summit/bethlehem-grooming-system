@@ -13,19 +13,26 @@ class CustomerNotificationController extends Controller
         $userId = $request->user()->user_id;
 
         $notifications = CustomerNotification::where('user_id', $userId)
+            ->with(['booking.bookingPets.pet', 'booking.timeWindow'])
             ->orderBy('is_read', 'asc')
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc')
             ->limit(30)
             ->get()
-            ->map(fn($n) => [
-                'id'         => $n->id,
-                'type'       => $n->type,
-                'message'    => $n->message,
-                'is_read'    => (bool) $n->is_read,
-                'created_at' => $n->created_at?->toDateTimeString(),
-                'booking_id' => $n->booking_id,
-            ]);
+            ->map(function ($n) {
+                $petNames = $this->notificationPetNames($n);
+
+                return [
+                    'id'              => $n->id,
+                    'type'            => $n->type,
+                    'message'         => $n->message,
+                    'display_message' => $this->formatCustomerNotificationMessage($n, $petNames),
+                    'pet_names'       => $petNames,
+                    'is_read'         => (bool) $n->is_read,
+                    'created_at'      => $n->created_at?->toDateTimeString(),
+                    'booking_id'      => $n->booking_id,
+                ];
+            });
 
         $unreadCount = CustomerNotification::where('user_id', $userId)
             ->where('is_read', 0)
@@ -35,18 +42,22 @@ class CustomerNotificationController extends Controller
         $pickupNotif = CustomerNotification::where('user_id', $userId)
             ->where('type', 'ready_for_pickup')
             ->where('is_read', 0)
-            ->with('booking')
+            ->with(['booking.bookingPets.pet', 'booking.timeWindow'])
             ->latest('created_at')
             ->first();
+
+        $pickupPetNames = $pickupNotif ? $this->notificationPetNames($pickupNotif) : [];
 
         return response()->json([
             'success'         => true,
             'unread_count'    => $unreadCount,
             'notifications'   => $notifications,
             'pickup_alert'    => $pickupNotif ? [
-                'id'         => $pickupNotif->id,
-                'message'    => $pickupNotif->message,
-                'booking_id' => $pickupNotif->booking_id,
+                'id'              => $pickupNotif->id,
+                'message'         => $pickupNotif->message,
+                'display_message' => $this->formatCustomerNotificationMessage($pickupNotif, $pickupPetNames),
+                'pet_names'       => $pickupPetNames,
+                'booking_id'      => $pickupNotif->booking_id,
             ] : null,
         ]);
     }
@@ -75,5 +86,58 @@ class CustomerNotificationController extends Controller
             ->update(['is_read' => 1]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function notificationPetNames(CustomerNotification $notification): array
+    {
+        return ($notification->booking?->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
+    {
+        if (empty($petNames)) {
+            return $notification->message;
+        }
+
+        $subject = $this->formatNameList($petNames);
+        $isPlural = count($petNames) > 1;
+        $timeLabel = $notification->booking?->timeWindow?->window_label;
+
+        return match ($notification->type) {
+            'grooming_started' => "Great news! Grooming has started for {$subject}. We'll let you know as soon as they're ready for pickup!",
+            'ready_for_pickup' => "{$subject} " . ($isPlural ? 'are' : 'is') . " all done and looking fabulous! Please come to the clinic to pick them up.",
+            'pickup_reminder'  => "Reminder: {$subject} " . ($isPlural ? 'are' : 'is') . " still waiting to be picked up at the clinic. Please come at your earliest convenience!",
+            'picked_up'        => "{$subject} " . ($isPlural ? 'have' : 'has') . " been released. Thank you for visiting Bethlehem Animal Clinic!",
+            'reminder_24h'     => $timeLabel
+                ? "Reminder: {$subject}'s grooming appointment is tomorrow at {$timeLabel}. Please don't forget!"
+                : $notification->message,
+            'reminder_3h'      => $timeLabel
+                ? "Heads up! {$subject}'s grooming appointment is in about 3 hours at {$timeLabel}. See you soon!"
+                : $notification->message,
+            default            => $notification->message,
+        };
+    }
+
+    private function formatNameList(array $names): string
+    {
+        $cleanNames = array_values(array_filter(array_map(
+            fn($name) => trim((string) $name),
+            $names,
+        )));
+
+        if (count($cleanNames) <= 1) {
+            return $cleanNames[0] ?? 'your pet';
+        }
+
+        if (count($cleanNames) === 2) {
+            return $cleanNames[0] . ' and ' . $cleanNames[1];
+        }
+
+        return implode(', ', array_slice($cleanNames, 0, -1)) . ', and ' . end($cleanNames);
     }
 }

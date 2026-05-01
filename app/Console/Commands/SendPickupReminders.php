@@ -29,7 +29,8 @@ class SendPickupReminders extends Command
                 continue;
             }
 
-            $petName = $booking->bookingPets->first()?->pet?->pet_name ?? 'your pet';
+            $petName = $this->petNames($booking);
+            $petVerb = $this->hasMultiplePets($booking) ? 'are' : 'is';
 
             // Only send if no pickup_reminder has been sent in the last 60 minutes
             $lastReminder = CustomerNotification::where('user_id', $booking->user->user_id)
@@ -46,7 +47,7 @@ class SendPickupReminders extends Command
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'pickup_reminder',
-                'message'    => "Reminder: {$petName} is still waiting to be picked up at the clinic. Please come at your earliest convenience!",
+                'message'    => "Reminder: {$petName} {$petVerb} still waiting to be picked up at the clinic. Please come at your earliest convenience!",
                 'is_read'    => false,
                 'created_at' => $now,
             ]);
@@ -55,5 +56,37 @@ class SendPickupReminders extends Command
         }
 
         $this->info("Pickup reminders sent: {$sent}");
+    }
+
+    private function petNames(Booking $booking): string
+    {
+        $names = ($booking->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return 'your pet';
+        }
+
+        if ($names->count() === 1) {
+            return $names->first();
+        }
+
+        if ($names->count() === 2) {
+            return $names->implode(' and ');
+        }
+
+        return $names->slice(0, -1)->implode(', ') . ', and ' . $names->last();
+    }
+
+    private function hasMultiplePets(Booking $booking): bool
+    {
+        return ($booking->bookingPets ?? collect())
+            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->filter()
+            ->unique()
+            ->count() > 1;
     }
 }

@@ -226,7 +226,7 @@
 
     list.innerHTML = notifications.map((n) => {
       const icon = notifIcon(n.type);
-      const message = formatNotificationMessage(n.message);
+      const message = formatNotificationMessage(n.display_message || n.message);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
@@ -311,7 +311,7 @@
       }
     } catch { /* use API-provided message below */ }
 
-    return stripDecorativePaws(pickup.message) || "Please come to the clinic to pick them up now!";
+    return stripDecorativePaws(pickup.display_message || pickup.message) || "Please come to the clinic to pick them up now!";
   }
 
   async function findPickupBooking(pickup) {
@@ -351,14 +351,14 @@
     if (!booking) return [];
 
     const names = [];
+    if (Array.isArray(booking.pet_names)) names.push(...booking.pet_names);
+    if (Array.isArray(booking.petNames)) names.push(...booking.petNames);
     if (Array.isArray(booking.pets)) {
       booking.pets.forEach((pet) => {
         names.push(pet?.pet_name ?? pet?.petName ?? pet?.name ?? "");
       });
     }
 
-    if (Array.isArray(booking.pet_names)) names.push(...booking.pet_names);
-    if (Array.isArray(booking.petNames)) names.push(...booking.petNames);
     names.push(booking.pet_name ?? booking.petName ?? "");
 
     return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
