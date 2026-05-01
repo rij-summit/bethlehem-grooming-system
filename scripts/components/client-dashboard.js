@@ -380,6 +380,15 @@
   const appointmentsList         = document.getElementById("appointmentsList");
   const groomingTrackerEl        = document.getElementById("groomingTracker");
   const groomingHistoryEl        = document.getElementById("groomingHistory");
+  const myPetsCountEl            = document.getElementById("myPetsCount");
+  const myPetsSummaryEl          = document.getElementById("myPetsSummary");
+  const upcomingAppointmentsCountEl   = document.getElementById("upcomingAppointmentsCount");
+  const upcomingAppointmentsSummaryEl = document.getElementById("upcomingAppointmentsSummary");
+  const upcomingReminderKickerEl      = document.getElementById("upcomingReminderKicker");
+  const upcomingReminderTitleEl       = document.getElementById("upcomingReminderTitle");
+  const upcomingReminderTextEl        = document.getElementById("upcomingReminderText");
+  const pastGroomingCountEl      = document.getElementById("pastGroomingCount");
+  const pastGroomingSummaryEl    = document.getElementById("pastGroomingSummary");
   const rescheduleModal          = document.getElementById("rescheduleModal");
   const closeRescheduleModal     = document.getElementById("closeRescheduleModal");
   const rescheduleBookingRef     = document.getElementById("rescheduleBookingRef");
@@ -398,12 +407,26 @@
   let selectedWindowId    = null;
   let cancelTargetBooking = null;
 
+  const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
+
   const today = new Date().toISOString().split("T")[0];
   rescheduleDate.min = today;
 
-  document.addEventListener("DOMContentLoaded", loadAppointments);
+  document.addEventListener("DOMContentLoaded", () => {
+    loadDashboardPets();
+    loadAppointments();
+  });
 
   // ── Load & route data ──────────────────────────────────────────────────────
+
+  async function loadDashboardPets() {
+    try {
+      const data = await API.getUserPets({ archived: 0 });
+      renderMyPetsSummary(data.pets || []);
+    } catch {
+      renderMyPetsSummary([]);
+    }
+  }
 
   async function loadAppointments() {
     try {
@@ -411,16 +434,16 @@
       const active  = data.bookings || [];
       const history = data.history  || [];
 
-      const scheduled = active.filter(b =>
-        ["waiting_to_arrive", "cancelled", "no_show"].includes(b.status)
-      );
+      const scheduled = active.filter(isUpcomingAppointment);
       const atClinic  = active.filter(b =>
         ["checked_in", "in_progress", "for_payment", "released"].includes(b.status)
       );
 
       renderAppointments(scheduled);
+      renderUpcomingAppointmentsSummary(scheduled);
       renderGroomingTracker(atClinic);
       renderGroomingHistory(history);
+      renderPastGroomingSummary(history);
     } catch {
       appointmentsList.innerHTML =
         '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load appointments.</p></div>';
@@ -428,6 +451,20 @@
   }
 
   // ── Appointments section ───────────────────────────────────────────────────
+
+  function renderMyPetsSummary(pets) {
+    const count = Array.isArray(pets) ? pets.length : 0;
+
+    if (myPetsCountEl) {
+      myPetsCountEl.textContent = String(count);
+    }
+
+    if (myPetsSummaryEl) {
+      myPetsSummaryEl.textContent = count
+        ? `${count} active pet${count === 1 ? "" : "s"}`
+        : "No pets yet";
+    }
+  }
 
   function renderAppointments(bookings) {
     if (!bookings.length) {
@@ -485,6 +522,71 @@
   }
 
   // ── Grooming Tracker section ───────────────────────────────────────────────
+
+  function renderUpcomingAppointmentsSummary(bookings) {
+    const records = Array.isArray(bookings) ? bookings : [];
+    const count = records.length;
+
+    if (upcomingAppointmentsCountEl) {
+      upcomingAppointmentsCountEl.textContent = String(count);
+    }
+
+    if (upcomingAppointmentsSummaryEl) {
+      upcomingAppointmentsSummaryEl.textContent = count
+        ? `${count} appointment${count === 1 ? "" : "s"} scheduled`
+        : "No upcoming appointments";
+      upcomingAppointmentsSummaryEl.className = count
+        ? "text-sm text-emerald-600 mt-1"
+        : "text-sm text-slate-500 mt-1";
+    }
+
+    renderUpcomingReminder(records);
+  }
+
+  function renderUpcomingReminder(bookings) {
+    const nextBooking = getNextUpcomingBooking(bookings);
+
+    if (!nextBooking) {
+      if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "No Upcoming Appointments";
+      if (upcomingReminderTitleEl) upcomingReminderTitleEl.textContent = "You don't have any scheduled grooming yet";
+      if (upcomingReminderTextEl) upcomingReminderTextEl.textContent = "Start by booking your first grooming session for your pet.";
+      return;
+    }
+
+    const timeLabel = nextBooking.time_window?.window_label ?? "Time to be confirmed";
+    const petNames = getPetNamesLabel(nextBooking);
+
+    if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "Upcoming Appointment";
+    if (upcomingReminderTitleEl) {
+      upcomingReminderTitleEl.textContent =
+        `${nextBooking.booking_reference} on ${formatDate(nextBooking.booking_date)}`;
+    }
+    if (upcomingReminderTextEl) {
+      upcomingReminderTextEl.textContent = `${petNames} - ${timeLabel}`;
+    }
+  }
+
+  function getNextUpcomingBooking(bookings) {
+    return [...bookings]
+      .filter(isUpcomingAppointment)
+      .sort((a, b) => String(a.booking_date || "").localeCompare(String(b.booking_date || "")))[0] || null;
+  }
+
+  function isUpcomingAppointment(booking) {
+    return UPCOMING_APPOINTMENT_STATUSES.has(String(booking?.status || "").toLowerCase());
+  }
+
+  function getPetNamesLabel(booking) {
+    const petNames = (booking.pets || [])
+      .map((pet) => pet.pet_name)
+      .filter(Boolean)
+      .join(", ");
+
+    if (petNames) return petNames;
+
+    const count = booking.number_of_pets || 0;
+    return count ? `${count} pet${count === 1 ? "" : "s"}` : "Your pet";
+  }
 
   function renderGroomingTracker(bookings) {
     if (!bookings.length) {
@@ -581,6 +683,20 @@
         ${history.map(b => buildHistoryCard(b)).join("")}
       </div>`;
     if (window.lucide) lucide.createIcons();
+  }
+
+  function renderPastGroomingSummary(history) {
+    const count = Array.isArray(history) ? history.length : 0;
+
+    if (pastGroomingCountEl) {
+      pastGroomingCountEl.textContent = String(count);
+    }
+
+    if (pastGroomingSummaryEl) {
+      pastGroomingSummaryEl.textContent = count
+        ? `${count} completed session${count === 1 ? "" : "s"}`
+        : "No grooming history yet";
+    }
   }
 
   function buildHistoryCard(b) {

@@ -1001,10 +1001,6 @@ video {
   width: 100%;
 }
 
-.w-1\/5 {
-  width: 20%;
-}
-
 .min-w-0 {
   min-width: 0px;
 }
@@ -2729,6 +2725,11 @@ video {
   background-color: rgb(255 255 255 / 0.4);
 }
 
+.hover\:bg-\[\#3f6d9c\]:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(63 109 156 / var(--tw-bg-opacity, 1));
+}
+
 .hover\:text-\[\#274a66\]:hover {
   --tw-text-opacity: 1;
   color: rgb(39 74 102 / var(--tw-text-opacity, 1));
@@ -2818,6 +2819,10 @@ video {
 
 .focus\:ring-\[\#315b7e\]\/20:focus {
   --tw-ring-color: rgb(49 91 126 / 0.2);
+}
+
+.focus\:ring-white\/70:focus {
+  --tw-ring-color: rgb(255 255 255 / 0.7);
 }
 
 .focus-visible\:outline-none:focus-visible {
