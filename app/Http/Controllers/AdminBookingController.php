@@ -79,8 +79,8 @@ class AdminBookingController extends Controller
             ->map(fn($b) => $this->formatBooking($b));
 
         // Summary metrics (always based on today, not the filter date)
-        $todayCount = Booking::where('booking_date', $today->toDateString())
-            ->whereNotIn('status', ['cancelled'])
+        $todayCompletedCount = Booking::whereDate('grooming_finished_at', $today->toDateString())
+            ->whereNotIn('status', ['cancelled', 'no_show'])
             ->count();
 
         $weekStart  = Carbon::now()->startOfWeek()->toDateString();
@@ -109,7 +109,7 @@ class AdminBookingController extends Controller
             'forPaymentList'  => $forPayment->values(),
             'releasedList'    => $released->values(),
             'summary'         => [
-                'today'               => $todayCount,
+                'today'               => $todayCompletedCount,
                 'week'                => $weekCount,
                 'revenueToday'        => (float) $revenueToday,
                 'revenuePaymentCount' => $revenuePaymentCount,
@@ -118,7 +118,7 @@ class AdminBookingController extends Controller
             ],
             'recentActivity'  => $this->recentActivity(),
             'capacity'       => [
-                'current' => $todayCount,
+                'current' => $todayCompletedCount,
                 'max'     => self::MAX_CAPACITY,
             ],
         ]);
