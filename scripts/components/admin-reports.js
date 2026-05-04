@@ -20,6 +20,29 @@ function adminReports() {
       periodLabel: "Today",
       serviceBreakdown: [],
     },
+    customerPeriod: "day",
+    customerSelectedDate: currentDate,
+    customerSelectedMonth: currentMonth,
+    customerSelectedYear: currentYear,
+    customerActivitySubsection: "all",
+    customerActivityLoaded: false,
+    loadingCustomerActivity: false,
+    customerActivityError: "",
+    customerActivityNavItems: [
+      { key: "all", label: "All customers", icon: "users" },
+      { key: "new", label: "New customers", icon: "user-plus" },
+      { key: "returning", label: "Returning customers", icon: "repeat-2" },
+      { key: "noShows", label: "No-show count & rate", icon: "user-x" },
+    ],
+    customerActivityReport: {
+      period: "day",
+      totalUniqueCustomers: 0,
+      completedVisits: 0,
+      periodLabel: "Today",
+      topCustomer: null,
+      allCustomers: [],
+      newCustomers: [],
+    },
 
     async init() {
       await this.loadServicesPerformed();
@@ -62,8 +85,54 @@ function adminReports() {
       }
     },
 
+    async loadCustomerActivity() {
+      this.loadingCustomerActivity = true;
+      this.customerActivityError = "";
+
+      try {
+        const data = await API.getCustomerActivityReport({
+          period: this.customerPeriod,
+          date: this.customerPeriod === "day" ? this.customerSelectedDate : "",
+          month: this.customerPeriod === "month" ? this.customerSelectedMonth : "",
+          year: this.customerPeriod === "year" ? this.customerSelectedYear : "",
+        });
+
+        this.customerActivityReport = {
+          period: data.period || this.customerPeriod,
+          totalUniqueCustomers: Number(data.totalUniqueCustomers ?? 0),
+          completedVisits: Number(data.completedVisits ?? 0),
+          periodLabel: data.periodLabel || this.localCustomerActivityPeriodLabel,
+          topCustomer: data.topCustomer || null,
+          allCustomers: Array.isArray(data.allCustomers)
+            ? data.allCustomers
+            : [],
+          newCustomers: Array.isArray(data.newCustomers)
+            ? data.newCustomers
+            : [],
+        };
+      } catch (error) {
+        this.customerActivityError = error.message || "Failed to load customer activity. Please try again.";
+        this.customerActivityReport = {
+          period: this.customerPeriod,
+          totalUniqueCustomers: 0,
+          completedVisits: 0,
+          periodLabel: this.localCustomerActivityPeriodLabel,
+          topCustomer: null,
+          allCustomers: [],
+          newCustomers: [],
+        };
+      } finally {
+        this.loadingCustomerActivity = false;
+        this.customerActivityLoaded = true;
+        this.refreshIcons();
+      }
+    },
+
     switchSection(section) {
       this.activeSection = section;
+      if (section === "customers" && !this.customerActivityLoaded) {
+        this.loadCustomerActivity();
+      }
       this.refreshIcons();
     },
 
@@ -83,6 +152,26 @@ function adminReports() {
       this.loadServicesPerformed();
     },
 
+    onCustomerPeriodChange() {
+      if (this.customerPeriod === "day" && !this.customerSelectedDate) {
+        this.customerSelectedDate = currentDate;
+      }
+
+      if (this.customerPeriod === "month" && !this.customerSelectedMonth) {
+        this.customerSelectedMonth = currentMonth;
+      }
+
+      if (this.customerPeriod === "year" && !this.customerSelectedYear) {
+        this.customerSelectedYear = currentYear;
+      }
+
+      this.loadCustomerActivity();
+    },
+
+    onCustomerPeriodValueChange() {
+      this.loadCustomerActivity();
+    },
+
     onServicesPeriodValueChange() {
       this.loadServicesPerformed();
     },
@@ -99,6 +188,18 @@ function adminReports() {
       this.loadServicesPerformed();
     },
 
+    clearCustomerPeriod() {
+      if (this.customerPeriod === "day") {
+        this.customerSelectedDate = "";
+      } else if (this.customerPeriod === "month") {
+        this.customerSelectedMonth = "";
+      } else if (this.customerPeriod === "year") {
+        this.customerSelectedYear = "";
+      }
+
+      this.loadCustomerActivity();
+    },
+
     get hasSelectedPeriodValue() {
       if (this.servicesPeriod === "month") {
         return Boolean(this.selectedMonth);
@@ -109,6 +210,18 @@ function adminReports() {
       }
 
       return Boolean(this.selectedDate);
+    },
+
+    get hasSelectedCustomerPeriodValue() {
+      if (this.customerPeriod === "month") {
+        return Boolean(this.customerSelectedMonth);
+      }
+
+      if (this.customerPeriod === "year") {
+        return Boolean(this.customerSelectedYear);
+      }
+
+      return Boolean(this.customerSelectedDate);
     },
 
     get servicesPeriodLabel() {
@@ -127,6 +240,23 @@ function adminReports() {
       return this.selectedDate ? this.formatReportDate(this.selectedDate) : "All dates";
     },
 
+    get customerActivityPeriodLabel() {
+      const label = this.customerActivityReport.periodLabel || this.localCustomerActivityPeriodLabel;
+      return label === "All dates" ? "All Dates" : label;
+    },
+
+    get localCustomerActivityPeriodLabel() {
+      if (this.customerPeriod === "month") {
+        return this.customerSelectedMonth ? this.formatReportMonth(this.customerSelectedMonth) : "All Dates";
+      }
+
+      if (this.customerPeriod === "year") {
+        return this.customerSelectedYear || "All Dates";
+      }
+
+      return this.customerSelectedDate ? this.formatReportDate(this.customerSelectedDate) : "All Dates";
+    },
+
     get servicesSubtitle() {
       const count = this.servicesReport.completedAppointments;
       const period = this.servicesPeriodLabel === "All dates"
@@ -136,8 +266,37 @@ function adminReports() {
       return `${this.formatWholeNumber(count)} completed appointment${count === 1 ? "" : "s"} ${period}`;
     },
 
+    get customerActivitySubtitle() {
+      const count = this.customerActivityReport.completedVisits;
+      const period = this.customerActivityPeriodLabel === "All Dates"
+        ? "across all dates"
+        : `${this.customerPeriod === "day" ? "on" : "in"} ${this.customerActivityPeriodLabel}`;
+
+      return `${this.formatWholeNumber(count)} completed grooming visit${count === 1 ? "" : "s"} ${period}`;
+    },
+
     get topService() {
       return this.servicesReport.serviceBreakdown[0] || null;
+    },
+
+    get topCustomer() {
+      return this.customerActivityReport.topCustomer || null;
+    },
+
+    get allCustomerActivityCustomers() {
+      return this.customerActivityReport.allCustomers || [];
+    },
+
+    get newCustomerActivityCustomers() {
+      return this.customerActivityReport.newCustomers || [];
+    },
+
+    get allCustomersEmptyMessage() {
+      return "No customers with completed grooming visits yet.";
+    },
+
+    get newCustomersEmptyMessage() {
+      return `No first-time customer visits for ${this.customerActivityPeriodLabel}.`;
     },
 
     get filteredServiceBreakdown() {
@@ -197,6 +356,49 @@ function adminReports() {
       } catch {
         return monthStr;
       }
+    },
+
+    formatReportDateTime(dateTimeStr) {
+      if (!dateTimeStr) return "No visits yet";
+
+      try {
+        return new Intl.DateTimeFormat("en-PH", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        }).format(new Date(String(dateTimeStr).replace(" ", "T")));
+      } catch {
+        return dateTimeStr;
+      }
+    },
+
+    customerInitials(customer) {
+      const name = customer?.customerName || "";
+      const initials = name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part[0])
+        .join("")
+        .toUpperCase();
+
+      return initials || "CU";
+    },
+
+    formatMobileNumber(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+
+      const digits = text.replace(/\D/g, "");
+      if (digits.length === 11) {
+        return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+      }
+
+      return text;
+    },
+
+    customerContactLine(customer) {
+      return [this.formatMobileNumber(customer?.phone), customer?.email].filter(Boolean).join(" | ");
     },
 
     refreshIcons() {

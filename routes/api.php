@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/bookings/{id}/release',            [PaymentController::class, 'release']);
     Route::get('/admin/transactions',                      [PaymentController::class, 'index']);
     Route::get('/admin/reports/services-performed',         [ReportController::class, 'servicesPerformed']);
+    Route::get('/admin/reports/customer-activity',          [ReportController::class, 'customerActivity']);
 
     // Admin — Clinic closures
     Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);

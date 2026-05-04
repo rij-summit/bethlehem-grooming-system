@@ -532,6 +532,17 @@ var API = (() => {
     return request("GET", `/admin/reports/services-performed${query}`, null, getAdminToken());
   }
 
+  async function getCustomerActivityReport({ period = "day", date = "", month = "", year = "" } = {}) {
+    // GET /api/admin/reports/customer-activity  (protected - admin token)
+    const params = new URLSearchParams();
+    if (period) params.set("period", period);
+    if (date)   params.set("date",   date);
+    if (month)  params.set("month",  month);
+    if (year)   params.set("year",   year);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/reports/customer-activity${query}`, null, getAdminToken());
+  }
+
   function normalizePhoneLikeIdentifier(value) {
     const digits = String(value || "").replace(/\D/g, "");
 
@@ -613,5 +624,6 @@ var API = (() => {
     markPickedUp,
     getTransactions,
     getServicesPerformedReport,
+    getCustomerActivityReport,
   };
 })();
