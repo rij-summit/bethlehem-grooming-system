@@ -161,7 +161,38 @@ class PaymentController extends Controller
     public function index(Request $request)
     {
         $search = $request->query('search', '');
+        $period = $request->query('period', 'day');
         $date   = $request->query('date', '');
+        $month  = $request->query('month', '');
+        $year   = $request->query('year', '');
+
+        if (!in_array($period, ['day', 'month', 'year'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid transaction period.',
+            ], 422);
+        }
+
+        if ($period === 'day' && $date && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid transaction date.',
+            ], 422);
+        }
+
+        if ($period === 'month' && $month && !preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid transaction month.',
+            ], 422);
+        }
+
+        if ($period === 'year' && $year && !preg_match('/^\d{4}$/', $year)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid transaction year.',
+            ], 422);
+        }
 
         $query = Payment::with([
             'booking.user',
@@ -169,16 +200,16 @@ class PaymentController extends Controller
             'booking.bookingServices.service',
         ])->where('payment_status', 'paid')->orderBy('paid_at', 'desc');
 
-        if ($date) {
-            $query->whereDate('paid_at', $date);
-        }
+        $this->applyPeriodFilter($query, $period, $date, $month, $year);
 
         if ($search) {
-            $query->whereHas('booking.user', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name',  'like', "%{$search}%");
-            })->orWhereHas('booking.bookingPets.pet', function ($q) use ($search) {
-                $q->where('pet_name', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('booking.user', function ($q2) use ($search) {
+                    $q2->where('first_name', 'like', "%{$search}%")
+                       ->orWhere('last_name',  'like', "%{$search}%");
+                })->orWhereHas('booking.bookingPets.pet', function ($q2) use ($search) {
+                    $q2->where('pet_name', 'like', "%{$search}%");
+                });
             });
         }
 
@@ -186,9 +217,32 @@ class PaymentController extends Controller
 
         return response()->json([
             'success'      => true,
+            'period'       => $period,
+            'date'         => $date ?: null,
+            'month'        => $month ?: null,
+            'year'         => $year ?: null,
             'transactions' => $transactions->values(),
             'total'        => $transactions->count(),
         ]);
+    }
+
+    private function applyPeriodFilter($query, string $period, string $date, string $month, string $year): void
+    {
+        if ($period === 'day' && $date) {
+            $query->whereDate('paid_at', $date);
+            return;
+        }
+
+        if ($period === 'month' && $month) {
+            [$selectedYear, $selectedMonth] = explode('-', $month);
+            $query->whereYear('paid_at', (int) $selectedYear)
+                ->whereMonth('paid_at', (int) $selectedMonth);
+            return;
+        }
+
+        if ($period === 'year' && $year) {
+            $query->whereYear('paid_at', (int) $year);
+        }
     }
 
     // ── FORMAT ────────────────────────────────────────────

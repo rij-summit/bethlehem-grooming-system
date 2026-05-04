@@ -1,14 +1,17 @@
 function adminTransactions() {
-  const currentDate = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  })();
+  const d = new Date();
+  const currentDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const currentMonth = currentDate.slice(0, 7);
+  const currentYear = currentDate.slice(0, 4);
 
   return {
     transactions: [],
     totalCount: 0,
     searchQuery: "",
+    transactionPeriod: "day",
     filterDate: "",
+    filterMonth: "",
+    filterYear: "",
     loading: false,
     errorMessage: "",
 
@@ -24,7 +27,10 @@ function adminTransactions() {
       try {
         const data = await API.getTransactions({
           search: this.searchQuery.trim(),
-          date:   this.filterDate,
+          period: this.transactionPeriod,
+          date:   this.transactionPeriod === "day" ? this.filterDate : "",
+          month:  this.transactionPeriod === "month" ? this.filterMonth : "",
+          year:   this.transactionPeriod === "year" ? this.filterYear : "",
         });
         this.transactions = data.transactions || [];
         this.totalCount   = data.total ?? this.transactions.length;
@@ -42,18 +48,43 @@ function adminTransactions() {
       this.loadTransactions();
     },
 
-    onDateChange() {
+    onPeriodChange() {
+      if (this.transactionPeriod === "day" && !this.filterDate) {
+        this.filterDate = currentDate;
+      }
+
+      if (this.transactionPeriod === "month" && !this.filterMonth) {
+        this.filterMonth = currentMonth;
+      }
+
+      if (this.transactionPeriod === "year" && !this.filterYear) {
+        this.filterYear = currentYear;
+      }
+
+      this.loadTransactions();
+    },
+
+    onPeriodValueChange() {
       this.loadTransactions();
     },
 
     clearFilters() {
       this.searchQuery = "";
-      this.filterDate  = "";
+      this.transactionPeriod = "day";
+      this.filterDate = "";
+      this.filterMonth = "";
+      this.filterYear = "";
       this.loadTransactions();
     },
 
     get hasActiveFilters() {
-      return this.searchQuery || this.filterDate;
+      return (
+        this.searchQuery ||
+        this.transactionPeriod !== "day" ||
+        this.filterDate ||
+        this.filterMonth ||
+        this.filterYear
+      );
     },
 
     // Groups transactions: today first, then earlier dates
@@ -78,13 +109,30 @@ function adminTransactions() {
       }));
     },
 
-    get todayTotal() {
-      const todayItems = this.transactions.filter(tx => tx.dateKey === currentDate);
-      return todayItems.reduce((sum, tx) => sum + tx.finalPrice, 0);
+    get collectionTotal() {
+      return this.transactions.reduce((sum, tx) => sum + tx.finalPrice, 0);
     },
 
-    get todayCount() {
-      return this.transactions.filter(tx => tx.dateKey === currentDate).length;
+    get collectionCount() {
+      return this.transactions.length;
+    },
+
+    get hasSelectedPeriodValue() {
+      if (this.transactionPeriod === "month") return Boolean(this.filterMonth);
+      if (this.transactionPeriod === "year") return Boolean(this.filterYear);
+      return Boolean(this.filterDate);
+    },
+
+    get collectionTitle() {
+      if (this.transactionPeriod === "month") {
+        return this.filterMonth ? `${this.formatMonth(this.filterMonth)} Collection` : "Monthly Collection";
+      }
+
+      if (this.transactionPeriod === "year") {
+        return this.filterYear ? `${this.filterYear} Collection` : "Yearly Collection";
+      }
+
+      return this.filterDate ? `${this.formatShortDate(this.filterDate)} Collection` : "Collection";
     },
 
     formatGroupDate(dateStr) {
@@ -112,6 +160,33 @@ function adminTransactions() {
         }).format(new Date(paidAt));
       } catch {
         return paidAt;
+      }
+    },
+
+    formatMonth(monthStr) {
+      if (!monthStr) return "All dates";
+
+      try {
+        return new Intl.DateTimeFormat("en-PH", {
+          year: "numeric",
+          month: "short",
+        }).format(new Date(monthStr + "-01T00:00:00"));
+      } catch {
+        return monthStr;
+      }
+    },
+
+    formatShortDate(dateStr) {
+      if (!dateStr) return "All dates";
+
+      try {
+        return new Intl.DateTimeFormat("en-PH", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }).format(new Date(dateStr + "T00:00:00"));
+      } catch {
+        return dateStr;
       }
     },
 

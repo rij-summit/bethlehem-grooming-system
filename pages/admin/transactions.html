@@ -166,11 +166,11 @@
                   <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">PAYMENT HISTORY</p>
                 </div>
 
-                <!-- Today summary card -->
+                <!-- Collection summary card -->
                 <div class="rounded-xl border border-[#86efac] bg-white/75 px-4 py-2.5 shadow-sm sm:min-w-[220px]">
-                  <p class="text-xs font-semibold uppercase tracking-widest text-[#16a34a]">Today's Collection</p>
-                  <p class="mt-0.5 text-2xl font-extrabold leading-tight text-[#15803d]" x-text="formatPeso(todayTotal)"></p>
-                  <p class="text-xs text-slate-500" x-text="todayCount + ' transaction' + (todayCount !== 1 ? 's' : '')"></p>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-[#16a34a]" x-text="collectionTitle"></p>
+                  <p class="mt-0.5 text-2xl font-extrabold leading-tight text-[#15803d]" x-text="formatPeso(collectionTotal)"></p>
+                  <p class="text-xs text-slate-500" x-text="collectionCount + ' transaction' + (collectionCount !== 1 ? 's' : '')"></p>
                 </div>
               </div>
 
@@ -190,13 +190,45 @@
                   />
                 </label>
 
-                <!-- Date filter -->
+                <!-- Period filter -->
+                <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
+                  <i data-lucide="calendar-range" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
+                  <select
+                    x-model="transactionPeriod"
+                    @change="onPeriodChange()"
+                    class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
+                  >
+                    <option value="day">Day</option>
+                    <option value="month">Month</option>
+                    <option value="year">Year</option>
+                  </select>
+                </div>
+
+                <!-- Period value filter -->
                 <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
                   <i data-lucide="calendar" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
                   <input
+                    x-show="transactionPeriod === 'day'"
                     type="date"
                     x-model="filterDate"
-                    @change="onDateChange()"
+                    @change="onPeriodValueChange()"
+                    class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
+                  />
+                  <input
+                    x-show="transactionPeriod === 'month'"
+                    type="month"
+                    x-model="filterMonth"
+                    @change="onPeriodValueChange()"
+                    class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
+                  />
+                  <input
+                    x-show="transactionPeriod === 'year'"
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    step="1"
+                    x-model="filterYear"
+                    @change="onPeriodValueChange()"
                     class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
                   />
                 </div>

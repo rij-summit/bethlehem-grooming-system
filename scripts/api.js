@@ -509,13 +509,27 @@ var API = (() => {
     return request("PATCH", "/customer/notifications/read-all", null, getCustomerToken());
   }
 
-  async function getTransactions({ search = "", date = "" } = {}) {
+  async function getTransactions({ search = "", period = "day", date = "", month = "", year = "" } = {}) {
     // GET /api/admin/transactions  (protected — admin token)
     const params = new URLSearchParams();
     if (search) params.set("search", search);
+    if (period) params.set("period", period);
     if (date)   params.set("date",   date);
+    if (month)  params.set("month",  month);
+    if (year)   params.set("year",   year);
     const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/admin/transactions${query}`, null, getAdminToken());
+  }
+
+  async function getServicesPerformedReport({ period = "day", date = "", month = "", year = "" } = {}) {
+    // GET /api/admin/reports/services-performed  (protected - admin token)
+    const params = new URLSearchParams();
+    if (period) params.set("period", period);
+    if (date)   params.set("date",   date);
+    if (month)  params.set("month",  month);
+    if (year)   params.set("year",   year);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/reports/services-performed${query}`, null, getAdminToken());
   }
 
   function normalizePhoneLikeIdentifier(value) {
@@ -598,5 +612,6 @@ var API = (() => {
     releaseBooking,
     markPickedUp,
     getTransactions,
+    getServicesPerformedReport,
   };
 })();
