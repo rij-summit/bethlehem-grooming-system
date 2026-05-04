@@ -725,7 +725,7 @@
 
                           <p
                             class="text-sm text-slate-500"
-                            x-text="booking.contactNumber"
+                            x-text="formatMobileNumber(booking.contactNumber)"
                           ></p>
 
                           <div
@@ -904,7 +904,7 @@
 
                       <p
                         class="text-sm text-slate-500"
-                        x-text="booking.contactNumber"
+                        x-text="formatMobileNumber(booking.contactNumber)"
                       ></p>
 
                       <div
@@ -1098,7 +1098,7 @@
 
                       <p
                         class="text-sm text-slate-500"
-                        x-text="booking.contactNumber"
+                        x-text="formatMobileNumber(booking.contactNumber)"
                       ></p>
 
                       <div
@@ -1239,7 +1239,7 @@
                         </template>
                       </div>
 
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
+                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
 
                       <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
                         <p class="flex items-center gap-2">
@@ -1336,7 +1336,7 @@
                         </span>
                       </div>
 
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
+                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
 
                       <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
                         <p class="flex items-center gap-2">
@@ -1406,7 +1406,7 @@
                     <div class="text-4xl font-extrabold text-red-300" x-text="'#' + booking.queueNumber"></div>
                     <div class="min-w-0">
                       <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                      <p class="text-sm text-slate-500" x-text="booking.contactNumber"></p>
+                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
                       <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
                         <p class="flex items-center gap-2">
                           <i data-lucide="paw-print" class="h-4 w-4"></i>
@@ -1690,7 +1690,7 @@
                         </div>
                         <div>
                           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact Number</p>
-                          <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.contactNumber"></p>
+                          <p class="mt-2 text-sm text-slate-700" x-text="formatMobileNumber(receiptModal.contactNumber)"></p>
                         </div>
                       </div>
                     </section>
@@ -1920,7 +1920,7 @@
                 <div>
                   <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Owner</p>
                   <p class="font-semibold text-slate-800" x-text="detailsBooking?.ownerName ?? '—'"></p>
-                  <p class="text-sm text-slate-500" x-text="detailsBooking?.contactNumber ?? '—'"></p>
+                  <p class="text-sm text-slate-500" x-text="formatMobileNumber(detailsBooking?.contactNumber)"></p>
                 </div>
 
                 <!-- Schedule -->

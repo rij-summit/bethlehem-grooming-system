@@ -395,18 +395,24 @@ body.client-sidebar-open {
 .badge-new       { background-color: #e0f2fe; color: #0369a1; }
 
 /* Deactivate action button (on card) */
-.btn-deactivate       { border-color: #fbbf24; color: #d97706; }
-.btn-deactivate:hover { background-color: #fffbeb; }
+.btn-deactivate       { border-color: #EF4444; color: #EF4444; }
+.btn-deactivate:hover { background-color: #fef2f2; }
+.btn-reactivate       { background-color: #2563eb; color: #ffffff; }
+.btn-reactivate:hover { background-color: #1d4ed8; }
 
 /* Confirm modal — icon container */
-.icon-bg-warn    { background-color: #fef3c7; }
+.icon-bg-warn    { background-color: #fee2e2; }
+.icon-bg-reactivate { background-color: #dbeafe; }
 .icon-bg-success { background-color: #dcfce7; }
-.icon-warn       { color: #d97706; }
+.icon-warn       { color: #EF4444; }
+.icon-reactivate { color: #2563eb; }
 .icon-success    { color: #16a34a; }
 
 /* Confirm modal — confirm button variants */
-.btn-confirm-deactivate       { background-color: #f59e0b; color: #ffffff; }
-.btn-confirm-deactivate:hover { background-color: #d97706; }
+.btn-confirm-deactivate       { background-color: #EF4444; color: #ffffff; }
+.btn-confirm-deactivate:hover { background-color: #dc2626; }
+.btn-confirm-reactivate       { background-color: #2563eb; color: #ffffff; }
+.btn-confirm-reactivate:hover { background-color: #1d4ed8; }
 .btn-confirm-archive          { background-color: #64748b; color: #ffffff; }
 .btn-confirm-archive:hover    { background-color: #475569; }
 
