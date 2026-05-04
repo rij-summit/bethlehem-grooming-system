@@ -495,6 +495,8 @@ class AdminBookingController extends Controller
             'pets'             => $bpets->map(function ($bp) {
                 $pet = $bp->pet;
                 return [
+                    'bookingPetId'        => $bp->booking_pet_id,
+                    'petId'               => $pet?->pet_id,
                     'petName'             => $pet?->pet_name ?? '—',
                     'species'             => ucfirst($pet?->species ?? '—'),
                     'breed'               => $pet?->breed ?? '—',
@@ -506,8 +508,11 @@ class AdminBookingController extends Controller
                 ];
             })->values(),
             'services' => $bookedServices->map(fn($bs) => [
-                'name'           => $bs->service?->service_name ?? '—',
-                'priceAtBooking' => $bs->price_at_booking,
+                'bookingServiceId' => $bs->booking_service_id,
+                'bookingPetId'     => $bs->booking_pet_id,
+                'slug'             => $bs->service?->slug,
+                'name'             => $bs->service?->service_name ?? '—',
+                'priceAtBooking'   => $bs->price_at_booking,
             ])->values(),
         ];
     }
