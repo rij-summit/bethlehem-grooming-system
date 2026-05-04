@@ -38,13 +38,13 @@
       </div>
 
       <div class="site-nav-actions flex items-center gap-10">
-        <!-- TODO: FAQ page not yet built. href="#" is a placeholder.
-             Wire this to a dedicated FAQ page or an anchor section when ready. -->
+        <!-- TODO: About Us page not yet built. href="#" is a placeholder.
+             Wire this to a dedicated About Us page or an anchor section when ready. -->
         <a
           href="#"
-          class="site-nav-link text-gray-800 font-medium text-base hover:text-blue-600 transition-colors"
+          class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg px-5 py-2.5 text-xl font-semibold leading-none text-gray-800 transition-colors hover:bg-white/40"
         >
-          FAQ
+          About Us
         </a>
 
         <!-- TODO: Auth-aware redirect not implemented on the home page.
@@ -78,9 +78,9 @@
           </h1>
 
           <p class="text-2xl text-gray-600 max-w-xl leading-relaxed">
-            Book grooming appointments for your furry friends with ease.
-            Our expert team is dedicated to keeping your pets clean, 
-            happy, and looking their best.
+            Plan your pet's visit online with ease.
+            Our expert team is dedicated to keeping your pets clean
+            happy, and looking their best."
           </p>
         </div>
 
@@ -178,7 +178,7 @@
         Ready to Visit Us?
       </h2>
       <p class="text-white text-lg mb-20">
-        Give your pet the care they deserve. Schedule your appointment today!
+        Give your pet the care they deserve. Plan your visit online today!
       </p>
       <a
         href="./pages/client/sign-in.html"
@@ -195,6 +195,16 @@
         ©2026 Bethlehem Animal Clinic & Grooming. All rights reserved.
       </p>
     </footer>
+
+    <button
+      type="button"
+      class="ai-chatbot-button"
+      aria-label="Open AI Chatbot"
+      data-ai-chatbot-launcher
+    >
+      <i data-lucide="message-circle" class="ai-chatbot-button__icon"></i>
+      <span>AI Chatbot</span>
+    </button>
 
     <script>
       lucide.createIcons();

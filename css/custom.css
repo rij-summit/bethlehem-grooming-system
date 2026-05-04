@@ -1,12 +1,12 @@
-/*This is for later when Tailwind CSS cant produce style that it cant easily do like*/
-/* custom animations */
-/* custom scrollbar styles */
-/* very specific one-off styles */
+/* ----- Custom CSS Notes ----- */
+/* Use this file for custom animations, custom scrollbar styles, and one-off styles that Tailwind cannot easily cover. */
 
+/* ----- Admin Activity Status Indicators ----- */
 .admin-activity-dot-pickup {
   background-color: #0e7490;
 }
 
+/* ----- Site Navigation ----- */
 .site-nav {
   z-index: 30;
   gap: 1.25rem;
@@ -20,6 +20,51 @@
   background: #0d3b62;
 }
 
+/* ----- AI Chatbot Launcher ----- */
+.ai-chatbot-button {
+  position: fixed;
+  right: 1.75rem;
+  bottom: 1.75rem;
+  z-index: 80;
+  display: inline-flex;
+  min-height: 3.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border: 0;
+  border-radius: 9999px;
+  background: #124a78;
+  color: #ffffff;
+  padding: 0.95rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 18px 38px rgba(18, 74, 120, 0.28);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.ai-chatbot-button:hover {
+  background: #0d3b62;
+  box-shadow: 0 22px 44px rgba(18, 74, 120, 0.34);
+  transform: translateY(-2px);
+}
+
+.ai-chatbot-button:focus-visible {
+  outline: 3px solid rgba(18, 74, 120, 0.28);
+  outline-offset: 4px;
+}
+
+.ai-chatbot-button__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+}
+
+/* ----- Brand Lockup ----- */
 .brand-lockup {
   display: inline-flex;
   min-width: 0;
@@ -127,6 +172,7 @@
   }
 }
 
+/* ----- Booking Form Controls ----- */
 .booking-select {
   appearance: none;
   -webkit-appearance: none;
@@ -142,6 +188,7 @@
   transform: translateY(-50%);
 }
 
+/* ----- Service Cards And Pricing ----- */
 .service-card {
   align-items: flex-start;
 }
@@ -231,6 +278,7 @@
   color: #244764;
 }
 
+/* ----- Sidebar Layout ----- */
 body.client-sidebar-open {
   overflow: hidden;
 }
@@ -349,6 +397,7 @@ body.client-sidebar-open {
   }
 }
 
+/* ----- Mobile Navigation, Sidebar, And Chatbot ----- */
 @media (max-width: 640px) {
   .site-nav {
     padding: 0.9rem 1rem !important;
@@ -388,19 +437,32 @@ body.client-sidebar-open {
     padding-left: 4.75rem;
     padding-right: 1rem;
   }
+
+  .ai-chatbot-button {
+    right: 1rem;
+    bottom: 1rem;
+    min-height: 3.25rem;
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .ai-chatbot-button__icon {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
 }
 
-/* Customer tier badges */
+/* ----- Customer Tier Badges ----- */
 .badge-returning { background-color: #d1fae5; color: #047857; }
 .badge-new       { background-color: #e0f2fe; color: #0369a1; }
 
-/* Deactivate action button (on card) */
+/* ----- Customer Account Status Actions ----- */
 .btn-deactivate       { border-color: #EF4444; color: #EF4444; }
 .btn-deactivate:hover { background-color: #fef2f2; }
 .btn-reactivate       { background-color: #2563eb; color: #ffffff; }
 .btn-reactivate:hover { background-color: #1d4ed8; }
 
-/* Confirm modal — icon container */
+/* ----- Confirmation Modal Icons ----- */
 .icon-bg-warn    { background-color: #fee2e2; }
 .icon-bg-reactivate { background-color: #dbeafe; }
 .icon-bg-success { background-color: #dcfce7; }
@@ -408,7 +470,7 @@ body.client-sidebar-open {
 .icon-reactivate { color: #2563eb; }
 .icon-success    { color: #16a34a; }
 
-/* Confirm modal — confirm button variants */
+/* ----- Confirmation Modal Buttons ----- */
 .btn-confirm-deactivate       { background-color: #EF4444; color: #ffffff; }
 .btn-confirm-deactivate:hover { background-color: #dc2626; }
 .btn-confirm-reactivate       { background-color: #2563eb; color: #ffffff; }
@@ -416,7 +478,7 @@ body.client-sidebar-open {
 .btn-confirm-archive          { background-color: #64748b; color: #ffffff; }
 .btn-confirm-archive:hover    { background-color: #475569; }
 
-/* Stop Receiving / Reopen Today — sidebar button */
+/* ----- Clinic Receiving Controls ----- */
 .btn-clinic-stop {
   background-color: #fee2e2;
   border: 1px solid #fca5a5;
@@ -434,7 +496,7 @@ body.client-sidebar-open {
   background-color: #bbf7d0;
 }
 
-/* Modal confirm button colours */
+/* ----- Clinic Receiving Confirmation Buttons ----- */
 .btn-confirm-stop {
   background-color: #ef4444;
   color: #ffffff;
@@ -450,7 +512,7 @@ body.client-sidebar-open {
   background-color: #15803d;
 }
 
-/* Admin dashboard incoming appointment actions */
+/* ----- Admin Appointment Actions ----- */
 .admin-appointment-action {
   display: inline-flex;
   min-width: 9rem;
@@ -574,7 +636,7 @@ body.client-sidebar-open {
   }
 }
 
-/* Admin notification dropdown — positioned by Alpine x-show */
+/* ----- Admin Notification Dropdown ----- */
 .notif-dropdown {
   position: fixed;
   top: 5rem;
@@ -602,7 +664,7 @@ body.client-sidebar-open {
   }
 }
 
-/* Client notification dropdown — positioned and shown/hidden via inline styles in JS */
+/* ----- Client Notification Dropdown ----- */
 .notif-client-dropdown {
   position: fixed;
   z-index: 9999;
@@ -620,6 +682,7 @@ body.client-sidebar-open {
   overflow-y: auto;
 }
 
+/* ----- Payment Modal And Receipt Layout ----- */
 .payment-modal-card {
   max-width: min(48rem, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
@@ -787,6 +850,7 @@ body.client-sidebar-open {
   color: #475569;
 }
 
+/* ----- Payment Pet Service Lines ----- */
 .payment-pet-card {
   border: 1px solid #d7dde6;
   border-radius: 8px;
@@ -974,6 +1038,7 @@ body.client-sidebar-open {
   font-weight: 700;
 }
 
+/* ----- Payment Modal Mobile Layout ----- */
 @media (max-width: 640px) {
   .payment-modal-card,
   .receipt-modal-card {
@@ -1000,6 +1065,7 @@ body.client-sidebar-open {
   }
 }
 
+/* ----- Appointment Confirmation Print Layout ----- */
 @media print {
   @page {
     size: A4 portrait;
@@ -1374,6 +1440,7 @@ body.client-sidebar-open {
   }
 }
 
+/* ----- Payment Receipt Print Layout ----- */
 @media print {
   body.payment-receipt-printing {
     width: 210mm !important;
@@ -1685,9 +1752,9 @@ body.client-sidebar-open {
   }
 }
 
-/* ── Payment system ──────────────────────────────────────── */
+/* ----- Payment Action Buttons And Badges ----- */
 
-/* Pay Now button (on queued cards) */
+/* ----- Pay Now Button ----- */
 .btn-pay-now {
   background-color: #f0fdf4;
   border: 1px solid #86efac;
@@ -1697,19 +1764,19 @@ body.client-sidebar-open {
   background-color: #dcfce7;
 }
 
-/* Already Paid badge (on queued cards) */
+/* ----- Queued Already Paid Badge ----- */
 .btn-already-paid {
   background-color: #f0fdf4;
   border-color: #86efac;
   color: #15803d;
 }
 
-/* For Payment tab — green icon empty state */
+/* ----- For Payment Empty State Icon ----- */
 .btn-icon-payment {
   color: #16a34a;
 }
 
-/* Process Payment button (on for-payment cards) */
+/* ----- Process Payment Button ----- */
 .btn-process-payment {
   background-color: #16a34a;
   color: #ffffff;
@@ -1718,7 +1785,7 @@ body.client-sidebar-open {
   background-color: #15803d;
 }
 
-/* Release button (already-paid for-payment cards) */
+/* ----- Release Button ----- */
 .btn-release {
   background-color: #f0fdf4;
   border: 1px solid #86efac;
@@ -1728,7 +1795,7 @@ body.client-sidebar-open {
   background-color: #dcfce7;
 }
 
-/* Confirm Payment button in modal */
+/* ----- Confirm Payment Button ----- */
 .btn-confirm-payment {
   background-color: #16a34a;
   color: #ffffff;
@@ -1737,20 +1804,20 @@ body.client-sidebar-open {
   background-color: #15803d;
 }
 
-/* Awaiting Payment badge */
+/* ----- Awaiting Payment Badge ----- */
 .badge-awaiting-payment {
   background-color: #dcfce7;
   color: #15803d;
 }
 
-/* Already Paid badge (on for-payment cards) */
+/* ----- For Payment Already Paid Badge ----- */
 .badge-already-paid {
   background-color: #f0fdf4;
   border: 1px solid #86efac;
   color: #15803d;
 }
 
-/* ── Ready for Pickup Popup ─────────────────────────────────────────────── */
+/* ----- Ready For Pickup Popup ----- */
 
 .pickup-popup-overlay {
   position: fixed;
@@ -1869,7 +1936,7 @@ body.client-sidebar-open {
   transform: translateY(-1px);
 }
 
-
+/* ----- Pickup Action Button ----- */
 .btn-pickup {
   background-color: #0e7490;
   color: #ffffff;
@@ -1889,6 +1956,7 @@ body.client-sidebar-open {
   cursor: not-allowed;
 }
 
+/* ----- Pickup Confirmation Modal ----- */
 .pickup-confirm-overlay {
   position: fixed;
   inset: 0;

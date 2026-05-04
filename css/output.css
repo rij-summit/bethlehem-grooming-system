@@ -2171,6 +2171,10 @@ video {
   line-height: 1.25;
 }
 
+.leading-none {
+  line-height: 1;
+}
+
 .tracking-\[0\.16em\] {
   letter-spacing: 0.16em;
 }
@@ -2629,6 +2633,11 @@ video {
   background-color: rgb(49 91 126 / var(--tw-bg-opacity, 1));
 }
 
+.hover\:bg-\[\#3f6d9c\]:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(63 109 156 / var(--tw-bg-opacity, 1));
+}
+
 .hover\:bg-\[\#ccddf0\]:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(204 221 240 / var(--tw-bg-opacity, 1));
@@ -2723,11 +2732,6 @@ video {
 
 .hover\:bg-white\/40:hover {
   background-color: rgb(255 255 255 / 0.4);
-}
-
-.hover\:bg-\[\#3f6d9c\]:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(63 109 156 / var(--tw-bg-opacity, 1));
 }
 
 .hover\:text-\[\#274a66\]:hover {
