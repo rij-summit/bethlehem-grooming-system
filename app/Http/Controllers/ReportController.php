@@ -164,6 +164,10 @@ class ReportController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $hasSelectedPeriodValue = ($period === 'day' && $date)
+            || ($period === 'month' && $month)
+            || ($period === 'year' && $year);
+
         $newCustomers = $allCustomers
             ->filter(fn ($customer) => $this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $month, $year))
             ->map(function ($customer) use ($periodCustomerSummaries) {
@@ -176,6 +180,76 @@ class ReportController extends Controller
             })
             ->sortByDesc('firstVisitAt')
             ->values();
+
+        $returningCustomers = $allCustomers
+            ->filter(function ($customer) use ($periodCustomerSummaries, $hasSelectedPeriodValue, $period, $date, $month, $year) {
+                if (!$periodCustomerSummaries->has($customer['id'])) {
+                    return false;
+                }
+
+                if (!$hasSelectedPeriodValue) {
+                    return $customer['visitCount'] > 1;
+                }
+
+                return !$this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $month, $year);
+            })
+            ->map(function ($customer) use ($periodCustomerSummaries) {
+                $periodSummary = $periodCustomerSummaries->get($customer['id']);
+
+                return array_merge($customer, [
+                    'visitCount' => $periodSummary ? (int) $periodSummary->visitCount : 0,
+                    'lastVisitAt' => $periodSummary->lastVisitAt ?? $customer['lastVisitAt'],
+                ]);
+            })
+            ->sortByDesc('lastVisitAt')
+            ->values();
+
+        $scheduledBookings = Booking::whereNotIn('status', ['cancelled']);
+        $this->applyPeriodFilter($scheduledBookings, 'booking_date', $period, $date, $month, $year);
+
+        $scheduledByCustomer = (clone $scheduledBookings)
+            ->select('user_id')
+            ->selectRaw('COUNT(booking_id) as scheduledBookings')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $scheduledCount = (int) (clone $scheduledBookings)->count();
+        $noShows = Booking::where('status', 'no_show');
+        $this->applyPeriodFilter($noShows, 'booking_date', $period, $date, $month, $year);
+
+        $noShowCustomers = (clone $noShows)
+            ->join('users', 'bookings.user_id', '=', 'users.user_id')
+            ->select('bookings.user_id', 'users.first_name', 'users.last_name', 'users.email', 'users.phone')
+            ->selectRaw('COUNT(bookings.booking_id) as noShowCount')
+            ->selectRaw('MIN(bookings.booking_date) as firstNoShowDate')
+            ->selectRaw('MAX(bookings.booking_date) as latestNoShowDate')
+            ->groupBy('bookings.user_id', 'users.first_name', 'users.last_name', 'users.email', 'users.phone')
+            ->orderByDesc('noShowCount')
+            ->orderBy('users.last_name')
+            ->orderBy('users.first_name')
+            ->get()
+            ->map(function ($customer) use ($scheduledByCustomer) {
+                $noShowCount = (int) $customer->noShowCount;
+                $scheduledCount = (int) ($scheduledByCustomer->get($customer->user_id)->scheduledBookings ?? $noShowCount);
+
+                return [
+                    'id' => (int) $customer->user_id,
+                    'customerName' => trim($customer->first_name . ' ' . $customer->last_name),
+                    'email' => $customer->email,
+                    'phone' => $customer->phone,
+                    'noShowCount' => $noShowCount,
+                    'noShowRate' => $scheduledCount > 0 ? round(($noShowCount / $scheduledCount) * 100, 1) : 0,
+                    'scheduledBookings' => $scheduledCount,
+                    'firstNoShowDate' => $customer->firstNoShowDate,
+                    'latestNoShowDate' => $customer->latestNoShowDate,
+                ];
+            });
+
+        $noShowCount = (int) $noShowCustomers->sum('noShowCount');
+        $noShowRate = $scheduledCount > 0
+            ? round(($noShowCount / $scheduledCount) * 100, 1)
+            : 0;
 
         return response()->json([
             'success' => true,
@@ -193,6 +267,11 @@ class ReportController extends Controller
             ] : null,
             'allCustomers' => $allCustomers->values(),
             'newCustomers' => $newCustomers,
+            'returningCustomers' => $returningCustomers,
+            'noShowCount' => $noShowCount,
+            'noShowRate' => $noShowRate,
+            'scheduledBookings' => $scheduledCount,
+            'noShowCustomers' => $noShowCustomers->values(),
         ]);
     }
 

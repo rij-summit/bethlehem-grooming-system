@@ -32,7 +32,7 @@ function adminReports() {
       { key: "all", label: "All customers", icon: "users" },
       { key: "new", label: "New customers", icon: "user-plus" },
       { key: "returning", label: "Returning customers", icon: "repeat-2" },
-      { key: "noShows", label: "No-show count & rate", icon: "user-x" },
+      { key: "noShows", label: "No-show customers", icon: "user-x" },
     ],
     customerActivityReport: {
       period: "day",
@@ -42,6 +42,11 @@ function adminReports() {
       topCustomer: null,
       allCustomers: [],
       newCustomers: [],
+      returningCustomers: [],
+      noShowCount: 0,
+      noShowRate: 0,
+      scheduledBookings: 0,
+      noShowCustomers: [],
     },
 
     async init() {
@@ -109,6 +114,15 @@ function adminReports() {
           newCustomers: Array.isArray(data.newCustomers)
             ? data.newCustomers
             : [],
+          returningCustomers: Array.isArray(data.returningCustomers)
+            ? data.returningCustomers
+            : [],
+          noShowCount: Number(data.noShowCount ?? 0),
+          noShowRate: Number(data.noShowRate ?? 0),
+          scheduledBookings: Number(data.scheduledBookings ?? 0),
+          noShowCustomers: Array.isArray(data.noShowCustomers)
+            ? data.noShowCustomers
+            : [],
         };
       } catch (error) {
         this.customerActivityError = error.message || "Failed to load customer activity. Please try again.";
@@ -120,6 +134,11 @@ function adminReports() {
           topCustomer: null,
           allCustomers: [],
           newCustomers: [],
+          returningCustomers: [],
+          noShowCount: 0,
+          noShowRate: 0,
+          scheduledBookings: 0,
+          noShowCustomers: [],
         };
       } finally {
         this.loadingCustomerActivity = false;
@@ -291,12 +310,37 @@ function adminReports() {
       return this.customerActivityReport.newCustomers || [];
     },
 
+    get returningCustomerActivityCustomers() {
+      return this.customerActivityReport.returningCustomers || [];
+    },
+
+    get noShowCustomerActivityCustomers() {
+      return this.customerActivityReport.noShowCustomers || [];
+    },
+
     get allCustomersEmptyMessage() {
       return "No customers with completed grooming visits yet.";
     },
 
     get newCustomersEmptyMessage() {
       return `No first-time customer visits for ${this.customerActivityPeriodLabel}.`;
+    },
+
+    get returningCustomersEmptyMessage() {
+      return `No returning customer visits for ${this.customerActivityPeriodLabel}.`;
+    },
+
+    get noShowCustomersEmptyMessage() {
+      return `No customer no-shows for ${this.customerActivityPeriodLabel}.`;
+    },
+
+    get noShowSubtitle() {
+      const count = this.customerActivityReport.scheduledBookings;
+      const period = this.customerActivityPeriodLabel === "All Dates"
+        ? "across all dates"
+        : `${this.customerPeriod === "day" ? "on" : "in"} ${this.customerActivityPeriodLabel}`;
+
+      return `${this.formatWholeNumber(count)} scheduled booking${count === 1 ? "" : "s"} ${period}`;
     },
 
     get filteredServiceBreakdown() {
@@ -328,6 +372,12 @@ function adminReports() {
     formatWholeNumber(value) {
       return new Intl.NumberFormat("en-PH", {
         maximumFractionDigits: 0,
+      }).format(Number(value || 0));
+    },
+
+    formatPercent(value) {
+      return new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 1,
       }).format(Number(value || 0));
     },
 
