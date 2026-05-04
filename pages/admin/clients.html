@@ -59,10 +59,6 @@
                 <span>Appointments</span>
                 <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming appointments"></span>
               </a>
-              <a href="./ai-analytics.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'analytics' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
-                <i data-lucide="sparkles" class="h-5 w-5"></i>
-                <span>AI Analytics</span>
-              </a>
             </div>
           </div>
           <div class="mb-8">
@@ -75,6 +71,10 @@
               <a href="./transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'transactions' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="receipt" class="h-5 w-5"></i>
                 <span>Transactions</span>
+              </a>
+              <a href="./reports.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="clipboard-list" class="h-5 w-5"></i>
+                <span>Reports</span>
               </a>
             </div>
           </div>

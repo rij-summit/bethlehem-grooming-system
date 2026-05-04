@@ -73,12 +73,12 @@ function adminSidebar() {
         this.activePage = "customers";
       } else if (currentPath.includes("appointments.html")) {
         this.activePage = "appointments";
-      } else if (currentPath.includes("ai-analytics.html")) {
-        this.activePage = "analytics";
       } else if (currentPath.includes("archive.html")) {
         this.activePage = "archive";
       } else if (currentPath.includes("transactions.html")) {
         this.activePage = "transactions";
+      } else if (currentPath.includes("reports.html")) {
+        this.activePage = "reports";
       } else if (currentPath.includes("settings.html")) {
         this.activePage = "settings";
       }

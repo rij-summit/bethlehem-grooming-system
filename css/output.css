@@ -2159,6 +2159,10 @@ video {
   line-height: 1.75rem;
 }
 
+.leading-none {
+  line-height: 1;
+}
+
 .leading-relaxed {
   line-height: 1.625;
 }
@@ -2169,10 +2173,6 @@ video {
 
 .leading-tight {
   line-height: 1.25;
-}
-
-.leading-none {
-  line-height: 1;
 }
 
 .tracking-\[0\.16em\] {
@@ -2742,11 +2742,6 @@ video {
 .hover\:text-\[\#315b7e\]:hover {
   --tw-text-opacity: 1;
   color: rgb(49 91 126 / var(--tw-text-opacity, 1));
-}
-
-.hover\:text-blue-600:hover {
-  --tw-text-opacity: 1;
-  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
 }
 
 .hover\:text-slate-600:hover {
