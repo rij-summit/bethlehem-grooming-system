@@ -521,22 +521,24 @@ var API = (() => {
     return request("GET", `/admin/transactions${query}`, null, getAdminToken());
   }
 
-  async function getServicesPerformedReport({ period = "day", date = "", month = "", year = "" } = {}) {
+  async function getServicesPerformedReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/services-performed  (protected - admin token)
     const params = new URLSearchParams();
     if (period) params.set("period", period);
     if (date)   params.set("date",   date);
+    if (week)   params.set("week",   week);
     if (month)  params.set("month",  month);
     if (year)   params.set("year",   year);
     const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/admin/reports/services-performed${query}`, null, getAdminToken());
   }
 
-  async function getCustomerActivityReport({ period = "day", date = "", month = "", year = "" } = {}) {
+  async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/customer-activity  (protected - admin token)
     const params = new URLSearchParams();
     if (period) params.set("period", period);
     if (date)   params.set("date",   date);
+    if (week)   params.set("week",   week);
     if (month)  params.set("month",  month);
     if (year)   params.set("year",   year);
     const query = params.toString() ? `?${params.toString()}` : "";

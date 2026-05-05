@@ -13,10 +13,11 @@ class ReportController extends Controller
     {
         $period = $request->query('period', 'day');
         $date = $request->query('date', '');
+        $week = $request->query('week', '');
         $month = $request->query('month', '');
         $year = $request->query('year', '');
 
-        if (!in_array($period, ['day', 'month', 'year'], true)) {
+        if (!in_array($period, ['day', 'week', 'month', 'year'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid report period.',
@@ -27,6 +28,13 @@ class ReportController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid report date.',
+            ], 422);
+        }
+
+        if ($period === 'week' && $week && !$this->isValidWeekValue($week)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid report week.',
             ], 422);
         }
 
@@ -47,7 +55,7 @@ class ReportController extends Controller
         $bookings = Booking::whereNotNull('grooming_finished_at')
             ->whereNotIn('status', ['cancelled', 'no_show']);
 
-        $this->applyPeriodFilter($bookings, 'grooming_finished_at', $period, $date, $month, $year);
+        $this->applyPeriodFilter($bookings, 'grooming_finished_at', $period, $date, $week, $month, $year);
 
         $services = BookingService::query()
             ->join('bookings', 'booking_services.booking_id', '=', 'bookings.booking_id')
@@ -55,7 +63,7 @@ class ReportController extends Controller
             ->whereNotNull('bookings.grooming_finished_at')
             ->whereNotIn('bookings.status', ['cancelled', 'no_show']);
 
-        $this->applyPeriodFilter($services, 'bookings.grooming_finished_at', $period, $date, $month, $year);
+        $this->applyPeriodFilter($services, 'bookings.grooming_finished_at', $period, $date, $week, $month, $year);
 
         $serviceBreakdown = (clone $services)
             ->selectRaw("COALESCE(services.service_name, 'Grooming Service') as serviceName")
@@ -73,9 +81,10 @@ class ReportController extends Controller
             'success' => true,
             'period' => $period,
             'date' => $date ?: null,
+            'week' => $week ?: null,
             'month' => $month ?: null,
             'year' => $year ?: null,
-            'periodLabel' => $this->periodLabel($period, $date, $month, $year),
+            'periodLabel' => $this->periodLabel($period, $date, $week, $month, $year),
             'totalCompleted' => (int) (clone $services)->count('booking_services.booking_service_id'),
             'completedAppointments' => (int) $bookings->count(),
             'serviceBreakdown' => $serviceBreakdown->values(),
@@ -86,10 +95,11 @@ class ReportController extends Controller
     {
         $period = $request->query('period', 'day');
         $date = $request->query('date', '');
+        $week = $request->query('week', '');
         $month = $request->query('month', '');
         $year = $request->query('year', '');
 
-        if (!in_array($period, ['day', 'month', 'year'], true)) {
+        if (!in_array($period, ['day', 'week', 'month', 'year'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid report period.',
@@ -100,6 +110,13 @@ class ReportController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid report date.',
+            ], 422);
+        }
+
+        if ($period === 'week' && $week && !$this->isValidWeekValue($week)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid report week.',
             ], 422);
         }
 
@@ -120,7 +137,7 @@ class ReportController extends Controller
         $visits = Booking::whereNotNull('grooming_finished_at')
             ->whereNotIn('status', ['cancelled', 'no_show']);
 
-        $this->applyPeriodFilter($visits, 'grooming_finished_at', $period, $date, $month, $year);
+        $this->applyPeriodFilter($visits, 'grooming_finished_at', $period, $date, $week, $month, $year);
 
         $topCustomer = (clone $visits)
             ->join('users', 'bookings.user_id', '=', 'users.user_id')
@@ -165,11 +182,12 @@ class ReportController extends Controller
             ->keyBy('user_id');
 
         $hasSelectedPeriodValue = ($period === 'day' && $date)
+            || ($period === 'week' && $week)
             || ($period === 'month' && $month)
             || ($period === 'year' && $year);
 
         $newCustomers = $allCustomers
-            ->filter(fn ($customer) => $this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $month, $year))
+            ->filter(fn ($customer) => $this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $week, $month, $year))
             ->map(function ($customer) use ($periodCustomerSummaries) {
                 $periodSummary = $periodCustomerSummaries->get($customer['id']);
 
@@ -182,7 +200,7 @@ class ReportController extends Controller
             ->values();
 
         $returningCustomers = $allCustomers
-            ->filter(function ($customer) use ($periodCustomerSummaries, $hasSelectedPeriodValue, $period, $date, $month, $year) {
+            ->filter(function ($customer) use ($periodCustomerSummaries, $hasSelectedPeriodValue, $period, $date, $week, $month, $year) {
                 if (!$periodCustomerSummaries->has($customer['id'])) {
                     return false;
                 }
@@ -191,7 +209,7 @@ class ReportController extends Controller
                     return $customer['visitCount'] > 1;
                 }
 
-                return !$this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $month, $year);
+                return !$this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $week, $month, $year);
             })
             ->map(function ($customer) use ($periodCustomerSummaries) {
                 $periodSummary = $periodCustomerSummaries->get($customer['id']);
@@ -205,7 +223,7 @@ class ReportController extends Controller
             ->values();
 
         $scheduledBookings = Booking::whereNotIn('status', ['cancelled']);
-        $this->applyPeriodFilter($scheduledBookings, 'booking_date', $period, $date, $month, $year);
+        $this->applyPeriodFilter($scheduledBookings, 'booking_date', $period, $date, $week, $month, $year);
 
         $scheduledByCustomer = (clone $scheduledBookings)
             ->select('user_id')
@@ -216,7 +234,7 @@ class ReportController extends Controller
 
         $scheduledCount = (int) (clone $scheduledBookings)->count();
         $noShows = Booking::where('status', 'no_show');
-        $this->applyPeriodFilter($noShows, 'booking_date', $period, $date, $month, $year);
+        $this->applyPeriodFilter($noShows, 'booking_date', $period, $date, $week, $month, $year);
 
         $noShowCustomers = (clone $noShows)
             ->join('users', 'bookings.user_id', '=', 'users.user_id')
@@ -255,9 +273,10 @@ class ReportController extends Controller
             'success' => true,
             'period' => $period,
             'date' => $date ?: null,
+            'week' => $week ?: null,
             'month' => $month ?: null,
             'year' => $year ?: null,
-            'periodLabel' => $this->periodLabel($period, $date, $month, $year),
+            'periodLabel' => $this->periodLabel($period, $date, $week, $month, $year),
             'totalUniqueCustomers' => (int) (clone $visits)->distinct('bookings.user_id')->count('bookings.user_id'),
             'completedVisits' => (int) (clone $visits)->count('bookings.booking_id'),
             'topCustomer' => $topCustomer ? [
@@ -275,10 +294,17 @@ class ReportController extends Controller
         ]);
     }
 
-    private function applyPeriodFilter($query, string $column, string $period, string $date, string $month, string $year): void
+    private function applyPeriodFilter($query, string $column, string $period, string $date, string $week, string $month, string $year): void
     {
         if ($period === 'day' && $date) {
             $query->whereDate($column, $date);
+            return;
+        }
+
+        if ($period === 'week' && $week) {
+            [$weekStart, $weekEnd] = $this->weekRange($week);
+            $query->whereDate($column, '>=', $weekStart->toDateString())
+                ->whereDate($column, '<=', $weekEnd->toDateString());
             return;
         }
 
@@ -294,7 +320,7 @@ class ReportController extends Controller
         }
     }
 
-    private function dateMatchesPeriod(?string $value, string $period, string $date, string $month, string $year): bool
+    private function dateMatchesPeriod(?string $value, string $period, string $date, string $week, string $month, string $year): bool
     {
         if (!$value) {
             return false;
@@ -304,6 +330,11 @@ class ReportController extends Controller
 
         if ($period === 'day' && $date) {
             return $selectedDate->toDateString() === $date;
+        }
+
+        if ($period === 'week' && $week) {
+            [$weekStart, $weekEnd] = $this->weekRange($week);
+            return $selectedDate->gte($weekStart) && $selectedDate->lte($weekEnd);
         }
 
         if ($period === 'month' && $month) {
@@ -317,10 +348,14 @@ class ReportController extends Controller
         return true;
     }
 
-    private function periodLabel(string $period, string $date, string $month, string $year): string
+    private function periodLabel(string $period, string $date, string $week, string $month, string $year): string
     {
         if ($period === 'day' && $date) {
             return Carbon::parse($date)->format('M j, Y');
+        }
+
+        if ($period === 'week' && $week) {
+            return $this->weekLabel($week);
         }
 
         if ($period === 'month' && $month) {
@@ -332,5 +367,48 @@ class ReportController extends Controller
         }
 
         return 'All dates';
+    }
+
+    private function isValidWeekValue(string $week): bool
+    {
+        if (!preg_match('/^(\d{4})-W(\d{2})$/', $week, $matches)) {
+            return false;
+        }
+
+        $year = (int) $matches[1];
+        $weekNumber = (int) $matches[2];
+        if ($year < 1 || $weekNumber < 1) {
+            return false;
+        }
+
+        $lastIsoWeek = Carbon::create($year, 12, 28)->isoWeek();
+        return $weekNumber <= $lastIsoWeek;
+    }
+
+    private function weekRange(string $week): array
+    {
+        preg_match('/^(\d{4})-W(\d{2})$/', $week, $matches);
+
+        $weekStart = Carbon::now()
+            ->setISODate((int) $matches[1], (int) $matches[2], 1)
+            ->startOfDay();
+        $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
+
+        return [$weekStart, $weekEnd];
+    }
+
+    private function weekLabel(string $week): string
+    {
+        [$weekStart, $weekEnd] = $this->weekRange($week);
+
+        if ($weekStart->isSameMonth($weekEnd)) {
+            return $weekStart->format('M j') . '-' . $weekEnd->format('j, Y');
+        }
+
+        if ($weekStart->isSameYear($weekEnd)) {
+            return $weekStart->format('M j') . '-' . $weekEnd->format('M j, Y');
+        }
+
+        return $weekStart->format('M j, Y') . '-' . $weekEnd->format('M j, Y');
     }
 }

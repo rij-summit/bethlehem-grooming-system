@@ -3,11 +3,25 @@ function adminReports() {
   const currentDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const currentMonth = currentDate.slice(0, 7);
   const currentYear = currentDate.slice(0, 4);
+  const currentWeek = getIsoWeekValue(d);
+
+  function getIsoWeekValue(date) {
+    const weekDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = weekDate.getDay() || 7;
+    weekDate.setDate(weekDate.getDate() + 4 - day);
+
+    const isoYear = weekDate.getFullYear();
+    const yearStart = new Date(isoYear, 0, 1);
+    const week = Math.ceil((((weekDate - yearStart) / 86400000) + 1) / 7);
+
+    return `${isoYear}-W${String(week).padStart(2, "0")}`;
+  }
 
   return {
     activeSection: "services",
     servicesPeriod: "day",
     selectedDate: currentDate,
+    selectedWeek: currentWeek,
     selectedMonth: currentMonth,
     selectedYear: currentYear,
     selectedServiceFilter: "all",
@@ -22,6 +36,7 @@ function adminReports() {
     },
     customerPeriod: "day",
     customerSelectedDate: currentDate,
+    customerSelectedWeek: currentWeek,
     customerSelectedMonth: currentMonth,
     customerSelectedYear: currentYear,
     customerActivitySubsection: "all",
@@ -62,6 +77,7 @@ function adminReports() {
         const data = await API.getServicesPerformedReport({
           period: this.servicesPeriod,
           date: this.servicesPeriod === "day" ? this.selectedDate : "",
+          week: this.servicesPeriod === "week" ? this.selectedWeek : "",
           month: this.servicesPeriod === "month" ? this.selectedMonth : "",
           year: this.servicesPeriod === "year" ? this.selectedYear : "",
         });
@@ -98,6 +114,7 @@ function adminReports() {
         const data = await API.getCustomerActivityReport({
           period: this.customerPeriod,
           date: this.customerPeriod === "day" ? this.customerSelectedDate : "",
+          week: this.customerPeriod === "week" ? this.customerSelectedWeek : "",
           month: this.customerPeriod === "month" ? this.customerSelectedMonth : "",
           year: this.customerPeriod === "year" ? this.customerSelectedYear : "",
         });
@@ -160,6 +177,10 @@ function adminReports() {
         this.selectedDate = currentDate;
       }
 
+      if (this.servicesPeriod === "week" && !this.selectedWeek) {
+        this.selectedWeek = currentWeek;
+      }
+
       if (this.servicesPeriod === "month" && !this.selectedMonth) {
         this.selectedMonth = currentMonth;
       }
@@ -174,6 +195,10 @@ function adminReports() {
     onCustomerPeriodChange() {
       if (this.customerPeriod === "day" && !this.customerSelectedDate) {
         this.customerSelectedDate = currentDate;
+      }
+
+      if (this.customerPeriod === "week" && !this.customerSelectedWeek) {
+        this.customerSelectedWeek = currentWeek;
       }
 
       if (this.customerPeriod === "month" && !this.customerSelectedMonth) {
@@ -198,6 +223,8 @@ function adminReports() {
     clearServicesPeriod() {
       if (this.servicesPeriod === "day") {
         this.selectedDate = "";
+      } else if (this.servicesPeriod === "week") {
+        this.selectedWeek = "";
       } else if (this.servicesPeriod === "month") {
         this.selectedMonth = "";
       } else if (this.servicesPeriod === "year") {
@@ -210,6 +237,8 @@ function adminReports() {
     clearCustomerPeriod() {
       if (this.customerPeriod === "day") {
         this.customerSelectedDate = "";
+      } else if (this.customerPeriod === "week") {
+        this.customerSelectedWeek = "";
       } else if (this.customerPeriod === "month") {
         this.customerSelectedMonth = "";
       } else if (this.customerPeriod === "year") {
@@ -220,6 +249,10 @@ function adminReports() {
     },
 
     get hasSelectedPeriodValue() {
+      if (this.servicesPeriod === "week") {
+        return Boolean(this.selectedWeek);
+      }
+
       if (this.servicesPeriod === "month") {
         return Boolean(this.selectedMonth);
       }
@@ -232,6 +265,10 @@ function adminReports() {
     },
 
     get hasSelectedCustomerPeriodValue() {
+      if (this.customerPeriod === "week") {
+        return Boolean(this.customerSelectedWeek);
+      }
+
       if (this.customerPeriod === "month") {
         return Boolean(this.customerSelectedMonth);
       }
@@ -248,6 +285,10 @@ function adminReports() {
     },
 
     get localServicesPeriodLabel() {
+      if (this.servicesPeriod === "week") {
+        return this.selectedWeek ? this.formatReportWeek(this.selectedWeek) : "All dates";
+      }
+
       if (this.servicesPeriod === "month") {
         return this.selectedMonth ? this.formatReportMonth(this.selectedMonth) : "All dates";
       }
@@ -265,6 +306,10 @@ function adminReports() {
     },
 
     get localCustomerActivityPeriodLabel() {
+      if (this.customerPeriod === "week") {
+        return this.customerSelectedWeek ? this.formatReportWeek(this.customerSelectedWeek) : "All Dates";
+      }
+
       if (this.customerPeriod === "month") {
         return this.customerSelectedMonth ? this.formatReportMonth(this.customerSelectedMonth) : "All Dates";
       }
@@ -278,20 +323,22 @@ function adminReports() {
 
     get servicesSubtitle() {
       const count = this.servicesReport.completedAppointments;
+      const preposition = this.periodPreposition(this.servicesPeriod);
       const period = this.servicesPeriodLabel === "All dates"
         ? "across all dates"
-        : `${this.servicesPeriod === "day" ? "on" : "in"} ${this.servicesPeriodLabel}`;
+        : `${preposition} ${this.servicesPeriodLabel}`;
 
-      return `${this.formatWholeNumber(count)} completed appointment${count === 1 ? "" : "s"} ${period}`;
+      return `${this.formatWholeNumber(count)} completed session${count === 1 ? "" : "s"} ${period}`;
     },
 
     get customerActivitySubtitle() {
       const count = this.customerActivityReport.completedVisits;
+      const preposition = this.periodPreposition(this.customerPeriod);
       const period = this.customerActivityPeriodLabel === "All Dates"
         ? "across all dates"
-        : `${this.customerPeriod === "day" ? "on" : "in"} ${this.customerActivityPeriodLabel}`;
+        : `${preposition} ${this.customerActivityPeriodLabel}`;
 
-      return `${this.formatWholeNumber(count)} completed grooming visit${count === 1 ? "" : "s"} ${period}`;
+      return `${this.formatWholeNumber(count)} completed session${count === 1 ? "" : "s"} ${period}`;
     },
 
     get topService() {
@@ -323,11 +370,11 @@ function adminReports() {
     },
 
     get newCustomersEmptyMessage() {
-      return `No first-time customer visits for ${this.customerActivityPeriodLabel}.`;
+      return `No first-time customer for ${this.customerActivityPeriodLabel}.`;
     },
 
     get returningCustomersEmptyMessage() {
-      return `No returning customer visits for ${this.customerActivityPeriodLabel}.`;
+      return `No returning customer for ${this.customerActivityPeriodLabel}.`;
     },
 
     get noShowCustomersEmptyMessage() {
@@ -336,11 +383,12 @@ function adminReports() {
 
     get noShowSubtitle() {
       const count = this.customerActivityReport.scheduledBookings;
+      const preposition = this.periodPreposition(this.customerPeriod);
       const period = this.customerActivityPeriodLabel === "All Dates"
         ? "across all dates"
-        : `${this.customerPeriod === "day" ? "on" : "in"} ${this.customerActivityPeriodLabel}`;
+        : `${preposition} ${this.customerActivityPeriodLabel}`;
 
-      return `${this.formatWholeNumber(count)} scheduled booking${count === 1 ? "" : "s"} ${period}`;
+      return `${this.formatWholeNumber(count)} scheduled visit${count === 1 ? "" : "s"} ${period}`;
     },
 
     get filteredServiceBreakdown() {
@@ -406,6 +454,49 @@ function adminReports() {
       } catch {
         return monthStr;
       }
+    },
+
+    formatReportWeek(weekStr) {
+      const match = String(weekStr || "").match(/^(\d{4})-W(\d{2})$/);
+      if (!match) return "All dates";
+
+      const isoYear = Number(match[1]);
+      const isoWeek = Number(match[2]);
+      const janFourth = new Date(isoYear, 0, 4);
+      const janFourthDay = janFourth.getDay() || 7;
+      const weekStart = new Date(isoYear, 0, 4 - janFourthDay + 1 + ((isoWeek - 1) * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      return this.formatDateRange(weekStart, weekEnd);
+    },
+
+    formatDateRange(startDate, endDate) {
+      const sameYear = startDate.getFullYear() === endDate.getFullYear();
+      const sameMonth = sameYear && startDate.getMonth() === endDate.getMonth();
+      const monthFormatter = new Intl.DateTimeFormat("en-PH", { month: "long" });
+      const shortFormatter = new Intl.DateTimeFormat("en-PH", { month: "long", day: "numeric" });
+      const fullFormatter = new Intl.DateTimeFormat("en-PH", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (sameMonth) {
+        return `${monthFormatter.format(startDate)} ${startDate.getDate()}-${endDate.getDate()}, ${endDate.getFullYear()}`;
+      }
+
+      if (sameYear) {
+        return `${shortFormatter.format(startDate)}-${fullFormatter.format(endDate)}`;
+      }
+
+      return `${fullFormatter.format(startDate)}-${fullFormatter.format(endDate)}`;
+    },
+
+    periodPreposition(period) {
+      if (period === "day") return "on";
+      if (period === "week") return "during";
+      return "in";
     },
 
     formatReportDateTime(dateTimeStr) {
