@@ -181,6 +181,31 @@ class ReportController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $firstVisitSubquery = Booking::query()
+            ->whereNotNull('grooming_finished_at')
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->select('user_id')
+            ->selectRaw('MIN(grooming_finished_at) as firstVisitAt')
+            ->groupBy('user_id');
+
+        $periodReturnVisits = Booking::query()
+            ->joinSub($firstVisitSubquery, 'first_visits', function ($join) {
+                $join->on('bookings.user_id', '=', 'first_visits.user_id');
+            })
+            ->whereNotNull('bookings.grooming_finished_at')
+            ->whereNotIn('bookings.status', ['cancelled', 'no_show'])
+            ->whereColumn('bookings.grooming_finished_at', '>', 'first_visits.firstVisitAt');
+
+        $this->applyPeriodFilter($periodReturnVisits, 'bookings.grooming_finished_at', $period, $date, $week, $month, $year);
+
+        $periodReturnSummaries = (clone $periodReturnVisits)
+            ->select('bookings.user_id')
+            ->selectRaw('COUNT(bookings.booking_id) as returnVisitCount')
+            ->selectRaw('MAX(bookings.grooming_finished_at) as lastVisitAt')
+            ->groupBy('bookings.user_id')
+            ->get()
+            ->keyBy('user_id');
+
         $hasSelectedPeriodValue = ($period === 'day' && $date)
             || ($period === 'week' && $week)
             || ($period === 'month' && $month)
@@ -200,23 +225,26 @@ class ReportController extends Controller
             ->values();
 
         $returningCustomers = $allCustomers
-            ->filter(function ($customer) use ($periodCustomerSummaries, $hasSelectedPeriodValue, $period, $date, $week, $month, $year) {
-                if (!$periodCustomerSummaries->has($customer['id'])) {
+            ->filter(function ($customer) use ($periodReturnSummaries, $hasSelectedPeriodValue) {
+                if ((int) $customer['visitCount'] < 2) {
                     return false;
                 }
 
                 if (!$hasSelectedPeriodValue) {
-                    return $customer['visitCount'] > 1;
+                    return true;
                 }
 
-                return !$this->dateMatchesPeriod($customer['firstVisitAt'], $period, $date, $week, $month, $year);
+                return $periodReturnSummaries->has($customer['id']);
             })
-            ->map(function ($customer) use ($periodCustomerSummaries) {
-                $periodSummary = $periodCustomerSummaries->get($customer['id']);
+            ->map(function ($customer) use ($periodReturnSummaries) {
+                $returnSummary = $periodReturnSummaries->get($customer['id']);
+                $visitCount = (int) $customer['visitCount'];
 
                 return array_merge($customer, [
-                    'visitCount' => $periodSummary ? (int) $periodSummary->visitCount : 0,
-                    'lastVisitAt' => $periodSummary->lastVisitAt ?? $customer['lastVisitAt'],
+                    'visitCount' => $visitCount,
+                    'returnVisitCount' => max(0, $visitCount - 1),
+                    'periodReturnVisitCount' => $returnSummary ? (int) $returnSummary->returnVisitCount : 0,
+                    'lastVisitAt' => $customer['lastVisitAt'],
                 ]);
             })
             ->sortByDesc('lastVisitAt')
