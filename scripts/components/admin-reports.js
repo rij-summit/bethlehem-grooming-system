@@ -19,6 +19,13 @@ function adminReports() {
 
   return {
     activeSection: "services",
+    paymentMethodOptions: [
+      { value: "all", label: "All payment methods" },
+      { value: "cash", label: "Cash" },
+      { value: "gcash", label: "GCash" },
+      { value: "maya", label: "Maya" },
+      { value: "card", label: "Card" },
+    ],
     servicesPeriod: "day",
     selectedDate: currentDate,
     selectedWeek: currentWeek,
@@ -63,6 +70,16 @@ function adminReports() {
       scheduledBookings: 0,
       noShowCustomers: [],
     },
+    transactionPeriod: "day",
+    transactionSelectedDate: currentDate,
+    transactionSelectedMonth: currentMonth,
+    transactionSelectedYear: currentYear,
+    selectedPaymentMethodFilter: "all",
+    transactionSummaryLoaded: false,
+    loadingTransactionSummary: false,
+    transactionSummaryError: "",
+    transactionSummaryTransactions: [],
+    transactionSummaryTotalCount: 0,
 
     async init() {
       await this.loadServicesPerformed();
@@ -102,6 +119,33 @@ function adminReports() {
         };
       } finally {
         this.loadingServices = false;
+        this.refreshIcons();
+      }
+    },
+
+    async loadTransactionSummary() {
+      this.loadingTransactionSummary = true;
+      this.transactionSummaryError = "";
+
+      try {
+        const data = await API.getTransactions({
+          period: this.transactionPeriod,
+          date: this.transactionPeriod === "day" ? this.transactionSelectedDate : "",
+          month: this.transactionPeriod === "month" ? this.transactionSelectedMonth : "",
+          year: this.transactionPeriod === "year" ? this.transactionSelectedYear : "",
+        });
+
+        this.transactionSummaryTransactions = Array.isArray(data.transactions)
+          ? data.transactions
+          : [];
+        this.transactionSummaryTotalCount = Number(data.total ?? this.transactionSummaryTransactions.length);
+      } catch (error) {
+        this.transactionSummaryError = error.message || "Failed to load transaction summary. Please try again.";
+        this.transactionSummaryTransactions = [];
+        this.transactionSummaryTotalCount = 0;
+      } finally {
+        this.loadingTransactionSummary = false;
+        this.transactionSummaryLoaded = true;
         this.refreshIcons();
       }
     },
@@ -166,6 +210,9 @@ function adminReports() {
 
     switchSection(section) {
       this.activeSection = section;
+      if (section === "transactions" && !this.transactionSummaryLoaded) {
+        this.loadTransactionSummary();
+      }
       if (section === "customers" && !this.customerActivityLoaded) {
         this.loadCustomerActivity();
       }
@@ -190,6 +237,22 @@ function adminReports() {
       }
 
       this.loadServicesPerformed();
+    },
+
+    onTransactionPeriodChange() {
+      if (this.transactionPeriod === "day" && !this.transactionSelectedDate) {
+        this.transactionSelectedDate = currentDate;
+      }
+
+      if (this.transactionPeriod === "month" && !this.transactionSelectedMonth) {
+        this.transactionSelectedMonth = currentMonth;
+      }
+
+      if (this.transactionPeriod === "year" && !this.transactionSelectedYear) {
+        this.transactionSelectedYear = currentYear;
+      }
+
+      this.loadTransactionSummary();
     },
 
     onCustomerPeriodChange() {
@@ -220,6 +283,14 @@ function adminReports() {
       this.loadServicesPerformed();
     },
 
+    onTransactionPeriodValueChange() {
+      this.loadTransactionSummary();
+    },
+
+    onPaymentMethodFilterChange() {
+      this.refreshIcons();
+    },
+
     clearServicesPeriod() {
       if (this.servicesPeriod === "day") {
         this.selectedDate = "";
@@ -232,6 +303,18 @@ function adminReports() {
       }
 
       this.loadServicesPerformed();
+    },
+
+    clearTransactionPeriod() {
+      if (this.transactionPeriod === "day") {
+        this.transactionSelectedDate = "";
+      } else if (this.transactionPeriod === "month") {
+        this.transactionSelectedMonth = "";
+      } else if (this.transactionPeriod === "year") {
+        this.transactionSelectedYear = "";
+      }
+
+      this.loadTransactionSummary();
     },
 
     clearCustomerPeriod() {
@@ -264,6 +347,18 @@ function adminReports() {
       return Boolean(this.selectedDate);
     },
 
+    get hasSelectedTransactionPeriodValue() {
+      if (this.transactionPeriod === "month") {
+        return Boolean(this.transactionSelectedMonth);
+      }
+
+      if (this.transactionPeriod === "year") {
+        return Boolean(this.transactionSelectedYear);
+      }
+
+      return Boolean(this.transactionSelectedDate);
+    },
+
     get hasSelectedCustomerPeriodValue() {
       if (this.customerPeriod === "week") {
         return Boolean(this.customerSelectedWeek);
@@ -282,6 +377,18 @@ function adminReports() {
 
     get servicesPeriodLabel() {
       return this.servicesReport.periodLabel || this.localServicesPeriodLabel;
+    },
+
+    get transactionSummaryPeriodLabel() {
+      if (this.transactionPeriod === "month") {
+        return this.transactionSelectedMonth ? this.formatReportMonth(this.transactionSelectedMonth) : "All dates";
+      }
+
+      if (this.transactionPeriod === "year") {
+        return this.transactionSelectedYear || "All dates";
+      }
+
+      return this.transactionSelectedDate ? this.formatReportDate(this.transactionSelectedDate) : "All dates";
     },
 
     get localServicesPeriodLabel() {
@@ -331,6 +438,16 @@ function adminReports() {
       return `${this.formatWholeNumber(count)} completed session${count === 1 ? "" : "s"} ${period}`;
     },
 
+    get transactionSummarySubtitle() {
+      const count = this.transactionSummaryTransactions.length;
+      const preposition = this.periodPreposition(this.transactionPeriod);
+      const period = this.transactionSummaryPeriodLabel === "All dates"
+        ? "across all dates"
+        : `${preposition} ${this.transactionSummaryPeriodLabel}`;
+
+      return `${this.formatWholeNumber(count)} transaction${count === 1 ? "" : "s"} collected ${period}`;
+    },
+
     get customerActivitySubtitle() {
       const count = this.customerActivityReport.completedVisits;
       const preposition = this.periodPreposition(this.customerPeriod);
@@ -347,6 +464,56 @@ function adminReports() {
 
     get topCustomer() {
       return this.customerActivityReport.topCustomer || null;
+    },
+
+    get transactionCollectionTotal() {
+      return this.transactionSummaryTransactions.reduce(
+        (sum, tx) => sum + this.transactionAmount(tx),
+        0,
+      );
+    },
+
+    get transactionPaymentBreakdown() {
+      const groups = {};
+
+      for (const tx of this.transactionSummaryTransactions) {
+        const value = this.normalizePaymentMethod(tx.paymentMethod ?? tx.payment_method);
+        if (!groups[value]) {
+          groups[value] = {
+            value,
+            label: this.formatPaymentMethodLabel(value),
+            count: 0,
+            total: 0,
+          };
+        }
+
+        groups[value].count += 1;
+        groups[value].total += this.transactionAmount(tx);
+      }
+
+      return Object.values(groups).sort((a, b) => {
+        if (b.total !== a.total) return b.total - a.total;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.label.localeCompare(b.label);
+      });
+    },
+
+    get topPaymentMethod() {
+      const top = this.transactionPaymentBreakdown[0] || null;
+      if (!top) return null;
+
+      const totalAmount = this.transactionCollectionTotal;
+      const totalCount = this.transactionSummaryTransactions.length;
+      const percent = totalAmount > 0
+        ? (top.total / totalAmount) * 100
+        : totalCount > 0
+          ? (top.count / totalCount) * 100
+          : 0;
+
+      return {
+        ...top,
+        percent,
+      };
     },
 
     get allCustomerActivityCustomers() {
@@ -409,6 +576,10 @@ function adminReports() {
       return this.selectedServiceFilter;
     },
 
+    get selectedPaymentMethodFilterLabel() {
+      return this.formatPaymentMethodLabel(this.selectedPaymentMethodFilter);
+    },
+
     get serviceBreakdownEmptyMessage() {
       if (this.selectedServiceFilter === "all") {
         return "No completed grooming services for this period.";
@@ -417,10 +588,74 @@ function adminReports() {
       return `No completed ${this.selectedServiceFilter} services for this period.`;
     },
 
+    get filteredTransactionSummaryTransactions() {
+      if (this.selectedPaymentMethodFilter === "all") {
+        return this.transactionSummaryTransactions;
+      }
+
+      return this.transactionSummaryTransactions.filter((tx) => (
+        this.normalizePaymentMethod(tx.paymentMethod ?? tx.payment_method) === this.selectedPaymentMethodFilter
+      ));
+    },
+
+    get transactionClientRows() {
+      const rows = {};
+
+      for (const tx of this.filteredTransactionSummaryTransactions) {
+        const clientName = this.transactionClientName(tx);
+        const key = clientName.toLowerCase();
+        if (!rows[key]) {
+          rows[key] = {
+            clientName,
+            pets: new Set(),
+            totalVisits: 0,
+            totalSpent: 0,
+          };
+        }
+
+        for (const petName of this.transactionPetNames(tx)) {
+          rows[key].pets.add(petName.toLowerCase());
+        }
+
+        rows[key].totalVisits += 1;
+        rows[key].totalSpent += this.transactionAmount(tx);
+      }
+
+      return Object.values(rows)
+        .map((row) => ({
+          clientName: row.clientName,
+          petCount: row.pets.size,
+          totalVisits: row.totalVisits,
+          totalSpent: row.totalSpent,
+        }))
+        .sort((a, b) => {
+          if (b.totalSpent !== a.totalSpent) return b.totalSpent - a.totalSpent;
+          if (b.totalVisits !== a.totalVisits) return b.totalVisits - a.totalVisits;
+          return a.clientName.localeCompare(b.clientName);
+        });
+    },
+
+    get transactionClientRowsEmptyMessage() {
+      if (this.selectedPaymentMethodFilter === "all") {
+        return "No transaction collections for this period.";
+      }
+
+      return `No ${this.selectedPaymentMethodFilterLabel} transactions for this period.`;
+    },
+
     formatWholeNumber(value) {
       return new Intl.NumberFormat("en-PH", {
         maximumFractionDigits: 0,
       }).format(Number(value || 0));
+    },
+
+    formatPeso(amount) {
+      return new Intl.NumberFormat("en-PH", {
+        style: "currency",
+        currency: "PHP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(amount || 0));
     },
 
     formatPercent(value) {
@@ -540,6 +775,84 @@ function adminReports() {
 
     customerContactLine(customer) {
       return [this.formatMobileNumber(customer?.phone), customer?.email].filter(Boolean).join(" | ");
+    },
+
+    normalizePaymentMethod(value) {
+      const text = String(value || "unspecified")
+        .trim()
+        .toLowerCase();
+      const compact = text.replace(/[\s_-]+/g, "");
+      const knownMethods = ["cash", "gcash", "maya", "card"];
+
+      if (knownMethods.includes(compact)) {
+        return compact;
+      }
+
+      const normalized = text.replace(/[\s_-]+/g, "-");
+
+      return normalized || "unspecified";
+    },
+
+    formatPaymentMethodLabel(value) {
+      const normalized = this.normalizePaymentMethod(value);
+      const labels = {
+        all: "All payment methods",
+        cash: "Cash",
+        gcash: "GCash",
+        maya: "Maya",
+        card: "Card",
+        unspecified: "Unspecified",
+      };
+
+      return labels[normalized] || normalized
+        .split("-")
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+    },
+
+    transactionClientName(tx) {
+      return String(
+        tx.ownerName ??
+        tx.clientName ??
+        tx.customerName ??
+        tx.name ??
+        "Unknown Client"
+      ).trim() || "Unknown Client";
+    },
+
+    transactionPetNames(tx) {
+      const possiblePetArrays = [
+        tx.pets,
+        tx.petBreakdown,
+        tx.pet_breakdown,
+      ];
+
+      for (const petArray of possiblePetArrays) {
+        if (Array.isArray(petArray) && petArray.length > 0) {
+          const names = petArray
+            .map(pet => pet?.name ?? pet?.petName ?? pet?.pet_name)
+            .map(value => String(value || "").trim())
+            .filter(Boolean);
+
+          if (names.length > 0) {
+            return names;
+          }
+        }
+      }
+
+      const petText = String(tx.petName ?? tx.petNames ?? tx.pet_name ?? "").trim();
+      if (!petText) return [];
+
+      return petText
+        .split(/\s*(?:,|&|\band\b)\s*/i)
+        .map(value => value.trim())
+        .filter(Boolean);
+    },
+
+    transactionAmount(tx) {
+      const amount = Number(tx.finalPrice ?? tx.final_price ?? tx.totalSpent ?? tx.total ?? tx.amount ?? 0);
+      return Number.isFinite(amount) ? amount : 0;
     },
 
     refreshIcons() {
