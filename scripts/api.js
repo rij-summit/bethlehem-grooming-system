@@ -509,12 +509,13 @@ var API = (() => {
     return request("PATCH", "/customer/notifications/read-all", null, getCustomerToken());
   }
 
-  async function getTransactions({ search = "", period = "day", date = "", month = "", year = "" } = {}) {
+  async function getTransactions({ search = "", period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/transactions  (protected — admin token)
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (period) params.set("period", period);
     if (date)   params.set("date",   date);
+    if (week)   params.set("week",   week);
     if (month)  params.set("month",  month);
     if (year)   params.set("year",   year);
     const query = params.toString() ? `?${params.toString()}` : "";

@@ -404,6 +404,7 @@
                     class="cursor-pointer bg-transparent text-sm font-semibold text-[#1f3850] outline-none"
                   >
                     <option value="day">Day</option>
+                    <option value="week">Week</option>
                     <option value="month">Month</option>
                     <option value="year">Year</option>
                   </select>
@@ -415,6 +416,13 @@
                     x-show="transactionPeriod === 'day'"
                     type="date"
                     x-model="transactionSelectedDate"
+                    @change="onTransactionPeriodValueChange()"
+                    class="cursor-pointer bg-transparent text-sm font-semibold text-[#1f3850] outline-none"
+                  />
+                  <input
+                    x-show="transactionPeriod === 'week'"
+                    type="week"
+                    x-model="transactionSelectedWeek"
                     @change="onTransactionPeriodValueChange()"
                     class="cursor-pointer bg-transparent text-sm font-semibold text-[#1f3850] outline-none"
                   />
@@ -470,7 +478,7 @@
               </div>
             </template>
 
-            <div x-show="!loadingTransactionSummary && !transactionSummaryError" class="grid gap-4 lg:grid-cols-2">
+            <div x-show="!loadingTransactionSummary && !transactionSummaryError" class="grid gap-4 lg:grid-cols-3">
               <article class="rounded-[24px] border border-[#cfe0ee] bg-white p-5 shadow-sm">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -480,6 +488,19 @@
                   </div>
                   <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#dcfce7] text-[#15803d]">
                     <i data-lucide="banknote" class="h-8 w-8"></i>
+                  </div>
+                </div>
+              </article>
+
+              <article class="rounded-[24px] border border-[#cfe0ee] bg-white p-5 shadow-sm">
+                <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Average Transaction Value</p>
+                    <p class="mt-2 break-words text-4xl font-bold leading-tight text-[#315b7e]" x-text="formatPeso(averageTransactionValue)"></p>
+                    <p class="mt-3 text-sm text-slate-500" x-text="'Per transaction for ' + transactionSummaryPeriodLabel"></p>
+                  </div>
+                  <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
+                    <i data-lucide="calculator" class="h-8 w-8"></i>
                   </div>
                 </div>
               </article>
@@ -555,6 +576,7 @@
                       <th scope="col" class="px-5 py-3">Client Name</th>
                       <th scope="col" class="px-5 py-3">No. of Pets</th>
                       <th scope="col" class="px-5 py-3">Total Visits</th>
+                      <th scope="col" class="px-5 py-3 text-right">Avg. per visit</th>
                       <th scope="col" class="px-5 py-3 text-right">Total Spent</th>
                     </tr>
                   </thead>
@@ -564,6 +586,7 @@
                         <td class="px-5 py-4 font-semibold text-slate-800" x-text="row.clientName"></td>
                         <td class="px-5 py-4 font-semibold text-slate-700" x-text="formatWholeNumber(row.petCount)"></td>
                         <td class="px-5 py-4 font-semibold text-slate-700" x-text="formatWholeNumber(row.totalVisits)"></td>
+                        <td class="px-5 py-4 text-right font-semibold text-slate-700" x-text="formatPeso(row.averageSpentPerVisit)"></td>
                         <td class="px-5 py-4 text-right font-extrabold text-[#15803d]" x-text="formatPeso(row.totalSpent)"></td>
                       </tr>
                     </template>

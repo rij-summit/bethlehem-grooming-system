@@ -163,10 +163,11 @@ class PaymentController extends Controller
         $search = $request->query('search', '');
         $period = $request->query('period', 'day');
         $date   = $request->query('date', '');
+        $week   = $request->query('week', '');
         $month  = $request->query('month', '');
         $year   = $request->query('year', '');
 
-        if (!in_array($period, ['day', 'month', 'year'], true)) {
+        if (!in_array($period, ['day', 'week', 'month', 'year'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid transaction period.',
@@ -177,6 +178,13 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid transaction date.',
+            ], 422);
+        }
+
+        if ($period === 'week' && $week && !$this->isValidWeekValue($week)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a valid transaction week.',
             ], 422);
         }
 
@@ -200,7 +208,7 @@ class PaymentController extends Controller
             'booking.bookingServices.service',
         ])->where('payment_status', 'paid')->orderBy('paid_at', 'desc');
 
-        $this->applyPeriodFilter($query, $period, $date, $month, $year);
+        $this->applyPeriodFilter($query, $period, $date, $week, $month, $year);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -219,6 +227,7 @@ class PaymentController extends Controller
             'success'      => true,
             'period'       => $period,
             'date'         => $date ?: null,
+            'week'         => $week ?: null,
             'month'        => $month ?: null,
             'year'         => $year ?: null,
             'transactions' => $transactions->values(),
@@ -226,10 +235,17 @@ class PaymentController extends Controller
         ]);
     }
 
-    private function applyPeriodFilter($query, string $period, string $date, string $month, string $year): void
+    private function applyPeriodFilter($query, string $period, string $date, string $week, string $month, string $year): void
     {
         if ($period === 'day' && $date) {
             $query->whereDate('paid_at', $date);
+            return;
+        }
+
+        if ($period === 'week' && $week) {
+            [$weekStart, $weekEnd] = $this->weekRange($week);
+            $query->whereDate('paid_at', '>=', $weekStart->toDateString())
+                ->whereDate('paid_at', '<=', $weekEnd->toDateString());
             return;
         }
 
@@ -246,6 +262,34 @@ class PaymentController extends Controller
     }
 
     // ── FORMAT ────────────────────────────────────────────
+
+    private function isValidWeekValue(string $week): bool
+    {
+        if (!preg_match('/^(\d{4})-W(\d{2})$/', $week, $matches)) {
+            return false;
+        }
+
+        $year = (int) $matches[1];
+        $weekNumber = (int) $matches[2];
+        if ($year < 1 || $weekNumber < 1) {
+            return false;
+        }
+
+        $lastIsoWeek = Carbon::create($year, 12, 28)->isoWeek();
+        return $weekNumber <= $lastIsoWeek;
+    }
+
+    private function weekRange(string $week): array
+    {
+        preg_match('/^(\d{4})-W(\d{2})$/', $week, $matches);
+
+        $weekStart = Carbon::now()
+            ->setISODate((int) $matches[1], (int) $matches[2], 1)
+            ->startOfDay();
+        $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
+
+        return [$weekStart, $weekEnd];
+    }
 
     private function formatTransaction(Payment $payment): array
     {

@@ -72,6 +72,7 @@ function adminReports() {
     },
     transactionPeriod: "day",
     transactionSelectedDate: currentDate,
+    transactionSelectedWeek: currentWeek,
     transactionSelectedMonth: currentMonth,
     transactionSelectedYear: currentYear,
     selectedPaymentMethodFilter: "all",
@@ -131,6 +132,7 @@ function adminReports() {
         const data = await API.getTransactions({
           period: this.transactionPeriod,
           date: this.transactionPeriod === "day" ? this.transactionSelectedDate : "",
+          week: this.transactionPeriod === "week" ? this.transactionSelectedWeek : "",
           month: this.transactionPeriod === "month" ? this.transactionSelectedMonth : "",
           year: this.transactionPeriod === "year" ? this.transactionSelectedYear : "",
         });
@@ -244,6 +246,10 @@ function adminReports() {
         this.transactionSelectedDate = currentDate;
       }
 
+      if (this.transactionPeriod === "week" && !this.transactionSelectedWeek) {
+        this.transactionSelectedWeek = currentWeek;
+      }
+
       if (this.transactionPeriod === "month" && !this.transactionSelectedMonth) {
         this.transactionSelectedMonth = currentMonth;
       }
@@ -308,6 +314,8 @@ function adminReports() {
     clearTransactionPeriod() {
       if (this.transactionPeriod === "day") {
         this.transactionSelectedDate = "";
+      } else if (this.transactionPeriod === "week") {
+        this.transactionSelectedWeek = "";
       } else if (this.transactionPeriod === "month") {
         this.transactionSelectedMonth = "";
       } else if (this.transactionPeriod === "year") {
@@ -348,6 +356,10 @@ function adminReports() {
     },
 
     get hasSelectedTransactionPeriodValue() {
+      if (this.transactionPeriod === "week") {
+        return Boolean(this.transactionSelectedWeek);
+      }
+
       if (this.transactionPeriod === "month") {
         return Boolean(this.transactionSelectedMonth);
       }
@@ -380,6 +392,10 @@ function adminReports() {
     },
 
     get transactionSummaryPeriodLabel() {
+      if (this.transactionPeriod === "week") {
+        return this.transactionSelectedWeek ? this.formatReportWeek(this.transactionSelectedWeek) : "All dates";
+      }
+
       if (this.transactionPeriod === "month") {
         return this.transactionSelectedMonth ? this.formatReportMonth(this.transactionSelectedMonth) : "All dates";
       }
@@ -471,6 +487,11 @@ function adminReports() {
         (sum, tx) => sum + this.transactionAmount(tx),
         0,
       );
+    },
+
+    get averageTransactionValue() {
+      const count = this.transactionSummaryTransactions.length;
+      return count > 0 ? this.transactionCollectionTotal / count : 0;
     },
 
     get transactionPaymentBreakdown() {
@@ -627,6 +648,7 @@ function adminReports() {
           petCount: row.pets.size,
           totalVisits: row.totalVisits,
           totalSpent: row.totalSpent,
+          averageSpentPerVisit: row.totalVisits > 0 ? row.totalSpent / row.totalVisits : 0,
         }))
         .sort((a, b) => {
           if (b.totalSpent !== a.totalSpent) return b.totalSpent - a.totalSpent;
