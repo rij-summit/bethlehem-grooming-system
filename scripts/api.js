@@ -326,6 +326,11 @@ var API = (() => {
     return request("GET", "/booking/history", null, getCustomerToken());
   }
 
+  async function getGroomingCapacity() {
+    // GET /api/booking/grooming-capacity  (protected)
+    return request("GET", "/booking/grooming-capacity", null, getCustomerToken());
+  }
+
   async function cancelBooking(bookingId, reason = null) {
     // POST /api/booking/cancel  (protected)
     return request("POST", "/booking/cancel", { booking_id: bookingId, reason }, getCustomerToken());
@@ -592,6 +597,7 @@ var API = (() => {
     // Booking
     storeBooking,
     getBookingHistory,
+    getGroomingCapacity,
     cancelBooking,
     rescheduleBooking,
     // Admin bookings

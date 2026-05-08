@@ -384,6 +384,11 @@
   const myPetsSummaryEl          = document.getElementById("myPetsSummary");
   const upcomingAppointmentsCountEl   = document.getElementById("upcomingAppointmentsCount");
   const upcomingAppointmentsSummaryEl = document.getElementById("upcomingAppointmentsSummary");
+  const groomingQueueCountEl          = document.getElementById("groomingQueueCount");
+  const groomingQueueSummaryEl        = document.getElementById("groomingQueueSummary");
+  const groomingCapacityBadgeEl       = document.getElementById("groomingCapacityBadge");
+  const groomingCapacityBarEl         = document.getElementById("groomingCapacityBar");
+  const groomingCapacityTextEl        = document.getElementById("groomingCapacityText");
   const upcomingReminderKickerEl      = document.getElementById("upcomingReminderKicker");
   const upcomingReminderTitleEl       = document.getElementById("upcomingReminderTitle");
   const upcomingReminderTextEl        = document.getElementById("upcomingReminderText");
@@ -415,6 +420,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     loadDashboardPets();
     loadAppointments();
+    loadGroomingCapacity();
   });
 
   // ── Load & route data ──────────────────────────────────────────────────────
@@ -451,6 +457,15 @@
   }
 
   // ── Appointments section ───────────────────────────────────────────────────
+
+  async function loadGroomingCapacity() {
+    try {
+      const data = await API.getGroomingCapacity();
+      renderGroomingCapacity(data);
+    } catch {
+      renderGroomingCapacity(null);
+    }
+  }
 
   function renderMyPetsSummary(pets) {
     const count = Array.isArray(pets) ? pets.length : 0;
@@ -522,6 +537,69 @@
   }
 
   // ── Grooming Tracker section ───────────────────────────────────────────────
+
+  function renderGroomingCapacity(data) {
+    const capacity = data?.capacity || {};
+    const queue = data?.queue || {};
+    const max = toNumber(capacity.max) || 20;
+    const used = toNumber(capacity.used);
+    const remaining = Math.max(0, toNumber(capacity.remaining ?? (max - used)));
+    const percent = Math.max(0, Math.min(100, toNumber(capacity.percent ?? ((used / max) * 100))));
+    const queued = toNumber(queue.queued);
+    const inProgress = toNumber(queue.in_progress);
+    const isFull = Boolean(capacity.is_full) || used >= max;
+    const isBusy = !isFull && percent >= 80;
+
+    if (!data) {
+      if (groomingQueueCountEl) groomingQueueCountEl.textContent = "--";
+      if (groomingQueueSummaryEl) groomingQueueSummaryEl.textContent = "Unable to load live queue";
+      if (groomingCapacityTextEl) groomingCapacityTextEl.textContent = "Capacity unavailable";
+      if (groomingCapacityBarEl) {
+        groomingCapacityBarEl.style.width = "0%";
+        groomingCapacityBarEl.className = "h-full rounded-full bg-slate-300 transition-all duration-300";
+      }
+      if (groomingCapacityBadgeEl) {
+        groomingCapacityBadgeEl.textContent = "Offline";
+        groomingCapacityBadgeEl.className = "rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600";
+      }
+      return;
+    }
+
+    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(queued);
+    if (groomingQueueSummaryEl) {
+      groomingQueueSummaryEl.textContent =
+        `${queued} queued now, ${inProgress} in progress`;
+      groomingQueueSummaryEl.className = queued || inProgress
+        ? "text-sm text-amber-600 mt-1"
+        : "text-sm text-slate-500 mt-1";
+    }
+    if (groomingCapacityTextEl) {
+      groomingCapacityTextEl.textContent = isFull
+        ? `${used} / ${max} daily capacity - max reached`
+        : `${used} / ${max} daily capacity - ${remaining} left`;
+    }
+    if (groomingCapacityBarEl) {
+      groomingCapacityBarEl.style.width = `${percent}%`;
+      groomingCapacityBarEl.className = isFull
+        ? "h-full rounded-full bg-red-500 transition-all duration-300"
+        : isBusy
+          ? "h-full rounded-full bg-amber-500 transition-all duration-300"
+          : "h-full rounded-full bg-emerald-500 transition-all duration-300";
+    }
+    if (groomingCapacityBadgeEl) {
+      groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Busy" : "Open";
+      groomingCapacityBadgeEl.className = isFull
+        ? "rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-semibold text-red-700"
+        : isBusy
+          ? "rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
+          : "rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700";
+    }
+  }
+
+  function toNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
 
   function renderUpcomingAppointmentsSummary(bookings) {
     const records = Array.isArray(bookings) ? bookings : [];
@@ -894,4 +972,5 @@
   // Expose for coordination with the notification poller (pickup popup sequencing).
   window._refreshAppointments = loadAppointments;
   setInterval(loadAppointments, 15000);
+  setInterval(loadGroomingCapacity, 15000);
 })();

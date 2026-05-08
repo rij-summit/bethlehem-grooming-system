@@ -15,6 +15,8 @@ use App\Models\Service;
 
 class BookingController extends Controller
 {
+    private const DAILY_CAPACITY = 20;
+
     // ── GET AVAILABLE TIME WINDOWS ────────────────────────
     public function getTimeslots(Request $request)
     {
@@ -63,14 +65,14 @@ class BookingController extends Controller
             ->whereNotIn('status', ['cancelled'])
             ->count();
 
-        $dayFull = $totalBooked >= 20;
+        $dayFull = $totalBooked >= self::DAILY_CAPACITY;
 
         return response()->json([
             'success'      => true,
             'date'         => $date,
             'day_full'     => $dayFull,
             'total_booked' => $totalBooked,
-            'capacity'     => 20,
+            'capacity'     => self::DAILY_CAPACITY,
             'windows'      => $result->values(),
         ]);
     }
@@ -108,7 +110,7 @@ class BookingController extends Controller
             ->whereNotIn('status', ['cancelled'])
             ->count();
 
-        if ($totalBooked >= 20) {
+        if ($totalBooked >= self::DAILY_CAPACITY) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sorry, this date is fully booked. Please choose another date.',
@@ -309,6 +311,60 @@ class BookingController extends Controller
             'success'  => true,
             'bookings' => $active->map($format)->values(),
             'history'  => $history->map($format)->values(),
+        ]);
+    }
+
+    // Real-time client dashboard snapshot of today's grooming queue and capacity.
+    public function groomingCapacity(Request $request)
+    {
+        $today = Carbon::today()->toDateString();
+
+        $used = Booking::where('booking_date', $today)
+            ->whereNotIn('status', ['cancelled'])
+            ->count();
+
+        $queued = Booking::where('booking_date', $today)
+            ->where('status', 'checked_in')
+            ->count();
+
+        $inProgress = Booking::where('booking_date', $today)
+            ->where('status', 'in_progress')
+            ->count();
+
+        $readyForPickup = Booking::where('booking_date', $today)
+            ->whereIn('status', ['for_payment', 'for_pickup', 'released'])
+            ->count();
+
+        $waiting = Booking::where('booking_date', $today)
+            ->where('status', 'waiting_to_arrive')
+            ->count();
+
+        $completed = Booking::whereDate('grooming_finished_at', $today)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->count();
+
+        $capacity = self::DAILY_CAPACITY;
+        $remaining = max(0, $capacity - $used);
+        $percent = $capacity > 0 ? min(100, round(($used / $capacity) * 100)) : 0;
+
+        return response()->json([
+            'success' => true,
+            'date' => $today,
+            'capacity' => [
+                'used' => $used,
+                'max' => $capacity,
+                'remaining' => $remaining,
+                'percent' => $percent,
+                'is_full' => $used >= $capacity,
+            ],
+            'queue' => [
+                'queued' => $queued,
+                'in_progress' => $inProgress,
+                'ready_for_pickup' => $readyForPickup,
+                'waiting' => $waiting,
+                'completed_today' => $completed,
+            ],
+            'updated_at' => Carbon::now()->toIso8601String(),
         ]);
     }
 
