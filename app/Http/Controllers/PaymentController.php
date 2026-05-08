@@ -160,7 +160,7 @@ class PaymentController extends Controller
     // GET /admin/transactions
     public function index(Request $request)
     {
-        $search = $request->query('search', '');
+        $search = trim((string) $request->query('search', ''));
         $period = $request->query('period', 'day');
         $date   = $request->query('date', '');
         $week   = $request->query('week', '');
@@ -210,11 +210,23 @@ class PaymentController extends Controller
 
         $this->applyPeriodFilter($query, $period, $date, $week, $month, $year);
 
-        if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->whereHas('booking.user', function ($q2) use ($search) {
-                    $q2->where('first_name', 'like', "%{$search}%")
-                       ->orWhere('last_name',  'like', "%{$search}%");
+        if ($search !== '') {
+            $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+
+            $query->where(function ($q) use ($search, $nameTerms) {
+                $q->whereHas('booking.user', function ($q2) use ($search, $nameTerms) {
+                    $q2->where(function ($nameQuery) use ($search, $nameTerms) {
+                        $nameQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere(function ($fullNameQuery) use ($nameTerms) {
+                                foreach ($nameTerms as $term) {
+                                    $fullNameQuery->where(function ($termQuery) use ($term) {
+                                        $termQuery->where('first_name', 'like', "%{$term}%")
+                                            ->orWhere('last_name', 'like', "%{$term}%");
+                                    });
+                                }
+                            });
+                    });
                 })->orWhereHas('booking.bookingPets.pet', function ($q2) use ($search) {
                     $q2->where('pet_name', 'like', "%{$search}%");
                 });
