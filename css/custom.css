@@ -283,8 +283,17 @@ body.client-sidebar-open {
   overflow: hidden;
 }
 
+html.customer-detail-modal-open,
+body.customer-detail-modal-open {
+  overflow: hidden;
+}
+
 .admin-sidebar-menu {
   overflow-y: auto;
+}
+
+.admin-sidebar-menu nav a.bg-\[\#315b7e\]:hover {
+  background-color: #315b7e;
 }
 
 .admin-sidebar-footer {

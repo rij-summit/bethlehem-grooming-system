@@ -40,8 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/booking/cancel',     [BookingController::class, 'cancel']);
     Route::post('/booking/reschedule', [BookingController::class, 'reschedule']);
 
-    // Admin — Customer management (admin role only)
+    // Admin — Customer management (staff can view, admin can manage)
     Route::get('/admin/customers',                          [CustomerController::class, 'index']);
+    Route::get('/admin/customers/{id}',                      [CustomerController::class, 'show']);
     Route::post('/admin/customers/{id}/deactivate',         [CustomerController::class, 'deactivate']);
     Route::post('/admin/customers/{id}/reactivate',         [CustomerController::class, 'reactivate']);
     Route::post('/admin/customers/{id}/archive',            [CustomerController::class, 'archive']);

@@ -234,13 +234,16 @@
             <!-- Tab description -->
             <div class="mt-3">
               <div class="rounded-2xl border border-[#d9e6f1] bg-white/80 p-3 text-sm text-slate-600">
-                <template x-if="statusFilter === 'active'">
+                <template x-if="!isAdmin">
+                  <p>Customer records are read-only for staff. Select a customer profile to view account and pet details.</p>
+                </template>
+                <template x-if="isAdmin && statusFilter === 'active'">
                   <p>You can <strong>Deactivate</strong> to temporarily block their access or <strong>Archive</strong> to permanently remove them from the active list.</p>
                 </template>
-                <template x-if="statusFilter === 'inactive'">
+                <template x-if="isAdmin && statusFilter === 'inactive'">
                   <p>Use <strong>Reactivate</strong> to restore their access, or <strong>Archive</strong> to move them to permanent records.</p>
                 </template>
-                <template x-if="statusFilter === 'archived'">
+                <template x-if="isAdmin && statusFilter === 'archived'">
                   <p>Archived customers are permanently removed from active operations. Use <strong>Unarchive</strong> to restore their account and reactivate their access.</p>
                 </template>
               </div>
@@ -286,7 +289,15 @@
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
                   <!-- LEFT: Avatar + Info -->
-                  <div class="flex items-start gap-4">
+                  <div
+                    role="button"
+                    tabindex="0"
+                    @click="openCustomerDetails(customer)"
+                    @keydown.enter.prevent="openCustomerDetails(customer)"
+                    @keydown.space.prevent="openCustomerDetails(customer)"
+                    :aria-label="'View details for ' + customer.fullName"
+                    class="flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-2xl text-left transition focus:outline-none"
+                  >
                     <!-- Initials Avatar -->
                     <div
                       class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold text-white shadow-sm"
@@ -350,8 +361,7 @@
                   </div>
 
                   <!-- RIGHT: Actions -->
-                  <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
-
+                  <div x-show="isAdmin" class="flex flex-wrap items-center gap-2 lg:shrink-0">
                     <!-- Active tab actions -->
                     <template x-if="statusFilter === 'active'">
                       <div class="flex flex-wrap gap-2">
@@ -418,7 +428,7 @@
 
           <!-- ── Confirm Action Modal ── -->
           <div
-            x-show="confirmModal.open"
+            x-show="isAdmin && confirmModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
             @click.self="closeConfirm()"
@@ -474,9 +484,182 @@
             </div>
           </div>
 
-          <!-- ── Reset Password Modal ── -->
+          <!-- Customer Details Modal -->
           <div
-            x-show="resetModal.open"
+            x-show="detailModal.open"
+            x-transition
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
+            @click.self="closeCustomerDetails()"
+          >
+            <div class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl">
+              <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+                <div class="flex min-w-0 items-center gap-4">
+                  <div
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold text-white shadow-sm"
+                    :style="'background-color:' + getAvatarColor(detailModal.customer?.fullName)"
+                    x-text="getInitials(detailModal.customer?.fullName)"
+                  ></div>
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-xl font-bold text-[#1f3850]" x-text="detailModal.customer?.fullName || 'Customer Details'"></h3>
+                      <span
+                        x-show="detailModal.customer"
+                        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold"
+                        :class="detailModal.customer?.isArchived ? 'bg-slate-100 text-slate-500' : detailModal.customer?.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                        x-text="customerStatusLabel(detailModal.customer)"
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+                <button type="button"
+                  @click="closeCustomerDetails()"
+                  class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                  aria-label="Close customer details">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+
+              <div class="overflow-y-auto px-5 py-5 sm:px-6">
+                <div x-show="detailModal.loading" class="flex justify-center py-16">
+                  <div class="flex flex-col items-center gap-3 text-slate-400">
+                    <i data-lucide="loader-circle" class="h-10 w-10 animate-spin text-[#315b7e]"></i>
+                    <p class="text-sm font-medium">Loading customer details...</p>
+                  </div>
+                </div>
+
+                <div x-show="!detailModal.loading && detailModal.error" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <p class="font-semibold">Failed to load details</p>
+                  <p class="mt-1" x-text="detailModal.error"></p>
+                </div>
+
+                <div x-show="!detailModal.loading && !detailModal.error && detailModal.customer" class="space-y-5">
+                  <section class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4">
+                    <div class="mb-4 flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]">
+                        <i data-lucide="user-round" class="h-5 w-5"></i>
+                      </div>
+                      <div>
+                        <h4 class="font-extrabold text-[#1f3850]">Account Information</h4>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">First Name</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.firstName)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Last Name</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.lastName)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Username</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.username)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Phone Number</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatMobileNumber(detailModal.customer?.phone)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Email Address</p>
+                        <p class="mt-1 break-words font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.email)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Account Status</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="customerStatusLabel(detailModal.customer)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Joined</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatDate(detailModal.customer?.joinedAt)"></p>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Bookings</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="(detailModal.customer?.bookingCount ?? 0) + ' booking' + ((detailModal.customer?.bookingCount ?? 0) !== 1 ? 's' : '')"></p>
+                      </div>
+                      <div x-show="detailModal.customer?.isArchived" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Archived</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="formatDate(detailModal.customer?.archivedAt)"></p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="rounded-[24px] border border-[#d9e6f1] bg-white p-4">
+                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]">
+                          <i data-lucide="paw-print" class="h-5 w-5"></i>
+                        </div>
+                        <div>
+                          <h4 class="font-extrabold text-[#1f3850]">Registered Pets</h4>
+                        </div>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <span class="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700" x-text="(detailModal.customer?.activePetCount ?? 0) + ' active'"></span>
+                        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500" x-text="(detailModal.customer?.archivedPetCount ?? 0) + ' archived'"></span>
+                      </div>
+                    </div>
+
+                    <div x-show="(detailModal.customer?.pets || []).length === 0" class="rounded-2xl border border-dashed border-[#bfd3e3] bg-[#f8fbfd] px-5 py-8 text-center">
+                      <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]">
+                        <i data-lucide="paw-print" class="h-6 w-6"></i>
+                      </div>
+                      <p class="mt-3 font-bold text-[#2f4b66]">No registered pets yet.</p>
+                    </div>
+
+                    <div x-show="(detailModal.customer?.pets || []).length > 0" class="grid gap-4 lg:grid-cols-2">
+                      <template x-for="pet in detailModal.customer?.pets || []" :key="pet.id">
+                        <article class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4">
+                          <div class="flex items-start justify-between gap-3">
+                            <div>
+                              <h5 class="text-lg font-extrabold text-[#1f3850]" x-text="formatTextValue(pet.petName)"></h5>
+                              <p class="mt-1 text-sm text-slate-500">
+                                <span x-text="formatLabel(pet.species)"></span>
+                                <span x-show="pet.breed"> | </span>
+                                <span x-show="pet.breed" x-text="formatTextValue(pet.breed)"></span>
+                              </p>
+                            </div>
+                            <span
+                              class="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                              :class="pet.isArchived ? 'bg-slate-100 text-slate-500' : 'bg-green-100 text-green-700'"
+                              x-text="pet.isArchived ? 'Archived' : 'Active'"
+                            ></span>
+                          </div>
+
+                          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Size</p>
+                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatLabel(pet.size)"></p>
+                            </div>
+                            <div>
+                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Fur Type</p>
+                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatLabel(pet.furType)"></p>
+                            </div>
+                            <div>
+                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Weight</p>
+                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatWeight(pet.weight)"></p>
+                            </div>
+                            <div>
+                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Color</p>
+                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatTextValue(pet.color)"></p>
+                            </div>
+                          </div>
+
+                          <div class="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-3">
+                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Medical Conditions</p>
+                            <p class="mt-1 text-sm font-medium text-slate-700" style="white-space: pre-line" x-text="formatTextValue(pet.medicalConditions)"></p>
+                          </div>
+                          <p class="mt-3 text-xs font-semibold text-slate-400" x-text="'Registered ' + formatDate(pet.createdAt)"></p>
+                        </article>
+                      </template>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            x-show="isAdmin && resetModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
             @click.self="closeReset()"

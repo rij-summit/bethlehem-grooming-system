@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Booking;
+use App\Models\Pet;
 
 class CustomerController extends Controller
 {
@@ -19,12 +20,22 @@ class CustomerController extends Controller
         }
     }
 
+    private function requireAdminOrStaff(Request $request)
+    {
+        if (!in_array($request->user()?->role, ['admin', 'staff'], true)) {
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Admin or staff access required.',
+            ], 403));
+        }
+    }
+
     // ── LIST CUSTOMERS ────────────────────────────────────
     // GET /api/admin/customers
     // Query params: status (active|inactive|archived), tier (new|returning), search
     public function index(Request $request)
     {
-        $this->requireAdmin($request);
+        $this->requireAdminOrStaff($request);
 
         $status = $request->query('status', 'active');   // active | inactive | archived
         $tier   = $request->query('tier',   '');          // new | returning | '' (all)
@@ -91,6 +102,69 @@ class CustomerController extends Controller
             'success'   => true,
             'customers' => $customers,
             'total'     => $customers->count(),
+        ]);
+    }
+
+    // ── CUSTOMER DETAILS ──────────────────────────────────
+    // GET /api/admin/customers/{id}
+    public function show(Request $request, $id)
+    {
+        $this->requireAdminOrStaff($request);
+
+        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $bookingCount = Booking::where('user_id', $user->user_id)
+            ->whereNotIn('status', ['cancelled'])
+            ->count();
+
+        $pastBookingCount = Booking::where('user_id', $user->user_id)
+            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
+            ->count();
+
+        $pets = Pet::where('user_id', $user->user_id)
+            ->orderBy('is_archived')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn (Pet $pet) => [
+                'id'                => $pet->pet_id,
+                'petName'           => $pet->pet_name,
+                'species'           => $pet->species,
+                'breed'             => $pet->breed,
+                'weight'            => $pet->weight,
+                'color'             => $pet->color,
+                'size'              => $pet->size,
+                'furType'           => $pet->fur_type,
+                'medicalConditions' => $pet->medical_conditions,
+                'isArchived'        => (bool) $pet->is_archived,
+                'createdAt'         => $pet->created_at ?? null,
+            ]);
+
+        return response()->json([
+            'success'  => true,
+            'customer' => [
+                'id'               => $user->user_id,
+                'firstName'        => $user->first_name,
+                'lastName'         => $user->last_name,
+                'fullName'         => trim($user->first_name . ' ' . $user->last_name),
+                'username'         => $user->username,
+                'email'            => $user->email,
+                'phone'            => $user->phone,
+                'isActive'         => (bool) $user->is_active,
+                'isArchived'       => (bool) $user->is_archived,
+                'tier'             => $pastBookingCount > 0 ? 'returning' : 'new',
+                'customerTier'     => $user->customer_tier,
+                'bookingCount'     => $bookingCount,
+                'petCount'         => $pets->count(),
+                'activePetCount'   => $pets->where('isArchived', false)->count(),
+                'archivedPetCount' => $pets->where('isArchived', true)->count(),
+                'archivedAt'       => $user->archived_at,
+                'joinedAt'         => $user->created_at ?? null,
+                'pets'             => $pets->values(),
+            ],
         ]);
     }
 

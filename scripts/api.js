@@ -388,6 +388,11 @@ var API = (() => {
     return request("GET", `/admin/customers${query}`, null, getAdminToken());
   }
 
+  async function getCustomerDetails(customerId) {
+    // GET /api/admin/customers/{id}  (protected — admin token)
+    return request("GET", `/admin/customers/${customerId}`, null, getAdminToken());
+  }
+
   async function deactivateCustomer(customerId) {
     // POST /api/admin/customers/{id}/deactivate  (protected — admin token)
     return request("POST", `/admin/customers/${customerId}/deactivate`, null, getAdminToken());
@@ -596,6 +601,7 @@ var API = (() => {
     adminMarkDone,
     // Admin customers
     getCustomers,
+    getCustomerDetails,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,

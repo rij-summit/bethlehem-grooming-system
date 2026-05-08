@@ -24,10 +24,21 @@ function adminCustomers() {
       customer: null,
     },
 
+    detailModal: {
+      open:     false,
+      customer: null,
+      loading:  false,
+      error:    "",
+    },
+
     // ── Init ──────────────────────────────────────────────
 
     async init() {
       await this.loadCustomers();
+    },
+
+    get isAdmin() {
+      return API.getUserRole?.() === "admin";
     },
 
     // ── Load ─────────────────────────────────────────────
@@ -69,6 +80,8 @@ function adminCustomers() {
     // ── Confirm modal ─────────────────────────────────────
 
     confirmAction(action, customer) {
+      if (!this.isAdmin) return;
+
       const labels = {
         deactivate:  { title: "Deactivate Account",  confirmLabel: "Deactivate",  color: "amber"  },
         reactivate:  { title: "Reactivate Account",  confirmLabel: "Reactivate",  color: "green"  },
@@ -103,6 +116,8 @@ function adminCustomers() {
     },
 
     async executeAction() {
+      if (!this.isAdmin) return;
+
       const { action, customer } = this.confirmModal;
       if (!customer) return;
 
@@ -130,12 +145,46 @@ function adminCustomers() {
     // ── Reset Password modal ──────────────────────────────
 
     openResetPassword(customer) {
+      if (!this.isAdmin) return;
+
       this.resetModal = { open: true, customer };
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
     },
 
     closeReset() {
       this.resetModal.open = false;
+    },
+
+    async openCustomerDetails(customer) {
+      this.setCustomerDetailScrollLock(true);
+      this.detailModal = {
+        open:     true,
+        customer: { ...customer, pets: [] },
+        loading:  true,
+        error:    "",
+      };
+      this.refreshIcons();
+
+      try {
+        const data = await API.getCustomerDetails(customer.id);
+        this.detailModal.customer = data.customer || this.detailModal.customer;
+      } catch (err) {
+        this.detailModal.error = err.message || "Failed to load customer details.";
+      } finally {
+        this.detailModal.loading = false;
+        this.refreshIcons();
+      }
+    },
+
+    closeCustomerDetails() {
+      this.detailModal.open = false;
+      this.detailModal.error = "";
+      this.setCustomerDetailScrollLock(false);
+    },
+
+    setCustomerDetailScrollLock(locked) {
+      document.documentElement.classList.toggle("customer-detail-modal-open", locked);
+      document.body.classList.toggle("customer-detail-modal-open", locked);
     },
 
     // ── Avatar helpers ────────────────────────────────────
@@ -186,6 +235,37 @@ function adminCustomers() {
       }
 
       return text;
+    },
+
+    formatTextValue(value) {
+      const text = String(value ?? "").trim();
+      return text || "Not provided";
+    },
+
+    formatLabel(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "Not provided";
+
+      return text
+        .replace(/_/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+    },
+
+    formatWeight(value) {
+      if (value === null || value === undefined || value === "") return "Not provided";
+      const amount = Number(value);
+      if (!Number.isFinite(amount)) return String(value);
+
+      return `${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`;
+    },
+
+    customerStatusLabel(customer) {
+      if (customer?.isArchived) return "Archived";
+      if (customer?.isActive) return "Active";
+      return "Inactive";
     },
 
     refreshIcons() {
