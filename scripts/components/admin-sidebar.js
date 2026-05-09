@@ -32,8 +32,10 @@ function adminSidebar() {
     },
 
     async init() {
-      this.detectActivePage();
       this.isAdmin = API.getUserRole() === "admin";
+      if (API.enforceAdminPageAccess && !API.enforceAdminPageAccess()) return;
+
+      this.detectActivePage();
       this.registerIncomingAppointmentListener();
 
       this.$nextTick(() => {
@@ -153,6 +155,8 @@ function adminSidebar() {
     },
 
     async openBlockedDatesModal() {
+      if (!this.isAdmin) return;
+
       this.blockDatesModal.open = true;
       this.blockForm = { startDate: "", endDate: "", reason: "", busy: false, error: "", warning: "" };
       await this.loadBlockedDates();
@@ -169,6 +173,8 @@ function adminSidebar() {
     },
 
     async submitBlockedDate() {
+      if (!this.isAdmin) return;
+
       this.blockForm.error = "";
       this.blockForm.warning = "";
 
@@ -203,6 +209,8 @@ function adminSidebar() {
     },
 
     async removeBlockedDate(id) {
+      if (!this.isAdmin) return;
+
       try {
         await API.removeBlockedDate(id);
         this.blockedDates = this.blockedDates.filter(b => b.id !== id);
@@ -212,6 +220,8 @@ function adminSidebar() {
     },
 
     handleStopReceivingClick() {
+      if (!this.isAdmin) return;
+
       if (this.clinicStopped) {
         this.stopModal = {
           open: true,
@@ -236,6 +246,8 @@ function adminSidebar() {
     },
 
     async executeStopReceiving() {
+      if (!this.isAdmin) return;
+
       const action = this.stopModal.action;
       this.stopModal.busy = true;
       this.stopModal.error = "";

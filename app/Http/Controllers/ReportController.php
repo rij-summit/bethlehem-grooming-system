@@ -9,8 +9,20 @@ use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
+    private function requireAdmin(Request $request): void
+    {
+        if ($request->user()?->role !== 'admin') {
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Admin access required.',
+            ], 403));
+        }
+    }
+
     public function servicesPerformed(Request $request)
     {
+        $this->requireAdmin($request);
+
         $period = $request->query('period', 'day');
         $date = $request->query('date', '');
         $week = $request->query('week', '');
@@ -93,6 +105,8 @@ class ReportController extends Controller
 
     public function customerActivity(Request $request)
     {
+        $this->requireAdmin($request);
+
         $period = $request->query('period', 'day');
         $date = $request->query('date', '');
         $week = $request->query('week', '');

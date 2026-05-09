@@ -15,10 +15,10 @@ class ClinicClosureController extends Controller
     // ── ADMIN GUARD ───────────────────────────────────────
     private function requireAdmin(Request $request)
     {
-        if (!in_array($request->user()?->role, ['admin', 'staff'])) {
+        if ($request->user()?->role !== 'admin') {
             abort(response()->json([
                 'success' => false,
-                'message' => 'Unauthorized.',
+                'message' => 'Unauthorized. Admin access required.',
             ], 403));
         }
     }

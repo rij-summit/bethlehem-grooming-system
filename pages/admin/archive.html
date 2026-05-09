@@ -75,7 +75,7 @@
                 <i data-lucide="receipt" class="h-5 w-5"></i>
                 <span>Transactions</span>
               </a>
-              <a href="./reports.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+              <a href="./reports.html" x-show="isAdmin" style="display: none" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="clipboard-list" class="h-5 w-5"></i>
                 <span>Reports</span>
               </a>
@@ -482,9 +482,13 @@
                       <template x-for="(svc, index) in detailsBooking.services" :key="index">
                         <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
                           <p class="text-sm font-medium text-slate-700" x-text="svc.name"></p>
-                          <p class="text-sm text-slate-500" x-text="svc.priceAtBooking > 0 ? '₱' + Number(svc.priceAtBooking).toFixed(2) : 'TBD'"></p>
+                          <p class="text-sm text-slate-500" x-text="formatServiceAvailedPrice(svc)"></p>
                         </div>
                       </template>
+                      <div class="flex items-center justify-between rounded-xl border border-[#315b7e]/20 bg-[#eef5fb] px-4 py-2">
+                        <p class="text-sm font-bold text-[#1f3850]">Total</p>
+                        <p class="text-sm font-bold text-[#1f3850]" x-text="formatServicesAvailedTotal(detailsBooking)"></p>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -507,8 +511,8 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/api.js?v=service-prices-20260509"></script>
     <script src="../../scripts/components/admin-sidebar.js"></script>
-    <script src="../../scripts/components/admin-archive.js"></script>
+    <script src="../../scripts/components/admin-archive.js?v=service-prices-20260509"></script>
   </body>
 </html>

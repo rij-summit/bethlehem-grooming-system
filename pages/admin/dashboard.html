@@ -125,6 +125,8 @@
 
               <a
                 href="./reports.html"
+                x-show="isAdmin"
+                style="display: none"
                 class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40"
                 :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
@@ -575,12 +577,12 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/api.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
     <script src="../../scripts/components/admin-sidebar.js"></script>
 
     <!-- New dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=service-prices-20260509"></script>
   </body>
 </html>

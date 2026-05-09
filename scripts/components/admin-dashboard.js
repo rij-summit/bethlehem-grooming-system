@@ -1955,6 +1955,89 @@ function adminDashboard() {
       })}`;
     },
 
+    formatServiceAvailedPrice(service, booking = this.detailsBooking) {
+      const bookedAmount = parsePaymentNumber(
+        service?.priceAtBooking ?? service?.price_at_booking,
+      );
+
+      if (Number.isFinite(bookedAmount) && bookedAmount > 0) {
+        return this.formatPeso(bookedAmount);
+      }
+
+      const serviceDefinition = getPaymentServiceDefinition(service);
+      if (!serviceDefinition) {
+        return "Price unavailable";
+      }
+
+      const petSize = this.getServiceAvailedPetSize(service, booking);
+      const pricing = getPaymentServicePricing(serviceDefinition, petSize);
+
+      return pricing.displayPrice === "Enter price"
+        ? "Price unavailable"
+        : pricing.displayPrice;
+    },
+
+    getServiceAvailedPetSize(service, booking = this.detailsBooking) {
+      const serviceSize = getPaymentPetSizeCandidate(service);
+
+      if (serviceSize) {
+        return serviceSize;
+      }
+
+      const matchedPet = this.getServiceAvailedPet(service, booking);
+
+      return (
+        getPaymentPetSizeCandidate(matchedPet) ||
+        getPaymentPetSizeCandidate(booking)
+      );
+    },
+
+    getServiceAvailedPet(service, booking = this.detailsBooking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+
+      if (pets.length === 0) {
+        return null;
+      }
+
+      const bookingPetId = service?.bookingPetId ?? service?.booking_pet_id;
+      if (bookingPetId) {
+        const matchedPet = pets.find((pet) =>
+          String(pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id) ===
+          String(bookingPetId),
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      const petId = service?.petId ?? service?.pet_id;
+      if (petId) {
+        const matchedPet = pets.find((pet) =>
+          String(pet?.petId ?? pet?.pet_id) === String(petId),
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      const petName = service?.petName ?? service?.pet_name;
+      if (petName) {
+        const normalizedPetName = normalizePaymentText(petName);
+        const matchedPet = pets.find((pet) =>
+          normalizePaymentText(pet?.petName ?? pet?.pet_name ?? pet?.name) ===
+          normalizedPetName,
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      return pets.length === 1 ? pets[0] : null;
+    },
+
     formatPercent(value) {
       return `${Number(value || 0).toFixed(1)}%`;
     },
@@ -2522,6 +2605,30 @@ function adminDashboard() {
       });
     },
 
+    buildPaymentServicePrices(petBreakdown) {
+      const pets = Array.isArray(petBreakdown) ? petBreakdown : [];
+      const servicePrices = [];
+
+      pets.forEach((pet) => {
+        (Array.isArray(pet?.lines) ? pet.lines : []).forEach((line) => {
+          const bookingServiceId =
+            line?.bookingServiceId ?? line?.booking_service_id ?? null;
+          const amount = parseFloat(line?.amount);
+
+          if (!bookingServiceId || !Number.isFinite(amount)) {
+            return;
+          }
+
+          servicePrices.push({
+            booking_service_id: bookingServiceId,
+            amount: Number(amount.toFixed(2)),
+          });
+        });
+      });
+
+      return servicePrices;
+    },
+
     async submitPayment() {
       const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
       const fp = Number(this.paymentTotalDue.toFixed(2));
@@ -2553,27 +2660,27 @@ function adminDashboard() {
         return;
       }
 
+      const servicePrices = this.buildPaymentServicePrices(this.paymentModal.petBreakdown);
+      if (servicePrices.length !== this.paymentLineCount) {
+        this.paymentModal.error = "Service price records are incomplete. Please refresh and try again.";
+        return;
+      }
+
       this.paymentModal.busy  = true;
       this.paymentModal.error = "";
 
       try {
         const payload = {
-          final_price:    fp,
-          amount_paid:    ap,
-          payment_method: paymentMethod,
-          notes:          notes || null,
+          final_price:     fp,
+          amount_paid:     ap,
+          payment_method:  paymentMethod,
+          notes:           notes || null,
+          service_prices:  servicePrices,
         };
         const res = isEarlyPayment
           ? await API.payNow(booking.id, payload)
           : await API.processPayment(booking.id, payload);
 
-        /*
-         * Frontend-only receipt snapshot:
-         * the payment API currently persists the final total, while this modal
-         * displays the admin-entered per-service amounts from the form above.
-         * If line-level paid prices need storage later, backend can accept these
-         * line amounts explicitly; no backend contract is changed here.
-         */
         const receiptPets = this.buildPaymentReceiptPets(this.paymentModal.petBreakdown);
         const receiptPetNames = receiptPets.map((pet) => pet.name).filter(Boolean).join(", ");
         const receiptServiceNames = [

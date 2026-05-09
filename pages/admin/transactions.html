@@ -75,7 +75,7 @@
                 <i data-lucide="receipt" class="h-5 w-5"></i>
                 <span>Transactions</span>
               </a>
-              <a href="./reports.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+              <a href="./reports.html" x-show="isAdmin" style="display: none" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="clipboard-list" class="h-5 w-5"></i>
                 <span>Reports</span>
               </a>

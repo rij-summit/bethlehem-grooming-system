@@ -567,11 +567,8 @@
 
     if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(queued);
     if (groomingQueueSummaryEl) {
-      groomingQueueSummaryEl.textContent =
-        `${queued} queued now, ${inProgress} in progress`;
-      groomingQueueSummaryEl.className = queued || inProgress
-        ? "text-sm text-amber-600 mt-1"
-        : "text-sm text-slate-500 mt-1";
+      groomingQueueSummaryEl.textContent = `${inProgress} in progress`;
+      groomingQueueSummaryEl.className = "text-sm text-[#315b7e] mt-1";
     }
     if (groomingCapacityTextEl) {
       groomingCapacityTextEl.textContent = isFull
@@ -580,11 +577,7 @@
     }
     if (groomingCapacityBarEl) {
       groomingCapacityBarEl.style.width = `${percent}%`;
-      groomingCapacityBarEl.className = isFull
-        ? "h-full rounded-full bg-red-500 transition-all duration-300"
-        : isBusy
-          ? "h-full rounded-full bg-amber-500 transition-all duration-300"
-          : "h-full rounded-full bg-emerald-500 transition-all duration-300";
+      groomingCapacityBarEl.className = "h-full rounded-full bg-[#315b7e] transition-all duration-300";
     }
     if (groomingCapacityBadgeEl) {
       groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Busy" : "Open";

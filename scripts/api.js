@@ -11,6 +11,7 @@ var API = (() => {
   const ADMIN_TOKEN_KEY    = "admin_token";
   const USER_ROLE_KEY      = "user_role";
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
+  const ADMIN_ONLY_PAGE_NAMES = ["reports.html", "settings.html", "services.html"];
 
   // ── Booking session keys to wipe on customer logout / login ──────────────
   const BOOKING_SESSION_KEYS = [
@@ -101,6 +102,38 @@ var API = (() => {
     }
   }
 
+  function currentPageName() {
+    const path = window.location.pathname.replace(/\\/g, "/");
+    return path.split("/").filter(Boolean).pop() || "";
+  }
+
+  function isAdminOnlyPage() {
+    return isAdminPage() && ADMIN_ONLY_PAGE_NAMES.includes(currentPageName());
+  }
+
+  function redirectToAdminDashboard() {
+    if (currentPageName() !== "dashboard.html") {
+      window.location.replace("./dashboard.html");
+    }
+  }
+
+  function enforceAdminPageAccess() {
+    if (!isAdminPage()) return true;
+
+    const role = getUserRole();
+    if (!getAdminToken() || (role !== "admin" && role !== "staff")) {
+      redirectToSignIn();
+      return false;
+    }
+
+    if (isAdminOnlyPage() && role !== "admin") {
+      redirectToAdminDashboard();
+      return false;
+    }
+
+    return true;
+  }
+
   function notifyLogout(role) {
     try {
       localStorage.setItem(
@@ -143,6 +176,8 @@ var API = (() => {
         // Ignore malformed auth sync events.
       }
     });
+
+    enforceAdminPageAccess();
   }
 
   // ── Core request function ─────────────────────────────────────────────────
@@ -213,6 +248,10 @@ var API = (() => {
     }
 
     if (!response.ok) {
+      if (response.status === 403 && token === getAdminToken() && isAdminOnlyPage()) {
+        redirectToAdminDashboard();
+      }
+
       const error = new Error(data.message || "Something went wrong.");
       error.status = response.status;
       error.errors = data.errors || null;
@@ -482,13 +521,13 @@ var API = (() => {
 
   async function processPayment(bookingId, payload) {
     // POST /api/admin/bookings/{id}/pay  (protected — admin token)
-    // payload: { final_price, amount_paid, notes? }
+    // payload: { final_price, amount_paid, payment_method?, notes?, service_prices? }
     return request("POST", `/admin/bookings/${bookingId}/pay`, payload, getAdminToken());
   }
 
   async function payNow(bookingId, payload) {
     // POST /api/admin/bookings/{id}/pay-now  (protected — admin token)
-    // Early payment while booking is still checked_in
+    // Early payment while booking is still checked_in; accepts the same payload as processPayment.
     return request("POST", `/admin/bookings/${bookingId}/pay-now`, payload, getAdminToken());
   }
 
@@ -581,6 +620,8 @@ var API = (() => {
     getUserRole,
     setUserRole,
     clearUserRole,
+    enforceAdminPageAccess,
+    isAdminOnlyPage,
     // Auth
     register,
     signIn,

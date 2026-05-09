@@ -407,7 +407,15 @@ class AdminBookingController extends Controller
         $date   = $request->query('date', '');
 
         $query = Booking::where('status', 'archived')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with([
+                'user',
+                'timeWindow',
+                'bookingPets.pet',
+                'bookingServices.service',
+                'payments' => fn($q) => $q
+                    ->where('payment_status', 'paid')
+                    ->orderBy('paid_at', 'desc'),
+            ])
             ->orderBy('archived_at', 'desc');
 
         if ($date) {
@@ -466,6 +474,18 @@ class AdminBookingController extends Controller
             ? $serviceNames->implode(', ')
             : 'Grooming';
 
+        $paidPayment = $this->paidPaymentForBooking($booking);
+        $paidTotal = $paidPayment
+            ? (float) $paidPayment->total_amount
+            : ((bool) $booking->paid && (float) $booking->total_amount > 0
+                ? (float) $booking->total_amount
+                : null);
+        $bookedServicesTotal = round((float) $bookedServices->sum(
+            fn($bs) => (float) ($bs->price_at_booking ?? 0),
+        ), 2);
+        $canUseSavedServicePrices = !$paidTotal
+            || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - round($paidTotal, 2)) <= 0.01);
+
         return [
             // Fields the card templates read directly
             'id'              => $booking->booking_id,
@@ -497,6 +517,21 @@ class AdminBookingController extends Controller
             'bookingReference' => $booking->booking_reference,
             'specialNotes'     => $booking->special_notes,
             'numberOfPets'     => $booking->number_of_pets,
+            'paidAmount'       => $paidTotal,
+            'paid_amount'      => $paidTotal,
+            'payment'          => $paidPayment ? [
+                'id'             => $paidPayment->payment_id ?? $paidPayment->id ?? null,
+                'finalPrice'     => (float) $paidPayment->total_amount,
+                'final_price'    => (float) $paidPayment->total_amount,
+                'amountPaid'     => (float) $paidPayment->amount_tendered,
+                'amount_paid'    => (float) $paidPayment->amount_tendered,
+                'paymentMethod'  => $paidPayment->payment_method,
+                'payment_method' => $paidPayment->payment_method,
+                'paidAt'         => $paidPayment->paid_at
+                    ? Carbon::parse($paidPayment->paid_at)->format('M j, Y g:i A')
+                    : null,
+                'paid_at'        => $paidPayment->paid_at,
+            ] : null,
             'pets'             => $bpets->map(function ($bp) {
                 $pet = $bp->pet;
                 return [
@@ -521,9 +556,20 @@ class AdminBookingController extends Controller
                     'specialInstructions' => $bp->special_instructions ?? null,
                 ];
             })->values(),
-            'services' => $bookedServices->map(function ($bs) use ($bpetsById) {
+            'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {
                 $bookingPet = $bpetsById->get($bs->booking_pet_id);
                 $pet = $bookingPet?->pet;
+                $savedPrice = (float) ($bs->price_at_booking ?? 0);
+                $paidPrice = null;
+                $paidPriceSource = null;
+
+                if ($paidTotal && $bookedServices->count() === 1) {
+                    $paidPrice = $paidTotal;
+                    $paidPriceSource = 'payment_total';
+                } elseif ($savedPrice > 0 && $canUseSavedServicePrices) {
+                    $paidPrice = $savedPrice;
+                    $paidPriceSource = $paidTotal ? 'service_line' : 'booking_price';
+                }
 
                 return [
                     'id'                 => $bs->booking_service_id,
@@ -546,6 +592,12 @@ class AdminBookingController extends Controller
                     'name'               => $bs->service?->service_name ?? '—',
                     'priceAtBooking'     => $bs->price_at_booking,
                     'price_at_booking'   => $bs->price_at_booking,
+                    'paidPrice'          => $paidPrice,
+                    'paid_price'         => $paidPrice,
+                    'paidPriceSource'    => $paidPriceSource,
+                    'paid_price_source'  => $paidPriceSource,
+                    'paymentTotal'       => $paidTotal,
+                    'payment_total'      => $paidTotal,
                 ];
             })->values(),
         ];
@@ -561,6 +613,20 @@ class AdminBookingController extends Controller
             : '—';
 
         return $base;
+    }
+
+    private function paidPaymentForBooking(Booking $booking): ?Payment
+    {
+        if ($booking->relationLoaded('payments')) {
+            return $booking->payments
+                ->where('payment_status', 'paid')
+                ->sortByDesc(fn($payment) => $payment->paid_at
+                    ? Carbon::parse($payment->paid_at)->timestamp
+                    : 0)
+                ->first();
+        }
+
+        return null;
     }
 
     private function recentActivity(): array

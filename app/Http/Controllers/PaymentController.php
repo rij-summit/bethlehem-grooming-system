@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use App\Models\Booking;
+use App\Models\BookingService;
 use App\Models\Payment;
 use App\Models\Notification;
 use App\Exceptions\PaymentLimitExceededException;
@@ -14,10 +17,13 @@ class PaymentController extends Controller
     private function validatePayload(Request $request): array
     {
         $data = $request->validate([
-            'final_price'    => 'required|numeric|min:0.01',
-            'amount_paid'    => 'required|numeric|min:0.01',
-            'payment_method' => 'nullable|in:cash,gcash,maya,card,others',
-            'notes'          => 'nullable|string|max:500',
+            'final_price'                         => 'required|numeric|min:0.01',
+            'amount_paid'                         => 'required|numeric|min:0.01',
+            'payment_method'                      => 'nullable|in:cash,gcash,maya,card,others',
+            'notes'                               => 'nullable|string|max:500',
+            'service_prices'                      => 'nullable|array',
+            'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',
+            'service_prices.*.amount'             => 'required_with:service_prices|numeric|min:0.01',
         ]);
 
         if ($data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
@@ -28,7 +34,66 @@ class PaymentController extends Controller
             throw new PaymentLimitExceededException('amount paid');
         }
 
+        foreach ($data['service_prices'] ?? [] as $servicePrice) {
+            if (($servicePrice['amount'] ?? 0) > PaymentLimitExceededException::MAX_VALUE) {
+                throw new PaymentLimitExceededException('service price');
+            }
+        }
+
+        $servicePriceTotal = round(collect($data['service_prices'] ?? [])->sum(
+            fn($servicePrice) => (float) ($servicePrice['amount'] ?? 0),
+        ), 2);
+
+        if ($servicePriceTotal > 0 && abs($servicePriceTotal - round((float) $data['final_price'], 2)) > 0.01) {
+            throw ValidationException::withMessages([
+                'final_price' => 'Final price must match the submitted service prices.',
+            ]);
+        }
+
         return $data;
+    }
+
+    private function updateBookingServicePrices(Booking $booking, array $servicePrices): void
+    {
+        $booking->loadMissing('bookingServices');
+
+        $bookedServiceIds = $booking->bookingServices
+            ->pluck('booking_service_id')
+            ->map(fn($id) => (int) $id);
+
+        if ($bookedServiceIds->isEmpty()) {
+            return;
+        }
+
+        if (empty($servicePrices)) {
+            throw ValidationException::withMessages([
+                'service_prices' => 'Please submit a confirmed price for every booked service.',
+            ]);
+        }
+
+        $submittedPrices = collect($servicePrices)->mapWithKeys(function ($servicePrice) {
+            return [
+                (int) $servicePrice['booking_service_id'] => round((float) $servicePrice['amount'], 2),
+            ];
+        });
+
+        if ($submittedPrices->keys()->diff($bookedServiceIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'service_prices' => 'One or more service prices do not belong to this booking.',
+            ]);
+        }
+
+        if ($bookedServiceIds->diff($submittedPrices->keys())->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'service_prices' => 'Please submit a confirmed price for every booked service.',
+            ]);
+        }
+
+        foreach ($submittedPrices as $bookingServiceId => $amount) {
+            BookingService::where('booking_id', $booking->booking_id)
+                ->where('booking_service_id', $bookingServiceId)
+                ->update(['price_at_booking' => $amount]);
+        }
     }
 
     private function createPaymentRecord(Booking $booking, array $data): Payment
@@ -68,13 +133,19 @@ class PaymentController extends Controller
             return response()->json(['success' => false, 'message' => 'Amount paid cannot be less than the final price.'], 422);
         }
 
-        $payment = $this->createPaymentRecord($booking, $data);
+        $payment = DB::transaction(function () use ($booking, $data) {
+            $this->updateBookingServicePrices($booking, $data['service_prices'] ?? []);
+            $payment = $this->createPaymentRecord($booking, $data);
 
-        $booking->update([
-            'status'      => 'archived',
-            'paid'        => true,
-            'archived_at' => now(),
-        ]);
+            $booking->update([
+                'status'       => 'archived',
+                'paid'         => true,
+                'total_amount' => $data['final_price'],
+                'archived_at'  => now(),
+            ]);
+
+            return $payment;
+        });
 
         return response()->json([
             'success'        => true,
@@ -112,9 +183,17 @@ class PaymentController extends Controller
             return response()->json(['success' => false, 'message' => 'Amount paid cannot be less than the final price.'], 422);
         }
 
-        $payment = $this->createPaymentRecord($booking, $data);
+        $payment = DB::transaction(function () use ($booking, $data) {
+            $this->updateBookingServicePrices($booking, $data['service_prices'] ?? []);
+            $payment = $this->createPaymentRecord($booking, $data);
 
-        $booking->update(['paid' => true]);
+            $booking->update([
+                'paid'         => true,
+                'total_amount' => $data['final_price'],
+            ]);
+
+            return $payment;
+        });
 
         return response()->json([
             'success'        => true,

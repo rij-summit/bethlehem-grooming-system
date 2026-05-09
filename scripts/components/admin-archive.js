@@ -194,6 +194,57 @@ function adminArchive() {
       return text;
     },
 
+    formatPeso(amount) {
+      return `\u20b1${Number(amount || 0).toFixed(2)}`;
+    },
+
+    getServiceAvailedAmount(service) {
+      const amount = Number(
+        service?.paidPrice ??
+        service?.paid_price ??
+        service?.finalPrice ??
+        service?.final_price,
+      );
+
+      return Number.isFinite(amount) && amount > 0 ? amount : null;
+    },
+
+    formatServiceAvailedPrice(service) {
+      const amount = this.getServiceAvailedAmount(service);
+
+      return amount ? this.formatPeso(amount) : "Price unavailable";
+    },
+
+    getServicesAvailedTotal(booking = this.detailsBooking) {
+      const paymentTotal = Number(
+        booking?.paidAmount ??
+        booking?.paid_amount ??
+        booking?.payment?.finalPrice ??
+        booking?.payment?.final_price,
+      );
+
+      if (Number.isFinite(paymentTotal) && paymentTotal > 0) {
+        return paymentTotal;
+      }
+
+      const services = Array.isArray(booking?.services) ? booking.services : [];
+      const serviceAmounts = services
+        .map((service) => this.getServiceAvailedAmount(service))
+        .filter((amount) => Number.isFinite(amount) && amount > 0);
+
+      return serviceAmounts.length > 0
+        ? serviceAmounts.reduce((sum, amount) => sum + amount, 0)
+        : null;
+    },
+
+    formatServicesAvailedTotal(booking = this.detailsBooking) {
+      const total = this.getServicesAvailedTotal(booking);
+
+      return Number.isFinite(total) && total > 0
+        ? this.formatPeso(total)
+        : "Price unavailable";
+    },
+
     refreshIcons() {
       this.$nextTick(() => {
         if (window.lucide) window.lucide.createIcons();
