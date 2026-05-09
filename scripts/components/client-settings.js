@@ -151,10 +151,26 @@ document.addEventListener("DOMContentLoaded", () => {
   function applyUserToAccount(user) {
     firstNameInput.value = user.first_name || "";
     lastNameInput.value = user.last_name || "";
-    phoneInput.value = user.phone || "Not provided";
+    phoneInput.value = formatMobileNumber(user.phone) || "Not provided";
     emailInput.value = user.email || "Not provided";
 
     updateVisibleProfile(user);
+  }
+
+  function formatMobileNumber(value) {
+    const text = String(value ?? "").trim();
+    if (!text || text === "—" || text === "Not provided") return "";
+
+    const digits = text.replace(/\D/g, "");
+    const localDigits = digits.startsWith("639") && digits.length === 12
+      ? `0${digits.slice(2)}`
+      : digits;
+
+    if (localDigits.length === 11) {
+      return `${localDigits.slice(0, 4)}-${localDigits.slice(4, 7)}-${localDigits.slice(7)}`;
+    }
+
+    return text;
   }
 
   function updateVisibleProfile(user) {
