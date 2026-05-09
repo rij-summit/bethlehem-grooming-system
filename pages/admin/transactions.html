@@ -111,8 +111,7 @@
             class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition"
             :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"
           >
-            <template x-if="clinicStopped"><i data-lucide="door-open" class="h-4 w-4"></i></template>
-            <template x-if="!clinicStopped"><i data-lucide="door-closed" class="h-4 w-4"></i></template>
+            <i data-lucide="door-closed" class="h-4 w-4 shrink-0"></i>
             <span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span>
           </button>
           <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()">
@@ -130,7 +129,7 @@
             <p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p>
             <p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p>
           </div>
-          <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+          <div class="flex gap-3 px-6 py-4">
             <button type="button" @click="stopModal.open = false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
             <button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped ? 'btn-confirm-reopen' : 'btn-confirm-stop'">
               <span x-text="stopModal.busy ? 'Please wait...' : stopModal.confirmLabel"></span>

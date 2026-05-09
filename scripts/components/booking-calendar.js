@@ -172,7 +172,7 @@ function updateClinicNotice() {
 
   if (state.clinicStatus.stoppedToday) {
     elements.clinicNotice.textContent =
-      "The clinic is not accepting bookings for today. Please select a different date.";
+      "The clinic is not accepting bookings for today.";
     elements.clinicNotice.classList.remove("hidden");
   } else {
     elements.clinicNotice.classList.add("hidden");
