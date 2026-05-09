@@ -384,7 +384,7 @@ function renderTimeSlots() {
       disabled
         ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
         : "border-[#a8c8e6] bg-[#edf6fd] text-slate-700 hover:bg-[#dbeefe]",
-      selected ? "ring-2 ring-[#315b7e] border-[#315b7e] bg-[#315b7e] text-white" : "",
+      selected ? "ring-2 ring-[#315b7e] border-[#315b7e] bg-[#edf6fd]" : "",
     ].join(" ");
 
     button.setAttribute("aria-pressed", String(selected));
