@@ -24,6 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const petModalTitle    = document.getElementById("petModalTitle");
   const petFormError     = document.getElementById("petFormError");
   const petFormSubmit    = document.getElementById("petFormSubmit");
+  const petSpecies       = document.getElementById("petSpecies");
+  const petSize          = document.getElementById("petSize");
   const logoutBtn        = document.getElementById("clientLogoutBtn");
 
   // ── Icons ─────────────────────────────────────────────
@@ -236,6 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
     petModalTitle.textContent = "Add Pet";
     petForm.reset();
     document.getElementById("petId").value = "";
+    updateSizeOptions();
     hideFormError();
     showModal();
   }
@@ -247,10 +250,11 @@ document.addEventListener("DOMContentLoaded", () => {
     petModalTitle.textContent = "Edit Pet";
     document.getElementById("petId").value    = pet.pet_id;
     document.getElementById("petName").value   = pet.pet_name || "";
-    document.getElementById("petSpecies").value= pet.species || "Dog";
+    petSpecies.value= pet.species || "Dog";
     document.getElementById("petBreed").value  = pet.breed || "";
     document.getElementById("petColor").value  = pet.color || "";
-    document.getElementById("petSize").value   = pet.size || "";
+    petSize.value   = pet.size || "";
+    updateSizeOptions();
     document.getElementById("petFurType").value= pet.fur_type || "";
     document.getElementById("petWeight").value = pet.weight || "";
     document.getElementById("petMedical").value= pet.medical_conditions || "";
@@ -271,6 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
   addPetBtn.addEventListener("click", openAddModal);
   closePetModal.addEventListener("click", closeModal);
   petModal.addEventListener("click", (e) => { if (e.target === petModal) closeModal(); });
+  petSpecies.addEventListener("change", updateSizeOptions);
 
   // ── Form submit ───────────────────────────────────────
   petForm.addEventListener("submit", async (e) => {
@@ -280,10 +285,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = document.getElementById("petId").value;
     const payload = {
       pet_name:           document.getElementById("petName").value.trim(),
-      species:            document.getElementById("petSpecies").value,
+      species:            petSpecies.value,
       breed:              document.getElementById("petBreed").value.trim() || null,
       color:              document.getElementById("petColor").value.trim() || null,
-      size:               document.getElementById("petSize").value || null,
+      size:               petSize.value || null,
       fur_type:           document.getElementById("petFurType").value || null,
       weight:             document.getElementById("petWeight").value || null,
       medical_conditions: document.getElementById("petMedical").value.trim() || null,
@@ -344,6 +349,18 @@ document.addEventListener("DOMContentLoaded", () => {
   function hideFormError() {
     petFormError.textContent = "";
     petFormError.classList.add("hidden");
+  }
+
+  function updateSizeOptions() {
+    const isCat = petSpecies.value.toLowerCase() === "cat";
+    petSize.querySelectorAll('option[value="large"], option[value="extra_large"]').forEach((option) => {
+      option.hidden = isCat;
+      option.disabled = isCat;
+    });
+
+    if (isCat && ["large", "extra_large"].includes(petSize.value)) {
+      petSize.value = "";
+    }
   }
 
   function escHtml(str) {
