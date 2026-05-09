@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Appointments | Bethlehem Animal Clinic</title>
+    <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
@@ -85,12 +85,12 @@
                 :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
-                <span>Appointments</span>
+                <span>Schedules</span>
                 <span
                   x-show="hasIncomingAppointments"
                   style="display: none"
                   class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"
-                  aria-label="Incoming appointments"
+                  aria-label="Incoming schedules"
                 ></span>
               </a>
 
@@ -236,7 +236,7 @@
         >
           <div>
             <p class="text-sm font-semibold text-[#5c7690]">Admin Panel</p>
-            <h2 class="text-lg font-extrabold text-[#1f3850]">Appointments</h2>
+            <h2 class="text-lg font-extrabold text-[#1f3850]">Schedules</h2>
           </div>
 
           <button
@@ -248,7 +248,7 @@
           </button>
         </header>
 
-        <!-- Appointments Body -->
+        <!-- Schedules Body -->
         <main
           x-data="adminDashboard()"
           class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
@@ -265,7 +265,7 @@
                   <h2
                     class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl"
                   >
-                    Appointments
+                    Schedules
                   </h2>
                   <p
                     class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]"
@@ -558,16 +558,16 @@
             >
               <template x-if="activeTab === 'incoming' && showFutureAppointments">
                 <p>
-                  Incoming displays bookings made up to three days in advance.
-                  Same-day bookings should be prioritized first, then sorted by
-                  appointment time from earliest to latest.
+                  Incoming pre-registrations made up to three days in advance.
+                  Same-day pre-registrations should be prioritized first, then sorted by
+                  schedule time from earliest to latest.
                 </p>
               </template>
 
               <template x-if="activeTab === 'incoming' && !showFutureAppointments">
                 <p>
-                  Incoming displays today's bookings only. Open Appointments to
-                  view upcoming bookings scheduled for future dates.
+                  Incoming displays today's pre-registrations only. Open Schedules to
+                  view upcoming pre-registrations scheduled for future dates.
                 </p>
               </template>
 
@@ -575,15 +575,14 @@
                 <p>
                   Queued displays pets already present in the clinic and waiting
                   for their turn. Clicking <strong>Check-in</strong> should move
-                  a booking from Incoming to Queued.
+                  pre-register from Incoming to Queued.
                 </p>
               </template>
 
               <template x-if="activeTab === 'in-progress'">
                 <p>
                   In-Progress displays pets currently receiving grooming
-                  services. Clicking <strong>Start Grooming</strong> should move
-                  a booking from Queued to In-Progress.
+                  services. Clicking <strong>Start Grooming</strong> should from Queued to In-Progress.
                 </p>
               </template>
 
@@ -605,7 +604,7 @@
 
               <template x-if="activeTab === 'no-show'">
                 <p>
-                  No-Show displays bookings that were automatically flagged because
+                  No-Show pre-registrations that were automatically flagged because
                   the customer did not check in 30 minutes after their time window ended.
                   <strong>Late Check-in</strong> is available until 5:00 PM on the same day.
                 </p>
@@ -634,11 +633,11 @@
                 </div>
 
                 <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No incoming bookings yet
+                  No incoming schedules yet
                 </p>
 
                 <p class="mt-2 text-sm text-slate-500">
-                  Bookings scheduled up to 3 days ahead will appear here.
+                  Customer Arrival that's scheduled up to 3 days will appear here.
                 </p>
               </div>
             </template>
@@ -649,7 +648,7 @@
             <!--
             BACKEND DEVELOPER:
 
-            This section renders Incoming appointment cards.
+            This section renders Incoming schedule cards.
 
             DO NOT REMOVE the HTML structure below.
             Only replace the data source (incomingList) with real API data.
@@ -670,8 +669,8 @@
             }
 
             BUSINESS RULES:
-            - Same-day bookings FIRST
-            - Then sort by appointment time (earliest first)
+            - Same-day pre-registrations FIRST
+            - Then sort by schedule time (earliest first)
             - Then future dates
 
             NOTES:
@@ -1907,7 +1906,7 @@
               <!-- Header -->
               <div class="flex items-center justify-between bg-[#315b7e] px-6 py-4">
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70">Booking Details</p>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70">PRE-REGISTER DETAILS</p>
                   <h4 class="text-lg font-bold text-white" x-text="detailsBooking?.bookingReference ?? '—'"></h4>
                 </div>
                 <button type="button" @click="closeDetailsModal()" class="text-white/70 hover:text-white">

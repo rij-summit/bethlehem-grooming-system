@@ -166,7 +166,7 @@
             <div>
               <h2 class="text-3xl font-bold text-[#2f4b66]">Dashboard</h2>
               <p class="text-slate-500 mt-1">
-                Here's a quick overview of your pets and grooming appointments.
+                Here's a quick overview of your pets and grooming schedules
               </p>
             </div>
 
@@ -178,7 +178,7 @@
                 <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
                 <input
                   type="text"
-                  placeholder="Search appointments or pet name..."
+                  placeholder="Search schedules or pet name..."
                   class="w-full bg-transparent outline-none text-sm"
                 />
               </div>
@@ -214,12 +214,12 @@
                 </div>
               </div>
 
-              <!-- Book Grooming Button -->
+              <!-- Pre-register Button -->
               <a
                 href="./booking.html"
                 class="rounded-2xl bg-[#355c84] px-6 py-3 text-white font-semibold hover:bg-[#2d4f73] transition shadow-sm"
               >
-                Book Grooming
+                Pre-register
               </a>
             </div>
           </div>
@@ -259,11 +259,11 @@
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-slate-500 text-sm font-medium">
-                    Upcoming Appointments
+                    Upcoming Schedule
                   </p>
                   <h3 id="upcomingAppointmentsCount" class="text-3xl font-bold mt-2 text-[#2f4b66]">0</h3>
                   <p id="upcomingAppointmentsSummary" class="text-sm text-emerald-600 mt-1">
-                    No upcoming appointments
+                    No upcoming schedule
                   </p>
                 </div>
                 <div
@@ -359,7 +359,7 @@
                 id="upcomingReminderKicker"
                 class="uppercase tracking-[0.2em] text-xs text-white/80 font-semibold"
               >
-                No Upcoming Appointments
+                UPCOMING SCHEDULE
               </p>
 
               <h3 id="upcomingReminderTitle" class="text-2xl font-bold mt-3">
@@ -367,7 +367,7 @@
               </h3>
 
               <p id="upcomingReminderText" class="mt-3 text-white/90">
-                Start by booking your first grooming session for your pet.
+                Start by pre-registering your first grooming session for your pet.
               </p>
             </div>
 
@@ -410,11 +410,10 @@
           <!-- ===================================================== -->
           <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-            <!-- Appointments -->
+            <!-- Schedules -->
             <div class="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm">
               <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-bold text-[#2f4b66]">Appointments</h3>
-                <a href="./booking.html" class="text-[#355c84] font-semibold hover:underline">+ New Booking</a>
+                <h3 class="text-2xl font-bold text-[#2f4b66]">Schedules</h3>
               </div>
               <div id="appointmentsList">
                 <div class="text-center py-10">
@@ -459,7 +458,7 @@
         <div id="rescheduleModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
           <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between mb-5">
-              <h4 class="text-lg font-bold text-[#2f4b66]">Reschedule Booking</h4>
+              <h4 class="text-lg font-bold text-[#2f4b66]">Reschedule Site Arrival</h4>
               <button type="button" id="closeRescheduleModal" class="text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-5 h-5"></i>
               </button>
@@ -484,13 +483,13 @@
         <div id="cancelModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
           <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between mb-4">
-              <h4 class="text-lg font-bold text-[#2f4b66]">Cancel Booking</h4>
+              <h4 class="text-lg font-bold text-[#2f4b66]">Cancel Pre-registration</h4>
               <button type="button" id="closeCancelModal" class="text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-5 h-5"></i>
               </button>
             </div>
             <p id="cancelBookingRef" class="mb-1 text-sm font-semibold text-slate-700"></p>
-            <p class="mb-5 text-sm text-slate-500">Are you sure you want to cancel this booking? This action cannot be undone.</p>
+            <p class="mb-5 text-sm text-slate-500">Are you sure you want to cancel this schedule?</p>
             <div id="cancelMessage" class="hidden mb-4 rounded-xl border px-4 py-3 text-sm"></div>
             <div class="flex gap-3">
               <button type="button" id="keepBookingBtn"
@@ -499,7 +498,7 @@
               </button>
               <button type="button" id="confirmCancelBtn"
                 class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white hover:bg-red-600 transition">
-                Cancel Booking
+                Cancel
               </button>
             </div>
           </div>

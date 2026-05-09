@@ -105,7 +105,7 @@ function validatePetForm(values) {
   }
 
   if (state.pets.length >= MAX_PETS_PER_BOOKING) {
-    return `Only ${MAX_PETS_PER_BOOKING} pets are allowed per walk-in booking.`;
+    return `Only ${MAX_PETS_PER_BOOKING} pets are allowed per walk-in schedule.`;
   }
 
   return "";
@@ -170,7 +170,7 @@ function renderSelectedPets() {
           <h4 class="text-base font-bold text-[#2f4b66]">${escapeHtml(
             pet.petName,
           )}</h4>
-          <p class="mt-1 text-xs text-slate-400">Included in this walk-in booking</p>
+          <p class="mt-1 text-xs text-slate-400">Included in this walk-in schedule</p>
         </div>
 
         <button
@@ -204,7 +204,7 @@ function bindRemoveButtons() {
 
       if (petToRemove) {
         showMessage(
-          `${petToRemove.petName} was removed from this walk-in booking.`,
+          `${petToRemove.petName} was removed from this walk-in schedule.`,
           "warning",
         );
       }
@@ -234,7 +234,7 @@ function handleAddPetSubmit(event) {
 
   resetAddPetForm();
   renderSelectedPets();
-  showMessage(`${newPet.petName} was added to this walk-in booking.`, "success");
+  showMessage(`${newPet.petName} was added to this walk-in schedule.`, "success");
 }
 
 function handleBack() {

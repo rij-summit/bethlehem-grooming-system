@@ -689,7 +689,7 @@ class AdminBookingController extends Controller
                 return [
                     'id'        => 'completed-' . $booking->booking_id,
                     'type'      => 'completed',
-                    'title'     => 'Appointment completed',
+                    'title'     => 'Grooming Service Completed',
                     'subtitle'  => $this->petNames($booking) . ' - ' . $this->serviceLabel($booking),
                     'time'      => $booking->grooming_finished_at,
                 ];

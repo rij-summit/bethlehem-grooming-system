@@ -7,6 +7,7 @@ const WALK_IN_OWNER_STORAGE_KEY = "walkInOwnerStep";
 const WALK_IN_REVIEW_STORAGE_KEY = "walkInReviewStep";
 const WALK_IN_CONSENT_STORAGE_KEY = "walkInConsentStep";
 const WALK_IN_CONFIRMATION_STORAGE_KEY = "walkInBookingConfirmation";
+let consentDateValue = "";
 
 /*
   BACKEND TEAMMATE + CLAUDE CODE:
@@ -29,7 +30,7 @@ function getConsentMainMarkup() {
       </button>
 
       <section class="mt-4">
-        <h1 class="text-3xl font-bold text-[#2f4b66]">Walk-in Booking</h1>
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Select your Pet Drop-off Date and Time</h1>
 
         <div class="mt-6">
           <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
@@ -50,17 +51,17 @@ function getConsentMainMarkup() {
         <div class="mb-6 grid gap-4 md:grid-cols-2">
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Booking Type
+              Schedule Type
             </p>
-            <p class="mt-2 text-sm text-slate-600">Walk-in booking</p>
+            <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
           </div>
 
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Booking Summary
+              Schedule Summary
             </p>
             <p id="bookingSummaryText" class="mt-2 text-sm text-slate-600">
-              No booking details available yet.
+              No schedule details available yet.
             </p>
           </div>
         </div>
@@ -140,52 +141,6 @@ function getConsentMainMarkup() {
             </label>
           </section>
 
-          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
-            <div class="mb-4">
-              <h3 class="text-lg font-semibold text-[#2f4b66]">
-                Digital Signature
-                <span class="text-red-500">*</span>
-              </h3>
-              <p class="mt-1 text-sm text-slate-500">
-                By typing your name, you are providing a digital confirmation for this booking request.
-              </p>
-            </div>
-
-            <div class="space-y-4">
-              <div>
-                <label
-                  for="digitalSignature"
-                  class="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Full Name
-                </label>
-                <input
-                  id="digitalSignature"
-                  name="digital_signature"
-                  type="text"
-                  placeholder="Enter full name"
-                  class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-                />
-              </div>
-
-              <div>
-                <label
-                  for="consentDate"
-                  class="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Date
-                </label>
-                <input
-                  id="consentDate"
-                  name="consent_date"
-                  type="text"
-                  readonly
-                  class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600"
-                />
-              </div>
-            </div>
-          </section>
-
           <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <button
               id="walkInConsentBackBtn"
@@ -201,7 +156,7 @@ function getConsentMainMarkup() {
               disabled
               class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white"
             >
-              Submit Booking
+              Submit Schedule
             </button>
           </div>
         </form>
@@ -215,8 +170,6 @@ function refreshElements() {
     form: document.getElementById("walkInConsentForm"),
     mainConsentCheckbox: document.getElementById("mainConsentCheckbox"),
     sedationConsentCheckbox: document.getElementById("sedationConsentCheckbox"),
-    digitalSignatureInput: document.getElementById("digitalSignature"),
-    consentDateInput: document.getElementById("consentDate"),
     submitBookingButton: document.getElementById("submitBookingButton"),
     consentStatusMessage: document.getElementById("consentStatusMessage"),
     bookingSummaryText: document.getElementById("bookingSummaryText"),
@@ -229,7 +182,7 @@ function refreshElements() {
 
 function setCurrentDate() {
   const today = new Date();
-  elements.consentDateInput.value = today.toLocaleDateString("en-PH", {
+  consentDateValue = today.toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -259,7 +212,7 @@ function populateSummary() {
     return;
   }
 
-  elements.bookingSummaryText.textContent = "No booking details available yet.";
+  elements.bookingSummaryText.textContent = "No schedule details available yet.";
 }
 
 function getSelectedServiceSummary(item) {
@@ -280,10 +233,7 @@ function formatServiceName(value) {
 }
 
 function isFormValid() {
-  return (
-    elements.mainConsentCheckbox.checked &&
-    elements.digitalSignatureInput.value.trim().length > 0
-  );
+  return elements.mainConsentCheckbox.checked;
 }
 
 function validateConsentForm() {
@@ -294,7 +244,7 @@ function validateConsentForm() {
     elements.submitBookingButton.className =
       "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
     elements.consentStatusMessage.textContent =
-      "All required fields are complete. You can now submit this walk-in booking.";
+      "All required fields are complete. You can now submit this walk-in schedule.";
     elements.consentStatusMessage.className =
       "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
     return;
@@ -304,7 +254,7 @@ function validateConsentForm() {
   elements.submitBookingButton.className =
     "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
   elements.consentStatusMessage.textContent =
-    "Please check the grooming consent and enter a digital signature before submitting.";
+    "Please check the grooming consent before submitting.";
   elements.consentStatusMessage.className =
     "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
 }
@@ -355,8 +305,8 @@ function getConsentPayload() {
   return {
     groomingAgreementAccepted: elements.mainConsentCheckbox.checked,
     sedationConsentAccepted: elements.sedationConsentCheckbox.checked,
-    digitalSignature: elements.digitalSignatureInput.value.trim(),
-    consentDate: elements.consentDateInput.value,
+    digitalSignature: "",
+    consentDate: consentDateValue,
   };
 }
 
@@ -385,9 +335,7 @@ function restoreConsentDraft() {
   elements.sedationConsentCheckbox.checked = Boolean(
     savedDraft.sedationConsentAccepted,
   );
-  elements.digitalSignatureInput.value = savedDraft.digitalSignature || "";
-  elements.consentDateInput.value =
-    savedDraft.consentDate || elements.consentDateInput.value;
+  consentDateValue = savedDraft.consentDate || consentDateValue;
 }
 
 function buildWalkInConfirmation(consentPayload) {
@@ -485,7 +433,6 @@ function getStoredData(key) {
 function bindEvents() {
   elements.mainConsentCheckbox.addEventListener("change", handleFormStateChange);
   elements.sedationConsentCheckbox.addEventListener("change", handleFormStateChange);
-  elements.digitalSignatureInput.addEventListener("input", handleFormStateChange);
   elements.form.addEventListener("submit", handleSubmit);
   elements.backButtons.forEach((button) => {
     button.addEventListener("click", handleBackClick);
@@ -516,7 +463,7 @@ function initConsentState({ reviewPayload = null, onBack = null } = {}) {
 }
 
 export function renderWalkInConsentStep(options = {}) {
-  document.title = "Walk-in Booking - Consent & Agreement";
+  document.title = "Walk-in Schedule - Consent & Agreement";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getConsentMainMarkup();
 

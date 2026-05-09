@@ -58,7 +58,7 @@ class FlagNoShowBookings extends Command
             Notification::create([
                 'type'       => 'no_show',
                 'booking_id' => $booking->booking_id,
-                'message'    => "Booking {$booking->booking_reference} was automatically marked as no-show. Window \"{$windowLabel}\" ended at {$endTime} with no check-in.",
+                'message'    => "Pre-registration {$booking->booking_reference} was automatically marked as no-show. Window \"{$windowLabel}\" ended at {$endTime} with no check-in.",
                 'is_read'    => 0,
                 'created_at' => now(),
             ]);

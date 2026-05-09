@@ -125,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = "./booking-confirmed.html";
     } catch (error) {
       submitBookingButton.disabled = false;
-      submitBookingButton.textContent = "Submit Booking";
+      submitBookingButton.textContent = "Submit Registration";
 
       const existingBookingId = error.errors?.existing_booking_id;
       if (existingBookingId) {

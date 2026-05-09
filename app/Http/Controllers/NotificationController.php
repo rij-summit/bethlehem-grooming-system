@@ -20,7 +20,7 @@ class NotificationController extends Controller
                 return [
                     'notification_id' => $n->notification_id,
                     'type'            => $n->type,
-                    'message'         => $n->message,
+                    'message'         => $this->formatNotificationMessage($n->message),
                     'is_read'         => (bool) $n->is_read,
                     'created_at'      => $n->created_at,
                     'booking_reference' => $n->booking?->booking_reference,
@@ -65,5 +65,24 @@ class NotificationController extends Controller
             'success' => true,
             'message' => 'All notifications marked as read.',
         ]);
+    }
+
+    private function formatNotificationMessage(?string $message): string
+    {
+        $text = (string) $message;
+
+        $text = preg_replace(
+            '/\bNew booking\s+(BAC-[A-Za-z0-9-]+)/i',
+            'New Pre-registration $1',
+            $text
+        );
+
+        $text = preg_replace(
+            '/\bBooking\s+(BAC-[A-Za-z0-9-]+)/i',
+            'Pre-registration $1',
+            $text
+        );
+
+        return $text;
     }
 }

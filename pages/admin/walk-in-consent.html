@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Walk-in Booking - Consent & Agreement</title>
+    <title>Walk-in Schedule - Consent & Agreement</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
   </head>
@@ -20,7 +20,7 @@
       </button>
 
       <section class="mt-4">
-        <h1 class="text-3xl font-bold text-[#2f4b66]">Walk-in Booking</h1>
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Select your Pet Drop-off Date and Time</h1>
 
         <div class="mt-6">
           <div
@@ -49,19 +49,19 @@
             <p
               class="text-xs font-semibold uppercase tracking-wide text-slate-400"
             >
-              Booking Type
+              Schedule Type
             </p>
-            <p class="mt-2 text-sm text-slate-600">Walk-in booking</p>
+            <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
           </div>
 
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <p
               class="text-xs font-semibold uppercase tracking-wide text-slate-400"
             >
-              Booking Summary
+              Schedule Summary
             </p>
             <p id="bookingSummaryText" class="mt-2 text-sm text-slate-600">
-              No booking details available yet.
+              No schedule details available yet.
             </p>
           </div>
         </div>
@@ -151,52 +151,6 @@
             </label>
           </section>
 
-          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
-            <div class="mb-4">
-              <h3 class="text-lg font-semibold text-[#2f4b66]">
-                Digital Signature
-                <span class="text-red-500">*</span>
-              </h3>
-              <p class="mt-1 text-sm text-slate-500">
-                By typing your name, you are providing a digital confirmation for this booking request.
-              </p>
-            </div>
-
-            <div class="space-y-4">
-              <div>
-                <label
-                  for="digitalSignature"
-                  class="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Full Name
-                </label>
-                <input
-                  id="digitalSignature"
-                  name="digital_signature"
-                  type="text"
-                  placeholder="Enter full name"
-                  class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-                />
-              </div>
-
-              <div>
-                <label
-                  for="consentDate"
-                  class="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Date
-                </label>
-                <input
-                  id="consentDate"
-                  name="consent_date"
-                  type="text"
-                  readonly
-                  class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600"
-                />
-              </div>
-            </div>
-          </section>
-
           <div
             class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
           >
@@ -214,7 +168,7 @@
               disabled
               class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white"
             >
-              Submit Booking
+              Submit Schedule
             </button>
           </div>
         </form>

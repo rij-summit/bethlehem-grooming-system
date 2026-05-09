@@ -85,12 +85,12 @@
                 :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
-                <span>Appointments</span>
+                <span>Schedules</span>
                 <span
                   x-show="hasIncomingAppointments"
                   style="display: none"
                   class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"
-                  aria-label="Incoming appointments"
+                  aria-label="Incoming schedules"
                 ></span>
               </a>
 
@@ -502,7 +502,7 @@
                       <i data-lucide="clock-3" class="h-6 w-6"></i>
                     </div>
                     <p class="mt-3 text-sm font-medium text-[#2f4b66]">No queued pets yet</p>
-                    <p class="mt-1 text-xs text-slate-400">Checked-in and in-progress appointments will appear here.</p>
+                    <p class="mt-1 text-xs text-slate-400">Checked-in and in-progress schedules will appear here.</p>
                   </div>
                 </template>
 
@@ -548,7 +548,7 @@
                       <i data-lucide="activity" class="h-6 w-6"></i>
                     </div>
                     <p class="mt-3 text-sm font-medium text-[#2f4b66]">No recent activity yet</p>
-                    <p class="mt-1 text-xs text-slate-400">Check-ins, completed appointments, and payments will appear here.</p>
+                    <p class="mt-1 text-xs text-slate-400">Check-ins, completed schedules, and payments will appear here.</p>
                   </div>
                 </template>
 

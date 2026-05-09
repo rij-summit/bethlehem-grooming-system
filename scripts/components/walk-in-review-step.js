@@ -42,7 +42,7 @@ function getReviewMainMarkup() {
       </button>
 
       <section class="mt-4">
-        <h1 class="text-3xl font-bold text-[#2f4b66]">Review Walk-in Booking</h1>
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Review your selected drop-off Schedule</h1>
 
         <div class="mt-6">
           <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
@@ -57,15 +57,15 @@ function getReviewMainMarkup() {
 
       <section class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8">
         <div class="mb-6">
-          <h2 class="text-2xl font-bold text-[#2f4b66]">Booking Review</h2>
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Schedule Review</h2>
         </div>
 
         <div class="mb-6 grid gap-4 md:grid-cols-2">
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Booking Type
+              Schedule Type
             </p>
-            <p class="mt-2 text-sm text-slate-600">Walk-in booking</p>
+            <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
           </div>
 
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -80,10 +80,8 @@ function getReviewMainMarkup() {
 
         <div
           id="reviewNotice"
-          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
-        >
-          Review details will appear here.
-        </div>
+          class="hidden"
+        ></div>
 
         <div id="reviewSelections" class="space-y-6"></div>
 
@@ -209,7 +207,7 @@ function renderEmptyState(message) {
   elements.totalPriceHeading.textContent = "Total Price";
   elements.totalPriceText.textContent = "P0";
   elements.totalPriceSubtext.textContent =
-    "Review data is unavailable until the earlier walk-in booking steps are completed.";
+    "Review data is unavailable until the earlier walk-in schedule steps are completed.";
   elements.confirmBookingBtn.disabled = true;
   elements.confirmBookingBtn.classList.add("opacity-50", "cursor-not-allowed");
 }
@@ -229,36 +227,8 @@ function renderSummary() {
 }
 
 function renderReviewNotice() {
-  if (!state.reviewPayload) {
-    return;
-  }
-
-  elements.reviewNotice.className =
-    "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
   elements.reviewNotice.innerHTML = "";
-
-  const headline = document.createElement("p");
-  headline.className = "font-semibold";
-  headline.textContent = state.reviewPayload.isEstimate
-    ? "This booking contains estimated pricing details."
-    : "All selected pets are ready for final confirmation.";
-
-  elements.reviewNotice.appendChild(headline);
-
-  const lines = state.reviewPayload.notices.length
-    ? state.reviewPayload.notices
-    : ["Each pet is matched to its selected service and pricing summary below."];
-
-  const list = document.createElement("div");
-  list.className = "mt-2 space-y-1";
-
-  lines.forEach((lineText) => {
-    const line = document.createElement("p");
-    line.textContent = lineText;
-    list.appendChild(line);
-  });
-
-  elements.reviewNotice.appendChild(list);
+  elements.reviewNotice.className = "hidden";
 }
 
 function renderReviewSelections() {
@@ -496,7 +466,7 @@ function initReviewState({ pets = [], petSelections = [], onBack = null } = {}) 
 }
 
 export function renderWalkInReviewStep(options = {}) {
-  document.title = "Walk-in Booking - Review";
+  document.title = "Walk-in Schedule - Review";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getReviewMainMarkup();
 

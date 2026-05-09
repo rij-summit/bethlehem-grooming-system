@@ -245,7 +245,7 @@ class BookingController extends Controller
         Notification::create([
             'type'       => 'booked',
             'booking_id' => $booking->booking_id,
-            'message'    => "New booking {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
+            'message'    => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
             'is_read'    => 0,
             'created_at' => now(),
         ]);
@@ -432,7 +432,7 @@ class BookingController extends Controller
         Notification::create([
             'type'       => 'cancelled',
             'booking_id' => $booking->booking_id,
-            'message'    => "Booking {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
+            'message'    => "Pre-registration {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
             'is_read'    => 0,
             'created_at' => now(),
         ]);
@@ -505,7 +505,7 @@ class BookingController extends Controller
         Notification::create([
             'type'       => 'rescheduled',
             'booking_id' => $booking->booking_id,
-            'message'    => "Booking {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
+            'message'    => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
             'is_read'    => 0,
             'created_at' => now(),
         ]);

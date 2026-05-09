@@ -452,7 +452,7 @@
       renderPastGroomingSummary(history);
     } catch {
       appointmentsList.innerHTML =
-        '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load appointments.</p></div>';
+        '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load schedule.</p></div>';
     }
   }
 
@@ -486,7 +486,7 @@
       appointmentsList.innerHTML = `
         <div class="text-center py-10">
           <i data-lucide="calendar-x" class="w-10 h-10 mx-auto text-slate-300"></i>
-          <p class="mt-3 text-slate-400 text-sm">No upcoming appointments.</p>
+          <p class="mt-3 text-slate-400 text-sm">No upcoming schedule.</p>
         </div>`;
       if (window.lucide) lucide.createIcons();
       return;
@@ -604,8 +604,8 @@
 
     if (upcomingAppointmentsSummaryEl) {
       upcomingAppointmentsSummaryEl.textContent = count
-        ? `${count} appointment${count === 1 ? "" : "s"} scheduled`
-        : "No upcoming appointments";
+        ? `${count} active schedule`
+        : "No upcoming schedule";
       upcomingAppointmentsSummaryEl.className = count
         ? "text-sm text-emerald-600 mt-1"
         : "text-sm text-slate-500 mt-1";
@@ -618,16 +618,16 @@
     const nextBooking = getNextUpcomingBooking(bookings);
 
     if (!nextBooking) {
-      if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "No Upcoming Appointments";
+      if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "UPCOMING SCHEDULE";
       if (upcomingReminderTitleEl) upcomingReminderTitleEl.textContent = "You don't have any scheduled grooming yet";
-      if (upcomingReminderTextEl) upcomingReminderTextEl.textContent = "Start by booking your first grooming session for your pet.";
+      if (upcomingReminderTextEl) upcomingReminderTextEl.textContent = "Start by pre-registering your first grooming session for your pet.";
       return;
     }
 
     const timeLabel = nextBooking.time_window?.window_label ?? "Time to be confirmed";
     const petNames = getPetNamesLabel(nextBooking);
 
-    if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "Upcoming Appointment";
+    if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "UPCOMING SCHEDULE";
     if (upcomingReminderTitleEl) {
       upcomingReminderTitleEl.textContent =
         `${nextBooking.booking_reference} on ${formatDate(nextBooking.booking_date)}`;
@@ -913,7 +913,7 @@
     cancelBookingRefEl.textContent = booking.booking_reference;
     hideCancelMessage();
     confirmCancelBtn.disabled = false;
-    confirmCancelBtn.textContent = "Cancel Booking";
+    confirmCancelBtn.textContent = "Cancel";
     cancelModal.classList.remove("hidden");
     cancelModal.classList.add("flex");
     if (window.lucide) lucide.createIcons();
@@ -952,7 +952,7 @@
     } catch (error) {
       showCancelMessage("error", error.message || "Cancellation failed. Please try again.");
       confirmCancelBtn.disabled = false;
-      confirmCancelBtn.textContent = "Cancel Booking";
+      confirmCancelBtn.textContent = "Cancel";
     }
   });
 

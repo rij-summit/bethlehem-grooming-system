@@ -163,7 +163,7 @@ function populateSummary(data) {
 function renderMissingPetState() {
   elements.petServiceSelections.innerHTML = `
     <div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-      No pet was found in this booking draft. Please go back to Step 2 and select at least one pet before continuing.
+      No pet was found in this pre-register draft. Please go back to Step 2 and select at least one pet before continuing.
     </div>
   `;
 

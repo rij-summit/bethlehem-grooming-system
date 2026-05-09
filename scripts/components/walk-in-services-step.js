@@ -44,7 +44,7 @@ function getServicesMainMarkup() {
 
         <div class="mt-4">
           <h1 class="text-3xl font-bold text-[#2f4b66]">
-            Walk-in Booking
+            Select your Grooming Services
           </h1>
         </div>
 

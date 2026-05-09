@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Appointment Confirmed</title>
+    <title>Pet Drop-off Arrival Confirmed</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
   </head>
@@ -15,7 +15,7 @@
       BACKEND TEAMMATE + CLAUDE CODE:
       This admin/staff confirmation currently reads a frontend-only browser
       payload. Once the walk-in submit endpoint exists, render the saved
-      booking response here, including the official reference number and
+      schedule response here, including the official reference number and
       server-confirmed details.
     -->
     <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
@@ -40,10 +40,10 @@
         </div>
 
         <h1 class="mt-4 text-3xl font-bold text-[#2f4b66]">
-          Appointment Confirmed
+          Pet Drop-off Arrival Confirmed
         </h1>
         <p class="mt-2 text-sm text-slate-500">
-          Walk-in booking details are ready for confirmation and printing.
+          Thank you for trusting your pet with Bethlehem Animal Clinic
         </p>
       </section>
 
@@ -77,7 +77,7 @@
             <p
               class="text-xs font-semibold uppercase tracking-wide text-slate-400"
             >
-              Booking Ref No.
+              REGISTRATION REF NO.
             </p>
             <p
               id="bookingReferenceNumber"
@@ -92,7 +92,7 @@
           id="confirmationStatus"
           class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
         >
-          Walk-in confirmation details are shown below.
+          Pet drop-off confirmation details are shown below.
         </div>
 
         <div class="space-y-6">
@@ -264,7 +264,7 @@
           <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
             <div class="mb-4">
               <h3 class="text-lg font-semibold text-[#2f4b66]">
-                Booking Schedule
+                Pet Drop-off Schedule
               </h3>
             </div>
 
@@ -273,10 +273,10 @@
                 <p
                   class="text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Appointment Date
+                  Pet Drop-off date
                 </p>
                 <p id="appointmentDate" class="mt-2 text-sm text-slate-700">
-                  No booking date selected.
+                  No pet drop-off date selected.
                 </p>
               </div>
 
@@ -284,10 +284,10 @@
                 <p
                   class="text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Appointment Time
+                  Pet Drop-off time
                 </p>
                 <p id="appointmentTime" class="mt-2 text-sm text-slate-700">
-                  No booking time selected.
+                  No pet drop-off time selected.
                 </p>
               </div>
             </div>
@@ -339,20 +339,6 @@
                 <p
                   class="text-xs font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  Digital Signature
-                </p>
-                <p
-                  id="digitalSignatureValue"
-                  class="mt-2 text-sm text-slate-700"
-                >
-                  No signature available.
-                </p>
-              </div>
-
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
                   Consent Date
                 </p>
                 <p id="consentDateValue" class="mt-2 text-sm text-slate-700">
@@ -362,6 +348,7 @@
             </div>
           </section>
         </div>
+
       </section>
 
       <div
@@ -371,7 +358,7 @@
           href="./appointments.html"
           class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
         >
-          Back to Appointments
+          Back to Schedules
         </a>
 
         <button

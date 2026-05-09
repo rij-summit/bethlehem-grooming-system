@@ -1185,7 +1185,7 @@ body.customer-detail-modal-open {
   }
 
   #printableConfirmation > div:first-child::after {
-    content: "Appointment Confirmed";
+    content: "Pet Drop-off Arrival Confirmed";
     order: 1;
     grid-column: 1 / -1;
     margin-bottom: 2mm;

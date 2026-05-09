@@ -86,7 +86,7 @@ class ClinicClosureController extends Controller
             Notification::create([
                 'type'       => 'no_show',
                 'booking_id' => $booking->booking_id,
-                'message'    => "Booking {$booking->booking_reference} was marked as no-show. Clinic stopped receiving for today.",
+                'message'    => "Pre-registration {$booking->booking_reference} was marked as no-show. Clinic stopped receiving for today.",
                 'is_read'    => 0,
                 'created_at' => now(),
             ]);

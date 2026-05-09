@@ -56,8 +56,8 @@
               </a>
               <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
-                <span>Appointments</span>
-                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming appointments"></span>
+                <span>Schedules</span>
+                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming schedules"></span>
               </a>
             </div>
           </div>
@@ -347,7 +347,7 @@
                         </span>
                         <span class="flex items-center gap-1.5">
                           <i data-lucide="clipboard-list" class="h-3.5 w-3.5"></i>
-                          <span x-text="customer.bookingCount + ' booking' + (customer.bookingCount !== 1 ? 's' : '')"></span>
+                          <span x-text="customer.bookingCount + ' visit' + (customer.bookingCount !== 1 ? 's' : '')"></span>
                         </span>
                       </div>
 
@@ -572,8 +572,8 @@
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatDate(detailModal.customer?.joinedAt)"></p>
                       </div>
                       <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Bookings</p>
-                        <p class="mt-1 font-semibold text-slate-800" x-text="(detailModal.customer?.bookingCount ?? 0) + ' booking' + ((detailModal.customer?.bookingCount ?? 0) !== 1 ? 's' : '')"></p>
+                        <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Visits</p>
+                        <p class="mt-1 font-semibold text-slate-800" x-text="(detailModal.customer?.bookingCount ?? 0) + ' visit' + ((detailModal.customer?.bookingCount ?? 0) !== 1 ? 's' : '')"></p>
                       </div>
                       <div x-show="detailModal.customer?.isArchived" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Archived</p>

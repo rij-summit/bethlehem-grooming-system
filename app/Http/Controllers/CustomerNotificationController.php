@@ -25,7 +25,7 @@ class CustomerNotificationController extends Controller
                 return [
                     'id'              => $n->id,
                     'type'            => $n->type,
-                    'message'         => $n->message,
+                    'message'         => $this->formatNotificationMessage($n->message),
                     'display_message' => $this->formatCustomerNotificationMessage($n, $petNames),
                     'pet_names'       => $petNames,
                     'is_read'         => (bool) $n->is_read,
@@ -54,7 +54,7 @@ class CustomerNotificationController extends Controller
             'notifications'   => $notifications,
             'pickup_alert'    => $pickupNotif ? [
                 'id'              => $pickupNotif->id,
-                'message'         => $pickupNotif->message,
+                'message'         => $this->formatNotificationMessage($pickupNotif->message),
                 'display_message' => $this->formatCustomerNotificationMessage($pickupNotif, $pickupPetNames),
                 'pet_names'       => $pickupPetNames,
                 'booking_id'      => $pickupNotif->booking_id,
@@ -101,7 +101,7 @@ class CustomerNotificationController extends Controller
     private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
     {
         if (empty($petNames)) {
-            return $notification->message;
+            return $this->formatNotificationMessage($notification->message);
         }
 
         $subject = $this->formatNameList($petNames);
@@ -115,12 +115,31 @@ class CustomerNotificationController extends Controller
             'picked_up'        => "{$subject} " . ($isPlural ? 'have' : 'has') . " been released. Thank you for visiting Bethlehem Animal Clinic!",
             'reminder_24h'     => $timeLabel
                 ? "Reminder: {$subject}'s grooming appointment is tomorrow at {$timeLabel}. Please don't forget!"
-                : $notification->message,
+                : $this->formatNotificationMessage($notification->message),
             'reminder_3h'      => $timeLabel
                 ? "Heads up! {$subject}'s grooming appointment is in about 3 hours at {$timeLabel}. See you soon!"
-                : $notification->message,
-            default            => $notification->message,
+                : $this->formatNotificationMessage($notification->message),
+            default            => $this->formatNotificationMessage($notification->message),
         };
+    }
+
+    private function formatNotificationMessage(?string $message): string
+    {
+        $text = (string) $message;
+
+        $text = preg_replace(
+            '/\bNew booking\s+(BAC-[A-Za-z0-9-]+)/i',
+            'New Pre-registration $1',
+            $text
+        );
+
+        $text = preg_replace(
+            '/\bBooking\s+(BAC-[A-Za-z0-9-]+)/i',
+            'Pre-registration $1',
+            $text
+        );
+
+        return $text;
     }
 
     private function formatNameList(array $names): string

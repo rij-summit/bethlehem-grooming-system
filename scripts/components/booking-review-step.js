@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
     renderEmptyState(
-      "No pets were found in the current booking draft. Please go back to Step 2 and Step 3 before reviewing.",
+      "No pets were found in the current pre-register draft. Please go back to Step 2 and Step 3 before reviewing.",
     );
     bindEvents();
     return;
@@ -93,7 +93,7 @@ function renderEmptyState(message) {
   elements.totalPriceHeading.textContent = "Total Price";
   elements.totalPriceText.textContent = "P0";
   elements.totalPriceSubtext.textContent =
-    "Review data is unavailable until the earlier booking steps are completed.";
+    "Review data is unavailable until the earlier pre-registration steps are completed.";
   elements.confirmBookingBtn.disabled = true;
   elements.confirmBookingBtn.classList.add("opacity-50", "cursor-not-allowed");
 }

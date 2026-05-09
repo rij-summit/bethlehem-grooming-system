@@ -77,7 +77,7 @@ function renderScheduleSummary() {
 
   if (!schedule || !schedule.date || !schedule.time) {
     elements.bookingScheduleSummary.textContent =
-      "No selected schedule found. Please go back to Step 1 and choose a valid booking time.";
+      "No selected schedule found. Please go back to Step 1 and choose a valid pre-registration time.";
     return;
   }
 

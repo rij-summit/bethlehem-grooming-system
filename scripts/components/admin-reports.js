@@ -451,7 +451,7 @@ function adminReports() {
         ? "across all dates"
         : `${preposition} ${this.servicesPeriodLabel}`;
 
-      return `${this.formatWholeNumber(count)} completed session${count === 1 ? "" : "s"} ${period}`;
+      return `${this.formatWholeNumber(count)} completed grooming ${period}`;
     },
 
     get transactionSummarySubtitle() {

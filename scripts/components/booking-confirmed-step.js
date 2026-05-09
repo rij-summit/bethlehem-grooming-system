@@ -33,9 +33,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /*
     BACKEND TEAMMATE + CLAUDE CODE:
-    Customer bookings already read their saved confirmation payload. Walk-in
+    Customer pre-registrations already read their saved confirmation payload. Walk-in
     confirmations still read a frontend-only payload until the backend returns
-    the official walk-in booking response.
+    the official walk-in schedule response.
   */
   const confirmation = getStoredData(
     isWalkInConfirmation ? "walkInBookingConfirmation" : "bookingConfirmation",
@@ -71,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirmation) {
       confirmationStatus.hidden = false;
       confirmationStatus.textContent =
-        "Booking data not found. Please complete the booking process from the beginning.";
+        "Schedule data not found. Please complete the scheduling process from the beginning.";
       confirmationStatus.className =
         "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
       return;
@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ownerName.textContent = "Loading...";
     ownerPhone.textContent = "Loading...";
 
-    // ── Pet info (first pet in the booking) ──────────────
+    // Pet info (first pet in the schedule)
     const firstPet = Array.isArray(confirmation.pets) ? confirmation.pets[0] : null;
 
     if (confirmation.pets?.length > 1) {
@@ -155,28 +155,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ── Schedule ──────────────────────────────────────────
     appointmentDate.textContent =
-      formatBookingDate(confirmation.booking_date) || "No date selected.";
+      formatBookingDate(confirmation.booking_date) || "No pet drop-off date selected.";
     appointmentTime.textContent =
-      formatBookingTimeRange(confirmation.booking_time) || "No time selected.";
+      formatBookingTimeRange(confirmation.booking_time) || "No pet drop-off time selected.";
 
     // ── Consent ───────────────────────────────────────────
     groomingConsentStatus.textContent =
       bookingConsentStep?.groomingAgreementAccepted ? "Agreed" : "Not confirmed";
     sedationConsentStatus.textContent =
       bookingConsentStep?.sedationConsentAccepted ? "Agreed" : "Not confirmed";
-    digitalSignatureValue.textContent =
-      bookingConsentStep?.digitalSignature || "No signature available.";
-    consentDateValue.textContent =
-      bookingConsentStep?.consentDate || "No consent date available.";
+    if (digitalSignatureValue) {
+      digitalSignatureValue.textContent =
+        bookingConsentStep?.digitalSignature || "No signature available.";
+    }
+    if (consentDateValue) {
+      consentDateValue.textContent =
+        bookingConsentStep?.consentDate || "No consent date available.";
+    }
 
     updateConfirmationStatus();
   }
 
   function updateConfirmationStatus() {
     const hasReference = Boolean(confirmation?.booking_reference);
-    const hasConsent =
-      bookingConsentStep?.groomingAgreementAccepted &&
-      bookingConsentStep?.digitalSignature;
+    const hasConsent = isWalkInConfirmation
+      ? Boolean(bookingConsentStep?.groomingAgreementAccepted)
+      : Boolean(
+          bookingConsentStep?.groomingAgreementAccepted &&
+          bookingConsentStep?.digitalSignature,
+        );
 
     if (hasReference && hasConsent) {
       confirmationStatus.hidden = true;
@@ -225,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "Not provided";
 
       ownerName.textContent = fullName;
-      ownerPhone.textContent = owner.phone || "Not provided";
+      ownerPhone.textContent = formatMobileNumber(owner.phone) || "Not provided";
       return;
     }
 
@@ -242,7 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         || user?.username
         || "Not provided";
       ownerName.textContent = fullName;
-      ownerPhone.textContent = user?.phone || "Not provided";
+      ownerPhone.textContent = formatMobileNumber(user?.phone) || "Not provided";
     } catch {
       ownerName.textContent = "Not provided";
       ownerPhone.textContent = "Not provided";
@@ -256,6 +263,22 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return null;
     }
+  }
+
+  function formatMobileNumber(value) {
+    const text = String(value ?? "").trim();
+    if (!text || text === "Not provided") return "";
+
+    const digits = text.replace(/\D/g, "");
+    const localDigits = digits.startsWith("639") && digits.length === 12
+      ? `0${digits.slice(2)}`
+      : digits;
+
+    if (localDigits.length === 11) {
+      return `${localDigits.slice(0, 4)}-${localDigits.slice(4, 7)}-${localDigits.slice(7)}`;
+    }
+
+    return text;
   }
 
   function guardAdminAccess() {
