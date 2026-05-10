@@ -625,6 +625,10 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab(booking.paid ? "to-be-picked-up" : "for-payment");
           },
+          cancel: async ({ booking }) => {
+            await API.adminCancelBooking(booking.id);
+            await this.loadAdminBookings();
+          },
           archive: async ({ booking }) => {
             await API.adminArchiveBooking(booking.id);
             await this.loadAdminBookings();
@@ -947,7 +951,7 @@ function adminDashboard() {
         } else if (action === "markDone") {
           await this.markBookingDone(booking);
         } else if (action === "cancel") {
-          this.cancelBookingFrontendOnly(booking);
+          await this.cancelBooking(booking);
         } else if (action === "revertQueued") {
           this.revertQueuedBookingFrontendOnly(booking);
         } else if (action === "revertInProgress") {
@@ -963,8 +967,11 @@ function adminDashboard() {
       await this.runBookingAction("checkIn", booking);
     },
 
-    // Frontend-only cancellation: hides the card in this browser session.
-    // BACKEND: replace this with a real cancel endpoint/status when cancellation is ready server-side.
+    async cancelBooking(booking) {
+      await this.runBookingAction("cancel", booking);
+    },
+
+    // Legacy local-only fallback used only if a custom integration calls it directly.
     cancelBookingFrontendOnly(booking) {
       if (!booking || booking.id === undefined || booking.id === null) {
         return;
@@ -1736,6 +1743,7 @@ function adminDashboard() {
         checkIn: "queued",
         startGrooming: "in-progress",
         markDone: "for-payment",
+        cancel: "cancelled",
         archive: "archived",
         pickedUp: "archived",
       };
@@ -1774,6 +1782,7 @@ function adminDashboard() {
         checkIn: "Checking in...",
         startGrooming: "Grooming...",
         markDone: "Finishing...",
+        cancel: "Cancelling...",
         archive: "Archiving...",
       };
 

@@ -14,6 +14,28 @@ use App\Models\Payment;
 class AdminBookingController extends Controller
 {
     private const MAX_CAPACITY = 20;
+    private const INTAKE_STATUSES = [
+        'checked_in',
+        'in_progress',
+        'for_payment',
+        'for_pickup',
+        'released',
+    ];
+
+    private function dailyIntakeCount(string $date): int
+    {
+        return Booking::where(function ($query) use ($date) {
+                $query->whereDate('dropped_off_at', $date)
+                    ->orWhere(function ($fallback) use ($date) {
+                        $fallback->whereNull('dropped_off_at')
+                            ->where('booking_date', $date)
+                            ->whereIn('status', self::INTAKE_STATUSES);
+                    });
+            })
+            ->whereIn('status', self::INTAKE_STATUSES)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->count();
+    }
 
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
     public function index(Request $request)
@@ -82,6 +104,7 @@ class AdminBookingController extends Controller
         $todayCompletedCount = Booking::whereDate('grooming_finished_at', $today->toDateString())
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->count();
+        $todayIntakeCount = $this->dailyIntakeCount($today->toDateString());
 
         $weekStart  = Carbon::now()->startOfWeek()->toDateString();
         $weekEnd    = Carbon::now()->endOfWeek()->toDateString();
@@ -118,7 +141,7 @@ class AdminBookingController extends Controller
             ],
             'recentActivity'  => $this->recentActivity(),
             'capacity'       => [
-                'current' => $todayCompletedCount,
+                'current' => $todayIntakeCount,
                 'max'     => self::MAX_CAPACITY,
             ],
         ]);
@@ -305,6 +328,31 @@ class AdminBookingController extends Controller
 
     // ── ARCHIVE ───────────────────────────────────────────
     // for_pickup (legacy) → archived
+    // Cancel a booking and remove it from active capacity.
+    public function cancel($id)
+    {
+        $booking = Booking::find($id);
+
+        if (!$booking) {
+            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+        }
+
+        if (in_array($booking->status, ['cancelled', 'archived', 'no_show'])) {
+            return response()->json(['success' => false, 'message' => 'This booking cannot be cancelled.'], 422);
+        }
+
+        $booking->update([
+            'status'              => 'cancelled',
+            'cancellation_reason' => 'Cancelled by clinic staff.',
+            'cancel_count'        => ($booking->cancel_count ?? 0) + 1,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking cancelled successfully.',
+        ]);
+    }
+
     public function archive($id)
     {
         $booking = Booking::find($id);

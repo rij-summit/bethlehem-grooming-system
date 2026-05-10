@@ -16,6 +16,28 @@ use App\Models\Service;
 class BookingController extends Controller
 {
     private const DAILY_CAPACITY = 20;
+    private const INTAKE_STATUSES = [
+        'checked_in',
+        'in_progress',
+        'for_payment',
+        'for_pickup',
+        'released',
+    ];
+
+    private function dailyIntakeCount(string $date): int
+    {
+        return Booking::where(function ($query) use ($date) {
+                $query->whereDate('dropped_off_at', $date)
+                    ->orWhere(function ($fallback) use ($date) {
+                        $fallback->whereNull('dropped_off_at')
+                            ->where('booking_date', $date)
+                            ->whereIn('status', self::INTAKE_STATUSES);
+                    });
+            })
+            ->whereIn('status', self::INTAKE_STATUSES)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->count();
+    }
 
     // ── GET AVAILABLE TIME WINDOWS ────────────────────────
     public function getTimeslots(Request $request)
@@ -319,9 +341,7 @@ class BookingController extends Controller
     {
         $today = Carbon::today()->toDateString();
 
-        $used = Booking::where('booking_date', $today)
-            ->whereNotIn('status', ['cancelled'])
-            ->count();
+        $used = $this->dailyIntakeCount($today);
 
         $queued = Booking::where('booking_date', $today)
             ->where('status', 'checked_in')
