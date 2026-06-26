@@ -34,7 +34,7 @@ class AdminBookingController extends Controller
             })
             ->whereIn('status', self::INTAKE_STATUSES)
             ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->count();
+            ->sum('number_of_pets');
     }
 
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
