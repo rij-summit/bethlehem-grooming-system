@@ -414,10 +414,13 @@
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
 
-  const today = new Date().toISOString().split("T")[0];
-  rescheduleDate.min = today;
+  document.addEventListener("DOMContentLoaded", async () => {
+    await window.AppClock?.load?.();
 
-  document.addEventListener("DOMContentLoaded", () => {
+    if (rescheduleDate) {
+      rescheduleDate.min = window.AppClock?.todayKey?.() || new Date().toISOString().split("T")[0];
+    }
+
     loadDashboardPets();
     loadAppointments();
     loadGroomingCapacity();

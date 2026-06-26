@@ -161,10 +161,9 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking is not in waiting status.'], 422);
         }
 
-        // DATE GUARD TEMPORARILY DISABLED FOR TESTING
-        // if ($booking->booking_date !== Carbon::today()->toDateString()) {
-        //     return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
-        // }
+        if ($booking->booking_date !== now()->toDateString()) {
+            return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
+        }
 
         $queueNumber = Booking::where('booking_date', $booking->booking_date)
             ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])

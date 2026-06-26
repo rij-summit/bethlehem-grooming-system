@@ -323,6 +323,10 @@ var API = (() => {
     return request("GET", "/me", null, token);
   }
 
+  async function getSystemClock() {
+    return request("GET", "/system/clock");
+  }
+
   async function getTimeslots(date) {
     // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
     return request("GET", `/timeslots?date=${date}`);
@@ -632,6 +636,7 @@ var API = (() => {
     signIn,
     logout,
     getMe,
+    getSystemClock,
     // Timeslots
     getTimeslots,
     // Pets

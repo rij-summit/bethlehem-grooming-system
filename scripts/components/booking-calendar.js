@@ -52,6 +52,7 @@ const elements = {
 // =========================
 
 function getManilaNowParts() {
+  const currentDate = window.AppClock?.now?.() || new Date();
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Manila",
     year: "numeric",
@@ -60,7 +61,7 @@ function getManilaNowParts() {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(currentDate);
 
   const result = {};
   for (const part of parts) {
@@ -482,6 +483,8 @@ function bindEvents() {
 // =========================
 
 export async function initBookingCalendar() {
+  await window.AppClock?.load?.();
+
   const now = getManilaNowParts();
   state.currentMonth = new Date(now.year, now.month - 1, 1);
 

@@ -479,14 +479,23 @@ function adminDashboard() {
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
+      const today = window.AppClock?.todayKey?.();
+      if (today) return today;
+
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     })(),
     get todayDate() {
+      const today = window.AppClock?.todayKey?.();
+      if (today) return today;
+
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
     get maxDate() {
+      const maxDate = window.AppClock?.dateKeyWithOffset?.(3);
+      if (maxDate) return maxDate;
+
       const d = new Date();
       d.setDate(d.getDate() + 3);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -592,6 +601,9 @@ function adminDashboard() {
         window.location.href = "../../pages/client/sign-in.html";
         return;
       }
+
+      await window.AppClock?.load?.();
+      this.selectedDate = this.todayDate;
 
       this.registerBridge();
       this.loadConfig();
@@ -2198,6 +2210,9 @@ function adminDashboard() {
 
     // Returns YYYY-MM-DD in local time (avoids UTC off-by-one at midnight PH)
     localToday() {
+      const today = window.AppClock?.todayKey?.();
+      if (today) return today;
+
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
@@ -2224,9 +2239,11 @@ function adminDashboard() {
 
     formatDateGroupLabel(dateStr) {
       const today    = this.localToday();
-      const tomorrowDate = new Date();
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
+      const tomorrow = window.AppClock?.dateKeyWithOffset?.(1) || (() => {
+        const tomorrowDate = new Date();
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        return `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
+      })();
 
       const formatted = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
         weekday: 'long',
@@ -2907,7 +2924,8 @@ function adminDashboard() {
 
     // Returns true when late check-in is still allowed (before 5 PM and clinic not stopped).
     isLateCheckInAvailable() {
-      return new Date().getHours() < 17 && !this.clinicStopped;
+      const currentMinutes = window.AppClock?.currentMinutes?.() ?? (new Date().getHours() * 60);
+      return currentMinutes < 17 * 60 && !this.clinicStopped;
     },
 
     async loadClinicStatus() {

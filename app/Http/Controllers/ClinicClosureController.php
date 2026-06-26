@@ -151,8 +151,10 @@ class ClinicClosureController extends Controller
     {
         $this->requireAdmin($request);
 
+        $today = now()->toDateString();
+
         $request->validate([
-            'start_date' => 'required|date|after_or_equal:today',
+            'start_date' => 'required|date|after_or_equal:' . $today,
             'end_date'   => 'required|date|after_or_equal:start_date',
             'reason'     => 'nullable|string|max:255',
         ]);

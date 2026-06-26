@@ -102,8 +102,10 @@ class BookingController extends Controller
     // ── SUBMIT A BOOKING ──────────────────────────────────
     public function store(Request $request)
     {
+        $today = now()->toDateString();
+
         $request->validate([
-            'booking_date'  => 'required|date|after_or_equal:today',
+            'booking_date'  => 'required|date|after_or_equal:' . $today,
             'window_id'     => 'required|exists:time_windows,window_id',
             'number_of_pets'=> 'required|integer|min:1|max:3',
             'special_notes' => 'nullable|string',
@@ -467,9 +469,11 @@ class BookingController extends Controller
     // ── RESCHEDULE A BOOKING ──────────────────────────────
     public function reschedule(Request $request)
     {
+        $today = now()->toDateString();
+
         $request->validate([
             'booking_id'    => 'required|exists:bookings,booking_id',
-            'new_date'      => 'required|date|after_or_equal:today',
+            'new_date'      => 'required|date|after_or_equal:' . $today,
             'new_window_id' => 'required|exists:time_windows,window_id',
         ]);
 
