@@ -7,6 +7,12 @@ const elements = {
   email: document.getElementById("ownerEmailAddress"),
   message: document.getElementById("walkInOwnerMessage"),
   nextButton: document.getElementById("walkInOwnerNextBtn"),
+  fieldErrors: {
+    firstName: document.getElementById("ownerFirstNameError"),
+    lastName: document.getElementById("ownerLastNameError"),
+    phone: document.getElementById("ownerPhoneNumberError"),
+    email: document.getElementById("ownerEmailAddressError"),
+  },
 };
 
 const WALK_IN_OWNER_STORAGE_KEY = "walkInOwnerStep";
@@ -15,6 +21,7 @@ const WALK_IN_FLOW_STORAGE_KEYS = [
   "walkInReviewStep",
   "walkInBookingConfirmation",
 ];
+let hasSubmittedOnce = false;
 
 /*
   BACKEND TEAMMATE + CLAUDE CODE:
@@ -35,7 +42,7 @@ function normalizePhoneNumber(value) {
   const rawValue = normalizeText(value);
   const digits = rawValue.replace(/\D/g, "");
 
-  if (/^639\d{9}$/.test(digits)) {
+  if (/^63\d{10}$/.test(digits)) {
     return `0${digits.slice(2)}`;
   }
 
@@ -48,7 +55,7 @@ function normalizePhoneNumber(value) {
 
 function isValidPhoneNumber(value) {
   const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 7 && digits.length <= 15;
+  return digits.length === 11 && digits.startsWith("09");
 }
 
 function isValidEmail(value) {
@@ -98,33 +105,28 @@ function saveOwnerDraft(values) {
   );
 }
 
-/*
-  BACKEND TEAMMATE + CLAUDE CODE:
-  These checks mirror the expected required fields for the UI. Server-side
-  validation should still enforce the final owner rules before saving.
-*/
 function validateOwner(values) {
+  const errors = {};
+
   if (!values.firstName) {
-    return "First name is required.";
+    errors.firstName = "First name is required.";
   }
 
   if (!values.lastName) {
-    return "Last name is required.";
+    errors.lastName = "Last name is required.";
   }
 
   if (!values.phone) {
-    return "Phone number is required.";
+    errors.phone = "Phone number is required.";
+  } else if (!isValidPhoneNumber(values.phone)) {
+    errors.phone = "Phone number must be 11 digits and start with 09.";
   }
 
-  if (!isValidPhoneNumber(values.phone)) {
-    return "Enter a valid phone number.";
+  if (values.email && !isValidEmail(values.email)) {
+    errors.email = "Enter a valid email address or leave it blank.";
   }
 
-  if (!isValidEmail(values.email)) {
-    return "Enter a valid email address or leave it blank.";
-  }
-
-  return "";
+  return errors;
 }
 
 function showMessage(message, variant = "default") {
@@ -145,10 +147,47 @@ function hideMessage() {
   elements.message.className = "hidden rounded-2xl border px-4 py-3 text-sm";
 }
 
+function setFieldError(fieldName, message) {
+  const errorElement = elements.fieldErrors[fieldName];
+
+  if (!errorElement) {
+    return;
+  }
+
+  if (message) {
+    errorElement.textContent = message;
+    errorElement.className = "mt-2 text-sm text-red-600";
+    return;
+  }
+
+  errorElement.textContent = "";
+  errorElement.className = "mt-2 hidden text-sm text-red-600";
+}
+
+function renderValidationErrors(values, { showAll = false } = {}) {
+  const errors = validateOwner(values);
+  const requestedFields = Object.keys(elements.fieldErrors);
+
+  requestedFields.forEach((fieldName) => {
+    const hasValue = Boolean(values[fieldName] || "");
+    const shouldShow = showAll || hasSubmittedOnce || hasValue;
+    setFieldError(fieldName, shouldShow ? errors[fieldName] || "" : "");
+  });
+
+  const firstError = requestedFields.map((fieldName) => errors[fieldName]).find(Boolean);
+
+  if (showAll || (hasSubmittedOnce && firstError)) {
+    showMessage(firstError || "Please complete the highlighted fields.", "error");
+    return;
+  }
+
+  hideMessage();
+}
+
 function syncNextButtonState() {
   const values = getFormValues();
-  const validationMessage = validateOwner(values);
-  const isReady = !validationMessage;
+  const errors = validateOwner(values);
+  const isReady = Object.keys(errors).length === 0;
 
   elements.nextButton.disabled = !isReady;
   elements.nextButton.setAttribute("aria-disabled", String(!isReady));
@@ -158,19 +197,27 @@ function syncNextButtonState() {
   return isReady;
 }
 
-function handleInput() {
-  hideMessage();
+function handleInput(event) {
+  const values = getFormValues();
+  const fieldName = event.target?.name;
+
+  if (fieldName === "phone") {
+    elements.phone.value = normalizePhoneNumber(elements.phone.value);
+  }
+
+  renderValidationErrors(values, { showAll: false });
   syncNextButtonState();
 }
 
 function handleSubmit(event) {
   event.preventDefault();
+  hasSubmittedOnce = true;
 
   const values = getFormValues();
-  const validationMessage = validateOwner(values);
+  const errors = validateOwner(values);
 
-  if (validationMessage) {
-    showMessage(validationMessage, "error");
+  if (Object.keys(errors).length > 0) {
+    renderValidationErrors(values, { showAll: true });
     syncNextButtonState();
     return;
   }
@@ -224,6 +271,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   bindEvents();
+  renderValidationErrors(getFormValues(), { showAll: false });
   syncNextButtonState();
 
   if (window.lucide) {
