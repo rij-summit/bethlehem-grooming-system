@@ -369,19 +369,13 @@ function renderTimeSlots() {
     const button = document.createElement("button");
     button.type = "button";
 
-    // Show label + remaining slots
-    const remainingText = slot.is_full
-      ? "Full"
-      : `${slot.remaining} slot${slot.remaining !== 1 ? "s" : ""} left`;
-
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
-      <span class="block text-xs mt-0.5 ${slot.is_full ? "text-red-400" : "text-slate-400"}">${remainingText}</span>
       ${slot.recommended ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>` : ""}
     `;
 
     button.className = [
-      "rounded-2xl border px-4 py-3 text-sm transition text-left",
+      "h-16 rounded-2xl border px-4 py-3 text-sm transition text-left",
       disabled
         ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
         : "border-[#a8c8e6] bg-[#edf6fd] text-slate-700 hover:bg-[#dbeefe]",

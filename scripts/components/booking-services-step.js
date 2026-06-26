@@ -135,7 +135,7 @@ function populateHiddenInputs(data) {
 }
 
 function populateSummary(data) {
-  if (data?.bookingDate || data?.bookingTime) {
+  if (elements.scheduleSummaryText && (data?.bookingDate || data?.bookingTime)) {
     elements.scheduleSummaryText.textContent =
       data.bookingScheduleText ||
       formatBookingSchedule(data.bookingDate, data.bookingTime) ||
@@ -143,6 +143,10 @@ function populateSummary(data) {
   }
 
   const selectedPets = Array.isArray(data?.pets) ? data.pets : [];
+
+  if (!elements.petSummaryText) {
+    return;
+  }
 
   if (selectedPets.length > 1) {
     elements.petSummaryText.textContent = `${selectedPets.length} pets selected: ${selectedPets
@@ -200,40 +204,29 @@ function renderPetSelectionCard(pet, index) {
       data-pet-card="${escapeHtml(pet.id)}"
       class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm md:p-6"
     >
-      <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pet ${
-            index + 1
-          }</p>
-          <h3 class="mt-1 text-2xl font-bold text-[#2f4b66]">${escapeHtml(
-            pet.petName || "Unnamed Pet",
-          )}</h3>
-          <p class="mt-2 text-sm text-slate-500">${escapeHtml(
-            formatPetTypeLabel(pet.petType),
-          )} | ${escapeHtml(pet.breed || "Breed not specified")}</p>
-        </div>
-
-        <div class="flex flex-col gap-2 md:items-end">
+      <div class="mb-6">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pet ${
+              index + 1
+            }</p>
+            <h3 class="mt-1 text-2xl font-bold text-[#2f4b66]">${escapeHtml(
+              pet.petName || "Unnamed Pet",
+            )}</h3>
+          </div>
           <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
             ${escapeHtml(formatPetSizeLabel(pet.size))}
           </span>
-          <span class="text-sm text-slate-500">${escapeHtml(
+        </div>
+
+        <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <p class="text-sm font-normal text-slate-500">${escapeHtml(
+            formatPetTypeLabel(pet.petType),
+          )} | ${escapeHtml(pet.breed || "Breed not specified")}</p>
+          <span class="text-sm text-slate-500 md:text-right">${escapeHtml(
             getPetSelectionSummaryText(pet, selection, petPricing),
           )}</span>
         </div>
-      </div>
-
-      <div class="mb-6 rounded-2xl border border-slate-200 bg-[#d9e8f4] p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Service Rules
-        </p>
-        <p class="mt-2 text-sm text-slate-600">
-          ${
-            allowsAlaCarteOnly
-              ? "Choose one package, A la Carte services, or both. Items already included in the selected package will be unavailable."
-              : "Choose one grooming package to proceed."
-          }
-        </p>
       </div>
 
       <section>
@@ -358,7 +351,7 @@ function renderAlaCarteCard(pet, selection, service, selectedPackage) {
     packageAlaCarteRules.includedAlaCarteServiceIds.includes(service.id);
   const labelClasses = [
     isChecked ? "service-option--selected" : "",
-    "flex items-start gap-3 rounded-xl border px-3 py-2 text-sm transition",
+    "flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition",
     isDisabled
       ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
       : "cursor-pointer border-slate-200 text-slate-600 hover:border-[#315b7e] hover:bg-slate-50",
@@ -377,20 +370,20 @@ function renderAlaCarteCard(pet, selection, service, selectedPackage) {
         value="${escapeHtml(service.id)}"
         data-role="ala-carte"
         data-pet-id="${escapeHtml(pet.id)}"
-        class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+        class="h-4 w-4 shrink-0 accent-[#315b7e]"
         ${isDisabled ? "disabled" : ""}
         ${isChecked ? "checked" : ""}
       />
-      <div>
-        <span class="${titleClasses}">${escapeHtml(service.name)}</span>
-        <span class="${priceClasses}">${escapeHtml(
-          formatPriceOption(service.priceOptions[0]),
-        )}</span>
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <div class="min-w-0">
+          <span class="${titleClasses}">${escapeHtml(service.name)}</span>
+          <span class="${priceClasses}">${escapeHtml(
+            formatPriceOption(service.priceOptions[0]),
+          )}</span>
+        </div>
         ${
           isDisabled
-            ? `<span class="mt-1 block text-xs font-medium text-slate-400">Included in ${escapeHtml(
-                selectedPackage?.name || "the selected package",
-              )}</span>`
+            ? `<span class="ml-auto shrink-0 rounded-full bg-slate-100 px-2 py-1 text-right text-xs font-medium text-slate-400">Included in Package</span>`
             : ""
         }
       </div>
@@ -466,42 +459,28 @@ function updateServiceNotice(validationMessage = "") {
 
   elements.serviceNotice.className = hasValidationError
     ? "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-    : allPetsReady
-      ? "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700"
-      : "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
+    : "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
 
   elements.serviceNotice.innerHTML = "";
 
-  const title = document.createElement("p");
-  title.className = "font-semibold";
-  title.textContent = hasValidationError
-    ? validationMessage
-    : allPetsReady
-      ? `${readyPetCount} of ${pets.length} pets are ready for review.`
-      : `${readyPetCount} of ${pets.length} pets have a service selected.`;
-
-  elements.serviceNotice.appendChild(title);
-
-  if (!pets.length) {
+  if (hasValidationError) {
+    const title = document.createElement("p");
+    title.className = "font-semibold";
+    title.textContent = validationMessage;
+    elements.serviceNotice.appendChild(title);
     return;
   }
 
-  const list = document.createElement("div");
-  list.className = "mt-2 space-y-1";
+  const title = document.createElement("p");
+  title.className = "text-xs font-semibold uppercase tracking-wide text-slate-400";
+  title.textContent = "Service Rules";
+  elements.serviceNotice.appendChild(title);
 
-  pets.forEach((pet) => {
-    const selection = getSelectionByPetId(pet.id);
-    const pricing = calculatePetSelectionPricing(selection, pet);
-    const line = document.createElement("p");
-    line.textContent = `${pet.petName || "Unnamed Pet"}: ${getPetSelectionSummaryText(
-      pet,
-      selection,
-      pricing,
-    )}`;
-    list.appendChild(line);
-  });
-
-  elements.serviceNotice.appendChild(list);
+  const message = document.createElement("p");
+  message.className = "mt-2";
+  message.textContent =
+    "Choose one package, A la Carte services, or both. Items already included in the selected package will be unavailable.";
+  elements.serviceNotice.appendChild(message);
 }
 
 function syncNextButtonState(isEnabled) {

@@ -27,7 +27,7 @@ import { formatBookingSchedule } from "../services/booking-format-service.js";
  * In production, this should connect to a booking draft or session endpoint.
  *
  * Recommended backend validations:
- * 1. Enforce max 2 pets per booking
+ * 1. Enforce max 10 pets per booking
  * 2. Verify selected pet belongs to authenticated user
  * 3. Save newly added pet to user's pet list
  * 4. Attach chosen pets to active booking draft
@@ -42,6 +42,7 @@ const elements = {
   existingPetSection: document.getElementById("existingPetSection"),
   existingPetEmptyState: document.getElementById("existingPetEmptyState"),
   existingPetList: document.getElementById("existingPetList"),
+  selectAllExistingPetsBtn: document.getElementById("selectAllExistingPetsBtn"),
 
   addPetSection: document.getElementById("addPetSection"),
   addPetForm: document.getElementById("addPetForm"),
@@ -52,6 +53,7 @@ const elements = {
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
   selectedPetCards: document.getElementById("selectedPetCards"),
+  removeAllSelectedPetsBtn: document.getElementById("removeAllSelectedPetsBtn"),
 
   backBtn: document.getElementById("backBtn"),
   nextBtn: document.getElementById("nextBtn"),
@@ -73,6 +75,10 @@ function escapeHtml(value) {
 }
 
 function renderScheduleSummary() {
+  if (!elements.bookingScheduleSummary) {
+    return;
+  }
+
   const schedule = getBookingSchedule();
 
   if (!schedule || !schedule.date || !schedule.time) {
@@ -147,6 +153,16 @@ function showAddPetSection() {
   elements.addPetSection.classList.remove("hidden");
 }
 
+function formatWeightLabel(weight) {
+  const value = String(weight ?? "").trim();
+
+  if (!value) {
+    return "Not specified";
+  }
+
+  return /\bkg\b/i.test(value) ? value : `${value} kg`;
+}
+
 function buildPetSummaryHtml(pet) {
   return `
     <div class="grid gap-2 text-sm text-slate-600">
@@ -157,7 +173,7 @@ function buildPetSummaryHtml(pet) {
         pet.breed || "Not specified",
       )}</p>
       <p><span class="font-semibold text-slate-700">Weight:</span> ${escapeHtml(
-        pet.weight || "Not specified",
+        formatWeightLabel(pet.weight),
       )}</p>
       <p><span class="font-semibold text-slate-700">Fur Type:</span> ${escapeHtml(
         pet.furType || "Not specified",
@@ -177,6 +193,7 @@ function renderExistingPets() {
   const bookingPets = getBookingPets();
 
   elements.existingPetList.innerHTML = "";
+  syncSelectAllButtonState(savedPets, bookingPets);
 
   if (savedPets.length === 0) {
     elements.existingPetEmptyState.classList.remove("hidden");
@@ -209,7 +226,6 @@ function renderExistingPets() {
           <h4 class="text-base font-bold text-[#2f4b66]">${escapeHtml(
             pet.petName,
           )}</h4>
-          <p class="mt-1 text-xs text-slate-400">Saved pet</p>
         </div>
         <button
           type="button"
@@ -234,6 +250,17 @@ function renderExistingPets() {
   });
 
   bindExistingPetButtons();
+}
+
+function syncSelectAllButtonState(
+  savedPets = getSavedPets(),
+  bookingPets = getBookingPets(),
+) {
+  const selectedPetIds = new Set(bookingPets.map((pet) => pet.id));
+  const hasSelectablePets = savedPets.some((pet) => !selectedPetIds.has(pet.id));
+  const bookingIsFull = bookingPets.length >= MAX_PETS_PER_BOOKING;
+
+  elements.selectAllExistingPetsBtn.disabled = !hasSelectablePets || bookingIsFull;
 }
 
 function bindExistingPetButtons() {
@@ -265,11 +292,71 @@ function bindExistingPetButtons() {
   });
 }
 
+function handleSelectAllExistingPets() {
+  const savedPets = getSavedPets();
+  const bookingPets = getBookingPets();
+  const remainingSlots = MAX_PETS_PER_BOOKING - bookingPets.length;
+
+  if (savedPets.length === 0) {
+    showMessage("You do not have any saved pets to select yet.", "warning");
+    syncSelectAllButtonState(savedPets, bookingPets);
+    return;
+  }
+
+  if (remainingSlots <= 0) {
+    showMessage(
+      `Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`,
+      "error",
+    );
+    syncSelectAllButtonState(savedPets, bookingPets);
+    return;
+  }
+
+  const selectedPetIds = new Set(bookingPets.map((pet) => pet.id));
+  const unselectedSavedPets = savedPets.filter(
+    (pet) => !selectedPetIds.has(pet.id),
+  );
+  const petsToAdd = unselectedSavedPets.slice(0, remainingSlots);
+
+  if (petsToAdd.length === 0) {
+    showMessage(
+      "All saved pets are already selected for this booking.",
+      "default",
+    );
+    syncSelectAllButtonState(savedPets, bookingPets);
+    return;
+  }
+
+  try {
+    petsToAdd.forEach((pet) => addPetToBooking(pet));
+    renderExistingPets();
+    renderSelectedPets();
+
+    const plural = petsToAdd.length === 1 ? "pet was" : "pets were";
+    const limitNote =
+      petsToAdd.length < unselectedSavedPets.length
+        ? ` The booking limit is ${MAX_PETS_PER_BOOKING} pets.`
+        : "";
+
+    showMessage(
+      `${petsToAdd.length} ${plural} added to this booking.${limitNote}`,
+      "success",
+    );
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
 function renderSelectedPets() {
   const bookingPets = getBookingPets();
 
   elements.selectedPetCards.innerHTML = "";
   elements.selectedPetCount.textContent = `${bookingPets.length} / ${MAX_PETS_PER_BOOKING} selected`;
+  elements.removeAllSelectedPetsBtn.classList.toggle(
+    "hidden",
+    bookingPets.length < 2,
+  );
+  elements.removeAllSelectedPetsBtn.disabled = bookingPets.length < 2;
   saveStepTwoDraft();
 
   if (bookingPets.length === 0) {
@@ -294,7 +381,6 @@ function renderSelectedPets() {
           <h4 class="text-base font-bold text-[#2f4b66]">${escapeHtml(
             pet.petName,
           )}</h4>
-          <p class="mt-1 text-xs text-slate-400">Included in this booking</p>
         </div>
 
         <button
@@ -313,6 +399,21 @@ function renderSelectedPets() {
   });
 
   bindRemoveButtons();
+}
+
+function handleRemoveAllSelectedPets() {
+  const bookingPets = getBookingPets();
+
+  if (bookingPets.length === 0) {
+    showMessage("No selected pets to remove.", "default");
+    elements.removeAllSelectedPetsBtn.disabled = true;
+    return;
+  }
+
+  saveBookingPets([]);
+  renderExistingPets();
+  renderSelectedPets();
+  showMessage("All selected pets were removed from this booking.", "warning");
 }
 
 function bindRemoveButtons() {
@@ -477,6 +578,14 @@ function updateSizeOptions(petType) {
 function bindEvents() {
   elements.showExistingPetBtn.addEventListener("click", showExistingPetSection);
   elements.showAddPetBtn.addEventListener("click", showAddPetSection);
+  elements.selectAllExistingPetsBtn.addEventListener(
+    "click",
+    handleSelectAllExistingPets,
+  );
+  elements.removeAllSelectedPetsBtn.addEventListener(
+    "click",
+    handleRemoveAllSelectedPets,
+  );
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);

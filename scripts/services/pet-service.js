@@ -13,7 +13,7 @@ const CLIENT_PETS_KEY = "clientPets";     // localStorage — persists across ta
 const BOOKING_PETS_KEY = "bookingPets";   // sessionStorage — current booking draft only
 const BOOKING_SCHEDULE_KEY = "bookingSchedule";
 
-export const MAX_PETS_PER_BOOKING = 2;
+export const MAX_PETS_PER_BOOKING = 10;
 
 // ── Saved pets (localStorage) ─────────────────────────────────────────────
 

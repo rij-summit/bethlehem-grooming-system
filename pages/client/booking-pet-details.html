@@ -54,21 +54,6 @@
         <div class="mx-auto max-w-5xl">
           <div class="mb-6">
             <h2 class="text-3xl font-bold text-[#2f4b66]">Pet Information</h2>
-            <p class="mt-1 text-xs text-slate-500">
-              Maximum of 2 pets per booking.
-            </p>
-          </div>
-
-          <!-- Booking summary from Step 1 -->
-          <div class="mb-6 rounded-2xl bg-white/90 p-4 shadow-sm">
-            <p
-              class="text-xs font-semibold tracking-wide text-slate-400"
-            >
-              Schedule Summary
-            </p>
-            <p id="bookingScheduleSummary" class="mt-2 text-sm text-slate-600">
-              No selected schedule found.
-            </p>
           </div>
 
           <!-- Action buttons -->
@@ -103,11 +88,24 @@
             id="existingPetSection"
             class="mb-6 hidden rounded-2xl bg-white/85 p-5 shadow-sm"
           >
-            <div class="mb-4">
-              <h3 class="text-lg font-bold text-[#2f4b66]">Your Saved Pets</h3>
-              <p class="mt-1 text-sm text-slate-500">
-                Select up to 2 pets from your saved pet list.
-              </p>
+            <div
+              class="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:justify-between"
+            >
+              <div>
+                <h3 class="text-lg font-bold text-[#2f4b66]">
+                  Your Saved Pets
+                </h3>
+                <p class="mt-1 text-sm text-slate-500">
+                  Select up to 10 pets from your saved pet list.
+                </p>
+              </div>
+              <button
+                id="selectAllExistingPetsBtn"
+                type="button"
+                class="rounded-xl bg-[#315b7e] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Select All
+              </button>
             </div>
 
             <div
@@ -290,15 +288,26 @@
 
           <!-- Selected pets -->
           <section class="mt-8 rounded-2xl bg-white/90 p-5 shadow-sm">
-            <div class="mb-4 flex items-center justify-between gap-3">
+            <div
+              class="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
               <div>
                 <h3 class="text-lg font-bold text-[#2f4b66]">Selected Pets</h3>
               </div>
-              <div
-                id="selectedPetCount"
-                class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]"
-              >
-                0 / 2 selected
+              <div class="flex items-center gap-2">
+                <button
+                  id="removeAllSelectedPetsBtn"
+                  type="button"
+                  class="hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Remove All
+                </button>
+                <div
+                  id="selectedPetCount"
+                  class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]"
+                >
+                  0 / 10 selected
+                </div>
               </div>
             </div>
 
