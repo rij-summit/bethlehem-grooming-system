@@ -70,8 +70,7 @@ function getConsentMainMarkup() {
           id="consentStatusMessage"
           class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
         >
-          Please review the agreement, complete the digital signature, and
-          accept all required checkboxes.
+          Please review the agreement and continue with the walk-in schedule.
         </div>
 
         <form id="walkInConsentForm" class="space-y-6" novalidate>
@@ -187,6 +186,7 @@ function setCurrentDate() {
     month: "long",
     day: "numeric",
   });
+
 }
 
 function populateSummary() {
@@ -350,10 +350,15 @@ function buildWalkInConfirmation(consentPayload) {
   const owner = getStoredData(WALK_IN_OWNER_STORAGE_KEY);
   const items = Array.isArray(reviewPayload?.items) ? reviewPayload.items : [];
 
+  const selectedDate = formatLocalDateKey(submittedAt);
+  const selectedTime = `${String(submittedAt.getHours()).padStart(2, "0")}:${String(
+    submittedAt.getMinutes(),
+  ).padStart(2, "0")}`;
+
   return {
     booking_reference: createFrontEndReference(submittedAt),
-    booking_date: formatLocalDateKey(submittedAt),
-    booking_time: "Walk-in / Queue",
+    booking_date: selectedDate,
+    booking_time: selectedTime,
     booking_type: "walk_in",
     status: "confirmed",
     number_of_pets: items.length,

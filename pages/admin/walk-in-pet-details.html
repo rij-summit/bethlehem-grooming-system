@@ -47,7 +47,7 @@
           <div class="mb-6">
             <h2 class="text-3xl font-bold text-[#2f4b66]">Pet Information</h2>
             <p class="mt-1 text-xs text-slate-500">
-              Maximum of 2 pets per walk-in schedule.
+              Maximum of 10 pets per walk-in schedule.
             </p>
           </div>
 
@@ -91,23 +91,19 @@
                   >
                     Pet Type <span class="text-red-500">*</span>
                   </label>
-                  <div class="relative">
+                  <div>
                     <select
                       id="petType"
                       name="petType"
-                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                      class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
                       required
                     >
                       <option value="">Select pet type</option>
                       <option value="Dog">Dog</option>
                       <option value="Cat">Cat</option>
                     </select>
-                    <i
-                      data-lucide="chevron-down"
-                      class="booking-select-icon h-5 w-5 text-slate-500"
-                      aria-hidden="true"
-                    ></i>
                   </div>
+                  <p id="petTypeError" class="mt-2 hidden text-sm text-red-600"></p>
                 </div>
 
                 <div>
@@ -126,6 +122,7 @@
                     class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
                     required
                   />
+                  <p id="petNameError" class="mt-2 hidden text-sm text-red-600"></p>
                 </div>
 
                 <div>
@@ -168,20 +165,16 @@
                   >
                     Fur Type
                   </label>
-                  <div class="relative">
+                  <div>
                     <select
                       id="furType"
                       name="furType"
-                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                      class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
                     >
                       <option value="">Select fur type</option>
                     </select>
-                    <i
-                      data-lucide="chevron-down"
-                      class="booking-select-icon h-5 w-5 text-slate-500"
-                      aria-hidden="true"
-                    ></i>
                   </div>
+                  <p id="furTypeError" class="mt-2 hidden text-sm text-red-600"></p>
                 </div>
 
                 <div class="md:col-span-2">
@@ -189,22 +182,19 @@
                     for="size"
                     class="mb-2 block text-sm font-medium text-slate-700"
                   >
-                    Size
+                    Size <span class="text-red-500">*</span>
                   </label>
-                  <div class="relative">
+                  <div>
                     <select
                       id="size"
                       name="size"
-                      class="booking-select w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                      class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                      required
                     >
                       <option value="">Select size</option>
                     </select>
-                    <i
-                      data-lucide="chevron-down"
-                      class="booking-select-icon h-5 w-5 text-slate-500"
-                      aria-hidden="true"
-                    ></i>
                   </div>
+                  <p id="sizeError" class="mt-2 hidden text-sm text-red-600"></p>
                 </div>
 
                 <div class="md:col-span-2">
@@ -245,7 +235,7 @@
                 id="selectedPetCount"
                 class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]"
               >
-                0 / 2 selected
+                0 / 10 selected
               </div>
             </div>
 

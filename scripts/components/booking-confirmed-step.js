@@ -2,6 +2,7 @@ import {
   formatBookingDate,
   formatBookingTimeRange,
 } from "../services/booking-format-service.js";
+import { escapeHtml } from "../services/booking-draft-service.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const confirmationContext =
@@ -10,13 +11,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const bookingReferenceNumber = document.getElementById("bookingReferenceNumber");
   const ownerName = document.getElementById("ownerName");
   const ownerPhone = document.getElementById("ownerPhone");
-  const petName = document.getElementById("petName");
-  const petType = document.getElementById("petType");
-  const petBreed = document.getElementById("petBreed");
-  const petSize = document.getElementById("petSize");
-  const selectedService = document.getElementById("selectedService");
-  const selectedAlaCarteMenu = document.getElementById("selectedAlaCarteMenu");
-  const specialInstructions = document.getElementById("specialInstructions");
+  const ownerEmail = document.getElementById("ownerEmail");
+  const petInfoTableBody = document.getElementById("petInfoTableBody");
+  const serviceInfoTableBody = document.getElementById("serviceInfoTableBody");
   const estimatedTotalPrice = document.getElementById("estimatedTotalPrice");
   const appointmentDate = document.getElementById("appointmentDate");
   const appointmentTime = document.getElementById("appointmentTime");
@@ -84,30 +81,31 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── Owner info (populated asynchronously via populateOwnerInfo) ──
     ownerName.textContent = "Loading...";
     ownerPhone.textContent = "Loading...";
+    ownerEmail.textContent = "Loading...";
 
-    // Pet info (first pet in the schedule)
-    const firstPet = Array.isArray(confirmation.pets) ? confirmation.pets[0] : null;
+    const pets = Array.isArray(confirmation.pets) ? confirmation.pets : [];
 
-    if (confirmation.pets?.length > 1) {
-      // Multiple pets — summarize all
-      petName.textContent = confirmation.pets
-        .map((p) => p.petName || "Unnamed")
-        .join(", ");
-      petType.textContent = confirmation.pets
-        .map((p) => p.petType || "")
-        .filter(Boolean)
-        .join(", ");
-      petBreed.textContent = confirmation.pets
-        .map((p) => p.breed || "Not specified")
-        .join(", ");
-      petSize.textContent = confirmation.pets
-        .map((p) => formatLabel(p.size) || "Not specified")
-        .join(", ");
-    } else {
-      petName.textContent = firstPet?.petName || "No pet selected.";
-      petType.textContent = formatLabel(firstPet?.petType) || "Not specified.";
-      petBreed.textContent = firstPet?.breed || "Breed not specified.";
-      petSize.textContent = formatLabel(firstPet?.size) || "Size not specified.";
+    if (petInfoTableBody) {
+      if (pets.length > 0) {
+        petInfoTableBody.innerHTML = pets
+          .map(
+            (pet) => `
+              <tr>
+                <td class="px-3 py-3 font-medium text-slate-700">${escapeHtml(pet.petName || "Unnamed Pet")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(formatLabel(pet.petType) || "Not specified")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(pet.breed || "Not specified")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(formatLabel(pet.size) || "Not specified")}</td>
+              </tr>
+            `,
+          )
+          .join("");
+      } else {
+        petInfoTableBody.innerHTML = `
+          <tr>
+            <td colspan="4" class="px-3 py-3 text-slate-500">No pet selected.</td>
+          </tr>
+        `;
+      }
     }
 
     // ── Service info (from review data) ──────────────────
@@ -116,40 +114,41 @@ document.addEventListener("DOMContentLoaded", () => {
       : [];
 
     if (reviewPets.length > 0) {
-      selectedService.textContent = reviewPets
-        .map((rp) => {
-          if (Array.isArray(rp.selectedServiceNames)) {
-            return rp.selectedServiceNames.map(formatServiceName).join(", ");
-          }
+      if (serviceInfoTableBody) {
+        serviceInfoTableBody.innerHTML = reviewPets
+          .map((rp) => {
+            const serviceNames = Array.isArray(rp.selectedServiceNames)
+              ? rp.selectedServiceNames.map(formatServiceName)
+              : [formatServiceName(rp.servicePackage)].filter(Boolean);
+            const alaCarteServices = Array.isArray(rp.alaCarteServices)
+              ? rp.alaCarteServices.map(formatServiceName)
+              : [];
+            const instructions = rp.specialInstructions?.trim() || "No special instructions provided.";
 
-          return formatServiceName(rp.servicePackage);
-        })
-        .filter(Boolean)
-        .join(", ") || "No service selected.";
+            return `
+              <tr>
+                <td class="px-3 py-3 font-medium text-slate-700">${escapeHtml(rp.petName || "Unnamed Pet")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(serviceNames.join(", ") || "No service selected")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(alaCarteServices.join(", ") || "No A la Carte service selected")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(instructions)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
 
-      const allAlaCarteServices = reviewPets.flatMap((rp) =>
-        Array.isArray(rp.alaCarteServices) ? rp.alaCarteServices : [],
-      );
-      selectedAlaCarteMenu.textContent = allAlaCarteServices.length > 0
-        ? allAlaCarteServices.map(formatServiceName).join(", ")
-        : "No A la Carte service selected.";
-
-      const allInstructions = reviewPets
-        .map((rp) => rp.specialInstructions?.trim())
-        .filter(Boolean)
-        .join(" | ");
-      specialInstructions.textContent =
-        allInstructions || "No special instructions provided.";
-
-      // Estimated total from review
       const totalPricing = confirmation.review?.totalPricing;
       estimatedTotalPrice.textContent = totalPricing
         ? formatPriceRange(totalPricing)
         : "To be confirmed by clinic.";
     } else {
-      selectedService.textContent = "No service selected.";
-      selectedAlaCarteMenu.textContent = "No A la Carte service selected.";
-      specialInstructions.textContent = "No special instructions provided.";
+      if (serviceInfoTableBody) {
+        serviceInfoTableBody.innerHTML = `
+          <tr>
+            <td colspan="4" class="px-3 py-3 text-slate-500">No service selected.</td>
+          </tr>
+        `;
+      }
       estimatedTotalPrice.textContent = "To be confirmed by clinic.";
     }
 
@@ -233,12 +232,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       ownerName.textContent = fullName;
       ownerPhone.textContent = formatMobileNumber(owner.phone) || "Not provided";
+      ownerEmail.textContent = owner.email || "Not provided";
       return;
     }
 
     if (isWalkInConfirmation) {
       ownerName.textContent = "Not provided";
       ownerPhone.textContent = "Not provided";
+      ownerEmail.textContent = "Not provided";
       return;
     }
 
@@ -250,9 +251,11 @@ document.addEventListener("DOMContentLoaded", () => {
         || "Not provided";
       ownerName.textContent = fullName;
       ownerPhone.textContent = formatMobileNumber(user?.phone) || "Not provided";
+      ownerEmail.textContent = user?.email || "Not provided";
     } catch {
       ownerName.textContent = "Not provided";
       ownerPhone.textContent = "Not provided";
+      ownerEmail.textContent = "Not provided";
     }
   }
 
