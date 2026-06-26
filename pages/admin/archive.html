@@ -485,7 +485,7 @@
                       <template x-for="(svc, index) in detailsBooking.services" :key="index">
                         <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
                           <p class="text-sm font-medium text-slate-700" x-text="svc.name"></p>
-                          <p class="text-sm text-slate-500" x-text="formatServiceAvailedPrice(svc)"></p>
+                          <p class="text-sm font-bold text-slate-500" x-text="formatServiceAvailedPrice(svc)"></p>
                         </div>
                       </template>
                       <div class="flex items-center justify-between rounded-xl border border-[#315b7e]/20 bg-[#eef5fb] px-4 py-2">

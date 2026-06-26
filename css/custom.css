@@ -818,22 +818,23 @@ body.customer-detail-modal-open {
   padding-top: 0.85rem;
   color: #475569;
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .receipt-service-subtotal strong {
   color: #16a34a;
+  font-weight: 700;
 }
 
 .receipt-price,
 .receipt-total-price {
   color: #16a34a;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .receipt-total-price {
   margin-top: 0.35rem;
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   line-height: 1;
 }
 
@@ -997,7 +998,7 @@ body.customer-detail-modal-open {
   border-radius: 8px;
   color: #334155;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0.7rem 0.75rem;
   outline: none;
 }

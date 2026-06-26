@@ -1998,6 +1998,157 @@ function adminDashboard() {
         : pricing.displayPrice;
     },
 
+    getServiceAvailedAmount(service, booking = this.detailsBooking, pet = null) {
+      const amount = parsePaymentNumber(
+        service?.priceAtBooking ??
+          service?.price_at_booking ??
+          service?.paidPrice ??
+          service?.paid_price ??
+          service?.finalPrice ??
+          service?.final_price,
+      );
+
+      if (Number.isFinite(amount) && amount > 0) {
+        return amount;
+      }
+
+      const serviceDefinition = getPaymentServiceDefinition(service);
+      if (!serviceDefinition) {
+        return null;
+      }
+
+      const petSize =
+        getPaymentPetSizeCandidate(pet) ||
+        this.getServiceAvailedPetSize(service, booking);
+      const pricing = getPaymentServicePricing(serviceDefinition, petSize);
+
+      return pricing.displayPrice === "Enter price" ? null : pricing.minAmount;
+    },
+
+    getServicesAvailedTotal(booking = this.detailsBooking) {
+      const paymentTotal = parsePaymentNumber(
+        booking?.paidAmount ??
+          booking?.paid_amount ??
+          booking?.payment?.finalPrice ??
+          booking?.payment?.final_price,
+      );
+
+      if (Number.isFinite(paymentTotal) && paymentTotal > 0) {
+        return paymentTotal;
+      }
+
+      const services = Array.isArray(booking?.services) ? booking.services : [];
+      if (services.length === 0) {
+        return null;
+      }
+
+      const serviceAmounts = services.map((service) =>
+        this.getServiceAvailedAmount(service, booking),
+      );
+
+      if (serviceAmounts.some((amount) => !Number.isFinite(amount) || amount <= 0)) {
+        return null;
+      }
+
+      return serviceAmounts.reduce((total, amount) => total + amount, 0);
+    },
+
+    formatServicesAvailedTotal(booking = this.detailsBooking) {
+      const total = this.getServicesAvailedTotal(booking);
+
+      return Number.isFinite(total) && total > 0
+        ? this.formatPeso(total)
+        : "Price unavailable";
+    },
+
+    getDetailsPaymentPet(pet, booking = this.detailsBooking, pets = this.normalizePaymentPets(booking)) {
+      if (pets.length === 0) {
+        return null;
+      }
+
+      const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id;
+      if (bookingPetId) {
+        const matchedPet = pets.find((candidate) =>
+          [candidate.bookingPetId, candidate.id].some((value) =>
+            value !== null &&
+            value !== undefined &&
+            String(value) === String(bookingPetId),
+          ),
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      const petId = pet?.petId ?? pet?.pet_id ?? pet?.id;
+      if (petId) {
+        const matchedPet = pets.find((candidate) =>
+          [candidate.petId, candidate.id].some((value) =>
+            value !== null &&
+            value !== undefined &&
+            String(value) === String(petId),
+          ),
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      const petName = pet?.petName ?? pet?.pet_name ?? pet?.name;
+      if (petName) {
+        const normalizedPetName = normalizePaymentText(petName);
+        const matchedPet = pets.find((candidate) =>
+          normalizePaymentText(candidate.name) === normalizedPetName,
+        );
+
+        if (matchedPet) {
+          return matchedPet;
+        }
+      }
+
+      return pets.length === 1 ? pets[0] : null;
+    },
+
+    getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
+      const pets = this.normalizePaymentPets(booking);
+      const normalizedPet = this.getDetailsPaymentPet(pet, booking, pets);
+      if (!normalizedPet) {
+        return null;
+      }
+
+      const services = this.normalizePaymentServices(booking?.services);
+      const petServices = this.getPaymentServicesForPet(
+        booking,
+        normalizedPet,
+        pets,
+        services,
+      );
+
+      if (petServices.length === 0) {
+        return null;
+      }
+
+      const serviceAmounts = petServices.map((service) =>
+        this.getServiceAvailedAmount(service, booking, normalizedPet),
+      );
+
+      if (serviceAmounts.some((amount) => !Number.isFinite(amount) || amount <= 0)) {
+        return null;
+      }
+
+      return serviceAmounts.reduce((total, amount) => total + amount, 0);
+    },
+
+    formatPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
+      const total = this.getPetServicesAvailedTotal(pet, booking);
+
+      return Number.isFinite(total) && total > 0
+        ? this.formatPeso(total)
+        : "Price unavailable";
+    },
+
     getServiceAvailedPetSize(service, booking = this.detailsBooking) {
       const serviceSize = getPaymentPetSizeCandidate(service);
 
