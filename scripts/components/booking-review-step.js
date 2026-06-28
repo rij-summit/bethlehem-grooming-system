@@ -91,7 +91,7 @@ function renderEmptyState(message) {
     </div>
   `;
   elements.totalPriceHeading.textContent = "Total Price";
-  elements.totalPriceText.textContent = "P0";
+  elements.totalPriceText.textContent = "₱0";
   elements.totalPriceSubtext.textContent =
     "Review data is unavailable until the earlier pre-registration steps are completed.";
   elements.confirmBookingBtn.disabled = true;
@@ -107,17 +107,30 @@ function renderSummary() {
     ) ||
     "No schedule selected yet.";
 
-  const petSummary = state.bookingDraft.pets
-    .map(
-      (pet) =>
-        `${pet.petName || "Unnamed Pet"} (${formatPetTypeLabel(pet.petType)})`,
-    )
-    .join(", ");
+  elements.petReviewText.replaceChildren();
 
-  elements.petReviewText.textContent =
-    state.bookingDraft.pets.length > 1
-      ? `${state.bookingDraft.pets.length} pets selected: ${petSummary}`
-      : petSummary;
+  if (state.bookingDraft.pets.length > 1) {
+    const count = document.createElement("span");
+    count.className = "font-semibold text-slate-700";
+    count.textContent = `${state.bookingDraft.pets.length} pets. `;
+    elements.petReviewText.appendChild(count);
+  }
+
+  state.bookingDraft.pets.forEach((pet, index) => {
+    const petName = document.createElement("span");
+    petName.className = "font-semibold text-[#2f4b66]";
+    petName.textContent = pet.petName || "Unnamed Pet";
+
+    const petType = document.createElement("span");
+    petType.className = "font-semibold text-slate-600";
+    petType.textContent = ` (${formatPetTypeLabel(pet.petType)})`;
+
+    elements.petReviewText.append(petName, petType);
+
+    if (index < state.bookingDraft.pets.length - 1) {
+      elements.petReviewText.appendChild(document.createTextNode(", "));
+    }
+  });
 }
 
 function renderReviewNotice() {
@@ -183,24 +196,26 @@ function renderPetReviewCard(item, index) {
 
   return `
     <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pet ${
             index + 1
           }</p>
-          <h3 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(
-            item.pet.petName || "Unnamed Pet",
-          )}</h3>
-          <p class="mt-2 text-sm text-slate-500">${escapeHtml(
-            formatPetTypeLabel(item.pet.petType),
-          )} | ${escapeHtml(item.pet.breed || "Breed not specified")}</p>
+          <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h3 class="text-2xl font-bold text-[#2f4b66]">${escapeHtml(
+              item.pet.petName || "Unnamed Pet",
+            )}</h3>
+            <p class="text-base font-semibold text-slate-600">${escapeHtml(
+              formatPetTypeLabel(item.pet.petType),
+            )} · ${escapeHtml(item.pet.breed || "Breed not specified")}</p>
+          </div>
         </div>
 
-        <div class="flex flex-col gap-2 md:items-end">
+        <div class="flex shrink-0 flex-col items-end gap-2">
           <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
             ${escapeHtml(formatPetSizeLabel(item.pet.size))}
           </span>
-          <span class="text-sm text-slate-500">${escapeHtml(
+          <span class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
             item.pricing.hasSelection ? formatAmountRange(item.pricing.total) : "No price available",
           )}</span>
         </div>
@@ -250,14 +265,9 @@ function renderPackageReview(selectedPackage, item) {
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
         Selected Package
       </p>
-      <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <h4 class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
-          selectedPackage.name,
-        )}</h4>
-        <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
-          ${escapeHtml(packageLineItem.pricing.displayPrice)}
-        </span>
-      </div>
+      <h4 class="mt-2 text-lg font-semibold text-[#2f4b66]">${escapeHtml(
+        selectedPackage.name,
+      )}</h4>
       <div class="service-card__pricing">
         <span class="service-card__pricing-label">Size &amp; Price</span>
         <div class="service-card__price-grid">
@@ -317,9 +327,6 @@ function renderAlaCarteReview(alaCarteLineItems) {
 
 function getPackagePricingNote(item, packageLineItem) {
   if (packageLineItem.pricing.selectedPriceOption) {
-    if (packageLineItem.pricing.selectedPriceOption.pricingType === "plus") {
-      return "Final rate will still be confirmed at the clinic.";
-    }
     return "";
   }
 
@@ -341,13 +348,6 @@ function renderTotalPricing() {
     ? "Estimated Total"
     : "Total Price";
   elements.totalPriceText.textContent = formatAmountRange(totalPricing);
-
-  if (state.reviewPayload.isEstimate) {
-    elements.totalPriceSubtext.classList.remove("hidden");
-    elements.totalPriceSubtext.textContent =
-      "This total includes at least one estimate because of a missing pet size, a price range, or a clinic-confirmed + rate.";
-    return;
-  }
 
   elements.totalPriceSubtext.textContent = "";
   elements.totalPriceSubtext.classList.add("hidden");

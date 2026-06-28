@@ -241,7 +241,7 @@ const ALA_CARTE_MAP = new Map(
 );
 
 export function formatPhpAmount(amount) {
-  return `P${Number(amount || 0).toLocaleString("en-PH")}`;
+  return `₱${Number(amount || 0).toLocaleString("en-PH")}`;
 }
 
 export function formatPriceOption(priceOption) {

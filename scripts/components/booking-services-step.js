@@ -79,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function bindEvents() {
+  elements.petServiceSelections.addEventListener("click", handleSelectionClick);
   elements.petServiceSelections.addEventListener("change", handleSelectionChange);
   elements.petServiceSelections.addEventListener("input", handleSelectionInput);
   elements.form.addEventListener("submit", handleSubmit);
@@ -158,9 +159,9 @@ function populateSummary(data) {
   if (selectedPets.length === 1) {
     const firstPet = selectedPets[0];
 
-    elements.petSummaryText.textContent = `${firstPet.petName || "Unnamed Pet"} | ${formatPetTypeLabel(
+    elements.petSummaryText.textContent = `${firstPet.petName || "Unnamed Pet"} · ${formatPetTypeLabel(
       firstPet.petType,
-    )} | ${firstPet.breed || "Breed not specified"}`;
+    )} · ${firstPet.breed || "Breed not specified"}`;
   }
 }
 
@@ -190,6 +191,7 @@ function renderPetServiceSelections() {
 function renderPetSelectionCard(pet, index) {
   const selection = getSelectionByPetId(pet.id);
   const petPricing = calculatePetSelectionPricing(selection, pet);
+  const selectionSummary = getPetSelectionSummary(selection, petPricing);
   const allowsAlaCarteOnly = petCanUseAlaCarteOnly(pet);
   const selectedPackage = selection.servicePackage
     ? getPackageById(selection.servicePackage)
@@ -205,27 +207,23 @@ function renderPetSelectionCard(pet, index) {
       class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm md:p-6"
     >
       <div class="mb-6">
-        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pet ${
               index + 1
             }</p>
-            <h3 class="mt-1 text-2xl font-bold text-[#2f4b66]">${escapeHtml(
-              pet.petName || "Unnamed Pet",
-            )}</h3>
+            <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 class="text-2xl font-bold text-[#2f4b66]">${escapeHtml(
+                pet.petName || "Unnamed Pet",
+              )}</h3>
+              <p class="text-base font-semibold text-slate-600">${escapeHtml(
+                formatPetTypeLabel(pet.petType),
+              )} · ${escapeHtml(pet.breed || "Breed not specified")}</p>
+            </div>
           </div>
-          <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
+          <span class="shrink-0 rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
             ${escapeHtml(formatPetSizeLabel(pet.size))}
           </span>
-        </div>
-
-        <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <p class="text-sm font-normal text-slate-500">${escapeHtml(
-            formatPetTypeLabel(pet.petType),
-          )} | ${escapeHtml(pet.breed || "Breed not specified")}</p>
-          <span class="text-sm text-slate-500 md:text-right">${escapeHtml(
-            getPetSelectionSummaryText(pet, selection, petPricing),
-          )}</span>
         </div>
       </div>
 
@@ -265,21 +263,43 @@ function renderPetSelectionCard(pet, index) {
           : ""
       }
 
-      <section class="mt-8">
-        <div class="mb-3">
-          <h4 class="text-base font-semibold text-[#2f4b66]">
-            Grooming Preferences &amp; Special Instructions
-          </h4>
+      <section class="mt-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,0.55fr)] md:items-stretch">
+        <div>
+          <div class="mb-3">
+            <h4 class="text-base font-semibold text-[#2f4b66]">
+              Grooming Preferences &amp; Special Instructions
+            </h4>
+          </div>
+
+          <textarea
+            data-role="special-instructions"
+            data-pet-id="${escapeHtml(pet.id)}"
+            rows="4"
+            maxlength="500"
+            placeholder="Add pet-specific notes like haircut preference, sensitivity, or handling instructions."
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+          >${escapeHtml(selection.specialInstructions || "")}</textarea>
         </div>
 
-        <textarea
-          data-role="special-instructions"
-          data-pet-id="${escapeHtml(pet.id)}"
-          rows="4"
-          maxlength="500"
-          placeholder="Add pet-specific notes like haircut preference, sensitivity, or handling instructions."
-          class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-        >${escapeHtml(selection.specialInstructions || "")}</textarea>
+        <aside
+          data-role="selection-summary"
+          aria-live="polite"
+          class="flex flex-col rounded-2xl border border-[#b8cadb] bg-[#f4f8fc] p-4"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Selected Package &amp; Price
+          </p>
+          <p class="mt-2 text-base font-semibold leading-relaxed text-[#2f4b66]">
+            ${escapeHtml(selectionSummary.label)}
+          </p>
+          ${
+            selectionSummary.price
+              ? `<p class="mt-auto pt-4 text-right text-lg font-bold text-[#2f4b66]">
+                  ${escapeHtml(selectionSummary.price)}
+                </p>`
+              : ""
+          }
+        </aside>
       </section>
     </article>
   `;
@@ -418,32 +438,40 @@ function hasCompletedRequiredServiceSelection(pet, selection) {
   return calculatePetSelectionPricing(selection, pet).hasSelection;
 }
 
-function getPetSelectionSummaryText(pet, selection, petPricing) {
+function getPetSelectionSummary(selection, petPricing) {
   if (!petPricing.hasSelection) {
-    return "No service selected yet.";
+    return {
+      label: "No service selected yet.",
+      price: "",
+    };
   }
 
   const alaCarteLabels = selection.alaCarteServices
     .map((serviceId) => getAlaCarteServiceById(serviceId)?.name)
     .filter(Boolean);
+  const price = formatAmountRange(petPricing.total);
 
   if (selection.servicePackage) {
     const selectedPackage = getPackageById(selection.servicePackage);
-    const summaryLabel =
+    const label =
       alaCarteLabels.length > 0
-        ? `${selectedPackage?.name || "Selected package"} + A la Carte: ${alaCarteLabels.join(
-            ", ",
-          )}`
+        ? `${selectedPackage?.name || "Selected package"} + ${alaCarteLabels.join(", ")}`
         : selectedPackage?.name || "Selected package";
 
-    return `${summaryLabel} | ${formatAmountRange(petPricing.total)}`;
+    return { label, price };
   }
 
   if (alaCarteLabels.length > 0) {
-    return `${alaCarteLabels.join(", ")} | ${formatAmountRange(petPricing.total)}`;
+    return {
+      label: alaCarteLabels.join(", "),
+      price,
+    };
   }
 
-  return "No service selected yet.";
+  return {
+    label: "No service selected yet.",
+    price: "",
+  };
 }
 
 function updateServiceNotice(validationMessage = "") {
@@ -492,6 +520,33 @@ function syncNextButtonState(isEnabled) {
   elements.nextButton.setAttribute("aria-disabled", String(!isEnabled));
   elements.nextButton.classList.toggle("opacity-50", !isEnabled);
   elements.nextButton.classList.toggle("cursor-not-allowed", !isEnabled);
+}
+
+function handleSelectionClick(event) {
+  const target = event.target;
+
+  if (
+    !(target instanceof HTMLInputElement) ||
+    target.dataset.role !== "service-package"
+  ) {
+    return;
+  }
+
+  const selection = state.petSelections.find(
+    (petSelection) => petSelection.petId === target.dataset.petId,
+  );
+
+  if (!selection || selection.servicePackage !== target.value) {
+    return;
+  }
+
+  event.preventDefault();
+  target.checked = false;
+  selection.servicePackage = "";
+
+  renderPetServiceSelections();
+  updateServiceNotice();
+  saveCurrentStepDraft();
 }
 
 function handleSelectionChange(event) {

@@ -264,9 +264,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (reviewedPets.length === 1) {
       const [reviewedPet] = reviewedPets;
 
-      bookingSummaryText.textContent = `${reviewedPet.petName || "No pet selected"} | ${formatServiceName(
+      bookingSummaryText.textContent = `${reviewedPet.petName || "No pet selected"} · ${formatServiceName(
         reviewedPet.petType || "No pet type",
-      )} | ${getReviewedServiceSummary(reviewedPet)}`;
+      )} · ${getReviewedServiceSummary(reviewedPet)}`;
       return;
     }
 
@@ -276,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
       bookingStep3?.servicePackage || "No service selected",
     );
 
-    bookingSummaryText.textContent = `${petName} | ${petType} | ${servicePackage}`;
+    bookingSummaryText.textContent = `${petName} · ${petType} · ${servicePackage}`;
   }
 
   function getReviewedServiceSummary(pet) {
