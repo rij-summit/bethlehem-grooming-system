@@ -103,7 +103,7 @@
               </h3>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-2">
+            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div>
                 <p
                   class="text-xs font-semibold uppercase tracking-wide text-slate-400"
@@ -125,6 +125,17 @@
                   No contact number available.
                 </p>
               </div>
+
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Email Address
+                </p>
+                <p id="ownerEmail" class="mt-2 text-sm text-slate-700">
+                  Not provided.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -135,50 +146,24 @@
               </h3>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  Pet Name
-                </p>
-                <p id="petName" class="mt-2 text-sm text-slate-700">
-                  No pet selected.
-                </p>
-              </div>
-
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  Pet Type
-                </p>
-                <p id="petType" class="mt-2 text-sm text-slate-700">
-                  No pet type available.
-                </p>
-              </div>
-
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  Breed
-                </p>
-                <p id="petBreed" class="mt-2 text-sm text-slate-700">
-                  Breed not specified.
-                </p>
-              </div>
-
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  Size
-                </p>
-                <p id="petSize" class="mt-2 text-sm text-slate-700">
-                  Size not specified.
-                </p>
-              </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-slate-700">
+                <thead class="bg-slate-50 text-left">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Pet Name</th>
+                    <th class="px-3 py-2 font-semibold">Pet Type</th>
+                    <th class="px-3 py-2 font-semibold">Breed</th>
+                    <th class="px-3 py-2 font-semibold">Size</th>
+                  </tr>
+                </thead>
+                <tbody id="petInfoTableBody">
+                  <tr>
+                    <td colspan="4" class="px-3 py-3 text-slate-500">
+                      No pet selected.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
 
@@ -189,42 +174,24 @@
               </h3>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-2">
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  Selected Service
-                </p>
-                <p id="selectedService" class="mt-2 text-sm text-slate-700">
-                  No service selected.
-                </p>
-              </div>
-
-              <div>
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  A la Carte Menu
-                </p>
-                <p
-                  id="selectedAlaCarteMenu"
-                  class="mt-2 text-sm text-slate-700"
-                >
-                  No A la Carte service selected.
-                </p>
-              </div>
-            </div>
-
-            <div class="mt-4">
-              <p
-                class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-              >
-                Special Instructions
-              </p>
-              <p id="specialInstructions" class="mt-2 text-sm text-slate-700">
-                No special instructions provided.
-              </p>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-slate-700">
+                <thead class="bg-slate-50 text-left">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Pet</th>
+                    <th class="px-3 py-2 font-semibold">Service</th>
+                    <th class="px-3 py-2 font-semibold">A la Carte</th>
+                    <th class="px-3 py-2 font-semibold">Instructions</th>
+                  </tr>
+                </thead>
+                <tbody id="serviceInfoTableBody">
+                  <tr>
+                    <td colspan="4" class="px-3 py-3 text-slate-500">
+                      No service selected.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
             <div

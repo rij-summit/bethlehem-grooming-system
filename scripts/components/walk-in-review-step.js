@@ -218,7 +218,7 @@ function renderSummary() {
       (pet) =>
         `${pet.petName || "Unnamed Pet"} (${formatPetTypeLabel(pet.petType)})`,
     )
-    .join(", ");
+    .join(" | ");
 
   elements.petReviewText.textContent =
     state.bookingDraft.pets.length > 1
