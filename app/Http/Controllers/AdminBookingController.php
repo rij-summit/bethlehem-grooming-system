@@ -103,12 +103,15 @@ class AdminBookingController extends Controller
         // Summary metrics (always based on today, not the filter date)
         $todayCompletedCount = Booking::whereDate('grooming_finished_at', $today->toDateString())
             ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->count();
+            ->sum('number_of_pets');
         $todayIntakeCount = $this->dailyIntakeCount($today->toDateString());
 
         $weekStart  = Carbon::now()->startOfWeek()->toDateString();
         $weekEnd    = Carbon::now()->endOfWeek()->toDateString();
         $weekCount  = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
+            ->whereNotIn('status', ['cancelled'])
+            ->sum('number_of_pets');
+        $weekBookingCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
             ->whereNotIn('status', ['cancelled'])
             ->count();
         $revenueToday = Payment::whereDate('paid_at', $today->toDateString())
@@ -120,8 +123,8 @@ class AdminBookingController extends Controller
         $noShowWeekCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
             ->where('status', 'no_show')
             ->count();
-        $noShowWeekRate = $weekCount > 0
-            ? round(($noShowWeekCount / $weekCount) * 100, 1)
+        $noShowWeekRate = $weekBookingCount > 0
+            ? round(($noShowWeekCount / $weekBookingCount) * 100, 1)
             : 0;
 
         return response()->json([
