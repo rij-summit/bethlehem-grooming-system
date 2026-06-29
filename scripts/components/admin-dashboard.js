@@ -2111,22 +2111,27 @@ function adminDashboard() {
       return pets.length === 1 ? pets[0] : null;
     },
 
-    getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
+    getPetServicesAvailed(pet, booking = this.detailsBooking) {
       const pets = this.normalizePaymentPets(booking);
       const normalizedPet = this.getDetailsPaymentPet(pet, booking, pets);
       if (!normalizedPet) {
-        return null;
+        return [];
       }
 
       const services = this.normalizePaymentServices(booking?.services);
-      const petServices = this.getPaymentServicesForPet(
+      return this.getPaymentServicesForPet(
         booking,
         normalizedPet,
         pets,
         services,
       );
+    },
 
-      if (petServices.length === 0) {
+    getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
+      const normalizedPet = this.getDetailsPaymentPet(pet, booking);
+      const petServices = this.getPetServicesAvailed(pet, booking);
+
+      if (!normalizedPet || petServices.length === 0) {
         return null;
       }
 
