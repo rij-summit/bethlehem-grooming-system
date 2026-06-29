@@ -1165,7 +1165,7 @@ body.customer-detail-modal-open {
     display: block !important;
     width: auto !important;
     height: auto !important;
-    min-height: var(--booking-print-min-height, 273mm) !important;
+    min-height: var(--booking-print-min-height, 272mm) !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 0 24mm !important;

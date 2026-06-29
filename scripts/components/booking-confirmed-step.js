@@ -26,7 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const confirmationStatus = document.getElementById("confirmationStatus");
   const printableConfirmation = document.getElementById("printableConfirmation");
   const printNextSteps = document.getElementById("printNextSteps");
-  const PRINT_PAGE_CONTENT_HEIGHT_MM = 273;
+  // Keep a 1 mm allowance so print-unit rounding cannot create a blank page.
+  const PRINT_PAGE_CONTENT_HEIGHT_MM = 272;
   const MAX_ROWS_FOR_SINGLE_PRINT_PAGE = 5;
 
   if (isWalkInConfirmation && !guardAdminAccess()) {
