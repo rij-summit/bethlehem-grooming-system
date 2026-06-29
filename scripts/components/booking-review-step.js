@@ -107,29 +107,36 @@ function renderSummary() {
     ) ||
     "No schedule selected yet.";
 
-  elements.petReviewText.replaceChildren();
+  const petSummaries = formatGroupedPetSummaries(state.bookingDraft.pets);
 
-  if (state.bookingDraft.pets.length > 1) {
-    const count = document.createElement("span");
-    count.className = "font-semibold text-slate-700";
-    count.textContent = `${state.bookingDraft.pets.length} pets. `;
-    elements.petReviewText.appendChild(count);
-  }
+  elements.petReviewText.replaceChildren(
+    ...petSummaries.map((summary) => {
+      const line = document.createElement("span");
+      line.className = "block";
+      line.textContent = summary;
+      return line;
+    }),
+  );
+}
 
-  state.bookingDraft.pets.forEach((pet, index) => {
-    const petName = document.createElement("span");
-    petName.className = "font-semibold text-[#2f4b66]";
-    petName.textContent = pet.petName || "Unnamed Pet";
+function formatGroupedPetSummaries(pets) {
+  const groups = new Map();
 
-    const petType = document.createElement("span");
-    petType.className = "font-semibold text-slate-600";
-    petType.textContent = ` (${formatPetTypeLabel(pet.petType)})`;
+  pets.forEach((pet) => {
+    const type = String(pet.petType || "").trim().toLowerCase();
+    const groupKey = type || "unknown";
+    const group = groups.get(groupKey) || [];
 
-    elements.petReviewText.append(petName, petType);
+    group.push(pet.petName || "Unnamed Pet");
+    groups.set(groupKey, group);
+  });
 
-    if (index < state.bookingDraft.pets.length - 1) {
-      elements.petReviewText.appendChild(document.createTextNode(", "));
-    }
+  return [...groups.entries()].map(([type, names]) => {
+    const typeLabel =
+      type === "unknown" ? "pet" : formatPetTypeLabel(type).toLowerCase();
+    const pluralizedType = names.length === 1 ? typeLabel : `${typeLabel}s`;
+
+    return `${names.length} ${pluralizedType}: ${names.join(" · ")}`;
   });
 }
 

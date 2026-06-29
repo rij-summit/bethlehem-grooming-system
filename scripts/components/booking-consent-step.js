@@ -1,5 +1,3 @@
-import { formatBookingSchedule } from "../services/booking-format-service.js";
-
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("bookingConsentForm");
   const mainConsentCheckbox = document.getElementById("mainConsentCheckbox");
@@ -10,9 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const consentDateInput = document.getElementById("consentDate");
   const submitBookingButton = document.getElementById("submitBookingButton");
   const consentStatusMessage = document.getElementById("consentStatusMessage");
-  const scheduleSummaryText = document.getElementById("scheduleSummaryText");
-  const bookingSummaryText = document.getElementById("bookingSummaryText");
-
   /*
     BACKEND NOTE:
     This page currently uses sessionStorage as a temporary front-end placeholder
@@ -24,14 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
     - API fetch for booking draft
   */
 
-  const bookingStep1 = getStoredData("bookingStep1");
-  const bookingStep2 = getStoredData("bookingStep2");
   const bookingStep3 = getStoredData("bookingStep3");
-  const bookingReview =
-    getStoredData("bookingReview") || getStoredData("bookingStep4Review");
 
   setCurrentDate();
-  populateSummary();
   restoreConsentDraft();
   validateConsentForm();
 
@@ -227,76 +217,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     consentDateInput.value = formattedDate;
-  }
-
-  function populateSummary() {
-    const bookingDate =
-      bookingReview?.bookingDate ||
-      bookingStep2?.bookingDate ||
-      bookingStep1?.bookingDate ||
-      "";
-    const bookingTime =
-      bookingReview?.bookingTime ||
-      bookingStep2?.bookingTime ||
-      bookingStep1?.bookingTime ||
-      "";
-
-    scheduleSummaryText.textContent =
-      bookingReview?.bookingScheduleText ||
-      bookingStep2?.bookingScheduleText ||
-      formatBookingSchedule(bookingDate, bookingTime) ||
-      "No schedule selected yet.";
-
-    const reviewedPets = Array.isArray(bookingReview?.pets)
-      ? bookingReview.pets
-      : [];
-
-    if (reviewedPets.length > 1) {
-      bookingSummaryText.textContent = `${reviewedPets.length} pets selected: ${reviewedPets
-        .map(
-          (pet) =>
-            `${pet.petName || "Unnamed Pet"} (${getReviewedServiceSummary(pet)})`,
-        )
-        .join(", ")}`;
-      return;
-    }
-
-    if (reviewedPets.length === 1) {
-      const [reviewedPet] = reviewedPets;
-
-      bookingSummaryText.textContent = `${reviewedPet.petName || "No pet selected"} · ${formatServiceName(
-        reviewedPet.petType || "No pet type",
-      )} · ${getReviewedServiceSummary(reviewedPet)}`;
-      return;
-    }
-
-    const petName = bookingStep2?.petName || "No pet selected";
-    const petType = formatServiceName(bookingStep2?.petType || "No pet type");
-    const servicePackage = formatServiceName(
-      bookingStep3?.servicePackage || "No service selected",
-    );
-
-    bookingSummaryText.textContent = `${petName} · ${petType} · ${servicePackage}`;
-  }
-
-  function getReviewedServiceSummary(pet) {
-    const selectedServices = [
-      pet?.servicePackage ? formatServiceName(pet.servicePackage) : "",
-      ...(Array.isArray(pet?.alaCarteServices)
-        ? pet.alaCarteServices.map((serviceId) => formatServiceName(serviceId))
-        : []),
-    ].filter(Boolean);
-
-    return selectedServices.length > 0
-      ? selectedServices.join(", ")
-      : "No service selected";
-  }
-
-  function formatServiceName(value) {
-    if (!value) return "";
-    return value
-      .replaceAll("_", " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
   function getStoredData(key) {
