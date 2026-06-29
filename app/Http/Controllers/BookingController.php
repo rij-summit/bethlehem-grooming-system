@@ -262,6 +262,14 @@ class BookingController extends Controller
             'created_at' => now(),
         ]);
 
+        // Reload database-managed timestamps so the confirmation uses the
+        // authoritative booking creation time without changing the schedule.
+        $booking->refresh();
+        $createdAt = Carbon::parse(
+            $booking->created_at,
+            config('app.timezone')
+        )->toIso8601String();
+
         return response()->json([
             'success'   => true,
             'message'   => 'Booking confirmed successfully!',
@@ -270,6 +278,7 @@ class BookingController extends Controller
                 'booking_reference' => $booking->booking_reference,
                 'booking_date'      => $booking->booking_date,
                 'window'            => $window->window_label,
+                'created_at'        => $createdAt,
                 'status'            => $booking->status,
                 'number_of_pets'    => $booking->number_of_pets,
             ],
@@ -297,6 +306,9 @@ class BookingController extends Controller
                 'booking_id'        => $b->booking_id,
                 'booking_reference' => $b->booking_reference,
                 'booking_date'      => $b->booking_date,
+                'created_at'        => $b->created_at
+                    ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
+                    : null,
                 'status'            => $b->status,
                 'paid'              => (bool) $b->paid,
                 'number_of_pets'    => $b->number_of_pets,

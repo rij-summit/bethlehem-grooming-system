@@ -17,12 +17,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const estimatedTotalPrice = document.getElementById("estimatedTotalPrice");
   const appointmentDate = document.getElementById("appointmentDate");
   const appointmentTime = document.getElementById("appointmentTime");
+  const submittedAt = document.getElementById("submittedAt");
   const groomingConsentStatus = document.getElementById("groomingConsentStatus");
   const sedationConsentStatus = document.getElementById("sedationConsentStatus");
   const digitalSignatureValue = document.getElementById("digitalSignatureValue");
   const consentDateValue = document.getElementById("consentDateValue");
   const printConfirmationButton = document.getElementById("printConfirmationButton");
   const confirmationStatus = document.getElementById("confirmationStatus");
+  const printableConfirmation = document.getElementById("printableConfirmation");
+  const printNextSteps = document.getElementById("printNextSteps");
+  const PRINT_PAGE_CONTENT_HEIGHT_MM = 273;
+  const MAX_ROWS_FOR_SINGLE_PRINT_PAGE = 5;
 
   if (isWalkInConfirmation && !guardAdminAccess()) {
     return;
@@ -43,8 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   populateConfirmationData();
   populateOwnerInfo();
+  populateSubmittedAt();
+  window.addEventListener("beforeprint", preparePrintLayout);
+  window.addEventListener("afterprint", resetPrintLayout);
 
-  printConfirmationButton.addEventListener("click", () => {
+  printConfirmationButton?.addEventListener("click", () => {
     const originalTitle = document.title;
     let titleRestored = false;
 
@@ -58,7 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
       window.removeEventListener("afterprint", restoreTitle);
     }
 
-    document.title = "";
+    // Keep the browser from falling back to the page URL as an empty title.
+    document.title = "\u200B";
     window.addEventListener("afterprint", restoreTitle);
     window.print();
     window.setTimeout(restoreTitle, 1000);
@@ -66,22 +75,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function populateConfirmationData() {
     if (!confirmation) {
-      confirmationStatus.hidden = false;
-      confirmationStatus.textContent =
-        "Schedule data not found. Please complete the scheduling process from the beginning.";
-      confirmationStatus.className =
-        "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+      showConfirmationStatus(
+        "Schedule data not found. Please complete the scheduling process from the beginning.",
+        "error",
+      );
       return;
     }
 
     // ── Reference number (from backend) ──────────────────
-    bookingReferenceNumber.textContent =
-      confirmation.booking_reference || "Pending";
+    setText(bookingReferenceNumber, confirmation.booking_reference || "Pending");
 
     // ── Owner info (populated asynchronously via populateOwnerInfo) ──
-    ownerName.textContent = "Loading...";
-    ownerPhone.textContent = "Loading...";
-    ownerEmail.textContent = "Loading...";
+    setText(ownerName, "Loading...");
+    setText(ownerPhone, "Loading...");
+    setText(ownerEmail, "Loading...");
 
     const pets = Array.isArray(confirmation.pets) ? confirmation.pets : [];
 
@@ -123,6 +130,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const alaCarteServices = Array.isArray(rp.alaCarteServices)
               ? rp.alaCarteServices.map(formatServiceName)
               : [];
+            const price = rp.pricing
+              ? formatPriceRange(rp.pricing)
+              : "To be confirmed by clinic.";
             const instructions = rp.specialInstructions?.trim() || "No special instructions provided.";
 
             return `
@@ -130,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td class="px-3 py-3 font-medium text-slate-700">${escapeHtml(rp.petName || "Unnamed Pet")}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(serviceNames.join(", ") || "No service selected")}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(alaCarteServices.join(", ") || "No A la Carte service selected")}</td>
+                <td class="whitespace-nowrap px-3 py-3 font-semibold text-slate-700">${escapeHtml(price)}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(instructions)}</td>
               </tr>
             `;
@@ -138,39 +149,55 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const totalPricing = confirmation.review?.totalPricing;
-      estimatedTotalPrice.textContent = totalPricing
-        ? formatPriceRange(totalPricing)
-        : "To be confirmed by clinic.";
+      setText(
+        estimatedTotalPrice,
+        totalPricing
+          ? formatPriceRange(totalPricing)
+          : "To be confirmed by clinic.",
+      );
     } else {
       if (serviceInfoTableBody) {
         serviceInfoTableBody.innerHTML = `
           <tr>
-            <td colspan="4" class="px-3 py-3 text-slate-500">No service selected.</td>
+            <td colspan="5" class="px-3 py-3 text-slate-500">No service selected.</td>
           </tr>
         `;
       }
-      estimatedTotalPrice.textContent = "To be confirmed by clinic.";
+      setText(estimatedTotalPrice, "To be confirmed by clinic.");
     }
 
     // ── Schedule ──────────────────────────────────────────
-    appointmentDate.textContent =
-      formatBookingDate(confirmation.booking_date) || "No pet drop-off date selected.";
-    appointmentTime.textContent =
-      formatBookingTimeRange(confirmation.booking_time) || "No pet drop-off time selected.";
+    setText(
+      appointmentDate,
+      formatBookingDate(confirmation.booking_date) || "No pet drop-off date selected.",
+    );
+    setText(
+      appointmentTime,
+      formatBookingTimeRange(confirmation.booking_time) || "No pet drop-off time selected.",
+    );
+    setText(
+      submittedAt,
+      formatSubmittedAt(confirmation.submitted_at || confirmation.created_at) ||
+        "Not available.",
+    );
 
     // ── Consent ───────────────────────────────────────────
-    groomingConsentStatus.textContent =
-      bookingConsentStep?.groomingAgreementAccepted ? "Agreed" : "Not confirmed";
-    sedationConsentStatus.textContent =
-      bookingConsentStep?.sedationConsentAccepted ? "Agreed" : "Not confirmed";
-    if (digitalSignatureValue) {
-      digitalSignatureValue.textContent =
-        bookingConsentStep?.digitalSignature || "No signature available.";
-    }
-    if (consentDateValue) {
-      consentDateValue.textContent =
-        bookingConsentStep?.consentDate || "No consent date available.";
-    }
+    setText(
+      groomingConsentStatus,
+      bookingConsentStep?.groomingAgreementAccepted ? "Agreed" : "Not confirmed",
+    );
+    setText(
+      sedationConsentStatus,
+      bookingConsentStep?.sedationConsentAccepted ? "Agreed" : "Not confirmed",
+    );
+    setText(
+      digitalSignatureValue,
+      bookingConsentStep?.digitalSignature || "No signature available.",
+    );
+    setText(
+      consentDateValue,
+      bookingConsentStep?.consentDate || "No consent date available.",
+    );
 
     updateConfirmationStatus();
   }
@@ -185,16 +212,63 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
     if (hasReference && hasConsent) {
-      confirmationStatus.hidden = true;
-      confirmationStatus.textContent = "";
-      confirmationStatus.className = "hidden";
+      hideConfirmationStatus();
     } else {
-      confirmationStatus.hidden = false;
-      confirmationStatus.textContent =
-        "Some confirmation details are incomplete. Please contact the clinic if you believe this is an error.";
-      confirmationStatus.className =
-        "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
+      showConfirmationStatus(
+        "Some confirmation details are incomplete. Please contact the clinic if you believe this is an error.",
+      );
     }
+  }
+
+  function setText(element, value) {
+    if (element) {
+      element.textContent = value;
+    }
+  }
+
+  function preparePrintLayout() {
+    if (!printableConfirmation || !printNextSteps) return;
+
+    const petCount = Array.isArray(confirmation?.pets)
+      ? confirmation.pets.length
+      : 0;
+    const serviceRowCount = Array.isArray(confirmation?.review?.pets)
+      ? confirmation.review.pets.length
+      : 0;
+    const declaredPetCount = Number(confirmation?.number_of_pets) || 0;
+    const largestRowCount = Math.max(
+      petCount,
+      serviceRowCount,
+      declaredPetCount,
+    );
+    const pageCount = largestRowCount > MAX_ROWS_FOR_SINGLE_PRINT_PAGE ? 2 : 1;
+
+    printableConfirmation.style.setProperty(
+      "--booking-print-min-height",
+      `${pageCount * PRINT_PAGE_CONTENT_HEIGHT_MM}mm`,
+    );
+  }
+
+  function resetPrintLayout() {
+    printableConfirmation?.style.removeProperty("--booking-print-min-height");
+  }
+
+  function hideConfirmationStatus() {
+    if (!confirmationStatus) return;
+
+    confirmationStatus.hidden = true;
+    confirmationStatus.textContent = "";
+    confirmationStatus.className = "hidden";
+  }
+
+  function showConfirmationStatus(message, variant = "default") {
+    if (!confirmationStatus) return;
+
+    confirmationStatus.hidden = false;
+    confirmationStatus.textContent = message;
+    confirmationStatus.className = variant === "error"
+      ? "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+      : "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
   }
 
   function formatPriceRange(pricing) {
@@ -216,6 +290,51 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(value).replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  function formatSubmittedAt(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return new Intl.DateTimeFormat("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(date);
+  }
+
+  async function populateSubmittedAt() {
+    const savedTimestamp = confirmation?.submitted_at || confirmation?.created_at;
+
+    if (savedTimestamp || isWalkInConfirmation || !confirmation?.booking_reference) {
+      return;
+    }
+
+    try {
+      const data = await API.getBookingHistory();
+      const bookings = [
+        ...(Array.isArray(data?.bookings) ? data.bookings : []),
+        ...(Array.isArray(data?.history) ? data.history : []),
+      ];
+      const savedBooking = bookings.find(
+        (booking) =>
+          booking.booking_reference === confirmation.booking_reference,
+      );
+      const createdAt = savedBooking?.created_at;
+
+      if (!createdAt) return;
+
+      confirmation.submitted_at = createdAt;
+      sessionStorage.setItem("bookingConfirmation", JSON.stringify(confirmation));
+      setText(submittedAt, formatSubmittedAt(createdAt) || "Not available.");
+    } catch {
+      // Keep the existing fallback when history cannot be loaded.
+    }
+  }
+
   async function populateOwnerInfo() {
     const owner = confirmation?.owner;
 
@@ -230,16 +349,16 @@ document.addEventListener("DOMContentLoaded", () => {
           .join(" ") ||
         "Not provided";
 
-      ownerName.textContent = fullName;
-      ownerPhone.textContent = formatMobileNumber(owner.phone) || "Not provided";
-      ownerEmail.textContent = owner.email || "Not provided";
+      setText(ownerName, fullName);
+      setText(ownerPhone, formatMobileNumber(owner.phone) || "Not provided");
+      setText(ownerEmail, owner.email || "Not provided");
       return;
     }
 
     if (isWalkInConfirmation) {
-      ownerName.textContent = "Not provided";
-      ownerPhone.textContent = "Not provided";
-      ownerEmail.textContent = "Not provided";
+      setText(ownerName, "Not provided");
+      setText(ownerPhone, "Not provided");
+      setText(ownerEmail, "Not provided");
       return;
     }
 
@@ -249,13 +368,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ")
         || user?.username
         || "Not provided";
-      ownerName.textContent = fullName;
-      ownerPhone.textContent = formatMobileNumber(user?.phone) || "Not provided";
-      ownerEmail.textContent = user?.email || "Not provided";
+      setText(ownerName, fullName);
+      setText(ownerPhone, formatMobileNumber(user?.phone) || "Not provided");
+      setText(ownerEmail, user?.email || "Not provided");
     } catch {
-      ownerName.textContent = "Not provided";
-      ownerPhone.textContent = "Not provided";
-      ownerEmail.textContent = "Not provided";
+      setText(ownerName, "Not provided");
+      setText(ownerPhone, "Not provided");
+      setText(ownerEmail, "Not provided");
     }
   }
 

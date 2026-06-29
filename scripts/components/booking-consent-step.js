@@ -87,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     submitBookingButton.disabled = true;
     submitBookingButton.textContent = "Submitting...";
+    const submittedAt = new Date().toISOString();
 
     try {
       const response = await API.storeBooking({
@@ -99,9 +100,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Save the backend response so the confirmed page can read it
       sessionStorage.setItem("bookingConfirmation", JSON.stringify({
+        booking_id: response.booking.booking_id,
         booking_reference: response.booking.booking_reference,
         booking_date: response.booking.booking_date,
         booking_time: response.booking.window,
+        submitted_at:
+          response.booking.created_at || response.booking.submitted_at || submittedAt,
         status: response.booking.status,
         number_of_pets: response.booking.number_of_pets,
         pets: bookingPets,
