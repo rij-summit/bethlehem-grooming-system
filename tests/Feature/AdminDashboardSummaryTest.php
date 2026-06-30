@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
+use App\Models\Booking;
+use App\Models\BookingPet;
+use App\Models\Pet;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -116,5 +119,47 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertSame(17, $summary['week']);
         $this->assertSame(1, $summary['noShowWeek']);
         $this->assertSame(33.3, $summary['noShowWeekRate']);
+    }
+
+    public function test_schedule_pet_type_summary_uses_all_pets_with_correct_pluralization(): void
+    {
+        $cases = [
+            [['dog', 'cat'], 'Dog and Cat'],
+            [['dog', 'dog', 'cat'], 'Dogs and Cat'],
+            [['dog', 'cat', 'cat'], 'Dog and Cats'],
+            [['dog', 'dog', 'cat', 'cat'], 'Dogs and Cats'],
+        ];
+
+        $formatBooking = new \ReflectionMethod(AdminBookingController::class, 'formatBooking');
+        $controller = new AdminBookingController;
+
+        foreach ($cases as [$species, $expected]) {
+            $booking = new Booking([
+                'booking_reference' => 'PET-TYPES',
+                'booking_date' => '2026-06-24',
+                'number_of_pets' => count($species),
+                'status' => 'waiting_to_arrive',
+            ]);
+            $booking->setAttribute('booking_id', 1);
+            $booking->setRelation('user', null);
+            $booking->setRelation('timeWindow', null);
+            $booking->setRelation('bookingServices', collect());
+            $booking->setRelation('payments', collect());
+            $booking->setRelation('bookingPets', collect($species)->map(function ($type, $index) {
+                $pet = new Pet([
+                    'pet_name' => 'Pet ' . ($index + 1),
+                    'species' => $type,
+                ]);
+                $bookingPet = new BookingPet;
+                $bookingPet->setAttribute('booking_pet_id', $index + 1);
+                $bookingPet->setRelation('pet', $pet);
+
+                return $bookingPet;
+            }));
+
+            $formatted = $formatBooking->invoke($controller, $booking);
+
+            $this->assertSame($expected, $formatted['petType']);
+        }
     }
 }

@@ -1572,7 +1572,7 @@ function adminDashboard() {
           booking?.contactNumber ?? booking?.phone ?? booking?.contact,
         ),
         petName: this.toStringValue(booking?.petName),
-        petType: this.toStringValue(booking?.petType),
+        petType: this.formatBookingPetTypes(booking),
         breed: this.toStringValue(booking?.breed),
         serviceLabel: this.toStringValue(
           booking?.serviceLabel ?? booking?.service ?? booking?.packageLabel,
@@ -2294,6 +2294,44 @@ function adminDashboard() {
     // Converts nullable values into template-safe strings.
     toStringValue(value) {
       return value === undefined || value === null ? "" : String(value);
+    },
+
+    // Derive the card label from the actual pets instead of trusting a first-pet summary.
+    formatBookingPetTypes(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      if (pets.length === 0) {
+        return this.toStringValue(booking?.petType);
+      }
+
+      const typeCounts = pets.reduce((counts, pet) => {
+        const type = this.toStringValue(
+          pet?.species ?? pet?.petType ?? pet?.pet_type,
+        ).trim().toLowerCase();
+
+        if (type) {
+          counts.set(type, (counts.get(type) || 0) + 1);
+        }
+
+        return counts;
+      }, new Map());
+
+      if (typeCounts.size === 0) {
+        return this.toStringValue(booking?.petType);
+      }
+
+      const supportedTypes = ["dog", "cat"].filter((type) => typeCounts.has(type));
+      const otherTypes = Array.from(typeCounts.keys()).filter(
+        (type) => !supportedTypes.includes(type),
+      );
+      const labels = [...supportedTypes, ...otherTypes].map((type) => {
+        const label = type.charAt(0).toUpperCase() + type.slice(1);
+        return typeCounts.get(type) > 1 ? `${label}s` : label;
+      });
+
+      if (labels.length === 1) return labels[0];
+      if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+
+      return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
     },
 
     formatMobileNumber(value) {

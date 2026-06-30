@@ -509,7 +509,7 @@ class AdminBookingController extends Controller
             $petName .= ' +' . ($bpets->count() - 1) . ' more';
         }
 
-        $petType = ucfirst($firstPet?->species ?? 'Dog');
+        $petType = $this->formatPetTypeSummary($bpets);
         $breed   = $firstPet?->breed ?? '—';
 
         // Build service label from booked services
@@ -651,6 +651,44 @@ class AdminBookingController extends Controller
                 ];
             })->values(),
         ];
+    }
+
+    /**
+     * Build the schedule-card pet type label from every pet in the booking.
+     */
+    private function formatPetTypeSummary($bookingPets): string
+    {
+        $typeCounts = collect($bookingPets)
+            ->map(fn ($bookingPet) => strtolower(trim((string) ($bookingPet->pet?->species ?? ''))))
+            ->filter()
+            ->countBy();
+
+        if ($typeCounts->isEmpty()) {
+            return '—';
+        }
+
+        // Keep the two supported clinic pet types in the expected display order.
+        $orderedTypes = collect(['dog', 'cat'])
+            ->filter(fn ($type) => $typeCounts->has($type))
+            ->merge($typeCounts->keys()->reject(fn ($type) => in_array($type, ['dog', 'cat'], true)));
+
+        $labels = $orderedTypes
+            ->map(function ($type) use ($typeCounts) {
+                $label = ucfirst($type);
+
+                return $typeCounts->get($type) > 1 ? $label . 's' : $label;
+            })
+            ->values();
+
+        if ($labels->count() === 1) {
+            return $labels->first();
+        }
+
+        if ($labels->count() === 2) {
+            return $labels->first() . ' and ' . $labels->last();
+        }
+
+        return $labels->slice(0, -1)->implode(', ') . ', and ' . $labels->last();
     }
 
     // Formats a booking record for the archive page
