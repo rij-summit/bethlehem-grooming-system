@@ -383,7 +383,7 @@ function renderAlaCarteCard(pet, selection, service, selectedPackage) {
     .filter(Boolean)
     .join(" ");
   const titleClasses = isDisabled ? "font-semibold text-slate-400" : "font-semibold text-[#2f4b66]";
-  const priceClasses = isDisabled ? "mt-1 block text-sm text-slate-400" : "mt-1 block text-sm text-slate-500";
+  const priceClasses = isDisabled ? "mt-1 block text-sm font-bold text-slate-400" : "mt-1 block text-sm font-bold text-slate-500";
 
   return `
     <label class="${labelClasses}">
@@ -506,12 +506,21 @@ function updateServiceNotice(validationMessage = "") {
   state.pets.forEach((pet) => {
     const selection = getSelectionByPetId(pet.id);
     const pricing = calculatePetSelectionPricing(selection, pet);
+    const summaryText = getPetSelectionSummaryText(pet, selection, pricing);
+    const [serviceSummary, priceSummary] = summaryText.split(" | ");
     const line = document.createElement("p");
-    line.textContent = `${pet.petName || "Unnamed Pet"}: ${getPetSelectionSummaryText(
-      pet,
-      selection,
-      pricing,
-    )}`;
+
+    if (priceSummary) {
+      line.append(document.createTextNode(`${pet.petName || "Unnamed Pet"}: ${serviceSummary} | `));
+
+      const price = document.createElement("span");
+      price.className = "font-bold";
+      price.textContent = priceSummary;
+      line.appendChild(price);
+    } else {
+      line.textContent = `${pet.petName || "Unnamed Pet"}: ${summaryText}`;
+    }
+
     list.appendChild(line);
   });
 

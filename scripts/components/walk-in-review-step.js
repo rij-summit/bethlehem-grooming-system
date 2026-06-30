@@ -278,7 +278,7 @@ function renderPetReviewCard(item, index) {
           <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
             ${escapeHtml(formatPetSizeLabel(item.pet.size))}
           </span>
-          <span class="text-sm text-slate-500">${escapeHtml(
+          <span class="text-sm font-bold text-slate-500">${escapeHtml(
             item.pricing.hasSelection ? formatAmountRange(item.pricing.total) : "No price available",
           )}</span>
         </div>
@@ -332,7 +332,7 @@ function renderPackageReview(selectedPackage, item) {
         <h4 class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
           selectedPackage.name,
         )}</h4>
-        <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
+        <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-bold text-[#315b7e]">
           ${escapeHtml(packageLineItem.pricing.displayPrice)}
         </span>
       </div>
@@ -381,7 +381,7 @@ function renderAlaCarteReview(alaCarteLineItems) {
                 <span class="font-semibold text-[#2f4b66]">${escapeHtml(
                   lineItem.serviceName,
                 )}</span>
-                <span class="text-sm text-slate-500">${escapeHtml(
+                <span class="text-sm font-bold text-slate-500">${escapeHtml(
                   lineItem.pricing.displayPrice,
                 )}</span>
               </div>

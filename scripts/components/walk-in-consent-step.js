@@ -359,6 +359,7 @@ function buildWalkInConfirmation(consentPayload) {
     booking_reference: createFrontEndReference(submittedAt),
     booking_date: selectedDate,
     booking_time: selectedTime,
+    submitted_at: submittedAt.toISOString(),
     booking_type: "walk_in",
     status: "confirmed",
     number_of_pets: items.length,

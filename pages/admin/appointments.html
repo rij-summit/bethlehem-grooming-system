@@ -765,22 +765,13 @@
                       <!-- RIGHT SIDE -->
                       <div class="flex flex-col items-stretch gap-3 sm:items-end">
 
-                        <!-- DATE GUARD TEMPORARILY DISABLED FOR TESTING
                         <button
                           type="button"
                           @click="confirmCheckInBooking(booking)"
-                          :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate"
+                          :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate"
                           class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
-                          :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== selectedDate) ? 'cursor-not-allowed opacity-40' : ''"
-                          :title="booking.appointmentDate !== selectedDate ? 'Check-in is only allowed on the day of the appointment' : ''"
-                        >
-                        -->
-                        <button
-                          type="button"
-                          @click="confirmCheckInBooking(booking)"
-                          :disabled="isActionBusy('checkIn', booking.id)"
-                          class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
-                          :class="isActionBusy('checkIn', booking.id) ? 'cursor-not-allowed opacity-40' : ''"
+                          :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate) ? 'cursor-not-allowed opacity-40' : ''"
+                          :title="booking.appointmentDate !== todayDate ? 'Check-in is only allowed on the day of the appointment' : ''"
                         >
                           <span
                             x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
@@ -1964,30 +1955,40 @@
                       <template x-if="pet.specialInstructions">
                         <p class="mt-1 text-sm"><span class="text-slate-400">Instructions:</span> <span x-text="pet.specialInstructions"></span></p>
                       </template>
-                    </div>
-                  </template>
-                </div>
 
-                <!-- Services -->
-                <template x-if="detailsBooking?.services?.length > 0">
-                  <div>
-                    <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
-                    <div class="space-y-2">
-                      <template x-for="(svc, index) in detailsBooking.services" :key="index">
-                        <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
-                          <p class="text-sm font-medium text-slate-700" x-text="svc.name"></p>
-                          <p class="text-sm text-slate-500" x-text="formatServiceAvailedPrice(svc, detailsBooking)"></p>
+                      <template x-if="getPetServicesAvailed(pet, detailsBooking).length > 0">
+                        <div class="mt-3 border-t border-slate-200 pt-3">
+                          <div class="mb-2 flex items-center justify-between gap-3">
+                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
+                            <p class="shrink-0 text-sm font-bold text-[#1f3850]" x-text="formatPetServicesAvailedTotal(pet, detailsBooking)"></p>
+                          </div>
+                          <div class="space-y-2">
+                            <template x-for="(svc, serviceIndex) in getPetServicesAvailed(pet, detailsBooking)" :key="svc.id ?? serviceIndex">
+                              <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                                <p class="text-sm font-medium text-slate-700" x-text="svc.name ?? svc.serviceName ?? svc.service_name"></p>
+                                <p class="shrink-0 text-sm font-bold text-slate-500" x-text="formatServiceAvailedPrice(svc, detailsBooking)"></p>
+                              </div>
+                            </template>
+                          </div>
                         </div>
                       </template>
                     </div>
-                  </div>
-                </template>
+                  </template>
+                </div>
 
                 <!-- Special Notes -->
                 <template x-if="detailsBooking?.specialNotes">
                   <div>
                     <p class="mb-1 text-xs font-bold uppercase tracking-widest text-slate-400">Special Notes</p>
                     <p class="text-sm text-slate-700" x-text="detailsBooking.specialNotes"></p>
+                  </div>
+                </template>
+
+                <!-- Overall Total -->
+                <template x-if="detailsBooking?.services?.length > 0">
+                  <div class="flex items-center justify-between rounded-xl border border-[#315b7e]/20 bg-[#eef5fb] px-4 py-3">
+                    <p class="text-sm font-bold text-[#1f3850]">Overall Total</p>
+                    <p class="text-sm font-bold text-[#1f3850]" x-text="formatServicesAvailedTotal(detailsBooking)"></p>
                   </div>
                 </template>
 
@@ -2049,6 +2050,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script src="../../scripts/api.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
     <script src="../../scripts/components/admin-sidebar.js"></script>

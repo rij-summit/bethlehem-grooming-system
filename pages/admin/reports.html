@@ -519,7 +519,7 @@
                           <span x-text="formatPercent(topPaymentMethod.percent)"></span><span>%</span>
                         </p>
                         <p class="mt-2 text-sm text-slate-500">
-                          <span x-text="formatPeso(topPaymentMethod.total)"></span>
+                          <span class="font-bold" x-text="formatPeso(topPaymentMethod.total)"></span>
                           <span> from </span>
                           <span x-text="formatWholeNumber(topPaymentMethod.count)"></span>
                           <span x-text="' transaction' + (topPaymentMethod.count === 1 ? '' : 's')"></span>
@@ -589,8 +589,8 @@
                         <td class="px-5 py-4 font-semibold text-slate-800" x-text="row.clientName"></td>
                         <td class="px-5 py-4 font-semibold text-slate-700" x-text="formatWholeNumber(row.petCount)"></td>
                         <td class="px-5 py-4 font-semibold text-slate-700" x-text="formatWholeNumber(row.totalVisits)"></td>
-                        <td class="px-5 py-4 text-right font-semibold text-slate-700" x-text="formatPeso(row.averageSpentPerVisit)"></td>
-                        <td class="px-5 py-4 text-right font-extrabold text-[#15803d]" x-text="formatPeso(row.totalSpent)"></td>
+                        <td class="px-5 py-4 text-right font-bold text-slate-700" x-text="formatPeso(row.averageSpentPerVisit)"></td>
+                        <td class="px-5 py-4 text-right font-bold text-[#15803d]" x-text="formatPeso(row.totalSpent)"></td>
                       </tr>
                     </template>
                   </tbody>

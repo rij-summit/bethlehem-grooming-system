@@ -35,6 +35,8 @@ function adminSidebar() {
       this.isAdmin = API.getUserRole() === "admin";
       if (API.enforceAdminPageAccess && !API.enforceAdminPageAccess()) return;
 
+      await window.AppClock?.load?.();
+
       this.detectActivePage();
       this.registerIncomingAppointmentListener();
 
@@ -105,6 +107,9 @@ function adminSidebar() {
     },
 
     todayDate() {
+      const today = window.AppClock?.todayKey?.();
+      if (today) return today;
+
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },

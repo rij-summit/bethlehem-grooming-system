@@ -16,6 +16,7 @@ use App\Models\Service;
 class BookingController extends Controller
 {
     private const DAILY_CAPACITY = 20;
+    private const MAX_PETS_PER_BOOKING = 10;
     private const INTAKE_STATUSES = [
         'checked_in',
         'in_progress',
@@ -36,7 +37,7 @@ class BookingController extends Controller
             })
             ->whereIn('status', self::INTAKE_STATUSES)
             ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->count();
+            ->sum('number_of_pets');
     }
 
     // ── GET AVAILABLE TIME WINDOWS ────────────────────────
@@ -44,16 +45,20 @@ class BookingController extends Controller
     {
         $date = $request->query('date', Carbon::today()->toDateString());
 
+        $totalBooked = Booking::where('booking_date', $date)
+            ->whereNotIn('status', ['cancelled'])
+            ->sum('number_of_pets');
+
+        $dayFull = $totalBooked >= self::DAILY_CAPACITY;
+        $dailyRemaining = max(0, self::DAILY_CAPACITY - $totalBooked);
+
         $windows = TimeWindow::where('is_active', 1)->get();
 
-        $result = $windows->map(function ($window) use ($date) {
+        $result = $windows->map(function ($window) use ($date, $dayFull, $dailyRemaining) {
             $booked = Booking::where('window_id', $window->window_id)
                 ->where('booking_date', $date)
                 ->whereNotIn('status', ['cancelled'])
-                ->count();
-
-            $remaining = $window->max_slots - $booked;
-            $isFull    = $remaining <= 0;
+                ->sum('number_of_pets');
 
             return [
                 'window_id'    => $window->window_id,
@@ -62,8 +67,8 @@ class BookingController extends Controller
                 'end_time'     => $window->end_time,
                 'max_slots'    => $window->max_slots,
                 'booked'       => $booked,
-                'remaining'    => max(0, $remaining),
-                'is_full'      => $isFull,
+                'remaining'    => $dailyRemaining,
+                'is_full'      => $dayFull,
                 'recommended'  => false,
             ];
         });
@@ -82,13 +87,7 @@ class BookingController extends Controller
             });
         }
 
-        // ── Check if day is fully booked ──────────────────
-        $totalBooked = Booking::where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled'])
-            ->count();
-
-        $dayFull = $totalBooked >= self::DAILY_CAPACITY;
-
+        // ── Return active time windows with daily capacity status ──────────────────
         return response()->json([
             'success'      => true,
             'date'         => $date,
@@ -102,12 +101,14 @@ class BookingController extends Controller
     // ── SUBMIT A BOOKING ──────────────────────────────────
     public function store(Request $request)
     {
+        $today = now()->toDateString();
+
         $request->validate([
-            'booking_date'  => 'required|date|after_or_equal:today',
+            'booking_date'  => 'required|date|after_or_equal:' . $today,
             'window_id'     => 'required|exists:time_windows,window_id',
-            'number_of_pets'=> 'required|integer|min:1|max:3',
+            'number_of_pets'=> 'required|integer|min:1|max:' . self::MAX_PETS_PER_BOOKING,
             'special_notes' => 'nullable|string',
-            'pets'          => 'required|array|min:1|max:3',
+            'pets'          => 'required|array|min:1|max:' . self::MAX_PETS_PER_BOOKING,
             'pets.*.pet_id' => 'nullable|integer|exists:pets,pet_id',
             'pets.*.pet_name'   => 'required|string|max:100',
             'pets.*.species'    => 'nullable|string|max:50',
@@ -126,33 +127,22 @@ class BookingController extends Controller
 
         $user = $request->user();
         $date = $request->booking_date;
+        $petCount = (int) $request->number_of_pets;
 
         // ── Check if day is full ──────────────────────────
         $totalBooked = Booking::where('booking_date', $date)
             ->whereNotIn('status', ['cancelled'])
-            ->count();
+            ->sum('number_of_pets');
 
-        if ($totalBooked >= self::DAILY_CAPACITY) {
+        if ($totalBooked + $petCount > self::DAILY_CAPACITY) {
             return response()->json([
                 'success' => false,
                 'message' => 'Sorry, this date is fully booked. Please choose another date.',
             ], 422);
         }
 
-        // ── Check if window is full ───────────────────────
-        $windowBooked = Booking::where('window_id', $request->window_id)
-            ->where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled'])
-            ->count();
-
+        // ── Load selected time window ───────────────────────
         $window = TimeWindow::find($request->window_id);
-
-        if ($windowBooked >= $window->max_slots) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sorry, this time slot is already full. Please choose another time.',
-            ], 422);
-        }
 
         // ── Check duplicate booking ───────────────────────
         $duplicate = Booking::where('user_id', $user->user_id)
@@ -272,6 +262,14 @@ class BookingController extends Controller
             'created_at' => now(),
         ]);
 
+        // Reload database-managed timestamps so the confirmation uses the
+        // authoritative booking creation time without changing the schedule.
+        $booking->refresh();
+        $createdAt = Carbon::parse(
+            $booking->created_at,
+            config('app.timezone')
+        )->toIso8601String();
+
         return response()->json([
             'success'   => true,
             'message'   => 'Booking confirmed successfully!',
@@ -280,6 +278,7 @@ class BookingController extends Controller
                 'booking_reference' => $booking->booking_reference,
                 'booking_date'      => $booking->booking_date,
                 'window'            => $window->window_label,
+                'created_at'        => $createdAt,
                 'status'            => $booking->status,
                 'number_of_pets'    => $booking->number_of_pets,
             ],
@@ -307,6 +306,9 @@ class BookingController extends Controller
                 'booking_id'        => $b->booking_id,
                 'booking_reference' => $b->booking_reference,
                 'booking_date'      => $b->booking_date,
+                'created_at'        => $b->created_at
+                    ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
+                    : null,
                 'status'            => $b->status,
                 'paid'              => (bool) $b->paid,
                 'number_of_pets'    => $b->number_of_pets,
@@ -466,9 +468,11 @@ class BookingController extends Controller
     // ── RESCHEDULE A BOOKING ──────────────────────────────
     public function reschedule(Request $request)
     {
+        $today = now()->toDateString();
+
         $request->validate([
             'booking_id'    => 'required|exists:bookings,booking_id',
-            'new_date'      => 'required|date|after_or_equal:today',
+            'new_date'      => 'required|date|after_or_equal:' . $today,
             'new_window_id' => 'required|exists:time_windows,window_id',
         ]);
 
@@ -498,20 +502,20 @@ class BookingController extends Controller
             ], 422);
         }
 
-        // Check that the target window is not full
+        // Check that the target date still has enough daily capacity
         $newDate   = $request->new_date;
         $newWindow = TimeWindow::find($request->new_window_id);
+        $petCount  = (int) $booking->number_of_pets;
 
-        $windowBooked = Booking::where('window_id', $request->new_window_id)
-            ->where('booking_date', $newDate)
+        $dayBooked = Booking::where('booking_date', $newDate)
             ->whereNotIn('status', ['cancelled'])
             ->where('booking_id', '!=', $booking->booking_id)
-            ->count();
+            ->sum('number_of_pets');
 
-        if ($windowBooked >= $newWindow->max_slots) {
+        if ($dayBooked + $petCount > self::DAILY_CAPACITY) {
             return response()->json([
                 'success' => false,
-                'message' => 'Sorry, that time slot is already full. Please choose another.',
+                'message' => 'Sorry, this date is fully booked. Please choose another date.',
             ], 422);
         }
 
