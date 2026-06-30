@@ -39,6 +39,20 @@ class AdminDashboardSummaryTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
+            $table->text('special_instructions')->nullable();
+            $table->dateTime('grooming_start_time')->nullable();
+            $table->dateTime('grooming_end_time')->nullable();
+        });
+
+        Schema::create('pets', function (Blueprint $table) {
+            $table->increments('pet_id');
+            $table->string('pet_name');
+            $table->string('species')->nullable();
+            $table->string('breed')->nullable();
+            $table->string('size')->nullable();
+            $table->string('fur_type')->nullable();
+            $table->decimal('weight', 5, 2)->nullable();
+            $table->text('medical_conditions')->nullable();
         });
 
         Schema::create('booking_services', function (Blueprint $table) {
@@ -65,6 +79,7 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('booking_pets');
+        Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
 
         parent::tearDown();
@@ -160,6 +175,48 @@ class AdminDashboardSummaryTest extends TestCase
             $formatted = $formatBooking->invoke($controller, $booking);
 
             $this->assertSame($expected, $formatted['petType']);
+            $this->assertSame(
+                range(1, count($species)),
+                collect($formatted['pets'])->pluck('petQueueNumber')->all(),
+            );
         }
+    }
+
+    public function test_starting_pets_keeps_booking_queued_until_every_pet_has_started(): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'PET-START-2',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 2,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+        ]);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Zeus', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Ginger', 'species' => 'cat'],
+        ]);
+
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 1, 'booking_id' => 1, 'pet_id' => 1],
+            ['booking_pet_id' => 2, 'booking_id' => 1, 'pet_id' => 2],
+        ]);
+
+        $controller = new AdminBookingController;
+        $firstResponse = $controller->startPetGrooming(1, 1);
+
+        $this->assertSame(200, $firstResponse->getStatusCode());
+        $this->assertFalse($firstResponse->getData(true)['all_pets_started']);
+        $this->assertSame('checked_in', DB::table('bookings')->where('booking_id', 1)->value('status'));
+        $this->assertNotNull(DB::table('booking_pets')->where('booking_pet_id', 1)->value('grooming_start_time'));
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 2)->value('grooming_start_time'));
+
+        $secondResponse = $controller->startPetGrooming(1, 2);
+
+        $this->assertSame(200, $secondResponse->getStatusCode());
+        $this->assertTrue($secondResponse->getData(true)['all_pets_started']);
+        $this->assertSame('in_progress', DB::table('bookings')->where('booking_id', 1)->value('status'));
+        $this->assertNotNull(DB::table('bookings')->where('booking_id', 1)->value('grooming_started_at'));
     }
 }

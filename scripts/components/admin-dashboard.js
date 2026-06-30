@@ -476,6 +476,7 @@ function adminDashboard() {
     localCancelledBookingIds: [],
     localRevertedToIncomingBookings: [],
     localRevertedToQueuedBookings: [],
+    expandedQueuedBookingIds: {},
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -631,6 +632,26 @@ function adminDashboard() {
             await API.adminStartGrooming(booking.id);
             await this.loadAdminBookings();
             this.setTab("in-progress");
+          },
+          startPetGrooming: async ({ booking }) => {
+            const pet = booking?.actionPet;
+            const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
+
+            if (!bookingPetId) {
+              throw new Error("Cannot start grooming: missing booking pet id.");
+            }
+
+            const response = await API.adminStartPetGrooming(booking.id, bookingPetId);
+            await this.loadAdminBookings();
+
+            if (response?.all_pets_started) {
+              this.setTab("in-progress");
+            } else {
+              this.setQueuedBookingExpanded(booking.id, true);
+              this.setTab("queued");
+            }
+
+            return response;
           },
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
@@ -836,6 +857,29 @@ function adminDashboard() {
       });
     },
 
+    // Confirms a per-pet start. The selected pet travels with the cloned booking
+    // so the shared confirmation modal can continue using its existing contract.
+    confirmStartGroomingPet(booking, pet) {
+      if (pet?.isGroomingStarted) {
+        return;
+      }
+
+      const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      this.openActionConfirmModal({
+        action: "startPetGrooming",
+        booking: {
+          ...booking,
+          actionPet: { ...pet },
+        },
+        title: "Confirm Start Grooming",
+        message: `Are you sure you want to start grooming for ${petName}?`,
+        confirmLabel: "Yes, Start",
+        busyLabel: "Starting...",
+        icon: "grooming",
+        variant: "primary",
+      });
+    },
+
     // Opens a second confirmation before finishing an In-Progress booking.
     confirmMarkBookingDone(booking) {
       const ownerName = String(booking?.ownerName || "").trim();
@@ -960,6 +1004,8 @@ function adminDashboard() {
           await this.checkInBooking(booking);
         } else if (action === "startGrooming") {
           await this.startGroomingBooking(booking);
+        } else if (action === "startPetGrooming") {
+          await this.runBookingAction("startPetGrooming", booking);
         } else if (action === "markDone") {
           await this.markBookingDone(booking);
         } else if (action === "cancel") {
@@ -1788,11 +1834,31 @@ function adminDashboard() {
       return Boolean(this.pendingActions[this.getActionKey(actionName, bookingId)]);
     },
 
+    isQueuedBookingExpanded(bookingId) {
+      return Boolean(this.expandedQueuedBookingIds[String(bookingId)]);
+    },
+
+    setQueuedBookingExpanded(bookingId, expanded) {
+      this.expandedQueuedBookingIds = {
+        ...this.expandedQueuedBookingIds,
+        [String(bookingId)]: Boolean(expanded),
+      };
+      this.$nextTick(() => this.refreshIcons());
+    },
+
+    toggleQueuedBooking(bookingId) {
+      this.setQueuedBookingExpanded(
+        bookingId,
+        !this.isQueuedBookingExpanded(bookingId),
+      );
+    },
+
     // Provides the temporary button label shown while an action is in progress.
     getActionLabel(actionName) {
       const labelMap = {
         checkIn: "Checking in...",
         startGrooming: "Grooming...",
+        startPetGrooming: "Starting...",
         markDone: "Finishing...",
         cancel: "Cancelling...",
         archive: "Archiving...",
@@ -2125,6 +2191,116 @@ function adminDashboard() {
         pets,
         services,
       );
+    },
+
+    formatPetQueueNumber(pet, petIndex = 0) {
+      // Display-only numbering is scoped to one owner booking. See the backend
+      // formatter comment for the optional persistence migration guidance.
+      const queueNumber = Number(pet?.petQueueNumber ?? petIndex + 1);
+      return `#P${Number.isFinite(queueNumber) && queueNumber > 0 ? queueNumber : petIndex + 1}`;
+    },
+
+    formatPetCardServiceLabel(pet, booking) {
+      const names = this.getPetServicesAvailed(pet, booking)
+        .map((service) => service?.name ?? service?.serviceName ?? service?.service_name)
+        .filter(Boolean);
+
+      return names.length > 0 ? names.join(", ") : "No selected services recorded";
+    },
+
+    formatPetCardValue(value, fallback = "Not provided") {
+      const text = String(value ?? "").trim();
+      if (!text || text === "—") {
+        return fallback;
+      }
+
+      return text
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+    },
+
+    escapePrintHtml(value) {
+      const element = document.createElement("span");
+      element.textContent = String(value ?? "");
+      return element.innerHTML;
+    },
+
+    printPetCard(booking, pet, petIndex = 0) {
+      const services = this.getPetServicesAvailed(pet, booking);
+      const serviceItems = services.length > 0
+        ? services.map((service) => {
+            const serviceName = service?.name ?? service?.serviceName ?? service?.service_name ?? "Grooming service";
+            return `<li>${this.escapePrintHtml(serviceName)}</li>`;
+          }).join("")
+        : "<li>No selected services recorded</li>";
+
+      const petName = pet?.petName ?? pet?.pet_name ?? pet?.name ?? "Pet";
+      const groomingInstructions =
+        pet?.specialInstructions ??
+        pet?.special_instructions ??
+        booking?.specialNotes ??
+        "None provided";
+      const medicalInformation =
+        pet?.medicalConditions ??
+        pet?.medical_conditions ??
+        "None provided";
+      const printRoot = document.createElement("section");
+      const previousTitle = document.title;
+      let cleanupTimer = null;
+
+      printRoot.className = "pet-grooming-print-clone";
+      printRoot.innerHTML = `
+        <header class="pet-grooming-print-header">
+          <div>
+            <p class="pet-grooming-print-clinic">Bethlehem Animal Clinic</p>
+            <p class="pet-grooming-print-subtitle">Individual Pet Grooming Card</p>
+          </div>
+          <strong class="pet-grooming-print-queue">${this.escapePrintHtml(this.formatPetQueueNumber(pet, petIndex))}</strong>
+        </header>
+        <section class="pet-grooming-print-section">
+          <h1>${this.escapePrintHtml(petName)}</h1>
+          <div class="pet-grooming-print-grid">
+            <p><span>Owner</span>${this.escapePrintHtml(booking?.ownerName || "Not provided")}</p>
+            <p><span>Booking reference</span>${this.escapePrintHtml(booking?.bookingReference || "Not provided")}</p>
+            <p><span>Species</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.species ?? pet?.petType ?? pet?.pet_type))}</p>
+            <p><span>Breed</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.breed))}</p>
+            <p><span>Size</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.size ?? pet?.petSize ?? pet?.pet_size))}</p>
+            <p><span>Fur type</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.furType ?? pet?.fur_type))}</p>
+            <p><span>Weight</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.weight))}</p>
+            <p><span>Dropped off</span>${this.escapePrintHtml(booking?.dropOffTime || "Not recorded")}</p>
+          </div>
+        </section>
+        <section class="pet-grooming-print-section">
+          <h2>Selected services</h2>
+          <ul class="pet-grooming-print-services">${serviceItems}</ul>
+        </section>
+        <section class="pet-grooming-print-section">
+          <h2>Grooming instructions</h2>
+          <p class="pet-grooming-print-notes">${this.escapePrintHtml(groomingInstructions)}</p>
+        </section>
+        <section class="pet-grooming-print-section pet-grooming-print-medical">
+          <h2>Medical information</h2>
+          <p class="pet-grooming-print-notes">${this.escapePrintHtml(medicalInformation)}</p>
+        </section>
+      `;
+
+      const cleanup = () => {
+        printRoot.remove();
+        document.body.classList.remove("pet-grooming-card-printing");
+        document.title = previousTitle;
+        window.removeEventListener("afterprint", cleanup);
+        if (cleanupTimer) {
+          window.clearTimeout(cleanupTimer);
+          cleanupTimer = null;
+        }
+      };
+
+      document.body.appendChild(printRoot);
+      document.body.classList.add("pet-grooming-card-printing");
+      document.title = `${this.formatPetQueueNumber(pet, petIndex)} ${petName}`;
+      window.addEventListener("afterprint", cleanup);
+      cleanupTimer = window.setTimeout(cleanup, 60000);
+      window.print();
     },
 
     getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {

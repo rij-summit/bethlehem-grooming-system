@@ -409,6 +409,16 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/start-grooming`, null, getAdminToken());
   }
 
+  async function adminStartPetGrooming(bookingId, bookingPetId) {
+    // Starts grooming for one pet while preserving the rest of the owner's queue card.
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/pets/${bookingPetId}/start-grooming`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function adminMarkDone(bookingId) {
     // POST /api/admin/bookings/{id}/mark-done  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/mark-done`, null, getAdminToken());
@@ -655,6 +665,7 @@ var API = (() => {
     getAdminBookings,
     adminCheckIn,
     adminStartGrooming,
+    adminStartPetGrooming,
     adminMarkDone,
     adminCancelBooking,
     // Admin customers

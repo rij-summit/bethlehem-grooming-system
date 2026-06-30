@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\Booking;
+use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
 use App\Models\Notification;
@@ -221,6 +223,95 @@ class AdminBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Grooming session started.',
+        ]);
+    }
+
+    // Starts one pet without moving the owner booking out of Queued until every pet has started.
+    // No migration is needed: booking_pets.grooming_start_time already stores this per-pet state.
+    public function startPetGrooming($id, $bookingPetId)
+    {
+        $result = DB::transaction(function () use ($id, $bookingPetId) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
+
+            if (!$booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'checked_in') {
+                return ['error' => ['message' => 'Booking must be queued before a pet can start grooming.', 'status' => 422]];
+            }
+
+            $bookingPet = BookingPet::where('booking_id', $booking->booking_id)
+                ->whereKey($bookingPetId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$bookingPet) {
+                return ['error' => ['message' => 'Pet is not part of this booking.', 'status' => 404]];
+            }
+
+            if ($bookingPet->grooming_start_time) {
+                return ['error' => ['message' => 'Grooming has already started for this pet.', 'status' => 422]];
+            }
+
+            $startedAt = now();
+            $bookingPet->update(['grooming_start_time' => $startedAt]);
+
+            $remainingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->whereNull('grooming_start_time')
+                ->count();
+
+            $bookingUpdates = [];
+            if (!$booking->grooming_started_at) {
+                $bookingUpdates['grooming_started_at'] = $startedAt;
+            }
+            if ($remainingPets === 0) {
+                $bookingUpdates['status'] = 'in_progress';
+            }
+            if ($bookingUpdates) {
+                $booking->update($bookingUpdates);
+            }
+
+            $booking->loadMissing(['user', 'bookingPets.pet']);
+            $petName = $bookingPet->pet()->value('pet_name') ?: 'your pet';
+
+            if ($booking->user) {
+                CustomerNotification::create([
+                    'user_id'    => $booking->user->user_id,
+                    'booking_id' => $booking->booking_id,
+                    'type'       => 'grooming_started',
+                    'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
+                    'is_read'    => false,
+                    'created_at' => $startedAt,
+                ]);
+            }
+
+            return [
+                'booking' => $booking,
+                'bookingPet' => $bookingPet,
+                'petName' => $petName,
+                'allPetsStarted' => $remainingPets === 0,
+                'remainingPets' => $remainingPets,
+                'startedAt' => $startedAt,
+            ];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        return response()->json([
+            'success'          => true,
+            'message'          => "Grooming started for {$result['petName']}.",
+            'booking_id'       => $result['booking']->booking_id,
+            'booking_pet_id'   => $result['bookingPet']->booking_pet_id,
+            'started_at'       => $result['startedAt']->toIso8601String(),
+            'all_pets_started' => $result['allPetsStarted'],
+            'remaining_pets'   => $result['remainingPets'],
+            'booking_status'   => $result['allPetsStarted'] ? 'in_progress' : 'checked_in',
         ]);
     }
 
@@ -499,7 +590,9 @@ class AdminBookingController extends Controller
     {
         $user     = $booking->user;
         $window   = $booking->timeWindow;
-        $bpets    = $booking->bookingPets ?? collect();
+        $bpets    = ($booking->bookingPets ?? collect())
+            ->sortBy('booking_pet_id')
+            ->values();
         $firstBp  = $bpets->first();
         $firstPet = $firstBp?->pet;
         $bpetsById = $bpets->keyBy('booking_pet_id');
@@ -582,7 +675,7 @@ class AdminBookingController extends Controller
                     : null,
                 'paid_at'        => $paidPayment->paid_at,
             ] : null,
-            'pets'             => $bpets->map(function ($bp) {
+            'pets'             => $bpets->values()->map(function ($bp, $petIndex) {
                 $pet = $bp->pet;
                 return [
                     'id'                  => $bp->booking_pet_id,
@@ -604,6 +697,14 @@ class AdminBookingController extends Controller
                     'weight'              => $pet?->weight ? $pet->weight . ' kg' : '—',
                     'medicalConditions'   => $pet?->medical_conditions ?? null,
                     'specialInstructions' => $bp->special_instructions ?? null,
+                    // #P1, #P2, ... is intentionally derived within this owner booking.
+                    // DB TEAM (optional): add booking_pets.pet_queue_number only if product rules
+                    // later require a globally unique/immutable pet queue number across bookings.
+                    'petQueueNumber'      => $petIndex + 1,
+                    'groomingStartedAt'   => $bp->grooming_start_time
+                        ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
+                        : null,
+                    'isGroomingStarted'   => (bool) $bp->grooming_start_time,
                 ];
             })->values(),
             'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {

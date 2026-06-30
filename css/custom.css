@@ -2155,6 +2155,404 @@ body.customer-detail-modal-open {
   background: #ecfeff;
 }
 
+/* ----- Queued Owner / Per-Pet Cards ----- */
+.admin-queued-owner-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  border: 0;
+  border-radius: 1rem;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-queued-owner-toggle:focus-visible {
+  outline: 3px solid rgba(49, 91, 126, 0.28);
+  outline-offset: 0.35rem;
+}
+
+.admin-queued-owner-summary {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.admin-queued-owner-expand-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  color: #315b7e;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.admin-queued-owner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.admin-queued-owner-action {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-queued-details-action {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #315b7e;
+}
+
+.admin-queued-details-action:hover {
+  background: #dbeafe;
+}
+
+.admin-queued-pets-panel {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 1rem;
+  padding-top: 1.1rem;
+}
+
+.admin-queued-pets-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.admin-queued-pet-count {
+  display: inline-flex;
+  min-width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #fff8e8;
+  color: #9a6b00;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.admin-queued-pets-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.9rem;
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.admin-queued-pet-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-queued-pet-card {
+  overflow: hidden;
+  border: 1px solid #d8dee6;
+  border-radius: 0.9rem;
+  background: #fcfcfb;
+}
+
+.admin-queued-pet-main {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.admin-queued-pet-queue {
+  color: #315b7e;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.admin-queued-pet-information h5 {
+  color: #1e293b;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.admin-queued-pet-basic {
+  margin-top: 0.15rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.admin-queued-pet-services {
+  margin-top: 0.3rem;
+  color: #315b7e;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.admin-queued-pet-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.admin-queued-pet-start,
+.admin-queued-pet-print {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-queued-pet-start {
+  border: 1px solid #315b7e;
+  background: #315b7e;
+  color: #ffffff;
+}
+
+.admin-queued-pet-start:hover:not(:disabled) {
+  background: #284a67;
+}
+
+.admin-queued-pet-start.is-disabled {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+  cursor: not-allowed;
+}
+
+.admin-queued-pet-print {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.admin-queued-pet-print:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.admin-queued-pet-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0.75rem 1rem;
+}
+
+.admin-queued-pet-notes p {
+  min-width: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.admin-queued-pet-notes span,
+.admin-queued-pet-notes strong {
+  display: block;
+}
+
+.admin-queued-pet-notes span {
+  margin-bottom: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-queued-pet-notes strong {
+  overflow-wrap: anywhere;
+  color: #475569;
+  font-weight: 600;
+  white-space: pre-line;
+}
+
+@media (max-width: 767px) {
+  .admin-queued-owner-toggle,
+  .admin-queued-owner-summary {
+    align-items: flex-start;
+  }
+
+  .admin-queued-owner-expand-hint span {
+    display: none;
+  }
+
+  .admin-queued-owner-actions {
+    justify-content: stretch;
+  }
+
+  .admin-queued-owner-action {
+    flex: 1 1 calc(50% - 0.6rem);
+  }
+
+  .admin-queued-pet-main {
+    grid-template-columns: 3.6rem minmax(0, 1fr);
+  }
+
+  .admin-queued-pet-actions {
+    grid-column: 1 / -1;
+  }
+
+  .admin-queued-pet-start,
+  .admin-queued-pet-print {
+    flex: 1 1 0;
+  }
+
+  .admin-queued-pet-notes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The generated sheet is hidden on screen and becomes the only printable node. */
+.pet-grooming-print-clone {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  body.pet-grooming-card-printing > :not(.pet-grooming-print-clone) {
+    display: none !important;
+  }
+
+  body.pet-grooming-card-printing .pet-grooming-print-clone {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #172033 !important;
+    font-family: Arial, sans-serif !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .pet-grooming-print-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20mm;
+    border-bottom: 3px solid #315b7e;
+    padding-bottom: 6mm;
+  }
+
+  .pet-grooming-print-clinic {
+    color: #1f3850;
+    font-size: 18pt;
+    font-weight: 800;
+  }
+
+  .pet-grooming-print-subtitle {
+    margin-top: 1mm;
+    color: #64748b;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .pet-grooming-print-queue {
+    border: 2px solid #315b7e;
+    border-radius: 5mm;
+    padding: 3mm 5mm;
+    color: #315b7e;
+    font-size: 20pt;
+  }
+
+  .pet-grooming-print-section {
+    border: 1px solid #cbd5e1;
+    border-radius: 4mm;
+    margin-top: 5mm;
+    padding: 5mm;
+    break-inside: avoid;
+  }
+
+  .pet-grooming-print-section h1 {
+    margin: 0 0 4mm;
+    color: #1f3850;
+    font-size: 19pt;
+  }
+
+  .pet-grooming-print-section h2 {
+    margin: 0 0 3mm;
+    color: #315b7e;
+    font-size: 11pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pet-grooming-print-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4mm 8mm;
+  }
+
+  .pet-grooming-print-grid p,
+  .pet-grooming-print-notes,
+  .pet-grooming-print-services {
+    margin: 0;
+    color: #334155;
+    font-size: 10pt;
+    line-height: 1.45;
+  }
+
+  .pet-grooming-print-grid span {
+    display: block;
+    margin-bottom: 1mm;
+    color: #94a3b8;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .pet-grooming-print-services {
+    padding-left: 5mm;
+  }
+
+  .pet-grooming-print-services li + li {
+    margin-top: 1.5mm;
+  }
+
+  .pet-grooming-print-notes {
+    white-space: pre-wrap;
+  }
+
+  .pet-grooming-print-medical {
+    border-color: #f0b7b7;
+    background: #fffafa;
+  }
+}
+
 /* ----- Inventory Filters ----- */
 .inventory-filter-grid {
   display: grid;
