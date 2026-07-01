@@ -2435,9 +2435,9 @@ body.customer-detail-modal-open {
 }
 
 @media print {
-  @page {
+  @page pet-grooming-card {
     size: A4 portrait;
-    margin: 15mm;
+    margin: 0;
   }
 
   body.pet-grooming-card-printing > :not(.pet-grooming-print-clone) {
@@ -2445,11 +2445,12 @@ body.customer-detail-modal-open {
   }
 
   body.pet-grooming-card-printing .pet-grooming-print-clone {
+    page: pet-grooming-card;
     display: block !important;
     width: auto !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 15mm !important;
     color: #172033 !important;
     font-family: Arial, sans-serif !important;
     print-color-adjust: exact;

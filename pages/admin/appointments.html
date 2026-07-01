@@ -941,7 +941,10 @@
 
                 <div class="admin-queued-owner-actions">
                   <template x-if="!booking.paid">
-                    <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">Pay Now</button>
+                    <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
+                      <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
+                      Pay Now
+                    </button>
                   </template>
                   <template x-if="booking.paid">
                     <div class="admin-queued-owner-action btn-already-paid">
@@ -950,8 +953,14 @@
                     </div>
                   </template>
                   <!-- Existing frontend-only owner booking actions remain booking-scoped. -->
-                  <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">Revert</button>
-                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">Cancel</button>
+                  <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
+                    <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                    Revert
+                  </button>
+                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
+                    <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                    Cancel
+                  </button>
                   <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">View Details</button>
                 </div>
 

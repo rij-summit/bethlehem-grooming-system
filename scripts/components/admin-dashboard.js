@@ -2244,6 +2244,10 @@ function adminDashboard() {
         pet?.medicalConditions ??
         pet?.medical_conditions ??
         "None provided";
+      const contactNumber = this.toStringValue(booking?.contactNumber).trim();
+      const formattedContactNumber = contactNumber
+        ? this.formatMobileNumber(contactNumber)
+        : "Not provided";
       const printRoot = document.createElement("section");
       const previousTitle = document.title;
       let cleanupTimer = null;
@@ -2261,7 +2265,7 @@ function adminDashboard() {
           <h1>${this.escapePrintHtml(petName)}</h1>
           <div class="pet-grooming-print-grid">
             <p><span>Owner</span>${this.escapePrintHtml(booking?.ownerName || "Not provided")}</p>
-            <p><span>Booking reference</span>${this.escapePrintHtml(booking?.bookingReference || "Not provided")}</p>
+            <p><span>Phone number</span>${this.escapePrintHtml(formattedContactNumber)}</p>
             <p><span>Species</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.species ?? pet?.petType ?? pet?.pet_type))}</p>
             <p><span>Breed</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.breed))}</p>
             <p><span>Size</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.size ?? pet?.petSize ?? pet?.pet_size))}</p>
