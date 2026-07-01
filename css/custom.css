@@ -2254,6 +2254,11 @@ body.customer-detail-modal-open {
   font-weight: 800;
 }
 
+.admin-in-progress-pet-count {
+  background: #eef5fb;
+  color: #315b7e;
+}
+
 .admin-queued-pets-empty {
   border: 1px dashed #cbd5e1;
   border-radius: 0.9rem;
@@ -2316,7 +2321,8 @@ body.customer-detail-modal-open {
 }
 
 .admin-queued-pet-start,
-.admin-queued-pet-print {
+.admin-queued-pet-print,
+.admin-in-progress-pet-finish {
   display: inline-flex;
   min-height: 2.5rem;
   align-items: center;
@@ -2329,17 +2335,20 @@ body.customer-detail-modal-open {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.admin-queued-pet-start {
+.admin-queued-pet-start,
+.admin-in-progress-pet-finish {
   border: 1px solid #315b7e;
   background: #315b7e;
   color: #ffffff;
 }
 
-.admin-queued-pet-start:hover:not(:disabled) {
+.admin-queued-pet-start:hover:not(:disabled),
+.admin-in-progress-pet-finish:hover:not(:disabled) {
   background: #284a67;
 }
 
-.admin-queued-pet-start.is-disabled {
+.admin-queued-pet-start.is-disabled,
+.admin-in-progress-pet-finish.is-disabled {
   border-color: #bbf7d0;
   background: #f0fdf4;
   color: #15803d;
@@ -2420,7 +2429,8 @@ body.customer-detail-modal-open {
   }
 
   .admin-queued-pet-start,
-  .admin-queued-pet-print {
+  .admin-queued-pet-print,
+  .admin-in-progress-pet-finish {
     flex: 1 1 0;
   }
 

@@ -424,6 +424,16 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/mark-done`, null, getAdminToken());
   }
 
+  async function adminMarkPetDone(bookingId, bookingPetId) {
+    // Finishes one pet while the owner booking remains in progress until all pets are done.
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/pets/${bookingPetId}/mark-done`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function adminCancelBooking(bookingId) {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
@@ -667,6 +677,7 @@ var API = (() => {
     adminStartGrooming,
     adminStartPetGrooming,
     adminMarkDone,
+    adminMarkPetDone,
     adminCancelBooking,
     // Admin customers
     getCustomers,

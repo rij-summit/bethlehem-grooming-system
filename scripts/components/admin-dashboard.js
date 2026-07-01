@@ -477,6 +477,7 @@ function adminDashboard() {
     localRevertedToIncomingBookings: [],
     localRevertedToQueuedBookings: [],
     expandedQueuedBookingIds: {},
+    expandedInProgressBookingIds: {},
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -657,6 +658,31 @@ function adminDashboard() {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
             this.setTab(booking.paid ? "to-be-picked-up" : "for-payment");
+          },
+          markPetDone: async ({ booking }) => {
+            const pet = booking?.actionPet;
+            const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
+
+            if (!bookingPetId) {
+              throw new Error("Cannot finish grooming: missing booking pet id.");
+            }
+
+            const response = await API.adminMarkPetDone(booking.id, bookingPetId);
+            await this.loadAdminBookings();
+
+            if (response?.all_pets_finished) {
+              const completedStatus = this.normalizeStatus(response.booking_status);
+              this.setTab(
+                completedStatus === "to-be-picked-up" || completedStatus === "released"
+                  ? "to-be-picked-up"
+                  : "for-payment",
+              );
+            } else {
+              this.setInProgressBookingExpanded(booking.id, true);
+              this.setTab("in-progress");
+            }
+
+            return response;
           },
           cancel: async ({ booking }) => {
             await API.adminCancelBooking(booking.id);
@@ -897,6 +923,28 @@ function adminDashboard() {
       });
     },
 
+    // Confirms completion for one pet without finishing the owner booking early.
+    confirmMarkPetDone(booking, pet) {
+      if (pet?.isGroomingFinished) {
+        return;
+      }
+
+      const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      this.openActionConfirmModal({
+        action: "markPetDone",
+        booking: {
+          ...booking,
+          actionPet: { ...pet },
+        },
+        title: "Confirm Finished",
+        message: `Are you sure you want to mark ${petName} as finished?`,
+        confirmLabel: "Yes, Finished",
+        busyLabel: "Finishing...",
+        icon: "finished",
+        variant: "primary",
+      });
+    },
+
     // Opens a second confirmation before moving a Queued booking back to Incoming in this UI.
     confirmRevertQueuedBooking(booking) {
       const ownerName = String(booking?.ownerName || "").trim();
@@ -1008,6 +1056,8 @@ function adminDashboard() {
           await this.runBookingAction("startPetGrooming", booking);
         } else if (action === "markDone") {
           await this.markBookingDone(booking);
+        } else if (action === "markPetDone") {
+          await this.runBookingAction("markPetDone", booking);
         } else if (action === "cancel") {
           await this.cancelBooking(booking);
         } else if (action === "revertQueued") {
@@ -1853,6 +1903,25 @@ function adminDashboard() {
       );
     },
 
+    isInProgressBookingExpanded(bookingId) {
+      return Boolean(this.expandedInProgressBookingIds[String(bookingId)]);
+    },
+
+    setInProgressBookingExpanded(bookingId, expanded) {
+      this.expandedInProgressBookingIds = {
+        ...this.expandedInProgressBookingIds,
+        [String(bookingId)]: Boolean(expanded),
+      };
+      this.$nextTick(() => this.refreshIcons());
+    },
+
+    toggleInProgressBooking(bookingId) {
+      this.setInProgressBookingExpanded(
+        bookingId,
+        !this.isInProgressBookingExpanded(bookingId),
+      );
+    },
+
     // Provides the temporary button label shown while an action is in progress.
     getActionLabel(actionName) {
       const labelMap = {
@@ -1860,6 +1929,7 @@ function adminDashboard() {
         startGrooming: "Grooming...",
         startPetGrooming: "Starting...",
         markDone: "Finishing...",
+        markPetDone: "Finishing...",
         cancel: "Cancelling...",
         archive: "Archiving...",
       };
@@ -2191,6 +2261,32 @@ function adminDashboard() {
         pets,
         services,
       );
+    },
+
+    // Keeps the backend pet records intact while presenting Queued cards as
+    // dogs first, cats second, and any other species afterward.
+    getQueuedPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      const speciesRank = (pet) => {
+        const species = String(
+          pet?.species ?? pet?.petType ?? pet?.pet_type ?? "",
+        ).trim().toLowerCase();
+
+        if (species === "dog" || species === "dogs") return 0;
+        if (species === "cat" || species === "cats") return 1;
+        return 2;
+      };
+
+      return pets
+        .map((pet, originalIndex) => ({ pet, originalIndex }))
+        .sort((left, right) =>
+          speciesRank(left.pet) - speciesRank(right.pet) ||
+          left.originalIndex - right.originalIndex,
+        )
+        .map(({ pet }, displayIndex) => ({
+          ...pet,
+          petQueueNumber: displayIndex + 1,
+        }));
     },
 
     formatPetQueueNumber(pet, petIndex = 0) {

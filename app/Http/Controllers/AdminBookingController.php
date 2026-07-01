@@ -380,6 +380,139 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // ── MARK ONE PET DONE ─────────────────────────────────
+    // Finishes one pet and keeps the owner booking In Progress until every pet is done.
+    // booking_pets.grooming_end_time already provides the required per-pet state.
+    public function markPetDone($id, $bookingPetId)
+    {
+        $result = DB::transaction(function () use ($id, $bookingPetId) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
+
+            if (!$booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'in_progress') {
+                return ['error' => ['message' => 'Booking must be in progress first.', 'status' => 422]];
+            }
+
+            $bookingPet = BookingPet::where('booking_id', $booking->booking_id)
+                ->whereKey($bookingPetId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$bookingPet) {
+                return ['error' => ['message' => 'Pet is not part of this booking.', 'status' => 404]];
+            }
+
+            if (!$bookingPet->grooming_start_time) {
+                return ['error' => ['message' => 'Grooming has not started for this pet.', 'status' => 422]];
+            }
+
+            if ($bookingPet->grooming_end_time) {
+                return ['error' => ['message' => 'This pet is already marked as finished.', 'status' => 422]];
+            }
+
+            $finishedAt = now();
+            $bookingPet->update(['grooming_end_time' => $finishedAt]);
+
+            $remainingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->whereNull('grooming_end_time')
+                ->count();
+            $petName = $bookingPet->pet()->value('pet_name') ?: 'Pet';
+            $completion = null;
+
+            if ($remainingPets === 0) {
+                $completion = $this->completeGroomingBooking($booking, $finishedAt);
+            }
+
+            return [
+                'booking' => $booking,
+                'bookingPet' => $bookingPet,
+                'petName' => $petName,
+                'allPetsFinished' => $remainingPets === 0,
+                'remainingPets' => $remainingPets,
+                'finishedAt' => $finishedAt,
+                'completion' => $completion,
+            ];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        $allPetsFinished = $result['allPetsFinished'];
+        $remainingPets = $result['remainingPets'];
+        $remainingLabel = $remainingPets === 1 ? 'pet remains' : 'pets remain';
+
+        return response()->json([
+            'success'           => true,
+            'message'           => $allPetsFinished
+                ? $result['completion']['message']
+                : "Grooming finished for {$result['petName']}. {$remainingPets} {$remainingLabel} in progress.",
+            'booking_id'        => $result['booking']->booking_id,
+            'booking_pet_id'    => $result['bookingPet']->booking_pet_id,
+            'finished_at'       => $result['finishedAt']->toIso8601String(),
+            'all_pets_finished' => $allPetsFinished,
+            'remaining_pets'    => $remainingPets,
+            'booking_status'    => $allPetsFinished
+                ? $result['completion']['status']
+                : 'in_progress',
+        ]);
+    }
+
+    private function completeGroomingBooking(Booking $booking, Carbon $finishedAt): array
+    {
+        $booking->loadMissing(['user', 'bookingPets.pet']);
+        $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
+        $petName = $this->petNames($booking);
+        $petVerb = $this->hasMultiplePets($booking) ? 'are' : 'is';
+
+        if ($booking->user) {
+            CustomerNotification::create([
+                'user_id'    => $booking->user->user_id,
+                'booking_id' => $booking->booking_id,
+                'type'       => 'ready_for_pickup',
+                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
+                'is_read'    => false,
+                'created_at' => $finishedAt,
+            ]);
+        }
+
+        if ($booking->paid) {
+            $booking->update([
+                'status'               => 'released',
+                'grooming_finished_at' => $finishedAt,
+            ]);
+
+            return [
+                'status' => 'released',
+                'message' => 'Grooming done. Customer notified for pickup (early payment on file).',
+            ];
+        }
+
+        $booking->update([
+            'status'               => 'for_payment',
+            'grooming_finished_at' => $finishedAt,
+        ]);
+
+        Notification::create([
+            'type'       => 'payment_due',
+            'booking_id' => $booking->booking_id,
+            'message'    => "Grooming done for {$ownerName}. Pet is ready - please collect payment.",
+            'is_read'    => false,
+            'created_at' => $finishedAt,
+        ]);
+
+        return [
+            'status' => 'for_payment',
+            'message' => 'Grooming done. Customer notified for pickup and payment.',
+        ];
+    }
+
     // ── MARK PICKED UP ────────────────────────────────────
     // released → archived + customer notification
     public function markPickedUp($id)
@@ -705,6 +838,10 @@ class AdminBookingController extends Controller
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,
                     'isGroomingStarted'   => (bool) $bp->grooming_start_time,
+                    'groomingFinishedAt'  => $bp->grooming_end_time
+                        ? Carbon::parse($bp->grooming_end_time)->format('g:i A')
+                        : null,
+                    'isGroomingFinished'  => (bool) $bp->grooming_end_time,
                 ];
             })->values(),
             'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {

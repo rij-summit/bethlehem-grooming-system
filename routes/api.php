@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/bookings/{id}/check-in',           [AdminBookingController::class, 'checkIn']);
     Route::post('/admin/bookings/{id}/start-grooming',     [AdminBookingController::class, 'startGrooming']);
     Route::post('/admin/bookings/{id}/pets/{bookingPetId}/start-grooming', [AdminBookingController::class, 'startPetGrooming']);
+    Route::post('/admin/bookings/{id}/pets/{bookingPetId}/mark-done', [AdminBookingController::class, 'markPetDone']);
     Route::post('/admin/bookings/{id}/mark-done',          [AdminBookingController::class, 'markDone']);
     Route::post('/admin/bookings/{id}/cancel',             [AdminBookingController::class, 'cancel']);
     Route::post('/admin/bookings/{id}/archive',            [AdminBookingController::class, 'archive']);

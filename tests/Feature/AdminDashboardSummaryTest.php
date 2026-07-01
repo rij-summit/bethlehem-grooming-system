@@ -70,12 +70,22 @@ class AdminDashboardSummaryTest extends TestCase
             $table->decimal('total_amount', 8, 2)->default(0);
             $table->dateTime('paid_at')->nullable();
         });
+
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->increments('notification_id');
+            $table->string('type');
+            $table->unsignedInteger('booking_id');
+            $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->dateTime('created_at')->nullable();
+        });
     }
 
     protected function tearDown(): void
     {
         Carbon::setTestNow();
 
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('booking_pets');
@@ -218,5 +228,57 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertTrue($secondResponse->getData(true)['all_pets_started']);
         $this->assertSame('in_progress', DB::table('bookings')->where('booking_id', 1)->value('status'));
         $this->assertNotNull(DB::table('bookings')->where('booking_id', 1)->value('grooming_started_at'));
+    }
+
+    public function test_finishing_pets_keeps_booking_in_progress_until_every_pet_is_done(): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'PET-FINISH-2',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 2,
+            'status' => 'in_progress',
+            'queue_number' => 1,
+            'grooming_started_at' => '2026-06-24 10:00:00',
+        ]);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Zeus', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Ginger', 'species' => 'cat'],
+        ]);
+
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 1,
+                'booking_id' => 1,
+                'pet_id' => 1,
+                'grooming_start_time' => '2026-06-24 10:00:00',
+            ],
+            [
+                'booking_pet_id' => 2,
+                'booking_id' => 1,
+                'pet_id' => 2,
+                'grooming_start_time' => '2026-06-24 10:05:00',
+            ],
+        ]);
+
+        $controller = new AdminBookingController;
+        $firstResponse = $controller->markPetDone(1, 1);
+
+        $this->assertSame(200, $firstResponse->getStatusCode());
+        $this->assertFalse($firstResponse->getData(true)['all_pets_finished']);
+        $this->assertSame('in_progress', DB::table('bookings')->where('booking_id', 1)->value('status'));
+        $this->assertNotNull(DB::table('booking_pets')->where('booking_pet_id', 1)->value('grooming_end_time'));
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 2)->value('grooming_end_time'));
+        $this->assertSame(0, DB::table('notifications')->count());
+
+        $secondResponse = $controller->markPetDone(1, 2);
+
+        $this->assertSame(200, $secondResponse->getStatusCode());
+        $this->assertTrue($secondResponse->getData(true)['all_pets_finished']);
+        $this->assertSame('for_payment', DB::table('bookings')->where('booking_id', 1)->value('status'));
+        $this->assertNotNull(DB::table('bookings')->where('booking_id', 1)->value('grooming_finished_at'));
+        $this->assertNotNull(DB::table('booking_pets')->where('booking_pet_id', 2)->value('grooming_end_time'));
+        $this->assertSame(1, DB::table('notifications')->count());
     }
 }
