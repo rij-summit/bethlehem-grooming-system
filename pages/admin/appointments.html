@@ -1615,6 +1615,8 @@
                                   :min="line.minAmount"
                                   step="0.01"
                                   :placeholder="line.placeholder"
+                                  :readonly="line.isFixedPriceLocked"
+                                  :aria-readonly="line.isFixedPriceLocked ? 'true' : 'false'"
                                   @input="clearPaymentError()"
                                   @blur="enforcePaymentMinimum(pet, line)"
                                 />

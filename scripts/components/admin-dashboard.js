@@ -393,6 +393,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
       minAmount: 0.01,
       displayPrice: "Enter price",
       placeholder: "0.00",
+      pricingType: "custom",
       selectedPriceOption: null,
     };
   }
@@ -410,6 +411,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
         minAmount: selectedPriceOption.minAmount || 0.01,
         displayPrice: formatPaymentPriceOption(selectedPriceOption),
         placeholder: formatPaymentPriceOption(selectedPriceOption, false),
+        pricingType: selectedPriceOption.pricingType,
         selectedPriceOption,
       };
     }
@@ -425,6 +427,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
         summary.maxAmount === null
           ? `${Number(summary.minAmount || 0).toLocaleString("en-PH")}+`
           : `${Number(summary.minAmount || 0).toLocaleString("en-PH")}-${Number(summary.maxAmount || 0).toLocaleString("en-PH")}`,
+      pricingType: summary.pricingType,
       selectedPriceOption: null,
     };
   }
@@ -436,6 +439,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
       minAmount: 0.01,
       displayPrice: "Enter price",
       placeholder: "0.00",
+      pricingType: "custom",
       selectedPriceOption: null,
     };
   }
@@ -444,6 +448,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
     minAmount: option.minAmount || 0.01,
     displayPrice: formatPaymentPriceOption(option),
     placeholder: formatPaymentPriceOption(option, false),
+    pricingType: option.pricingType,
     selectedPriceOption: option,
   };
 }
@@ -2783,7 +2788,7 @@ function adminDashboard() {
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking),
+        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: !isEarlyPayment }),
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -2800,7 +2805,7 @@ function adminDashboard() {
       };
     },
 
-    buildPaymentBreakdown(booking) {
+    buildPaymentBreakdown(booking, paymentOptions = {}) {
       const pets = this.normalizePaymentPets(booking);
       const services = this.normalizePaymentServices(booking?.services);
 
@@ -2821,7 +2826,7 @@ function adminDashboard() {
             }
           : pet;
         const lines = petServices.map((service, serviceIndex) =>
-          this.normalizePaymentLine(service, pricedPet, `${petIndex}-${serviceIndex}`),
+          this.normalizePaymentLine(service, pricedPet, `${petIndex}-${serviceIndex}`, paymentOptions),
         );
 
         return {
@@ -2942,7 +2947,7 @@ function adminDashboard() {
       return pets[0]?.id === pet.id ? unscopedServices : [];
     },
 
-    normalizePaymentLine(rawService, pet, fallbackId) {
+    normalizePaymentLine(rawService, pet, fallbackId, paymentOptions = {}) {
       const serviceDefinition = getPaymentServiceDefinition(rawService);
       const fallbackAmount = parseFloat(rawService?.priceAtBooking ?? rawService?.price_at_booking ?? 0);
       const pricing = serviceDefinition
@@ -2952,9 +2957,13 @@ function adminDashboard() {
               minAmount: fallbackAmount,
               displayPrice: formatPaymentAmount(fallbackAmount),
               placeholder: Number(fallbackAmount).toLocaleString("en-PH"),
+              pricingType: "fixed",
               selectedPriceOption: null,
             }
           : getPaymentServicePricing(null, pet.sizeKey);
+      const pricingType = pricing.pricingType || "custom";
+      const lockFixedPrices = Boolean(paymentOptions.lockFixedPrices);
+      const isFixedPriceLocked = lockFixedPrices && pricingType === "fixed";
 
       return {
         id: rawService?.id ?? fallbackId,
@@ -2978,7 +2987,10 @@ function adminDashboard() {
         minAmount: pricing.minAmount,
         priceHint: pricing.displayPrice,
         placeholder: pricing.placeholder,
-        amount: "",
+        pricingType,
+        lockFixedPrices,
+        isFixedPriceLocked,
+        amount: isFixedPriceLocked ? Number(pricing.minAmount).toFixed(2) : "",
       };
     },
 
@@ -2995,10 +3007,20 @@ function adminDashboard() {
     },
 
     refreshPaymentLinePricing(pet, line) {
+      const wasFixedPriceLocked = Boolean(line.isFixedPriceLocked);
       const pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
+      const pricingType = pricing.pricingType || "custom";
       line.minAmount = pricing.minAmount;
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
+      line.pricingType = pricingType;
+      line.isFixedPriceLocked = Boolean(line.lockFixedPrices && pricingType === "fixed");
+
+      if (line.isFixedPriceLocked) {
+        line.amount = Number(pricing.minAmount).toFixed(2);
+      } else if (wasFixedPriceLocked) {
+        line.amount = "";
+      }
     },
 
     getPaymentSizeOptions(pet) {
