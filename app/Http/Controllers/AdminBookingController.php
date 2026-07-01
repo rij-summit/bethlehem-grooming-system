@@ -84,11 +84,31 @@ class AdminBookingController extends Controller
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
-        $inProgress = Booking::where('status', 'in_progress')
+        $inProgress = Booking::where(function ($query) {
+                $query->where('status', 'in_progress')
+                    ->orWhere(function ($partialBooking) {
+                        $partialBooking->where('status', 'checked_in')
+                            ->whereHas('bookingPets', function ($pet) {
+                                $pet->whereNotNull('grooming_start_time');
+                            })
+                            ->whereHas('bookingPets', function ($pet) {
+                                // Includes an unstarted queued sibling after a
+                                // different pet in this booking has finished.
+                                $pet->whereNull('grooming_end_time');
+                            });
+                    });
+            })
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
-            ->map(fn($b) => $this->formatBooking($b));
+            ->map(function ($booking) {
+                $formatted = $this->formatBooking($booking);
+                // A partially started booking remains checked_in so its queued pets
+                // stay in Queued, but this copy belongs to the In Progress feed.
+                $formatted['status'] = 'in-progress';
+
+                return $formatted;
+            });
 
         $forPayment = Booking::where('status', 'for_payment')
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
@@ -392,8 +412,8 @@ class AdminBookingController extends Controller
                 return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
             }
 
-            if ($booking->status !== 'in_progress') {
-                return ['error' => ['message' => 'Booking must be in progress first.', 'status' => 422]];
+            if (!in_array($booking->status, ['checked_in', 'in_progress'], true)) {
+                return ['error' => ['message' => 'Booking must be queued or in progress first.', 'status' => 422]];
             }
 
             $bookingPet = BookingPet::where('booking_id', $booking->booking_id)
@@ -460,7 +480,7 @@ class AdminBookingController extends Controller
             'remaining_pets'    => $remainingPets,
             'booking_status'    => $allPetsFinished
                 ? $result['completion']['status']
-                : 'in_progress',
+                : $result['booking']->status,
         ]);
     }
 

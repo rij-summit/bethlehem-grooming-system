@@ -2322,7 +2322,8 @@ body.customer-detail-modal-open {
 
 .admin-queued-pet-start,
 .admin-queued-pet-print,
-.admin-in-progress-pet-finish {
+.admin-in-progress-pet-finish,
+.admin-in-progress-pet-queued {
   display: inline-flex;
   min-height: 2.5rem;
   align-items: center;
@@ -2353,6 +2354,21 @@ body.customer-detail-modal-open {
   background: #f0fdf4;
   color: #15803d;
   cursor: not-allowed;
+}
+
+.admin-in-progress-pet-finish.is-finished {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.admin-in-progress-pet-queued {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+  cursor: default;
+  user-select: none;
 }
 
 .admin-queued-pet-print {
@@ -2430,7 +2446,8 @@ body.customer-detail-modal-open {
 
   .admin-queued-pet-start,
   .admin-queued-pet-print,
-  .admin-in-progress-pet-finish {
+  .admin-in-progress-pet-finish,
+  .admin-in-progress-pet-queued {
     flex: 1 1 0;
   }
 

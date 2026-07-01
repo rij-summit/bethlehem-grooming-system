@@ -677,6 +677,13 @@ function adminDashboard() {
                   ? "to-be-picked-up"
                   : "for-payment",
               );
+            } else if (
+              ["checked_in", "queued"].includes(this.normalizeStatus(response?.booking_status)) &&
+              !this.inProgressList.some((item) => String(item.id) === String(booking.id))
+            ) {
+              // No active pet remains, but one or more siblings are still waiting.
+              this.setQueuedBookingExpanded(booking.id, true);
+              this.setTab("queued");
             } else {
               this.setInProgressBookingExpanded(booking.id, true);
               this.setTab("in-progress");
@@ -925,7 +932,7 @@ function adminDashboard() {
 
     // Confirms completion for one pet without finishing the owner booking early.
     confirmMarkPetDone(booking, pet) {
-      if (pet?.isGroomingFinished) {
+      if (!pet?.isGroomingStarted || pet?.isGroomingFinished) {
         return;
       }
 
@@ -2289,6 +2296,12 @@ function adminDashboard() {
         }));
     },
 
+    // In Progress mirrors the Queued card and retains finished pets as disabled
+    // indicators until every pet in the owner booking is complete.
+    getInProgressPets(booking) {
+      return this.getQueuedPets(booking);
+    },
+
     formatPetQueueNumber(pet, petIndex = 0) {
       // Display-only numbering is scoped to one owner booking. See the backend
       // formatter comment for the optional persistence migration guidance.
@@ -2510,7 +2523,12 @@ function adminDashboard() {
 
     todayQueuePreview() {
       const today = this.localToday();
-      return [...this.inProgressList, ...this.queuedList]
+      const visibleBookings = [...this.inProgressList, ...this.queuedList]
+        .filter((booking, index, bookings) =>
+          bookings.findIndex((candidate) => String(candidate.id) === String(booking.id)) === index,
+        );
+
+      return visibleBookings
         .filter((booking) => booking.appointmentDate === today)
         .sort((left, right) => {
           const statusOrder = { "in-progress": 0, queued: 1 };
@@ -3209,6 +3227,9 @@ function adminDashboard() {
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
         await this.loadAdminBookings();
         await this.loadNotifications();
+        if (isEarlyPayment && res?.all_pets_finished) {
+          this.setTab("to-be-picked-up");
+        }
       } catch (err) {
         this.paymentModal.error = err.message || "Payment failed. Please try again.";
       } finally {
