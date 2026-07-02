@@ -264,7 +264,7 @@ function handleFormStateChange() {
   validateConsentForm();
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
 
   if (!isFormValid()) {
@@ -276,20 +276,132 @@ function handleSubmit(event) {
   saveConsentDraft(consentPayload);
 
   elements.submitBookingButton.disabled = true;
-  elements.submitBookingButton.textContent = "Submitting...";
+  elements.submitBookingButton.textContent = "Submitting…";
 
-  /*
-    BACKEND TEAMMATE + CLAUDE CODE:
-    This submit currently builds a frontend-only confirmation for the visible
-    admin/staff flow. Swap this block for the real walk-in booking API call,
-    then save the API response for the confirmation page to render.
-  */
-  sessionStorage.setItem(
-    WALK_IN_CONFIRMATION_STORAGE_KEY,
-    JSON.stringify(buildWalkInConfirmation(consentPayload)),
-  );
+  try {
+    const owner        = getStoredData(WALK_IN_OWNER_STORAGE_KEY);
+    const reviewPayload = state.reviewPayload || getStoredData(WALK_IN_REVIEW_STORAGE_KEY);
 
-  window.location.href = "./walk-in-booking-confirmed.html";
+    if (!owner || !Array.isArray(reviewPayload?.items) || reviewPayload.items.length === 0) {
+      showSubmitError("Walk-in data is incomplete. Please restart from Step 1.");
+      resetSubmitButton();
+      return;
+    }
+
+    const payload  = buildApiPayload(owner, reviewPayload, consentPayload);
+    const response = await API.submitWalkIn(payload);
+
+    // Merge real server fields with the shape the confirmation page expects
+    sessionStorage.setItem(
+      WALK_IN_CONFIRMATION_STORAGE_KEY,
+      JSON.stringify(buildConfirmationPayload(response, reviewPayload)),
+    );
+    window.location.href = "./walk-in-booking-confirmed.html";
+  } catch (error) {
+    showSubmitError(error.message || "Failed to register walk-in. Please try again.");
+    resetSubmitButton();
+  }
+}
+
+function buildApiPayload(owner, reviewPayload, consentPayload) {
+  return {
+    fname: owner.firstName,
+    lname: owner.lastName,
+    mname: owner.middleInitial || null,
+    email: owner.email || null,
+    phone: owner.phone,
+
+    pets: (reviewPayload.items || []).map((item) => ({
+      pet_name:             item.pet.petName,
+      species:              item.pet.petType,
+      breed:                item.pet.breed    || null,
+      weight:               item.pet.weight   || null,
+      size:                 normalizeSizeForApi(item.pet.size),
+      medical_conditions:   item.pet.medicalNotes || null,
+      special_instructions: item.selection.specialInstructions || null,
+      services:             item.pricing.lineItems.map((lineItem) => ({
+        service_slug: lineItem.serviceId,
+      })),
+    })),
+
+    sedation_consent: Boolean(consentPayload.sedationConsentAccepted),
+    terms_agreed:     Boolean(consentPayload.groomingAgreementAccepted),
+  };
+}
+
+function normalizeSizeForApi(size) {
+  const map = {
+    Small:        "small",
+    Medium:       "medium",
+    Large:        "large",
+    "Extra Large": "extra_large",
+  };
+  return map[size] || (size ? size.toLowerCase().replace(/\s+/g, "_") : null);
+}
+
+function buildConfirmationPayload(response, reviewPayload) {
+  const items = Array.isArray(reviewPayload?.items) ? reviewPayload.items : [];
+
+  return {
+    // Real server fields
+    booking_reference: response.booking_reference,
+    queue_number:      response.queue_number,
+    booking_id:        response.booking_id,
+    booking_date:      response.booking_date,
+    booking_time:      "",
+    status:            response.status,
+    booking_type:      "walk_in",
+    number_of_pets:    items.length,
+    total_amount:      response.total_amount,
+    returning_customer: response.returning_customer,
+    submitted_at:      new Date().toISOString(),
+
+    // Owner in the shape the confirmation page reads
+    owner: {
+      fullName: response.owner?.name || "",
+      phone:    response.owner?.phone || "",
+      email:    response.owner?.email || "",
+    },
+
+    // Pet rows for the pet info table (uses frontend field names)
+    pets: items.map((item) => ({
+      petName: item.pet.petName,
+      petType: item.pet.petType,
+      breed:   item.pet.breed || "",
+      size:    item.pet.size  || "",
+    })),
+
+    // Service rows for the service table
+    review: {
+      pets: items.map((item) => {
+        const packageLine    = item.pricing.lineItems.find((l) => l.kind === "package");
+        const alaCarteLines  = item.pricing.lineItems.filter((l) => l.kind === "ala_carte");
+        return {
+          petName:              item.pet.petName,
+          servicePackage:       packageLine?.serviceName || null,
+          alaCarteServices:     alaCarteLines.map((l) => l.serviceName),
+          pricing:              item.pricing.total,
+          specialInstructions:  item.selection.specialInstructions || "",
+        };
+      }),
+      totalPricing: reviewPayload?.totalPricing || null,
+    },
+  };
+}
+
+function showSubmitError(message) {
+  elements.consentStatusMessage.textContent = message;
+  elements.consentStatusMessage.className =
+    "mb-6 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700";
+}
+
+function resetSubmitButton() {
+  const valid = isFormValid();
+  elements.submitBookingButton.disabled = !valid;
+  elements.submitBookingButton.textContent = "Submit Schedule";
+  elements.submitBookingButton.className = valid
+    ? "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+    : "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
 }
 
 function handleBackClick() {

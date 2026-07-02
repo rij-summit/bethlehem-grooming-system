@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\BookingService;
+use App\Models\Walkin;
 
 class Booking extends Model
 {
@@ -14,6 +15,7 @@ class Booking extends Model
     protected $fillable = [
         'booking_reference',
         'user_id',
+        'walkin_id',
         'window_id',
         'booking_date',
         'number_of_pets',
@@ -35,6 +37,11 @@ class Booking extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function walkin()
+    {
+        return $this->belongsTo(Walkin::class, 'walkin_id', 'id');
     }
 
     public function timeWindow()

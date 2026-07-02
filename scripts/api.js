@@ -592,6 +592,12 @@ var API = (() => {
     return request("GET", `/admin/reports/services-performed${query}`, null, getAdminToken());
   }
 
+  async function submitWalkIn(payload) {
+    // POST /api/admin/walk-in  (protected — admin token)
+    // payload: { fname, lname, mname?, email?, phone, pets: [...], sedation_consent, terms_agreed }
+    return request("POST", "/admin/walk-in", payload, getAdminToken());
+  }
+
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/customer-activity  (protected - admin token)
     const params = new URLSearchParams();
@@ -692,5 +698,7 @@ var API = (() => {
     getTransactions,
     getServicesPerformedReport,
     getCustomerActivityReport,
+    // Walk-in
+    submitWalkIn,
   };
 })();

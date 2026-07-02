@@ -77,25 +77,25 @@ class AdminBookingController extends Controller
         // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
         // on each query below when re-enabling the date guard for production.
         $queued = Booking::where('status', 'checked_in')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
         $inProgress = Booking::where('status', 'in_progress')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
         $forPayment = Booking::where('status', 'for_payment')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn($b) => $this->formatBooking($b));
@@ -238,8 +238,8 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be in progress first.'], 422);
         }
 
-        $booking->load('bookingPets.pet');
-        $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
+        $booking->load('bookingPets.pet', 'walkin');
+        $ownerName = $this->ownerName($booking);
         $petName   = $this->petNames($booking);
         $petVerb   = $this->hasMultiplePets($booking) ? 'are' : 'is';
 
@@ -498,6 +498,7 @@ class AdminBookingController extends Controller
     private function formatBooking(Booking $booking): array
     {
         $user     = $booking->user;
+        $walkin   = $booking->walkin;
         $window   = $booking->timeWindow;
         $bpets    = $booking->bookingPets ?? collect();
         $firstBp  = $bpets->first();
@@ -540,8 +541,10 @@ class AdminBookingController extends Controller
             // Fields the card templates read directly
             'id'              => $booking->booking_id,
             'queueNumber'     => $booking->queue_number ?? 0,
-            'ownerName'       => trim(($user?->first_name ?? '') . ' ' . ($user?->last_name ?? '')),
-            'contactNumber'   => $user?->phone ?? '—',
+            'ownerName'       => $user
+                ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
+                : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : '—'),
+            'contactNumber'   => $user?->phone ?? $walkin?->phone ?? '—',
             'petName'         => $petName,
             'petType'         => $petType,
             'breed'           => $breed,
@@ -700,7 +703,7 @@ class AdminBookingController extends Controller
                 ];
             });
 
-        $checkIns = Booking::with(['user', 'bookingPets.pet'])
+        $checkIns = Booking::with(['user', 'walkin', 'bookingPets.pet'])
             ->whereNotNull('dropped_off_at')
             ->orderBy('dropped_off_at', 'desc')
             ->limit(6)
@@ -767,11 +770,15 @@ class AdminBookingController extends Controller
 
     private function ownerName(?Booking $booking): string
     {
-        if (!$booking?->user) {
-            return '';
+        if ($booking?->user) {
+            return trim(($booking->user->first_name ?? '') . ' ' . ($booking->user->last_name ?? ''));
         }
 
-        return trim(($booking->user->first_name ?? '') . ' ' . ($booking->user->last_name ?? ''));
+        if ($booking?->walkin) {
+            return trim("{$booking->walkin->fname} {$booking->walkin->lname}");
+        }
+
+        return '';
     }
 
     private function petNames(Booking $booking): string

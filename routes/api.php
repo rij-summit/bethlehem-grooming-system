@@ -11,6 +11,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PetController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\WalkinController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/sign-in',  [AuthController::class, 'signIn']);
@@ -91,6 +92,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/transactions',                      [PaymentController::class, 'index']);
     Route::get('/admin/reports/services-performed',         [ReportController::class, 'servicesPerformed']);
     Route::get('/admin/reports/customer-activity',          [ReportController::class, 'customerActivity']);
+
+    // Admin — Walk-in registration
+    Route::post('/admin/walk-in', [WalkinController::class, 'store']);
 
     // Admin — Clinic closures
     Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);
