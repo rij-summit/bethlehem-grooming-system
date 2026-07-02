@@ -393,6 +393,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
       minAmount: 0.01,
       displayPrice: "Enter price",
       placeholder: "0.00",
+      pricingType: "custom",
       selectedPriceOption: null,
     };
   }
@@ -410,6 +411,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
         minAmount: selectedPriceOption.minAmount || 0.01,
         displayPrice: formatPaymentPriceOption(selectedPriceOption),
         placeholder: formatPaymentPriceOption(selectedPriceOption, false),
+        pricingType: selectedPriceOption.pricingType,
         selectedPriceOption,
       };
     }
@@ -425,6 +427,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
         summary.maxAmount === null
           ? `${Number(summary.minAmount || 0).toLocaleString("en-PH")}+`
           : `${Number(summary.minAmount || 0).toLocaleString("en-PH")}-${Number(summary.maxAmount || 0).toLocaleString("en-PH")}`,
+      pricingType: summary.pricingType,
       selectedPriceOption: null,
     };
   }
@@ -436,6 +439,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
       minAmount: 0.01,
       displayPrice: "Enter price",
       placeholder: "0.00",
+      pricingType: "custom",
       selectedPriceOption: null,
     };
   }
@@ -444,6 +448,7 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
     minAmount: option.minAmount || 0.01,
     displayPrice: formatPaymentPriceOption(option),
     placeholder: formatPaymentPriceOption(option, false),
+    pricingType: option.pricingType,
     selectedPriceOption: option,
   };
 }
@@ -476,6 +481,8 @@ function adminDashboard() {
     localCancelledBookingIds: [],
     localRevertedToIncomingBookings: [],
     localRevertedToQueuedBookings: [],
+    expandedQueuedBookingIds: {},
+    expandedInProgressBookingIds: {},
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -632,10 +639,62 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab("in-progress");
           },
+          startPetGrooming: async ({ booking }) => {
+            const pet = booking?.actionPet;
+            const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
+
+            if (!bookingPetId) {
+              throw new Error("Cannot start grooming: missing booking pet id.");
+            }
+
+            const response = await API.adminStartPetGrooming(booking.id, bookingPetId);
+            await this.loadAdminBookings();
+
+            if (response?.all_pets_started) {
+              this.setTab("in-progress");
+            } else {
+              this.setQueuedBookingExpanded(booking.id, true);
+              this.setTab("queued");
+            }
+
+            return response;
+          },
           markDone: async ({ booking }) => {
             await API.adminMarkDone(booking.id);
             await this.loadAdminBookings();
             this.setTab(booking.paid ? "to-be-picked-up" : "for-payment");
+          },
+          markPetDone: async ({ booking }) => {
+            const pet = booking?.actionPet;
+            const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
+
+            if (!bookingPetId) {
+              throw new Error("Cannot finish grooming: missing booking pet id.");
+            }
+
+            const response = await API.adminMarkPetDone(booking.id, bookingPetId);
+            await this.loadAdminBookings();
+
+            if (response?.all_pets_finished) {
+              const completedStatus = this.normalizeStatus(response.booking_status);
+              this.setTab(
+                completedStatus === "to-be-picked-up" || completedStatus === "released"
+                  ? "to-be-picked-up"
+                  : "for-payment",
+              );
+            } else if (
+              ["checked_in", "queued"].includes(this.normalizeStatus(response?.booking_status)) &&
+              !this.inProgressList.some((item) => String(item.id) === String(booking.id))
+            ) {
+              // No active pet remains, but one or more siblings are still waiting.
+              this.setQueuedBookingExpanded(booking.id, true);
+              this.setTab("queued");
+            } else {
+              this.setInProgressBookingExpanded(booking.id, true);
+              this.setTab("in-progress");
+            }
+
+            return response;
           },
           cancel: async ({ booking }) => {
             await API.adminCancelBooking(booking.id);
@@ -836,6 +895,29 @@ function adminDashboard() {
       });
     },
 
+    // Confirms a per-pet start. The selected pet travels with the cloned booking
+    // so the shared confirmation modal can continue using its existing contract.
+    confirmStartGroomingPet(booking, pet) {
+      if (pet?.isGroomingStarted) {
+        return;
+      }
+
+      const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      this.openActionConfirmModal({
+        action: "startPetGrooming",
+        booking: {
+          ...booking,
+          actionPet: { ...pet },
+        },
+        title: "Confirm Start Grooming",
+        message: `Are you sure you want to start grooming for ${petName}?`,
+        confirmLabel: "Yes, Start",
+        busyLabel: "Starting...",
+        icon: "grooming",
+        variant: "primary",
+      });
+    },
+
     // Opens a second confirmation before finishing an In-Progress booking.
     confirmMarkBookingDone(booking) {
       const ownerName = String(booking?.ownerName || "").trim();
@@ -846,6 +928,28 @@ function adminDashboard() {
         message: ownerName
           ? `Are you sure you want to mark ${ownerName}'s appointment as finished?`
           : "Are you sure you want to mark this appointment as finished?",
+        confirmLabel: "Yes, Finished",
+        busyLabel: "Finishing...",
+        icon: "finished",
+        variant: "primary",
+      });
+    },
+
+    // Confirms completion for one pet without finishing the owner booking early.
+    confirmMarkPetDone(booking, pet) {
+      if (!pet?.isGroomingStarted || pet?.isGroomingFinished) {
+        return;
+      }
+
+      const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      this.openActionConfirmModal({
+        action: "markPetDone",
+        booking: {
+          ...booking,
+          actionPet: { ...pet },
+        },
+        title: "Confirm Finished",
+        message: `Are you sure you want to mark ${petName} as finished?`,
         confirmLabel: "Yes, Finished",
         busyLabel: "Finishing...",
         icon: "finished",
@@ -960,8 +1064,12 @@ function adminDashboard() {
           await this.checkInBooking(booking);
         } else if (action === "startGrooming") {
           await this.startGroomingBooking(booking);
+        } else if (action === "startPetGrooming") {
+          await this.runBookingAction("startPetGrooming", booking);
         } else if (action === "markDone") {
           await this.markBookingDone(booking);
+        } else if (action === "markPetDone") {
+          await this.runBookingAction("markPetDone", booking);
         } else if (action === "cancel") {
           await this.cancelBooking(booking);
         } else if (action === "revertQueued") {
@@ -1572,7 +1680,7 @@ function adminDashboard() {
           booking?.contactNumber ?? booking?.phone ?? booking?.contact,
         ),
         petName: this.toStringValue(booking?.petName),
-        petType: this.toStringValue(booking?.petType),
+        petType: this.formatBookingPetTypes(booking),
         breed: this.toStringValue(booking?.breed),
         serviceLabel: this.toStringValue(
           booking?.serviceLabel ?? booking?.service ?? booking?.packageLabel,
@@ -1788,12 +1896,52 @@ function adminDashboard() {
       return Boolean(this.pendingActions[this.getActionKey(actionName, bookingId)]);
     },
 
+    isQueuedBookingExpanded(bookingId) {
+      return Boolean(this.expandedQueuedBookingIds[String(bookingId)]);
+    },
+
+    setQueuedBookingExpanded(bookingId, expanded) {
+      this.expandedQueuedBookingIds = {
+        ...this.expandedQueuedBookingIds,
+        [String(bookingId)]: Boolean(expanded),
+      };
+      this.$nextTick(() => this.refreshIcons());
+    },
+
+    toggleQueuedBooking(bookingId) {
+      this.setQueuedBookingExpanded(
+        bookingId,
+        !this.isQueuedBookingExpanded(bookingId),
+      );
+    },
+
+    isInProgressBookingExpanded(bookingId) {
+      return Boolean(this.expandedInProgressBookingIds[String(bookingId)]);
+    },
+
+    setInProgressBookingExpanded(bookingId, expanded) {
+      this.expandedInProgressBookingIds = {
+        ...this.expandedInProgressBookingIds,
+        [String(bookingId)]: Boolean(expanded),
+      };
+      this.$nextTick(() => this.refreshIcons());
+    },
+
+    toggleInProgressBooking(bookingId) {
+      this.setInProgressBookingExpanded(
+        bookingId,
+        !this.isInProgressBookingExpanded(bookingId),
+      );
+    },
+
     // Provides the temporary button label shown while an action is in progress.
     getActionLabel(actionName) {
       const labelMap = {
         checkIn: "Checking in...",
         startGrooming: "Grooming...",
+        startPetGrooming: "Starting...",
         markDone: "Finishing...",
+        markPetDone: "Finishing...",
         cancel: "Cancelling...",
         archive: "Archiving...",
       };
@@ -2127,6 +2275,152 @@ function adminDashboard() {
       );
     },
 
+    // Keeps the backend pet records intact while presenting Queued cards as
+    // dogs first, cats second, and any other species afterward.
+    getQueuedPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      const speciesRank = (pet) => {
+        const species = String(
+          pet?.species ?? pet?.petType ?? pet?.pet_type ?? "",
+        ).trim().toLowerCase();
+
+        if (species === "dog" || species === "dogs") return 0;
+        if (species === "cat" || species === "cats") return 1;
+        return 2;
+      };
+
+      return pets
+        .map((pet, originalIndex) => ({ pet, originalIndex }))
+        .sort((left, right) =>
+          speciesRank(left.pet) - speciesRank(right.pet) ||
+          left.originalIndex - right.originalIndex,
+        )
+        .map(({ pet }, displayIndex) => ({
+          ...pet,
+          petQueueNumber: displayIndex + 1,
+        }));
+    },
+
+    // In Progress mirrors the Queued card and retains finished pets as disabled
+    // indicators until every pet in the owner booking is complete.
+    getInProgressPets(booking) {
+      return this.getQueuedPets(booking);
+    },
+
+    formatPetQueueNumber(pet, petIndex = 0) {
+      // Display-only numbering is scoped to one owner booking. See the backend
+      // formatter comment for the optional persistence migration guidance.
+      const queueNumber = Number(pet?.petQueueNumber ?? petIndex + 1);
+      return `#P${Number.isFinite(queueNumber) && queueNumber > 0 ? queueNumber : petIndex + 1}`;
+    },
+
+    formatPetCardServiceLabel(pet, booking) {
+      const names = this.getPetServicesAvailed(pet, booking)
+        .map((service) => service?.name ?? service?.serviceName ?? service?.service_name)
+        .filter(Boolean);
+
+      return names.length > 0 ? names.join(", ") : "No selected services recorded";
+    },
+
+    formatPetCardValue(value, fallback = "Not provided") {
+      const text = String(value ?? "").trim();
+      if (!text || text === "—") {
+        return fallback;
+      }
+
+      return text
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+    },
+
+    escapePrintHtml(value) {
+      const element = document.createElement("span");
+      element.textContent = String(value ?? "");
+      return element.innerHTML;
+    },
+
+    printPetCard(booking, pet, petIndex = 0) {
+      const services = this.getPetServicesAvailed(pet, booking);
+      const serviceItems = services.length > 0
+        ? services.map((service) => {
+            const serviceName = service?.name ?? service?.serviceName ?? service?.service_name ?? "Grooming service";
+            return `<li>${this.escapePrintHtml(serviceName)}</li>`;
+          }).join("")
+        : "<li>No selected services recorded</li>";
+
+      const petName = pet?.petName ?? pet?.pet_name ?? pet?.name ?? "Pet";
+      const groomingInstructions =
+        pet?.specialInstructions ??
+        pet?.special_instructions ??
+        booking?.specialNotes ??
+        "None provided";
+      const medicalInformation =
+        pet?.medicalConditions ??
+        pet?.medical_conditions ??
+        "None provided";
+      const contactNumber = this.toStringValue(booking?.contactNumber).trim();
+      const formattedContactNumber = contactNumber
+        ? this.formatMobileNumber(contactNumber)
+        : "Not provided";
+      const printRoot = document.createElement("section");
+      const previousTitle = document.title;
+      let cleanupTimer = null;
+
+      printRoot.className = "pet-grooming-print-clone";
+      printRoot.innerHTML = `
+        <header class="pet-grooming-print-header">
+          <div>
+            <p class="pet-grooming-print-clinic">Bethlehem Animal Clinic</p>
+            <p class="pet-grooming-print-subtitle">Individual Pet Grooming Card</p>
+          </div>
+          <strong class="pet-grooming-print-queue">${this.escapePrintHtml(this.formatPetQueueNumber(pet, petIndex))}</strong>
+        </header>
+        <section class="pet-grooming-print-section">
+          <h1>${this.escapePrintHtml(petName)}</h1>
+          <div class="pet-grooming-print-grid">
+            <p><span>Owner</span>${this.escapePrintHtml(booking?.ownerName || "Not provided")}</p>
+            <p><span>Phone number</span>${this.escapePrintHtml(formattedContactNumber)}</p>
+            <p><span>Species</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.species ?? pet?.petType ?? pet?.pet_type))}</p>
+            <p><span>Breed</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.breed))}</p>
+            <p><span>Size</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.size ?? pet?.petSize ?? pet?.pet_size))}</p>
+            <p><span>Fur type</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.furType ?? pet?.fur_type))}</p>
+            <p><span>Weight</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.weight))}</p>
+            <p><span>Dropped off</span>${this.escapePrintHtml(booking?.dropOffTime || "Not recorded")}</p>
+          </div>
+        </section>
+        <section class="pet-grooming-print-section">
+          <h2>Selected services</h2>
+          <ul class="pet-grooming-print-services">${serviceItems}</ul>
+        </section>
+        <section class="pet-grooming-print-section">
+          <h2>Grooming instructions</h2>
+          <p class="pet-grooming-print-notes">${this.escapePrintHtml(groomingInstructions)}</p>
+        </section>
+        <section class="pet-grooming-print-section pet-grooming-print-medical">
+          <h2>Medical information</h2>
+          <p class="pet-grooming-print-notes">${this.escapePrintHtml(medicalInformation)}</p>
+        </section>
+      `;
+
+      const cleanup = () => {
+        printRoot.remove();
+        document.body.classList.remove("pet-grooming-card-printing");
+        document.title = previousTitle;
+        window.removeEventListener("afterprint", cleanup);
+        if (cleanupTimer) {
+          window.clearTimeout(cleanupTimer);
+          cleanupTimer = null;
+        }
+      };
+
+      document.body.appendChild(printRoot);
+      document.body.classList.add("pet-grooming-card-printing");
+      document.title = `${this.formatPetQueueNumber(pet, petIndex)} ${petName}`;
+      window.addEventListener("afterprint", cleanup);
+      cleanupTimer = window.setTimeout(cleanup, 60000);
+      window.print();
+    },
+
     getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
       const normalizedPet = this.getDetailsPaymentPet(pet, booking);
       const petServices = this.getPetServicesAvailed(pet, booking);
@@ -2234,7 +2528,12 @@ function adminDashboard() {
 
     todayQueuePreview() {
       const today = this.localToday();
-      return [...this.inProgressList, ...this.queuedList]
+      const visibleBookings = [...this.inProgressList, ...this.queuedList]
+        .filter((booking, index, bookings) =>
+          bookings.findIndex((candidate) => String(candidate.id) === String(booking.id)) === index,
+        );
+
+      return visibleBookings
         .filter((booking) => booking.appointmentDate === today)
         .sort((left, right) => {
           const statusOrder = { "in-progress": 0, queued: 1 };
@@ -2294,6 +2593,44 @@ function adminDashboard() {
     // Converts nullable values into template-safe strings.
     toStringValue(value) {
       return value === undefined || value === null ? "" : String(value);
+    },
+
+    // Derive the card label from the actual pets instead of trusting a first-pet summary.
+    formatBookingPetTypes(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      if (pets.length === 0) {
+        return this.toStringValue(booking?.petType);
+      }
+
+      const typeCounts = pets.reduce((counts, pet) => {
+        const type = this.toStringValue(
+          pet?.species ?? pet?.petType ?? pet?.pet_type,
+        ).trim().toLowerCase();
+
+        if (type) {
+          counts.set(type, (counts.get(type) || 0) + 1);
+        }
+
+        return counts;
+      }, new Map());
+
+      if (typeCounts.size === 0) {
+        return this.toStringValue(booking?.petType);
+      }
+
+      const supportedTypes = ["dog", "cat"].filter((type) => typeCounts.has(type));
+      const otherTypes = Array.from(typeCounts.keys()).filter(
+        (type) => !supportedTypes.includes(type),
+      );
+      const labels = [...supportedTypes, ...otherTypes].map((type) => {
+        const label = type.charAt(0).toUpperCase() + type.slice(1);
+        return typeCounts.get(type) > 1 ? `${label}s` : label;
+      });
+
+      if (labels.length === 1) return labels[0];
+      if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+
+      return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
     },
 
     formatMobileNumber(value) {
@@ -2451,7 +2788,7 @@ function adminDashboard() {
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking),
+        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: !isEarlyPayment }),
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -2468,7 +2805,7 @@ function adminDashboard() {
       };
     },
 
-    buildPaymentBreakdown(booking) {
+    buildPaymentBreakdown(booking, paymentOptions = {}) {
       const pets = this.normalizePaymentPets(booking);
       const services = this.normalizePaymentServices(booking?.services);
 
@@ -2489,7 +2826,7 @@ function adminDashboard() {
             }
           : pet;
         const lines = petServices.map((service, serviceIndex) =>
-          this.normalizePaymentLine(service, pricedPet, `${petIndex}-${serviceIndex}`),
+          this.normalizePaymentLine(service, pricedPet, `${petIndex}-${serviceIndex}`, paymentOptions),
         );
 
         return {
@@ -2610,7 +2947,7 @@ function adminDashboard() {
       return pets[0]?.id === pet.id ? unscopedServices : [];
     },
 
-    normalizePaymentLine(rawService, pet, fallbackId) {
+    normalizePaymentLine(rawService, pet, fallbackId, paymentOptions = {}) {
       const serviceDefinition = getPaymentServiceDefinition(rawService);
       const fallbackAmount = parseFloat(rawService?.priceAtBooking ?? rawService?.price_at_booking ?? 0);
       const pricing = serviceDefinition
@@ -2620,9 +2957,13 @@ function adminDashboard() {
               minAmount: fallbackAmount,
               displayPrice: formatPaymentAmount(fallbackAmount),
               placeholder: Number(fallbackAmount).toLocaleString("en-PH"),
+              pricingType: "fixed",
               selectedPriceOption: null,
             }
           : getPaymentServicePricing(null, pet.sizeKey);
+      const pricingType = pricing.pricingType || "custom";
+      const lockFixedPrices = Boolean(paymentOptions.lockFixedPrices);
+      const isFixedPriceLocked = lockFixedPrices && pricingType === "fixed";
 
       return {
         id: rawService?.id ?? fallbackId,
@@ -2646,7 +2987,10 @@ function adminDashboard() {
         minAmount: pricing.minAmount,
         priceHint: pricing.displayPrice,
         placeholder: pricing.placeholder,
-        amount: "",
+        pricingType,
+        lockFixedPrices,
+        isFixedPriceLocked,
+        amount: isFixedPriceLocked ? Number(pricing.minAmount).toFixed(2) : "",
       };
     },
 
@@ -2663,10 +3007,20 @@ function adminDashboard() {
     },
 
     refreshPaymentLinePricing(pet, line) {
+      const wasFixedPriceLocked = Boolean(line.isFixedPriceLocked);
       const pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
+      const pricingType = pricing.pricingType || "custom";
       line.minAmount = pricing.minAmount;
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
+      line.pricingType = pricingType;
+      line.isFixedPriceLocked = Boolean(line.lockFixedPrices && pricingType === "fixed");
+
+      if (line.isFixedPriceLocked) {
+        line.amount = Number(pricing.minAmount).toFixed(2);
+      } else if (wasFixedPriceLocked) {
+        line.amount = "";
+      }
     },
 
     getPaymentSizeOptions(pet) {
@@ -2895,6 +3249,9 @@ function adminDashboard() {
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
         await this.loadAdminBookings();
         await this.loadNotifications();
+        if (isEarlyPayment && res?.all_pets_finished) {
+          this.setTab("to-be-picked-up");
+        }
       } catch (err) {
         this.paymentModal.error = err.message || "Payment failed. Please try again.";
       } finally {

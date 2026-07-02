@@ -19,6 +19,11 @@ class BookingPet extends Model
         'grooming_end_time',
     ];
 
+    protected $casts = [
+        'grooming_start_time' => 'datetime',
+        'grooming_end_time' => 'datetime',
+    ];
+
     // BookingPet belongs to a booking
     public function booking()
     {

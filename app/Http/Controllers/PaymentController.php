@@ -159,50 +159,86 @@ class PaymentController extends Controller
     }
 
     // ── PAY NOW (early payment from checked_in or in_progress) ───────────
-    // Does NOT change status — just flags the booking as paid so it
-    // skips the payment step when grooming finishes.
+    // Records owner-level payment without advancing a booking that still has
+    // queued or in-progress pets. The final pet completion performs the move.
     public function payNow(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
 
-        $booking = Booking::find($bookingId);
+        $result = DB::transaction(function () use ($bookingId, $data) {
+            $booking = Booking::whereKey($bookingId)->lockForUpdate()->first();
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
+            if (!$booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
 
-        if (!in_array($booking->status, ['checked_in', 'in_progress'])) {
-            return response()->json(['success' => false, 'message' => 'Early payment is only available for checked-in or in-progress bookings.'], 422);
-        }
+            if (!in_array($booking->status, ['checked_in', 'in_progress'], true)) {
+                return ['error' => [
+                    'message' => 'Early payment is only available for checked-in or in-progress bookings.',
+                    'status' => 422,
+                ]];
+            }
 
-        if ($booking->paid) {
-            return response()->json(['success' => false, 'message' => 'This booking has already been paid.'], 422);
-        }
+            if ($booking->paid) {
+                return ['error' => ['message' => 'This booking has already been paid.', 'status' => 422]];
+            }
 
-        if ($data['amount_paid'] < $data['final_price']) {
-            return response()->json(['success' => false, 'message' => 'Amount paid cannot be less than the final price.'], 422);
-        }
+            if ($data['amount_paid'] < $data['final_price']) {
+                return ['error' => ['message' => 'Amount paid cannot be less than the final price.', 'status' => 422]];
+            }
 
-        $payment = DB::transaction(function () use ($booking, $data) {
             $this->updateBookingServicePrices($booking, $data['service_prices'] ?? []);
             $payment = $this->createPaymentRecord($booking, $data);
+            $petCount = $booking->bookingPets()->count();
+            $remainingPets = $booking->bookingPets()
+                ->whereNull('grooming_end_time')
+                ->count();
+            $allPetsFinished = $petCount > 0 && $remainingPets === 0;
 
-            $booking->update([
+            $bookingUpdates = [
                 'paid'         => true,
                 'total_amount' => $data['final_price'],
-            ]);
+            ];
 
-            return $payment;
+            // This is a defensive concurrency guard. During the normal UI flow,
+            // the final Finished action is what advances an early-paid booking.
+            if ($allPetsFinished) {
+                $bookingUpdates['status'] = 'released';
+                $bookingUpdates['grooming_finished_at'] = $booking->grooming_finished_at ?? now();
+            }
+
+            $booking->update($bookingUpdates);
+
+            return [
+                'booking' => $booking,
+                'payment' => $payment,
+                'allPetsFinished' => $allPetsFinished,
+                'remainingPets' => $remainingPets,
+            ];
         });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        $payment = $result['payment'];
 
         return response()->json([
             'success'        => true,
-            'message'        => 'Early payment recorded. Booking will be auto-released after grooming.',
+            'message'        => $result['allPetsFinished']
+                ? 'Payment recorded. Booking is ready for pickup.'
+                : 'Early payment recorded. Booking will remain in its current schedule until every pet is finished.',
             'change'         => $payment->change_amount,
             'final_price'    => $data['final_price'],
             'amount_paid'    => $data['amount_paid'],
             'payment_method' => $payment->payment_method,
             'paid_at'        => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
+            'all_pets_finished' => $result['allPetsFinished'],
+            'remaining_pets' => $result['remainingPets'],
+            'booking_status' => $result['booking']->status,
         ]);
     }
 
