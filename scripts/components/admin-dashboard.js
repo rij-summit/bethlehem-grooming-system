@@ -509,6 +509,14 @@ function adminDashboard() {
     },
     noShowList: [],
     forPaymentList: [],
+    activeGroomers: (() => {
+      try {
+        const saved = parseInt(localStorage.getItem("activeGroomers"), 10);
+        return saved >= 1 && saved <= 5 ? saved : 2;
+      } catch (_) {
+        return 2;
+      }
+    })(),
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
     pickupModal: { open: false, booking: null, busy: false },
@@ -1739,6 +1747,170 @@ function adminDashboard() {
         this.compareBookings(left, right),
       );
     },
+
+    // ── QUEUE ETA ENGINE ─────────────────────────────────────────────────────
+    // Assigns each unfinished pet to the next available groomer slot and returns
+    // a map of { bookingPetId → { estStartAt: ms, estDoneAt: ms } }.
+    _computeQueueETAs() {
+      const now = Date.now();
+      const slots = Array(Math.max(1, this.activeGroomers)).fill(now);
+
+      const petKey = (pet) => String(pet.bookingPetId ?? pet.id ?? "");
+
+      const getPetDuration = (booking, pet) => {
+        const petId = String(pet.bookingPetId ?? pet.id ?? "");
+        const services = (booking.services || []).filter(
+          (s) => String(s.bookingPetId ?? s.booking_pet_id ?? "") === petId,
+        );
+        const total = services.reduce(
+          (sum, s) => sum + (Number(s.durationMinutes) || 60),
+          0,
+        );
+        return total > 0 ? total : 60;
+      };
+
+      const earliestSlotIdx = () =>
+        slots.reduce((minI, t, i) => (t < slots[minI] ? i : minI), 0);
+
+      const etaMap = {};
+
+      // In-progress pets already occupy a groomer slot — estimate their remaining time
+      const sortedInProgress = [...this.inProgressList].sort(
+        (a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0),
+      );
+      for (const booking of sortedInProgress) {
+        for (const pet of booking.pets ?? []) {
+          if (!pet.isGroomingStarted || pet.isGroomingFinished) continue;
+          const duration = getPetDuration(booking, pet);
+          const startIso = pet.groomingStartedAtIso;
+          let estDone;
+          if (startIso) {
+            const elapsed = (now - new Date(startIso).getTime()) / 60000;
+            const remaining = Math.max(5, duration - elapsed);
+            estDone = now + remaining * 60000;
+          } else {
+            estDone = now + duration * 60000;
+          }
+          const i = earliestSlotIdx();
+          slots[i] = estDone;
+          etaMap[petKey(pet)] = {
+            estStartAt: startIso ? new Date(startIso).getTime() : now,
+            estDoneAt: estDone,
+          };
+        }
+      }
+
+      // Queued pets fill whichever groomer slot frees up next
+      const sortedQueued = [...this.queuedList].sort(
+        (a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0),
+      );
+      for (const booking of sortedQueued) {
+        for (const pet of booking.pets ?? []) {
+          const duration = getPetDuration(booking, pet);
+          const i = earliestSlotIdx();
+          const estStart = slots[i];
+          const estDone = estStart + duration * 60000;
+          slots[i] = estDone;
+          etaMap[petKey(pet)] = { estStartAt: estStart, estDoneAt: estDone };
+        }
+      }
+
+      return etaMap;
+    },
+
+    get petETAs() {
+      return this._computeQueueETAs();
+    },
+
+    // Summary stats shown in the Queue Overview panel
+    get queueSummary() {
+      const etaMap = this.petETAs;
+      const vals = Object.values(etaMap);
+      const now = Date.now();
+      const petsWaiting = this.queuedList.reduce(
+        (n, b) => n + (b.pets?.length || 0),
+        0,
+      );
+
+      if (vals.length === 0) {
+        return { petsWaiting, avgWaitLabel: "—", lastDoneLabel: null };
+      }
+
+      const queuedVals = vals.filter((v) => v.estStartAt >= now);
+      const avgMs =
+        queuedVals.length > 0
+          ? queuedVals.reduce((s, v) => s + (v.estDoneAt - v.estStartAt), 0) /
+            queuedVals.length
+          : 0;
+      const avgMins = Math.round(avgMs / 60000);
+      const avgWaitLabel = avgMins > 0 ? `~${avgMins} min` : "—";
+
+      const lastDoneMs = Math.max(...vals.map((v) => v.estDoneAt));
+      const lastDoneLabel =
+        lastDoneMs > now
+          ? new Date(lastDoneMs).toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })
+          : null;
+
+      return { petsWaiting, avgWaitLabel, lastDoneLabel };
+    },
+
+    // Returns "~3:45 PM" for the last unfinished pet in a booking, or null.
+    getBookingETA(booking) {
+      const etaMap = this.petETAs;
+      let latest = null;
+      for (const pet of booking.pets ?? []) {
+        if (pet.isGroomingFinished) continue;
+        const entry = etaMap[String(pet.bookingPetId ?? pet.id ?? "")];
+        if (entry && (!latest || entry.estDoneAt > latest)) {
+          latest = entry.estDoneAt;
+        }
+      }
+      if (!latest) return null;
+      return new Date(latest).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    },
+
+    // Returns elapsed time string for a pet actively being groomed.
+    getPetElapsed(pet) {
+      const startIso = pet.groomingStartedAtIso;
+      if (!startIso) return "";
+      const mins = Math.round(
+        (Date.now() - new Date(startIso).getTime()) / 60000,
+      );
+      if (mins <= 0) return "";
+      if (mins < 60) return `${mins} min elapsed`;
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return m > 0 ? `${h}h ${m}m elapsed` : `${h}h elapsed`;
+    },
+
+    // Returns "Est. done ~3:45 PM" for a specific in-progress pet.
+    getPetEstDone(booking, pet) {
+      const etaMap = this.petETAs;
+      const entry = etaMap[String(pet.bookingPetId ?? pet.id ?? "")];
+      if (!entry || entry.estDoneAt <= Date.now()) return "";
+      const t = new Date(entry.estDoneAt).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `Est. done ~${t}`;
+    },
+
+    setActiveGroomers(n) {
+      this.activeGroomers = Math.min(5, Math.max(1, n));
+      try {
+        localStorage.setItem("activeGroomers", String(this.activeGroomers));
+      } catch (_) {}
+    },
+    // ── END QUEUE ETA ENGINE ─────────────────────────────────────────────────
 
     // Removes a booking from every visible status list using its id.
     removeBookingFromLists(bookingId) {

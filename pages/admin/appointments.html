@@ -499,6 +499,74 @@
             </div>
           </section>
 
+          <!-- Queue Overview Panel — visible on Queued and In-Progress tabs -->
+          <section
+            x-show="activeTab === 'queued' || activeTab === 'in-progress'"
+            x-transition
+            class="mt-4"
+          >
+            <div class="rounded-2xl border border-[#d9e6f1] bg-white px-4 py-4 shadow-sm">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                <!-- ETA stats -->
+                <div class="flex flex-wrap gap-5">
+                  <div class="flex items-center gap-2">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-50">
+                      <i data-lucide="clock-3" class="h-4 w-4 text-[#e5a800]"></i>
+                    </div>
+                    <div>
+                      <p class="text-xs text-slate-500">Pets waiting</p>
+                      <p class="text-lg font-bold text-slate-800" x-text="queueSummary.petsWaiting"></p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
+                      <i data-lucide="timer" class="h-4 w-4 text-[#315b7e]"></i>
+                    </div>
+                    <div>
+                      <p class="text-xs text-slate-500">Avg grooming time</p>
+                      <p class="text-lg font-bold text-slate-800" x-text="queueSummary.avgWaitLabel"></p>
+                    </div>
+                  </div>
+
+                  <template x-if="queueSummary.lastDoneLabel">
+                    <div class="flex items-center gap-2">
+                      <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-50">
+                        <i data-lucide="flag" class="h-4 w-4 text-green-600"></i>
+                      </div>
+                      <div>
+                        <p class="text-xs text-slate-500">Est. queue done by</p>
+                        <p class="text-lg font-bold text-slate-800" x-text="queueSummary.lastDoneLabel"></p>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Groomer count control -->
+                <div class="flex items-center gap-3">
+                  <span class="text-sm font-medium text-slate-600">Groomers on duty</span>
+                  <div class="flex items-center gap-1 rounded-xl border border-[#d7e3ef] bg-[#f5f8fb] px-1.5 py-1">
+                    <button
+                      type="button"
+                      @click="setActiveGroomers(activeGroomers - 1)"
+                      :disabled="activeGroomers <= 1"
+                      class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
+                    >−</button>
+                    <span class="w-6 text-center text-lg font-bold text-[#1f3850]" x-text="activeGroomers"></span>
+                    <button
+                      type="button"
+                      @click="setActiveGroomers(activeGroomers + 1)"
+                      :disabled="activeGroomers >= 5"
+                      class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
+                    >+</button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
           <!-- Flow tabs -->
           <section class="mt-6">
             <div class="rounded-full bg-[#bdd6ec] p-1">
@@ -926,6 +994,13 @@
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
                         <span x-show="booking.dropOffTime" x-text="' · Dropped off: ' + booking.dropOffTime"></span>
                       </p>
+                      <!-- Queue ETA badge -->
+                      <template x-if="getBookingETA(booking)">
+                        <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#c48a00]">
+                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
+                          Est. ready: ~<span x-text="getBookingETA(booking)"></span>
+                        </p>
+                      </template>
                     </div>
                   </div>
 
@@ -1147,8 +1222,15 @@
                       ></p>
                       <p class="mt-2 text-sm text-slate-600">
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.startedAt" x-text="' Â· Started: ' + booking.startedAt"></span>
+                        <span x-show="booking.startedAt" x-text="' · Started: ' + booking.startedAt"></span>
                       </p>
+                      <!-- In-progress ETA badge -->
+                      <template x-if="getBookingETA(booking)">
+                        <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#315b7e]">
+                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
+                          Est. done: ~<span x-text="getBookingETA(booking)"></span>
+                        </p>
+                      </template>
                     </div>
                   </div>
 
@@ -1223,6 +1305,13 @@
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <!-- Per-pet elapsed + ETA -->
+                            <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
+                              <span x-text="getPetElapsed(pet)"></span>
+                              <template x-if="getPetEstDone(booking, pet)">
+                                <span x-text="(getPetElapsed(pet) ? ' · ' : '') + getPetEstDone(booking, pet)"></span>
+                              </template>
+                            </p>
                           </div>
 
                           <div class="admin-queued-pet-actions">

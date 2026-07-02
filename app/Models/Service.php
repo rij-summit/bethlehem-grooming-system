@@ -19,5 +19,6 @@ class Service extends Model
         'price_medium',
         'price_large',
         'is_active',
+        'duration_minutes',
     ];
 }

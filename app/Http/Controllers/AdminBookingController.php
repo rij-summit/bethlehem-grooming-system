@@ -860,11 +860,13 @@ class AdminBookingController extends Controller
                     'groomingStartedAt'   => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,
-                    'isGroomingStarted'   => (bool) $bp->grooming_start_time,
-                    'groomingFinishedAt'  => $bp->grooming_end_time
+                    'isGroomingStarted'    => (bool) $bp->grooming_start_time,
+                    'groomingStartedAtIso' => $bp->grooming_start_time,
+                    'groomingFinishedAt'   => $bp->grooming_end_time
                         ? Carbon::parse($bp->grooming_end_time)->format('g:i A')
                         : null,
-                    'isGroomingFinished'  => (bool) $bp->grooming_end_time,
+                    'groomingFinishedAtIso' => $bp->grooming_end_time,
+                    'isGroomingFinished'    => (bool) $bp->grooming_end_time,
                 ];
             })->values(),
             'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {
@@ -903,6 +905,7 @@ class AdminBookingController extends Controller
                     'name'               => $bs->service?->service_name ?? '—',
                     'priceAtBooking'     => $bs->price_at_booking,
                     'price_at_booking'   => $bs->price_at_booking,
+                    'durationMinutes'    => (int) ($bs->service?->duration_minutes ?? 60),
                     'paidPrice'          => $paidPrice,
                     'paid_price'         => $paidPrice,
                     'paidPriceSource'    => $paidPriceSource,
