@@ -2554,6 +2554,18 @@ function adminDashboard() {
       return this.getQueuedPets(booking);
     },
 
+    shouldShowOwnerReschedule(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+
+      return pets.length > 1 && pets.some((pet) =>
+        Boolean(
+          pet?.isGroomingFinished ||
+          pet?.groomingFinishedAt ||
+          pet?.grooming_finished_at,
+        ),
+      );
+    },
+
     formatPetQueueNumber(pet, petIndex = 0) {
       // Display-only numbering is scoped to one owner booking. See the backend
       // formatter comment for the optional persistence migration guidance.

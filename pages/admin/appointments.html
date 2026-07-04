@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=card-actions-20260704" />
+    <link rel="stylesheet" href="../../css/custom.css?v=reschedule-ui-20260704" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1028,15 +1028,24 @@
                       Already Paid
                     </div>
                   </template>
-                  <!-- Existing frontend-only owner booking actions remain booking-scoped. -->
-                  <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                    <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                    Revert
-                  </button>
-                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                    <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                    Cancel
-                  </button>
+                  <template x-if="shouldShowOwnerReschedule(booking)">
+                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
+                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
+                      Reschedule
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
+                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                      Revert
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
+                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                      Cancel
+                    </button>
+                  </template>
                   <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
                     View Details
                   </button>
@@ -1264,14 +1273,24 @@
                       Already Paid
                     </div>
                   </template>
-                  <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                    <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                    Revert
-                  </button>
-                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                    <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                    Cancel
-                  </button>
+                  <template x-if="shouldShowOwnerReschedule(booking)">
+                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
+                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
+                      Reschedule
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
+                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                      Revert
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
+                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                      Cancel
+                    </button>
+                  </template>
                   <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
                     View Details
                   </button>
@@ -2237,6 +2256,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=groomer-capacity-20260704"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=reschedule-ui-20260704"></script>
   </body>
 </html>

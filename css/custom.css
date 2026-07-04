@@ -637,6 +637,16 @@ body.customer-detail-modal-open {
   background-color: #fecaca;
 }
 
+.admin-queued-reschedule-action {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #315b7e;
+}
+
+.admin-queued-reschedule-action:hover {
+  background-color: #dbeafe;
+}
+
 @media (max-width: 640px) {
   .admin-queued-main-action,
   .admin-queued-secondary-row {
