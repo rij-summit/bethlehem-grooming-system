@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/custom.css?v=card-actions-20260704" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -550,20 +550,21 @@
                     <button
                       type="button"
                       @click="setActiveGroomers(activeGroomers - 1)"
-                      :disabled="activeGroomers <= 1"
+                      :disabled="activeGroomers <= 1 || groomerCapacityBusy"
                       class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
                     >−</button>
                     <span class="w-6 text-center text-lg font-bold text-[#1f3850]" x-text="activeGroomers"></span>
                     <button
                       type="button"
                       @click="setActiveGroomers(activeGroomers + 1)"
-                      :disabled="activeGroomers >= 5"
+                      :disabled="activeGroomers >= 5 || groomerCapacityBusy"
                       class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
                     >+</button>
                   </div>
                 </div>
 
               </div>
+              <p x-show="groomerCapacityError" class="mt-3 text-right text-xs font-semibold text-red-600" x-text="groomerCapacityError"></p>
             </div>
           </section>
 
@@ -1073,15 +1074,21 @@
                           </div>
 
                           <div class="admin-queued-pet-actions">
-                            <button
-                              type="button"
-                              @click="confirmStartGroomingPet(booking, pet)"
-                              :disabled="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id)"
-                              class="admin-queued-pet-start"
-                              :class="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                            <div
+                              class="admin-queued-pet-start-wrap"
+                              :class="isGroomerCapacityFull && !pet.isGroomingStarted ? 'is-capacity-disabled' : ''"
+                              :title="isGroomerCapacityFull && !pet.isGroomingStarted ? 'Groomer currently busy' : ''"
                             >
-                              <span x-text="pet.isGroomingStarted ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
-                            </button>
+                              <button
+                                type="button"
+                                @click="confirmStartGroomingPet(booking, pet)"
+                                :disabled="pet.isGroomingStarted || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                class="admin-queued-pet-start"
+                                :class="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                              >
+                                <span x-text="pet.isGroomingStarted ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
+                              </button>
+                            </div>
                             <button
                               type="button"
                               @click="printPetCard(booking, pet, petIndex)"
@@ -2230,6 +2237,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=payment-limit-20260704"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=groomer-capacity-20260704"></script>
   </body>
 </html>

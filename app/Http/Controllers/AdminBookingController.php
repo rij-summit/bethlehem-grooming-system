@@ -9,6 +9,7 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use App\Models\Notification;
 use App\Models\CustomerNotification;
 use App\Models\Payment;
@@ -37,6 +38,43 @@ class AdminBookingController extends Controller
             ->whereIn('status', self::INTAKE_STATUSES)
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->sum('number_of_pets');
+    }
+
+    private function activeGroomingPetCount(): int
+    {
+        return BookingPet::whereNotNull('grooming_start_time')
+            ->whereNull('grooming_end_time')
+            ->whereHas('booking', function ($query) {
+                $query->whereIn('status', ['checked_in', 'in_progress']);
+            })
+            ->count();
+    }
+
+    private function groomerCapacitySnapshot(): array
+    {
+        $groomersOnDuty = ClinicSetting::current()->groomers_on_duty;
+        $activePets = $this->activeGroomingPetCount();
+
+        return [
+            'groomers_on_duty' => $groomersOnDuty,
+            'active_pets' => $activePets,
+            'available_slots' => max(0, $groomersOnDuty - $activePets),
+            'is_full' => $activePets >= $groomersOnDuty,
+        ];
+    }
+
+    private function groomerCapacityError(int $activePets, int $groomersOnDuty, int $requestedSlots = 1): array
+    {
+        $availableSlots = max(0, $groomersOnDuty - $activePets);
+        $slotLabel = $availableSlots === 1 ? 'slot is' : 'slots are';
+        $message = $availableSlots === 0
+            ? "Groomer capacity is full ({$activePets} of {$groomersOnDuty} pets in progress). Finish a pet before starting another."
+            : "Only {$availableSlots} groomer {$slotLabel} available, but {$requestedSlots} pets would be started.";
+
+        return ['error' => [
+            'message' => $message,
+            'status' => 422,
+        ]];
     }
 
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
@@ -169,6 +207,7 @@ class AdminBookingController extends Controller
                 'current' => $todayIntakeCount,
                 'max'     => self::MAX_CAPACITY,
             ],
+            'groomerCapacity' => $this->groomerCapacitySnapshot(),
         ]);
     }
 
@@ -210,22 +249,55 @@ class AdminBookingController extends Controller
     // checked_in → in_progress
     public function startGrooming($id)
     {
-        $booking = Booking::find($id);
+        $result = DB::transaction(function () use ($id) {
+            $settings = ClinicSetting::current(lockForUpdate: true);
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+            if (!$booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'checked_in') {
+                return ['error' => ['message' => 'Booking must be checked in first.', 'status' => 422]];
+            }
+
+            $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->lockForUpdate()
+                ->get();
+            $petsToStart = $bookingPets->whereNull('grooming_start_time');
+            $activePets = $this->activeGroomingPetCount();
+
+            if ($activePets + $petsToStart->count() > $settings->groomers_on_duty) {
+                return $this->groomerCapacityError(
+                    $activePets,
+                    $settings->groomers_on_duty,
+                    $petsToStart->count(),
+                );
+            }
+
+            $startedAt = now();
+            if ($petsToStart->isNotEmpty()) {
+                BookingPet::whereIn('booking_pet_id', $petsToStart->pluck('booking_pet_id'))
+                    ->update(['grooming_start_time' => $startedAt]);
+            }
+
+            $booking->update([
+                'status' => 'in_progress',
+                'grooming_started_at' => $booking->grooming_started_at ?? $startedAt,
+            ]);
+            $booking->load('user', 'bookingPets.pet');
+
+            return ['booking' => $booking];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
 
-        if ($booking->status !== 'checked_in') {
-            return response()->json(['success' => false, 'message' => 'Booking must be checked in first.'], 422);
-        }
-
-        $booking->load('user', 'bookingPets.pet');
-
-        $booking->update([
-            'status'             => 'in_progress',
-            'grooming_started_at' => now(),
-        ]);
+        $booking = $result['booking'];
 
         // Notify the customer that grooming has started
         if ($booking->user) {
@@ -251,6 +323,7 @@ class AdminBookingController extends Controller
     public function startPetGrooming($id, $bookingPetId)
     {
         $result = DB::transaction(function () use ($id, $bookingPetId) {
+            $settings = ClinicSetting::current(lockForUpdate: true);
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (!$booking) {
@@ -272,6 +345,11 @@ class AdminBookingController extends Controller
 
             if ($bookingPet->grooming_start_time) {
                 return ['error' => ['message' => 'Grooming has already started for this pet.', 'status' => 422]];
+            }
+
+            $activePets = $this->activeGroomingPetCount();
+            if ($activePets >= $settings->groomers_on_duty) {
+                return $this->groomerCapacityError($activePets, $settings->groomers_on_duty);
             }
 
             $startedAt = now();

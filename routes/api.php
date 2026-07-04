@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ClinicClosureController;
+use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PetController;
@@ -104,4 +105,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/clinic/blocked-dates',              [ClinicClosureController::class, 'blockedDates']);
     Route::post('/admin/clinic/blocked-dates',             [ClinicClosureController::class, 'addBlockedDate']);
     Route::delete('/admin/clinic/blocked-dates/{id}',      [ClinicClosureController::class, 'removeBlockedDate']);
+    Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
 });

@@ -524,14 +524,10 @@ function adminDashboard() {
     },
     noShowList: [],
     forPaymentList: [],
-    activeGroomers: (() => {
-      try {
-        const saved = parseInt(localStorage.getItem("activeGroomers"), 10);
-        return saved >= 1 && saved <= 5 ? saved : 2;
-      } catch (_) {
-        return 2;
-      }
-    })(),
+    activeGroomers: 2,
+    activeGroomingPets: 0,
+    groomerCapacityBusy: false,
+    groomerCapacityError: "",
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
     pickupModal: { open: false, booking: null, busy: false },
@@ -903,6 +899,11 @@ function adminDashboard() {
 
     // Opens a second confirmation before moving a Queued booking into In-Progress.
     confirmStartGroomingBooking(booking) {
+      if (this.isGroomerCapacityFull) {
+        this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
+        return;
+      }
+
       const ownerName = String(booking?.ownerName || "").trim();
       this.openActionConfirmModal({
         action: "startGrooming",
@@ -921,7 +922,10 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (pet?.isGroomingStarted) {
+      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+        if (this.isGroomerCapacityFull) {
+          this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
+        }
         return;
       }
 
@@ -1270,6 +1274,10 @@ function adminDashboard() {
       };
 
       try {
+        if (["startGrooming", "startPetGrooming"].includes(actionName)) {
+          this.groomerCapacityError = "";
+        }
+
         this.dispatchDashboardEvent("admin-dashboard:action-start", {
           action: actionName,
           booking: this.cloneBooking(booking),
@@ -1312,6 +1320,10 @@ function adminDashboard() {
         });
       } catch (error) {
         console.error(`Admin dashboard ${actionName} failed:`, error);
+        if (["startGrooming", "startPetGrooming"].includes(actionName)) {
+          this.groomerCapacityError = error.message;
+          await this.loadAdminBookings();
+        }
         this.dispatchDashboardEvent("admin-dashboard:action-error", {
           action: actionName,
           booking: this.cloneBooking(booking),
@@ -1438,6 +1450,14 @@ function adminDashboard() {
         this.maxCapacity = nextPayload.maxCapacity;
       }
 
+      if ("activeGroomers" in nextPayload) {
+        this.activeGroomers = nextPayload.activeGroomers;
+      }
+
+      if ("activeGroomingPets" in nextPayload) {
+        this.activeGroomingPets = nextPayload.activeGroomingPets;
+      }
+
       if ("notificationCount" in nextPayload) {
         this.notificationCount = nextPayload.notificationCount;
       }
@@ -1485,6 +1505,7 @@ function adminDashboard() {
 
       const summary = payload.summary || payload.metrics || {};
       const capacity = payload.capacity || {};
+      const groomerCapacity = payload.groomerCapacity || payload.groomer_capacity || {};
       const notifications = payload.notifications || {};
 
       const nextPayload = {};
@@ -1567,6 +1588,26 @@ function adminDashboard() {
         nextPayload.maxCapacity = this.toNumber(
           payload.maxCapacity ?? capacity.max,
           this.maxCapacity,
+        );
+      }
+
+      if (
+        this.hasValue(payload.activeGroomers) ||
+        this.hasValue(groomerCapacity.groomers_on_duty)
+      ) {
+        nextPayload.activeGroomers = this.toNumber(
+          payload.activeGroomers ?? groomerCapacity.groomers_on_duty,
+          this.activeGroomers,
+        );
+      }
+
+      if (
+        this.hasValue(payload.activeGroomingPets) ||
+        this.hasValue(groomerCapacity.active_pets)
+      ) {
+        nextPayload.activeGroomingPets = this.toNumber(
+          payload.activeGroomingPets ?? groomerCapacity.active_pets,
+          this.activeGroomingPets,
         );
       }
 
@@ -1873,6 +1914,10 @@ function adminDashboard() {
       return { petsWaiting, avgWaitLabel, lastDoneLabel };
     },
 
+    get isGroomerCapacityFull() {
+      return this.activeGroomingPets >= this.activeGroomers;
+    },
+
     // Returns "~3:45 PM" for the last unfinished pet in a booking, or null.
     getBookingETA(booking) {
       const etaMap = this.petETAs;
@@ -1919,11 +1964,24 @@ function adminDashboard() {
       return `Est. done ~${t}`;
     },
 
-    setActiveGroomers(n) {
-      this.activeGroomers = Math.min(5, Math.max(1, n));
+    async setActiveGroomers(n) {
+      const nextValue = Math.min(5, Math.max(1, Number(n) || 1));
+      if (this.groomerCapacityBusy || nextValue === this.activeGroomers) {
+        return;
+      }
+
+      this.groomerCapacityBusy = true;
+      this.groomerCapacityError = "";
+
       try {
-        localStorage.setItem("activeGroomers", String(this.activeGroomers));
-      } catch (_) {}
+        const response = await API.adminUpdateGroomersOnDuty(nextValue);
+        this.activeGroomers = Number(response?.groomers_on_duty) || nextValue;
+        await this.loadAdminBookings();
+      } catch (error) {
+        this.groomerCapacityError = error.message || "Unable to update groomers on duty.";
+      } finally {
+        this.groomerCapacityBusy = false;
+      }
     },
     // ── END QUEUE ETA ENGINE ─────────────────────────────────────────────────
 
@@ -2257,6 +2315,8 @@ function adminDashboard() {
         noShowWeekRate: this.noShowWeekRate,
         currentCapacity: this.currentCapacity,
         maxCapacity: this.maxCapacity,
+        activeGroomers: this.activeGroomers,
+        activeGroomingPets: this.activeGroomingPets,
         notificationCount: this.notificationCount,
         recentActivity: [...this.recentActivity],
         incomingList: [...this.incomingList],

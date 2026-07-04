@@ -2320,6 +2320,18 @@ body.customer-detail-modal-open {
   gap: 0.55rem;
 }
 
+.admin-queued-pet-start-wrap {
+  display: inline-flex;
+}
+
+.admin-queued-pet-start-wrap.is-capacity-disabled {
+  cursor: not-allowed;
+}
+
+.admin-queued-pet-start-wrap.is-capacity-disabled .admin-queued-pet-start {
+  pointer-events: none;
+}
+
 .admin-queued-pet-start,
 .admin-queued-pet-print,
 .admin-in-progress-pet-finish,
@@ -2332,7 +2344,7 @@ body.customer-detail-modal-open {
   border-radius: 0.7rem;
   padding: 0.6rem 0.85rem;
   font-size: 0.8rem;
-  font-weight: 800;
+  font-weight: 700;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -2442,6 +2454,14 @@ body.customer-detail-modal-open {
 
   .admin-queued-pet-actions {
     grid-column: 1 / -1;
+  }
+
+  .admin-queued-pet-start-wrap {
+    flex: 1 1 0;
+  }
+
+  .admin-queued-pet-start-wrap .admin-queued-pet-start {
+    width: 100%;
   }
 
   .admin-queued-pet-start,

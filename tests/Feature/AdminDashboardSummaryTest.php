@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
+use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\PaymentController;
 use App\Models\Booking;
 use App\Models\BookingPet;
@@ -12,6 +13,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AdminDashboardSummaryTest extends TestCase
@@ -21,6 +23,17 @@ class AdminDashboardSummaryTest extends TestCase
         parent::setUp();
 
         Carbon::setTestNow(Carbon::parse('2026-06-24 12:00:00'));
+
+        Schema::create('clinic_settings', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedTinyInteger('groomers_on_duty')->default(2);
+            $table->timestamps();
+        });
+
+        DB::table('clinic_settings')->insert([
+            'id' => 1,
+            'groomers_on_duty' => 2,
+        ]);
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->increments('booking_id');
@@ -99,6 +112,7 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
+        Schema::dropIfExists('clinic_settings');
 
         parent::tearDown();
     }
@@ -243,6 +257,100 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertTrue($secondResponse->getData(true)['all_pets_started']);
         $this->assertSame('in_progress', DB::table('bookings')->where('booking_id', 1)->value('status'));
         $this->assertNotNull(DB::table('bookings')->where('booking_id', 1)->value('grooming_started_at'));
+    }
+
+    #[DataProvider('groomerCapacities')]
+    public function test_groomer_capacity_limits_active_pets_and_finishing_frees_a_slot(int $groomersOnDuty): void
+    {
+        DB::table('clinic_settings')->where('id', 1)->update([
+            'groomers_on_duty' => $groomersOnDuty,
+        ]);
+
+        for ($index = 1; $index <= $groomersOnDuty + 1; $index++) {
+            DB::table('bookings')->insert([
+                'booking_id' => $index,
+                'booking_reference' => "CAPACITY-{$groomersOnDuty}-{$index}",
+                'booking_date' => '2026-06-24',
+                'number_of_pets' => 1,
+                'status' => 'checked_in',
+                'queue_number' => $index,
+            ]);
+            DB::table('pets')->insert([
+                'pet_id' => $index,
+                'pet_name' => "Pet {$index}",
+                'species' => 'dog',
+            ]);
+            DB::table('booking_pets')->insert([
+                'booking_pet_id' => $index,
+                'booking_id' => $index,
+                'pet_id' => $index,
+            ]);
+        }
+
+        $controller = new AdminBookingController;
+        for ($index = 1; $index <= $groomersOnDuty; $index++) {
+            $this->assertSame(200, $controller->startPetGrooming($index, $index)->getStatusCode());
+        }
+
+        $blockedPetId = $groomersOnDuty + 1;
+        $blockedResponse = $controller->startPetGrooming($blockedPetId, $blockedPetId);
+        $this->assertSame(422, $blockedResponse->getStatusCode());
+        $this->assertStringContainsString('Groomer capacity is full', $blockedResponse->getData(true)['message']);
+
+        $schedule = $controller->index(Request::create('/api/admin/bookings', 'GET'))->getData(true);
+        $this->assertSame($groomersOnDuty, $schedule['groomerCapacity']['active_pets']);
+        $this->assertTrue($schedule['groomerCapacity']['is_full']);
+
+        $this->assertSame(200, $controller->markPetDone(1, 1)->getStatusCode());
+        $this->assertSame(200, $controller->startPetGrooming($blockedPetId, $blockedPetId)->getStatusCode());
+    }
+
+    public static function groomerCapacities(): array
+    {
+        return [
+            'one groomer' => [1],
+            'two groomers' => [2],
+            'three groomers' => [3],
+        ];
+    }
+
+    public function test_groomers_on_duty_setting_can_be_updated(): void
+    {
+        $response = (new ClinicSettingController)->updateGroomersOnDuty(new Request([
+            'groomers_on_duty' => 3,
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(3, $response->getData(true)['groomers_on_duty']);
+        $this->assertSame(3, DB::table('clinic_settings')->where('id', 1)->value('groomers_on_duty'));
+    }
+
+    public function test_booking_level_start_cannot_bypass_pet_capacity(): void
+    {
+        DB::table('clinic_settings')->where('id', 1)->update(['groomers_on_duty' => 1]);
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'CAPACITY-WHOLE-BOOKING',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 2,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+        ]);
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Zeus', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Ginger', 'species' => 'cat'],
+        ]);
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 1, 'booking_id' => 1, 'pet_id' => 1],
+            ['booking_pet_id' => 2, 'booking_id' => 1, 'pet_id' => 2],
+        ]);
+
+        $response = (new AdminBookingController)->startGrooming(1);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 1)->value('grooming_start_time'));
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 2)->value('grooming_start_time'));
+        $this->assertSame('checked_in', DB::table('bookings')->where('booking_id', 1)->value('status'));
     }
 
     public function test_finishing_pets_keeps_booking_in_progress_until_every_pet_is_done(): void

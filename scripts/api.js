@@ -518,8 +518,16 @@ var API = (() => {
   }
 
   async function adminReopenToday() {
-    // POST /api/admin/clinic/reopen-today  (protected — admin token)
     return request("POST", "/admin/clinic/reopen-today", null, getAdminToken());
+  }
+
+  async function adminUpdateGroomersOnDuty(groomersOnDuty) {
+    return request(
+      "PATCH",
+      "/admin/clinic/settings/groomers-on-duty",
+      { groomers_on_duty: groomersOnDuty },
+      getAdminToken(),
+    );
   }
 
   async function getBlockedDates() {
@@ -703,6 +711,7 @@ var API = (() => {
     getClinicStatus,
     adminStopToday,
     adminReopenToday,
+    adminUpdateGroomersOnDuty,
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,
