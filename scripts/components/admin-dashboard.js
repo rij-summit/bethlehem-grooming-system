@@ -2542,10 +2542,7 @@ function adminDashboard() {
           speciesRank(left.pet) - speciesRank(right.pet) ||
           left.originalIndex - right.originalIndex,
         )
-        .map(({ pet }, displayIndex) => ({
-          ...pet,
-          petQueueNumber: displayIndex + 1,
-        }));
+        .map(({ pet }) => pet);
     },
 
     // In Progress mirrors the Queued card and retains finished pets as disabled
@@ -2567,8 +2564,6 @@ function adminDashboard() {
     },
 
     formatPetQueueNumber(pet, petIndex = 0) {
-      // Display-only numbering is scoped to one owner booking. See the backend
-      // formatter comment for the optional persistence migration guidance.
       const queueNumber = Number(pet?.petQueueNumber ?? petIndex + 1);
       return `#P${Number.isFinite(queueNumber) && queueNumber > 0 ? queueNumber : petIndex + 1}`;
     },

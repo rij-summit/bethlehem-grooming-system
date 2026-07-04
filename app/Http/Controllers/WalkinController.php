@@ -10,13 +10,15 @@ use App\Models\Pet;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\Walkin;
-use Illuminate\Support\Facades\DB;
+use App\Services\DailyPetQueue;
 
 class WalkinController extends Controller
 {
     public function store(StoreWalkinRequest $request)
     {
-        return DB::transaction(function () use ($request) {
+        $queueDate = now()->toDateString();
+
+        return app(DailyPetQueue::class)->runForDate($queueDate, function () use ($request, $queueDate) {
             $data = $request->validated();
 
             // Check if this email belongs to a registered customer
@@ -43,13 +45,12 @@ class WalkinController extends Controller
                 'user_id'          => $user?->user_id,
             ]);
 
-            // Atomically assign today's queue number to prevent duplicates under concurrent requests
-            $queueNumber = Booking::where('booking_type', 'walk_in')
-                ->where('booking_date', now()->toDateString())
-                ->lockForUpdate()
-                ->count() + 1;
+            // Scheduled and walk-in owners share the same daily queue.
+            $queueNumber = ((int) Booking::where('booking_date', $queueDate)
+                ->whereNotNull('queue_number')
+                ->max('queue_number')) + 1;
 
-            $bookingReference = 'WI-' . now()->format('Ymd') . '-' . str_pad($queueNumber, 3, '0', STR_PAD_LEFT);
+            $bookingReference = 'WI-' . str_replace('-', '', $queueDate) . '-' . str_pad($queueNumber, 3, '0', STR_PAD_LEFT);
 
             // Create the booking — walk-in customers are already on-site so they
             // enter the queue immediately (checked_in) rather than waiting_to_arrive
@@ -57,7 +58,7 @@ class WalkinController extends Controller
                 'booking_reference' => $bookingReference,
                 'user_id'           => $user?->user_id,
                 'walkin_id'         => $walkin->id,
-                'booking_date'      => now()->toDateString(),
+                'booking_date'      => $queueDate,
                 'number_of_pets'    => count($resolvedPets),
                 'booking_type'      => 'walk_in',
                 'status'            => 'checked_in',
@@ -87,6 +88,7 @@ class WalkinController extends Controller
                 }
 
                 $petsResponse[] = [
+                    'booking_pet_id' => $bookingPet->booking_pet_id,
                     'pet_name' => $item['petData']['pet_name'],
                     'species'  => $item['petData']['species'],
                     'size'     => $item['petData']['size'] ?? null,
@@ -96,6 +98,12 @@ class WalkinController extends Controller
                     ], $item['services']),
                 ];
             }
+
+            $petQueueNumbers = app(DailyPetQueue::class)->assignBookingPets($booking, $queueDate);
+            foreach ($petsResponse as &$petResponse) {
+                $petResponse['pet_queue_number'] = $petQueueNumbers[$petResponse['booking_pet_id']];
+            }
+            unset($petResponse);
 
             return response()->json([
                 'success'            => true,

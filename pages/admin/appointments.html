@@ -948,9 +948,7 @@
 
             NOTES:
             - queueNumber (#1, #2, #3...) should come from backend
-            - petQueueNumber is currently derived as P1, P2, ... within each owner booking
-            - DB TEAM: add booking_pets.pet_queue_number later if pet queue labels must be
-              globally unique or immutable; the current feature does not require that migration
+            - petQueueNumber is the persisted, date-scoped number assigned by the backend
             - serviceLabel comes from client booking selection
             - petType must be Dog or Cat
             - dropOffTime should reflect the actual check-in/drop-off time saved by backend

@@ -13,6 +13,8 @@ class BookingPet extends Model
     protected $fillable = [
         'booking_id',
         'pet_id',
+        'pet_queue_date',
+        'pet_queue_number',
         'special_instructions',
         'groomer_id',
         'grooming_start_time',
@@ -20,6 +22,8 @@ class BookingPet extends Model
     ];
 
     protected $casts = [
+        'pet_queue_date' => 'date',
+        'pet_queue_number' => 'integer',
         'grooming_start_time' => 'datetime',
         'grooming_end_time' => 'datetime',
     ];

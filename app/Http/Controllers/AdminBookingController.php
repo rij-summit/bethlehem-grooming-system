@@ -13,6 +13,7 @@ use App\Models\ClinicSetting;
 use App\Models\Notification;
 use App\Models\CustomerNotification;
 use App\Models\Payment;
+use App\Services\DailyPetQueue;
 
 class AdminBookingController extends Controller
 {
@@ -215,33 +216,51 @@ class AdminBookingController extends Controller
     // waiting_to_arrive → checked_in, assigns queue number
     public function checkIn($id)
     {
-        $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])->find($id);
+        $queueDate = now()->toDateString();
+        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate) {
+            $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'waiting_to_arrive') {
+                return ['error' => ['message' => 'Booking is not in waiting status.', 'status' => 422]];
+            }
+
+            if ($booking->booking_date !== $queueDate) {
+                return ['error' => ['message' => 'Check-in is only allowed on the day of the appointment.', 'status' => 422]];
+            }
+
+            $queueNumber = ((int) Booking::where('booking_date', $queueDate)
+                ->whereNotNull('queue_number')
+                ->max('queue_number')) + 1;
+
+            $booking->update([
+                'status'         => 'checked_in',
+                'queue_number'   => $queueNumber,
+                'dropped_off_at' => now(),
+            ]);
+
+            app(DailyPetQueue::class)->assignBookingPets($booking, $queueDate);
+
+            return ['queue_number' => $queueNumber];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
-
-        if ($booking->status !== 'waiting_to_arrive') {
-            return response()->json(['success' => false, 'message' => 'Booking is not in waiting status.'], 422);
-        }
-
-        if ($booking->booking_date !== now()->toDateString()) {
-            return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
-        }
-
-        $queueNumber = Booking::where('booking_date', $booking->booking_date)
-            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
-            ->count() + 1;
-
-        $booking->update([
-            'status'         => 'checked_in',
-            'queue_number'   => $queueNumber,
-            'dropped_off_at' => now(),
-        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Customer checked in successfully.',
+            'queue_number' => $result['queue_number'],
         ]);
     }
 
@@ -723,52 +742,61 @@ class AdminBookingController extends Controller
     // no_show → checked_in (same day only, before 5 PM, clinic not stopped)
     public function lateCheckIn($id)
     {
-        $booking = Booking::find($id);
-
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
-
-        if ($booking->status !== 'no_show') {
-            return response()->json(['success' => false, 'message' => 'Only no-show bookings can be late checked-in.'], 422);
-        }
-
         $today = Carbon::today()->toDateString();
+        $result = app(DailyPetQueue::class)->runForDate($today, function () use ($id, $today) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
-        if ($booking->booking_date !== $today) {
-            return response()->json(['success' => false, 'message' => 'Late check-in is only available on the day of the booking.'], 422);
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'no_show') {
+                return ['error' => ['message' => 'Only no-show bookings can be late checked-in.', 'status' => 422]];
+            }
+
+            if ($booking->booking_date !== $today) {
+                return ['error' => ['message' => 'Late check-in is only available on the day of the booking.', 'status' => 422]];
+            }
+
+            if (Carbon::now()->hour >= 17) {
+                return ['error' => ['message' => 'Late check-in is no longer available after 5:00 PM.', 'status' => 422]];
+            }
+
+            $stoppedToday = ClinicClosure::where('type', 'stop_today')
+                ->where('start_date', $today)
+                ->where('is_active', 1)
+                ->exists();
+
+            if ($stoppedToday) {
+                return ['error' => ['message' => 'The clinic has stopped receiving for today.', 'status' => 422]];
+            }
+
+            $queueNumber = ((int) Booking::where('booking_date', $today)
+                ->whereNotNull('queue_number')
+                ->max('queue_number')) + 1;
+
+            $booking->update([
+                'status'         => 'checked_in',
+                'queue_number'   => $queueNumber,
+                'dropped_off_at' => now(),
+            ]);
+
+            app(DailyPetQueue::class)->assignBookingPets($booking, $today);
+
+            return ['queue_number' => $queueNumber];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
-
-        // Block if past 5 PM
-        if (Carbon::now()->hour >= 17) {
-            return response()->json(['success' => false, 'message' => 'Late check-in is no longer available after 5:00 PM.'], 422);
-        }
-
-        // Block if clinic stopped receiving today
-        $stoppedToday = ClinicClosure::where('type', 'stop_today')
-            ->where('start_date', $today)
-            ->where('is_active', 1)
-            ->exists();
-
-        if ($stoppedToday) {
-            return response()->json(['success' => false, 'message' => 'The clinic has stopped receiving for today.'], 422);
-        }
-
-        // Assign queue number at the back
-        $queueNumber = Booking::where('booking_date', $today)
-            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'no_show'])
-            ->count() + 1;
-
-        $booking->update([
-            'status'         => 'checked_in',
-            'queue_number'   => $queueNumber,
-            'dropped_off_at' => now(),
-        ]);
 
         return response()->json([
             'success'      => true,
             'message'      => 'Late check-in successful. Customer added to the back of the queue.',
-            'queue_number' => $queueNumber,
+            'queue_number' => $result['queue_number'],
         ]);
     }
 
@@ -931,10 +959,7 @@ class AdminBookingController extends Controller
                     'weight'              => $pet?->weight ? $pet->weight . ' kg' : '—',
                     'medicalConditions'   => $pet?->medical_conditions ?? null,
                     'specialInstructions' => $bp->special_instructions ?? null,
-                    // #P1, #P2, ... is intentionally derived within this owner booking.
-                    // DB TEAM (optional): add booking_pets.pet_queue_number only if product rules
-                    // later require a globally unique/immutable pet queue number across bookings.
-                    'petQueueNumber'      => $petIndex + 1,
+                    'petQueueNumber'      => $bp->pet_queue_number ?? $petIndex + 1,
                     'groomingStartedAt'   => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,

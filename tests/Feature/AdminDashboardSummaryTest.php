@@ -55,9 +55,12 @@ class AdminDashboardSummaryTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
+            $table->date('pet_queue_date')->nullable();
+            $table->unsignedInteger('pet_queue_number')->nullable();
             $table->text('special_instructions')->nullable();
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
+            $table->unique(['pet_queue_date', 'pet_queue_number']);
         });
 
         Schema::create('pets', function (Blueprint $table) {
@@ -212,6 +215,109 @@ class AdminDashboardSummaryTest extends TestCase
                 collect($formatted['pets'])->pluck('petQueueNumber')->all(),
             );
         }
+    }
+
+    public function test_pet_queue_continues_from_highest_number_on_effective_date_and_resets_next_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-29 08:00:00'));
+
+        DB::table('bookings')->insert([
+            [
+                'booking_id' => 1,
+                'booking_reference' => 'DONE-7',
+                'booking_date' => '2026-06-29',
+                'number_of_pets' => 7,
+                'status' => 'archived',
+                'queue_number' => 1,
+                'dropped_off_at' => '2026-06-29 07:00:00',
+            ],
+            [
+                'booking_id' => 2,
+                'booking_reference' => 'RELEASED-5',
+                'booking_date' => '2026-06-29',
+                'number_of_pets' => 5,
+                'status' => 'released',
+                'queue_number' => 2,
+                'dropped_off_at' => '2026-06-29 07:30:00',
+            ],
+            [
+                'booking_id' => 3,
+                'booking_reference' => 'CURRENT-5',
+                'booking_date' => '2026-06-29',
+                'number_of_pets' => 5,
+                'status' => 'waiting_to_arrive',
+                'queue_number' => null,
+                'dropped_off_at' => null,
+            ],
+            [
+                'booking_id' => 4,
+                'booking_reference' => 'NEXT-DAY-1',
+                'booking_date' => '2026-06-30',
+                'number_of_pets' => 1,
+                'status' => 'waiting_to_arrive',
+                'queue_number' => null,
+                'dropped_off_at' => null,
+            ],
+        ]);
+
+        $pets = [];
+        $bookingPets = [];
+        for ($petId = 1; $petId <= 18; $petId++) {
+            $pets[] = [
+                'pet_id' => $petId,
+                'pet_name' => "Pet {$petId}",
+                'species' => 'dog',
+            ];
+
+            $bookingId = $petId <= 7 ? 1 : ($petId <= 12 ? 2 : ($petId <= 17 ? 3 : 4));
+            $bookingPets[] = [
+                'booking_pet_id' => $petId,
+                'booking_id' => $bookingId,
+                'pet_id' => $petId,
+                'pet_queue_date' => $petId <= 12 ? '2026-06-29' : null,
+                'pet_queue_number' => $petId <= 12 ? $petId : null,
+            ];
+        }
+
+        DB::table('pets')->insert($pets);
+        DB::table('booking_pets')->insert($bookingPets);
+
+        $controller = new AdminBookingController;
+        $response = $controller->checkIn(3);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(
+            [13, 14, 15, 16, 17],
+            DB::table('booking_pets')
+                ->where('booking_id', 3)
+                ->orderBy('booking_pet_id')
+                ->pluck('pet_queue_number')
+                ->all(),
+        );
+        $this->assertSame(
+            ['2026-06-29'],
+            DB::table('booking_pets')
+                ->where('booking_id', 3)
+                ->distinct()
+                ->pluck('pet_queue_date')
+                ->map(fn ($date) => substr($date, 0, 10))
+                ->all(),
+        );
+
+        $schedule = $controller->index(Request::create('/api/admin/bookings', 'GET'))->getData(true);
+        $this->assertSame(
+            [13, 14, 15, 16, 17],
+            collect($schedule['queuedList'][0]['pets'])->pluck('petQueueNumber')->all(),
+        );
+
+        Carbon::setTestNow(Carbon::parse('2026-06-30 08:00:00'));
+        $nextDayResponse = $controller->checkIn(4);
+
+        $this->assertSame(200, $nextDayResponse->getStatusCode());
+        $this->assertSame(
+            1,
+            DB::table('booking_pets')->where('booking_id', 4)->value('pet_queue_number'),
+        );
     }
 
     public function test_starting_pets_keeps_booking_queued_until_every_pet_has_started(): void
