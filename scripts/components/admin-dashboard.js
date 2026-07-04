@@ -5,6 +5,21 @@ const PAYMENT_SIZE_OPTIONS = [
   { value: "extra_large", label: "Extra Large" },
 ];
 
+const PAYMENT_BILL_DENOMINATION = 1000;
+
+function maximumPaymentAmount(totalDue) {
+  const amount = Number(totalDue);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
+
+  return (
+    Math.floor(amount / PAYMENT_BILL_DENOMINATION) * PAYMENT_BILL_DENOMINATION +
+    PAYMENT_BILL_DENOMINATION * 2
+  );
+}
+
 /*
  * Payment modal service rules mirror scripts/services/grooming-service.js.
  * This dashboard is loaded as a classic script, so keep these values in sync
@@ -2938,19 +2953,26 @@ function adminDashboard() {
       );
     },
 
+    get paymentMaximumAmount() {
+      return maximumPaymentAmount(this.paymentTotalDue);
+    },
+
     get paymentChange() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
       return paid - this.paymentTotalDue;
     },
 
     get canSubmitPayment() {
+      const paid = parseFloat(this.paymentModal.amountPaid) || 0;
+
       return (
         !this.paymentModal.busy &&
         this.paymentLineCount > 0 &&
         this.paymentTotalDue > 0 &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        this.paymentChange >= 0
+        this.paymentChange >= 0 &&
+        paid <= this.paymentMaximumAmount
       );
     },
 
@@ -3249,6 +3271,25 @@ function adminDashboard() {
       }
     },
 
+    enforcePaymentAmountLimit(event = null) {
+      const currentValue = event?.target?.value ?? this.paymentModal.amountPaid;
+      const amount = parseFloat(currentValue);
+      const maximum = this.paymentMaximumAmount;
+
+      if (Number.isFinite(amount) && maximum > 0 && amount > maximum) {
+        const maximumValue = String(maximum);
+        this.paymentModal.amountPaid = maximumValue;
+
+        if (event?.target) {
+          event.target.value = maximumValue;
+        }
+      }
+
+      if (event) {
+        this.clearPaymentError();
+      }
+    },
+
     hasMissingPaymentPrices() {
       return this.paymentModal.petBreakdown.some((pet) =>
         (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
@@ -3365,6 +3406,10 @@ function adminDashboard() {
       }
       if (!ap || ap < fp) {
         this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
+        return;
+      }
+      if (ap > this.paymentMaximumAmount) {
+        this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
         return;
       }
 

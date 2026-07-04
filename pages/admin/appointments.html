@@ -1734,9 +1734,11 @@
                     type="number"
                     x-model="paymentModal.amountPaid"
                     :min="paymentTotalDue"
+                    :max="paymentMaximumAmount"
                     step="0.01"
                     placeholder="0.00"
-                    @input="clearPaymentError()"
+                    x-effect="enforcePaymentAmountLimit()"
+                    @input="enforcePaymentAmountLimit($event)"
                     class="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 outline-none focus:border-[#16a34a]"
                   />
                 </div>
@@ -2228,6 +2230,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=payment-limit-20260704"></script>
   </body>
 </html>

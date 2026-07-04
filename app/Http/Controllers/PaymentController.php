@@ -11,6 +11,7 @@ use App\Models\BookingService;
 use App\Models\Payment;
 use App\Models\Notification;
 use App\Exceptions\PaymentLimitExceededException;
+use App\Support\PaymentAmountLimit;
 
 class PaymentController extends Controller
 {
@@ -32,6 +33,14 @@ class PaymentController extends Controller
 
         if ($data['amount_paid'] > PaymentLimitExceededException::MAX_VALUE) {
             throw new PaymentLimitExceededException('amount paid');
+        }
+
+        $maximumAmountPaid = PaymentAmountLimit::maximumFor((float) $data['final_price']);
+
+        if ((float) $data['amount_paid'] > $maximumAmountPaid) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Amount paid cannot exceed ₱' . number_format($maximumAmountPaid, 2) . '.',
+            ]);
         }
 
         foreach ($data['service_prices'] ?? [] as $servicePrice) {
