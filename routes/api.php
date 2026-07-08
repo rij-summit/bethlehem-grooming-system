@@ -12,6 +12,11 @@ use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PetController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WalkinController;
+use App\Http\Controllers\ClinicWalkinController;
+use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\PosController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/sign-in',  [AuthController::class, 'signIn']);
@@ -95,8 +100,56 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/reports/services-performed',         [ReportController::class, 'servicesPerformed']);
     Route::get('/admin/reports/customer-activity',          [ReportController::class, 'customerActivity']);
 
-    // Admin — Walk-in registration
+    // Admin — Walk-in registration (grooming)
     Route::post('/admin/walk-in', [WalkinController::class, 'store']);
+
+    // Admin — Walk-in registration (clinic)
+    Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
+
+    // Admin — Clinic queue management
+    Route::get('/admin/clinic-appointments',                                          [AdminClinicController::class, 'index']);
+    Route::post('/admin/clinic-appointments/{id}/check-in',                           [AdminClinicController::class, 'checkIn']);
+    Route::post('/admin/clinic-appointments/{id}/start-consultation',                 [AdminClinicController::class, 'startConsultation']);
+    Route::post('/admin/clinic-appointments/{id}/finish-consultation',                [AdminClinicController::class, 'finishConsultation']);
+    Route::post('/admin/clinic-appointments/{id}/pay',                                [AdminClinicController::class, 'markPaid']);
+    Route::post('/admin/clinic-appointments/{id}/cancel',                             [AdminClinicController::class, 'cancel']);
+    Route::post('/admin/clinic-appointments/{id}/record',                             [AdminClinicController::class, 'saveRecord']);
+    Route::post('/admin/clinic-appointments/{id}/attachments',                        [AdminClinicController::class, 'uploadAttachment']);
+    Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}',       [AdminClinicController::class, 'deleteAttachment']);
+
+    // Admin — Inventory: Products
+    Route::get('/inventory/items',                         [InventoryController::class, 'index']);
+    Route::post('/inventory/items',                        [InventoryController::class, 'store']);
+    Route::get('/inventory/items/{id}',                    [InventoryController::class, 'show']);
+    Route::put('/inventory/items/{id}',                    [InventoryController::class, 'update']);
+    Route::post('/inventory/items/{id}/deactivate',        [InventoryController::class, 'deactivate']);
+    Route::post('/inventory/items/{id}/reactivate',        [InventoryController::class, 'reactivate']);
+
+    // Admin — Inventory: Barcode & search
+    Route::get('/inventory/search',                        [InventoryController::class, 'search']);
+    Route::get('/inventory/barcode/{barcode}',             [InventoryController::class, 'findByBarcode']);
+
+    // Admin — Inventory: Stock movements
+    Route::post('/inventory/stock-in',                     [InventoryController::class, 'stockIn']);
+    Route::post('/inventory/stock-out',                    [InventoryController::class, 'stockOut']);
+
+    // Admin — Inventory: History & alerts
+    Route::get('/inventory/transactions',                  [InventoryController::class, 'transactions']);
+    Route::get('/inventory/low-stock',                     [InventoryController::class, 'lowStock']);
+    Route::get('/inventory/alerts/expiry',                 [InventoryController::class, 'expiryAlerts']);
+    Route::get('/inventory/alerts/badge',                  [InventoryController::class, 'alertBadge']);
+    Route::get('/inventory/summary',                       [InventoryController::class, 'summary']);
+
+    // Admin — Suppliers
+    Route::get('/inventory/suppliers',                     [SupplierController::class, 'index']);
+    Route::post('/inventory/suppliers',                    [SupplierController::class, 'store']);
+    Route::put('/inventory/suppliers/{id}',                [SupplierController::class, 'update']);
+    Route::post('/inventory/suppliers/{id}/deactivate',    [SupplierController::class, 'deactivate']);
+
+    // Admin — POS
+    Route::post('/pos/transactions',                  [PosController::class, 'processSale']);
+    Route::get('/pos/transactions',                   [PosController::class, 'getTransactions']);
+    Route::get('/pos/transactions/{posId}',           [PosController::class, 'getReceipt']);
 
     // Admin — Clinic closures
     Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);

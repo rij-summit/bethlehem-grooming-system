@@ -17,6 +17,8 @@ class Walkin extends Model
         'sedation_consent',
         'terms_agreed',
         'user_id',
+        'appointment_type',
+        'chief_complaint',
     ];
 
     protected $casts = [
@@ -32,5 +34,10 @@ class Walkin extends Model
     public function booking()
     {
         return $this->hasOne(Booking::class, 'walkin_id', 'id');
+    }
+
+    public function clinicAppointment()
+    {
+        return $this->hasOne(ClinicAppointment::class, 'walkin_id', 'id');
     }
 }

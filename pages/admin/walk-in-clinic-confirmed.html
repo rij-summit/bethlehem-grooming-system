@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clinic Walk-in Registered</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <section class="text-center">
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h1 class="mt-4 text-3xl font-bold text-[#2f4b66]">Clinic Walk-in Registered</h1>
+        <p class="mt-2 text-sm text-slate-500">The patient has been added to today's clinic queue.</p>
+      </section>
+
+      <section class="mt-8 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8">
+        <div class="mb-6 flex flex-col gap-4 border-b border-[#9fb6cb] pb-6 md:flex-row md:items-start md:justify-between">
+          <div class="brand-lockup" role="img" aria-label="Bethlehem Animal Clinic">
+            <img src="../../assets/images/clinic/Bethlehem_Logo.png" alt="" class="brand-lockup__mark" />
+            <span class="brand-lockup__divider" aria-hidden="true"></span>
+            <span class="brand-lockup__text" aria-hidden="true">
+              <span class="brand-lockup__name">BETHLEHEM</span>
+              <span class="brand-lockup__service">ANIMAL CLINIC</span>
+            </span>
+          </div>
+
+          <div class="rounded-2xl border border-[#91aeca] bg-white px-4 py-3 text-left md:min-w-[240px]">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Appointment Ref No.</p>
+            <p id="appointmentReference" class="mt-2 text-lg font-bold text-[#2f4b66]">—</p>
+          </div>
+        </div>
+
+        <div class="mb-6 grid gap-4 md:grid-cols-3">
+          <div class="rounded-2xl border border-[#91aeca] bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Queue Number</p>
+            <p id="queueNumber" class="mt-2 text-2xl font-bold text-[#2f4b66]">—</p>
+          </div>
+          <div class="rounded-2xl border border-[#91aeca] bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Visit Date</p>
+            <p id="visitDate" class="mt-2 text-sm text-slate-700">—</p>
+          </div>
+          <div class="rounded-2xl border border-[#91aeca] bg-white p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</p>
+            <p id="visitStatus" class="mt-2 text-sm font-semibold text-emerald-600">Checked In</p>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <h3 class="mb-4 text-lg font-semibold text-[#2f4b66]">Owner Information</h3>
+            <div class="grid gap-4 md:grid-cols-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Full Name</p>
+                <p id="ownerName" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact Number</p>
+                <p id="ownerPhone" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Email</p>
+                <p id="ownerEmail" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <h3 class="mb-4 text-lg font-semibold text-[#2f4b66]">Patient</h3>
+            <div class="grid gap-4 md:grid-cols-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Name</p>
+                <p id="petName" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Species</p>
+                <p id="petSpecies" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Breed</p>
+                <p id="petBreed" class="mt-2 text-sm text-slate-700">—</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <h3 class="mb-4 text-lg font-semibold text-[#2f4b66]">Chief Complaint</h3>
+            <p id="chiefComplaint" class="text-sm text-slate-700">—</p>
+          </section>
+        </div>
+      </section>
+
+      <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+        <a
+          href="./clinic.html"
+          class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+        >
+          Go to Clinic Queue
+        </a>
+        <a
+          href="./walk-in-booking.html"
+          class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-slate-50"
+        >
+          Register Another Walk-in
+        </a>
+      </div>
+    </main>
+
+    <script src="../../scripts/api.js"></script>
+    <script>
+      (function () {
+        const KEY = "walkInClinicConfirmation";
+        let data = {};
+        try {
+          data = JSON.parse(sessionStorage.getItem(KEY) || "{}");
+        } catch {}
+
+        function setText(id, value) {
+          const el = document.getElementById(id);
+          if (el) el.textContent = value || "—";
+        }
+
+        setText("appointmentReference", data.appointment_reference);
+        setText("queueNumber", data.queue_number);
+        setText("visitDate", data.appointment_date);
+        setText("ownerName", data.owner?.fullName);
+        setText("ownerPhone", data.owner?.phone);
+        setText("ownerEmail", data.owner?.email || "Not provided");
+        setText("petName", data.pet?.name);
+        setText("petSpecies", data.pet?.species);
+        setText("petBreed", data.pet?.breed || "Not specified");
+        setText("chiefComplaint", data.chief_complaint);
+
+        if (data.returning_customer) {
+          const statusEl = document.getElementById("visitStatus");
+          if (statusEl) {
+            statusEl.textContent = "Checked In (Returning customer)";
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

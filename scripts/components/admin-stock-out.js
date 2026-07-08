@@ -1,0 +1,151 @@
+function adminStockOut() {
+  return {
+    // ── Item search ───────────────────────────────────────────────────────────
+    searchQuery: "",
+    searchResults: [],
+    _searchTimer: null,
+    selected: null,
+
+    // ── Current entry ─────────────────────────────────────────────────────────
+    qty: "",
+    reason: "used",
+    sellingPrice: "",
+    notes: "",
+    entryError: "",
+
+    // ── Pending list ──────────────────────────────────────────────────────────
+    pending: [],
+
+    // ── Submit state ──────────────────────────────────────────────────────────
+    submitting: false,
+    error: "",
+    success: "",
+
+    async init() {
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    async onSearchInput() {
+      const q = this.searchQuery;
+      if (q.length < 2) { this.searchResults = []; return; }
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(async () => {
+        try {
+          const res = await InventoryAPI.searchItems(q);
+          this.searchResults = res.data;
+        } catch { this.searchResults = []; }
+      }, 300);
+    },
+
+    async onSearchEnter() {
+      if (!this.searchQuery.trim()) return;
+      clearTimeout(this._searchTimer);
+      try {
+        const res = await InventoryAPI.findByBarcode(this.searchQuery.trim());
+        this.pickItem(res.data);
+      } catch {
+        const res = await InventoryAPI.searchItems(this.searchQuery.trim()).catch(() => ({ data: [] }));
+        this.searchResults = res.data;
+      }
+    },
+
+    pickItem(item) {
+      this.selected      = item;
+      this.sellingPrice  = item.selling_price ?? "";
+      this.qty           = "";
+      this.notes         = "";
+      this.entryError    = "";
+      this.searchQuery   = "";
+      this.searchResults = [];
+      this.$nextTick(() => {
+        if (window.lucide) lucide.createIcons();
+        this.$el.querySelector?.("[data-qty-input]")?.focus();
+      });
+    },
+
+    clearSelected() {
+      this.selected     = null;
+      this.qty          = "";
+      this.sellingPrice = "";
+      this.notes        = "";
+      this.entryError   = "";
+    },
+
+    // ── Add to pending ────────────────────────────────────────────────────────
+
+    addToPending() {
+      this.entryError = "";
+      if (!this.selected) { this.entryError = "Select an item first."; return; }
+
+      const qty = parseFloat(this.qty);
+      if (!qty || qty <= 0) { this.entryError = "Enter a valid quantity."; return; }
+
+      if (qty > parseFloat(this.selected.quantity_on_hand)) {
+        this.entryError = `Only ${this.selected.quantity_on_hand} ${this.selected.unit} available.`;
+        return;
+      }
+
+      const existing = this.pending.find(p => p.item_id === this.selected.item_id);
+      if (existing) {
+        const newQty = Math.round((existing.quantity + qty) * 100) / 100;
+        if (newQty > parseFloat(this.selected.quantity_on_hand)) {
+          this.entryError = `Total would exceed available stock (${this.selected.quantity_on_hand} ${this.selected.unit}).`;
+          return;
+        }
+        existing.quantity      = newQty;
+        // Update reason, price, and notes from the latest entry
+        existing.reason        = this.reason;
+        if (this.sellingPrice !== "") existing.selling_price = parseFloat(this.sellingPrice);
+        if (this.notes.trim())        existing.notes         = this.notes.trim();
+      } else {
+        this.pending.push({
+          item_id:       this.selected.item_id,
+          item_name:     this.selected.item_name,
+          unit:          this.selected.unit,
+          category:      this.selected.category,
+          quantity:      qty,
+          reason:        this.reason,
+          selling_price: this.sellingPrice !== "" ? parseFloat(this.sellingPrice) : null,
+          notes:         this.notes.trim() || null,
+        });
+      }
+
+      this.clearSelected();
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    removePending(idx) {
+      this.pending.splice(idx, 1);
+    },
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+
+    async submit() {
+      this.error = this.success = "";
+      if (!this.pending.length) { this.error = "Add at least one item first."; return; }
+
+      this.submitting = true;
+      try {
+        await InventoryAPI.stockOut(
+          this.pending.map(p => ({
+            item_id:       p.item_id,
+            quantity:      p.quantity,
+            reason:        p.reason,
+            selling_price: p.selling_price,
+            notes:         p.notes,
+          }))
+        );
+        this.success    = `Stock-out recorded for ${this.pending.length} item(s).`;
+        this.pending    = [];
+        this.clearSelected();
+        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+      } catch (err) {
+        this.error = err.message || "Failed to record stock-out.";
+      } finally {
+        this.submitting = false;
+      }
+    },
+  };
+}

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Dashboard | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../../css/output.css" />
+    <link rel="stylesheet" href="../../../css/custom.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div x-data="adminSidebar()" class="min-h-screen flex bg-[#f5f8fb]">
+      <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" @click="sidebarOpen = false"></div>
+      <aside class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+        <div class="px-6 py-6"><div class="flex items-start gap-4"><div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"><img src="../../../assets/images/clinic/Bethlehem_Logo.png" alt="logo" class="h-full w-full object-contain" /></div><div class="min-w-0"><h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1><p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p></div></div></div>
+        <nav class="px-4 py-6">
+          <div class="mb-8"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p><div class="space-y-1.5">
+            <a href="../dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='dashboard'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="layout-dashboard" class="h-5 w-5"></i><span>Dashboard</span></a>
+            <a href="../clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='customers'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="users" class="h-5 w-5"></i><span>Customers</span></a>
+            <a href="../appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='appointments'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="calendar-days" class="h-5 w-5"></i><span>Schedules</span><span x-show="hasIncomingAppointments" style="display:none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"></span></a>
+            <a href="../clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='clinic'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="stethoscope" class="h-5 w-5"></i><span>Clinic</span></a>
+            <a href="./inventory-dashboard.html" class="flex items-center gap-3 rounded-2xl bg-[#315b7e] px-4 py-3 font-semibold text-white shadow-sm transition"><i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span></a>
+          </div></div>
+          <div class="mb-8"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p><div class="space-y-1.5">
+            <a href="../archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="archive" class="h-5 w-5"></i><span>Archive</span></a>
+            <a href="../transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="receipt" class="h-5 w-5"></i><span>Transactions</span></a>
+            <a href="../reports.html" x-show="isAdmin" style="display:none" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="clipboard-list" class="h-5 w-5"></i><span>Reports</span></a>
+          </div></div>
+          <div x-show="isAdmin"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p><div class="space-y-1.5"><a href="../settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="settings" class="h-5 w-5"></i><span>Settings</span></a></div></div>
+        </nav>
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3"><div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin?'AD':'ST'">AD</div><div class="min-w-0"><p class="truncate font-bold text-white" x-text="isAdmin?'Admin':'Staff'">Admin</p><p class="truncate text-sm text-white/80" x-text="isAdmin?'Clinic Manager':'Receptionist'">Clinic Manager</p></div></div>
+          <button type="button" x-show="isAdmin" @click="handleStopReceivingClick()" class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition" :class="clinicStopped?'btn-clinic-reopen':'btn-clinic-stop'"><i data-lucide="door-closed" class="h-4 w-4 shrink-0"></i><span x-text="clinicStopped?'Reopen Today':'We\'re Done for Today'"></span></button>
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()"><i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span></button>
+        </div>
+      </aside>
+      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"><div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden"><div class="px-6 py-5"><h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4><p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p><p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p></div><div class="flex gap-3 px-6 py-4"><button type="button" @click="stopModal.open=false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped?'btn-confirm-reopen':'btn-confirm-stop'"><span x-text="stopModal.busy?'Please wait...':stopModal.confirmLabel"></span></button></div></div></div>
+
+      <!-- Main -->
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+        <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
+          <div><p class="text-sm font-semibold text-[#5c7690]">Inventory</p><h2 class="text-lg font-extrabold text-[#1f3850]">Dashboard</h2></div>
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen=true"><i data-lucide="menu" class="h-5 w-5"></i></button>
+        </header>
+
+        <main x-data="adminInventoryDashboard()" class="flex-1 px-4 py-6 lg:px-6 lg:pt-0">
+
+          <!-- Page header -->
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
+            <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Inventory</h2>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674]">Overview &amp; Alerts</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                  <a href="./inventory-items.html" class="inline-flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2.5 text-sm font-semibold text-[#1f3850] transition hover:bg-white">
+                    <i data-lucide="package" class="h-4 w-4"></i><span>Products</span>
+                  </a>
+                  <a href="./stock-in.html" class="inline-flex items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+                    <i data-lucide="package-plus" class="h-4 w-4"></i><span>Stock In</span>
+                  </a>
+                  <a href="./stock-out.html" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700">
+                    <i data-lucide="package-minus" class="h-4 w-4"></i><span>Stock Out</span>
+                  </a>
+                  <a href="./inventory-transactions.html" class="inline-flex items-center gap-2 rounded-xl border border-[#6e8ba8] bg-white/50 px-4 py-2.5 text-sm font-semibold text-[#1f3850] transition hover:bg-white/80">
+                    <i data-lucide="list" class="h-4 w-4"></i><span>History</span>
+                  </a>
+                  <a href="./suppliers.html" class="inline-flex items-center gap-2 rounded-xl border border-[#6e8ba8] bg-white/50 px-4 py-2.5 text-sm font-semibold text-[#1f3850] transition hover:bg-white/80">
+                    <i data-lucide="truck" class="h-4 w-4"></i><span>Suppliers</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div x-show="error" style="display:none" class="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700" x-text="error"></div>
+
+          <!-- Loading -->
+          <div x-show="loading" style="display:none" class="mt-6 grid gap-4 sm:grid-cols-3">
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+          </div>
+
+          <div x-show="!loading">
+            <!-- Stats cards -->
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div class="rounded-2xl border border-[#e6eef7] bg-white p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <p class="text-sm font-semibold text-slate-500">Active Items</p>
+                  <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color:#dbeafe">
+                    <i data-lucide="box" class="h-5 w-5" style="color:#1d4ed8"></i>
+                  </div>
+                </div>
+                <p class="mt-3 text-3xl font-extrabold text-slate-800" x-text="totalItems"></p>
+              </div>
+              <div class="rounded-2xl border border-[#e6eef7] bg-white p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <p class="text-sm font-semibold text-slate-500">Low Stock</p>
+                  <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color:#fef3c7">
+                    <i data-lucide="alert-triangle" class="h-5 w-5" style="color:#d97706"></i>
+                  </div>
+                </div>
+                <p class="mt-3 text-3xl font-extrabold" :style="lowStockCount > 0 ? 'color:#d97706' : 'color:#1e293b'" x-text="lowStockCount"></p>
+              </div>
+              <div class="rounded-2xl border border-[#e6eef7] bg-white p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <p class="text-sm font-semibold text-slate-500">Expiry Alerts</p>
+                  <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color:#fee2e2">
+                    <i data-lucide="calendar-x" class="h-5 w-5" style="color:#dc2626"></i>
+                  </div>
+                </div>
+                <p class="mt-3 text-3xl font-extrabold" :style="expiryCount > 0 ? 'color:#dc2626' : 'color:#1e293b'" x-text="expiryCount"></p>
+              </div>
+              <div class="rounded-2xl border border-[#e6eef7] bg-white p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <p class="text-sm font-semibold text-slate-500">Top Used (30d)</p>
+                  <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color:#dcfce7">
+                    <i data-lucide="trending-up" class="h-5 w-5" style="color:#16a34a"></i>
+                  </div>
+                </div>
+                <p class="mt-3 text-3xl font-extrabold text-slate-800" x-text="topUsed.length"></p>
+              </div>
+            </div>
+
+            <!-- Alert tabs -->
+            <div class="mt-6">
+              <div class="flex gap-1 rounded-2xl bg-white/60 p-1 w-fit border border-[#e6eef7]">
+                <button type="button" @click="activeTab='low_stock'"
+                  class="rounded-xl px-5 py-2 text-sm font-semibold transition"
+                  :class="activeTab==='low_stock' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'">
+                  Low Stock
+                  <span x-show="lowStockCount > 0" style="display:none"
+                    class="ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-bold"
+                    style="background-color:#fee2e2;color:#b91c1c" x-text="lowStockCount"></span>
+                </button>
+                <button type="button" @click="activeTab='expiry'"
+                  class="rounded-xl px-5 py-2 text-sm font-semibold transition"
+                  :class="activeTab==='expiry' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'">
+                  Expiry
+                  <span x-show="expiryCount > 0" style="display:none"
+                    class="ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-bold"
+                    style="background-color:#fee2e2;color:#b91c1c" x-text="expiryCount"></span>
+                </button>
+              </div>
+
+              <!-- Low stock list -->
+              <div x-show="activeTab==='low_stock'" class="mt-3 overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+                <template x-if="lowStockItems.length === 0">
+                  <p class="px-4 py-8 text-center text-sm text-slate-400">All items are sufficiently stocked.</p>
+                </template>
+                <table x-show="lowStockItems.length > 0" class="w-full text-sm">
+                  <thead><tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th class="px-4 py-3">Item</th>
+                    <th class="px-4 py-3 hidden sm:table-cell">Category</th>
+                    <th class="px-4 py-3">Stock</th>
+                    <th class="px-4 py-3">Min Stock</th>
+                    <th class="px-4 py-3 text-right hidden sm:table-cell">Action</th>
+                  </tr></thead>
+                  <tbody class="divide-y divide-[#e6eef7]">
+                    <template x-for="item in lowStockItems" :key="item.item_id">
+                      <tr class="hover:bg-[#f5f8fb] transition">
+                        <td class="px-4 py-3 font-semibold text-slate-800" x-text="item.item_name"></td>
+                        <td class="px-4 py-3 hidden sm:table-cell">
+                          <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" style="background-color:#e0f2fe;color:#0369a1" x-text="item.category?.replace('_',' ')"></span>
+                        </td>
+                        <td class="px-4 py-3 font-bold" style="color:#d97706">
+                          <span x-text="fmtQty(item.quantity_on_hand)"></span>
+                          <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
+                        </td>
+                        <td class="px-4 py-3 text-slate-500">
+                          <span x-text="fmtQty(item.reorder_level)"></span>
+                          <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
+                        </td>
+                        <td class="px-4 py-3 text-right hidden sm:table-cell">
+                          <a href="./stock-in.html" class="text-xs font-semibold text-[#315b7e] hover:underline">Restock</a>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Expiry list -->
+              <div x-show="activeTab==='expiry'" style="display:none" class="mt-3 overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+                <template x-if="expiryItems.length === 0">
+                  <p class="px-4 py-8 text-center text-sm text-slate-400">No items expiring within 30 days.</p>
+                </template>
+                <table x-show="expiryItems.length > 0" class="w-full text-sm">
+                  <thead><tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th class="px-4 py-3">Item</th>
+                    <th class="px-4 py-3 hidden sm:table-cell">Batch</th>
+                    <th class="px-4 py-3">Expiry Date</th>
+                    <th class="px-4 py-3">Status</th>
+                  </tr></thead>
+                  <tbody class="divide-y divide-[#e6eef7]">
+                    <template x-for="item in expiryItems" :key="item.item_id + '-' + (item.batch_number ?? '')">
+                      <tr class="hover:bg-[#f5f8fb] transition">
+                        <td class="px-4 py-3 font-semibold text-slate-800" x-text="item.item_name"></td>
+                        <td class="px-4 py-3 hidden sm:table-cell text-slate-500 font-mono text-xs" x-text="item.batch_number || '—'"></td>
+                        <td class="px-4 py-3 text-slate-600" x-text="item.earliest_expiry || '—'"></td>
+                        <td class="px-4 py-3">
+                          <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="expiryStyle(item)" x-text="expiryLabel(item)"></span>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Recent transactions -->
+            <div class="mt-6">
+              <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Recent Transactions</h3>
+              <div class="overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+                <template x-if="recentTransactions.length === 0">
+                  <p class="px-4 py-8 text-center text-sm text-slate-400">No transactions recorded yet.</p>
+                </template>
+                <table x-show="recentTransactions.length > 0" class="w-full text-sm">
+                  <thead><tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th class="px-4 py-3">Item</th>
+                    <th class="px-4 py-3">Type</th>
+                    <th class="px-4 py-3 hidden sm:table-cell">Qty</th>
+                    <th class="px-4 py-3 hidden md:table-cell">Date</th>
+                  </tr></thead>
+                  <tbody class="divide-y divide-[#e6eef7]">
+                    <template x-for="tx in recentTransactions" :key="tx.transaction_id">
+                      <tr class="hover:bg-[#f5f8fb] transition">
+                        <td class="px-4 py-3 font-semibold text-slate-800" x-text="tx.item_name ?? tx.item?.item_name ?? '—'"></td>
+                        <td class="px-4 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="typeStyle(tx.type)" x-text="tx.type==='stock_in'?'Stock In':'Stock Out'"></span></td>
+                        <td class="px-4 py-3 hidden sm:table-cell text-slate-600" x-text="fmtQty(tx.quantity)"></td>
+                        <td class="px-4 py-3 hidden md:table-cell text-slate-400 text-xs" x-text="fmtDate(tx.created_at)"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <div class="mt-3 text-right">
+                <a href="./inventory-transactions.html" class="text-sm font-semibold text-[#315b7e] hover:underline">View full history →</a>
+              </div>
+            </div>
+
+            <!-- Top used -->
+            <div x-show="topUsed.length > 0" style="display:none" class="mt-6 mb-10">
+              <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Most Used — Last 30 Days</h3>
+              <div class="overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+                <table class="w-full text-sm">
+                  <thead><tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th class="px-4 py-3">#</th>
+                    <th class="px-4 py-3">Item</th>
+                    <th class="px-4 py-3">Total Used</th>
+                    <th class="px-4 py-3 hidden sm:table-cell">Unit</th>
+                  </tr></thead>
+                  <tbody class="divide-y divide-[#e6eef7]">
+                    <template x-for="(item, idx) in topUsed" :key="item.item_id">
+                      <tr class="hover:bg-[#f5f8fb] transition">
+                        <td class="px-4 py-3 text-slate-400 text-xs font-bold" x-text="idx + 1"></td>
+                        <td class="px-4 py-3 font-semibold text-slate-800" x-text="item.item_name"></td>
+                        <td class="px-4 py-3 font-bold text-slate-700" x-text="fmtQty(item.total_used)"></td>
+                        <td class="px-4 py-3 hidden sm:table-cell text-slate-400 text-xs" x-text="item.unit"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </div>
+    <script src="../../../scripts/api.js"></script>
+    <script src="../../../scripts/services/inventory-service.js"></script>
+    <script src="../../../scripts/components/admin-sidebar.js"></script>
+    <script src="../../../scripts/components/admin-inventory-dashboard.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  </body>
+</html>

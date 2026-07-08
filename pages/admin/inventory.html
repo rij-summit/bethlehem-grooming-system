@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Management | Bethlehem Animal Clinic</title>
+    <meta http-equiv="refresh" content="0; url=./inventory/inventory-dashboard.html" />
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -48,6 +49,10 @@
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
                 <span>Schedules</span>
                 <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming schedules"></span>
+              </a>
+              <a href="./clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'clinic' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="stethoscope" class="h-5 w-5"></i>
+                <span>Clinic</span>
               </a>
               <a href="./inventory.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'inventory' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="box" class="h-5 w-5"></i>

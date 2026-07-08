@@ -1,4 +1,5 @@
 import { renderWalkInServicesStep } from "./walk-in-services-step.js";
+import { renderWalkInClinicComplaintStep } from "./walk-in-clinic-complaint-step.js";
 
 const MAX_PETS_PER_BOOKING = 10;
 
@@ -312,9 +313,30 @@ function handleBack() {
   window.location.href = "./walk-in-booking.html";
 }
 
+function getOwnerAppointmentType() {
+  try {
+    const owner = JSON.parse(sessionStorage.getItem("walkInOwnerStep") || "{}");
+    return owner.appointmentType || "grooming";
+  } catch {
+    return "grooming";
+  }
+}
+
 function handleNext() {
   if (state.pets.length === 0) {
     showMessage("Please add at least one pet before continuing.", "error");
+    return;
+  }
+
+  const appointmentType = getOwnerAppointmentType();
+
+  if (appointmentType === "clinic") {
+    if (state.pets.length > 1) {
+      showMessage("Clinic walk-in supports one pet per visit. Please remove extra pets.", "error");
+      return;
+    }
+    window.history.pushState(null, "", "./walk-in-clinic-complaint.html");
+    renderWalkInClinicComplaintStep({ pet: state.pets[0] });
     return;
   }
 

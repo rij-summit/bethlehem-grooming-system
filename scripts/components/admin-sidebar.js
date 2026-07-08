@@ -77,7 +77,7 @@ function adminSidebar() {
         this.activePage = "customers";
       } else if (currentPath.includes("appointments.html")) {
         this.activePage = "appointments";
-      } else if (currentPath.includes("inventory.html")) {
+      } else if (currentPath.includes("inventory.html") || currentPath.includes("/inventory/")) {
         this.activePage = "inventory";
       } else if (currentPath.includes("archive.html")) {
         this.activePage = "archive";
@@ -87,6 +87,8 @@ function adminSidebar() {
         this.activePage = "reports";
       } else if (currentPath.includes("settings.html")) {
         this.activePage = "settings";
+      } else if (currentPath.includes("clinic.html")) {
+        this.activePage = "clinic";
       }
     },
 
@@ -147,8 +149,9 @@ function adminSidebar() {
       try {
         await API.logout("admin");
       } finally {
-        // Always redirect even if the API call fails (token is already cleared by api.js)
-        window.location.href = "../../pages/client/sign-in.html";
+        const parts = window.location.pathname.replace(/\\/g, "/").split("/").filter(Boolean);
+        const ups = parts.length > 1 ? "../".repeat(parts.length - 1) : "./";
+        window.location.href = ups + "pages/client/sign-in.html";
       }
     },
 

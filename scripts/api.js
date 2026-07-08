@@ -92,8 +92,9 @@ var API = (() => {
   }
 
   function signInPath() {
-    const depth = window.location.pathname.split("/").filter(Boolean).length;
-    return depth >= 2 ? "../client/sign-in.html" : "./pages/client/sign-in.html";
+    const parts = window.location.pathname.replace(/\\/g, "/").split("/").filter(Boolean);
+    if (parts.length <= 1) return "./pages/client/sign-in.html";
+    return "../".repeat(parts.length - 1) + "pages/client/sign-in.html";
   }
 
   function redirectToSignIn() {
@@ -618,6 +619,40 @@ var API = (() => {
     return request("POST", "/admin/walk-in", payload, getAdminToken());
   }
 
+  async function submitClinicWalkIn(payload) {
+    // POST /api/admin/clinic-walk-in  (protected — admin token)
+    // payload: { fname, lname, mname?, email?, phone, pet_name, species, breed?, weight?, medical_conditions?, chief_complaint, terms_agreed }
+    return request("POST", "/admin/clinic-walk-in", payload, getAdminToken());
+  }
+
+  async function getClinicAppointments() {
+    return request("GET", "/admin/clinic-appointments", null, getAdminToken());
+  }
+
+  async function clinicCheckIn(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
+  }
+
+  async function clinicStartConsultation(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/start-consultation`, {}, getAdminToken());
+  }
+
+  async function clinicFinishConsultation(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, {}, getAdminToken());
+  }
+
+  async function clinicMarkPaid(id, payload) {
+    return request("POST", `/admin/clinic-appointments/${id}/pay`, payload, getAdminToken());
+  }
+
+  async function clinicCancel(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/cancel`, {}, getAdminToken());
+  }
+
+  async function clinicSaveRecord(id, payload) {
+    return request("POST", `/admin/clinic-appointments/${id}/record`, payload, getAdminToken());
+  }
+
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/customer-activity  (protected - admin token)
     const params = new URLSearchParams();
@@ -722,5 +757,14 @@ var API = (() => {
     getCustomerActivityReport,
     // Walk-in
     submitWalkIn,
+    submitClinicWalkIn,
+    // Clinic queue
+    getClinicAppointments,
+    clinicCheckIn,
+    clinicStartConsultation,
+    clinicFinishConsultation,
+    clinicMarkPaid,
+    clinicCancel,
+    clinicSaveRecord,
   };
 })();

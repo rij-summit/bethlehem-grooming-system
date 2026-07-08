@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock In | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../../css/output.css" />
+    <link rel="stylesheet" href="../../../css/custom.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div x-data="adminSidebar()" class="min-h-screen flex bg-[#f5f8fb]">
+      <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" @click="sidebarOpen = false"></div>
+      <aside class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
+        <div class="px-6 py-6"><div class="flex items-start gap-4"><div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"><img src="../../../assets/images/clinic/Bethlehem_Logo.png" alt="logo" class="h-full w-full object-contain" /></div><div class="min-w-0"><h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1><p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p></div></div></div>
+        <nav class="px-4 py-6">
+          <div class="mb-8"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p><div class="space-y-1.5">
+            <a href="../dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='dashboard'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="layout-dashboard" class="h-5 w-5"></i><span>Dashboard</span></a>
+            <a href="../clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='customers'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="users" class="h-5 w-5"></i><span>Customers</span></a>
+            <a href="../appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='appointments'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="calendar-days" class="h-5 w-5"></i><span>Schedules</span><span x-show="hasIncomingAppointments" style="display:none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"></span></a>
+            <a href="../clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='clinic'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="stethoscope" class="h-5 w-5"></i><span>Clinic</span></a>
+            <a href="./inventory-dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='inventory'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span></a>
+          </div></div>
+          <div class="mb-8"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p><div class="space-y-1.5">
+            <a href="../archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='archive'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="archive" class="h-5 w-5"></i><span>Archive</span></a>
+            <a href="../transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='transactions'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="receipt" class="h-5 w-5"></i><span>Transactions</span></a>
+            <a href="../reports.html" x-show="isAdmin" style="display:none" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='reports'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="clipboard-list" class="h-5 w-5"></i><span>Reports</span></a>
+          </div></div>
+          <div x-show="isAdmin"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p><div class="space-y-1.5"><a href="../settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='settings'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="settings" class="h-5 w-5"></i><span>Settings</span></a></div></div>
+        </nav>
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3"><div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin?'AD':'ST'">AD</div><div class="min-w-0"><p class="truncate font-bold text-white" x-text="isAdmin?'Admin':'Staff'">Admin</p><p class="truncate text-sm text-white/80" x-text="isAdmin?'Clinic Manager':'Receptionist'">Clinic Manager</p></div></div>
+          <button type="button" x-show="isAdmin" @click="handleStopReceivingClick()" class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition" :class="clinicStopped?'btn-clinic-reopen':'btn-clinic-stop'"><i data-lucide="door-closed" class="h-4 w-4 shrink-0"></i><span x-text="clinicStopped?'Reopen Today':'We\'re Done for Today'"></span></button>
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()"><i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span></button>
+        </div>
+      </aside>
+      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"><div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden"><div class="px-6 py-5"><h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4><p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p><p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p></div><div class="flex gap-3 px-6 py-4"><button type="button" @click="stopModal.open=false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped?'btn-confirm-reopen':'btn-confirm-stop'"><span x-text="stopModal.busy?'Please wait...':stopModal.confirmLabel"></span></button></div></div></div>
+
+      <!-- Main -->
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+        <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
+          <div><p class="text-sm font-semibold text-[#5c7690]">Inventory</p><h2 class="text-lg font-extrabold text-[#1f3850]">Stock In</h2></div>
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen=true"><i data-lucide="menu" class="h-5 w-5"></i></button>
+        </header>
+
+        <main x-data="adminStockIn()" class="flex-1 pb-28 px-4 py-6 lg:px-6 lg:pt-0">
+
+          <!-- Page header -->
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
+            <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Stock In</h2>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674]">Record received inventory</p>
+                </div>
+                <a href="./inventory-dashboard.html"
+                  class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#6e8ba8] bg-white/50 px-4 py-2.5 text-sm font-semibold text-[#1f3850] transition hover:bg-white/80">
+                  <i data-lucide="arrow-left" class="h-4 w-4"></i><span class="hidden sm:inline">Back</span>
+                </a>
+              </div>
+            </div>
+          </section>
+
+          <!-- Alerts -->
+          <div class="mt-4 max-w-2xl space-y-3">
+            <div x-show="success" style="display:none"
+              class="flex items-start gap-3 rounded-2xl p-4 text-sm font-semibold"
+              style="background-color:#d1fae5;color:#065f46">
+              <i data-lucide="check-circle" class="h-4 w-4 mt-0.5 shrink-0"></i>
+              <span x-text="success"></span>
+            </div>
+            <div x-show="error" style="display:none"
+              class="flex items-start gap-3 rounded-2xl p-4 text-sm"
+              style="background-color:#fee2e2;color:#b91c1c">
+              <i data-lucide="alert-circle" class="h-4 w-4 mt-0.5 shrink-0"></i>
+              <span x-text="error"></span>
+            </div>
+          </div>
+
+          <div class="mt-4 max-w-2xl space-y-4">
+
+            <!-- ── Step 1: Search item ─────────────────────────────────────── -->
+            <div class="rounded-2xl border border-[#e6eef7] bg-white shadow-sm overflow-hidden">
+              <div class="px-5 py-4 border-b border-[#e6eef7]" style="background-color:#f8fafc">
+                <p class="text-sm font-bold text-slate-700">1. Search Item</p>
+              </div>
+              <div class="p-5">
+
+                <!-- Search bar (hidden once item selected) -->
+                <div x-show="!selected" style="display:block">
+                  <div class="flex gap-2">
+                    <div class="relative flex-1">
+                      <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                      <input
+                        x-model="searchQuery"
+                        @input="onSearchInput()"
+                        @keyup.enter="onSearchEnter()"
+                        type="search"
+                        placeholder="Item name or barcode…"
+                        class="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      @click="openScanner()"
+                      title="Scan with camera"
+                      class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-500 transition hover:border-[#315b7e] hover:text-[#315b7e]"
+                    >
+                      <i data-lucide="scan-line" class="h-4 w-4"></i>
+                    </button>
+                  </div>
+                  <p class="mt-1.5 text-xs text-slate-400">Press Enter to search by barcode, or click the scan icon for camera.</p>
+
+                  <!-- Dropdown results -->
+                  <div x-show="searchResults.length > 0" style="display:none"
+                    class="mt-1 overflow-hidden rounded-2xl border border-[#d7e3ef] bg-white shadow-lg">
+                    <template x-for="item in searchResults" :key="item.item_id">
+                      <button type="button" @click="pickItem(item)"
+                        class="flex w-full items-center justify-between px-4 py-3 text-sm transition hover:bg-[#eaf4fb]">
+                        <div class="text-left min-w-0">
+                          <p class="font-semibold text-slate-800 truncate" x-text="item.item_name"></p>
+                          <p class="text-xs text-slate-400 capitalize" x-text="item.category?.replace('_',' ')"></p>
+                        </div>
+                        <span class="ml-3 shrink-0 text-xs text-slate-500">
+                          <span x-text="item.quantity_on_hand"></span> <span x-text="item.unit"></span>
+                        </span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Selected item chip -->
+                <div x-show="selected" style="display:none">
+                  <div class="flex items-center gap-3 rounded-xl p-3" style="background-color:#eaf4fb">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color:#315b7e">
+                      <i data-lucide="package" class="h-4 w-4" style="color:white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-semibold text-[#1f3850] truncate" x-text="selected?.item_name"></p>
+                      <p class="text-xs text-slate-500">
+                        Current stock:
+                        <span class="font-semibold" x-text="selected?.quantity_on_hand"></span>
+                        <span x-text="selected?.unit"></span>
+                      </p>
+                    </div>
+                    <button type="button" @click="clearSelected()"
+                      class="shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-red-500">
+                      <i data-lucide="x" class="h-4 w-4"></i>
+                    </button>
+                  </div>
+
+                  <!-- Entry fields -->
+                  <div class="mt-4 space-y-4">
+                    <!-- Row 1: Qty / Cost / Reason -->
+                    <div class="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Quantity *</label>
+                        <input x-model="qty" data-qty-input type="number" step="0.01" min="0.01" placeholder="0"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Unit Cost (₱)</label>
+                        <input x-model="unitCost" type="number" step="0.01" min="0" placeholder="0.00"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Reason</label>
+                        <select x-model="reason"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                          <option value="purchase">New Stock</option>
+                          <option value="return">Returned Item</option>
+                          <option value="adjustment">Adjustment</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Row 2: Batch / Expiry -->
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">
+                          Batch Number
+                          <span class="font-normal text-slate-400">(optional)</span>
+                        </label>
+                        <input x-model="batchNumber" type="text" placeholder="e.g. BT-2024-001"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">
+                          Expiry Date
+                          <span x-show="needsExpiry" style="display:none" class="font-bold" style="color:#ef4444"> *</span>
+                          <span x-show="!needsExpiry" class="font-normal text-slate-400">(optional)</span>
+                        </label>
+                        <input x-model="expiryDate" type="date"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"
+                          :class="needsExpiry ? 'border-amber-400 bg-amber-50' : ''" />
+                      </div>
+                    </div>
+
+                    <!-- Row 3: Notes -->
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600">
+                        Notes
+                        <span class="font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input x-model="notes" type="text" placeholder="Any additional info…"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                    </div>
+
+                    <!-- Error -->
+                    <p x-show="entryError" style="display:none" class="text-xs font-semibold" style="color:#b91c1c" x-text="entryError"></p>
+
+                    <!-- Add button -->
+                    <button type="button" @click="addToPending()"
+                      class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition"
+                      style="background-color:#315b7e">
+                      <i data-lucide="plus" class="h-4 w-4"></i>
+                      <span>Add to List</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- ── Supplier ─────────────────────────────────────────────────── -->
+            <div class="rounded-2xl border border-[#e6eef7] bg-white shadow-sm overflow-hidden">
+              <div class="px-5 py-4 border-b border-[#e6eef7]" style="background-color:#f8fafc">
+                <p class="text-sm font-bold text-slate-700">2. Supplier <span class="font-normal text-slate-400">(optional)</span></p>
+              </div>
+              <div class="p-5">
+                <select x-model="supplierId"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                  <option value="">— No supplier —</option>
+                  <template x-for="s in suppliers" :key="s.supplier_id">
+                    <option :value="s.supplier_id" x-text="s.supplier_name"></option>
+                  </template>
+                </select>
+                <p class="mt-2 text-xs text-slate-400">
+                  Supplier not in the list?
+                  <a href="./suppliers.html" class="font-semibold hover:underline" style="color:#315b7e">Manage suppliers →</a>
+                </p>
+              </div>
+            </div>
+
+            <!-- ── Pending list ─────────────────────────────────────────────── -->
+            <div x-show="pending.length > 0" style="display:none"
+              class="overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+              <div class="flex items-center justify-between border-b border-[#e6eef7] px-5 py-4" style="background-color:#f8fafc">
+                <p class="text-sm font-bold text-slate-700">3. Items to Stock In</p>
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                  style="background-color:#fef3c7;color:#92400e"
+                  x-text="pending.length + ' item(s)'"></span>
+              </div>
+              <ul class="divide-y divide-[#e6eef7]">
+                <template x-for="(p, idx) in pending" :key="idx">
+                  <li class="flex items-center gap-3 px-5 py-3.5">
+                    <div class="flex-1 min-w-0">
+                      <p class="truncate text-sm font-semibold text-slate-800" x-text="p.item_name"></p>
+                      <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                        <span>
+                          <span x-text="p.quantity"></span>
+                          <span x-text="p.unit"></span>
+                        </span>
+                        <span x-show="p.unit_cost" style="display:none">
+                          · ₱<span x-text="parseFloat(p.unit_cost).toFixed(2)"></span>/unit
+                        </span>
+                        <span class="capitalize" x-text="'· ' + p.reason"></span>
+                        <span x-show="p.batch_number" style="display:none" x-text="'· Batch: ' + p.batch_number"></span>
+                        <span x-show="p.expiry_date" style="display:none" x-text="'· Exp: ' + p.expiry_date"></span>
+                      </div>
+                    </div>
+                    <button type="button" @click="removePending(idx)"
+                      class="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500">
+                      <i data-lucide="trash-2" class="h-4 w-4"></i>
+                    </button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+
+          </div><!-- /max-w-2xl -->
+
+          <!-- ── Camera Scanner Modal ─────────────────────────────────────────── -->
+          <div x-show="scannerActive" style="display:none" x-transition
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4">
+            <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <h4 class="font-bold text-slate-800">Scan Barcode</h4>
+                <button type="button" @click="closeScanner()" class="text-slate-400 transition hover:text-red-500">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+              <div class="p-4">
+                <div id="stockin-qr-reader" class="w-full overflow-hidden rounded-xl"></div>
+                <p class="mt-3 text-center text-xs text-slate-400">Point camera at barcode or QR code</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Sticky submit bar ────────────────────────────────────────────── -->
+          <div class="fixed bottom-0 left-0 right-0 z-40 border-t border-[#d7e3ef] bg-white px-4 py-3 shadow-lg lg:left-[280px]">
+            <div class="mx-auto flex max-w-2xl items-center justify-between gap-4">
+              <div class="min-w-0">
+                <p x-show="!pending.length" class="text-sm text-slate-400">Add at least one item above, then submit.</p>
+                <p x-show="pending.length > 0" style="display:none" class="text-sm font-semibold text-slate-700">
+                  <span x-text="pending.length"></span> item(s) ready to record
+                </p>
+              </div>
+              <button
+                type="button"
+                @click="submit()"
+                :disabled="submitting || !pending.length"
+                class="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition"
+                style="background-color:#d97706"
+                :style="(submitting || !pending.length) ? 'background-color:#d97706;opacity:0.5;cursor:not-allowed' : 'background-color:#d97706'"
+              >
+                <i data-lucide="save" class="h-4 w-4"></i>
+                <span>Record Stock In</span>
+              </button>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </div>
+    <script src="../../../scripts/api.js"></script>
+    <script src="../../../scripts/services/inventory-service.js"></script>
+    <script src="../../../scripts/components/admin-sidebar.js"></script>
+    <script src="../../../scripts/components/admin-stock-in.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  </body>
+</html>

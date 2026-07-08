@@ -68,6 +68,11 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function getAppointmentType() {
+  const checked = document.querySelector('input[name="appointmentType"]:checked');
+  return checked?.value || "grooming";
+}
+
 function getFormValues() {
   return {
     firstName: normalizeText(elements.firstName.value),
@@ -101,6 +106,7 @@ function saveOwnerDraft(values) {
       ...values,
       fullName: getOwnerDisplayName(values),
       bookingType: "walk_in",
+      appointmentType: getAppointmentType(),
     }),
   );
 }
