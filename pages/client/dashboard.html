@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="../../css/custom.css" />
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
   </head>
   <body class="bg-slate-50 text-slate-800">
     <div class="min-h-screen flex client-dashboard-shell">
@@ -53,8 +53,11 @@
                   class="h-12 w-12 rounded-2xl bg-white p-1.5 flex items-center justify-center"
                 >
                   <img
-                    src="../../assets/images/clinic/Bethlehem_Logo.png"
+                    src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                     alt="Bethlehem Animal Clinic logo"
+                    width="256"
+                    height="341"
+                    decoding="async"
                     class="h-full w-full object-contain"
                   />
                 </div>
@@ -528,8 +531,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js"></script>
-    <script src="../../scripts/services/app-clock.js"></script>
-    <script src="../../scripts/components/client-dashboard.js"></script>
+    <script src="../../scripts/api.js" defer></script>
+    <script src="../../scripts/services/app-clock.js" defer></script>
+    <script src="../../scripts/components/client-dashboard.js" defer></script>
   </body>
 </html>

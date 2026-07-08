@@ -4,7 +4,22 @@
 // Client dashboard shell: Lucide icons, mobile sidebar, profile name, and logout.
 // Connected to the sidebar/profile controls in pages/client/dashboard.html.
 (function () {
-  if (window.lucide) window.lucide.createIcons();
+  function createIconsWhenReady() {
+    if (window.lucide) {
+      window.lucide.createIcons();
+      return;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      window.lucide?.createIcons();
+    }, { once: true });
+
+    window.addEventListener("load", () => {
+      window.lucide?.createIcons();
+    }, { once: true });
+  }
+
+  createIconsWhenReady();
 
   const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
   const sidebarToggle = document.getElementById("clientSidebarToggle");
@@ -300,6 +315,16 @@
   }
 
   async function buildPickupMessage(pickup) {
+    const providedPetNames = Array.isArray(pickup?.pet_names)
+      ? pickup.pet_names.map((name) => String(name).trim()).filter(Boolean)
+      : [];
+
+    if (providedPetNames.length > 0) {
+      const subject = formatNameList(providedPetNames);
+      const verb = providedPetNames.length === 1 ? "is" : "are";
+      return `${subject} ${verb} all done and looking fabulous! Please come to the clinic to pick them up.`;
+    }
+
     try {
       const booking = await findPickupBooking(pickup);
       const petNames = getBookingPetNames(booking);
@@ -315,7 +340,7 @@
   }
 
   async function findPickupBooking(pickup) {
-    const data = await API.getBookingHistory();
+    const data = await API.getBookingHistory({ historyLimit: 0 });
     const activeBookings = Array.isArray(data?.bookings) ? data.bookings : [];
     const pickupBookingId = getPickupBookingId(pickup);
 
@@ -414,16 +439,19 @@
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
 
-  document.addEventListener("DOMContentLoaded", async () => {
-    await window.AppClock?.load?.();
-
-    if (rescheduleDate) {
-      rescheduleDate.min = window.AppClock?.todayKey?.() || new Date().toISOString().split("T")[0];
-    }
-
+  document.addEventListener("DOMContentLoaded", () => {
+    setRescheduleMinDate(new Date().toISOString().split("T")[0]);
     loadDashboardPets();
     loadAppointments();
     loadGroomingCapacity();
+
+    Promise.resolve(window.AppClock?.load?.())
+      .then(() => {
+        setRescheduleMinDate(window.AppClock?.todayKey?.());
+      })
+      .catch(() => {
+        setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+      });
   });
 
   // ── Load & route data ──────────────────────────────────────────────────────
@@ -439,9 +467,12 @@
 
   async function loadAppointments() {
     try {
-      const data    = await API.getBookingHistory();
+      const data    = await API.getBookingHistory({ historyLimit: 6 });
       const active  = data.bookings || [];
       const history = data.history  || [];
+      const historyTotal = Number.isFinite(Number(data.history_total))
+        ? Number(data.history_total)
+        : history.length;
 
       const scheduled = active.filter(isUpcomingAppointment);
       const atClinic  = active.filter(b =>
@@ -452,7 +483,7 @@
       renderUpcomingAppointmentsSummary(scheduled);
       renderGroomingTracker(atClinic);
       renderGroomingHistory(history);
-      renderPastGroomingSummary(history);
+      renderPastGroomingSummary(history, historyTotal);
     } catch {
       appointmentsList.innerHTML =
         '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load schedule.</p></div>';
@@ -467,6 +498,12 @@
       renderGroomingCapacity(data);
     } catch {
       renderGroomingCapacity(null);
+    }
+  }
+
+  function setRescheduleMinDate(dateKey) {
+    if (rescheduleDate && dateKey) {
+      rescheduleDate.min = dateKey;
     }
   }
 
@@ -759,8 +796,10 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  function renderPastGroomingSummary(history) {
-    const count = Array.isArray(history) ? history.length : 0;
+  function renderPastGroomingSummary(history, totalCount = null) {
+    const count = Number.isFinite(Number(totalCount))
+      ? Number(totalCount)
+      : (Array.isArray(history) ? history.length : 0);
 
     if (pastGroomingCountEl) {
       pastGroomingCountEl.textContent = String(count);
