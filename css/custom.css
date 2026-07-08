@@ -565,6 +565,15 @@ body.customer-detail-modal-open {
   background-color: #284a67;
 }
 
+.admin-confirm-warning-button {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
+.admin-confirm-warning-button:hover:not(:disabled) {
+  background-color: #b45309;
+}
+
 .admin-confirm-cancel-button {
   background-color: #ef4444;
   color: #ffffff;
@@ -572,6 +581,21 @@ body.customer-detail-modal-open {
 
 .admin-confirm-cancel-button:hover:not(:disabled) {
   background-color: #dc2626;
+}
+
+.admin-action-confirm-icon-primary {
+  background-color: #eaf4fb;
+  color: #315b7e;
+}
+
+.admin-action-confirm-icon-warning {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
+.admin-action-confirm-icon-danger {
+  background-color: #fef2f2;
+  color: #ef4444;
 }
 
 .admin-action-confirm-footer {

@@ -930,18 +930,74 @@ function adminDashboard() {
       }
 
       const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      const hasEarlierUnfinishedPets = this.hasEarlierQueuedUnfinishedPets(booking);
       this.openActionConfirmModal({
         action: "startPetGrooming",
         booking: {
           ...booking,
           actionPet: { ...pet },
         },
-        title: "Confirm Start Grooming",
-        message: `Are you sure you want to start grooming for ${petName}?`,
+        title: hasEarlierUnfinishedPets ? "Queue Order Warning" : "Confirm Start Grooming",
+        message: hasEarlierUnfinishedPets
+          ? "An earlier queue still has unfinished pets. Are you sure you want to start grooming this pet first?"
+          : `Are you sure you want to start grooming for ${petName}?`,
         confirmLabel: "Yes, Start",
         busyLabel: "Starting...",
         icon: "grooming",
-        variant: "primary",
+        variant: hasEarlierUnfinishedPets ? "warning" : "primary",
+      });
+    },
+
+    isPetGroomingFinished(pet) {
+      if (pet?.isGroomingFinished === true) {
+        return true;
+      }
+
+      const finishedValues = [
+        pet?.groomingFinishedAt,
+        pet?.grooming_finished_at,
+        pet?.groomingFinishedAtIso,
+        pet?.grooming_finished_at_iso,
+        pet?.groomingEndTime,
+        pet?.grooming_end_time,
+      ];
+
+      return finishedValues.some((value) => {
+        const text = String(value ?? "").trim().toLowerCase();
+        return Boolean(text && !["-", "\u2014", "none", "null", "not provided"].includes(text));
+      });
+    },
+
+    hasUnfinishedQueuedPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) => !this.isPetGroomingFinished(pet));
+    },
+
+    hasEarlierQueuedUnfinishedPets(booking) {
+      const selectedId = String(booking?.id ?? "");
+      const selectedIndex = this.queuedList.findIndex(
+        (queuedBooking) => String(queuedBooking?.id ?? "") === selectedId,
+      );
+
+      if (selectedIndex > 0) {
+        return this.queuedList
+          .slice(0, selectedIndex)
+          .some((queuedBooking) => this.hasUnfinishedQueuedPets(queuedBooking));
+      }
+
+      const selectedQueueNumber = Number(booking?.queueNumber ?? 0);
+      if (!Number.isFinite(selectedQueueNumber) || selectedQueueNumber <= 0) {
+        return false;
+      }
+
+      return this.queuedList.some((queuedBooking) => {
+        const queueNumber = Number(queuedBooking?.queueNumber ?? 0);
+        return (
+          Number.isFinite(queueNumber) &&
+          queueNumber > 0 &&
+          queueNumber < selectedQueueNumber &&
+          this.hasUnfinishedQueuedPets(queuedBooking)
+        );
       });
     },
 

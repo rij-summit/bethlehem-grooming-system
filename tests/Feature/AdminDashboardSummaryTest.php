@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\ClinicSettingController;
+use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Models\Booking;
 use App\Models\BookingPet;
@@ -34,6 +35,15 @@ class AdminDashboardSummaryTest extends TestCase
             'id' => 1,
             'groomers_on_duty' => 2,
         ]);
+
+        Schema::create('users', function (Blueprint $table) {
+            $table->increments('user_id');
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+            $table->string('email')->nullable();
+            $table->string('role')->nullable();
+            $table->string('password_hash')->nullable();
+        });
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->increments('booking_id');
@@ -103,18 +113,30 @@ class AdminDashboardSummaryTest extends TestCase
             $table->boolean('is_read')->default(false);
             $table->dateTime('created_at')->nullable();
         });
+
+        Schema::create('customer_notifications', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('user_id');
+            $table->unsignedInteger('booking_id')->nullable();
+            $table->string('type');
+            $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->dateTime('created_at')->nullable();
+        });
     }
 
     protected function tearDown(): void
     {
         Carbon::setTestNow();
 
+        Schema::dropIfExists('customer_notifications');
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
+        Schema::dropIfExists('users');
         Schema::dropIfExists('clinic_settings');
 
         parent::tearDown();
@@ -363,6 +385,56 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertTrue($secondResponse->getData(true)['all_pets_started']);
         $this->assertSame('in_progress', DB::table('bookings')->where('booking_id', 1)->value('status'));
         $this->assertNotNull(DB::table('bookings')->where('booking_id', 1)->value('grooming_started_at'));
+    }
+
+    public function test_started_pet_customer_notification_mentions_only_that_pet(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 1,
+            'first_name' => 'Jamie',
+            'last_name' => 'Santos',
+            'email' => 'jamie@example.test',
+            'role' => 'customer',
+            'password_hash' => 'secret',
+        ]);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'user_id' => 1,
+            'booking_reference' => 'PET-START-NOTIF-3',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 3,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+        ]);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Max', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Bella', 'species' => 'dog'],
+            ['pet_id' => 3, 'pet_name' => 'Luna', 'species' => 'cat'],
+        ]);
+
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 1, 'booking_id' => 1, 'pet_id' => 1],
+            ['booking_pet_id' => 2, 'booking_id' => 1, 'pet_id' => 2],
+            ['booking_pet_id' => 3, 'booking_id' => 1, 'pet_id' => 3],
+        ]);
+
+        $startResponse = (new AdminBookingController)->startPetGrooming(1, 1);
+
+        $this->assertSame(200, $startResponse->getStatusCode());
+        $this->assertSame(1, DB::table('customer_notifications')->count());
+
+        $request = Request::create('/api/customer/notifications', 'GET');
+        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+
+        $payload = (new CustomerNotificationController)->index($request)->getData(true);
+        $notification = $payload['notifications'][0];
+
+        $this->assertStringContainsString('Max', $notification['display_message']);
+        $this->assertStringNotContainsString('Bella', $notification['display_message']);
+        $this->assertStringNotContainsString('Luna', $notification['display_message']);
+        $this->assertSame(['Max'], $notification['pet_names']);
     }
 
     #[DataProvider('groomerCapacities')]

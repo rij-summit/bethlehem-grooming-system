@@ -90,16 +90,41 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetNames(CustomerNotification $notification): array
     {
-        return ($notification->booking?->bookingPets ?? collect())
+        $petNames = ($notification->booking?->bookingPets ?? collect())
             ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
             ->unique()
             ->values()
             ->all();
+
+        if ($notification->type !== 'grooming_started') {
+            return $petNames;
+        }
+
+        $startedPetName = $this->groomingStartedPetNameFromMessage($notification->message);
+
+        if (!$startedPetName) {
+            return $petNames;
+        }
+
+        $matchedPetNames = array_values(array_filter(
+            $petNames,
+            fn($petName) => strcasecmp(trim((string) $petName), $startedPetName) === 0,
+        ));
+
+        return $matchedPetNames ?: $petNames;
     }
 
     private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
     {
+        if ($notification->type === 'grooming_started') {
+            $message = $this->formatNotificationMessage($notification->message);
+
+            if (trim($message) !== '') {
+                return $message;
+            }
+        }
+
         if (empty($petNames)) {
             return $this->formatNotificationMessage($notification->message);
         }
@@ -121,6 +146,17 @@ class CustomerNotificationController extends Controller
                 : $this->formatNotificationMessage($notification->message),
             default            => $this->formatNotificationMessage($notification->message),
         };
+    }
+
+    private function groomingStartedPetNameFromMessage(?string $message): ?string
+    {
+        if (!preg_match('/\bGrooming has started for\s+(.+?)\.\s*/i', (string) $message, $matches)) {
+            return null;
+        }
+
+        $petName = trim($matches[1]);
+
+        return $petName === '' ? null : $petName;
     }
 
     private function formatNotificationMessage(?string $message): string

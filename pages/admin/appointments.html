@@ -2042,7 +2042,7 @@
               <div class="px-6 py-5 text-center">
                 <div
                   class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-                  :class="actionConfirmModal.variant === 'danger' ? 'bg-red-50 text-red-500' : 'bg-[#eaf4fb] text-[#315b7e]'"
+                  :class="actionConfirmModal.variant === 'danger' ? 'admin-action-confirm-icon-danger' : (actionConfirmModal.variant === 'warning' ? 'admin-action-confirm-icon-warning' : 'admin-action-confirm-icon-primary')"
                 >
                   <span x-show="actionConfirmModal.icon === 'cancel'">
                     <i data-lucide="calendar-x" class="h-7 w-7"></i>
@@ -2077,7 +2077,7 @@
                   @click="executeConfirmedBookingAction()"
                   :disabled="actionConfirmModal.busy"
                   class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition"
-                  :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : 'admin-confirm-checkin-button'"
+                  :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : (actionConfirmModal.variant === 'warning' ? 'admin-confirm-warning-button' : 'admin-confirm-checkin-button')"
                 >
                   <span x-text="actionConfirmModal.busy ? actionConfirmModal.busyLabel : actionConfirmModal.confirmLabel"></span>
                 </button>
