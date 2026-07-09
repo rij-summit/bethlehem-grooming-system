@@ -240,7 +240,7 @@
     }
 
     list.innerHTML = notifications.map((n) => {
-      const icon = notifIcon(n.type);
+      const icon = notifIcon(n);
       const message = formatNotificationMessage(n);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
@@ -273,9 +273,16 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  function notifIcon(type) {
+  function notifIcon(notification) {
+    const type = typeof notification === "object" && notification
+      ? notification.type
+      : notification;
+
+    if (type === "grooming_finished") {
+      return groomingFinishedIcon(notification);
+    }
+
     const icons = {
-      grooming_finished:"Done",
       reminder_24h:    "📅",
       reminder_3h:     "⏰",
       grooming_started:"✂️",
@@ -284,6 +291,20 @@
       picked_up:       "🏠",
     };
     return icons[type] || "🔔";
+  }
+
+  function groomingFinishedIcon(notification) {
+    const petTypes = notificationPetTypes(notification);
+
+    if (petTypes.includes("cat")) {
+      return "🐱";
+    }
+
+    if (petTypes.includes("dog")) {
+      return "🐶";
+    }
+
+    return "🐾";
   }
 
   function formatNotificationMessage(notification) {
@@ -325,6 +346,12 @@
   function notificationPetNames(notification) {
     return Array.isArray(notification?.pet_names)
       ? notification.pet_names.map((name) => String(name).trim()).filter(Boolean)
+      : [];
+  }
+
+  function notificationPetTypes(notification) {
+    return Array.isArray(notification?.pet_types)
+      ? notification.pet_types.map((type) => String(type).trim().toLowerCase()).filter(Boolean)
       : [];
   }
 

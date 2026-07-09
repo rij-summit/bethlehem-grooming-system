@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=reschedule-ui-20260704" />
+    <link rel="stylesheet" href="../../css/custom.css?v=queue-progress-20260709" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -991,7 +991,7 @@
                       ></p>
                       <p class="mt-2 text-sm text-slate-600">
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.dropOffTime" x-text="' · Dropped off: ' + booking.dropOffTime"></span>
+                        <span x-show="booking.dropOffTime" x-text="' \u00b7 Dropped off: ' + booking.dropOffTime"></span>
                       </p>
                       <!-- Queue ETA badge -->
                       <template x-if="getBookingETA(booking)">
@@ -1072,9 +1072,9 @@
                             <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
                             <p class="admin-queued-pet-basic">
                               <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> · </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> · </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
@@ -1184,13 +1184,13 @@
                 size: string,
                 groomingStartedAt: string|null,
                 groomingFinishedAt: string|null,
+                isGroomingStarted: boolean,
                 isGroomingFinished: boolean
               }]
             }
 
             BUSINESS RULE:
-            - A booking enters this tab after admin clicks "Start Grooming"
-              from the Queued tab.
+            - A booking enters this tab after at least one pet starts grooming.
 
             NOTES:
             - queueNumber (#1, #2, #3...) should come from backend
@@ -1236,7 +1236,7 @@
                       ></p>
                       <p class="mt-2 text-sm text-slate-600">
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.startedAt" x-text="' · Started: ' + booking.startedAt"></span>
+                        <span x-show="booking.startedAt" x-text="' \u00b7 Started: ' + booking.startedAt"></span>
                       </p>
                       <!-- In-progress ETA badge -->
                       <template x-if="getBookingETA(booking)">
@@ -1302,7 +1302,7 @@
                   <div class="admin-queued-pets-heading">
                     <div>
                       <p class="font-bold text-[#1f3850]">Pets in this booking</p>
-                      <p class="text-sm text-slate-500">Finish active pets here. Queued pets are shown as indicators only.</p>
+                      <p class="text-sm text-slate-500">Active and queued pets under this owner.</p>
                     </div>
                     <span class="admin-queued-pet-count admin-in-progress-pet-count" x-text="getInProgressPets(booking).length"></span>
                   </div>
@@ -1321,11 +1321,11 @@
                             <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
                             <p class="admin-queued-pet-basic">
                               <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> Â· </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> Â· </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
-                              <span x-show="pet.groomingStartedAt" aria-hidden="true"> Â· </span>
+                              <span x-show="pet.groomingStartedAt" aria-hidden="true"> &middot; </span>
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
@@ -1333,7 +1333,7 @@
                             <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
                               <span x-text="getPetElapsed(pet)"></span>
                               <template x-if="getPetEstDone(booking, pet)">
-                                <span x-text="(getPetElapsed(pet) ? ' · ' : '') + getPetEstDone(booking, pet)"></span>
+                                <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
                               </template>
                             </p>
                           </div>
@@ -1351,11 +1351,31 @@
                               </button>
                             </template>
                             <template x-if="!pet.isGroomingStarted">
-                              <span class="admin-in-progress-pet-queued" aria-label="This pet is still queued">
-                                <i data-lucide="hourglass" class="h-4 w-4" aria-hidden="true"></i>
-                                Queued
-                              </span>
+                              <div
+                                class="admin-queued-pet-start-wrap"
+                                :class="isGroomerCapacityFull ? 'is-capacity-disabled' : ''"
+                                :title="isGroomerCapacityFull ? 'Groomer currently busy' : ''"
+                              >
+                                <button
+                                  type="button"
+                                  @click="confirmStartGroomingPet(booking, pet)"
+                                  :disabled="isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                  class="admin-queued-pet-start admin-in-progress-pet-start"
+                                  :class="isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                                >
+                                  <span x-text="isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'"></span>
+                                </button>
+                              </div>
                             </template>
+                            <button
+                              type="button"
+                              @click="printPetCard(booking, pet, petIndex)"
+                              class="admin-queued-pet-print"
+                              :aria-label="'Print grooming card for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'pet')"
+                            >
+                              <i data-lucide="printer" class="h-4 w-4"></i>
+                              Print
+                            </button>
                           </div>
                         </div>
 
@@ -2261,6 +2281,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=payment-finish-20260709"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=queue-progress-20260709"></script>
   </body>
 </html>

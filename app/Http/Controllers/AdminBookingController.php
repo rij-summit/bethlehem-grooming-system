@@ -118,6 +118,9 @@ class AdminBookingController extends Controller
         // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
         // on each query below when re-enabling the date guard for production.
         $queued = Booking::where('status', 'checked_in')
+            ->whereDoesntHave('bookingPets', function ($pet) {
+                $pet->whereNotNull('grooming_start_time');
+            })
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -142,8 +145,8 @@ class AdminBookingController extends Controller
             ->get()
             ->map(function ($booking) {
                 $formatted = $this->formatBooking($booking);
-                // A partially started booking remains checked_in so its queued pets
-                // stay in Queued, but this copy belongs to the In Progress feed.
+                // A partially started booking remains checked_in in storage, but
+                // staff should manage the whole owner card from In Progress.
                 $formatted['status'] = 'in-progress';
 
                 return $formatted;
@@ -338,7 +341,8 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    // Starts one pet without moving the owner booking out of Queued until every pet has started.
+    // Starts one pet while the owner booking remains checked_in until every pet has started.
+    // The schedule feed surfaces partially started owner cards in In Progress.
     // No migration is needed: booking_pets.grooming_start_time already stores this per-pet state.
     public function startPetGrooming($id, $bookingPetId)
     {

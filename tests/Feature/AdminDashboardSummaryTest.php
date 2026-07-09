@@ -342,7 +342,7 @@ class AdminDashboardSummaryTest extends TestCase
         );
     }
 
-    public function test_starting_pets_keeps_booking_queued_until_every_pet_has_started(): void
+    public function test_starting_one_pet_moves_owner_card_only_to_in_progress_feed(): void
     {
         DB::table('bookings')->insert([
             'booking_id' => 1,
@@ -373,7 +373,7 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 2)->value('grooming_start_time'));
 
         $schedule = $controller->index(Request::create('/api/admin/bookings', 'GET'))->getData(true);
-        $this->assertSame([1], collect($schedule['queuedList'])->pluck('id')->all());
+        $this->assertSame([], collect($schedule['queuedList'])->pluck('id')->all());
         $this->assertSame([1], collect($schedule['inProgressList'])->pluck('id')->all());
         $this->assertSame('in-progress', $schedule['inProgressList'][0]['status']);
         $this->assertTrue($schedule['inProgressList'][0]['pets'][0]['isGroomingStarted']);
@@ -504,6 +504,7 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertStringNotContainsString('Bella', $notification['display_message']);
         $this->assertStringNotContainsString('Luna', $notification['display_message']);
         $this->assertSame(['Max'], $notification['pet_names']);
+        $this->assertSame(['dog'], $notification['pet_types']);
         $this->assertNull($payload['pickup_alert']);
     }
 
@@ -772,6 +773,7 @@ class AdminDashboardSummaryTest extends TestCase
             Request::create('/api/admin/bookings', 'GET'),
         )->getData(true);
 
+        $this->assertSame([], collect($schedule['queuedList'])->pluck('id')->all());
         $this->assertSame([1], collect($schedule['inProgressList'])->pluck('id')->all());
         $this->assertTrue($schedule['inProgressList'][0]['pets'][0]['isGroomingFinished']);
         $this->assertFalse($schedule['inProgressList'][0]['pets'][1]['isGroomingStarted']);

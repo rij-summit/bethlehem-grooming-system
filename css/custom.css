@@ -727,7 +727,7 @@ body.customer-detail-modal-open {
 
 .client-notification-emphasis {
   color: #1e293b;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* ----- Payment Modal And Receipt Layout ----- */
@@ -2387,19 +2387,40 @@ body.customer-detail-modal-open {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.admin-queued-pet-start,
+.admin-queued-pet-start {
+  border: 1px solid #e5a800;
+  background: #e5a800;
+  color: #ffffff;
+}
+
+.admin-queued-pet-start:hover:not(:disabled) {
+  border-color: #c48a00;
+  background: #c48a00;
+}
+
 .admin-in-progress-pet-finish {
   border: 1px solid #315b7e;
   background: #315b7e;
   color: #ffffff;
 }
 
-.admin-queued-pet-start:hover:not(:disabled),
 .admin-in-progress-pet-finish:hover:not(:disabled) {
   background: #284a67;
 }
 
-.admin-queued-pet-start.is-disabled,
+.admin-queued-pet-start:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.admin-queued-pet-start.is-disabled {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .admin-in-progress-pet-finish.is-disabled {
   border-color: #bbf7d0;
   background: #f0fdf4;

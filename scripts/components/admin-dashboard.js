@@ -680,12 +680,8 @@ function adminDashboard() {
             const response = await API.adminStartPetGrooming(booking.id, bookingPetId);
             await this.loadAdminBookings();
 
-            if (response?.all_pets_started) {
-              this.setTab("in-progress");
-            } else {
-              this.setQueuedBookingExpanded(booking.id, true);
-              this.setTab("queued");
-            }
+            this.setInProgressBookingExpanded(booking.id, true);
+            this.setTab("in-progress");
 
             return response;
           },
@@ -712,13 +708,6 @@ function adminDashboard() {
                   ? "to-be-picked-up"
                   : "for-payment",
               );
-            } else if (
-              ["checked_in", "queued"].includes(this.normalizeStatus(response?.booking_status)) &&
-              !this.hasActiveGroomingPetsForBooking(booking.id)
-            ) {
-              // No active pet remains, but one or more siblings are still waiting.
-              this.setQueuedBookingExpanded(booking.id, true);
-              this.setTab("queued");
             } else {
               this.setInProgressBookingExpanded(booking.id, true);
               this.setTab("in-progress");
@@ -1006,6 +995,11 @@ function adminDashboard() {
       );
     },
 
+    hasStartedGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) => this.isPetGroomingStarted(pet));
+    },
+
     hasActiveGroomingPetsForBooking(bookingId) {
       const id = String(bookingId ?? "");
       const booking = [...this.inProgressList, ...this.queuedList].find(
@@ -1018,6 +1012,13 @@ function adminDashboard() {
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
       return pets.some((pet) => !this.isPetGroomingFinished(pet));
+    },
+
+    getWaitingGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.filter((pet) =>
+        !this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
+      );
     },
 
     hasEarlierQueuedUnfinishedPets(booking) {
@@ -1814,7 +1815,50 @@ function adminDashboard() {
         );
       }
 
+      this.promoteStartedQueuedBookings(nextPayload);
+
       return nextPayload;
+    },
+
+    promoteStartedQueuedBookings(nextPayload) {
+      if (!Array.isArray(nextPayload.queuedList)) {
+        return;
+      }
+
+      const queuedBookings = [];
+      const promotedBookings = [];
+
+      for (const booking of nextPayload.queuedList) {
+        if (this.hasStartedGroomingPets(booking)) {
+          promotedBookings.push(
+            this.normalizeBooking(
+              {
+                ...booking,
+                status: "in-progress",
+              },
+              "in-progress",
+            ),
+          );
+        } else {
+          queuedBookings.push(booking);
+        }
+      }
+
+      if (promotedBookings.length === 0) {
+        return;
+      }
+
+      const existingInProgressIds = new Set(
+        (nextPayload.inProgressList || []).map((booking) => String(booking?.id ?? "")),
+      );
+
+      nextPayload.queuedList = queuedBookings;
+      nextPayload.inProgressList = [
+        ...(nextPayload.inProgressList || []),
+        ...promotedBookings.filter(
+          (booking) => !existingInProgressIds.has(String(booking?.id ?? "")),
+        ),
+      ].sort((left, right) => this.compareBookings(left, right));
     },
 
     // Normalizes a booking list and keeps the rendered order stable.
@@ -1946,7 +1990,7 @@ function adminDashboard() {
       );
       for (const booking of sortedInProgress) {
         for (const pet of booking.pets ?? []) {
-          if (!pet.isGroomingStarted || pet.isGroomingFinished) continue;
+          if (!this.isPetGroomingStarted(pet) || this.isPetGroomingFinished(pet)) continue;
           const duration = getPetDuration(booking, pet);
           const startIso = pet.groomingStartedAtIso;
           let estDone;
@@ -1966,11 +2010,15 @@ function adminDashboard() {
         }
       }
 
-      // Queued pets fill whichever groomer slot frees up next
-      const sortedQueued = [...this.queuedList].sort(
-        (a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0),
-      );
-      for (const booking of sortedQueued) {
+      // Waiting pets, including queued siblings in In Progress, fill the next slots.
+      const sortedWaiting = [...this.inProgressList, ...this.queuedList]
+        .map((booking) => ({
+          ...booking,
+          pets: this.getWaitingGroomingPets(booking),
+        }))
+        .filter((booking) => booking.pets.length > 0)
+        .sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
+      for (const booking of sortedWaiting) {
         for (const pet of booking.pets ?? []) {
           const duration = getPetDuration(booking, pet);
           const i = earliestSlotIdx();
@@ -1993,8 +2041,8 @@ function adminDashboard() {
       const etaMap = this.petETAs;
       const vals = Object.values(etaMap);
       const now = Date.now();
-      const petsWaiting = this.queuedList.reduce(
-        (n, b) => n + (b.pets?.length || 0),
+      const petsWaiting = [...this.inProgressList, ...this.queuedList].reduce(
+        (n, b) => n + this.getWaitingGroomingPets(b).length,
         0,
       );
 
@@ -2662,15 +2710,7 @@ function adminDashboard() {
     },
 
     shouldShowOwnerReschedule(booking) {
-      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-
-      return pets.length > 1 && pets.some((pet) =>
-        Boolean(
-          pet?.isGroomingFinished ||
-          pet?.groomingFinishedAt ||
-          pet?.grooming_finished_at,
-        ),
-      );
+      return Boolean(booking?.paid);
     },
 
     formatPetQueueNumber(pet, petIndex = 0) {

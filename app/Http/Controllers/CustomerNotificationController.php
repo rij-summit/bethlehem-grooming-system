@@ -21,6 +21,7 @@ class CustomerNotificationController extends Controller
             ->get()
             ->map(function ($n) {
                 $petNames = $this->notificationPetNames($n);
+                $petTypes = $this->notificationPetTypes($n, $petNames);
 
                 return [
                     'id'              => $n->id,
@@ -28,6 +29,7 @@ class CustomerNotificationController extends Controller
                     'message'         => $this->formatNotificationMessage($n->message),
                     'display_message' => $this->formatCustomerNotificationMessage($n, $petNames),
                     'pet_names'       => $petNames,
+                    'pet_types'       => $petTypes,
                     'is_read'         => (bool) $n->is_read,
                     'created_at'      => $n->created_at?->toDateTimeString(),
                     'booking_id'      => $n->booking_id,
@@ -47,6 +49,7 @@ class CustomerNotificationController extends Controller
             ->first();
 
         $pickupPetNames = $pickupNotif ? $this->notificationPetNames($pickupNotif) : [];
+        $pickupPetTypes = $pickupNotif ? $this->notificationPetTypes($pickupNotif, $pickupPetNames) : [];
 
         return response()->json([
             'success'         => true,
@@ -57,6 +60,7 @@ class CustomerNotificationController extends Controller
                 'message'         => $this->formatNotificationMessage($pickupNotif->message),
                 'display_message' => $this->formatCustomerNotificationMessage($pickupNotif, $pickupPetNames),
                 'pet_names'       => $pickupPetNames,
+                'pet_types'       => $pickupPetTypes,
                 'booking_id'      => $pickupNotif->booking_id,
             ] : null,
         ]);
@@ -104,6 +108,30 @@ class CustomerNotificationController extends Controller
         $matchedPetNames = $this->petNamesMentionedInMessage($notification->message, $petNames);
 
         return $matchedPetNames ?: $petNames;
+    }
+
+    private function notificationPetTypes(CustomerNotification $notification, array $petNames): array
+    {
+        $matchedNames = array_flip(array_map(
+            fn($name) => mb_strtolower(trim((string) $name)),
+            $petNames,
+        ));
+
+        return ($notification->booking?->bookingPets ?? collect())
+            ->filter(function ($bookingPet) use ($matchedNames) {
+                if (empty($matchedNames)) {
+                    return true;
+                }
+
+                $name = mb_strtolower(trim((string) $bookingPet->pet?->pet_name));
+
+                return $name !== '' && isset($matchedNames[$name]);
+            })
+            ->map(fn($bookingPet) => mb_strtolower(trim((string) $bookingPet->pet?->species)))
+            ->filter(fn($type) => in_array($type, ['dog', 'cat'], true))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
