@@ -288,13 +288,37 @@ class BookingController extends Controller
     // ── GET BOOKING HISTORY ───────────────────────────────
     public function history(Request $request)
     {
-        $bookings = Booking::where('user_id', $request->user()->user_id)
-            ->with(['timeWindow', 'bookingPets.pet'])
+        $userId = $request->user()->user_id;
+        $historyLimit = $request->has('history_limit')
+            ? max(0, min(100, (int) $request->query('history_limit')))
+            : null;
+
+        $relations = ['timeWindow', 'bookingPets.pet'];
+
+        $active = Booking::where('user_id', $userId)
+            ->whereNotIn('status', ['archived'])
+            ->with($relations)
             ->orderBy('booking_date', 'desc')
+            ->orderBy('booking_id', 'desc')
             ->get();
 
-        $active  = $bookings->whereNotIn('status', ['archived'])->values();
-        $history = $bookings->where('status', 'archived')->values();
+        $historyTotal = Booking::where('user_id', $userId)
+            ->where('status', 'archived')
+            ->count();
+
+        $historyQuery = Booking::where('user_id', $userId)
+            ->where('status', 'archived')
+            ->with($relations)
+            ->orderBy('booking_date', 'desc')
+            ->orderBy('booking_id', 'desc');
+
+        if ($historyLimit !== null) {
+            $historyQuery->limit($historyLimit);
+        }
+
+        $history = $historyLimit === 0
+            ? collect()
+            : $historyQuery->get();
 
         $format = function ($b) {
             $pets = ($b->bookingPets ?? collect())->map(fn($bp) => [
@@ -332,9 +356,10 @@ class BookingController extends Controller
         };
 
         return response()->json([
-            'success'  => true,
-            'bookings' => $active->map($format)->values(),
-            'history'  => $history->map($format)->values(),
+            'success'       => true,
+            'bookings'      => $active->map($format)->values(),
+            'history'       => $history->map($format)->values(),
+            'history_total' => $historyTotal,
         ]);
     }
 

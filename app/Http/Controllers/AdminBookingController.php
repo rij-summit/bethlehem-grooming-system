@@ -9,9 +9,11 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use App\Models\Notification;
 use App\Models\CustomerNotification;
 use App\Models\Payment;
+use App\Services\DailyPetQueue;
 
 class AdminBookingController extends Controller
 {
@@ -37,6 +39,43 @@ class AdminBookingController extends Controller
             ->whereIn('status', self::INTAKE_STATUSES)
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->sum('number_of_pets');
+    }
+
+    private function activeGroomingPetCount(): int
+    {
+        return BookingPet::whereNotNull('grooming_start_time')
+            ->whereNull('grooming_end_time')
+            ->whereHas('booking', function ($query) {
+                $query->whereIn('status', ['checked_in', 'in_progress']);
+            })
+            ->count();
+    }
+
+    private function groomerCapacitySnapshot(): array
+    {
+        $groomersOnDuty = ClinicSetting::current()->groomers_on_duty;
+        $activePets = $this->activeGroomingPetCount();
+
+        return [
+            'groomers_on_duty' => $groomersOnDuty,
+            'active_pets' => $activePets,
+            'available_slots' => max(0, $groomersOnDuty - $activePets),
+            'is_full' => $activePets >= $groomersOnDuty,
+        ];
+    }
+
+    private function groomerCapacityError(int $activePets, int $groomersOnDuty, int $requestedSlots = 1): array
+    {
+        $availableSlots = max(0, $groomersOnDuty - $activePets);
+        $slotLabel = $availableSlots === 1 ? 'slot is' : 'slots are';
+        $message = $availableSlots === 0
+            ? "Groomer capacity is full ({$activePets} of {$groomersOnDuty} pets in progress). Finish a pet before starting another."
+            : "Only {$availableSlots} groomer {$slotLabel} available, but {$requestedSlots} pets would be started.";
+
+        return ['error' => [
+            'message' => $message,
+            'status' => 422,
+        ]];
     }
 
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
@@ -79,6 +118,9 @@ class AdminBookingController extends Controller
         // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
         // on each query below when re-enabling the date guard for production.
         $queued = Booking::where('status', 'checked_in')
+            ->whereDoesntHave('bookingPets', function ($pet) {
+                $pet->whereNotNull('grooming_start_time');
+            })
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -103,8 +145,8 @@ class AdminBookingController extends Controller
             ->get()
             ->map(function ($booking) {
                 $formatted = $this->formatBooking($booking);
-                // A partially started booking remains checked_in so its queued pets
-                // stay in Queued, but this copy belongs to the In Progress feed.
+                // A partially started booking remains checked_in in storage, but
+                // staff should manage the whole owner card from In Progress.
                 $formatted['status'] = 'in-progress';
 
                 return $formatted;
@@ -169,6 +211,7 @@ class AdminBookingController extends Controller
                 'current' => $todayIntakeCount,
                 'max'     => self::MAX_CAPACITY,
             ],
+            'groomerCapacity' => $this->groomerCapacitySnapshot(),
         ]);
     }
 
@@ -176,33 +219,51 @@ class AdminBookingController extends Controller
     // waiting_to_arrive → checked_in, assigns queue number
     public function checkIn($id)
     {
-        $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])->find($id);
+        $queueDate = now()->toDateString();
+        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate) {
+            $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'waiting_to_arrive') {
+                return ['error' => ['message' => 'Booking is not in waiting status.', 'status' => 422]];
+            }
+
+            if ($booking->booking_date !== $queueDate) {
+                return ['error' => ['message' => 'Check-in is only allowed on the day of the appointment.', 'status' => 422]];
+            }
+
+            $queueNumber = ((int) Booking::where('booking_date', $queueDate)
+                ->whereNotNull('queue_number')
+                ->max('queue_number')) + 1;
+
+            $booking->update([
+                'status'         => 'checked_in',
+                'queue_number'   => $queueNumber,
+                'dropped_off_at' => now(),
+            ]);
+
+            app(DailyPetQueue::class)->assignBookingPets($booking, $queueDate);
+
+            return ['queue_number' => $queueNumber];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
-
-        if ($booking->status !== 'waiting_to_arrive') {
-            return response()->json(['success' => false, 'message' => 'Booking is not in waiting status.'], 422);
-        }
-
-        if ($booking->booking_date !== now()->toDateString()) {
-            return response()->json(['success' => false, 'message' => 'Check-in is only allowed on the day of the appointment.'], 422);
-        }
-
-        $queueNumber = Booking::where('booking_date', $booking->booking_date)
-            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
-            ->count() + 1;
-
-        $booking->update([
-            'status'         => 'checked_in',
-            'queue_number'   => $queueNumber,
-            'dropped_off_at' => now(),
-        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Customer checked in successfully.',
+            'queue_number' => $result['queue_number'],
         ]);
     }
 
@@ -210,31 +271,65 @@ class AdminBookingController extends Controller
     // checked_in → in_progress
     public function startGrooming($id)
     {
-        $booking = Booking::find($id);
+        $result = DB::transaction(function () use ($id) {
+            $settings = ClinicSetting::current(lockForUpdate: true);
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
+            if (!$booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'checked_in') {
+                return ['error' => ['message' => 'Booking must be checked in first.', 'status' => 422]];
+            }
+
+            $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->lockForUpdate()
+                ->get();
+            $petsToStart = $bookingPets->whereNull('grooming_start_time');
+            $activePets = $this->activeGroomingPetCount();
+
+            if ($activePets + $petsToStart->count() > $settings->groomers_on_duty) {
+                return $this->groomerCapacityError(
+                    $activePets,
+                    $settings->groomers_on_duty,
+                    $petsToStart->count(),
+                );
+            }
+
+            $startedAt = now();
+            if ($petsToStart->isNotEmpty()) {
+                BookingPet::whereIn('booking_pet_id', $petsToStart->pluck('booking_pet_id'))
+                    ->update(['grooming_start_time' => $startedAt]);
+            }
+
+            $booking->update([
+                'status' => 'in_progress',
+                'grooming_started_at' => $booking->grooming_started_at ?? $startedAt,
+            ]);
+            $booking->load('user', 'bookingPets.pet');
+
+            return ['booking' => $booking];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
 
-        if ($booking->status !== 'checked_in') {
-            return response()->json(['success' => false, 'message' => 'Booking must be checked in first.'], 422);
-        }
-
-        $booking->load('user', 'bookingPets.pet');
-
-        $booking->update([
-            'status'             => 'in_progress',
-            'grooming_started_at' => now(),
-        ]);
+        $booking = $result['booking'];
 
         // Notify the customer that grooming has started
         if ($booking->user) {
             $petName = $this->petNames($booking);
+            $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'grooming_started',
-                'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
+                'message'    => "Great news! {$petName} {$petVerb} Started Grooming. We'll let you know as soon as they're ready for pickup!",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -246,11 +341,13 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    // Starts one pet without moving the owner booking out of Queued until every pet has started.
+    // Starts one pet while the owner booking remains checked_in until every pet has started.
+    // The schedule feed surfaces partially started owner cards in In Progress.
     // No migration is needed: booking_pets.grooming_start_time already stores this per-pet state.
     public function startPetGrooming($id, $bookingPetId)
     {
         $result = DB::transaction(function () use ($id, $bookingPetId) {
+            $settings = ClinicSetting::current(lockForUpdate: true);
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (!$booking) {
@@ -272,6 +369,11 @@ class AdminBookingController extends Controller
 
             if ($bookingPet->grooming_start_time) {
                 return ['error' => ['message' => 'Grooming has already started for this pet.', 'status' => 422]];
+            }
+
+            $activePets = $this->activeGroomingPetCount();
+            if ($activePets >= $settings->groomers_on_duty) {
+                return $this->groomerCapacityError($activePets, $settings->groomers_on_duty);
             }
 
             $startedAt = now();
@@ -300,7 +402,7 @@ class AdminBookingController extends Controller
                     'user_id'    => $booking->user->user_id,
                     'booking_id' => $booking->booking_id,
                     'type'       => 'grooming_started',
-                    'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
+                    'message'    => "Great news! {$petName} has Started Grooming. We'll let you know as soon as they're ready for pickup!",
                     'is_read'    => false,
                     'created_at' => $startedAt,
                 ]);
@@ -351,8 +453,7 @@ class AdminBookingController extends Controller
 
         $booking->load('bookingPets.pet', 'walkin');
         $ownerName = $this->ownerName($booking);
-        $petName   = $this->petNames($booking);
-        $petVerb   = $this->hasMultiplePets($booking) ? 'are' : 'is';
+        $readySubject = $this->hasMultiplePets($booking) ? 'pets are' : 'pet is';
 
         // Always notify the customer that their pet is ready for pickup
         if ($booking->user) {
@@ -360,7 +461,7 @@ class AdminBookingController extends Controller
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'ready_for_pickup',
-                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
+                'message'    => "Your {$readySubject} now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -444,6 +545,19 @@ class AdminBookingController extends Controller
 
             if ($remainingPets === 0) {
                 $completion = $this->completeGroomingBooking($booking, $finishedAt);
+            } else {
+                $booking->loadMissing('user');
+
+                if ($booking->user) {
+                    CustomerNotification::create([
+                        'user_id'    => $booking->user->user_id,
+                        'booking_id' => $booking->booking_id,
+                        'type'       => 'grooming_finished',
+                        'message'    => "{$petName} is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                        'is_read'    => false,
+                        'created_at' => $finishedAt,
+                    ]);
+                }
             }
 
             return [
@@ -488,15 +602,14 @@ class AdminBookingController extends Controller
     {
         $booking->loadMissing(['user', 'bookingPets.pet']);
         $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
-        $petName = $this->petNames($booking);
-        $petVerb = $this->hasMultiplePets($booking) ? 'are' : 'is';
+        $readySubject = $this->hasMultiplePets($booking) ? 'pets are' : 'pet is';
 
         if ($booking->user) {
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'ready_for_pickup',
-                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
+                'message'    => "Your {$readySubject} now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.",
                 'is_read'    => false,
                 'created_at' => $finishedAt,
             ]);
@@ -645,52 +758,61 @@ class AdminBookingController extends Controller
     // no_show → checked_in (same day only, before 5 PM, clinic not stopped)
     public function lateCheckIn($id)
     {
-        $booking = Booking::find($id);
-
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
-
-        if ($booking->status !== 'no_show') {
-            return response()->json(['success' => false, 'message' => 'Only no-show bookings can be late checked-in.'], 422);
-        }
-
         $today = Carbon::today()->toDateString();
+        $result = app(DailyPetQueue::class)->runForDate($today, function () use ($id, $today) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
-        if ($booking->booking_date !== $today) {
-            return response()->json(['success' => false, 'message' => 'Late check-in is only available on the day of the booking.'], 422);
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'no_show') {
+                return ['error' => ['message' => 'Only no-show bookings can be late checked-in.', 'status' => 422]];
+            }
+
+            if ($booking->booking_date !== $today) {
+                return ['error' => ['message' => 'Late check-in is only available on the day of the booking.', 'status' => 422]];
+            }
+
+            if (Carbon::now()->hour >= 17) {
+                return ['error' => ['message' => 'Late check-in is no longer available after 5:00 PM.', 'status' => 422]];
+            }
+
+            $stoppedToday = ClinicClosure::where('type', 'stop_today')
+                ->where('start_date', $today)
+                ->where('is_active', 1)
+                ->exists();
+
+            if ($stoppedToday) {
+                return ['error' => ['message' => 'The clinic has stopped receiving for today.', 'status' => 422]];
+            }
+
+            $queueNumber = ((int) Booking::where('booking_date', $today)
+                ->whereNotNull('queue_number')
+                ->max('queue_number')) + 1;
+
+            $booking->update([
+                'status'         => 'checked_in',
+                'queue_number'   => $queueNumber,
+                'dropped_off_at' => now(),
+            ]);
+
+            app(DailyPetQueue::class)->assignBookingPets($booking, $today);
+
+            return ['queue_number' => $queueNumber];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
-
-        // Block if past 5 PM
-        if (Carbon::now()->hour >= 17) {
-            return response()->json(['success' => false, 'message' => 'Late check-in is no longer available after 5:00 PM.'], 422);
-        }
-
-        // Block if clinic stopped receiving today
-        $stoppedToday = ClinicClosure::where('type', 'stop_today')
-            ->where('start_date', $today)
-            ->where('is_active', 1)
-            ->exists();
-
-        if ($stoppedToday) {
-            return response()->json(['success' => false, 'message' => 'The clinic has stopped receiving for today.'], 422);
-        }
-
-        // Assign queue number at the back
-        $queueNumber = Booking::where('booking_date', $today)
-            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'no_show'])
-            ->count() + 1;
-
-        $booking->update([
-            'status'         => 'checked_in',
-            'queue_number'   => $queueNumber,
-            'dropped_off_at' => now(),
-        ]);
 
         return response()->json([
             'success'      => true,
             'message'      => 'Late check-in successful. Customer added to the back of the queue.',
-            'queue_number' => $queueNumber,
+            'queue_number' => $result['queue_number'],
         ]);
     }
 
@@ -853,10 +975,7 @@ class AdminBookingController extends Controller
                     'weight'              => $pet?->weight ? $pet->weight . ' kg' : '—',
                     'medicalConditions'   => $pet?->medical_conditions ?? null,
                     'specialInstructions' => $bp->special_instructions ?? null,
-                    // #P1, #P2, ... is intentionally derived within this owner booking.
-                    // DB TEAM (optional): add booking_pets.pet_queue_number only if product rules
-                    // later require a globally unique/immutable pet queue number across bookings.
-                    'petQueueNumber'      => $petIndex + 1,
+                    'petQueueNumber'      => $bp->pet_queue_number ?? $petIndex + 1,
                     'groomingStartedAt'   => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,

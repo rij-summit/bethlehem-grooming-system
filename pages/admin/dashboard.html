@@ -6,11 +6,12 @@
     <title>Admin Dashboard | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/custom.css?v=admin-cloak-20260709" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
       x-data="adminSidebar()"
+      x-cloak
       class="min-h-screen flex bg-[#f5f8fb]"
     >
       <!-- Mobile Backdrop -->
@@ -34,7 +35,7 @@
               class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"
             >
               <img
-                src="../../assets/images/clinic/Bethlehem_Logo.png"
+                src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                 alt="Bethlehem Animal Clinic logo"
                 class="h-full w-full object-contain"
               />
@@ -601,6 +602,6 @@
     <script src="../../scripts/components/admin-sidebar.js"></script>
 
     <!-- New dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=groomer-capacity-20260704"></script>
   </body>
 </html>

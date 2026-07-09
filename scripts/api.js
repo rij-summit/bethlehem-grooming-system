@@ -4,7 +4,46 @@
 
 // var (not const) so this is accessible as a global from ES module scripts
 var API = (() => {
-  const BASE_URL = "http://127.0.0.1:8000/api";
+  const LOCAL_API_ORIGIN = "http://127.0.0.1:8000";
+  const REQUEST_TIMEOUT_MS = 12000;
+
+  function trimTrailingSlash(value) {
+    return String(value || "").replace(/\/+$/, "");
+  }
+
+  function apiUrlFromOrigin(origin) {
+    const normalized = trimTrailingSlash(origin);
+    if (!normalized) return "";
+    return normalized.endsWith("/api") ? normalized : `${normalized}/api`;
+  }
+
+  function resolveBaseUrl() {
+    const configured = typeof window !== "undefined"
+      ? window.BETHLEHEM_API_BASE_URL
+      : "";
+    const metaConfigured = typeof document !== "undefined"
+      ? document.querySelector('meta[name="bethlehem-api-base-url"]')?.content
+      : "";
+    const explicitBase = apiUrlFromOrigin(configured || metaConfigured);
+
+    if (explicitBase) return explicitBase;
+
+    if (typeof window === "undefined" || !window.location) {
+      return `${LOCAL_API_ORIGIN}/api`;
+    }
+
+    const { protocol, hostname, port, origin } = window.location;
+    const localHostnames = new Set(["localhost", "127.0.0.1", "::1"]);
+    const isLocalDevServer = localHostnames.has(hostname) && port && port !== "8000";
+
+    if (protocol === "file:" || isLocalDevServer) {
+      return `${LOCAL_API_ORIGIN}/api`;
+    }
+
+    return `${origin}/api`;
+  }
+
+  const BASE_URL = resolveBaseUrl();
 
   // ── Token keys ────────────────────────────────────────────────────────────
   const CUSTOMER_TOKEN_KEY = "customer_token";
@@ -205,17 +244,31 @@ var API = (() => {
     }
 
     let response;
+    const controller = typeof AbortController !== "undefined"
+      ? new AbortController()
+      : null;
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+      : null;
+
+    if (controller) {
+      options.signal = controller.signal;
+    }
 
     try {
       response = await fetch(`${BASE_URL}${endpoint}`, options);
-    } catch {
+    } catch (error) {
       // Network failure (server down, no internet, CORS preflight killed)
       const networkError = new Error(
-        "Unable to reach the server. Please check your connection."
+        error?.name === "AbortError"
+          ? "The server is taking too long to respond. Please try again."
+          : "Unable to reach the server. Please check your connection."
       );
       networkError.status = 0;
       networkError.errors = null;
       throw networkError;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
 
     const data = await response.json().catch(() => ({}));
@@ -365,9 +418,14 @@ var API = (() => {
     return request("POST", "/booking/store", payload, getCustomerToken());
   }
 
-  async function getBookingHistory() {
+  async function getBookingHistory({ historyLimit = null } = {}) {
     // GET /api/booking/history  (protected)
-    return request("GET", "/booking/history", null, getCustomerToken());
+    const params = new URLSearchParams();
+    if (historyLimit !== null) {
+      params.set("history_limit", String(Math.max(0, Number(historyLimit) || 0)));
+    }
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/booking/history${query}`, null, getCustomerToken());
   }
 
   async function getGroomingCapacity() {
@@ -519,8 +577,16 @@ var API = (() => {
   }
 
   async function adminReopenToday() {
-    // POST /api/admin/clinic/reopen-today  (protected — admin token)
     return request("POST", "/admin/clinic/reopen-today", null, getAdminToken());
+  }
+
+  async function adminUpdateGroomersOnDuty(groomersOnDuty) {
+    return request(
+      "PATCH",
+      "/admin/clinic/settings/groomers-on-duty",
+      { groomers_on_duty: groomersOnDuty },
+      getAdminToken(),
+    );
   }
 
   async function getBlockedDates() {
@@ -738,6 +804,7 @@ var API = (() => {
     getClinicStatus,
     adminStopToday,
     adminReopenToday,
+    adminUpdateGroomersOnDuty,
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,

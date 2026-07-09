@@ -1,6 +1,10 @@
 /* ----- Custom CSS Notes ----- */
 /* Use this file for custom animations, custom scrollbar styles, and one-off styles that Tailwind cannot easily cover. */
 
+[x-cloak] {
+  display: none !important;
+}
+
 /* ----- Admin Activity Status Indicators ----- */
 .admin-activity-dot-pickup {
   background-color: #0e7490;
@@ -565,6 +569,15 @@ body.customer-detail-modal-open {
   background-color: #284a67;
 }
 
+.admin-confirm-warning-button {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
+.admin-confirm-warning-button:hover:not(:disabled) {
+  background-color: #b45309;
+}
+
 .admin-confirm-cancel-button {
   background-color: #ef4444;
   color: #ffffff;
@@ -572,6 +585,21 @@ body.customer-detail-modal-open {
 
 .admin-confirm-cancel-button:hover:not(:disabled) {
   background-color: #dc2626;
+}
+
+.admin-action-confirm-icon-primary {
+  background-color: #eaf4fb;
+  color: #315b7e;
+}
+
+.admin-action-confirm-icon-warning {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
+.admin-action-confirm-icon-danger {
+  background-color: #fef2f2;
+  color: #ef4444;
 }
 
 .admin-action-confirm-footer {
@@ -637,6 +665,16 @@ body.customer-detail-modal-open {
   background-color: #fecaca;
 }
 
+.admin-queued-reschedule-action {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #315b7e;
+}
+
+.admin-queued-reschedule-action:hover {
+  background-color: #dbeafe;
+}
+
 @media (max-width: 640px) {
   .admin-queued-main-action,
   .admin-queued-secondary-row {
@@ -689,6 +727,11 @@ body.customer-detail-modal-open {
 .notif-client-dropdown .notif-list {
   max-height: 18rem;
   overflow-y: auto;
+}
+
+.client-notification-emphasis {
+  color: #1e293b;
+  font-weight: 700;
 }
 
 /* ----- Payment Modal And Receipt Layout ----- */
@@ -2320,6 +2363,18 @@ body.customer-detail-modal-open {
   gap: 0.55rem;
 }
 
+.admin-queued-pet-start-wrap {
+  display: inline-flex;
+}
+
+.admin-queued-pet-start-wrap.is-capacity-disabled {
+  cursor: not-allowed;
+}
+
+.admin-queued-pet-start-wrap.is-capacity-disabled .admin-queued-pet-start {
+  pointer-events: none;
+}
+
 .admin-queued-pet-start,
 .admin-queued-pet-print,
 .admin-in-progress-pet-finish,
@@ -2332,23 +2387,44 @@ body.customer-detail-modal-open {
   border-radius: 0.7rem;
   padding: 0.6rem 0.85rem;
   font-size: 0.8rem;
-  font-weight: 800;
+  font-weight: 700;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.admin-queued-pet-start,
+.admin-queued-pet-start {
+  border: 1px solid #e5a800;
+  background: #e5a800;
+  color: #ffffff;
+}
+
+.admin-queued-pet-start:hover:not(:disabled) {
+  border-color: #c48a00;
+  background: #c48a00;
+}
+
 .admin-in-progress-pet-finish {
   border: 1px solid #315b7e;
   background: #315b7e;
   color: #ffffff;
 }
 
-.admin-queued-pet-start:hover:not(:disabled),
 .admin-in-progress-pet-finish:hover:not(:disabled) {
   background: #284a67;
 }
 
-.admin-queued-pet-start.is-disabled,
+.admin-queued-pet-start:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.admin-queued-pet-start.is-disabled {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .admin-in-progress-pet-finish.is-disabled {
   border-color: #bbf7d0;
   background: #f0fdf4;
@@ -2356,6 +2432,7 @@ body.customer-detail-modal-open {
   cursor: not-allowed;
 }
 
+.admin-queued-pet-start.is-finished,
 .admin-in-progress-pet-finish.is-finished {
   border-color: #cbd5e1;
   background: #f1f5f9;
@@ -2442,6 +2519,14 @@ body.customer-detail-modal-open {
 
   .admin-queued-pet-actions {
     grid-column: 1 / -1;
+  }
+
+  .admin-queued-pet-start-wrap {
+    flex: 1 1 0;
+  }
+
+  .admin-queued-pet-start-wrap .admin-queued-pet-start {
+    width: 100%;
   }
 
   .admin-queued-pet-start,

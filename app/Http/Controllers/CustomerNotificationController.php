@@ -21,6 +21,7 @@ class CustomerNotificationController extends Controller
             ->get()
             ->map(function ($n) {
                 $petNames = $this->notificationPetNames($n);
+                $petTypes = $this->notificationPetTypes($n, $petNames);
 
                 return [
                     'id'              => $n->id,
@@ -28,6 +29,7 @@ class CustomerNotificationController extends Controller
                     'message'         => $this->formatNotificationMessage($n->message),
                     'display_message' => $this->formatCustomerNotificationMessage($n, $petNames),
                     'pet_names'       => $petNames,
+                    'pet_types'       => $petTypes,
                     'is_read'         => (bool) $n->is_read,
                     'created_at'      => $n->created_at?->toDateTimeString(),
                     'booking_id'      => $n->booking_id,
@@ -47,6 +49,7 @@ class CustomerNotificationController extends Controller
             ->first();
 
         $pickupPetNames = $pickupNotif ? $this->notificationPetNames($pickupNotif) : [];
+        $pickupPetTypes = $pickupNotif ? $this->notificationPetTypes($pickupNotif, $pickupPetNames) : [];
 
         return response()->json([
             'success'         => true,
@@ -57,6 +60,7 @@ class CustomerNotificationController extends Controller
                 'message'         => $this->formatNotificationMessage($pickupNotif->message),
                 'display_message' => $this->formatCustomerNotificationMessage($pickupNotif, $pickupPetNames),
                 'pet_names'       => $pickupPetNames,
+                'pet_types'       => $pickupPetTypes,
                 'booking_id'      => $pickupNotif->booking_id,
             ] : null,
         ]);
@@ -90,9 +94,41 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetNames(CustomerNotification $notification): array
     {
-        return ($notification->booking?->bookingPets ?? collect())
+        $petNames = ($notification->booking?->bookingPets ?? collect())
             ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (!in_array($notification->type, ['grooming_started', 'grooming_finished'], true)) {
+            return $petNames;
+        }
+
+        $matchedPetNames = $this->petNamesMentionedInMessage($notification->message, $petNames);
+
+        return $matchedPetNames ?: $petNames;
+    }
+
+    private function notificationPetTypes(CustomerNotification $notification, array $petNames): array
+    {
+        $matchedNames = array_flip(array_map(
+            fn($name) => mb_strtolower(trim((string) $name)),
+            $petNames,
+        ));
+
+        return ($notification->booking?->bookingPets ?? collect())
+            ->filter(function ($bookingPet) use ($matchedNames) {
+                if (empty($matchedNames)) {
+                    return true;
+                }
+
+                $name = mb_strtolower(trim((string) $bookingPet->pet?->pet_name));
+
+                return $name !== '' && isset($matchedNames[$name]);
+            })
+            ->map(fn($bookingPet) => mb_strtolower(trim((string) $bookingPet->pet?->species)))
+            ->filter(fn($type) => in_array($type, ['dog', 'cat'], true))
             ->unique()
             ->values()
             ->all();
@@ -101,7 +137,12 @@ class CustomerNotificationController extends Controller
     private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
     {
         if (empty($petNames)) {
-            return $this->formatNotificationMessage($notification->message);
+            return match ($notification->type) {
+                'grooming_started' => "Great news! Your pet has Started Grooming. We'll let you know as soon as they're ready for pickup!",
+                'grooming_finished' => "Your pet is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                'ready_for_pickup' => 'Your pet is now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
+                default => $this->formatNotificationMessage($notification->message),
+            };
         }
 
         $subject = $this->formatNameList($petNames);
@@ -109,8 +150,9 @@ class CustomerNotificationController extends Controller
         $timeLabel = $notification->booking?->timeWindow?->window_label;
 
         return match ($notification->type) {
-            'grooming_started' => "Great news! Grooming has started for {$subject}. We'll let you know as soon as they're ready for pickup!",
-            'ready_for_pickup' => "{$subject} " . ($isPlural ? 'are' : 'is') . " all done and looking fabulous! Please come to the clinic to pick them up.",
+            'grooming_started' => "Great news! {$subject} " . ($isPlural ? 'have' : 'has') . " Started Grooming. We'll let you know as soon as they're ready for pickup!",
+            'grooming_finished' => "{$subject} " . ($isPlural ? 'are' : 'is') . " Finished with grooming. We'll keep you updated on the rest of the appointment.",
+            'ready_for_pickup' => 'Your ' . ($isPlural ? 'pets are' : 'pet is') . ' now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
             'pickup_reminder'  => "Reminder: {$subject} " . ($isPlural ? 'are' : 'is') . " still waiting to be picked up at the clinic. Please come at your earliest convenience!",
             'picked_up'        => "{$subject} " . ($isPlural ? 'have' : 'has') . " been released. Thank you for visiting Bethlehem Animal Clinic!",
             'reminder_24h'     => $timeLabel
@@ -121,6 +163,21 @@ class CustomerNotificationController extends Controller
                 : $this->formatNotificationMessage($notification->message),
             default            => $this->formatNotificationMessage($notification->message),
         };
+    }
+
+    private function petNamesMentionedInMessage(?string $message, array $petNames): array
+    {
+        $text = (string) $message;
+
+        return array_values(array_filter($petNames, function ($petName) use ($text) {
+            $name = trim((string) $petName);
+
+            if ($name === '') {
+                return false;
+            }
+
+            return preg_match('/(^|[^\pL\pN])' . preg_quote($name, '/') . '($|[^\pL\pN])/iu', $text) === 1;
+        }));
     }
 
     private function formatNotificationMessage(?string $message): string

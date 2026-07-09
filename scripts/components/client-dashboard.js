@@ -4,7 +4,22 @@
 // Client dashboard shell: Lucide icons, mobile sidebar, profile name, and logout.
 // Connected to the sidebar/profile controls in pages/client/dashboard.html.
 (function () {
-  if (window.lucide) window.lucide.createIcons();
+  function createIconsWhenReady() {
+    if (window.lucide) {
+      window.lucide.createIcons();
+      return;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      window.lucide?.createIcons();
+    }, { once: true });
+
+    window.addEventListener("load", () => {
+      window.lucide?.createIcons();
+    }, { once: true });
+  }
+
+  createIconsWhenReady();
 
   const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
   const sidebarToggle = document.getElementById("clientSidebarToggle");
@@ -210,7 +225,7 @@
       const pickup = data.pickup_alert;
       if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
         await window._refreshAppointments?.();
-        pickupMessage.textContent = await buildPickupMessage(pickup);
+        pickupMessage.innerHTML = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
         if (window.lucide) lucide.createIcons();
@@ -225,8 +240,8 @@
     }
 
     list.innerHTML = notifications.map((n) => {
-      const icon = notifIcon(n.type);
-      const message = formatNotificationMessage(n.display_message || n.message);
+      const icon = notifIcon(n);
+      const message = formatNotificationMessage(n);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
@@ -258,7 +273,15 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  function notifIcon(type) {
+  function notifIcon(notification) {
+    const type = typeof notification === "object" && notification
+      ? notification.type
+      : notification;
+
+    if (type === "grooming_finished") {
+      return groomingFinishedIcon(notification);
+    }
+
     const icons = {
       reminder_24h:    "📅",
       reminder_3h:     "⏰",
@@ -270,8 +293,92 @@
     return icons[type] || "🔔";
   }
 
-  function formatNotificationMessage(message) {
-    return escapeHtml(stripDecorativePaws(message));
+  function groomingFinishedIcon(notification) {
+    const petTypes = notificationPetTypes(notification);
+
+    if (petTypes.includes("cat")) {
+      return "🐱";
+    }
+
+    if (petTypes.includes("dog")) {
+      return "🐶";
+    }
+
+    return "🐾";
+  }
+
+  function formatNotificationMessage(notification) {
+    if (!notification || typeof notification !== "object") {
+      return boldImportantTerms(escapeHtml(stripDecorativePaws(notification)));
+    }
+
+    if (notification.type === "grooming_started") {
+      return formatPetStatusMessage(notification, "Started Grooming");
+    }
+
+    if (notification.type === "grooming_finished") {
+      return formatPetStatusMessage(notification, "Finished");
+    }
+
+    if (notification.type === "ready_for_pickup") {
+      return formatReadyForPickupMessage(notification);
+    }
+
+    return boldImportantTerms(
+      escapeHtml(stripDecorativePaws(notification.display_message || notification.message))
+    );
+  }
+
+  function formatPetStatusMessage(notification, statusLabel) {
+    const petNames = notificationPetNames(notification);
+    const message = escapeHtml(stripDecorativePaws(notification.display_message || notification.message));
+
+    return boldImportantTerms(boldPetNames(message, petNames));
+  }
+
+  function formatReadyForPickupMessage(notification) {
+    const petCount = notificationPetNames(notification).length;
+    const subject = petCount > 1 ? "pets are" : "pet is";
+
+    return `Your ${subject} now <strong class="client-notification-emphasis">Ready for Pickup</strong> and looking fabulous! Please come to the clinic to pick them up.`;
+  }
+
+  function notificationPetNames(notification) {
+    return Array.isArray(notification?.pet_names)
+      ? notification.pet_names.map((name) => String(name).trim()).filter(Boolean)
+      : [];
+  }
+
+  function notificationPetTypes(notification) {
+    return Array.isArray(notification?.pet_types)
+      ? notification.pet_types.map((type) => String(type).trim().toLowerCase()).filter(Boolean)
+      : [];
+  }
+
+  function boldPetNames(escapedMessage, petNames) {
+    return petNames.reduce((message, petName) => {
+      const escapedName = escapeHtml(String(petName).trim());
+
+      if (!escapedName) return message;
+
+      const pattern = new RegExp(
+        `(^|[^\\p{L}\\p{N}])(${escapeRegExp(escapedName)})(?=$|[^\\p{L}\\p{N}])`,
+        "gu"
+      );
+
+      return message.replace(pattern, '$1<strong class="client-notification-emphasis">$2</strong>');
+    }, String(escapedMessage || ""));
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function boldImportantTerms(escapedMessage) {
+    return String(escapedMessage || "")
+      .replace(/\bStarted Grooming\b/g, '<strong class="client-notification-emphasis">Started Grooming</strong>')
+      .replace(/\bReady for Pickup\b/g, '<strong class="client-notification-emphasis">Ready for Pickup</strong>')
+      .replace(/\bFinished\b/g, '<strong class="client-notification-emphasis">Finished</strong>');
   }
 
   function stripDecorativePaws(message) {
@@ -300,22 +407,28 @@
   }
 
   async function buildPickupMessage(pickup) {
+    const providedPetNames = Array.isArray(pickup?.pet_names)
+      ? pickup.pet_names.map((name) => String(name).trim()).filter(Boolean)
+      : [];
+
+    if (providedPetNames.length > 0) {
+      return formatReadyForPickupMessage({ pet_names: providedPetNames });
+    }
+
     try {
       const booking = await findPickupBooking(pickup);
       const petNames = getBookingPetNames(booking);
 
       if (petNames.length > 0) {
-        const subject = formatNameList(petNames);
-        const verb = petNames.length === 1 ? "is" : "are";
-        return `${subject} ${verb} all done and looking fabulous! Please come to the clinic to pick them up.`;
+        return formatReadyForPickupMessage({ pet_names: petNames });
       }
     } catch { /* use API-provided message below */ }
 
-    return stripDecorativePaws(pickup.display_message || pickup.message) || "Please come to the clinic to pick them up now!";
+    return formatReadyForPickupMessage({ pet_names: [] });
   }
 
   async function findPickupBooking(pickup) {
-    const data = await API.getBookingHistory();
+    const data = await API.getBookingHistory({ historyLimit: 0 });
     const activeBookings = Array.isArray(data?.bookings) ? data.bookings : [];
     const pickupBookingId = getPickupBookingId(pickup);
 
@@ -364,12 +477,6 @@
     return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
   }
 
-  function formatNameList(names) {
-    if (names.length <= 1) return names[0] || "Your pet";
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
-  }
-
   // Initial load + poll every 30 seconds
   loadNotifications();
   setInterval(loadNotifications, 30000);
@@ -414,16 +521,19 @@
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
 
-  document.addEventListener("DOMContentLoaded", async () => {
-    await window.AppClock?.load?.();
-
-    if (rescheduleDate) {
-      rescheduleDate.min = window.AppClock?.todayKey?.() || new Date().toISOString().split("T")[0];
-    }
-
+  document.addEventListener("DOMContentLoaded", () => {
+    setRescheduleMinDate(new Date().toISOString().split("T")[0]);
     loadDashboardPets();
     loadAppointments();
     loadGroomingCapacity();
+
+    Promise.resolve(window.AppClock?.load?.())
+      .then(() => {
+        setRescheduleMinDate(window.AppClock?.todayKey?.());
+      })
+      .catch(() => {
+        setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+      });
   });
 
   // ── Load & route data ──────────────────────────────────────────────────────
@@ -439,9 +549,12 @@
 
   async function loadAppointments() {
     try {
-      const data    = await API.getBookingHistory();
+      const data    = await API.getBookingHistory({ historyLimit: 6 });
       const active  = data.bookings || [];
       const history = data.history  || [];
+      const historyTotal = Number.isFinite(Number(data.history_total))
+        ? Number(data.history_total)
+        : history.length;
 
       const scheduled = active.filter(isUpcomingAppointment);
       const atClinic  = active.filter(b =>
@@ -452,7 +565,7 @@
       renderUpcomingAppointmentsSummary(scheduled);
       renderGroomingTracker(atClinic);
       renderGroomingHistory(history);
-      renderPastGroomingSummary(history);
+      renderPastGroomingSummary(history, historyTotal);
     } catch {
       appointmentsList.innerHTML =
         '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load schedule.</p></div>';
@@ -467,6 +580,12 @@
       renderGroomingCapacity(data);
     } catch {
       renderGroomingCapacity(null);
+    }
+  }
+
+  function setRescheduleMinDate(dateKey) {
+    if (rescheduleDate && dateKey) {
+      rescheduleDate.min = dateKey;
     }
   }
 
@@ -759,8 +878,10 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  function renderPastGroomingSummary(history) {
-    const count = Array.isArray(history) ? history.length : 0;
+  function renderPastGroomingSummary(history, totalCount = null) {
+    const count = Number.isFinite(Number(totalCount))
+      ? Number(totalCount)
+      : (Array.isArray(history) ? history.length : 0);
 
     if (pastGroomingCountEl) {
       pastGroomingCountEl.textContent = String(count);

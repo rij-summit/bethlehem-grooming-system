@@ -6,11 +6,12 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/custom.css?v=queue-progress-admin-cloak-20260709" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
       x-data="adminSidebar()"
+      x-cloak
       class="min-h-screen flex bg-[#f5f8fb]"
     >
       <!-- Mobile Backdrop -->
@@ -34,7 +35,7 @@
               class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"
             >
               <img
-                src="../../assets/images/clinic/Bethlehem_Logo.png"
+                src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                 alt="Bethlehem Animal Clinic logo"
                 class="h-full w-full object-contain"
               />
@@ -559,20 +560,21 @@
                     <button
                       type="button"
                       @click="setActiveGroomers(activeGroomers - 1)"
-                      :disabled="activeGroomers <= 1"
+                      :disabled="activeGroomers <= 1 || groomerCapacityBusy"
                       class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
                     >−</button>
                     <span class="w-6 text-center text-lg font-bold text-[#1f3850]" x-text="activeGroomers"></span>
                     <button
                       type="button"
                       @click="setActiveGroomers(activeGroomers + 1)"
-                      :disabled="activeGroomers >= 5"
+                      :disabled="activeGroomers >= 5 || groomerCapacityBusy"
                       class="flex h-7 w-7 items-center justify-center rounded-lg text-lg font-bold text-[#315b7e] transition hover:bg-white disabled:opacity-30"
                     >+</button>
                   </div>
                 </div>
 
               </div>
+              <p x-show="groomerCapacityError" class="mt-3 text-right text-xs font-semibold text-red-600" x-text="groomerCapacityError"></p>
             </div>
           </section>
 
@@ -956,9 +958,7 @@
 
             NOTES:
             - queueNumber (#1, #2, #3...) should come from backend
-            - petQueueNumber is currently derived as P1, P2, ... within each owner booking
-            - DB TEAM: add booking_pets.pet_queue_number later if pet queue labels must be
-              globally unique or immutable; the current feature does not require that migration
+            - petQueueNumber is the persisted, date-scoped number assigned by the backend
             - serviceLabel comes from client booking selection
             - petType must be Dog or Cat
             - dropOffTime should reflect the actual check-in/drop-off time saved by backend
@@ -1001,7 +1001,7 @@
                       ></p>
                       <p class="mt-2 text-sm text-slate-600">
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.dropOffTime" x-text="' · Dropped off: ' + booking.dropOffTime"></span>
+                        <span x-show="booking.dropOffTime" x-text="' \u00b7 Dropped off: ' + booking.dropOffTime"></span>
                       </p>
                       <!-- Queue ETA badge -->
                       <template x-if="getBookingETA(booking)">
@@ -1036,15 +1036,24 @@
                       Already Paid
                     </div>
                   </template>
-                  <!-- Existing frontend-only owner booking actions remain booking-scoped. -->
-                  <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                    <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                    Revert
-                  </button>
-                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                    <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                    Cancel
-                  </button>
+                  <template x-if="shouldShowOwnerReschedule(booking)">
+                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
+                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
+                      Reschedule
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
+                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                      Revert
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
+                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                      Cancel
+                    </button>
+                  </template>
                   <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
                     View Details
                   </button>
@@ -1073,24 +1082,30 @@
                             <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
                             <p class="admin-queued-pet-basic">
                               <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> · </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> · </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
                           </div>
 
                           <div class="admin-queued-pet-actions">
-                            <button
-                              type="button"
-                              @click="confirmStartGroomingPet(booking, pet)"
-                              :disabled="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id)"
-                              class="admin-queued-pet-start"
-                              :class="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                            <div
+                              class="admin-queued-pet-start-wrap"
+                              :class="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'is-capacity-disabled' : ''"
+                              :title="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'Groomer currently busy' : ''"
                             >
-                              <span x-text="pet.isGroomingStarted ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
-                            </button>
+                              <button
+                                type="button"
+                                @click="confirmStartGroomingPet(booking, pet)"
+                                :disabled="isPetGroomingStarted(pet) || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                class="admin-queued-pet-start"
+                                :class="isPetGroomingFinished(pet) ? 'is-finished' : (isPetGroomingStarted(pet) || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
+                              >
+                                <span x-text="isPetGroomingFinished(pet) ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isPetGroomingStarted(pet) ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'))"></span>
+                              </button>
+                            </div>
                             <button
                               type="button"
                               @click="printPetCard(booking, pet, petIndex)"
@@ -1179,13 +1194,13 @@
                 size: string,
                 groomingStartedAt: string|null,
                 groomingFinishedAt: string|null,
+                isGroomingStarted: boolean,
                 isGroomingFinished: boolean
               }]
             }
 
             BUSINESS RULE:
-            - A booking enters this tab after admin clicks "Start Grooming"
-              from the Queued tab.
+            - A booking enters this tab after at least one pet starts grooming.
 
             NOTES:
             - queueNumber (#1, #2, #3...) should come from backend
@@ -1231,7 +1246,7 @@
                       ></p>
                       <p class="mt-2 text-sm text-slate-600">
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.startedAt" x-text="' · Started: ' + booking.startedAt"></span>
+                        <span x-show="booking.startedAt" x-text="' \u00b7 Started: ' + booking.startedAt"></span>
                       </p>
                       <!-- In-progress ETA badge -->
                       <template x-if="getBookingETA(booking)">
@@ -1266,14 +1281,24 @@
                       Already Paid
                     </div>
                   </template>
-                  <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                    <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                    Revert
-                  </button>
-                  <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                    <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                    Cancel
-                  </button>
+                  <template x-if="shouldShowOwnerReschedule(booking)">
+                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
+                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
+                      Reschedule
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
+                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                      Revert
+                    </button>
+                  </template>
+                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
+                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+                      Cancel
+                    </button>
+                  </template>
                   <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
                     View Details
                   </button>
@@ -1287,7 +1312,7 @@
                   <div class="admin-queued-pets-heading">
                     <div>
                       <p class="font-bold text-[#1f3850]">Pets in this booking</p>
-                      <p class="text-sm text-slate-500">Finish active pets here. Queued pets are shown as indicators only.</p>
+                      <p class="text-sm text-slate-500">Active and queued pets under this owner.</p>
                     </div>
                     <span class="admin-queued-pet-count admin-in-progress-pet-count" x-text="getInProgressPets(booking).length"></span>
                   </div>
@@ -1306,11 +1331,11 @@
                             <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
                             <p class="admin-queued-pet-basic">
                               <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> Â· </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> Â· </span>
+                              <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
-                              <span x-show="pet.groomingStartedAt" aria-hidden="true"> Â· </span>
+                              <span x-show="pet.groomingStartedAt" aria-hidden="true"> &middot; </span>
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
@@ -1318,7 +1343,7 @@
                             <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
                               <span x-text="getPetElapsed(pet)"></span>
                               <template x-if="getPetEstDone(booking, pet)">
-                                <span x-text="(getPetElapsed(pet) ? ' · ' : '') + getPetEstDone(booking, pet)"></span>
+                                <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
                               </template>
                             </p>
                           </div>
@@ -1336,11 +1361,31 @@
                               </button>
                             </template>
                             <template x-if="!pet.isGroomingStarted">
-                              <span class="admin-in-progress-pet-queued" aria-label="This pet is still queued">
-                                <i data-lucide="hourglass" class="h-4 w-4" aria-hidden="true"></i>
-                                Queued
-                              </span>
+                              <div
+                                class="admin-queued-pet-start-wrap"
+                                :class="isGroomerCapacityFull ? 'is-capacity-disabled' : ''"
+                                :title="isGroomerCapacityFull ? 'Groomer currently busy' : ''"
+                              >
+                                <button
+                                  type="button"
+                                  @click="confirmStartGroomingPet(booking, pet)"
+                                  :disabled="isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                  class="admin-queued-pet-start admin-in-progress-pet-start"
+                                  :class="isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                                >
+                                  <span x-text="isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'"></span>
+                                </button>
+                              </div>
                             </template>
+                            <button
+                              type="button"
+                              @click="printPetCard(booking, pet, petIndex)"
+                              class="admin-queued-pet-print"
+                              :aria-label="'Print grooming card for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'pet')"
+                            >
+                              <i data-lucide="printer" class="h-4 w-4"></i>
+                              Print
+                            </button>
                           </div>
                         </div>
 
@@ -1714,7 +1759,9 @@
                                   step="0.01"
                                   :placeholder="line.placeholder"
                                   :readonly="line.isFixedPriceLocked"
+                                  :disabled="line.isFixedPriceLocked"
                                   :aria-readonly="line.isFixedPriceLocked ? 'true' : 'false'"
+                                  :class="line.isFixedPriceLocked ? 'cursor-not-allowed bg-slate-50 text-slate-500' : ''"
                                   @input="clearPaymentError()"
                                   @blur="enforcePaymentMinimum(pet, line)"
                                 />
@@ -1743,9 +1790,11 @@
                     type="number"
                     x-model="paymentModal.amountPaid"
                     :min="paymentTotalDue"
+                    :max="paymentMaximumAmount"
                     step="0.01"
                     placeholder="0.00"
-                    @input="clearPaymentError()"
+                    x-effect="enforcePaymentAmountLimit()"
+                    @input="enforcePaymentAmountLimit($event)"
                     class="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 outline-none focus:border-[#16a34a]"
                   />
                 </div>
@@ -1836,7 +1885,7 @@
                   <div class="receipt-detail-card flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div class="brand-lockup" role="img" aria-label="Bethlehem Animal Clinic">
                       <img
-                        src="../../assets/images/clinic/Bethlehem_Logo.png"
+                        src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                         alt=""
                         class="brand-lockup__mark"
                       />
@@ -2025,7 +2074,7 @@
               <div class="px-6 py-5 text-center">
                 <div
                   class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-                  :class="actionConfirmModal.variant === 'danger' ? 'bg-red-50 text-red-500' : 'bg-[#eaf4fb] text-[#315b7e]'"
+                  :class="actionConfirmModal.variant === 'danger' ? 'admin-action-confirm-icon-danger' : (actionConfirmModal.variant === 'warning' ? 'admin-action-confirm-icon-warning' : 'admin-action-confirm-icon-primary')"
                 >
                   <span x-show="actionConfirmModal.icon === 'cancel'">
                     <i data-lucide="calendar-x" class="h-7 w-7"></i>
@@ -2045,6 +2094,11 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <p
+                  x-show="actionConfirmModal.error"
+                  class="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
+                  x-text="actionConfirmModal.error"
+                ></p>
               </div>
               <div class="admin-action-confirm-footer flex gap-3 px-6">
                 <button
@@ -2060,7 +2114,7 @@
                   @click="executeConfirmedBookingAction()"
                   :disabled="actionConfirmModal.busy"
                   class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition"
-                  :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : 'admin-confirm-checkin-button'"
+                  :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : (actionConfirmModal.variant === 'warning' ? 'admin-confirm-warning-button' : 'admin-confirm-checkin-button')"
                 >
                   <span x-text="actionConfirmModal.busy ? actionConfirmModal.busyLabel : actionConfirmModal.confirmLabel"></span>
                 </button>
@@ -2237,6 +2291,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=queue-progress-20260709"></script>
   </body>
 </html>

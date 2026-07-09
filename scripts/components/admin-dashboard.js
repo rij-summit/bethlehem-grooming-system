@@ -5,6 +5,21 @@ const PAYMENT_SIZE_OPTIONS = [
   { value: "extra_large", label: "Extra Large" },
 ];
 
+const PAYMENT_BILL_DENOMINATION = 1000;
+
+function maximumPaymentAmount(totalDue) {
+  const amount = Number(totalDue);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
+
+  return (
+    Math.floor(amount / PAYMENT_BILL_DENOMINATION) * PAYMENT_BILL_DENOMINATION +
+    PAYMENT_BILL_DENOMINATION * 2
+  );
+}
+
 /*
  * Payment modal service rules mirror scripts/services/grooming-service.js.
  * This dashboard is loaded as a classic script, so keep these values in sync
@@ -453,6 +468,16 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
   };
 }
 
+function shouldLockPaymentPrice(pricing, lockFixedPrices) {
+  if (!lockFixedPrices) {
+    return false;
+  }
+
+  const pricingType = pricing?.pricingType || "custom";
+
+  return pricingType !== "plus" && pricingType !== "custom";
+}
+
 /*
  * Backend integration contract:
  * - Optional preload config: window.ADMIN_DASHBOARD_CONFIG = { bootstrap, endpoints, handlers, ... }
@@ -509,14 +534,10 @@ function adminDashboard() {
     },
     noShowList: [],
     forPaymentList: [],
-    activeGroomers: (() => {
-      try {
-        const saved = parseInt(localStorage.getItem("activeGroomers"), 10);
-        return saved >= 1 && saved <= 5 ? saved : 2;
-      } catch (_) {
-        return 2;
-      }
-    })(),
+    activeGroomers: 2,
+    activeGroomingPets: 0,
+    groomerCapacityBusy: false,
+    groomerCapacityError: "",
     clinicStopped: false,
     stopModal: { open: false, title: "", message: "" },
     pickupModal: { open: false, booking: null, busy: false },
@@ -531,6 +552,7 @@ function adminDashboard() {
       icon: "checkIn",
       variant: "primary",
       busy: false,
+      error: "",
     },
     paymentModal: {
       open: false,
@@ -658,12 +680,8 @@ function adminDashboard() {
             const response = await API.adminStartPetGrooming(booking.id, bookingPetId);
             await this.loadAdminBookings();
 
-            if (response?.all_pets_started) {
-              this.setTab("in-progress");
-            } else {
-              this.setQueuedBookingExpanded(booking.id, true);
-              this.setTab("queued");
-            }
+            this.setInProgressBookingExpanded(booking.id, true);
+            this.setTab("in-progress");
 
             return response;
           },
@@ -690,13 +708,6 @@ function adminDashboard() {
                   ? "to-be-picked-up"
                   : "for-payment",
               );
-            } else if (
-              ["checked_in", "queued"].includes(this.normalizeStatus(response?.booking_status)) &&
-              !this.inProgressList.some((item) => String(item.id) === String(booking.id))
-            ) {
-              // No active pet remains, but one or more siblings are still waiting.
-              this.setQueuedBookingExpanded(booking.id, true);
-              this.setTab("queued");
             } else {
               this.setInProgressBookingExpanded(booking.id, true);
               this.setTab("in-progress");
@@ -888,6 +899,11 @@ function adminDashboard() {
 
     // Opens a second confirmation before moving a Queued booking into In-Progress.
     confirmStartGroomingBooking(booking) {
+      if (this.isGroomerCapacityFull) {
+        this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
+        return;
+      }
+
       const ownerName = String(booking?.ownerName || "").trim();
       this.openActionConfirmModal({
         action: "startGrooming",
@@ -906,23 +922,130 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (pet?.isGroomingStarted) {
+      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+        if (this.isGroomerCapacityFull) {
+          this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
+        }
         return;
       }
 
       const petName = String(pet?.petName ?? pet?.pet_name ?? pet?.name ?? "this pet").trim();
+      const hasEarlierUnfinishedPets = this.hasEarlierQueuedUnfinishedPets(booking);
       this.openActionConfirmModal({
         action: "startPetGrooming",
         booking: {
           ...booking,
           actionPet: { ...pet },
         },
-        title: "Confirm Start Grooming",
-        message: `Are you sure you want to start grooming for ${petName}?`,
+        title: hasEarlierUnfinishedPets ? "Queue Order Warning" : "Confirm Start Grooming",
+        message: hasEarlierUnfinishedPets
+          ? "An earlier queue still has unfinished pets. Are you sure you want to start grooming this pet first?"
+          : `Are you sure you want to start grooming for ${petName}?`,
         confirmLabel: "Yes, Start",
         busyLabel: "Starting...",
         icon: "grooming",
-        variant: "primary",
+        variant: hasEarlierUnfinishedPets ? "warning" : "primary",
+      });
+    },
+
+    isPetGroomingFinished(pet) {
+      if (pet?.isGroomingFinished === true) {
+        return true;
+      }
+
+      const finishedValues = [
+        pet?.groomingFinishedAt,
+        pet?.grooming_finished_at,
+        pet?.groomingFinishedAtIso,
+        pet?.grooming_finished_at_iso,
+        pet?.groomingEndTime,
+        pet?.grooming_end_time,
+      ];
+
+      return finishedValues.some((value) => {
+        const text = String(value ?? "").trim().toLowerCase();
+        return Boolean(text && !["-", "\u2014", "none", "null", "not provided"].includes(text));
+      });
+    },
+
+    isPetGroomingStarted(pet) {
+      if (pet?.isGroomingStarted === true) {
+        return true;
+      }
+
+      const startedValues = [
+        pet?.groomingStartedAt,
+        pet?.grooming_started_at,
+        pet?.groomingStartedAtIso,
+        pet?.grooming_started_at_iso,
+        pet?.groomingStartTime,
+        pet?.grooming_start_time,
+      ];
+
+      return startedValues.some((value) => {
+        const text = String(value ?? "").trim().toLowerCase();
+        return Boolean(text && !["-", "\u2014", "none", "null", "not provided"].includes(text));
+      });
+    },
+
+    hasActiveGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) =>
+        this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
+      );
+    },
+
+    hasStartedGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) => this.isPetGroomingStarted(pet));
+    },
+
+    hasActiveGroomingPetsForBooking(bookingId) {
+      const id = String(bookingId ?? "");
+      const booking = [...this.inProgressList, ...this.queuedList].find(
+        (item) => String(item?.id ?? "") === id,
+      );
+
+      return this.hasActiveGroomingPets(booking);
+    },
+
+    hasUnfinishedQueuedPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) => !this.isPetGroomingFinished(pet));
+    },
+
+    getWaitingGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.filter((pet) =>
+        !this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
+      );
+    },
+
+    hasEarlierQueuedUnfinishedPets(booking) {
+      const selectedId = String(booking?.id ?? "");
+      const selectedIndex = this.queuedList.findIndex(
+        (queuedBooking) => String(queuedBooking?.id ?? "") === selectedId,
+      );
+
+      if (selectedIndex > 0) {
+        return this.queuedList
+          .slice(0, selectedIndex)
+          .some((queuedBooking) => this.hasUnfinishedQueuedPets(queuedBooking));
+      }
+
+      const selectedQueueNumber = Number(booking?.queueNumber ?? 0);
+      if (!Number.isFinite(selectedQueueNumber) || selectedQueueNumber <= 0) {
+        return false;
+      }
+
+      return this.queuedList.some((queuedBooking) => {
+        const queueNumber = Number(queuedBooking?.queueNumber ?? 0);
+        return (
+          Number.isFinite(queueNumber) &&
+          queueNumber > 0 &&
+          queueNumber < selectedQueueNumber &&
+          this.hasUnfinishedQueuedPets(queuedBooking)
+        );
       });
     },
 
@@ -1037,6 +1160,7 @@ function adminDashboard() {
         icon,
         variant,
         busy: false,
+        error: "",
       };
     },
 
@@ -1056,6 +1180,7 @@ function adminDashboard() {
         icon: "checkIn",
         variant: "primary",
         busy: false,
+        error: "",
       };
     },
 
@@ -1066,6 +1191,7 @@ function adminDashboard() {
       }
 
       this.actionConfirmModal.busy = true;
+      this.actionConfirmModal.error = "";
 
       try {
         if (action === "checkIn") {
@@ -1085,8 +1211,11 @@ function adminDashboard() {
         } else if (action === "revertInProgress") {
           this.revertInProgressBookingFrontendOnly(booking);
         }
-      } finally {
         this.closeActionConfirmModal(true);
+      } catch (error) {
+        this.actionConfirmModal.error = error.message || "Action failed. Please try again.";
+      } finally {
+        this.actionConfirmModal.busy = false;
       }
     },
 
@@ -1255,6 +1384,10 @@ function adminDashboard() {
       };
 
       try {
+        if (["startGrooming", "startPetGrooming"].includes(actionName)) {
+          this.groomerCapacityError = "";
+        }
+
         this.dispatchDashboardEvent("admin-dashboard:action-start", {
           action: actionName,
           booking: this.cloneBooking(booking),
@@ -1297,12 +1430,17 @@ function adminDashboard() {
         });
       } catch (error) {
         console.error(`Admin dashboard ${actionName} failed:`, error);
+        if (["startGrooming", "startPetGrooming"].includes(actionName)) {
+          this.groomerCapacityError = error.message;
+          await this.loadAdminBookings();
+        }
         this.dispatchDashboardEvent("admin-dashboard:action-error", {
           action: actionName,
           booking: this.cloneBooking(booking),
           error: error.message,
           state: this.getState(),
         });
+        throw error;
       } finally {
         const nextPendingActions = { ...this.pendingActions };
         delete nextPendingActions[actionKey];
@@ -1423,6 +1561,14 @@ function adminDashboard() {
         this.maxCapacity = nextPayload.maxCapacity;
       }
 
+      if ("activeGroomers" in nextPayload) {
+        this.activeGroomers = nextPayload.activeGroomers;
+      }
+
+      if ("activeGroomingPets" in nextPayload) {
+        this.activeGroomingPets = nextPayload.activeGroomingPets;
+      }
+
       if ("notificationCount" in nextPayload) {
         this.notificationCount = nextPayload.notificationCount;
       }
@@ -1470,6 +1616,7 @@ function adminDashboard() {
 
       const summary = payload.summary || payload.metrics || {};
       const capacity = payload.capacity || {};
+      const groomerCapacity = payload.groomerCapacity || payload.groomer_capacity || {};
       const notifications = payload.notifications || {};
 
       const nextPayload = {};
@@ -1552,6 +1699,26 @@ function adminDashboard() {
         nextPayload.maxCapacity = this.toNumber(
           payload.maxCapacity ?? capacity.max,
           this.maxCapacity,
+        );
+      }
+
+      if (
+        this.hasValue(payload.activeGroomers) ||
+        this.hasValue(groomerCapacity.groomers_on_duty)
+      ) {
+        nextPayload.activeGroomers = this.toNumber(
+          payload.activeGroomers ?? groomerCapacity.groomers_on_duty,
+          this.activeGroomers,
+        );
+      }
+
+      if (
+        this.hasValue(payload.activeGroomingPets) ||
+        this.hasValue(groomerCapacity.active_pets)
+      ) {
+        nextPayload.activeGroomingPets = this.toNumber(
+          payload.activeGroomingPets ?? groomerCapacity.active_pets,
+          this.activeGroomingPets,
         );
       }
 
@@ -1648,7 +1815,50 @@ function adminDashboard() {
         );
       }
 
+      this.promoteStartedQueuedBookings(nextPayload);
+
       return nextPayload;
+    },
+
+    promoteStartedQueuedBookings(nextPayload) {
+      if (!Array.isArray(nextPayload.queuedList)) {
+        return;
+      }
+
+      const queuedBookings = [];
+      const promotedBookings = [];
+
+      for (const booking of nextPayload.queuedList) {
+        if (this.hasStartedGroomingPets(booking)) {
+          promotedBookings.push(
+            this.normalizeBooking(
+              {
+                ...booking,
+                status: "in-progress",
+              },
+              "in-progress",
+            ),
+          );
+        } else {
+          queuedBookings.push(booking);
+        }
+      }
+
+      if (promotedBookings.length === 0) {
+        return;
+      }
+
+      const existingInProgressIds = new Set(
+        (nextPayload.inProgressList || []).map((booking) => String(booking?.id ?? "")),
+      );
+
+      nextPayload.queuedList = queuedBookings;
+      nextPayload.inProgressList = [
+        ...(nextPayload.inProgressList || []),
+        ...promotedBookings.filter(
+          (booking) => !existingInProgressIds.has(String(booking?.id ?? "")),
+        ),
+      ].sort((left, right) => this.compareBookings(left, right));
     },
 
     // Normalizes a booking list and keeps the rendered order stable.
@@ -1780,7 +1990,7 @@ function adminDashboard() {
       );
       for (const booking of sortedInProgress) {
         for (const pet of booking.pets ?? []) {
-          if (!pet.isGroomingStarted || pet.isGroomingFinished) continue;
+          if (!this.isPetGroomingStarted(pet) || this.isPetGroomingFinished(pet)) continue;
           const duration = getPetDuration(booking, pet);
           const startIso = pet.groomingStartedAtIso;
           let estDone;
@@ -1800,11 +2010,15 @@ function adminDashboard() {
         }
       }
 
-      // Queued pets fill whichever groomer slot frees up next
-      const sortedQueued = [...this.queuedList].sort(
-        (a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0),
-      );
-      for (const booking of sortedQueued) {
+      // Waiting pets, including queued siblings in In Progress, fill the next slots.
+      const sortedWaiting = [...this.inProgressList, ...this.queuedList]
+        .map((booking) => ({
+          ...booking,
+          pets: this.getWaitingGroomingPets(booking),
+        }))
+        .filter((booking) => booking.pets.length > 0)
+        .sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
+      for (const booking of sortedWaiting) {
         for (const pet of booking.pets ?? []) {
           const duration = getPetDuration(booking, pet);
           const i = earliestSlotIdx();
@@ -1827,8 +2041,8 @@ function adminDashboard() {
       const etaMap = this.petETAs;
       const vals = Object.values(etaMap);
       const now = Date.now();
-      const petsWaiting = this.queuedList.reduce(
-        (n, b) => n + (b.pets?.length || 0),
+      const petsWaiting = [...this.inProgressList, ...this.queuedList].reduce(
+        (n, b) => n + this.getWaitingGroomingPets(b).length,
         0,
       );
 
@@ -1856,6 +2070,10 @@ function adminDashboard() {
           : null;
 
       return { petsWaiting, avgWaitLabel, lastDoneLabel };
+    },
+
+    get isGroomerCapacityFull() {
+      return this.activeGroomingPets >= this.activeGroomers;
     },
 
     // Returns "~3:45 PM" for the last unfinished pet in a booking, or null.
@@ -1904,11 +2122,24 @@ function adminDashboard() {
       return `Est. done ~${t}`;
     },
 
-    setActiveGroomers(n) {
-      this.activeGroomers = Math.min(5, Math.max(1, n));
+    async setActiveGroomers(n) {
+      const nextValue = Math.min(5, Math.max(1, Number(n) || 1));
+      if (this.groomerCapacityBusy || nextValue === this.activeGroomers) {
+        return;
+      }
+
+      this.groomerCapacityBusy = true;
+      this.groomerCapacityError = "";
+
       try {
-        localStorage.setItem("activeGroomers", String(this.activeGroomers));
-      } catch (_) {}
+        const response = await API.adminUpdateGroomersOnDuty(nextValue);
+        this.activeGroomers = Number(response?.groomers_on_duty) || nextValue;
+        await this.loadAdminBookings();
+      } catch (error) {
+        this.groomerCapacityError = error.message || "Unable to update groomers on duty.";
+      } finally {
+        this.groomerCapacityBusy = false;
+      }
     },
     // ── END QUEUE ETA ENGINE ─────────────────────────────────────────────────
 
@@ -2242,6 +2473,8 @@ function adminDashboard() {
         noShowWeekRate: this.noShowWeekRate,
         currentCapacity: this.currentCapacity,
         maxCapacity: this.maxCapacity,
+        activeGroomers: this.activeGroomers,
+        activeGroomingPets: this.activeGroomingPets,
         notificationCount: this.notificationCount,
         recentActivity: [...this.recentActivity],
         incomingList: [...this.incomingList],
@@ -2467,10 +2700,7 @@ function adminDashboard() {
           speciesRank(left.pet) - speciesRank(right.pet) ||
           left.originalIndex - right.originalIndex,
         )
-        .map(({ pet }, displayIndex) => ({
-          ...pet,
-          petQueueNumber: displayIndex + 1,
-        }));
+        .map(({ pet }) => pet);
     },
 
     // In Progress mirrors the Queued card and retains finished pets as disabled
@@ -2479,9 +2709,11 @@ function adminDashboard() {
       return this.getQueuedPets(booking);
     },
 
+    shouldShowOwnerReschedule(booking) {
+      return Boolean(booking?.paid);
+    },
+
     formatPetQueueNumber(pet, petIndex = 0) {
-      // Display-only numbering is scoped to one owner booking. See the backend
-      // formatter comment for the optional persistence migration guidance.
       const queueNumber = Number(pet?.petQueueNumber ?? petIndex + 1);
       return `#P${Number.isFinite(queueNumber) && queueNumber > 0 ? queueNumber : petIndex + 1}`;
     },
@@ -2938,19 +3170,26 @@ function adminDashboard() {
       );
     },
 
+    get paymentMaximumAmount() {
+      return maximumPaymentAmount(this.paymentTotalDue);
+    },
+
     get paymentChange() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
       return paid - this.paymentTotalDue;
     },
 
     get canSubmitPayment() {
+      const paid = parseFloat(this.paymentModal.amountPaid) || 0;
+
       return (
         !this.paymentModal.busy &&
         this.paymentLineCount > 0 &&
         this.paymentTotalDue > 0 &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        this.paymentChange >= 0
+        this.paymentChange >= 0 &&
+        paid <= this.paymentMaximumAmount
       );
     },
 
@@ -2960,7 +3199,7 @@ function adminDashboard() {
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: !isEarlyPayment }),
+        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: true }),
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -3135,7 +3374,7 @@ function adminDashboard() {
           : getPaymentServicePricing(null, pet.sizeKey);
       const pricingType = pricing.pricingType || "custom";
       const lockFixedPrices = Boolean(paymentOptions.lockFixedPrices);
-      const isFixedPriceLocked = lockFixedPrices && pricingType === "fixed";
+      const isFixedPriceLocked = shouldLockPaymentPrice(pricing, lockFixedPrices);
 
       return {
         id: rawService?.id ?? fallbackId,
@@ -3186,7 +3425,7 @@ function adminDashboard() {
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
       line.pricingType = pricingType;
-      line.isFixedPriceLocked = Boolean(line.lockFixedPrices && pricingType === "fixed");
+      line.isFixedPriceLocked = shouldLockPaymentPrice(pricing, line.lockFixedPrices);
 
       if (line.isFixedPriceLocked) {
         line.amount = Number(pricing.minAmount).toFixed(2);
@@ -3246,6 +3485,25 @@ function adminDashboard() {
 
       if (amount < minimum) {
         line.amount = minimum.toFixed(2);
+      }
+    },
+
+    enforcePaymentAmountLimit(event = null) {
+      const currentValue = event?.target?.value ?? this.paymentModal.amountPaid;
+      const amount = parseFloat(currentValue);
+      const maximum = this.paymentMaximumAmount;
+
+      if (Number.isFinite(amount) && maximum > 0 && amount > maximum) {
+        const maximumValue = String(maximum);
+        this.paymentModal.amountPaid = maximumValue;
+
+        if (event?.target) {
+          event.target.value = maximumValue;
+        }
+      }
+
+      if (event) {
+        this.clearPaymentError();
       }
     },
 
@@ -3365,6 +3623,10 @@ function adminDashboard() {
       }
       if (!ap || ap < fp) {
         this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
+        return;
+      }
+      if (ap > this.paymentMaximumAmount) {
+        this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
         return;
       }
 
