@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Management | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/custom.css?v=admin-cloak-20260709" />
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
-    <div x-data="adminSidebar()" class="min-h-screen flex bg-[#f5f8fb]">
+    <div x-data="adminSidebar()" x-cloak class="min-h-screen flex bg-[#f5f8fb]">
       <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" @click="sidebarOpen = false"></div>
 
       <aside

@@ -7,6 +7,10 @@ Route::get('/', function () {
     return response()->file(base_path('index.html'));
 });
 
+Route::get('/index.html', function () {
+    return response()->file(base_path('index.html'));
+});
+
 Route::get('/{directory}/{path}', function (string $directory, string $path) {
     $root = realpath(base_path($directory));
     $file = realpath(base_path($directory . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path)));

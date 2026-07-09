@@ -1,6 +1,10 @@
 /* ----- Custom CSS Notes ----- */
 /* Use this file for custom animations, custom scrollbar styles, and one-off styles that Tailwind cannot easily cover. */
 
+[x-cloak] {
+  display: none !important;
+}
+
 /* ----- Admin Activity Status Indicators ----- */
 .admin-activity-dot-pickup {
   background-color: #0e7490;
