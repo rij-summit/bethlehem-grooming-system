@@ -97,36 +97,24 @@ class CustomerNotificationController extends Controller
             ->values()
             ->all();
 
-        if ($notification->type !== 'grooming_started') {
+        if (!in_array($notification->type, ['grooming_started', 'grooming_finished'], true)) {
             return $petNames;
         }
 
-        $startedPetName = $this->groomingStartedPetNameFromMessage($notification->message);
-
-        if (!$startedPetName) {
-            return $petNames;
-        }
-
-        $matchedPetNames = array_values(array_filter(
-            $petNames,
-            fn($petName) => strcasecmp(trim((string) $petName), $startedPetName) === 0,
-        ));
+        $matchedPetNames = $this->petNamesMentionedInMessage($notification->message, $petNames);
 
         return $matchedPetNames ?: $petNames;
     }
 
     private function formatCustomerNotificationMessage(CustomerNotification $notification, array $petNames): string
     {
-        if ($notification->type === 'grooming_started') {
-            $message = $this->formatNotificationMessage($notification->message);
-
-            if (trim($message) !== '') {
-                return $message;
-            }
-        }
-
         if (empty($petNames)) {
-            return $this->formatNotificationMessage($notification->message);
+            return match ($notification->type) {
+                'grooming_started' => "Great news! Your pet has Started Grooming. We'll let you know as soon as they're ready for pickup!",
+                'grooming_finished' => "Your pet is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                'ready_for_pickup' => 'Your pet is now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
+                default => $this->formatNotificationMessage($notification->message),
+            };
         }
 
         $subject = $this->formatNameList($petNames);
@@ -134,8 +122,9 @@ class CustomerNotificationController extends Controller
         $timeLabel = $notification->booking?->timeWindow?->window_label;
 
         return match ($notification->type) {
-            'grooming_started' => "Great news! Grooming has started for {$subject}. We'll let you know as soon as they're ready for pickup!",
-            'ready_for_pickup' => "{$subject} " . ($isPlural ? 'are' : 'is') . " all done and looking fabulous! Please come to the clinic to pick them up.",
+            'grooming_started' => "Great news! {$subject} " . ($isPlural ? 'have' : 'has') . " Started Grooming. We'll let you know as soon as they're ready for pickup!",
+            'grooming_finished' => "{$subject} " . ($isPlural ? 'are' : 'is') . " Finished with grooming. We'll keep you updated on the rest of the appointment.",
+            'ready_for_pickup' => 'Your ' . ($isPlural ? 'pets are' : 'pet is') . ' now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
             'pickup_reminder'  => "Reminder: {$subject} " . ($isPlural ? 'are' : 'is') . " still waiting to be picked up at the clinic. Please come at your earliest convenience!",
             'picked_up'        => "{$subject} " . ($isPlural ? 'have' : 'has') . " been released. Thank you for visiting Bethlehem Animal Clinic!",
             'reminder_24h'     => $timeLabel
@@ -148,15 +137,19 @@ class CustomerNotificationController extends Controller
         };
     }
 
-    private function groomingStartedPetNameFromMessage(?string $message): ?string
+    private function petNamesMentionedInMessage(?string $message, array $petNames): array
     {
-        if (!preg_match('/\bGrooming has started for\s+(.+?)\.\s*/i', (string) $message, $matches)) {
-            return null;
-        }
+        $text = (string) $message;
 
-        $petName = trim($matches[1]);
+        return array_values(array_filter($petNames, function ($petName) use ($text) {
+            $name = trim((string) $petName);
 
-        return $petName === '' ? null : $petName;
+            if ($name === '') {
+                return false;
+            }
+
+            return preg_match('/(^|[^\pL\pN])' . preg_quote($name, '/') . '($|[^\pL\pN])/iu', $text) === 1;
+        }));
     }
 
     private function formatNotificationMessage(?string $message): string

@@ -725,6 +725,11 @@ body.customer-detail-modal-open {
   overflow-y: auto;
 }
 
+.client-notification-emphasis {
+  color: #1e293b;
+  font-weight: 800;
+}
+
 /* ----- Payment Modal And Receipt Layout ----- */
 .payment-modal-card {
   max-width: min(48rem, calc(100vw - 2rem));
@@ -2402,6 +2407,7 @@ body.customer-detail-modal-open {
   cursor: not-allowed;
 }
 
+.admin-queued-pet-start.is-finished,
 .admin-in-progress-pet-finish.is-finished {
   border-color: #cbd5e1;
   background: #f1f5f9;

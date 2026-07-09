@@ -468,6 +468,16 @@ function getPaymentServicePricing(serviceDefinition, petSize) {
   };
 }
 
+function shouldLockPaymentPrice(pricing, lockFixedPrices) {
+  if (!lockFixedPrices) {
+    return false;
+  }
+
+  const pricingType = pricing?.pricingType || "custom";
+
+  return pricingType !== "plus" && pricingType !== "custom";
+}
+
 /*
  * Backend integration contract:
  * - Optional preload config: window.ADMIN_DASHBOARD_CONFIG = { bootstrap, endpoints, handlers, ... }
@@ -542,6 +552,7 @@ function adminDashboard() {
       icon: "checkIn",
       variant: "primary",
       busy: false,
+      error: "",
     },
     paymentModal: {
       open: false,
@@ -703,7 +714,7 @@ function adminDashboard() {
               );
             } else if (
               ["checked_in", "queued"].includes(this.normalizeStatus(response?.booking_status)) &&
-              !this.inProgressList.some((item) => String(item.id) === String(booking.id))
+              !this.hasActiveGroomingPetsForBooking(booking.id)
             ) {
               // No active pet remains, but one or more siblings are still waiting.
               this.setQueuedBookingExpanded(booking.id, true);
@@ -968,6 +979,42 @@ function adminDashboard() {
       });
     },
 
+    isPetGroomingStarted(pet) {
+      if (pet?.isGroomingStarted === true) {
+        return true;
+      }
+
+      const startedValues = [
+        pet?.groomingStartedAt,
+        pet?.grooming_started_at,
+        pet?.groomingStartedAtIso,
+        pet?.grooming_started_at_iso,
+        pet?.groomingStartTime,
+        pet?.grooming_start_time,
+      ];
+
+      return startedValues.some((value) => {
+        const text = String(value ?? "").trim().toLowerCase();
+        return Boolean(text && !["-", "\u2014", "none", "null", "not provided"].includes(text));
+      });
+    },
+
+    hasActiveGroomingPets(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      return pets.some((pet) =>
+        this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
+      );
+    },
+
+    hasActiveGroomingPetsForBooking(bookingId) {
+      const id = String(bookingId ?? "");
+      const booking = [...this.inProgressList, ...this.queuedList].find(
+        (item) => String(item?.id ?? "") === id,
+      );
+
+      return this.hasActiveGroomingPets(booking);
+    },
+
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
       return pets.some((pet) => !this.isPetGroomingFinished(pet));
@@ -1112,6 +1159,7 @@ function adminDashboard() {
         icon,
         variant,
         busy: false,
+        error: "",
       };
     },
 
@@ -1131,6 +1179,7 @@ function adminDashboard() {
         icon: "checkIn",
         variant: "primary",
         busy: false,
+        error: "",
       };
     },
 
@@ -1141,6 +1190,7 @@ function adminDashboard() {
       }
 
       this.actionConfirmModal.busy = true;
+      this.actionConfirmModal.error = "";
 
       try {
         if (action === "checkIn") {
@@ -1160,8 +1210,11 @@ function adminDashboard() {
         } else if (action === "revertInProgress") {
           this.revertInProgressBookingFrontendOnly(booking);
         }
-      } finally {
         this.closeActionConfirmModal(true);
+      } catch (error) {
+        this.actionConfirmModal.error = error.message || "Action failed. Please try again.";
+      } finally {
+        this.actionConfirmModal.busy = false;
       }
     },
 
@@ -1386,6 +1439,7 @@ function adminDashboard() {
           error: error.message,
           state: this.getState(),
         });
+        throw error;
       } finally {
         const nextPendingActions = { ...this.pendingActions };
         delete nextPendingActions[actionKey];
@@ -3105,7 +3159,7 @@ function adminDashboard() {
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: !isEarlyPayment }),
+        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: true }),
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -3280,7 +3334,7 @@ function adminDashboard() {
           : getPaymentServicePricing(null, pet.sizeKey);
       const pricingType = pricing.pricingType || "custom";
       const lockFixedPrices = Boolean(paymentOptions.lockFixedPrices);
-      const isFixedPriceLocked = lockFixedPrices && pricingType === "fixed";
+      const isFixedPriceLocked = shouldLockPaymentPrice(pricing, lockFixedPrices);
 
       return {
         id: rawService?.id ?? fallbackId,
@@ -3331,7 +3385,7 @@ function adminDashboard() {
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
       line.pricingType = pricingType;
-      line.isFixedPriceLocked = Boolean(line.lockFixedPrices && pricingType === "fixed");
+      line.isFixedPriceLocked = shouldLockPaymentPrice(pricing, line.lockFixedPrices);
 
       if (line.isFixedPriceLocked) {
         line.amount = Number(pricing.minAmount).toFixed(2);

@@ -225,7 +225,7 @@
       const pickup = data.pickup_alert;
       if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
         await window._refreshAppointments?.();
-        pickupMessage.textContent = await buildPickupMessage(pickup);
+        pickupMessage.innerHTML = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
         if (window.lucide) lucide.createIcons();
@@ -241,7 +241,7 @@
 
     list.innerHTML = notifications.map((n) => {
       const icon = notifIcon(n.type);
-      const message = formatNotificationMessage(n.display_message || n.message);
+      const message = formatNotificationMessage(n);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
@@ -275,6 +275,7 @@
 
   function notifIcon(type) {
     const icons = {
+      grooming_finished:"Done",
       reminder_24h:    "📅",
       reminder_3h:     "⏰",
       grooming_started:"✂️",
@@ -285,8 +286,72 @@
     return icons[type] || "🔔";
   }
 
-  function formatNotificationMessage(message) {
-    return escapeHtml(stripDecorativePaws(message));
+  function formatNotificationMessage(notification) {
+    if (!notification || typeof notification !== "object") {
+      return boldImportantTerms(escapeHtml(stripDecorativePaws(notification)));
+    }
+
+    if (notification.type === "grooming_started") {
+      return formatPetStatusMessage(notification, "Started Grooming");
+    }
+
+    if (notification.type === "grooming_finished") {
+      return formatPetStatusMessage(notification, "Finished");
+    }
+
+    if (notification.type === "ready_for_pickup") {
+      return formatReadyForPickupMessage(notification);
+    }
+
+    return boldImportantTerms(
+      escapeHtml(stripDecorativePaws(notification.display_message || notification.message))
+    );
+  }
+
+  function formatPetStatusMessage(notification, statusLabel) {
+    const petNames = notificationPetNames(notification);
+    const message = escapeHtml(stripDecorativePaws(notification.display_message || notification.message));
+
+    return boldImportantTerms(boldPetNames(message, petNames));
+  }
+
+  function formatReadyForPickupMessage(notification) {
+    const petCount = notificationPetNames(notification).length;
+    const subject = petCount > 1 ? "pets are" : "pet is";
+
+    return `Your ${subject} now <strong class="client-notification-emphasis">Ready for Pickup</strong> and looking fabulous! Please come to the clinic to pick them up.`;
+  }
+
+  function notificationPetNames(notification) {
+    return Array.isArray(notification?.pet_names)
+      ? notification.pet_names.map((name) => String(name).trim()).filter(Boolean)
+      : [];
+  }
+
+  function boldPetNames(escapedMessage, petNames) {
+    return petNames.reduce((message, petName) => {
+      const escapedName = escapeHtml(String(petName).trim());
+
+      if (!escapedName) return message;
+
+      const pattern = new RegExp(
+        `(^|[^\\p{L}\\p{N}])(${escapeRegExp(escapedName)})(?=$|[^\\p{L}\\p{N}])`,
+        "gu"
+      );
+
+      return message.replace(pattern, '$1<strong class="client-notification-emphasis">$2</strong>');
+    }, String(escapedMessage || ""));
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function boldImportantTerms(escapedMessage) {
+    return String(escapedMessage || "")
+      .replace(/\bStarted Grooming\b/g, '<strong class="client-notification-emphasis">Started Grooming</strong>')
+      .replace(/\bReady for Pickup\b/g, '<strong class="client-notification-emphasis">Ready for Pickup</strong>')
+      .replace(/\bFinished\b/g, '<strong class="client-notification-emphasis">Finished</strong>');
   }
 
   function stripDecorativePaws(message) {
@@ -320,9 +385,7 @@
       : [];
 
     if (providedPetNames.length > 0) {
-      const subject = formatNameList(providedPetNames);
-      const verb = providedPetNames.length === 1 ? "is" : "are";
-      return `${subject} ${verb} all done and looking fabulous! Please come to the clinic to pick them up.`;
+      return formatReadyForPickupMessage({ pet_names: providedPetNames });
     }
 
     try {
@@ -330,13 +393,11 @@
       const petNames = getBookingPetNames(booking);
 
       if (petNames.length > 0) {
-        const subject = formatNameList(petNames);
-        const verb = petNames.length === 1 ? "is" : "are";
-        return `${subject} ${verb} all done and looking fabulous! Please come to the clinic to pick them up.`;
+        return formatReadyForPickupMessage({ pet_names: petNames });
       }
     } catch { /* use API-provided message below */ }
 
-    return stripDecorativePaws(pickup.display_message || pickup.message) || "Please come to the clinic to pick them up now!";
+    return formatReadyForPickupMessage({ pet_names: [] });
   }
 
   async function findPickupBooking(pickup) {
@@ -387,12 +448,6 @@
     names.push(booking.pet_name ?? booking.petName ?? "");
 
     return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
-  }
-
-  function formatNameList(names) {
-    if (names.length <= 1) return names[0] || "Your pet";
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
   }
 
   // Initial load + poll every 30 seconds

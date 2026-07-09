@@ -321,11 +321,12 @@ class AdminBookingController extends Controller
         // Notify the customer that grooming has started
         if ($booking->user) {
             $petName = $this->petNames($booking);
+            $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'grooming_started',
-                'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
+                'message'    => "Great news! {$petName} {$petVerb} Started Grooming. We'll let you know as soon as they're ready for pickup!",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -397,7 +398,7 @@ class AdminBookingController extends Controller
                     'user_id'    => $booking->user->user_id,
                     'booking_id' => $booking->booking_id,
                     'type'       => 'grooming_started',
-                    'message'    => "Great news! Grooming has started for {$petName}. We'll let you know as soon as they're ready for pickup!",
+                    'message'    => "Great news! {$petName} has Started Grooming. We'll let you know as soon as they're ready for pickup!",
                     'is_read'    => false,
                     'created_at' => $startedAt,
                 ]);
@@ -448,8 +449,7 @@ class AdminBookingController extends Controller
 
         $booking->load('bookingPets.pet', 'walkin');
         $ownerName = $this->ownerName($booking);
-        $petName   = $this->petNames($booking);
-        $petVerb   = $this->hasMultiplePets($booking) ? 'are' : 'is';
+        $readySubject = $this->hasMultiplePets($booking) ? 'pets are' : 'pet is';
 
         // Always notify the customer that their pet is ready for pickup
         if ($booking->user) {
@@ -457,7 +457,7 @@ class AdminBookingController extends Controller
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'ready_for_pickup',
-                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
+                'message'    => "Your {$readySubject} now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.",
                 'is_read'    => false,
                 'created_at' => now(),
             ]);
@@ -541,6 +541,19 @@ class AdminBookingController extends Controller
 
             if ($remainingPets === 0) {
                 $completion = $this->completeGroomingBooking($booking, $finishedAt);
+            } else {
+                $booking->loadMissing('user');
+
+                if ($booking->user) {
+                    CustomerNotification::create([
+                        'user_id'    => $booking->user->user_id,
+                        'booking_id' => $booking->booking_id,
+                        'type'       => 'grooming_finished',
+                        'message'    => "{$petName} is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                        'is_read'    => false,
+                        'created_at' => $finishedAt,
+                    ]);
+                }
             }
 
             return [
@@ -585,15 +598,14 @@ class AdminBookingController extends Controller
     {
         $booking->loadMissing(['user', 'bookingPets.pet']);
         $ownerName = trim(($booking->user?->first_name ?? '') . ' ' . ($booking->user?->last_name ?? ''));
-        $petName = $this->petNames($booking);
-        $petVerb = $this->hasMultiplePets($booking) ? 'are' : 'is';
+        $readySubject = $this->hasMultiplePets($booking) ? 'pets are' : 'pet is';
 
         if ($booking->user) {
             CustomerNotification::create([
                 'user_id'    => $booking->user->user_id,
                 'booking_id' => $booking->booking_id,
                 'type'       => 'ready_for_pickup',
-                'message'    => "{$petName} {$petVerb} all done and looking fabulous! Please come to the clinic to pick them up.",
+                'message'    => "Your {$readySubject} now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.",
                 'is_read'    => false,
                 'created_at' => $finishedAt,
             ]);

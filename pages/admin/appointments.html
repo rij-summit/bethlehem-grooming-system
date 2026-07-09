@@ -1083,17 +1083,17 @@
                           <div class="admin-queued-pet-actions">
                             <div
                               class="admin-queued-pet-start-wrap"
-                              :class="isGroomerCapacityFull && !pet.isGroomingStarted ? 'is-capacity-disabled' : ''"
-                              :title="isGroomerCapacityFull && !pet.isGroomingStarted ? 'Groomer currently busy' : ''"
+                              :class="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'is-capacity-disabled' : ''"
+                              :title="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'Groomer currently busy' : ''"
                             >
                               <button
                                 type="button"
                                 @click="confirmStartGroomingPet(booking, pet)"
-                                :disabled="pet.isGroomingStarted || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                :disabled="isPetGroomingStarted(pet) || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
                                 class="admin-queued-pet-start"
-                                :class="pet.isGroomingStarted || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
+                                :class="isPetGroomingFinished(pet) ? 'is-finished' : (isPetGroomingStarted(pet) || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
                               >
-                                <span x-text="pet.isGroomingStarted ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
+                                <span x-text="isPetGroomingFinished(pet) ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isPetGroomingStarted(pet) ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'))"></span>
                               </button>
                             </div>
                             <button
@@ -1729,7 +1729,9 @@
                                   step="0.01"
                                   :placeholder="line.placeholder"
                                   :readonly="line.isFixedPriceLocked"
+                                  :disabled="line.isFixedPriceLocked"
                                   :aria-readonly="line.isFixedPriceLocked ? 'true' : 'false'"
+                                  :class="line.isFixedPriceLocked ? 'cursor-not-allowed bg-slate-50 text-slate-500' : ''"
                                   @input="clearPaymentError()"
                                   @blur="enforcePaymentMinimum(pet, line)"
                                 />
@@ -2062,6 +2064,11 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <p
+                  x-show="actionConfirmModal.error"
+                  class="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
+                  x-text="actionConfirmModal.error"
+                ></p>
               </div>
               <div class="admin-action-confirm-footer flex gap-3 px-6">
                 <button
@@ -2254,6 +2261,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=reschedule-ui-20260704"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=payment-finish-20260709"></script>
   </body>
 </html>

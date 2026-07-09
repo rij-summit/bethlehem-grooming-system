@@ -431,10 +431,154 @@ class AdminDashboardSummaryTest extends TestCase
         $payload = (new CustomerNotificationController)->index($request)->getData(true);
         $notification = $payload['notifications'][0];
 
-        $this->assertStringContainsString('Max', $notification['display_message']);
+        $this->assertSame("Great news! Max has Started Grooming. We'll let you know as soon as they're ready for pickup!", $notification['display_message']);
         $this->assertStringNotContainsString('Bella', $notification['display_message']);
         $this->assertStringNotContainsString('Luna', $notification['display_message']);
         $this->assertSame(['Max'], $notification['pet_names']);
+    }
+
+    public function test_finished_pet_customer_notification_mentions_only_that_pet_while_siblings_remain(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 1,
+            'first_name' => 'Jamie',
+            'last_name' => 'Santos',
+            'email' => 'jamie@example.test',
+            'role' => 'customer',
+            'password_hash' => 'secret',
+        ]);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'user_id' => 1,
+            'booking_reference' => 'PET-FINISH-NOTIF-3',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 3,
+            'status' => 'in_progress',
+            'queue_number' => 1,
+            'grooming_started_at' => '2026-06-24 10:00:00',
+        ]);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Max', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Bella', 'species' => 'dog'],
+            ['pet_id' => 3, 'pet_name' => 'Luna', 'species' => 'cat'],
+        ]);
+
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 1,
+                'booking_id' => 1,
+                'pet_id' => 1,
+                'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_end_time' => null,
+            ],
+            [
+                'booking_pet_id' => 2,
+                'booking_id' => 1,
+                'pet_id' => 2,
+                'grooming_start_time' => '2026-06-24 10:05:00',
+                'grooming_end_time' => null,
+            ],
+            [
+                'booking_pet_id' => 3,
+                'booking_id' => 1,
+                'pet_id' => 3,
+                'grooming_start_time' => '2026-06-24 10:10:00',
+                'grooming_end_time' => null,
+            ],
+        ]);
+
+        $finishResponse = (new AdminBookingController)->markPetDone(1, 1);
+
+        $this->assertSame(200, $finishResponse->getStatusCode());
+        $this->assertSame('grooming_finished', DB::table('customer_notifications')->value('type'));
+
+        $request = Request::create('/api/customer/notifications', 'GET');
+        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+
+        $payload = (new CustomerNotificationController)->index($request)->getData(true);
+        $notification = $payload['notifications'][0];
+
+        $this->assertSame("Max is Finished with grooming. We'll keep you updated on the rest of the appointment.", $notification['display_message']);
+        $this->assertStringNotContainsString('Bella', $notification['display_message']);
+        $this->assertStringNotContainsString('Luna', $notification['display_message']);
+        $this->assertSame(['Max'], $notification['pet_names']);
+        $this->assertNull($payload['pickup_alert']);
+    }
+
+    public function test_ready_for_pickup_notification_does_not_mention_a_single_pet_name(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 1,
+            'first_name' => 'Jamie',
+            'last_name' => 'Santos',
+            'email' => 'jamie@example.test',
+            'role' => 'customer',
+            'password_hash' => 'secret',
+        ]);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'user_id' => 1,
+            'booking_reference' => 'PET-FINAL-FINISH-NOTIF-3',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 3,
+            'status' => 'in_progress',
+            'queue_number' => 1,
+            'grooming_started_at' => '2026-06-24 10:00:00',
+        ]);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Max', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Bella', 'species' => 'dog'],
+            ['pet_id' => 3, 'pet_name' => 'Luna', 'species' => 'cat'],
+        ]);
+
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 1,
+                'booking_id' => 1,
+                'pet_id' => 1,
+                'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_end_time' => null,
+            ],
+            [
+                'booking_pet_id' => 2,
+                'booking_id' => 1,
+                'pet_id' => 2,
+                'grooming_start_time' => '2026-06-24 10:05:00',
+                'grooming_end_time' => '2026-06-24 11:00:00',
+            ],
+            [
+                'booking_pet_id' => 3,
+                'booking_id' => 1,
+                'pet_id' => 3,
+                'grooming_start_time' => '2026-06-24 10:10:00',
+                'grooming_end_time' => '2026-06-24 11:05:00',
+            ],
+        ]);
+
+        $finishResponse = (new AdminBookingController)->markPetDone(1, 1);
+
+        $this->assertSame(200, $finishResponse->getStatusCode());
+        $this->assertSame('ready_for_pickup', DB::table('customer_notifications')->value('type'));
+
+        $request = Request::create('/api/customer/notifications', 'GET');
+        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+
+        $payload = (new CustomerNotificationController)->index($request)->getData(true);
+        $notification = $payload['notifications'][0];
+
+        $expectedPickupMessage = 'Your pets are now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.';
+
+        $this->assertSame($expectedPickupMessage, $notification['display_message']);
+        $this->assertSame($expectedPickupMessage, $payload['pickup_alert']['display_message']);
+        $this->assertStringNotContainsString('Max', $notification['display_message']);
+        $this->assertStringNotContainsString('Bella', $notification['display_message']);
+        $this->assertStringNotContainsString('Luna', $notification['display_message']);
+        $this->assertSame(['Max', 'Bella', 'Luna'], $notification['pet_names']);
+        $this->assertSame(['Max', 'Bella', 'Luna'], $payload['pickup_alert']['pet_names']);
     }
 
     #[DataProvider('groomerCapacities')]
