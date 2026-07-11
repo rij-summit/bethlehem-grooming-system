@@ -184,20 +184,27 @@ function adminInventoryItems() {
         alert("Camera scanner library not loaded. Try refreshing the page.");
         return;
       }
-      this._scanTarget  = target;
+      this._scanTarget   = target;
       this.scannerActive = true;
-      this.$nextTick(() => {
-        this._scanner = new Html5Qrcode("inv-qr-reader");
-        this._scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 260, height: 120 } },
-          (decoded) => this.onScanned(decoded),
-          () => {}
+      // Double rAF: waits until the modal is fully painted (not just in the DOM)
+      // so Html5Qrcode can measure the element's real dimensions.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const cfg     = { fps: 10, qrbox: { width: 260, height: 120 } };
+        const tryStart = (constraints) => {
+          this._scanner = new Html5Qrcode("inv-qr-reader");
+          return this._scanner.start(constraints, cfg, (decoded) => this.onScanned(decoded), () => {});
+        };
+        tryStart({
+          facingMode: { ideal: "environment" },
+          advanced: [{ focusMode: "continuous" }],
+        }).catch(() =>
+          // Fallback: drop focus constraint if device doesn't support it
+          tryStart({ facingMode: "environment" })
         ).catch(() => {
           this.scannerActive = false;
-          alert("Camera not available. Please allow camera access.");
+          alert("Camera not available. Make sure the app is served on localhost or HTTPS, and that camera permission is granted.");
         });
-      });
+      }));
     },
 
     closeScanner() {

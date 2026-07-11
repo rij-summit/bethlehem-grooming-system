@@ -93,7 +93,7 @@
               <option value="miscellaneous">Miscellaneous</option>
             </select>
             <label class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
-              <input type="checkbox" x-model="showInactive" @change="load(1)" class="h-4 w-4 rounded accent-[#315b7e]" />
+              <input type="checkbox" x-model="showInactive" @change="load(1)" class="h-4 w-4 rounded" style="accent-color:#315b7e" />
               <span>Show deactivated</span>
             </label>
           </div>
@@ -150,33 +150,23 @@
                         <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
                       </td>
                       <td class="px-4 py-3">
-                        <template x-if="item.is_active">
-                          <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="stockStyle(item)" x-text="stockLabel(item)"></span>
-                        </template>
-                        <template x-if="!item.is_active">
-                          <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" style="background-color:#f1f5f9;color:#64748b">Deactivated</span>
-                        </template>
+                        <span x-show="item.is_active" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="stockStyle(item)" x-text="stockLabel(item)"></span>
+                        <span x-show="!item.is_active" style="display:none;background-color:#f1f5f9;color:#64748b" class="rounded-full px-2.5 py-0.5 text-xs font-semibold">Deactivated</span>
                       </td>
                       <td class="px-4 py-3">
                         <div class="flex items-center justify-end gap-2">
-                          <template x-if="item.is_active">
-                            <button type="button" @click="openEdit(item)" title="Edit"
-                              class="rounded-lg p-1.5 text-slate-400 hover:bg-[#eaf4fb] hover:text-[#315b7e] transition">
-                              <i data-lucide="pencil" class="h-4 w-4"></i>
-                            </button>
-                          </template>
-                          <template x-if="item.is_active">
-                            <button type="button" @click="confirmDeactivate(item)" title="Deactivate"
-                              class="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition">
-                              <i data-lucide="trash-2" class="h-4 w-4"></i>
-                            </button>
-                          </template>
-                          <template x-if="!item.is_active">
-                            <button type="button" @click="doReactivate(item)" title="Reactivate"
-                              class="rounded-lg p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600 transition">
-                              <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
-                            </button>
-                          </template>
+                          <button x-show="item.is_active" type="button" @click="openEdit(item)" title="Edit"
+                            class="rounded-lg p-1.5 text-slate-400 hover:bg-[#eaf4fb] hover:text-[#315b7e] transition">
+                            <i data-lucide="pencil" class="h-4 w-4"></i>
+                          </button>
+                          <button x-show="item.is_active" type="button" @click="confirmDeactivate(item)" title="Deactivate"
+                            class="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition">
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                          </button>
+                          <button x-show="!item.is_active" style="display:none" type="button" @click="doReactivate(item)" title="Reactivate"
+                            class="rounded-lg p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600 transition">
+                            <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -328,8 +318,8 @@
           </div>
 
           <!-- ── Camera Scanner Modal ───────────────────────────────────── -->
-          <div x-show="scannerActive" style="display:none" x-transition
-            class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4">
+          <div x-show="scannerActive" style="display:none;z-index:60;background-color:rgba(15,23,42,0.8)" x-transition
+            class="fixed inset-0 flex items-center justify-center px-4">
             <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
               <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <h4 class="font-bold text-slate-800">Scan Barcode</h4>

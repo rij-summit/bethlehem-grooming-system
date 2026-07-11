@@ -259,6 +259,7 @@ class InventoryController extends Controller
         DB::transaction(function () use ($validated, $user, &$results) {
             foreach ($validated['items'] as $entry) {
                 $item = InventoryItem::where('item_id', $entry['item_id'])
+                                     ->where('is_active', 1)
                                      ->lockForUpdate()
                                      ->firstOrFail();
 
@@ -282,7 +283,7 @@ class InventoryController extends Controller
                     'item_id'          => $item->item_id,
                     'item_name'        => $item->item_name,
                     'quantity_added'   => $entry['quantity'],
-                    'quantity_on_hand' => $item->fresh()->quantity_on_hand,
+                    'quantity_on_hand' => $item->quantity_on_hand,
                     'transaction_id'   => $tx->transaction_id,
                 ];
             }
@@ -311,6 +312,7 @@ class InventoryController extends Controller
         DB::transaction(function () use ($validated, $user, &$results) {
             foreach ($validated['items'] as $entry) {
                 $item = InventoryItem::where('item_id', $entry['item_id'])
+                                     ->where('is_active', 1)
                                      ->lockForUpdate()
                                      ->firstOrFail();
 
@@ -337,7 +339,7 @@ class InventoryController extends Controller
                     'item_name'        => $item->item_name,
                     'unit'             => $item->unit,
                     'quantity_removed' => $entry['quantity'],
-                    'quantity_on_hand' => $item->fresh()->quantity_on_hand,
+                    'quantity_on_hand' => $item->quantity_on_hand,
                     'transaction_id'   => $tx->transaction_id,
                 ];
             }

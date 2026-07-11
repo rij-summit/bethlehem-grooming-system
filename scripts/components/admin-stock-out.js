@@ -21,6 +21,10 @@ function adminStockOut() {
     error: "",
     success: "",
 
+    // ── Camera scanner ────────────────────────────────────────────────────────
+    scannerActive: false,
+    _scanner: null,
+
     async init() {
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
     },
@@ -118,6 +122,45 @@ function adminStockOut() {
 
     removePending(idx) {
       this.pending.splice(idx, 1);
+    },
+
+    // ── Camera scanner ────────────────────────────────────────────────────────
+
+    openScanner() {
+      if (typeof Html5Qrcode === "undefined") {
+        alert("Camera scanner library not loaded. Try refreshing the page.");
+        return;
+      }
+      this.scannerActive = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const cfg      = { fps: 10, qrbox: { width: 260, height: 120 } };
+        const onDecode = (decoded) => {
+          this.closeScanner();
+          this.searchQuery = decoded;
+          this.onSearchEnter();
+        };
+        const tryStart = (constraints) => {
+          this._scanner = new Html5Qrcode("stockout-qr-reader");
+          return this._scanner.start(constraints, cfg, onDecode, () => {});
+        };
+        tryStart({
+          facingMode: { ideal: "environment" },
+          advanced: [{ focusMode: "continuous" }],
+        }).catch(() =>
+          tryStart({ facingMode: "environment" })
+        ).catch(() => {
+          this.scannerActive = false;
+          alert("Camera not available. Make sure the app is served on localhost or HTTPS, and that camera permission is granted.");
+        });
+      }));
+    },
+
+    closeScanner() {
+      if (this._scanner) {
+        this._scanner.stop().catch(() => {});
+        this._scanner = null;
+      }
+      this.scannerActive = false;
     },
 
     // ── Submit ────────────────────────────────────────────────────────────────

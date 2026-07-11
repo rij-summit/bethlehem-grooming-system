@@ -2666,6 +2666,23 @@ body.customer-detail-modal-open {
   }
 }
 
+/* ----- Missing Tailwind Utilities ----- */
+.pl-9 { padding-left: 2.25rem; }
+
+/* ----- Inventory Navigation Buttons ----- */
+.inv-btn-stock-out {
+  background-color: #d97706;
+}
+.inv-btn-stock-out:hover {
+  background-color: #b45309;
+}
+
+/* ----- Inventory Undo-Create Button ----- */
+.inv-undo-btn:hover {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
 /* ----- Inventory Filters ----- */
 .inventory-filter-grid {
   display: grid;
