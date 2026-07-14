@@ -381,6 +381,11 @@ var API = (() => {
     return request("GET", "/system/clock");
   }
 
+  async function sendChatbotMessage(message) {
+    // POST /api/chatbot  (public)
+    return request("POST", "/chatbot", { message });
+  }
+
   async function getTimeslots(date) {
     // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
     return request("GET", `/timeslots?date=${date}`);
@@ -764,6 +769,7 @@ var API = (() => {
     logout,
     getMe,
     getSystemClock,
+    sendChatbotMessage,
     // Timeslots
     getTimeslots,
     // Pets

@@ -18,9 +18,11 @@ use App\Http\Controllers\AdminClinicController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\ChatbotController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/sign-in',  [AuthController::class, 'signIn']);
+Route::post('/chatbot', [ChatbotController::class, 'chat',]);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots',      [BookingController::class,   'getTimeslots']);
