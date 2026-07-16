@@ -200,6 +200,12 @@
   margin-top: 0.8rem;
 }
 
+.ai-chatbot-message--bot .ai-chatbot-message__highlight {
+  color: #123f65;
+  font-size: 1.03em;
+  font-weight: 700;
+}
+
 .ai-chatbot-message--user {
   align-self: flex-end;
   border-bottom-right-radius: 0.35rem;

@@ -7,7 +7,7 @@
 
     <!-- Compiled Tailwind CSS-->
     <link rel="stylesheet" href="css/output.css" />
-    <link rel="stylesheet" href="css/custom.css?v=ai-chatbot-panel-border-20260714" />
+    <link rel="stylesheet" href="css/custom.css?v=ai-chatbot-highlight-soft-20260716" />
 
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
@@ -386,7 +386,7 @@
             formatAssistantParagraphs(text).forEach((paragraph) => {
               const paragraphEl = document.createElement("p");
               paragraphEl.className = "ai-chatbot-message__paragraph";
-              paragraphEl.textContent = paragraph;
+              appendFormattedAssistantText(paragraphEl, paragraph);
               messageEl.appendChild(paragraphEl);
             });
           } else {
@@ -395,6 +395,34 @@
 
           chatMessages.appendChild(messageEl);
           chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function appendFormattedAssistantText(parentEl, text) {
+          const rawText = String(text || "");
+          const highlightPattern = /\*\*([^*]+)\*\*/g;
+          let lastIndex = 0;
+          let match;
+
+          while ((match = highlightPattern.exec(rawText)) !== null) {
+            if (match.index > lastIndex) {
+              parentEl.appendChild(
+                document.createTextNode(rawText.slice(lastIndex, match.index))
+              );
+            }
+
+            const highlightEl = document.createElement("strong");
+            highlightEl.className = "ai-chatbot-message__highlight";
+            highlightEl.textContent = match[1];
+            parentEl.appendChild(highlightEl);
+
+            lastIndex = highlightPattern.lastIndex;
+          }
+
+          if (lastIndex < rawText.length) {
+            parentEl.appendChild(
+              document.createTextNode(rawText.slice(lastIndex))
+            );
+          }
         }
 
         function formatAssistantParagraphs(text) {
