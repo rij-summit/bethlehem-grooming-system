@@ -691,103 +691,274 @@
             </div>
           </div>
 
+        <!-- Pet Detail Modal -->
+        <div
+          x-show="petModal.open"
+          x-transition
+          style="display:none;z-index:300;background-color:rgba(15,23,42,0.7);padding:1.5rem 1rem"
+          class="fixed inset-0 flex items-center justify-center"
+          @keydown.escape.window="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }"
+        >
+          <div class="w-full overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col"
+               style="max-width:42rem;max-height:90vh">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between border-b border-slate-100 px-6 py-5" style="flex-shrink:0">
+              <div>
+                <h2 class="text-xl font-extrabold text-[#1f3850]" x-text="petModal.pet?.petName"></h2>
+                <p class="mt-0.5 text-sm text-slate-500">
+                  <span x-text="petModal.pet?.species || ''"></span>
+                  <span x-show="petModal.pet?.breed" x-text="' · ' + (petModal.pet?.breed || '')"></span>
+                </p>
+              </div>
+              <div class="flex items-center" style="gap:0.5rem">
+                <div x-show="!petModal.editing">
+                  <button @click="startEditPet()" type="button"
+                    style="background-color:#315b7e;color:#fff;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;white-space:nowrap;border:none;cursor:pointer">
+                    Edit Details
+                  </button>
+                </div>
+                <div x-show="petModal.editing" class="flex items-center" style="gap:0.5rem;display:none">
+                  <button @click="cancelEditPet()" type="button"
+                    style="border:1px solid #e2e8f0;color:#64748b;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;background:#fff;cursor:pointer">
+                    Cancel
+                  </button>
+                  <button @click="saveEditPet()" type="button" :disabled="petModal.saving"
+                    :style="petModal.saving ? 'background-color:#315b7e;opacity:0.6;cursor:not-allowed;color:#fff;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;border:none' : 'background-color:#315b7e;color:#fff;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;border:none;cursor:pointer'"
+                    x-text="petModal.saving ? 'Saving…' : 'Save Changes'">
+                  </button>
+                </div>
+                <button @click="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }" type="button"
+                  class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Save error -->
+            <div x-show="petModal.saveError" style="display:none;padding:0.75rem 1.5rem 0">
+              <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:0.75rem;padding:0.75rem 1rem;font-size:0.875rem;color:#b91c1c"
+                x-text="petModal.saveError"></div>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="overflow-y-auto flex-1" style="padding:1rem 1.5rem">
+
+              <!-- VIEW MODE: 2-column grid -->
+              <div x-show="!petModal.editing" style="display:grid;grid-template-columns:1fr 1fr;gap:0 2.5rem">
+                <div class="divide-y divide-slate-100">
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Gender</span>
+                    <span class="text-sm font-semibold capitalize text-slate-700" x-text="petModal.pet?.gender || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Birthdate</span>
+                    <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.birthdate || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered / Spayed</span>
+                    <span class="text-sm font-semibold"
+                      :style="petModal.pet?.isNeutered ? 'color:#15803d' : 'color:#94a3b8'"
+                      x-text="petModal.pet?.isNeutered ? 'Yes' : 'No'"></span>
+                  </div>
+                  <div x-show="petModal.pet?.isNeutered && petModal.pet?.neuteredDate" style="display:none"
+                    class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered Date</span>
+                    <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.neuteredDate || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased</span>
+                    <span class="text-sm font-semibold"
+                      :style="petModal.pet?.isDeceased ? 'color:#b91c1c' : 'color:#94a3b8'"
+                      x-text="petModal.pet?.isDeceased ? 'Yes' : 'No'"></span>
+                  </div>
+                  <div x-show="petModal.pet?.isDeceased && petModal.pet?.deceasedDate" style="display:none"
+                    class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased Date</span>
+                    <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.deceasedDate || '—'"></span>
+                  </div>
+                </div>
+                <div class="divide-y divide-slate-100">
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Size</span>
+                    <span class="text-sm font-semibold capitalize text-slate-700"
+                      x-text="petModal.pet?.size?.replace('_', ' ') || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Fur Type</span>
+                    <span class="text-sm font-semibold capitalize text-slate-700"
+                      x-text="petModal.pet?.furType || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Weight</span>
+                    <span class="text-sm font-semibold text-slate-700"
+                      x-text="petModal.pet?.weight ? petModal.pet.weight + ' kg' : '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Color</span>
+                    <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.color || '—'"></span>
+                  </div>
+                  <div x-show="petModal.pet?.medicalConditions" style="display:none" class="py-3">
+                    <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Medical Conditions</span>
+                    <p class="mt-1 text-sm font-medium text-slate-700" style="white-space:pre-line"
+                      x-text="petModal.pet?.medicalConditions"></p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- EDIT MODE -->
+              <form x-show="petModal.editing" style="display:none" @submit.prevent="saveEditPet()">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.5rem">
+
+                  <!-- Pet Name (full width) -->
+                  <div style="grid-column:1/-1">
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Pet Name</label>
+                    <input type="text" x-model="petModal.form.pet_name" required
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none" placeholder="Pet name">
+                  </div>
+
+                  <!-- Species -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Species</label>
+                    <input type="text" x-model="petModal.form.species"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none" placeholder="e.g. Dog, Cat">
+                  </div>
+
+                  <!-- Breed -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Breed</label>
+                    <input type="text" x-model="petModal.form.breed"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none" placeholder="Breed">
+                  </div>
+
+                  <!-- Gender -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Gender</label>
+                    <select x-model="petModal.form.gender"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none">
+                      <option value="">Not specified</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </div>
+
+                  <!-- Birthdate -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Birthdate</label>
+                    <input type="date" x-model="petModal.form.birthdate"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none">
+                  </div>
+
+                  <!-- Size -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Size</label>
+                    <select x-model="petModal.form.size"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none">
+                      <option value="">Not specified</option>
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                      <option value="extra_large">Extra Large</option>
+                    </select>
+                  </div>
+
+                  <!-- Fur Type -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Fur Type</label>
+                    <select x-model="petModal.form.fur_type"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none">
+                      <option value="">Not specified</option>
+                      <option value="short">Short</option>
+                      <option value="medium">Medium</option>
+                      <option value="long">Long</option>
+                      <option value="wire">Wire</option>
+                      <option value="curl">Curl</option>
+                    </select>
+                  </div>
+
+                  <!-- Weight -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Weight (kg)</label>
+                    <input type="number" x-model="petModal.form.weight" min="0" step="0.01"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none" placeholder="0.00">
+                  </div>
+
+                  <!-- Color -->
+                  <div>
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Color</label>
+                    <input type="text" x-model="petModal.form.color"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none" placeholder="Color">
+                  </div>
+
+                  <!-- Neutered toggle + date (full width, stacked) -->
+                  <div style="grid-column:1/-1">
+                    <div class="flex items-center" style="gap:0.625rem">
+                      <input type="checkbox" x-model="petModal.form.is_neutered" id="edit-neutered"
+                        style="width:1rem;height:1rem;accent-color:#315b7e;cursor:pointer">
+                      <label for="edit-neutered" class="text-sm font-semibold text-slate-700" style="cursor:pointer">Neutered / Spayed</label>
+                    </div>
+                    <div x-show="petModal.form.is_neutered" style="display:none;margin-top:0.5rem">
+                      <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Neutered Date</label>
+                      <input type="date" x-model="petModal.form.neutered_date"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                        style="outline:none">
+                    </div>
+                  </div>
+
+                  <!-- Deceased toggle + date (full width, stacked) -->
+                  <div style="grid-column:1/-1">
+                    <div class="flex items-center" style="gap:0.625rem">
+                      <input type="checkbox" x-model="petModal.form.is_deceased" id="edit-deceased"
+                        style="width:1rem;height:1rem;accent-color:#315b7e;cursor:pointer">
+                      <label for="edit-deceased" class="text-sm font-semibold text-slate-700" style="cursor:pointer">Deceased</label>
+                    </div>
+                    <div x-show="petModal.form.is_deceased" style="display:none;margin-top:0.5rem">
+                      <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Deceased Date</label>
+                      <input type="date" x-model="petModal.form.deceased_date"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                        style="outline:none">
+                    </div>
+                  </div>
+
+                  <!-- Medical Conditions (full width) -->
+                  <div style="grid-column:1/-1">
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400 block" style="margin-bottom:0.25rem">Medical Conditions</label>
+                    <textarea x-model="petModal.form.medical_conditions" rows="3"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                      style="outline:none;resize:none" placeholder="Any known medical conditions…"></textarea>
+                  </div>
+
+                </div>
+              </form>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-slate-100 px-6 py-4" style="flex-shrink:0">
+              <button @click="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }" type="button"
+                class="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+
         </main>
       </div>
     </div>
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Pet Detail Modal -->
-    <div
-      x-data="adminCustomers()"
-      x-show="petModal.open"
-      x-transition
-      style="display:none;z-index:300;background-color:rgba(15,23,42,0.7)"
-      class="fixed inset-0 flex items-center justify-center px-4"
-      @keydown.escape.window="petModal.open = false"
-    >
-      <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-          <div>
-            <h2 class="text-lg font-extrabold text-[#1f3850]" x-text="petModal.pet?.petName"></h2>
-            <p class="mt-0.5 text-sm text-slate-500">
-              <span x-text="petModal.pet?.species"></span>
-              <span x-show="petModal.pet?.breed" x-text="' · ' + petModal.pet?.breed"></span>
-            </p>
-          </div>
-          <button @click="petModal.open = false" type="button"
-            class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-            <i data-lucide="x" class="h-5 w-5"></i>
-          </button>
-        </div>
-        <div class="divide-y divide-slate-100 px-6 py-1">
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Gender</span>
-            <span class="text-sm font-semibold capitalize text-slate-700"
-              x-text="petModal.pet?.gender || '—'"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Birthdate</span>
-            <span class="text-sm font-semibold text-slate-700"
-              x-text="petModal.pet?.birthdate || '—'"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered / Spayed</span>
-            <span class="text-sm font-semibold"
-              :style="petModal.pet?.isNeutered ? 'color:#15803d' : 'color:#94a3b8'"
-              x-text="petModal.pet?.isNeutered ? 'Yes' : 'No'"></span>
-          </div>
-          <div x-show="petModal.pet?.isNeutered && petModal.pet?.neuteredDate" style="display:none"
-            class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered Date</span>
-            <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.neuteredDate"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Size</span>
-            <span class="text-sm font-semibold capitalize text-slate-700"
-              x-text="petModal.pet?.size?.replace('_', ' ') || '—'"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Fur Type</span>
-            <span class="text-sm font-semibold capitalize text-slate-700"
-              x-text="petModal.pet?.furType || '—'"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Weight</span>
-            <span class="text-sm font-semibold text-slate-700"
-              x-text="petModal.pet?.weight ? petModal.pet.weight + ' kg' : '—'"></span>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Color</span>
-            <span class="text-sm font-semibold text-slate-700"
-              x-text="petModal.pet?.color || '—'"></span>
-          </div>
-          <div x-show="petModal.pet?.medicalConditions" style="display:none" class="py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Medical Conditions</span>
-            <p class="mt-1 text-sm font-medium text-slate-700" style="white-space:pre-line"
-              x-text="petModal.pet?.medicalConditions"></p>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased</span>
-            <span class="text-sm font-semibold"
-              :style="petModal.pet?.isDeceased ? 'color:#b91c1c' : 'color:#94a3b8'"
-              x-text="petModal.pet?.isDeceased ? 'Yes' : 'No'"></span>
-          </div>
-          <div x-show="petModal.pet?.isDeceased && petModal.pet?.deceasedDate" style="display:none"
-            class="flex items-center justify-between py-3">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased Date</span>
-            <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.deceasedDate"></span>
-          </div>
-        </div>
-        <div class="px-6 py-4">
-          <button @click="petModal.open = false" type="button"
-            class="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js"></script>
     <script src="../../scripts/components/admin-customers.js"></script>

@@ -408,6 +408,11 @@ var API = (() => {
     return request("PUT", `/pets/${petId}`, payload, getCustomerToken());
   }
 
+  async function adminUpdatePet(petId, payload) {
+    // PUT /api/admin/pets/{id}  (admin/staff — updates any customer's pet)
+    return request("PUT", `/admin/pets/${petId}`, payload, getAdminToken());
+  }
+
   async function archivePet(petId) {
     // POST /api/pets/{id}/archive  (protected)
     return request("POST", `/pets/${petId}/archive`, null, getCustomerToken());
@@ -776,6 +781,7 @@ var API = (() => {
     getUserPets,
     addPet,
     updatePet,
+    adminUpdatePet,
     archivePet,
     unarchivePet,
     // Booking
