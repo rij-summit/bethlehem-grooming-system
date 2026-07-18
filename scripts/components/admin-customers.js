@@ -31,6 +31,11 @@ function adminCustomers() {
       error:    "",
     },
 
+    petModal: {
+      open: false,
+      pet:  null,
+    },
+
     // ── Init ──────────────────────────────────────────────
 
     async init() {
@@ -167,6 +172,11 @@ function adminCustomers() {
 
     closeReset() {
       this.resetModal.open = false;
+    },
+
+    openPetDetail(pet) {
+      this.petModal = { open: true, pet };
+      this.refreshIcons();
     },
 
     async openCustomerDetails(customer) {

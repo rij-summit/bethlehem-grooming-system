@@ -616,8 +616,10 @@
 
                     <div x-show="(detailModal.customer?.pets || []).length > 0" class="grid gap-4 lg:grid-cols-2">
                       <template x-for="pet in detailModal.customer?.pets || []" :key="pet.id">
-                        <article class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4">
-                          <div class="flex items-start justify-between gap-3">
+                        <article class="overflow-hidden rounded-2xl border border-slate-200 bg-[#f8fbfd]">
+                          <!-- Clickable header -->
+                          <button type="button" @click="openPetDetail(pet)"
+                            class="flex w-full items-start justify-between gap-3 p-4 text-left transition hover:bg-[#eaf4fb]">
                             <div>
                               <h5 class="text-lg font-extrabold text-[#1f3850]" x-text="formatTextValue(pet.petName)"></h5>
                               <p class="mt-1 text-sm text-slate-500">
@@ -626,22 +628,18 @@
                                 <span x-show="pet.breed" x-text="formatTextValue(pet.breed)"></span>
                               </p>
                             </div>
-                            <span
-                              class="rounded-full px-2.5 py-0.5 text-xs font-bold"
-                              :class="pet.isArchived ? 'bg-slate-100 text-slate-500' : 'bg-green-100 text-green-700'"
-                              x-text="pet.isArchived ? 'Archived' : 'Active'"
-                            ></span>
-                          </div>
+                            <div class="flex shrink-0 flex-col items-end gap-2">
+                              <span
+                                class="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                                :class="pet.isArchived ? 'bg-slate-100 text-slate-500' : 'bg-green-100 text-green-700'"
+                                x-text="pet.isArchived ? 'Archived' : 'Active'"
+                              ></span>
+                              <span class="text-xs font-semibold" style="color:#315b7e">View Details →</span>
+                            </div>
+                          </button>
 
-                          <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                            <div>
-                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Size</p>
-                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatLabel(pet.size)"></p>
-                            </div>
-                            <div>
-                              <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Fur Type</p>
-                              <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatLabel(pet.furType)"></p>
-                            </div>
+                          <!-- Summary (always visible) -->
+                          <div class="grid gap-3 border-t border-slate-100 px-4 pb-4 pt-3 sm:grid-cols-2">
                             <div>
                               <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Weight</p>
                               <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatWeight(pet.weight)"></p>
@@ -651,12 +649,7 @@
                               <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatTextValue(pet.color)"></p>
                             </div>
                           </div>
-
-                          <div class="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-3">
-                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Medical Conditions</p>
-                            <p class="mt-1 text-sm font-medium text-slate-700" style="white-space: pre-line" x-text="formatTextValue(pet.medicalConditions)"></p>
-                          </div>
-                          <p class="mt-3 text-xs font-semibold text-slate-400" x-text="'Registered ' + formatDate(pet.createdAt)"></p>
+                          <p class="px-4 pb-3 text-xs font-semibold text-slate-400" x-text="'Registered ' + formatDate(pet.createdAt)"></p>
                         </article>
                       </template>
                     </div>
@@ -704,6 +697,97 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Pet Detail Modal -->
+    <div
+      x-data="adminCustomers()"
+      x-show="petModal.open"
+      x-transition
+      style="display:none;z-index:300;background-color:rgba(15,23,42,0.7)"
+      class="fixed inset-0 flex items-center justify-center px-4"
+      @keydown.escape.window="petModal.open = false"
+    >
+      <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+          <div>
+            <h2 class="text-lg font-extrabold text-[#1f3850]" x-text="petModal.pet?.petName"></h2>
+            <p class="mt-0.5 text-sm text-slate-500">
+              <span x-text="petModal.pet?.species"></span>
+              <span x-show="petModal.pet?.breed" x-text="' · ' + petModal.pet?.breed"></span>
+            </p>
+          </div>
+          <button @click="petModal.open = false" type="button"
+            class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+            <i data-lucide="x" class="h-5 w-5"></i>
+          </button>
+        </div>
+        <div class="divide-y divide-slate-100 px-6 py-1">
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Gender</span>
+            <span class="text-sm font-semibold capitalize text-slate-700"
+              x-text="petModal.pet?.gender || '—'"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Birthdate</span>
+            <span class="text-sm font-semibold text-slate-700"
+              x-text="petModal.pet?.birthdate || '—'"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered / Spayed</span>
+            <span class="text-sm font-semibold"
+              :style="petModal.pet?.isNeutered ? 'color:#15803d' : 'color:#94a3b8'"
+              x-text="petModal.pet?.isNeutered ? 'Yes' : 'No'"></span>
+          </div>
+          <div x-show="petModal.pet?.isNeutered && petModal.pet?.neuteredDate" style="display:none"
+            class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Neutered Date</span>
+            <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.neuteredDate"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Size</span>
+            <span class="text-sm font-semibold capitalize text-slate-700"
+              x-text="petModal.pet?.size?.replace('_', ' ') || '—'"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Fur Type</span>
+            <span class="text-sm font-semibold capitalize text-slate-700"
+              x-text="petModal.pet?.furType || '—'"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Weight</span>
+            <span class="text-sm font-semibold text-slate-700"
+              x-text="petModal.pet?.weight ? petModal.pet.weight + ' kg' : '—'"></span>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Color</span>
+            <span class="text-sm font-semibold text-slate-700"
+              x-text="petModal.pet?.color || '—'"></span>
+          </div>
+          <div x-show="petModal.pet?.medicalConditions" style="display:none" class="py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Medical Conditions</span>
+            <p class="mt-1 text-sm font-medium text-slate-700" style="white-space:pre-line"
+              x-text="petModal.pet?.medicalConditions"></p>
+          </div>
+          <div class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased</span>
+            <span class="text-sm font-semibold"
+              :style="petModal.pet?.isDeceased ? 'color:#b91c1c' : 'color:#94a3b8'"
+              x-text="petModal.pet?.isDeceased ? 'Yes' : 'No'"></span>
+          </div>
+          <div x-show="petModal.pet?.isDeceased && petModal.pet?.deceasedDate" style="display:none"
+            class="flex items-center justify-between py-3">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Deceased Date</span>
+            <span class="text-sm font-semibold text-slate-700" x-text="petModal.pet?.deceasedDate"></span>
+          </div>
+        </div>
+        <div class="px-6 py-4">
+          <button @click="petModal.open = false" type="button"
+            class="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js"></script>
     <script src="../../scripts/components/admin-customers.js"></script>

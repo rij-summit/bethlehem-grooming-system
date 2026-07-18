@@ -241,8 +241,6 @@ function adminClinicSearch() {
     panelCustomer: null,
     showPanel: false,
 
-    petDetail: { open: false, pet: null },
-
     queueModal: { open: false, busy: false, error: "" },
     queueForm: { pet_name: "", species: "", breed: "", weight: "", chief_complaint: "" },
 
@@ -281,11 +279,6 @@ function adminClinicSearch() {
       this.searchQuery   = "";
       this.searchResults = [];
       this.noResults     = false;
-    },
-
-    openPetDetail(pet) {
-      this.petDetail = { open: true, pet };
-      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
     },
 
     openQueueModal(pet = null) {
