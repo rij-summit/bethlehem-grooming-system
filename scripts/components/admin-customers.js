@@ -35,6 +35,20 @@ function adminCustomers() {
 
     async init() {
       await this.loadCustomers();
+      const params     = new URLSearchParams(window.location.search);
+      const customerId = params.get("customer_id");
+      if (customerId) {
+        const customer = this.customers.find(c => String(c.id) === customerId);
+        if (customer) {
+          this.openCustomerDetails(customer);
+        } else {
+          // Not in the current filtered list — fetch directly by ID
+          try {
+            const data = await API.getCustomerDetails(customerId);
+            if (data.customer) this.openCustomerDetails(data.customer);
+          } catch { /* silently ignore if not found */ }
+        }
+      }
     },
 
     get isAdmin() {
