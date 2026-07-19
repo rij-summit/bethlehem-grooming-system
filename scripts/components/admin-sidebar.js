@@ -1,7 +1,34 @@
+function getAdminSidebarActivePage(pathname = window.location.pathname) {
+  const normalizedPath = String(pathname || "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+
+  if (
+    normalizedPath.includes("/inventory/") ||
+    normalizedPath.endsWith("/inventory.html")
+  ) {
+    return "inventory";
+  }
+
+  const pageName = normalizedPath.split("/").filter(Boolean).pop() || "";
+  const pageMap = {
+    "dashboard.html": "dashboard",
+    "clients.html": "customers",
+    "appointments.html": "appointments",
+    "clinic.html": "clinic",
+    "archive.html": "archive",
+    "transactions.html": "transactions",
+    "reports.html": "reports",
+    "settings.html": "settings",
+  };
+
+  return pageMap[pageName] || "";
+}
+
 function adminSidebar() {
   return {
     sidebarOpen: false,
-    activePage: "dashboard",
+    activePage: getAdminSidebarActivePage(),
     isAdmin: false,
     clinicStopped: false,
     incomingAppointmentCount: 0,
@@ -32,12 +59,12 @@ function adminSidebar() {
     },
 
     async init() {
+      this.detectActivePage();
       this.isAdmin = API.getUserRole() === "admin";
       if (API.enforceAdminPageAccess && !API.enforceAdminPageAccess()) return;
 
       await window.AppClock?.load?.();
 
-      this.detectActivePage();
       this.registerIncomingAppointmentListener();
 
       this.$nextTick(() => {
@@ -69,27 +96,7 @@ function adminSidebar() {
     },
 
     detectActivePage() {
-      const currentPath = window.location.pathname;
-
-      if (currentPath.includes("dashboard.html")) {
-        this.activePage = "dashboard";
-      } else if (currentPath.includes("clients.html")) {
-        this.activePage = "customers";
-      } else if (currentPath.includes("appointments.html")) {
-        this.activePage = "appointments";
-      } else if (currentPath.includes("inventory.html") || currentPath.includes("/inventory/")) {
-        this.activePage = "inventory";
-      } else if (currentPath.includes("archive.html")) {
-        this.activePage = "archive";
-      } else if (currentPath.includes("transactions.html")) {
-        this.activePage = "transactions";
-      } else if (currentPath.includes("reports.html")) {
-        this.activePage = "reports";
-      } else if (currentPath.includes("settings.html")) {
-        this.activePage = "settings";
-      } else if (currentPath.includes("clinic.html")) {
-        this.activePage = "clinic";
-      }
+      this.activePage = getAdminSidebarActivePage();
     },
 
     registerIncomingAppointmentListener() {

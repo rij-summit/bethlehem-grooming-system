@@ -527,7 +527,23 @@ body.customer-detail-modal-open {
 }
 
 .admin-sidebar-menu {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.admin-sidebar-menu > :first-child,
+.admin-sidebar-footer {
+  flex: 0 0 auto;
+}
+
+.admin-sidebar-menu > nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-sidebar-menu nav a.bg-\[\#315b7e\]:hover {
@@ -535,7 +551,6 @@ body.customer-detail-modal-open {
 }
 
 .admin-sidebar-footer {
-  flex: 0 0 auto;
   margin-top: auto;
 }
 
