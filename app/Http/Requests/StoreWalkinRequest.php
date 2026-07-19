@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Rules\ValidBreedCoat;
+use App\Rules\ValidPetSize;
+use App\Rules\ValidPetWeight;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreWalkinRequest extends FormRequest
@@ -28,8 +30,8 @@ class StoreWalkinRequest extends FormRequest
             'pets.*.species' => ['required', 'string', 'max:100'],
             'pets.*.breed' => ['nullable', 'string', 'max:100'],
             'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'pets.*.weight' => ['nullable', 'numeric', 'min:0', 'max:999'],
-            'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large'],
+            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'pets.*.medical_conditions' => ['nullable', 'string', 'max:1000'],
             'pets.*.special_instructions' => ['nullable', 'string', 'max:1000'],
 

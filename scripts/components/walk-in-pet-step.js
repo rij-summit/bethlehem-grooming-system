@@ -3,6 +3,17 @@ import { renderWalkInClinicComplaintStep } from "./walk-in-clinic-complaint-step
 import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
+import {
+  getEnteredWeight,
+  getSizeForWeight,
+  getSizeOptions,
+  getWeightFieldValidationMessage,
+  getWeightValidationMessage,
+  initializeWeightField,
+  resetWeightFieldForEntry,
+  showWeightRangeInField,
+  showWeightValidationInField,
+} from "./pet-weight-size.js";
 
 const MAX_PETS_PER_BOOKING = 10;
 
@@ -14,6 +25,7 @@ const elements = {
   petType: document.getElementById("petType"),
   petName: document.getElementById("petName"),
   breed: document.getElementById("breed"),
+  weight: document.getElementById("weight"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
   selectedPetCount: document.getElementById("selectedPetCount"),
@@ -59,6 +71,16 @@ const breedCoatCombobox = createBreedCoatCombobox({
   errorElement: document.getElementById("furTypeError"),
 });
 
+const sizeCombobox = createFixedOptionCombobox({
+  root: document.getElementById("sizeCombobox"),
+  input: elements.size,
+  listbox: document.getElementById("sizeOptions"),
+  toggleButton: document.getElementById("sizeDropdownButton"),
+  placeholder: "Select size",
+  options: [],
+  displaySelectedLabel: true,
+});
+
 const state = {
   pets: [],
 };
@@ -70,11 +92,6 @@ let hasSubmittedOnce = false;
   through the frontend flow. Persist these pets under the walk-in booking draft
   once a database-backed draft endpoint exists.
 */
-
-const sizeOptionsByType = {
-  Dog: ["Small", "Medium", "Large", "Extra Large"],
-  Cat: ["Small", "Medium"],
-};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -143,9 +160,9 @@ function getFormValues(form) {
     petType: form.petType.value,
     petName: normalizeText(form.petName.value),
     breed: normalizeText(form.breed.value),
-    weight: normalizeText(form.weight.value),
+    weight: getEnteredWeight(elements.weight),
     furType: form.furType.value,
-    size: form.size.value,
+    size: sizeCombobox.getValue(),
     medicalNotes: normalizeText(form.medicalNotes.value),
   };
 }
@@ -171,7 +188,13 @@ function validatePetForm(values) {
     errors.furType = furTypeValidationMessage;
   }
 
-  const allowedSizes = sizeOptionsByType[values.petType] || [];
+  const weightValidationMessage = getWeightFieldValidationMessage(elements.weight)
+    || getWeightValidationMessage(values.petType, values.weight);
+  if (weightValidationMessage) {
+    errors.weight = weightValidationMessage;
+  }
+
+  const allowedSizes = getSizeOptions(values.petType).map(({ value }) => value);
   if (!values.size.trim()) {
     errors.size = "Size is required.";
   } else if (allowedSizes.length > 0 && !allowedSizes.includes(values.size)) {
@@ -208,7 +231,7 @@ function buildPetSummaryHtml(pet) {
         pet.breed || "Not specified",
       )}</p>
       <p><span class="font-semibold text-slate-700">Weight:</span> ${escapeHtml(
-        pet.weight || "Not specified",
+        pet.weight ? `${pet.weight} kg` : "Not specified",
       )}</p>
       <p><span class="font-semibold text-slate-700">Fur Type:</span> ${escapeHtml(
         pet.furType || "Not specified",
@@ -289,17 +312,22 @@ function bindRemoveButtons() {
 
 function setFieldError(fieldName, message) {
   const errorElement = elements.fieldErrors[fieldName];
+  const input = elements[fieldName];
 
   if (!errorElement) {
     return;
   }
 
   if (message) {
+    input?.setAttribute("aria-invalid", "true");
+    input?.classList.add("border-red-400");
     errorElement.textContent = message;
     errorElement.className = "mt-2 text-sm text-red-600";
     return;
   }
 
+  input?.setAttribute("aria-invalid", "false");
+  input?.classList.remove("border-red-400");
   errorElement.textContent = "";
   errorElement.className = "mt-2 hidden text-sm text-red-600";
 }
@@ -333,9 +361,10 @@ function renderValidationErrors(values, { showAll = false } = {}) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
-  elements.size.value = "";
   breedCoatCombobox.reset();
-  updateSizeOptions("");
+  sizeCombobox.reset();
+  initializeWeightField(elements.weight);
+  syncWeightAndSize({ clearManualSize: true });
 }
 
 function handleAddPetSubmit(event) {
@@ -346,6 +375,9 @@ function handleAddPetSubmit(event) {
   const errors = validatePetForm(formValues);
 
   if (Object.keys(errors).length > 0) {
+    if (errors.weight) {
+      showWeightValidationInField(elements.weight, errors.weight);
+    }
     renderValidationErrors(formValues, { showAll: true });
     return;
   }
@@ -393,28 +425,57 @@ function handleNext() {
   renderWalkInServicesStep({ pets: state.pets });
 }
 
-function updateSizeOptions(petType) {
-  const selectedSize = elements.size.value;
-  const options = sizeOptionsByType[petType] || [];
+function syncWeightAndSize({ clearManualSize = false } = {}) {
+  const petType = elements.petType.value;
+  const rawWeight = getEnteredWeight(elements.weight);
+  const hasWeight = rawWeight.trim() !== "";
+  const options = getSizeOptions(petType);
 
-  elements.size.innerHTML = `<option value="">Select size</option>`;
-
-  options.forEach((optionValue) => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
-
-    if (optionValue === selectedSize) {
-      option.selected = true;
-    }
-
-    elements.size.appendChild(option);
+  sizeCombobox.setOptions(options, {
+    preserveValue: !clearManualSize,
   });
 
-  if (selectedSize && options.includes(selectedSize)) {
-    elements.size.value = selectedSize;
-  } else {
-    elements.size.value = "";
+  const computedSize = getSizeForWeight(petType, rawWeight);
+
+  if (hasWeight && computedSize) {
+    sizeCombobox.setValue(computedSize);
+  }
+
+  sizeCombobox.setDisabled(options.length === 0);
+}
+
+function validateWeightOnCommit() {
+  const rawWeight = getEnteredWeight(elements.weight);
+
+  if (!rawWeight) {
+    if (elements.weight.dataset.weightFieldMode !== "error") {
+      showWeightRangeInField(
+        elements.weight,
+        elements.petType.value,
+        sizeCombobox.getValue(),
+      );
+    }
+    return true;
+  }
+
+  const message = getWeightValidationMessage(elements.petType.value, rawWeight);
+
+  if (message) {
+    showWeightValidationInField(elements.weight, message);
+    return false;
+  }
+
+  return true;
+}
+
+function handleManualSizeChange() {
+  if (!getEnteredWeight(elements.weight)
+    && elements.weight.dataset.weightFieldMode !== "error") {
+    showWeightRangeInField(
+      elements.weight,
+      elements.petType.value,
+      sizeCombobox.getValue(),
+    );
   }
 }
 
@@ -444,12 +505,23 @@ function bindEvents() {
   elements.nextBtn.addEventListener("click", handleNext);
 
   const handlePetInputs = (event) => {
+    if (event.target === elements.petType) {
+      if (elements.weight.dataset.weightFieldMode === "range") {
+        resetWeightFieldForEntry(elements.weight);
+      }
+      syncWeightAndSize({ clearManualSize: true });
+      validateWeightOnCommit();
+    } else if (event.target === elements.weight) {
+      syncWeightAndSize();
+      if (event.type === "change") {
+        validateWeightOnCommit();
+      }
+    } else if (event.target === elements.size) {
+      handleManualSizeChange();
+    }
+
     const formValues = getFormValues(elements.addPetForm);
     renderValidationErrors(formValues, { showAll: false });
-
-    if (event.target === elements.petType) {
-      updateSizeOptions(event.target.value);
-    }
   };
 
   elements.petType.addEventListener("input", handlePetInputs);
@@ -457,8 +529,13 @@ function bindEvents() {
   elements.petName.addEventListener("input", handlePetInputs);
   elements.breed.addEventListener("input", handlePetInputs);
   elements.breed.addEventListener("change", handlePetInputs);
+  elements.weight.addEventListener("input", handlePetInputs);
+  elements.weight.addEventListener("change", handlePetInputs);
+  elements.weight.addEventListener("focus", () => {
+    resetWeightFieldForEntry(elements.weight);
+  });
   elements.furType.addEventListener("input", handlePetInputs);
-  elements.size.addEventListener("input", handlePetInputs);
+  elements.size.addEventListener("change", handlePetInputs);
 }
 
 function initWalkInPetStep() {
@@ -467,7 +544,8 @@ function initWalkInPetStep() {
   }
 
   bindEvents();
-  updateSizeOptions(elements.petType.value);
+  initializeWeightField(elements.weight);
+  syncWeightAndSize();
   renderSelectedPets();
 
   if (window.lucide) {

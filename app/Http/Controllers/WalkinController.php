@@ -11,6 +11,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Models\Walkin;
 use App\Services\DailyPetQueue;
+use App\Support\PetWeightSize;
 
 class WalkinController extends Controller
 {
@@ -20,6 +21,10 @@ class WalkinController extends Controller
 
         return app(DailyPetQueue::class)->runForDate($queueDate, function () use ($request, $queueDate) {
             $data = $request->validated();
+            $data['pets'] = array_map(
+                fn (array $pet) => PetWeightSize::withComputedSize($pet),
+                $data['pets'],
+            );
 
             // Check if this email belongs to a registered customer
             $user = ! empty($data['email'])
@@ -169,6 +174,8 @@ class WalkinController extends Controller
                 $existing->update([
                     'breed' => $petData['breed'] ?? $existing->breed,
                     'fur_type' => $petData['fur_type'] ?? $existing->fur_type,
+                    'weight' => $petData['weight'] ?? $existing->weight,
+                    'size' => $petData['size'] ?? $existing->size,
                 ]);
 
                 return $existing;

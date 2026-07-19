@@ -14,6 +14,17 @@ import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
+import {
+  getEnteredWeight,
+  getSizeForWeight,
+  getSizeOptions,
+  getWeightFieldValidationMessage,
+  getWeightValidationMessage,
+  initializeWeightField,
+  resetWeightFieldForEntry,
+  showWeightRangeInField,
+  showWeightValidationInField,
+} from "./pet-weight-size.js";
 
 /**
  * Booking Pet Step Controller
@@ -51,8 +62,10 @@ const elements = {
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
   breed: document.getElementById("breed"),
+  weight: document.getElementById("weight"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
+  sizeError: document.getElementById("sizeError"),
 
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
@@ -94,11 +107,17 @@ const breedCoatCombobox = createBreedCoatCombobox({
   errorElement: document.getElementById("furTypeError"),
 });
 
+const sizeCombobox = createFixedOptionCombobox({
+  root: document.getElementById("sizeCombobox"),
+  input: elements.size,
+  listbox: document.getElementById("sizeOptions"),
+  toggleButton: document.getElementById("sizeDropdownButton"),
+  placeholder: "Select size",
+  options: [],
+  displaySelectedLabel: true,
+});
+
 const BOOKING_STEP_TWO_KEY = "bookingStep2";
-const sizeOptionsByType = {
-  Dog: ["Small", "Medium", "Large", "Extra Large"],
-  Cat: ["Small", "Medium"],
-};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -479,9 +498,9 @@ function getFormValues(form) {
     petType: form.petType.value,
     petName: form.petName.value,
     breed: form.breed.value,
-    weight: form.weight.value,
+    weight: getEnteredWeight(elements.weight),
     furType: form.furType.value,
-    size: form.size.value,
+    size: sizeCombobox.getValue(),
     medicalNotes: form.medicalNotes.value,
   };
 }
@@ -505,7 +524,13 @@ function validatePetForm(values) {
     return furTypeValidationMessage;
   }
 
-  const allowedSizes = sizeOptionsByType[values.petType] || [];
+  const weightValidationMessage = getWeightFieldValidationMessage(elements.weight)
+    || getWeightValidationMessage(values.petType, values.weight);
+  if (weightValidationMessage) {
+    return weightValidationMessage;
+  }
+
+  const allowedSizes = getSizeOptions(values.petType).map(({ value }) => value);
   if (values.size && !allowedSizes.includes(values.size)) {
     return `${values.petType} size must be one of: ${allowedSizes.join(", ")}.`;
   }
@@ -520,7 +545,10 @@ function validatePetForm(values) {
 function resetAddPetForm() {
   elements.addPetForm.reset();
   breedCoatCombobox.reset();
-  updateSizeOptions("");
+  sizeCombobox.reset();
+  initializeWeightField(elements.weight);
+  syncWeightAndSize({ clearManualSize: true });
+  setFieldError(elements.size, elements.sizeError, "");
 }
 
 function handleAddPetSubmit(event) {
@@ -532,6 +560,11 @@ function handleAddPetSubmit(event) {
   if (validationMessage) {
     breedCombobox.showValidation();
     breedCoatCombobox.showValidation();
+    const weightMessage = getWeightFieldValidationMessage(elements.weight)
+      || getWeightValidationMessage(formValues.petType, formValues.weight);
+    if (weightMessage) {
+      showWeightValidationInField(elements.weight, weightMessage);
+    }
     showMessage(validationMessage, "error");
     return;
   }
@@ -585,23 +618,70 @@ function handleNext() {
   window.location.href = "./booking-services.html";
 }
 
-function updateSizeOptions(petType) {
-  const selectedSize = elements.size.value;
-  const options = sizeOptionsByType[petType] || [];
+function setFieldError(input, errorElement, message) {
+  if (!input || !errorElement) {
+    return;
+  }
 
-  elements.size.innerHTML = `<option value="">Select size</option>`;
+  input.setAttribute("aria-invalid", String(Boolean(message)));
+  input.classList.toggle("border-red-400", Boolean(message));
+  errorElement.textContent = message;
+  errorElement.classList.toggle("hidden", !message);
+}
 
-  options.forEach((optionValue) => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
+function syncWeightAndSize({ clearManualSize = false } = {}) {
+  const petType = elements.petType.value;
+  const rawWeight = getEnteredWeight(elements.weight);
+  const hasWeight = rawWeight.trim() !== "";
+  const options = getSizeOptions(petType);
 
-    if (optionValue === selectedSize) {
-      option.selected = true;
-    }
-
-    elements.size.appendChild(option);
+  sizeCombobox.setOptions(options, {
+    preserveValue: !clearManualSize,
   });
+
+  const computedSize = getSizeForWeight(petType, rawWeight);
+
+  if (hasWeight && computedSize) {
+    sizeCombobox.setValue(computedSize);
+  }
+
+  sizeCombobox.setDisabled(options.length === 0);
+  setFieldError(elements.size, elements.sizeError, "");
+}
+
+function validateWeightOnCommit() {
+  const rawWeight = getEnteredWeight(elements.weight);
+
+  if (!rawWeight) {
+    if (elements.weight.dataset.weightFieldMode !== "error") {
+      showWeightRangeInField(
+        elements.weight,
+        elements.petType.value,
+        sizeCombobox.getValue(),
+      );
+    }
+    return true;
+  }
+
+  const message = getWeightValidationMessage(elements.petType.value, rawWeight);
+
+  if (message) {
+    showWeightValidationInField(elements.weight, message);
+    return false;
+  }
+
+  return true;
+}
+
+function handleManualSizeChange() {
+  if (!getEnteredWeight(elements.weight)
+    && elements.weight.dataset.weightFieldMode !== "error") {
+    showWeightRangeInField(
+      elements.weight,
+      elements.petType.value,
+      sizeCombobox.getValue(),
+    );
+  }
 }
 
 function bindEvents() {
@@ -619,14 +699,25 @@ function bindEvents() {
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);
 
-  elements.petType.addEventListener("change", (event) => {
-    updateSizeOptions(event.target.value);
+  elements.petType.addEventListener("change", () => {
+    if (elements.weight.dataset.weightFieldMode === "range") {
+      resetWeightFieldForEntry(elements.weight);
+    }
+    syncWeightAndSize({ clearManualSize: true });
+    validateWeightOnCommit();
   });
+  elements.weight.addEventListener("input", () => syncWeightAndSize());
+  elements.weight.addEventListener("change", validateWeightOnCommit);
+  elements.weight.addEventListener("focus", () => {
+    resetWeightFieldForEntry(elements.weight);
+  });
+  elements.size.addEventListener("change", handleManualSizeChange);
 }
 
 async function initStepState() {
   renderScheduleSummary();
-  updateSizeOptions(elements.petType.value);
+  initializeWeightField(elements.weight);
+  syncWeightAndSize();
 
   if (!Array.isArray(getBookingPets())) {
     saveBookingPets([]);

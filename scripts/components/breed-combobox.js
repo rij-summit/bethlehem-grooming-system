@@ -1,10 +1,11 @@
 import {
-  MIXED_BREED,
   OTHER_BREED,
   UNKNOWN_BREED,
   breedCoatCatalogueReady,
+  getMixedBreed,
   getMatchingBreeds,
   hasLetter,
+  isMixedBreed,
 } from "./breed-coat-catalogue.js";
 
 export function createBreedCombobox({
@@ -90,7 +91,7 @@ export function createBreedCombobox({
     listbox.innerHTML = "";
 
     if (!isCustomEntry) {
-      listbox.appendChild(buildOption(MIXED_BREED));
+      listbox.appendChild(buildOption(getMixedBreed(getPetType())));
       listbox.appendChild(buildOption(UNKNOWN_BREED));
       listbox.appendChild(buildOption(OTHER_BREED));
       return;
@@ -113,7 +114,7 @@ export function createBreedCombobox({
     }
 
     addSectionLabel("Other options");
-    listbox.appendChild(buildOption(MIXED_BREED));
+    listbox.appendChild(buildOption(getMixedBreed(getPetType())));
     listbox.appendChild(buildOption(UNKNOWN_BREED));
   }
 
@@ -143,7 +144,7 @@ export function createBreedCombobox({
 
     input.value = value;
 
-    if (value === MIXED_BREED || value === UNKNOWN_BREED) {
+    if (isMixedBreed(value) || value === UNKNOWN_BREED) {
       isCustomEntry = false;
       input.readOnly = true;
       input.placeholder = "Select breed";

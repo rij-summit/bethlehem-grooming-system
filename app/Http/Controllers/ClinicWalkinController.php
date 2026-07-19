@@ -7,6 +7,7 @@ use App\Models\ClinicAppointment;
 use App\Models\Pet;
 use App\Models\User;
 use App\Models\Walkin;
+use App\Support\PetWeightSize;
 use Illuminate\Support\Facades\DB;
 
 class ClinicWalkinController extends Controller
@@ -15,6 +16,7 @@ class ClinicWalkinController extends Controller
     {
         return DB::transaction(function () use ($request) {
             $data = $request->validated();
+            $data = PetWeightSize::withComputedSize($data);
 
             $user = ! empty($data['email'])
                 ? User::where('email', $data['email'])->first()
@@ -91,6 +93,8 @@ class ClinicWalkinController extends Controller
                 $existing->update([
                     'breed' => $data['breed'] ?? $existing->breed,
                     'fur_type' => $data['fur_type'] ?? $existing->fur_type,
+                    'weight' => $data['weight'] ?? $existing->weight,
+                    'size' => $data['size'] ?? $existing->size,
                 ]);
 
                 return $existing;
@@ -104,6 +108,7 @@ class ClinicWalkinController extends Controller
             'breed' => $data['breed'] ?? null,
             'fur_type' => $data['fur_type'] ?? null,
             'weight' => $data['weight'] ?? null,
+            'size' => $data['size'] ?? null,
             'medical_conditions' => $data['medical_conditions'] ?? null,
             'is_archived' => false,
         ]);

@@ -1,8 +1,9 @@
 export const MIXED_BREED = "Mixed Breed / Aspin";
+export const MIXED_BREED_CAT = "Mixed Breed / Puspin";
 export const UNKNOWN_BREED = "Unknown Breed";
 export const OTHER_BREED = "Other \u2014 please specify";
 
-const SPECIAL_BREEDS = new Set([MIXED_BREED, UNKNOWN_BREED]);
+const SPECIAL_BREEDS = new Set([MIXED_BREED, MIXED_BREED_CAT, UNKNOWN_BREED]);
 const catalogueUrl = new URL("../data/breed-coat-options.json", import.meta.url);
 
 export let BREED_COAT_OPTIONS = {};
@@ -45,6 +46,17 @@ export function hasLetter(value) {
   return /\p{L}/u.test(String(value || ""));
 }
 
+export function getMixedBreed(petType) {
+  return petType === "Cat" ? MIXED_BREED_CAT : MIXED_BREED;
+}
+
+export function isMixedBreed(value) {
+  const normalizedValue = normalize(value);
+  return [MIXED_BREED, MIXED_BREED_CAT].some(
+    (mixedBreed) => normalize(mixedBreed) === normalizedValue,
+  );
+}
+
 export function getMatchingBreeds(query, petType, limit = 4) {
   const normalizedQuery = normalize(query);
 
@@ -71,14 +83,17 @@ export function getMatchingBreeds(query, petType, limit = 4) {
 }
 
 export function getCoatOptions(breed, petType) {
-  const normalizedBreed = normalize(breed);
+  const effectiveBreed = petType === "Cat" && normalize(breed) === normalize(MIXED_BREED)
+    ? MIXED_BREED_CAT
+    : breed;
+  const normalizedBreed = normalize(effectiveBreed);
 
   if (!normalizedBreed) {
     return [];
   }
 
   if (
-    [MIXED_BREED, UNKNOWN_BREED].some((specialBreed) => normalize(specialBreed) === normalizedBreed)
+    [...SPECIAL_BREEDS].some((specialBreed) => normalize(specialBreed) === normalizedBreed)
     && !BREED_COAT_OPTIONS[petType]
   ) {
     return [];
@@ -89,7 +104,7 @@ export function getCoatOptions(breed, petType) {
     : Object.keys(BREED_COAT_OPTIONS);
 
   for (const type of typesToSearch) {
-    const matchingBreed = findMatchingKey(BREED_COAT_OPTIONS[type], breed);
+    const matchingBreed = findMatchingKey(BREED_COAT_OPTIONS[type], effectiveBreed);
 
     if (matchingBreed) {
       return [...BREED_COAT_OPTIONS[type][matchingBreed]];

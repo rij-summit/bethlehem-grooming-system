@@ -5,12 +5,16 @@ export function createFixedOptionCombobox({
   toggleButton,
   options,
   placeholder,
+  displaySelectedLabel = false,
 }) {
   if (!root || !input || !listbox || !toggleButton || !Array.isArray(options)) {
     throw new Error("Fixed option combobox configuration is incomplete.");
   }
 
+  let currentOptions = [...options];
+  let selectedValue = "";
   let isOpen = false;
+  let isDisabled = input.disabled || toggleButton.disabled;
 
   function buildOption(option) {
     const button = document.createElement("button");
@@ -18,7 +22,7 @@ export function createFixedOptionCombobox({
     button.className =
       "fixed-option-combobox-option block w-full px-4 py-2.5 text-left text-sm text-slate-700 transition hover:bg-[#edf5fc] focus:bg-[#edf5fc] focus:outline-none";
     button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(input.value === option.value));
+    button.setAttribute("aria-selected", String(selectedValue === option.value));
     button.dataset.optionValue = option.value;
     button.textContent = option.label;
     return button;
@@ -26,10 +30,14 @@ export function createFixedOptionCombobox({
 
   function renderOptions() {
     listbox.innerHTML = "";
-    options.forEach((option) => listbox.appendChild(buildOption(option)));
+    currentOptions.forEach((option) => listbox.appendChild(buildOption(option)));
   }
 
   function setOpen(nextOpen) {
+    if (isDisabled || currentOptions.length === 0) {
+      nextOpen = false;
+    }
+
     isOpen = Boolean(nextOpen);
     listbox.classList.toggle("hidden", !isOpen);
     input.setAttribute("aria-expanded", String(isOpen));
@@ -41,22 +49,75 @@ export function createFixedOptionCombobox({
   }
 
   function selectValue(value) {
-    if (!options.some((option) => option.value === value)) {
+    if (isDisabled || !currentOptions.some((option) => option.value === value)) {
       return;
     }
 
-    input.value = value;
-    input.setAttribute("aria-invalid", "false");
-    setOpen(false);
+    setValue(value);
     input.focus();
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function reset() {
-    input.value = "";
-    input.placeholder = placeholder;
+  function setValue(value) {
+    if (value === "") {
+      selectedValue = "";
+      input.value = "";
+      delete input.dataset.optionValue;
+      input.placeholder = placeholder;
+      input.setAttribute("aria-invalid", "false");
+      setOpen(false);
+      return true;
+    }
+
+    const selectedOption = currentOptions.find((option) => option.value === value);
+
+    if (!selectedOption) {
+      return false;
+    }
+
+    selectedValue = selectedOption.value;
+    input.value = displaySelectedLabel ? selectedOption.label : selectedOption.value;
+    input.dataset.optionValue = selectedOption.value;
     input.setAttribute("aria-invalid", "false");
     setOpen(false);
+    return true;
+  }
+
+  function reset() {
+    setValue("");
+  }
+
+  function setOptions(nextOptions, { preserveValue = true } = {}) {
+    if (!Array.isArray(nextOptions)) {
+      throw new Error("Fixed option combobox options must be an array.");
+    }
+
+    const previousValue = selectedValue;
+    currentOptions = [...nextOptions];
+
+    if (!preserveValue || !currentOptions.some(({ value }) => value === previousValue)) {
+      setValue("");
+    }
+
+    if (isOpen) {
+      renderOptions();
+    }
+  }
+
+  function setDisabled(nextDisabled) {
+    isDisabled = Boolean(nextDisabled);
+    input.disabled = isDisabled;
+    toggleButton.disabled = isDisabled;
+    input.setAttribute("aria-disabled", String(isDisabled));
+    toggleButton.setAttribute("aria-disabled", String(isDisabled));
+
+    if (isDisabled) {
+      setOpen(false);
+    }
+  }
+
+  function getValue() {
+    return selectedValue;
   }
 
   function focusOption(offset) {
@@ -128,7 +189,8 @@ export function createFixedOptionCombobox({
   });
 
   input.form?.addEventListener("reset", () => window.setTimeout(reset));
+  setDisabled(isDisabled);
   reset();
 
-  return { reset };
+  return { getValue, reset, setDisabled, setOptions, setValue };
 }

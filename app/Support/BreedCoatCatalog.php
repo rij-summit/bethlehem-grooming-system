@@ -46,7 +46,12 @@ final class BreedCoatCatalog
             default => null,
         };
         $isGenericBreed = strcasecmp($breed, 'Mixed Breed / Aspin') === 0
+            || strcasecmp($breed, 'Mixed Breed / Puspin') === 0
             || strcasecmp($breed, 'Unknown Breed') === 0;
+
+        if ($speciesKey === 'Cat' && strcasecmp($breed, 'Mixed Breed / Aspin') === 0) {
+            $breed = 'Mixed Breed / Puspin';
+        }
 
         if ($isGenericBreed && $speciesKey === null) {
             return [];

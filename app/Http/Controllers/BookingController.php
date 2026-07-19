@@ -10,6 +10,9 @@ use App\Models\Pet;
 use App\Models\Service;
 use App\Models\TimeWindow;
 use App\Rules\ValidBreedCoat;
+use App\Rules\ValidPetSize;
+use App\Rules\ValidPetWeight;
+use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -106,7 +109,7 @@ class BookingController extends Controller
     {
         $today = now()->toDateString();
 
-        $request->validate([
+        $validated = $request->validate([
             'booking_date' => 'required|date|after_or_equal:'.$today,
             'window_id' => 'required|exists:time_windows,window_id',
             'number_of_pets' => 'required|integer|min:1|max:'.self::MAX_PETS_PER_BOOKING,
@@ -116,9 +119,9 @@ class BookingController extends Controller
             'pets.*.pet_name' => 'required|string|max:100',
             'pets.*.species' => 'nullable|string|max:50',
             'pets.*.breed' => 'nullable|string|max:100',
-            'pets.*.size' => 'nullable|in:small,medium,large,extra_large',
+            'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'pets.*.weight' => 'nullable|numeric',
+            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
             'pets.*.color' => 'nullable|string|max:50',
             'pets.*.medical_conditions' => 'nullable|string',
             'pets.*.special_instructions' => 'nullable|string',
@@ -127,6 +130,12 @@ class BookingController extends Controller
             'pets.*.services.ala_carte' => 'nullable|array',
             'pets.*.services.ala_carte.*' => 'nullable|string',
         ]);
+
+        $validated['pets'] = array_map(
+            fn (array $pet) => PetWeightSize::withComputedSize($pet),
+            $validated['pets'],
+        );
+        $request->merge(['pets' => $validated['pets']]);
 
         $user = $request->user();
         $date = $request->booking_date;
@@ -199,6 +208,8 @@ class BookingController extends Controller
                 $pet->update([
                     'breed' => $petData['breed'] ?? $pet->breed,
                     'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
+                    'weight' => $petData['weight'] ?? $pet->weight,
+                    'size' => $petData['size'] ?? $pet->size,
                 ]);
             }
 

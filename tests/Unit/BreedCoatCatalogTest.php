@@ -40,6 +40,12 @@ class BreedCoatCatalogTest extends TestCase
         );
     }
 
+    public function test_mixed_breed_labels_are_species_specific(): void
+    {
+        $this->assertNotEmpty(BreedCoatCatalog::optionsFor('Mixed Breed / Aspin', 'Dog'));
+        $this->assertNotEmpty(BreedCoatCatalog::optionsFor('Mixed Breed / Puspin', 'Cat'));
+    }
+
     public function test_impossible_breed_and_coat_combination_is_rejected(): void
     {
         $validator = Validator::make([
