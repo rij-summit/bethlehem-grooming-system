@@ -122,6 +122,157 @@
 
         <main class="flex-1 p-4 md:p-6">
 
+          <!-- ── Customer Search ──────────────────────────────────────────────── -->
+          <div x-data="adminClinicSearch()" class="mb-6">
+
+            <!-- Search bar -->
+            <div class="overflow-hidden rounded-2xl bg-white shadow-sm">
+              <div class="flex items-center gap-3 px-4 py-3">
+                <i data-lucide="search" class="h-4 w-4 shrink-0 text-slate-400"></i>
+                <input
+                  x-model="searchQuery"
+                  @input="onSearchInput()"
+                  type="text"
+                  placeholder="Search customer by name, phone, or email…"
+                  class="flex-1 bg-transparent text-sm outline-none"
+                  style="color:#1e293b"
+                />
+                <span x-show="searching" style="display:none" class="text-xs text-slate-400">Searching…</span>
+                <button x-show="searchQuery" style="display:none" @click="clearSearch()" type="button"
+                  class="text-slate-400 transition hover:text-slate-600">
+                  <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+              </div>
+              <!-- Results -->
+              <div x-show="searchResults.length > 0 || noResults" style="display:none"
+                class="border-t border-slate-100">
+                <div x-show="noResults" style="display:none"
+                  class="px-4 py-3 text-center text-sm text-slate-400">No customers found.</div>
+                <template x-for="c in searchResults" :key="c.id">
+                  <button @click="pickCustomer(c)" type="button"
+                    class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#eaf4fb]">
+                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style="background-color:#315b7e">
+                      <span x-text="(c.firstName?.[0] || '') + (c.lastName?.[0] || '')"></span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-semibold text-slate-800" x-text="c.fullName"></p>
+                      <p class="text-xs text-slate-400"
+                        x-text="[c.phone, c.email].filter(Boolean).join(' · ')"></p>
+                    </div>
+                    <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-300"></i>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Customer detail modal -->
+            <div x-show="showPanel" style="display:none;z-index:200;background-color:rgba(15,23,42,0.6)"
+              x-transition class="fixed inset-0 flex items-center justify-center px-4">
+              <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+                  <div>
+                    <h2 class="text-base font-bold text-[#2f4b66]" x-text="panelCustomer?.fullName"></h2>
+                    <p class="mt-0.5 text-xs text-slate-400"
+                      x-text="[panelCustomer?.phone, panelCustomer?.email].filter(Boolean).join(' · ')"></p>
+                  </div>
+                  <button @click="showPanel = false" type="button"
+                    class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+                    <i data-lucide="x" class="h-5 w-5"></i>
+                  </button>
+                </div>
+                <div class="max-h-64 overflow-y-auto px-6 py-4">
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Registered Pets</p>
+                  <div x-show="!(panelCustomer?.pets || []).filter(p => !p.isArchived).length" style="display:none"
+                    class="text-sm text-slate-400">No active pets on record.</div>
+                  <div class="space-y-2">
+                    <template x-for="pet in (panelCustomer?.pets || []).filter(p => !p.isArchived)" :key="pet.id">
+                      <div class="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2.5" style="background-color:#f8fafc">
+                        <div class="min-w-0">
+                          <p class="text-sm font-semibold text-slate-800" x-text="pet.petName"></p>
+                          <p class="text-xs text-slate-400"
+                            x-text="[pet.species, pet.breed].filter(Boolean).join(' · ')"></p>
+                        </div>
+                        <button @click="openQueueModal(pet)" type="button"
+                          class="ml-3 shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition"
+                          style="background-color:#315b7e">
+                          Add to Queue
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+                  <a :href="'./clients.html?customer_id=' + panelCustomer?.id"
+                    class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                    View Profile
+                  </a>
+                  <button @click="openQueueModal(null)" type="button"
+                    class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
+                    style="background-color:#315b7e">
+                    + New Pet
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add to Queue modal -->
+            <div x-show="queueModal.open" style="display:none;z-index:210;background-color:rgba(15,23,42,0.7)"
+              x-transition class="fixed inset-0 flex items-center justify-center px-4">
+              <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+                  <div>
+                    <h2 class="text-base font-bold text-[#2f4b66]">Add to Clinic Queue</h2>
+                    <p class="mt-0.5 text-xs text-slate-400" x-text="panelCustomer?.fullName"></p>
+                  </div>
+                  <button @click="queueModal.open = false" type="button"
+                    class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+                    <i data-lucide="x" class="h-5 w-5"></i>
+                  </button>
+                </div>
+                <div class="space-y-4 px-6 py-5">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-slate-600">Pet Name *</label>
+                    <input x-model="queueForm.pet_name" type="text" placeholder="e.g. Buddy"
+                      class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600">Species *</label>
+                      <input x-model="queueForm.species" type="text" placeholder="Dog / Cat"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                    <div>
+                      <label class="mb-1 block text-xs font-semibold text-slate-600">Breed</label>
+                      <input x-model="queueForm.breed" type="text" placeholder="optional"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-slate-600">Chief Complaint *</label>
+                    <textarea x-model="queueForm.chief_complaint" rows="2"
+                      placeholder="Reason for visit…"
+                      class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
+                  </div>
+                  <p x-show="queueModal.error" style="display:none;color:#b91c1c"
+                    class="text-xs font-semibold" x-text="queueModal.error"></p>
+                </div>
+                <div class="flex gap-3 px-6 pb-5">
+                  <button @click="queueModal.open = false" type="button"
+                    class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button @click="submitQueue()" :disabled="queueModal.busy" type="button"
+                    class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
+                    :style="queueModal.busy ? 'background-color:#315b7e;opacity:0.6;cursor:not-allowed' : 'background-color:#315b7e'">
+                    <span x-text="queueModal.busy ? 'Adding…' : 'Add to Queue'"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /adminClinicSearch -->
+
           <!-- Error banner -->
           <div x-show="error" x-transition class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="error"></div>
 

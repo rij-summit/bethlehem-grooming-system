@@ -31,10 +31,33 @@ function adminCustomers() {
       error:    "",
     },
 
+    petModal: {
+      open:      false,
+      pet:       null,
+      editing:   false,
+      saving:    false,
+      saveError: "",
+      form:      {},
+    },
+
     // ── Init ──────────────────────────────────────────────
 
     async init() {
       await this.loadCustomers();
+      const params     = new URLSearchParams(window.location.search);
+      const customerId = params.get("customer_id");
+      if (customerId) {
+        const customer = this.customers.find(c => String(c.id) === customerId);
+        if (customer) {
+          this.openCustomerDetails(customer);
+        } else {
+          // Not in the current filtered list — fetch directly by ID
+          try {
+            const data = await API.getCustomerDetails(customerId);
+            if (data.customer) this.openCustomerDetails(data.customer);
+          } catch { /* silently ignore if not found */ }
+        }
+      }
     },
 
     get isAdmin() {
@@ -153,6 +176,82 @@ function adminCustomers() {
 
     closeReset() {
       this.resetModal.open = false;
+    },
+
+    openPetDetail(pet) {
+      this.petModal = { open: true, pet, editing: false, saving: false, saveError: "", form: {} };
+      this.refreshIcons();
+    },
+
+    startEditPet() {
+      const p = this.petModal.pet;
+      this.petModal.form = {
+        pet_name:            p.petName           || "",
+        species:             p.species           || "",
+        breed:               p.breed             || "",
+        gender:              p.gender            || "",
+        birthdate:           p.birthdate         || "",
+        is_neutered:         p.isNeutered        || false,
+        neutered_date:       p.neuteredDate      || "",
+        is_deceased:         p.isDeceased        || false,
+        deceased_date:       p.deceasedDate      || "",
+        size:                p.size              || "",
+        fur_type:            p.furType           || "",
+        weight:              p.weight            ?? "",
+        color:               p.color             || "",
+        medical_conditions:  p.medicalConditions || "",
+      };
+      this.petModal.editing   = true;
+      this.petModal.saveError = "";
+    },
+
+    cancelEditPet() {
+      this.petModal.editing   = false;
+      this.petModal.saveError = "";
+    },
+
+    async saveEditPet() {
+      if (this.petModal.saving) return;
+      this.petModal.saving    = true;
+      this.petModal.saveError = "";
+
+      try {
+        await API.adminUpdatePet(this.petModal.pet.id, this.petModal.form);
+
+        const f = this.petModal.form;
+        const updated = {
+          ...this.petModal.pet,
+          petName:           f.pet_name,
+          species:           f.species,
+          breed:             f.breed,
+          gender:            f.gender,
+          birthdate:         f.birthdate,
+          isNeutered:        f.is_neutered,
+          neuteredDate:      f.neutered_date,
+          isDeceased:        f.is_deceased,
+          deceasedDate:      f.deceased_date,
+          size:              f.size,
+          furType:           f.fur_type,
+          weight:            f.weight,
+          color:             f.color,
+          medicalConditions: f.medical_conditions,
+        };
+
+        this.petModal.pet     = updated;
+        this.petModal.editing = false;
+
+        // Sync the updated pet back into the customer detail modal list
+        if (this.detailModal.customer?.pets) {
+          const idx = this.detailModal.customer.pets.findIndex(p => p.id === updated.id);
+          if (idx !== -1) this.detailModal.customer.pets[idx] = updated;
+        }
+
+        this.refreshIcons();
+      } catch (err) {
+        this.petModal.saveError = err.message || "Failed to save changes.";
+      } finally {
+        this.petModal.saving = false;
+      }
     },
 
     async openCustomerDetails(customer) {

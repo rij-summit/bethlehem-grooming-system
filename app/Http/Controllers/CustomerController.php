@@ -58,6 +58,7 @@ class CustomerController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name',  'like', "%{$search}%")
+                  ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"])
                   ->orWhere('phone',      'like', "%{$search}%")
                   ->orWhere('email',      'like', "%{$search}%");
             });
@@ -134,6 +135,12 @@ class CustomerController extends Controller
                 'petName'           => $pet->pet_name,
                 'species'           => $pet->species,
                 'breed'             => $pet->breed,
+                'gender'            => $pet->gender,
+                'birthdate'         => $pet->birthdate,
+                'isNeutered'        => (bool) $pet->is_neutered,
+                'neuteredDate'      => $pet->neutered_date,
+                'isDeceased'        => (bool) $pet->is_deceased,
+                'deceasedDate'      => $pet->deceased_date,
                 'weight'            => $pet->weight,
                 'color'             => $pet->color,
                 'size'              => $pet->size,

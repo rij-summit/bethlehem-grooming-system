@@ -228,6 +228,108 @@ function adminClinic() {
   };
 }
 
+// ── Customer Search ───────────────────────────────────────────────────────────
+
+function adminClinicSearch() {
+  return {
+    searchQuery: "",
+    searchResults: [],
+    noResults: false,
+    searching: false,
+    _timer: null,
+
+    panelCustomer: null,
+    showPanel: false,
+
+    queueModal: { open: false, busy: false, error: "" },
+    queueForm: { pet_name: "", species: "", breed: "", weight: "", chief_complaint: "" },
+
+    onSearchInput() {
+      const q = this.searchQuery.trim();
+      if (q.length < 2) { this.searchResults = []; this.noResults = false; return; }
+      clearTimeout(this._timer);
+      this._timer = setTimeout(async () => {
+        this.searching = true;
+        try {
+          const res = await API.getCustomers({ search: q, status: "active" });
+          this.searchResults = res.customers || [];
+          this.noResults     = this.searchResults.length === 0;
+        } catch {
+          this.searchResults = [];
+          this.noResults     = false;
+        } finally {
+          this.searching = false;
+        }
+      }, 350);
+    },
+
+    async pickCustomer(c) {
+      try {
+        const res = await API.getCustomerDetails(c.id);
+        this.panelCustomer = res.customer;
+        this.showPanel     = true;
+        this.clearSearch();
+        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+      } catch (err) {
+        alert(err.message || "Failed to load customer details.");
+      }
+    },
+
+    clearSearch() {
+      this.searchQuery   = "";
+      this.searchResults = [];
+      this.noResults     = false;
+    },
+
+    openQueueModal(pet = null) {
+      this.queueForm = {
+        pet_name:        pet?.petName || "",
+        species:         pet?.species || "",
+        breed:           pet?.breed   || "",
+        weight:          pet?.weight  || "",
+        chief_complaint: "",
+      };
+      this.queueModal = { open: true, busy: false, error: "" };
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    async submitQueue() {
+      this.queueModal.error = "";
+      if (!this.queueForm.pet_name.trim())       { this.queueModal.error = "Pet name is required."; return; }
+      if (!this.queueForm.species.trim())         { this.queueModal.error = "Species is required."; return; }
+      if (!this.queueForm.chief_complaint.trim()) { this.queueModal.error = "Chief complaint is required."; return; }
+
+      const c = this.panelCustomer;
+      if (!c) return;
+
+      this.queueModal.busy = true;
+      try {
+        await API.submitClinicWalkIn({
+          fname:           c.firstName,
+          lname:           c.lastName,
+          email:           c.email  || undefined,
+          phone:           c.phone,
+          pet_name:        this.queueForm.pet_name.trim(),
+          species:         this.queueForm.species.trim(),
+          breed:           this.queueForm.breed.trim()  || undefined,
+          weight:          this.queueForm.weight        || undefined,
+          chief_complaint: this.queueForm.chief_complaint.trim(),
+          terms_agreed:    true,
+        });
+        this.queueModal.open = false;
+        this.showPanel       = false;
+        window.__clinicReload?.();
+      } catch (err) {
+        this.queueModal.error = err.errors
+          ? Object.values(err.errors).flat().join(" ")
+          : (err.message || "Failed to add to queue.");
+      } finally {
+        this.queueModal.busy = false;
+      }
+    },
+  };
+}
+
 // ── Medical Record Modal ──────────────────────────────────────────────────────
 
 function adminClinicModal() {
