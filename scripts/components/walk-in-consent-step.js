@@ -315,6 +315,7 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
       pet_name:             item.pet.petName,
       species:              item.pet.petType,
       breed:                item.pet.breed    || null,
+      fur_type:             item.pet.furType  || null,
       weight:               item.pet.weight   || null,
       size:                 normalizeSizeForApi(item.pet.size),
       medical_conditions:   item.pet.medicalNotes || null,

@@ -186,6 +186,7 @@ async function handleSubmit(event) {
     pet_name:          state.pet?.petName || "",
     species:           state.pet?.petType || "",
     breed:             state.pet?.breed || null,
+    fur_type:          state.pet?.furType || null,
     weight:            state.pet?.weight || null,
     medical_conditions: state.pet?.medicalNotes || null,
     chief_complaint:   state.chiefComplaint,

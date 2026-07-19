@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidBreedCoat;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreClinicWalkinRequest extends FormRequest
@@ -15,17 +16,18 @@ class StoreClinicWalkinRequest extends FormRequest
     {
         return [
             // Owner
-            'fname'  => ['required', 'string', 'max:100'],
-            'lname'  => ['required', 'string', 'max:100'],
-            'mname'  => ['nullable', 'string', 'max:100'],
-            'email'  => ['nullable', 'email', 'max:255'],
-            'phone'  => ['required', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
+            'fname' => ['required', 'string', 'max:100'],
+            'lname' => ['required', 'string', 'max:100'],
+            'mname' => ['nullable', 'string', 'max:100'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['required', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
 
             // Pet — single pet for clinic walk-in
-            'pet_name'           => ['required', 'string', 'max:100'],
-            'species'            => ['required', 'string', 'max:100'],
-            'breed'              => ['nullable', 'string', 'max:100'],
-            'weight'             => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'pet_name' => ['required', 'string', 'max:100'],
+            'species' => ['required', 'string', 'max:100'],
+            'breed' => ['nullable', 'string', 'max:100'],
+            'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'weight' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'medical_conditions' => ['nullable', 'string', 'max:1000'],
 
             // Clinic
@@ -39,9 +41,9 @@ class StoreClinicWalkinRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'terms_agreed.accepted'  => 'The customer must agree to the terms before registration.',
+            'terms_agreed.accepted' => 'The customer must agree to the terms before registration.',
             'chief_complaint.required' => 'A chief complaint or reason for visit is required.',
-            'phone.regex'            => 'Phone number may only contain digits, spaces, +, -, and parentheses.',
+            'phone.regex' => 'Phone number may only contain digits, spaces, +, -, and parentheses.',
         ];
     }
 }

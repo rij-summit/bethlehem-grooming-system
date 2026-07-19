@@ -1,5 +1,8 @@
 import { renderWalkInServicesStep } from "./walk-in-services-step.js";
 import { renderWalkInClinicComplaintStep } from "./walk-in-clinic-complaint-step.js";
+import { createBreedCombobox } from "./breed-combobox.js";
+import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
+import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 
 const MAX_PETS_PER_BOOKING = 10;
 
@@ -10,6 +13,7 @@ const elements = {
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
   petName: document.getElementById("petName"),
+  breed: document.getElementById("breed"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
   selectedPetCount: document.getElementById("selectedPetCount"),
@@ -23,6 +27,37 @@ const elements = {
     size: document.getElementById("sizeError"),
   },
 };
+
+createFixedOptionCombobox({
+  root: document.getElementById("petTypeCombobox"),
+  input: elements.petType,
+  listbox: document.getElementById("petTypeOptions"),
+  toggleButton: document.getElementById("petTypeDropdownButton"),
+  placeholder: "Select pet type",
+  options: [
+    { value: "Dog", label: "Dog" },
+    { value: "Cat", label: "Cat" },
+  ],
+});
+
+const breedCombobox = createBreedCombobox({
+  root: document.getElementById("breedCombobox"),
+  input: elements.breed,
+  listbox: document.getElementById("breedOptions"),
+  toggleButton: document.getElementById("breedDropdownButton"),
+  errorElement: document.getElementById("breedError"),
+  getPetType: () => elements.petType.value,
+});
+
+const breedCoatCombobox = createBreedCoatCombobox({
+  root: document.getElementById("furTypeCombobox"),
+  breedInput: elements.breed,
+  petTypeInput: elements.petType,
+  input: elements.furType,
+  listbox: document.getElementById("furTypeOptions"),
+  toggleButton: document.getElementById("furTypeDropdownButton"),
+  errorElement: document.getElementById("furTypeError"),
+});
 
 const state = {
   pets: [],
@@ -124,6 +159,16 @@ function validatePetForm(values) {
 
   if (!values.petName.trim()) {
     errors.petName = "Pet name is required.";
+  }
+
+  const breedValidationMessage = breedCombobox.getValidationMessage();
+  if (breedValidationMessage) {
+    errors.breed = breedValidationMessage;
+  }
+
+  const furTypeValidationMessage = breedCoatCombobox.getValidationMessage();
+  if (furTypeValidationMessage) {
+    errors.furType = furTypeValidationMessage;
   }
 
   const allowedSizes = sizeOptionsByType[values.petType] || [];
@@ -268,6 +313,11 @@ function renderValidationErrors(values, { showAll = false } = {}) {
     setFieldError(fieldName, message);
   });
 
+  if (shouldShow) {
+    breedCombobox.showValidation(errors.breed || "");
+    breedCoatCombobox.showValidation(errors.furType || "");
+  }
+
   if (showAll || (hasSubmittedOnce && errors.limit)) {
     showMessage(errors.limit || "Please put valid inputs.", "error");
     return;
@@ -283,9 +333,8 @@ function renderValidationErrors(values, { showAll = false } = {}) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
-  elements.furType.value = "";
   elements.size.value = "";
-  updateFurOptions("");
+  breedCoatCombobox.reset();
   updateSizeOptions("");
 }
 
@@ -344,31 +393,6 @@ function handleNext() {
   renderWalkInServicesStep({ pets: state.pets });
 }
 
-function updateFurOptions(petType) {
-  const furOptionsByType = {
-    Dog: ["Short", "Medium", "Long", "Curly", "Double Coat"],
-    Cat: ["Short Hair", "Long Hair", "Hairless"],
-  };
-
-  const options = furOptionsByType[petType] || [];
-  const selectedValue = elements.furType.value;
-
-  elements.furType.innerHTML = `<option value="">Select fur type</option>`;
-
-  options.forEach((optionValue) => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
-    elements.furType.appendChild(option);
-  });
-
-  if (selectedValue && options.includes(selectedValue)) {
-    elements.furType.value = selectedValue;
-  } else {
-    elements.furType.value = "";
-  }
-}
-
 function updateSizeOptions(petType) {
   const selectedSize = elements.size.value;
   const options = sizeOptionsByType[petType] || [];
@@ -424,7 +448,6 @@ function bindEvents() {
     renderValidationErrors(formValues, { showAll: false });
 
     if (event.target === elements.petType) {
-      updateFurOptions(event.target.value);
       updateSizeOptions(event.target.value);
     }
   };
@@ -432,21 +455,28 @@ function bindEvents() {
   elements.petType.addEventListener("input", handlePetInputs);
   elements.petType.addEventListener("change", handlePetInputs);
   elements.petName.addEventListener("input", handlePetInputs);
+  elements.breed.addEventListener("input", handlePetInputs);
+  elements.breed.addEventListener("change", handlePetInputs);
   elements.furType.addEventListener("input", handlePetInputs);
   elements.size.addEventListener("input", handlePetInputs);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function initWalkInPetStep() {
   if (!guardAdminAccess()) {
     return;
   }
 
   bindEvents();
-  updateFurOptions(elements.petType.value);
   updateSizeOptions(elements.petType.value);
   renderSelectedPets();
 
   if (window.lucide) {
     window.lucide.createIcons();
   }
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initWalkInPetStep, { once: true });
+} else {
+  initWalkInPetStep();
+}

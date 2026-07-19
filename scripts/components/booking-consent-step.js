@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
         species: pet.petType,
         breed: pet.breed || null,
         size: normalizeSizeForApi(pet.size),
-        fur_type: normalizeFurForApi(pet.furType),
+        fur_type: pet.furType?.trim() || null,
         weight: pet.weight ? parseFloat(pet.weight) : null,
         medical_conditions: pet.medicalNotes || null,
         special_instructions: reviewPet?.specialInstructions || null,
@@ -134,24 +134,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function normalizeSizeForApi(size) {
     if (!size) return null;
     return size.toLowerCase().replace(/\s+/g, "_");
-  }
-
-  // Fur type values from the dropdown may be verbose — normalize to backend enum
-  function normalizeFurForApi(furType) {
-    if (!furType) return null;
-    const map = {
-      "short": "short",
-      "short hair": "short",
-      "medium": "medium",
-      "long": "long",
-      "long hair": "long",
-      "curly": "curl",
-      "double coat": "wire",
-      "wire": "wire",
-      "curl": "curl",
-      "hairless": "short",
-    };
-    return map[furType.toLowerCase()] || null;
   }
 
   function handleFormStateChange() {

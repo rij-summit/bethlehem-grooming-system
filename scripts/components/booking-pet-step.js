@@ -11,6 +11,9 @@ import {
   loadPetsFromApi,
 } from "../services/pet-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
+import { createBreedCombobox } from "./breed-combobox.js";
+import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
+import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 
 /**
  * Booking Pet Step Controller
@@ -47,6 +50,7 @@ const elements = {
   addPetSection: document.getElementById("addPetSection"),
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
+  breed: document.getElementById("breed"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
 
@@ -58,6 +62,37 @@ const elements = {
   backBtn: document.getElementById("backBtn"),
   nextBtn: document.getElementById("nextBtn"),
 };
+
+createFixedOptionCombobox({
+  root: document.getElementById("petTypeCombobox"),
+  input: elements.petType,
+  listbox: document.getElementById("petTypeOptions"),
+  toggleButton: document.getElementById("petTypeDropdownButton"),
+  placeholder: "Select pet type",
+  options: [
+    { value: "Dog", label: "Dog" },
+    { value: "Cat", label: "Cat" },
+  ],
+});
+
+const breedCombobox = createBreedCombobox({
+  root: document.getElementById("breedCombobox"),
+  input: elements.breed,
+  listbox: document.getElementById("breedOptions"),
+  toggleButton: document.getElementById("breedDropdownButton"),
+  errorElement: document.getElementById("breedError"),
+  getPetType: () => elements.petType.value,
+});
+
+const breedCoatCombobox = createBreedCoatCombobox({
+  root: document.getElementById("furTypeCombobox"),
+  breedInput: elements.breed,
+  petTypeInput: elements.petType,
+  input: elements.furType,
+  listbox: document.getElementById("furTypeOptions"),
+  toggleButton: document.getElementById("furTypeDropdownButton"),
+  errorElement: document.getElementById("furTypeError"),
+});
 
 const BOOKING_STEP_TWO_KEY = "bookingStep2";
 const sizeOptionsByType = {
@@ -460,6 +495,16 @@ function validatePetForm(values) {
     return "Pet name is required.";
   }
 
+  const breedValidationMessage = breedCombobox.getValidationMessage();
+  if (breedValidationMessage) {
+    return breedValidationMessage;
+  }
+
+  const furTypeValidationMessage = breedCoatCombobox.getValidationMessage();
+  if (furTypeValidationMessage) {
+    return furTypeValidationMessage;
+  }
+
   const allowedSizes = sizeOptionsByType[values.petType] || [];
   if (values.size && !allowedSizes.includes(values.size)) {
     return `${values.petType} size must be one of: ${allowedSizes.join(", ")}.`;
@@ -474,7 +519,7 @@ function validatePetForm(values) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
-  elements.furType.innerHTML = `<option value="">Select fur type</option>`;
+  breedCoatCombobox.reset();
   updateSizeOptions("");
 }
 
@@ -485,6 +530,8 @@ function handleAddPetSubmit(event) {
   const validationMessage = validatePetForm(formValues);
 
   if (validationMessage) {
+    breedCombobox.showValidation();
+    breedCoatCombobox.showValidation();
     showMessage(validationMessage, "error");
     return;
   }
@@ -538,24 +585,6 @@ function handleNext() {
   window.location.href = "./booking-services.html";
 }
 
-function updateFurOptions(petType) {
-  const furOptionsByType = {
-    Dog: ["Short", "Medium", "Long", "Curly", "Double Coat"],
-    Cat: ["Short Hair", "Long Hair", "Hairless"],
-  };
-
-  const options = furOptionsByType[petType] || [];
-
-  elements.furType.innerHTML = `<option value="">Select fur type</option>`;
-
-  options.forEach((optionValue) => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
-    elements.furType.appendChild(option);
-  });
-}
-
 function updateSizeOptions(petType) {
   const selectedSize = elements.size.value;
   const options = sizeOptionsByType[petType] || [];
@@ -591,7 +620,6 @@ function bindEvents() {
   elements.nextBtn.addEventListener("click", handleNext);
 
   elements.petType.addEventListener("change", (event) => {
-    updateFurOptions(event.target.value);
     updateSizeOptions(event.target.value);
   });
 }
@@ -624,7 +652,13 @@ async function initStepState() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function initBookingPetStep() {
   bindEvents();
   initStepState();
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initBookingPetStep, { once: true });
+} else {
+  initBookingPetStep();
+}
