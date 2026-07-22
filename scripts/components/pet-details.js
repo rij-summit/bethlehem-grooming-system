@@ -14,7 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const profileContent = document.getElementById("petProfileContent");
   const overviewGrid = document.getElementById("petOverviewGrid");
   const groomingRecords = document.getElementById("petGroomingRecords");
+  const medicalRecords = document.getElementById("petMedicalRecords");
   const bookGroomingLink = document.getElementById("bookGroomingLink");
+  let medicalLoadState = "idle";
 
   const petIdParam = new URLSearchParams(window.location.search).get("pet_id");
   const petId = Number(petIdParam);
@@ -120,6 +122,10 @@ document.addEventListener("DOMContentLoaded", () => {
         panels.forEach((panel) => {
           panel.classList.toggle("hidden", panel.dataset.petPanel !== selected);
         });
+
+        if (selected === "medical") {
+          loadMedicalRecords();
+        }
       });
     });
   };
@@ -250,6 +256,171 @@ document.addEventListener("DOMContentLoaded", () => {
           <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
         </div>
       `;
+    }
+
+    renderIcons();
+  };
+
+  const renderMedicalRecord = (record) => {
+    const summaryItems = [
+      ["Reason for Visit", displayValue(record.chief_complaint)],
+      ["Final Diagnosis", displayValue(record.diagnosis)],
+      ["Treatment", displayValue(record.treatment_given)],
+    ];
+    const vitalItems = [
+      ["Weight", isMissing(record.vitals?.weight_kg) ? null : `${record.vitals.weight_kg} kg`],
+      ["Temperature", isMissing(record.vitals?.temperature_c) ? null : `${record.vitals.temperature_c} °C`],
+      ["Heart Rate", isMissing(record.vitals?.heart_rate_bpm) ? null : `${record.vitals.heart_rate_bpm} bpm`],
+      ["Respiratory Rate", isMissing(record.vitals?.respiratory_rate_bpm) ? null : `${record.vitals.respiratory_rate_bpm} breaths/min`],
+      ["Body Condition Score", isMissing(record.vitals?.body_condition_score) ? null : `${record.vitals.body_condition_score} / 9`],
+    ].filter(([, value]) => !isMissing(value));
+    const medications = Array.isArray(record.medications) ? record.medications : [];
+    const hasFollowUp = !isMissing(record.follow_up_date) || !isMissing(record.follow_up_notes);
+
+    return `
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        <div class="border-b border-slate-200 bg-white px-5 py-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Appointment Reference</p>
+              <h4 class="mt-1 text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.appointment_reference))}</h4>
+              <p class="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                <i data-lucide="calendar-days" class="h-4 w-4"></i>
+                <span>${escapeHtml(formatDate(record.appointment_date))}</span>
+              </p>
+            </div>
+            <span class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">${escapeHtml(titleCase(record.status))}</span>
+          </div>
+        </div>
+
+        <div class="space-y-5 p-5">
+          <dl class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            ${summaryItems.map(([label, value]) => `
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                <dd class="mt-1 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(value)}</dd>
+              </div>
+            `).join("")}
+          </dl>
+
+          ${hasFollowUp ? `
+            <section class="rounded-2xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
+              <div class="flex items-start gap-3">
+                <i data-lucide="calendar-clock" class="mt-0.5 h-5 w-5 shrink-0 text-[#315b7e]"></i>
+                <div>
+                  <h5 class="font-bold text-[#2f4b66]">Follow-up</h5>
+                  <p class="mt-1 text-sm text-slate-600"><span class="font-semibold">Date:</span> ${escapeHtml(formatDate(record.follow_up_date))}</p>
+                  <p class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">${escapeHtml(displayValue(record.follow_up_notes))}</p>
+                </div>
+              </div>
+            </section>
+          ` : ""}
+
+          ${vitalItems.length ? `
+            <section>
+              <h5 class="flex items-center gap-2 font-bold text-[#2f4b66]">
+                <i data-lucide="activity" class="h-4 w-4"></i>
+                Vital Signs
+              </h5>
+              <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                ${vitalItems.map(([label, value]) => `
+                  <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                    <dt class="text-xs font-semibold text-slate-400">${escapeHtml(label)}</dt>
+                    <dd class="mt-1 text-sm font-bold text-slate-700">${escapeHtml(value)}</dd>
+                  </div>
+                `).join("")}
+              </dl>
+            </section>
+          ` : ""}
+
+          ${medications.length ? `
+            <section>
+              <h5 class="flex items-center gap-2 font-bold text-[#2f4b66]">
+                <i data-lucide="pill" class="h-4 w-4"></i>
+                Prescribed Medications
+              </h5>
+              <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                ${medications.map((medication) => {
+                  const details = [
+                    ["Dosage", medication.dosage],
+                    ["Frequency", medication.frequency],
+                    ["Duration", medication.duration],
+                    ["Instructions", medication.instructions],
+                  ].filter(([, value]) => !isMissing(value));
+
+                  return `
+                    <div class="rounded-xl border border-slate-200 bg-white p-4">
+                      <p class="font-bold text-slate-800">${escapeHtml(displayValue(medication.drug_name))}</p>
+                      ${details.length ? `
+                        <dl class="mt-3 space-y-2">
+                          ${details.map(([label, value]) => `
+                            <div class="text-sm">
+                              <dt class="inline font-semibold text-slate-500">${escapeHtml(label)}:</dt>
+                              <dd class="inline whitespace-pre-line text-slate-700"> ${escapeHtml(value)}</dd>
+                            </div>
+                          `).join("")}
+                        </dl>
+                      ` : ""}
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </section>
+          ` : ""}
+        </div>
+      </article>
+    `;
+  };
+
+  const loadMedicalRecords = async () => {
+    if (!medicalRecords || medicalLoadState === "loading" || medicalLoadState === "loaded") return;
+
+    medicalLoadState = "loading";
+    medicalRecords.innerHTML = `
+      <div class="py-12 text-center">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-slate-500">Loading completed medical records...</p>
+      </div>
+    `;
+    renderIcons();
+
+    try {
+      const data = await API.getPetMedicalRecords(petId);
+      const records = Array.isArray(data.medical_records) ? data.medical_records : [];
+
+      if (!records.length) {
+        medicalRecords.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+            <i data-lucide="clipboard-heart" class="mx-auto h-8 w-8 text-slate-300"></i>
+            <h4 class="mt-3 font-bold text-slate-700">No completed medical records</h4>
+            <p class="mt-1 text-sm text-slate-500">No completed medical records are available for this pet yet.</p>
+          </div>
+        `;
+      } else {
+        medicalRecords.innerHTML = `<div class="space-y-4">${records.map(renderMedicalRecord).join("")}</div>`;
+      }
+
+      medicalLoadState = "loaded";
+    } catch (error) {
+      medicalLoadState = "error";
+
+      if (error?.status === 404) {
+        medicalRecords.innerHTML = `
+          <div class="rounded-2xl border border-amber-100 bg-amber-50 px-6 py-10 text-center" role="alert">
+            <i data-lucide="shield-alert" class="mx-auto h-8 w-8 text-amber-500"></i>
+            <h4 class="mt-3 font-bold text-amber-900">Pet profile not found</h4>
+            <p class="mt-1 text-sm text-amber-700">This pet does not exist or is not available for your account.</p>
+          </div>
+        `;
+      } else {
+        medicalRecords.innerHTML = `
+          <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center" role="alert">
+            <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
+            <h4 class="mt-3 font-bold text-red-800">Medical records could not be loaded</h4>
+            <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
+          </div>
+        `;
+      }
     }
 
     renderIcons();

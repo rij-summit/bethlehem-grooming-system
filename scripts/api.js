@@ -432,6 +432,11 @@ var API = (() => {
     return request("GET", `/pets/${petId}`, null, getCustomerToken());
   }
 
+  async function getPetMedicalRecords(petId) {
+    // GET /api/pets/{petId}/medical-records  (protected and owner-scoped)
+    return request("GET", `/pets/${petId}/medical-records`, null, getCustomerToken());
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -849,6 +854,7 @@ var API = (() => {
     // Pets
     getUserPets,
     getPet,
+    getPetMedicalRecords,
     addPet,
     updatePet,
     adminUpdatePet,
