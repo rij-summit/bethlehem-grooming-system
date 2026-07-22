@@ -16,4 +16,9 @@ class ClinicAttachment extends Model
         'file_size_bytes',
         'label',
     ];
+
+    public function record()
+    {
+        return $this->belongsTo(ClinicRecord::class, 'clinic_record_id', 'id');
+    }
 }

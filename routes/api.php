@@ -110,19 +110,21 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin — Walk-in registration (grooming)
     Route::post('/admin/walk-in', [WalkinController::class, 'store']);
 
-    // Admin — Walk-in registration (clinic)
-    Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
+    // Clinic administration — available only to the project's staff/admin roles.
+    Route::middleware('role:admin,staff')->group(function () {
+        Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
 
-    // Admin — Clinic queue management
-    Route::get('/admin/clinic-appointments',                                          [AdminClinicController::class, 'index']);
-    Route::post('/admin/clinic-appointments/{id}/check-in',                           [AdminClinicController::class, 'checkIn']);
-    Route::post('/admin/clinic-appointments/{id}/start-consultation',                 [AdminClinicController::class, 'startConsultation']);
-    Route::post('/admin/clinic-appointments/{id}/finish-consultation',                [AdminClinicController::class, 'finishConsultation']);
-    Route::post('/admin/clinic-appointments/{id}/pay',                                [AdminClinicController::class, 'markPaid']);
-    Route::post('/admin/clinic-appointments/{id}/cancel',                             [AdminClinicController::class, 'cancel']);
-    Route::post('/admin/clinic-appointments/{id}/record',                             [AdminClinicController::class, 'saveRecord']);
-    Route::post('/admin/clinic-appointments/{id}/attachments',                        [AdminClinicController::class, 'uploadAttachment']);
-    Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}',       [AdminClinicController::class, 'deleteAttachment']);
+        Route::get('/admin/clinic-appointments',                                    [AdminClinicController::class, 'index']);
+        Route::post('/admin/clinic-appointments/{id}/check-in',                     [AdminClinicController::class, 'checkIn']);
+        Route::post('/admin/clinic-appointments/{id}/start-consultation',           [AdminClinicController::class, 'startConsultation']);
+        Route::post('/admin/clinic-appointments/{id}/finish-consultation',          [AdminClinicController::class, 'finishConsultation']);
+        Route::post('/admin/clinic-appointments/{id}/pay',                          [AdminClinicController::class, 'markPaid']);
+        Route::post('/admin/clinic-appointments/{id}/cancel',                       [AdminClinicController::class, 'cancel']);
+        Route::post('/admin/clinic-appointments/{id}/record',                       [AdminClinicController::class, 'saveRecord']);
+        Route::post('/admin/clinic-appointments/{id}/attachments',                  [AdminClinicController::class, 'uploadAttachment']);
+        Route::get('/admin/clinic-appointments/{id}/attachments/{attachmentId}/download', [AdminClinicController::class, 'downloadAttachment']);
+        Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}', [AdminClinicController::class, 'deleteAttachment']);
+    });
 
     // Admin — Inventory: Products
     Route::get('/inventory/items',                         [InventoryController::class, 'index']);
@@ -158,11 +160,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pos/transactions',                   [PosController::class, 'getTransactions']);
     Route::get('/pos/transactions/{posId}',           [PosController::class, 'getReceipt']);
 
-    // Admin — Clinic closures
-    Route::post('/admin/clinic/stop-today',                [ClinicClosureController::class, 'stopToday']);
-    Route::post('/admin/clinic/reopen-today',              [ClinicClosureController::class, 'reopenToday']);
-    Route::get('/admin/clinic/blocked-dates',              [ClinicClosureController::class, 'blockedDates']);
-    Route::post('/admin/clinic/blocked-dates',             [ClinicClosureController::class, 'addBlockedDate']);
-    Route::delete('/admin/clinic/blocked-dates/{id}',      [ClinicClosureController::class, 'removeBlockedDate']);
-    Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
+    // Administrator-only clinic availability and settings actions.
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/admin/clinic/stop-today',                 [ClinicClosureController::class, 'stopToday']);
+        Route::post('/admin/clinic/reopen-today',               [ClinicClosureController::class, 'reopenToday']);
+        Route::get('/admin/clinic/blocked-dates',               [ClinicClosureController::class, 'blockedDates']);
+        Route::post('/admin/clinic/blocked-dates',              [ClinicClosureController::class, 'addBlockedDate']);
+        Route::delete('/admin/clinic/blocked-dates/{id}',       [ClinicClosureController::class, 'removeBlockedDate']);
+        Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
+    });
 });

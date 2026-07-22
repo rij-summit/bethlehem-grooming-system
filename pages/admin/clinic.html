@@ -434,6 +434,74 @@
             </div>
           </section>
 
+          <!-- Attachments -->
+          <section>
+            <div class="mb-3">
+              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Attachments</h3>
+              <p class="mt-1 text-xs text-slate-400">Medical files are downloaded through the authenticated clinic API.</p>
+            </div>
+
+            <div class="space-y-2">
+              <template x-if="attachments.length === 0">
+                <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No attachments uploaded.</p>
+              </template>
+              <template x-for="attachment in attachments" :key="attachment.id">
+                <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-[#2f4b66]" x-text="attachment.label || attachment.file_name"></p>
+                    <p class="mt-0.5 truncate text-xs text-slate-400">
+                      <span x-text="attachment.file_name"></span>
+                      <span aria-hidden="true"> · </span>
+                      <span x-text="formatFileSize(attachment.file_size_bytes)"></span>
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      @click="downloadAttachment(attachment)"
+                      :disabled="attachmentBusyId === attachment.id"
+                      class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50"
+                    >Download</button>
+                    <button
+                      type="button"
+                      @click="deleteAttachment(attachment)"
+                      :disabled="attachmentBusyId === attachment.id"
+                      class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    >Delete</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div class="mt-3 rounded-2xl bg-slate-50 p-3">
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-slate-600">File</label>
+                  <input
+                    x-ref="attachmentFile"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf,.dcm"
+                    @change="selectAttachment($event)"
+                    class="block w-full text-xs text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-[#dbe8f5] file:px-3 file:py-2 file:font-semibold file:text-[#315b7e]"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-slate-600">Label (optional)</label>
+                  <input type="text" maxlength="200" x-model="attachmentLabel" placeholder="e.g. Laboratory result" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                </div>
+                <button
+                  type="button"
+                  @click="uploadAttachment()"
+                  :disabled="attachmentBusy"
+                  class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-60"
+                  x-text="attachmentBusy ? 'Uploading…' : 'Upload'"
+                ></button>
+              </div>
+              <p class="mt-2 text-xs text-slate-400">JPG, PNG, PDF, or DCM up to 10 MB.</p>
+              <p x-show="attachmentError" class="mt-2 text-sm text-red-600" x-text="attachmentError"></p>
+            </div>
+          </section>
+
           <!-- Follow-up -->
           <section>
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Follow-up</h3>

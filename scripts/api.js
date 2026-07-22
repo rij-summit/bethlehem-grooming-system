@@ -227,11 +227,15 @@ var API = (() => {
   //   error.message — backend message or generic fallback
   //   error.errors  — Laravel validation errors object (422 only), or null
 
-  async function request(method, endpoint, body = null, token = null) {
+  async function request(method, endpoint, body = null, token = null, requestOptions = {}) {
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
     const headers = {
-      "Content-Type": "application/json",
       Accept: "application/json",
     };
+
+    if (!isFormData) {
+      headers["Content-Type"] = "application/json";
+    }
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -240,7 +244,7 @@ var API = (() => {
     const options = { method, headers };
 
     if (body !== null) {
-      options.body = JSON.stringify(body);
+      options.body = isFormData ? body : JSON.stringify(body);
     }
 
     let response;
@@ -271,7 +275,10 @@ var API = (() => {
       if (timeoutId) clearTimeout(timeoutId);
     }
 
-    const data = await response.json().catch(() => ({}));
+    const expectsBlob = requestOptions.responseType === "blob";
+    const data = response.ok && expectsBlob
+      ? null
+      : await response.json().catch(() => ({}));
 
     if (response.status === 401) {
       if (token) {
@@ -310,6 +317,28 @@ var API = (() => {
       error.status = response.status;
       error.errors = data.errors || null;
       throw error;
+    }
+
+    if (expectsBlob) {
+      const contentDisposition = response.headers.get("Content-Disposition") || "";
+      const encodedFileName = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const quotedFileName = contentDisposition.match(/filename="([^"]+)"/i)?.[1];
+      const plainFileName = contentDisposition.match(/filename=([^;]+)/i)?.[1]?.trim();
+      let fileName = encodedFileName || quotedFileName || plainFileName || null;
+
+      if (fileName) {
+        try {
+          fileName = decodeURIComponent(fileName.replace(/^"|"$/g, ""));
+        } catch {
+          fileName = fileName.replace(/^"|"$/g, "");
+        }
+      }
+
+      return {
+        blob: await response.blob(),
+        fileName,
+        contentType: response.headers.get("Content-Type") || "application/octet-stream",
+      };
     }
 
     return data;
@@ -737,6 +766,38 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/record`, payload, getAdminToken());
   }
 
+  async function clinicUploadAttachment(id, file, label = "") {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (label) formData.append("label", label);
+
+    return request(
+      "POST",
+      `/admin/clinic-appointments/${id}/attachments`,
+      formData,
+      getAdminToken(),
+    );
+  }
+
+  async function clinicDownloadAttachment(id, attachmentId) {
+    return request(
+      "GET",
+      `/admin/clinic-appointments/${id}/attachments/${attachmentId}/download`,
+      null,
+      getAdminToken(),
+      { responseType: "blob" },
+    );
+  }
+
+  async function clinicDeleteAttachment(id, attachmentId) {
+    return request(
+      "DELETE",
+      `/admin/clinic-appointments/${id}/attachments/${attachmentId}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/customer-activity  (protected - admin token)
     const params = new URLSearchParams();
@@ -854,5 +915,8 @@ var API = (() => {
     clinicMarkPaid,
     clinicCancel,
     clinicSaveRecord,
+    clinicUploadAttachment,
+    clinicDownloadAttachment,
+    clinicDeleteAttachment,
   };
 })();

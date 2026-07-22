@@ -339,6 +339,12 @@ function adminClinicModal() {
     modalError: "",
     title:      "Medical Record",
     apptId:     null,
+    attachments: [],
+    attachmentFile: null,
+    attachmentLabel: "",
+    attachmentBusy: false,
+    attachmentBusyId: null,
+    attachmentError: "",
     form: {
       chief_complaint: "", diagnosis: "", findings: "", treatment_given: "",
       vet_notes: "", follow_up_date: "", follow_up_notes: "",
@@ -358,6 +364,12 @@ function adminClinicModal() {
       this.title      = `Record — ${appt.ownerName}${appt.pet?.name ? " / " + appt.pet.name : ""}`;
       const r = appt.record  || {};
       const v = appt.vitals  || {};
+      this.attachments = (r.attachments || []).map((attachment) => ({ ...attachment }));
+      this.attachmentFile = null;
+      this.attachmentLabel = "";
+      this.attachmentBusy = false;
+      this.attachmentBusyId = null;
+      this.attachmentError = "";
       this.form = {
         chief_complaint:      r.chief_complaint      || appt.chief_complaint || "",
         diagnosis:            r.diagnosis            || "",
@@ -374,6 +386,81 @@ function adminClinicModal() {
         medications:          (r.medications || []).map((m) => ({ ...m })),
       };
       this.open = true;
+    },
+
+    selectAttachment(event) {
+      this.attachmentFile = event.target.files?.[0] || null;
+      this.attachmentError = "";
+    },
+
+    formatFileSize(bytes) {
+      const size = Number(bytes);
+      if (!Number.isFinite(size) || size < 0) return "Size unavailable";
+      if (size < 1024) return `${size} B`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    },
+
+    async uploadAttachment() {
+      if (!this.attachmentFile) {
+        this.attachmentError = "Choose a JPG, PNG, PDF, or DCM file first.";
+        return;
+      }
+
+      this.attachmentBusy = true;
+      this.attachmentError = "";
+      try {
+        const result = await API.clinicUploadAttachment(
+          this.apptId,
+          this.attachmentFile,
+          this.attachmentLabel.trim(),
+        );
+        this.attachments.push(result.attachment);
+        this.attachmentFile = null;
+        this.attachmentLabel = "";
+        if (this.$refs.attachmentFile) this.$refs.attachmentFile.value = "";
+      } catch (error) {
+        this.attachmentError = error.errors
+          ? Object.values(error.errors).flat().join(" ")
+          : (error.message || "Failed to upload attachment.");
+      } finally {
+        this.attachmentBusy = false;
+      }
+    },
+
+    async downloadAttachment(attachment) {
+      this.attachmentBusyId = attachment.id;
+      this.attachmentError = "";
+      try {
+        const result = await API.clinicDownloadAttachment(this.apptId, attachment.id);
+        const objectUrl = URL.createObjectURL(result.blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = result.fileName || attachment.file_name || "clinic-attachment";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      } catch (error) {
+        this.attachmentError = error.message || "Failed to download attachment.";
+      } finally {
+        this.attachmentBusyId = null;
+      }
+    },
+
+    async deleteAttachment(attachment) {
+      if (!window.confirm(`Delete ${attachment.file_name}? This cannot be undone.`)) return;
+
+      this.attachmentBusyId = attachment.id;
+      this.attachmentError = "";
+      try {
+        await API.clinicDeleteAttachment(this.apptId, attachment.id);
+        this.attachments = this.attachments.filter((item) => item.id !== attachment.id);
+      } catch (error) {
+        this.attachmentError = error.message || "Failed to delete attachment.";
+      } finally {
+        this.attachmentBusyId = null;
+      }
     },
 
     addMedication() {
