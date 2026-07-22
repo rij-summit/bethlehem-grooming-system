@@ -398,6 +398,11 @@ var API = (() => {
     return request("GET", `/pets?archived=${archived}`, null, getCustomerToken());
   }
 
+  async function getPet(petId) {
+    // GET /api/pets/{id}  (protected and owner-scoped)
+    return request("GET", `/pets/${petId}`, null, getCustomerToken());
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -428,11 +433,14 @@ var API = (() => {
     return request("POST", "/booking/store", payload, getCustomerToken());
   }
 
-  async function getBookingHistory({ historyLimit = null } = {}) {
+  async function getBookingHistory({ historyLimit = null, petId = null } = {}) {
     // GET /api/booking/history  (protected)
     const params = new URLSearchParams();
     if (historyLimit !== null) {
       params.set("history_limit", String(Math.max(0, Number(historyLimit) || 0)));
+    }
+    if (petId !== null) {
+      params.set("pet_id", String(petId));
     }
     const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/booking/history${query}`, null, getCustomerToken());
@@ -779,6 +787,7 @@ var API = (() => {
     getTimeslots,
     // Pets
     getUserPets,
+    getPet,
     addPet,
     updatePet,
     adminUpdatePet,

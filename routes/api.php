@@ -48,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Pets
     Route::get('/pets',                    [PetController::class, 'index']);
+    Route::get('/pets/{id}',               [PetController::class, 'show']);
     Route::post('/pets',                   [PetController::class, 'store']);
     Route::put('/pets/{id}',               [PetController::class, 'update']);
     Route::post('/pets/{id}/archive',      [PetController::class, 'archive']);

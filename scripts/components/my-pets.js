@@ -207,6 +207,12 @@ document.addEventListener("DOMContentLoaded", () => {
         <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
       </button>`;
 
+    const viewProfileLink = `
+      <a href="./pet-details.html?pet_id=${encodeURIComponent(pet.pet_id)}"
+        class="flex items-center gap-1.5 rounded-xl bg-[#355c84] px-3 py-2 text-xs font-semibold text-white hover:bg-[#2d4f73] transition">
+        <i data-lucide="user-round-search" class="w-3.5 h-3.5"></i> View Profile
+      </a>`;
+
     return `
       <div class="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm flex flex-col gap-4">
         <div class="flex items-start justify-between gap-2">
@@ -226,7 +232,8 @@ document.addEventListener("DOMContentLoaded", () => {
           ${detailsHtml}
         </div>
 
-        <div class="flex gap-2 pt-2 border-t border-slate-100">
+        <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          ${viewProfileLink}
           ${editBtn}
           ${archiveBtn}
         </div>

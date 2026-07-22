@@ -317,22 +317,51 @@ class BookingController extends Controller
         $historyLimit = $request->has('history_limit')
             ? max(0, min(100, (int) $request->query('history_limit')))
             : null;
+        $petId = null;
 
-        $relations = ['timeWindow', 'bookingPets.pet'];
+        if ($request->filled('pet_id')) {
+            $request->validate([
+                'pet_id' => ['integer', 'min:1'],
+            ]);
 
-        $active = Booking::where('user_id', $userId)
-            ->whereNotIn('status', ['archived'])
+            $petId = (int) $request->query('pet_id');
+            $ownsPet = Pet::where('pet_id', $petId)
+                ->where('user_id', $userId)
+                ->exists();
+
+            if (! $ownsPet) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pet not found.',
+                ], 404);
+            }
+        }
+
+        $relations = ['timeWindow', 'bookingPets.pet', 'bookingServices.service'];
+
+        $activeQuery = Booking::where('user_id', $userId)
+            ->whereNotIn('status', ['archived']);
+
+        if ($petId !== null) {
+            $activeQuery->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $petId));
+        }
+
+        $active = $activeQuery
             ->with($relations)
             ->orderBy('booking_date', 'desc')
             ->orderBy('booking_id', 'desc')
             ->get();
 
-        $historyTotal = Booking::where('user_id', $userId)
-            ->where('status', 'archived')
-            ->count();
-
         $historyQuery = Booking::where('user_id', $userId)
-            ->where('status', 'archived')
+            ->where('status', 'archived');
+
+        if ($petId !== null) {
+            $historyQuery->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $petId));
+        }
+
+        $historyTotal = (clone $historyQuery)->count();
+
+        $historyQuery
             ->with($relations)
             ->orderBy('booking_date', 'desc')
             ->orderBy('booking_id', 'desc');
@@ -345,11 +374,46 @@ class BookingController extends Controller
             ? collect()
             : $historyQuery->get();
 
-        $format = function ($b) {
-            $pets = ($b->bookingPets ?? collect())->map(fn ($bp) => [
-                'pet_name' => $bp->pet?->pet_name ?? '—',
-                'breed' => $bp->pet?->breed ?? '—',
-            ])->values();
+        $format = function ($b) use ($petId) {
+            $bookingPets = $b->bookingPets ?? collect();
+
+            if ($petId !== null) {
+                $bookingPets = $bookingPets->where('pet_id', $petId);
+            }
+
+            $pets = $bookingPets->map(function ($bp) use ($b) {
+                $services = ($b->bookingServices ?? collect())
+                    ->where('booking_pet_id', $bp->booking_pet_id)
+                    ->map(fn ($bookingService) => [
+                        'booking_service_id' => $bookingService->booking_service_id,
+                        'service_id' => $bookingService->service_id,
+                        'service_name' => $bookingService->service?->service_name,
+                        'price_at_booking' => $bookingService->price_at_booking,
+                    ])
+                    ->values();
+
+                $groomingStatus = match (true) {
+                    in_array($b->status, ['cancelled', 'no_show'], true) => $b->status,
+                    $bp->grooming_end_time !== null => 'grooming_finished',
+                    $bp->grooming_start_time !== null => 'in_progress',
+                    default => $b->status,
+                };
+
+                return [
+                    'pet_id' => $bp->pet_id,
+                    'booking_pet_id' => $bp->booking_pet_id,
+                    'pet_name' => $bp->pet?->pet_name ?? '—',
+                    'breed' => $bp->pet?->breed ?? '—',
+                    'grooming_status' => $groomingStatus,
+                    'grooming_started_at' => $bp->grooming_start_time
+                        ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
+                        : null,
+                    'grooming_finished_at' => $bp->grooming_end_time
+                        ? Carbon::parse($bp->grooming_end_time)->format('g:i A')
+                        : null,
+                    'services' => $services,
+                ];
+            })->values();
 
             return [
                 'booking_id' => $b->booking_id,

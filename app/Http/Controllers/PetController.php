@@ -25,6 +25,27 @@ class PetController extends Controller
         ]);
     }
 
+    // ── SHOW ──────────────────────────────────────────────
+    // GET /api/pets/{id}
+    public function show(Request $request, $id)
+    {
+        $pet = Pet::where('pet_id', $id)
+            ->where('user_id', $request->user()->user_id)
+            ->first();
+
+        if (! $pet) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pet not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'pet' => $pet,
+        ]);
+    }
+
     // ── ADD ───────────────────────────────────────────────
     // POST /api/pets
     public function store(Request $request)
