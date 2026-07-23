@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,6 +13,109 @@ use Throwable;
 
 class ChatbotController extends Controller
 {
+    private const OPEN_HOUR = 8;
+
+    private const CLOSE_HOUR = 17;
+
+    private const OPERATING_HOURS_TIME = '8:00 AM to 5:00 PM';
+
+    private const OPERATING_HOURS = '8:00 AM to 5:00 PM daily';
+
+    private const IDENTITY_REPLY = 'I am the virtual assistant of Bethlehem Animal Clinic.';
+
+    private const OFF_TOPIC_REPLY = 'I can only answer questions related to Bethlehem Animal Clinic.';
+
+    private const CLINIC_RELATED_TERMS = [
+        'bethlehem',
+        'animal clinic',
+        'clinic',
+        'groom',
+        'grooming',
+        'groomer',
+        'bath',
+        'haircut',
+        'nail',
+        'ear cleaning',
+        'tooth brushing',
+        'service',
+        'schedule',
+        'timeslot',
+        'appointment',
+        'booking',
+        'pre-register',
+        'pre register',
+        'registration',
+        'queue',
+        'check in',
+        'check-in',
+        'drop off',
+        'drop-off',
+        'pickup',
+        'pick up',
+        'pet',
+        'pets',
+        'dog',
+        'dogs',
+        'cat',
+        'cats',
+        'puppy',
+        'kitten',
+        'animal',
+        'vet',
+        'veterinarian',
+        'consultation',
+        'emergency',
+        'health',
+        'sick',
+        'injury',
+        'vaccine',
+        'vaccination',
+        'rabies',
+        'deworm',
+        'contact',
+        'phone',
+        'address',
+        'location',
+        'directions',
+        'price',
+        'cost',
+        'fee',
+        'charge',
+        'payment',
+        'gcash',
+        'cash',
+        'card',
+        'walk-in',
+        'walk in',
+        'visit',
+        'parking',
+    ];
+
+    private const CLINIC_RELATED_PATTERNS = [
+        '/\bwhere\s+(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\b/i',
+        '/\b(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\s+(?:open|closed)\b/i',
+        '/\b(?:what|when)\s+(?:time|hours?)\b/i',
+        '/\b(?:open|opens|opening|close|closes|closing|closed)\b/i',
+        '/\b(?:book|reserve|cancel|reschedule)\b/i',
+    ];
+
+    private const CLINIC_OPEN_STATUS_PATTERNS = [
+        '/\b(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\s+(?:open|closed)\b/i',
+        '/\b(?:is\s+)?(?:bethlehem|the\s+clinic|clinic)\s+(?:still\s+)?(?:receiving|accepting)\b/i',
+        '/\b(?:open|closed|reopen|reopened|stopped|stop\s+receiving|not\s+receiving)\b/i',
+    ];
+
+    private const GROOMERS_ON_DUTY_PATTERNS = [
+        '/\b(?:how\s+many|number\s+of|count\s+of)\s+groomers?\b/i',
+        '/\bgroomers?\s+(?:on\s+duty|present|available|working|there|in\s+today)\b/i',
+        '/\b(?:available|present|current)\s+groomers?\b/i',
+    ];
+
+    private const GROOMING_PRICE_PATTERNS = [
+        '/\b(?:price|prices|pricing|cost|costs|fee|fees|charge|charges|rate|rates)\b.*\b(?:groom|grooming|bath|haircut|nail|pet|dog|cat|puppy|kitten)\b/i',
+        '/\b(?:groom|grooming|bath|haircut|nail|pet|dog|cat|puppy|kitten)\b.*\b(?:price|prices|pricing|cost|costs|fee|fees|charge|charges|rate|rates)\b/i',
+    ];
+
     public function chat(Request $request): JsonResponse
     {
         /*
@@ -23,6 +128,37 @@ class ChatbotController extends Controller
                 'max:1000',
             ],
         ]);
+
+        $message = $validated['message'];
+
+        if ($this->asksAboutAssistantIdentity($message)) {
+            return response()->json([
+                'reply' => self::IDENTITY_REPLY,
+            ]);
+        }
+
+        if (! $this->isClinicRelatedMessage($message)) {
+            return response()->json([
+                'reply' => self::OFF_TOPIC_REPLY,
+            ]);
+        }
+
+        if ($this->asksAboutGroomingPrice($message)) {
+            return response()->json([
+                'reply' => 'Verified grooming **prices are unavailable** here; please **contact us directly** for current prices.',
+            ]);
+        }
+
+        $allowedSystemContext = $this->getAllowedSystemContext();
+
+        if ($this->asksAboutAllowedSystemContext($message)) {
+            return response()->json([
+                'reply' => $this->answerAllowedSystemContextQuestion(
+                    $message,
+                    $allowedSystemContext
+                ),
+            ]);
+        }
 
         /*
          * Retrieve the Groq configuration.
@@ -55,9 +191,12 @@ class ChatbotController extends Controller
                             [
                                 'role' => 'system',
                                 'content' => implode("\n", [
-                                    'You are the virtual assistant for Bethlehem Animal Clinic & Grooming.',
+                                    'You are the virtual assistant of Bethlehem Animal Clinic.',
+                                    'Identify yourself only as the virtual assistant of Bethlehem Animal Clinic.',
+                                    'Do not claim to have a personal name, human identity, gender, personality identity, feelings, preferences, or personal life.',
+                                    'If asked about your name, identity, gender, personality, or whether you are human, answer only: "I am the virtual assistant of Bethlehem Animal Clinic."',
 
-                                    'Your purpose is to answer general questions about the clinic and grooming services.',
+                                    'Your purpose is to answer general questions about Bethlehem Animal Clinic, grooming services, schedules, pets, and other clinic-related concerns.',
 
                                     'You may answer questions about:',
                                     '- General grooming services.',
@@ -66,6 +205,22 @@ class ChatbotController extends Controller
                                     '- Pet drop-off and arrival preparation.',
                                     '- General clinic hours and contact procedures.',
                                     '- What customers should expect during grooming.',
+
+                                    'Allowed current system information:',
+                                    '- Current clinic status: ' . $allowedSystemContext['clinic_status'] . '.',
+                                    '- Normal operating hours: ' . self::OPERATING_HOURS . '.',
+                                    '- Groomers currently present/on duty: ' . $allowedSystemContext['groomers_on_duty'] . '.',
+                                    'Use only the allowed current system information listed above when answering questions about live clinic status or groomer count.',
+                                    'Do not claim access to bookings, customers, pets, queues, payments, inventory, staff records, or other live system information.',
+                                    'Bold-text rules:',
+                                    '- Use double asterisks only as a spotlight for the most important information.',
+                                    '- Limit bold formatting to 1 or 2 short phrases per message.',
+                                    '- Bold direct answers such as **open**, **closed**, **yes**, **no**, **available**, or **unavailable**.',
+                                    '- Bold important actions as a complete action phrase, such as **contact us directly** or **bring your pet to the clinic**.',
+                                    '- Bold important numbers or details only when they directly answer the question, such as **8:00 AM to 5:00 PM**, **24-hour notice**, a price, a date, or a queue position.',
+                                    '- Do not bold Bethlehem Animal Clinic, the clinic name, words copied from the customer question, or filler words such as please, here, and directly by themselves.',
+                                    'Questions about grooming prices, grooming costs, pet grooming rates, or service fees are clinic-related even if the customer does not mention Bethlehem Animal Clinic by name.',
+                                    'If verified prices are unavailable, do not refuse as off-topic; say that verified prices are unavailable here and ask the customer to contact Bethlehem Animal Clinic directly.',
 
                                     'When you give numbered or step-by-step instructions, put each numbered step on its own line.',
                                     'Use this numbered format:',
@@ -99,7 +254,8 @@ class ChatbotController extends Controller
 
                                     'When a response contains more than one idea, separate the ideas with a blank line.',
 
-                                    'For off-topic questions, use separate short paragraphs for the refusal, the suggested general source, and the offer to help with clinic-related questions.',
+                                    'For any unrelated request, reply with exactly one short sentence: "I can only answer questions related to Bethlehem Animal Clinic."',
+                                    'Do not add explanations, suggestions, or extra paragraphs to off-topic refusals.',
 
                                     'Keep responses polite, concise, simple, and easy for customers to understand.',
                                 ]),
@@ -167,7 +323,7 @@ class ChatbotController extends Controller
              * Return the answer to the frontend.
              */
             return response()->json([
-                'reply' => trim($reply),
+                'reply' => $this->normalizeBoldFormatting(trim($reply)),
             ]);
         } catch (ConnectionException $exception) {
             /*
@@ -199,5 +355,212 @@ class ChatbotController extends Controller
                 ]),
             ], 500);
         }
+    }
+
+    private function asksAboutAssistantIdentity(string $message): bool
+    {
+        return $this->matchesAny($message, [
+            '/\b(?:who|what)\s+are\s+you\b/i',
+            '/\bwhat(?:\'s|\s+is)\s+your\s+name\b/i',
+            '/\bwhat\s+should\s+i\s+call\s+you\b/i',
+            '/\bcan\s+i\s+call\s+you\b/i',
+            '/\bdo\s+you\s+have\s+(?:a\s+)?(?:name|gender|personality|identity)\b/i',
+            '/\bare\s+you\s+(?:a\s+)?(?:human|person|man|woman|male|female|boy|girl|real|bot|ai|chatbot)\b/i',
+            '/\byour\s+(?:gender|sex|pronouns?|personality|identity)\b/i',
+        ]);
+    }
+
+    /**
+     * @return array{clinic_status: string, clinic_is_open: bool, clinic_status_reason: string, groomers_on_duty: int}
+     */
+    private function getAllowedSystemContext(): array
+    {
+        $now = now();
+        $isStaffClosedToday = $this->isStaffClosedToday();
+        $isBlockedToday = $this->isBlockedToday();
+        $isWithinOperatingHours = $this->isWithinOperatingHours($now);
+
+        $clinicStatusReason = 'within_operating_hours';
+
+        if (! $isWithinOperatingHours) {
+            $clinicStatusReason = 'outside_operating_hours';
+        }
+
+        if ($isStaffClosedToday) {
+            $clinicStatusReason = 'staff_closed_today';
+        }
+
+        if ($isBlockedToday) {
+            $clinicStatusReason = 'blocked_date';
+        }
+
+        $isOpen = $isWithinOperatingHours && ! $isStaffClosedToday && ! $isBlockedToday;
+
+        return [
+            'clinic_status' => $isOpen ? 'open' : 'closed',
+            'clinic_is_open' => $isOpen,
+            'clinic_status_reason' => $clinicStatusReason,
+            'groomers_on_duty' => $this->getGroomersOnDuty(),
+        ];
+    }
+
+    private function isStaffClosedToday(): bool
+    {
+        $today = now()->toDateString();
+
+        return ClinicClosure::query()
+            ->where('is_active', 1)
+            ->where('type', 'stop_today')
+            ->whereDate('start_date', $today)
+            ->exists();
+    }
+
+    private function isBlockedToday(): bool
+    {
+        $today = now()->toDateString();
+
+        return ClinicClosure::query()
+            ->where('is_active', 1)
+            ->where('type', 'blocked_date')
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->exists();
+    }
+
+    private function isWithinOperatingHours(\DateTimeInterface $now): bool
+    {
+        $hour = (int) $now->format('G');
+
+        return $hour >= self::OPEN_HOUR && $hour < self::CLOSE_HOUR;
+    }
+
+    private function getGroomersOnDuty(): int
+    {
+        $groomersOnDuty = ClinicSetting::query()
+            ->whereKey(ClinicSetting::SINGLETON_ID)
+            ->value('groomers_on_duty');
+
+        return (int) ($groomersOnDuty ?? ClinicSetting::DEFAULT_GROOMERS_ON_DUTY);
+    }
+
+    private function asksAboutAllowedSystemContext(string $message): bool
+    {
+        return $this->asksAboutClinicOpenStatus($message)
+            || $this->asksAboutGroomersOnDuty($message);
+    }
+
+    /**
+     * @param array{clinic_status: string, clinic_is_open: bool, clinic_status_reason: string, groomers_on_duty: int} $allowedSystemContext
+     */
+    private function answerAllowedSystemContextQuestion(
+        string $message,
+        array $allowedSystemContext
+    ): string {
+        $answers = [];
+
+        if ($this->asksAboutClinicOpenStatus($message)) {
+            $answers[] = $allowedSystemContext['clinic_is_open']
+                ? 'Bethlehem Animal Clinic is currently **open**.'
+                : $this->clinicClosedReply($allowedSystemContext['clinic_status_reason']);
+        }
+
+        if ($this->asksAboutGroomersOnDuty($message)) {
+            $groomersOnDuty = $allowedSystemContext['groomers_on_duty'];
+            $answers[] = $groomersOnDuty === 1
+                ? 'There is **1 groomer** currently on duty.'
+                : "There are **{$groomersOnDuty} groomers** currently on duty.";
+        }
+
+        return implode(' ', $answers);
+    }
+
+    private function clinicClosedReply(string $reason): string
+    {
+        return match ($reason) {
+            'staff_closed_today' => 'Bethlehem Animal Clinic is currently **closed** for today.',
+            'blocked_date' => 'Bethlehem Animal Clinic is **closed** today.',
+            default => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **' . self::OPERATING_HOURS_TIME . '** daily.',
+        };
+    }
+
+    private function asksAboutClinicOpenStatus(string $message): bool
+    {
+        return $this->matchesAny($message, self::CLINIC_OPEN_STATUS_PATTERNS);
+    }
+
+    private function asksAboutGroomersOnDuty(string $message): bool
+    {
+        return $this->matchesAny($message, self::GROOMERS_ON_DUTY_PATTERNS);
+    }
+
+    private function asksAboutGroomingPrice(string $message): bool
+    {
+        return $this->matchesAny($message, self::GROOMING_PRICE_PATTERNS);
+    }
+
+    private function normalizeBoldFormatting(string $reply): string
+    {
+        $boldPhraseCount = 0;
+
+        return preg_replace_callback(
+            '/\*\*([^*]+)\*\*/',
+            function (array $matches) use (&$boldPhraseCount): string {
+                $phrase = $matches[1];
+
+                if ($this->shouldRemoveBoldFormatting($phrase) || $boldPhraseCount >= 2) {
+                    return $phrase;
+                }
+
+                $boldPhraseCount++;
+
+                return "**{$phrase}**";
+            },
+            $reply
+        ) ?? $reply;
+    }
+
+    private function shouldRemoveBoldFormatting(string $phrase): bool
+    {
+        $normalizedPhrase = strtolower(
+            preg_replace('/\s+/', ' ', trim($phrase)) ?? ''
+        );
+
+        return in_array($normalizedPhrase, [
+            'bethlehem',
+            'bethlehem animal clinic',
+            'animal clinic',
+            'clinic',
+            'the clinic',
+            'please',
+            'here',
+            'directly',
+        ], true);
+    }
+
+    private function isClinicRelatedMessage(string $message): bool
+    {
+        $normalizedMessage = strtolower($message);
+
+        foreach (self::CLINIC_RELATED_TERMS as $term) {
+            if (str_contains($normalizedMessage, $term)) {
+                return true;
+            }
+        }
+
+        return $this->matchesAny($message, self::CLINIC_RELATED_PATTERNS);
+    }
+
+    /**
+     * @param array<int, string> $patterns
+     */
+    private function matchesAny(string $message, array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $message) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

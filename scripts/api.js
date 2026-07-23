@@ -697,7 +697,7 @@ var API = (() => {
 
   async function submitClinicWalkIn(payload) {
     // POST /api/admin/clinic-walk-in  (protected — admin token)
-    // payload: { fname, lname, mname?, email?, phone, pet_name, species, breed?, weight?, medical_conditions?, chief_complaint, terms_agreed }
+    // payload: { fname, lname, mname?, email?, phone, pet_name, species, breed?, fur_type?, weight?, medical_conditions?, chief_complaint, terms_agreed }
     return request("POST", "/admin/clinic-walk-in", payload, getAdminToken());
   }
 

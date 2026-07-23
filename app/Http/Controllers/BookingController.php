@@ -2,21 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
 use App\Models\Booking;
-use App\Models\Notification;
-use App\Models\TimeWindow;
-use App\Models\Pet;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\Notification;
+use App\Models\Pet;
 use App\Models\Service;
+use App\Models\TimeWindow;
+use App\Rules\ValidBreedCoat;
+use App\Rules\ValidPetSize;
+use App\Rules\ValidPetWeight;
+use App\Support\PetWeightSize;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
     private const DAILY_CAPACITY = 20;
+
     private const MAX_PETS_PER_BOOKING = 10;
+
     private const INTAKE_STATUSES = [
         'checked_in',
         'in_progress',
@@ -28,13 +33,13 @@ class BookingController extends Controller
     private function dailyIntakeCount(string $date): int
     {
         return Booking::where(function ($query) use ($date) {
-                $query->whereDate('dropped_off_at', $date)
-                    ->orWhere(function ($fallback) use ($date) {
-                        $fallback->whereNull('dropped_off_at')
-                            ->where('booking_date', $date)
-                            ->whereIn('status', self::INTAKE_STATUSES);
-                    });
-            })
+            $query->whereDate('dropped_off_at', $date)
+                ->orWhere(function ($fallback) use ($date) {
+                    $fallback->whereNull('dropped_off_at')
+                        ->where('booking_date', $date)
+                        ->whereIn('status', self::INTAKE_STATUSES);
+                });
+        })
             ->whereIn('status', self::INTAKE_STATUSES)
             ->whereNotIn('status', ['cancelled', 'no_show'])
             ->sum('number_of_pets');
@@ -61,40 +66,41 @@ class BookingController extends Controller
                 ->sum('number_of_pets');
 
             return [
-                'window_id'    => $window->window_id,
+                'window_id' => $window->window_id,
                 'window_label' => $window->window_label,
-                'start_time'   => $window->start_time,
-                'end_time'     => $window->end_time,
-                'max_slots'    => $window->max_slots,
-                'booked'       => $booked,
-                'remaining'    => $dailyRemaining,
-                'is_full'      => $dayFull,
-                'recommended'  => false,
+                'start_time' => $window->start_time,
+                'end_time' => $window->end_time,
+                'max_slots' => $window->max_slots,
+                'booked' => $booked,
+                'remaining' => $dailyRemaining,
+                'is_full' => $dayFull,
+                'recommended' => false,
             ];
         });
 
         // ── AI FEATURE: Mark least congested as recommended ──
         $available = $result->where('is_full', false);
         if ($available->isNotEmpty()) {
-            $minBooked   = $available->min('booked');
+            $minBooked = $available->min('booked');
             $recommended = $available->firstWhere('booked', $minBooked);
 
             $result = $result->map(function ($window) use ($recommended) {
                 if ($window['window_id'] === $recommended['window_id']) {
                     $window['recommended'] = true;
                 }
+
                 return $window;
             });
         }
 
         // ── Return active time windows with daily capacity status ──────────────────
         return response()->json([
-            'success'      => true,
-            'date'         => $date,
-            'day_full'     => $dayFull,
+            'success' => true,
+            'date' => $date,
+            'day_full' => $dayFull,
             'total_booked' => $totalBooked,
-            'capacity'     => self::DAILY_CAPACITY,
-            'windows'      => $result->values(),
+            'capacity' => self::DAILY_CAPACITY,
+            'windows' => $result->values(),
         ]);
     }
 
@@ -103,27 +109,33 @@ class BookingController extends Controller
     {
         $today = now()->toDateString();
 
-        $request->validate([
-            'booking_date'  => 'required|date|after_or_equal:' . $today,
-            'window_id'     => 'required|exists:time_windows,window_id',
-            'number_of_pets'=> 'required|integer|min:1|max:' . self::MAX_PETS_PER_BOOKING,
+        $validated = $request->validate([
+            'booking_date' => 'required|date|after_or_equal:'.$today,
+            'window_id' => 'required|exists:time_windows,window_id',
+            'number_of_pets' => 'required|integer|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'special_notes' => 'nullable|string',
-            'pets'          => 'required|array|min:1|max:' . self::MAX_PETS_PER_BOOKING,
+            'pets' => 'required|array|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'pets.*.pet_id' => 'nullable|integer|exists:pets,pet_id',
-            'pets.*.pet_name'   => 'required|string|max:100',
-            'pets.*.species'    => 'nullable|string|max:50',
-            'pets.*.breed'      => 'nullable|string|max:100',
-            'pets.*.size'       => 'nullable|in:small,medium,large,extra_large',
-            'pets.*.fur_type'   => 'nullable|in:short,medium,long,wire,curl',
-            'pets.*.weight'     => 'nullable|numeric',
-            'pets.*.color'      => 'nullable|string|max:50',
-            'pets.*.medical_conditions'    => 'nullable|string',
-            'pets.*.special_instructions'  => 'nullable|string',
-            'pets.*.services'              => 'nullable|array',
-            'pets.*.services.package'      => 'nullable|string',
-            'pets.*.services.ala_carte'    => 'nullable|array',
-            'pets.*.services.ala_carte.*'  => 'nullable|string',
+            'pets.*.pet_name' => 'required|string|max:100',
+            'pets.*.species' => 'nullable|string|max:50',
+            'pets.*.breed' => 'nullable|string|max:100',
+            'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'pets.*.color' => 'nullable|string|max:50',
+            'pets.*.medical_conditions' => 'nullable|string',
+            'pets.*.special_instructions' => 'nullable|string',
+            'pets.*.services' => 'nullable|array',
+            'pets.*.services.package' => 'nullable|string',
+            'pets.*.services.ala_carte' => 'nullable|array',
+            'pets.*.services.ala_carte.*' => 'nullable|string',
         ]);
+
+        $validated['pets'] = array_map(
+            fn (array $pet) => PetWeightSize::withComputedSize($pet),
+            $validated['pets'],
+        );
+        $request->merge(['pets' => $validated['pets']]);
 
         $user = $request->user();
         $date = $request->booking_date;
@@ -154,31 +166,31 @@ class BookingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'You already have a booking on this date.',
-                'errors'  => [
-                    'existing_booking_id'  => $duplicate->booking_id,
+                'errors' => [
+                    'existing_booking_id' => $duplicate->booking_id,
                     'existing_booking_ref' => $duplicate->booking_reference,
                 ],
             ], 422);
         }
 
         // ── Generate booking reference ────────────────────
-        $dateStr  = Carbon::parse($date)->format('Ymd');
-        $prefix   = 'BAC-' . $dateStr . '-';
-        $maxRef   = Booking::where('booking_reference', 'like', $prefix . '%')->max('booking_reference');
+        $dateStr = Carbon::parse($date)->format('Ymd');
+        $prefix = 'BAC-'.$dateStr.'-';
+        $maxRef = Booking::where('booking_reference', 'like', $prefix.'%')->max('booking_reference');
         $lastCount = $maxRef ? ((int) substr($maxRef, -4)) + 1 : 1;
-        $reference = $prefix . str_pad($lastCount, 4, '0', STR_PAD_LEFT);
+        $reference = $prefix.str_pad($lastCount, 4, '0', STR_PAD_LEFT);
 
         // ── Create the booking ────────────────────────────
         $booking = Booking::create([
             'booking_reference' => $reference,
-            'user_id'           => $user->user_id,
-            'window_id'         => $request->window_id,
-            'booking_date'      => $date,
-            'number_of_pets'    => $request->number_of_pets,
-            'booking_type'      => 'online',
-            'status'            => 'waiting_to_arrive',
-            'special_notes'     => $request->special_notes,
-            'total_amount'      => 0,
+            'user_id' => $user->user_id,
+            'window_id' => $request->window_id,
+            'booking_date' => $date,
+            'number_of_pets' => $request->number_of_pets,
+            'booking_type' => 'online',
+            'status' => 'waiting_to_arrive',
+            'special_notes' => $request->special_notes,
+            'total_amount' => 0,
         ]);
 
         // ── Save pets ─────────────────────────────────────
@@ -186,36 +198,45 @@ class BookingController extends Controller
             $pet = null;
 
             // Reuse existing pet if pet_id is provided and belongs to this user
-            if (!empty($petData['pet_id'])) {
+            if (! empty($petData['pet_id'])) {
                 $pet = Pet::where('pet_id', $petData['pet_id'])
-                          ->where('user_id', $user->user_id)
-                          ->first();
+                    ->where('user_id', $user->user_id)
+                    ->first();
+            }
+
+            if ($pet) {
+                $pet->update([
+                    'breed' => $petData['breed'] ?? $pet->breed,
+                    'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
+                    'weight' => $petData['weight'] ?? $pet->weight,
+                    'size' => $petData['size'] ?? $pet->size,
+                ]);
             }
 
             // Create a new pet record if none was found
-            if (!$pet) {
+            if (! $pet) {
                 $pet = Pet::create([
-                    'user_id'            => $user->user_id,
-                    'pet_name'           => $petData['pet_name'],
-                    'species'            => $petData['species'] ?? 'Dog',
-                    'breed'              => $petData['breed'] ?? null,
-                    'weight'             => $petData['weight'] ?? null,
-                    'color'              => $petData['color'] ?? null,
-                    'size'               => $petData['size'] ?? null,
-                    'fur_type'           => $petData['fur_type'] ?? null,
+                    'user_id' => $user->user_id,
+                    'pet_name' => $petData['pet_name'],
+                    'species' => $petData['species'] ?? 'Dog',
+                    'breed' => $petData['breed'] ?? null,
+                    'weight' => $petData['weight'] ?? null,
+                    'color' => $petData['color'] ?? null,
+                    'size' => $petData['size'] ?? null,
+                    'fur_type' => $petData['fur_type'] ?? null,
                     'medical_conditions' => $petData['medical_conditions'] ?? null,
                 ]);
             }
 
             // Link pet to this booking
             $bookingPet = BookingPet::create([
-                'booking_id'           => $booking->booking_id,
-                'pet_id'               => $pet->pet_id,
+                'booking_id' => $booking->booking_id,
+                'pet_id' => $pet->pet_id,
                 'special_instructions' => $petData['special_instructions'] ?? null,
             ]);
 
             // ── Save services for this pet ────────────────
-            $petSize    = $petData['size'] ?? null;
+            $petSize = $petData['size'] ?? null;
             $slugsToSave = [];
 
             $packageSlug = $petData['services']['package'] ?? null;
@@ -224,29 +245,33 @@ class BookingController extends Controller
             }
 
             foreach ($petData['services']['ala_carte'] ?? [] as $slug) {
-                if ($slug) $slugsToSave[] = $slug;
+                if ($slug) {
+                    $slugsToSave[] = $slug;
+                }
             }
 
-            if (!empty($slugsToSave)) {
+            if (! empty($slugsToSave)) {
                 $services = Service::whereIn('slug', $slugsToSave)->get()->keyBy('slug');
 
                 foreach ($slugsToSave as $slug) {
                     $service = $services->get($slug);
-                    if (!$service) continue;
+                    if (! $service) {
+                        continue;
+                    }
 
                     $price = match ($petSize) {
-                        'small'       => $service->price_small  ?? $service->base_price,
-                        'medium'      => $service->price_medium ?? $service->base_price,
+                        'small' => $service->price_small ?? $service->base_price,
+                        'medium' => $service->price_medium ?? $service->base_price,
                         'large',
-                        'extra_large' => $service->price_large  ?? $service->base_price,
-                        default       => $service->base_price,
+                        'extra_large' => $service->price_large ?? $service->base_price,
+                        default => $service->base_price,
                     };
 
                     BookingService::create([
-                        'booking_id'       => $booking->booking_id,
-                        'booking_pet_id'   => $bookingPet->booking_pet_id ?? null,
-                        'service_id'       => $service->service_id,
-                        'addon_id'         => null,
+                        'booking_id' => $booking->booking_id,
+                        'booking_pet_id' => $bookingPet->booking_pet_id ?? null,
+                        'service_id' => $service->service_id,
+                        'addon_id' => null,
                         'price_at_booking' => $price,
                     ]);
                 }
@@ -255,10 +280,10 @@ class BookingController extends Controller
 
         // ── Create notification for admin ─────────────────
         Notification::create([
-            'type'       => 'booked',
+            'type' => 'booked',
             'booking_id' => $booking->booking_id,
-            'message'    => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
-            'is_read'    => 0,
+            'message' => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
+            'is_read' => 0,
             'created_at' => now(),
         ]);
 
@@ -271,16 +296,16 @@ class BookingController extends Controller
         )->toIso8601String();
 
         return response()->json([
-            'success'   => true,
-            'message'   => 'Booking confirmed successfully!',
-            'booking'   => [
-                'booking_id'        => $booking->booking_id,
+            'success' => true,
+            'message' => 'Booking confirmed successfully!',
+            'booking' => [
+                'booking_id' => $booking->booking_id,
                 'booking_reference' => $booking->booking_reference,
-                'booking_date'      => $booking->booking_date,
-                'window'            => $window->window_label,
-                'created_at'        => $createdAt,
-                'status'            => $booking->status,
-                'number_of_pets'    => $booking->number_of_pets,
+                'booking_date' => $booking->booking_date,
+                'window' => $window->window_label,
+                'created_at' => $createdAt,
+                'status' => $booking->status,
+                'number_of_pets' => $booking->number_of_pets,
             ],
         ], 201);
     }
@@ -321,44 +346,44 @@ class BookingController extends Controller
             : $historyQuery->get();
 
         $format = function ($b) {
-            $pets = ($b->bookingPets ?? collect())->map(fn($bp) => [
+            $pets = ($b->bookingPets ?? collect())->map(fn ($bp) => [
                 'pet_name' => $bp->pet?->pet_name ?? '—',
-                'breed'    => $bp->pet?->breed    ?? '—',
+                'breed' => $bp->pet?->breed ?? '—',
             ])->values();
 
             return [
-                'booking_id'        => $b->booking_id,
+                'booking_id' => $b->booking_id,
                 'booking_reference' => $b->booking_reference,
-                'booking_date'      => $b->booking_date,
-                'created_at'        => $b->created_at
+                'booking_date' => $b->booking_date,
+                'created_at' => $b->created_at
                     ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
                     : null,
-                'status'            => $b->status,
-                'paid'              => (bool) $b->paid,
-                'number_of_pets'    => $b->number_of_pets,
-                'reschedule_count'  => $b->reschedule_count ?? 0,
-                'cancel_count'      => $b->cancel_count     ?? 0,
-                'special_notes'     => $b->special_notes,
-                'time_window'        => $b->timeWindow ? [
+                'status' => $b->status,
+                'paid' => (bool) $b->paid,
+                'number_of_pets' => $b->number_of_pets,
+                'reschedule_count' => $b->reschedule_count ?? 0,
+                'cancel_count' => $b->cancel_count ?? 0,
+                'special_notes' => $b->special_notes,
+                'time_window' => $b->timeWindow ? [
                     'window_label' => $b->timeWindow->window_label,
                 ] : null,
-                'dropped_off_at'     => $b->dropped_off_at
-                    ? \Carbon\Carbon::parse($b->dropped_off_at)->format('g:i A')
+                'dropped_off_at' => $b->dropped_off_at
+                    ? Carbon::parse($b->dropped_off_at)->format('g:i A')
                     : null,
                 'grooming_started_at' => $b->grooming_started_at
-                    ? \Carbon\Carbon::parse($b->grooming_started_at)->format('g:i A')
+                    ? Carbon::parse($b->grooming_started_at)->format('g:i A')
                     : null,
                 'grooming_finished_at' => $b->grooming_finished_at
-                    ? \Carbon\Carbon::parse($b->grooming_finished_at)->format('g:i A')
+                    ? Carbon::parse($b->grooming_finished_at)->format('g:i A')
                     : null,
-                'pets'               => $pets,
+                'pets' => $pets,
             ];
         };
 
         return response()->json([
-            'success'       => true,
-            'bookings'      => $active->map($format)->values(),
-            'history'       => $history->map($format)->values(),
+            'success' => true,
+            'bookings' => $active->map($format)->values(),
+            'history' => $history->map($format)->values(),
             'history_total' => $historyTotal,
         ]);
     }
@@ -423,7 +448,7 @@ class BookingController extends Controller
             ->with(['timeWindow', 'bookingPets.pet'])
             ->first();
 
-        if (!$booking) {
+        if (! $booking) {
             return response()->json([
                 'success' => false,
                 'message' => 'Booking not found.',
@@ -441,15 +466,15 @@ class BookingController extends Controller
     {
         $request->validate([
             'booking_id' => 'required|exists:bookings,booking_id',
-            'reason'     => 'nullable|string',
+            'reason' => 'nullable|string',
         ]);
 
-        $user    = $request->user();
+        $user = $request->user();
         $booking = Booking::where('booking_id', $request->booking_id)
             ->where('user_id', $user->user_id)
             ->first();
 
-        if (!$booking) {
+        if (! $booking) {
             return response()->json([
                 'success' => false,
                 'message' => 'Booking not found.',
@@ -471,16 +496,16 @@ class BookingController extends Controller
         }
 
         $booking->update([
-            'status'              => 'cancelled',
+            'status' => 'cancelled',
             'cancellation_reason' => $request->reason,
-            'cancel_count'        => $booking->cancel_count + 1,
+            'cancel_count' => $booking->cancel_count + 1,
         ]);
 
         Notification::create([
-            'type'       => 'cancelled',
+            'type' => 'cancelled',
             'booking_id' => $booking->booking_id,
-            'message'    => "Pre-registration {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
-            'is_read'    => 0,
+            'message' => "Pre-registration {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
+            'is_read' => 0,
             'created_at' => now(),
         ]);
 
@@ -496,17 +521,17 @@ class BookingController extends Controller
         $today = now()->toDateString();
 
         $request->validate([
-            'booking_id'    => 'required|exists:bookings,booking_id',
-            'new_date'      => 'required|date|after_or_equal:' . $today,
+            'booking_id' => 'required|exists:bookings,booking_id',
+            'new_date' => 'required|date|after_or_equal:'.$today,
             'new_window_id' => 'required|exists:time_windows,window_id',
         ]);
 
-        $user    = $request->user();
+        $user = $request->user();
         $booking = Booking::where('booking_id', $request->booking_id)
             ->where('user_id', $user->user_id)
             ->first();
 
-        if (!$booking) {
+        if (! $booking) {
             return response()->json([
                 'success' => false,
                 'message' => 'Booking not found.',
@@ -528,9 +553,9 @@ class BookingController extends Controller
         }
 
         // Check that the target date still has enough daily capacity
-        $newDate   = $request->new_date;
+        $newDate = $request->new_date;
         $newWindow = TimeWindow::find($request->new_window_id);
-        $petCount  = (int) $booking->number_of_pets;
+        $petCount = (int) $booking->number_of_pets;
 
         $dayBooked = Booking::where('booking_date', $newDate)
             ->whereNotIn('status', ['cancelled'])
@@ -545,17 +570,17 @@ class BookingController extends Controller
         }
 
         $booking->update([
-            'booking_date'     => $newDate,
-            'window_id'        => $request->new_window_id,
+            'booking_date' => $newDate,
+            'window_id' => $request->new_window_id,
             'reschedule_count' => $booking->reschedule_count + 1,
-            'status'           => 'waiting_to_arrive',
+            'status' => 'waiting_to_arrive',
         ]);
 
         Notification::create([
-            'type'       => 'rescheduled',
+            'type' => 'rescheduled',
             'booking_id' => $booking->booking_id,
-            'message'    => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
-            'is_read'    => 0,
+            'message' => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
+            'is_read' => 0,
             'created_at' => now(),
         ]);
 
@@ -564,11 +589,10 @@ class BookingController extends Controller
             'message' => 'Booking rescheduled successfully.',
             'booking' => [
                 'booking_reference' => $booking->booking_reference,
-                'booking_date'      => $booking->booking_date,
-                'window'            => $newWindow->window_label,
-                'reschedule_count'  => $booking->reschedule_count,
+                'booking_date' => $booking->booking_date,
+                'window' => $newWindow->window_label,
+                'reschedule_count' => $booking->reschedule_count,
             ],
         ]);
     }
-
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Dashboard | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../../css/output.css" />
-    <link rel="stylesheet" href="../../../css/custom.css" />
+    <link rel="stylesheet" href="../../../css/custom.css?v=staff-sidebar-20260719" />
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -19,7 +19,7 @@
             <a href="../clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='customers'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="users" class="h-5 w-5"></i><span>Customers</span></a>
             <a href="../appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='appointments'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="calendar-days" class="h-5 w-5"></i><span>Schedules</span><span x-show="hasIncomingAppointments" style="display:none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"></span></a>
             <a href="../clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='clinic'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="stethoscope" class="h-5 w-5"></i><span>Clinic</span></a>
-            <a href="./inventory-dashboard.html" class="flex items-center gap-3 rounded-2xl bg-[#315b7e] px-4 py-3 font-semibold text-white shadow-sm transition"><i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span></a>
+            <a href="./inventory-dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage==='inventory'?'bg-[#315b7e] text-white shadow-sm':'text-[#2f4b66]'"><i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span></a>
           </div></div>
           <div class="mb-8"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p><div class="space-y-1.5">
             <a href="../archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="archive" class="h-5 w-5"></i><span>Archive</span></a>
@@ -272,7 +272,7 @@
     </div>
     <script src="../../../scripts/api.js"></script>
     <script src="../../../scripts/services/inventory-service.js"></script>
-    <script src="../../../scripts/components/admin-sidebar.js"></script>
+    <script src="../../../scripts/components/admin-sidebar.js?v=staff-sidebar-20260719"></script>
     <script src="../../../scripts/components/admin-inventory-dashboard.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>

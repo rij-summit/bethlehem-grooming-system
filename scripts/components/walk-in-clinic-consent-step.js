@@ -186,7 +186,9 @@ async function handleSubmit(event) {
     pet_name:          state.pet?.petName || "",
     species:           state.pet?.petType || "",
     breed:             state.pet?.breed || null,
+    fur_type:          state.pet?.furType || null,
     weight:            state.pet?.weight || null,
+    size:              normalizeSizeForApi(state.pet?.size),
     medical_conditions: state.pet?.medicalNotes || null,
     chief_complaint:   state.chiefComplaint,
     terms_agreed:      true,
@@ -220,6 +222,11 @@ async function handleSubmit(event) {
     showError(error.message || "Failed to submit clinic walk-in. Please try again.");
     resetSubmitButton();
   }
+}
+
+function normalizeSizeForApi(size) {
+  if (!size) return null;
+  return size.toLowerCase().replace(/\s+/g, "_");
 }
 
 function showError(message) {
