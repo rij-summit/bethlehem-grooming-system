@@ -258,6 +258,20 @@ class VaccinationRecordFoundationTest extends TestCase
         );
         $this->assertTrue(VaccinationRecord::firstWhere('vaccine_name', 'Published Vaccine')->hasPublishingRequirements());
         $this->assertFalse(VaccinationRecord::firstWhere('vaccine_name', 'Draft Vaccine')->hasPublishingRequirements());
+        $this->assertTrue((new VaccinationRecord([
+            'vaccine_name' => 'Provider ID Vaccine',
+            'administered_date' => '2026-07-23',
+            'administered_by_user_id' => 99,
+        ]))->hasPublishingRequirements());
+        $this->assertFalse((new VaccinationRecord([
+            'vaccine_name' => '',
+            'administered_date' => '2026-07-23',
+            'administered_by_name' => 'Staff Member',
+        ]))->hasPublishingRequirements());
+        $this->assertFalse((new VaccinationRecord([
+            'vaccine_name' => 'Missing Date Vaccine',
+            'administered_by_name' => 'Staff Member',
+        ]))->hasPublishingRequirements());
 
         $asOf = CarbonImmutable::parse('2026-07-23');
         $this->assertSame(VaccinationRecord::STATUS_UNKNOWN, $this->recordWithDueDate(null)->dueStatus($asOf));

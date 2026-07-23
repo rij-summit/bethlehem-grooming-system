@@ -15,6 +15,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WalkinController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\AdminVaccinationController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PosController;
@@ -130,6 +131,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/clinic-appointments/{id}/attachments',                  [AdminClinicController::class, 'uploadAttachment']);
         Route::get('/admin/clinic-appointments/{id}/attachments/{attachmentId}/download', [AdminClinicController::class, 'downloadAttachment']);
         Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}', [AdminClinicController::class, 'deleteAttachment']);
+
+        Route::get('/admin/pets/{petId}/vaccinations',                              [AdminVaccinationController::class, 'index']);
+        Route::post('/admin/pets/{petId}/vaccinations',                             [AdminVaccinationController::class, 'store']);
+        Route::get('/admin/pets/{petId}/vaccinations/{vaccinationId}',               [AdminVaccinationController::class, 'show']);
+        Route::patch('/admin/pets/{petId}/vaccinations/{vaccinationId}',             [AdminVaccinationController::class, 'update']);
+        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/publish',       [AdminVaccinationController::class, 'publish']);
+        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void',          [AdminVaccinationController::class, 'void']);
     });
 
     // Admin — Inventory: Products

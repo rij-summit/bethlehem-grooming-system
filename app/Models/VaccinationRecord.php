@@ -115,7 +115,10 @@ class VaccinationRecord extends Model
     {
         return filled($this->vaccine_name)
             && $this->administered_date !== null
-            && filled($this->administered_by_name);
+            && (
+                $this->administered_by_user_id !== null
+                || filled($this->administered_by_name)
+            );
     }
 
     public function dueStatus(?CarbonInterface $asOf = null): string
