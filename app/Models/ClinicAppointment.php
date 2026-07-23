@@ -66,4 +66,9 @@ class ClinicAppointment extends Model
     {
         return $this->hasOne(ClinicVital::class, 'clinic_appointment_id', 'id');
     }
+
+    public function vaccinationRecords()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'clinic_appointment_id', 'id');
+    }
 }

@@ -36,4 +36,24 @@ class User extends Authenticatable
     {
         return $this->password_hash;
     }
+
+    public function vaccinationsAdministered()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'administered_by_user_id', 'user_id');
+    }
+
+    public function vaccinationsRecorded()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'recorded_by_user_id', 'user_id');
+    }
+
+    public function vaccinationsPublished()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'published_by_user_id', 'user_id');
+    }
+
+    public function vaccinationsVoided()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'voided_by_user_id', 'user_id');
+    }
 }

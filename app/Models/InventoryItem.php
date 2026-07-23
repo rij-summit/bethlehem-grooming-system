@@ -47,6 +47,11 @@ class InventoryItem extends Model
         return $this->hasMany(InventoryTransaction::class, 'item_id', 'item_id');
     }
 
+    public function vaccinationRecords()
+    {
+        return $this->hasMany(VaccinationRecord::class, 'inventory_item_id', 'item_id');
+    }
+
     public function stockIns()
     {
         return $this->hasMany(InventoryTransaction::class, 'item_id', 'item_id')
