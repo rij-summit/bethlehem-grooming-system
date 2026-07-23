@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clinic Visit Summary</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <a
+        href="./clinic-visit-reason.html"
+        class="inline-flex items-center gap-2 text-sm font-medium text-[#315b7e] hover:underline"
+      >
+        &larr; Back to Reason for Visit
+      </a>
+
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Clinic Visit Summary</h1>
+        <div class="mt-6">
+          <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+            <span>Step 4 of 4</span>
+            <span>100% Complete</span>
+          </div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full w-full rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8">
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Review your clinic visit</h2>
+          <p class="mt-2 text-sm text-slate-500">
+            Your account information will be attached automatically.
+          </p>
+        </div>
+
+        <div id="clinicVisitSummaryDetails"></div>
+
+        <div
+          id="clinicVisitSubmitStatus"
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+          role="status"
+          aria-live="polite"
+        >
+          Check the date, pet, and reason before submitting.
+        </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <a
+            href="./clinic-visit-reason.html"
+            class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white"
+          >
+            Edit Information
+          </a>
+          <button
+            id="submitClinicVisitBtn"
+            type="button"
+            class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+          >
+            Submit Pre-registration
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script src="../../scripts/api.js"></script>
+    <script type="module" src="../../scripts/components/clinic-visit-summary.js"></script>
+  </body>
+</html>

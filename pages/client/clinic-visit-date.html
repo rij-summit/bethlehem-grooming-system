@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clinic Visit - Date and Time</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+  </head>
+  <body class="min-h-screen bg-[#f6fafd] text-slate-800">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <section class="mb-6">
+        <a
+          href="./pre-register.html"
+          class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+        >
+          &larr; Back to Services
+        </a>
+
+        <div class="mt-4">
+          <h1 class="text-3xl font-bold text-[#2f4b66]">
+            Select a Clinic Visit Date and Time
+          </h1>
+        </div>
+
+        <div class="mt-6">
+          <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+            <span>Step 1 of 4</span>
+            <span>25% Complete</span>
+          </div>
+          <div class="h-2 w-full rounded-full bg-slate-200">
+            <div class="h-2 w-1/4 rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-3xl bg-white p-5 shadow-lg md:p-6">
+        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div class="rounded-3xl bg-[#eaf3fb] p-5">
+            <div class="mb-5 flex items-center justify-between">
+              <button
+                id="prevMonthBtn"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Previous month"
+              >
+                &lt;
+              </button>
+              <h2 id="monthLabel" class="text-lg font-bold text-[#2f4b66]">Month Year</h2>
+              <button
+                id="nextMonthBtn"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Next month"
+              >
+                &gt;
+              </button>
+            </div>
+
+            <div class="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+            </div>
+
+            <div
+              id="clinicNotice"
+              class="mb-4 hidden rounded-xl border border-[#fcd34d] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]"
+            ></div>
+            <div id="calendarGrid" class="grid grid-cols-7 gap-2"></div>
+
+            <div class="mt-5 rounded-2xl bg-white/80 p-4 text-xs text-slate-500">
+              <p class="font-semibold text-slate-600">Pre-registration Guidelines:</p>
+              <ul class="mt-2 space-y-1">
+                <li>&bull; Select today or one of the next two days</li>
+                <li>&bull; Past dates, past times, and clinic closure dates are unavailable</li>
+                <li class="flex items-center gap-1.5">
+                  <span class="inline-block h-3 w-3 shrink-0 rounded bg-[#fef9c3]"></span>
+                  <span>Amber dates are clinic closures or scheduled breaks</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="rounded-3xl bg-[#d7ebfb] p-5">
+            <h2 class="text-xl font-bold text-[#2f4b66]">Available Time Windows</h2>
+            <p class="mt-2 text-sm text-slate-500">
+              Select a date to see its available clinic visit times.
+            </p>
+            <div id="timeSlots" class="mt-5 grid grid-cols-2 gap-3"></div>
+            <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Selected Date and Time
+              </p>
+              <p id="selectedScheduleText" class="mt-2 text-sm text-slate-600">
+                Please select a clinic visit date and time.
+              </p>
+            </div>
+            <div class="mt-6 flex justify-end">
+              <button
+                id="nextStepBtn"
+                type="button"
+                disabled
+                class="cursor-not-allowed rounded-2xl bg-[#315b7e] px-6 py-3 text-sm font-semibold text-white opacity-50 transition"
+              >
+                Next Step
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/services/app-clock.js"></script>
+    <script type="module" src="../../scripts/components/clinic-visit-date.js"></script>
+  </body>
+</html>

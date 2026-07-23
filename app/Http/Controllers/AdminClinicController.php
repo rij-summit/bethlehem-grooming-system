@@ -18,12 +18,12 @@ class AdminClinicController extends Controller
 
     public function index()
     {
-        $with = ['user', 'walkin', 'pet', 'vitals', 'record'];
+        $with = ['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record'];
 
         $incoming = ClinicAppointment::with($with)
             ->where('appointment_date', now()->toDateString())
             ->where('status', 'waiting_to_arrive')
-            ->orderBy('queue_number')
+            ->orderBy('created_at')
             ->get()
             ->map(fn ($a) => $this->formatAppointment($a));
 
@@ -69,18 +69,36 @@ class AdminClinicController extends Controller
 
     public function checkIn(int $id)
     {
-        $appt = ClinicAppointment::findOrFail($id);
+        $appt = DB::transaction(function () use ($id) {
+            $appointment = ClinicAppointment::whereKey($id)->lockForUpdate()->firstOrFail();
 
-        if ($appt->status !== 'waiting_to_arrive') {
+            if ($appointment->status !== 'waiting_to_arrive') {
+                return null;
+            }
+
+            $queueNumber = $appointment->queue_number;
+
+            if (! $queueNumber) {
+                $queueNumber = ((int) ClinicAppointment::query()
+                    ->where('appointment_date', $appointment->appointment_date->toDateString())
+                    ->lockForUpdate()
+                    ->max('queue_number')) + 1;
+            }
+
+            $appointment->update([
+                'status' => 'checked_in',
+                'queue_number' => $queueNumber,
+                'checked_in_at' => now(),
+            ]);
+
+            return $appointment;
+        });
+
+        if (! $appt) {
             return response()->json(['success' => false, 'message' => 'Appointment is not in Waiting to Arrive status.'], 422);
         }
 
-        $appt->update([
-            'status' => 'checked_in',
-            'checked_in_at' => now(),
-        ]);
-
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'vitals', 'record']))]);
+        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
     public function startConsultation(int $id)
@@ -96,7 +114,7 @@ class AdminClinicController extends Controller
             'consultation_started_at' => now(),
         ]);
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'vitals', 'record']))]);
+        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
     public function finishConsultation(int $id)
@@ -112,7 +130,7 @@ class AdminClinicController extends Controller
             'consultation_finished_at' => now(),
         ]);
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'vitals', 'record']))]);
+        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
     public function markPaid(Request $request, int $id)
@@ -134,7 +152,7 @@ class AdminClinicController extends Controller
             'paid' => true,
         ]);
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'vitals', 'record']))]);
+        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
     public function cancel(Request $request, int $id)
@@ -331,6 +349,12 @@ class AdminClinicController extends Controller
             'status' => $a->status,
             'queue_number' => $a->queue_number,
             'appointment_date' => $a->appointment_date?->toDateString(),
+            'time_window' => $a->timeWindow ? [
+                'window_id' => $a->timeWindow->window_id,
+                'window_label' => $a->timeWindow->displayLabel(),
+                'start_time' => $a->timeWindow->start_time,
+                'end_time' => $a->timeWindow->end_time,
+            ] : null,
             'chief_complaint' => $a->chief_complaint,
             'total_amount' => $a->total_amount,
             'paid' => $a->paid,

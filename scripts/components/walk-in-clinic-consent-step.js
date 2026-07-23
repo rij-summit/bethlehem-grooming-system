@@ -1,3 +1,5 @@
+import { getClinicVisitSummaryMarkup } from "./clinic-visit-summary-card.js";
+
 const WALK_IN_OWNER_KEY = "walkInOwnerStep";
 const WALK_IN_CLINIC_CONFIRMED_KEY = "walkInClinicConfirmation";
 
@@ -9,17 +11,7 @@ const state = {
 
 let elements = {};
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function getMarkup(pet, chiefComplaint) {
-  const petName = escapeHtml(pet?.petName || "");
   return `
     <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
       <button
@@ -49,21 +41,11 @@ function getMarkup(pet, chiefComplaint) {
           <h2 class="text-2xl font-bold text-[#2f4b66]">Clinic Visit Summary</h2>
         </div>
 
-        <div class="mb-6 grid gap-4 md:grid-cols-2">
-          <div class="rounded-2xl border border-slate-200 bg-white p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Visit Type</p>
-            <p class="mt-2 text-sm text-slate-600">Clinic Walk-in</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200 bg-white p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</p>
-            <p class="mt-2 text-sm font-semibold text-[#2f4b66]">${petName}</p>
-          </div>
-        </div>
-
-        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Chief Complaint</p>
-          <p class="mt-2 text-sm text-slate-600">${escapeHtml(chiefComplaint)}</p>
-        </div>
+        ${getClinicVisitSummaryMarkup({
+          visitType: "Clinic Walk-in",
+          pet,
+          reason: chiefComplaint,
+        })}
 
         <div
           id="clinicConsentStatus"

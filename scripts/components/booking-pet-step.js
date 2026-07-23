@@ -1,16 +1,24 @@
 import {
-  MAX_PETS_PER_BOOKING,
+  MAX_PETS_PER_BOOKING as GROOMING_MAX_PETS,
   getSavedPets,
-  getBookingPets,
-  saveBookingPets,
-  getBookingSchedule,
+  getBookingPets as getStoredBookingPets,
+  saveBookingPets as saveStoredBookingPets,
+  getBookingSchedule as getGroomingSchedule,
   createPetObject,
   addPetToSavedPets,
-  addPetToBooking,
-  removePetFromBooking,
+  addPetToBooking as addStoredPet,
+  removePetFromBooking as removeStoredPet,
   loadPetsFromApi,
 } from "../services/pet-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
+import { normalizePetSize } from "../services/booking-draft-service.js";
+import {
+  CLINIC_VISIT_PETS_KEY,
+  normalizeApiPet,
+  readClinicVisitDraft,
+  requireCustomerSession,
+  updateClinicVisitDraft,
+} from "../services/clinic-visit-service.js";
 import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
@@ -47,8 +55,55 @@ import {
  * 4. Attach chosen pets to active booking draft
  */
 
+const IS_CLINIC_VISIT = new URLSearchParams(window.location.search).get("flow") === "clinic";
+const SELECTED_PETS_STORAGE_KEY = IS_CLINIC_VISIT
+  ? CLINIC_VISIT_PETS_KEY
+  : undefined;
+const MAX_PETS_PER_BOOKING = IS_CLINIC_VISIT ? 1 : GROOMING_MAX_PETS;
+
+function getBookingPets() {
+  return getStoredBookingPets(SELECTED_PETS_STORAGE_KEY);
+}
+
+function saveBookingPets(pets) {
+  return saveStoredBookingPets(pets, SELECTED_PETS_STORAGE_KEY);
+}
+
+function getBookingSchedule() {
+  if (IS_CLINIC_VISIT) {
+    const draft = readClinicVisitDraft();
+    return {
+      date: draft.appointmentDate || "",
+      time: draft.windowLabel || "",
+      window_id: draft.windowId || null,
+    };
+  }
+
+  return getGroomingSchedule();
+}
+
+function addPetToBooking(pet) {
+  return addStoredPet(pet, {
+    storageKey: SELECTED_PETS_STORAGE_KEY,
+    maxPets: MAX_PETS_PER_BOOKING,
+  });
+}
+
+function removePetFromBooking(petId) {
+  return removeStoredPet(petId, SELECTED_PETS_STORAGE_KEY);
+}
+
+function flowLabel() {
+  return IS_CLINIC_VISIT ? "clinic visit" : "booking";
+}
+
 const elements = {
   bookingScheduleSummary: document.getElementById("bookingScheduleSummary"),
+  backLink: document.getElementById("petStepBackLink"),
+  backLabel: document.getElementById("petStepBackLabel"),
+  pageTitle: document.getElementById("petStepPageTitle"),
+  savedPetsInstruction: document.getElementById("savedPetsInstruction"),
+  selectedPetsTitle: document.getElementById("selectedPetsTitle"),
   showExistingPetBtn: document.getElementById("showExistingPetBtn"),
   showAddPetBtn: document.getElementById("showAddPetBtn"),
   petStepMessage: document.getElementById("petStepMessage"),
@@ -66,6 +121,7 @@ const elements = {
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
   sizeError: document.getElementById("sizeError"),
+  savePetBtn: document.getElementById("savePetBtn"),
 
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
@@ -186,6 +242,12 @@ function buildStepTwoDraft() {
 }
 
 function saveStepTwoDraft() {
+  if (IS_CLINIC_VISIT) {
+    return updateClinicVisitDraft({
+      pet: getBookingPets()[0] || null,
+    });
+  }
+
   const draft = buildStepTwoDraft();
   sessionStorage.setItem(BOOKING_STEP_TWO_KEY, JSON.stringify(draft));
   return draft;
@@ -336,7 +398,7 @@ function bindExistingPetButtons() {
         renderExistingPets();
         renderSelectedPets();
         showMessage(
-          `${selectedPet.petName} was added to this booking.`,
+          `${selectedPet.petName} was selected for this ${flowLabel()}.`,
           "success",
         );
       } catch (error) {
@@ -374,7 +436,7 @@ function handleSelectAllExistingPets() {
 
   if (petsToAdd.length === 0) {
     showMessage(
-      "All saved pets are already selected for this booking.",
+      `All available pets are already selected for this ${flowLabel()}.`,
       "default",
     );
     syncSelectAllButtonState(savedPets, bookingPets);
@@ -393,7 +455,7 @@ function handleSelectAllExistingPets() {
         : "";
 
     showMessage(
-      `${petsToAdd.length} ${plural} added to this booking.${limitNote}`,
+      `${petsToAdd.length} ${plural} added to this ${flowLabel()}.${limitNote}`,
       "success",
     );
   } catch (error) {
@@ -467,7 +529,7 @@ function handleRemoveAllSelectedPets() {
   saveBookingPets([]);
   renderExistingPets();
   renderSelectedPets();
-  showMessage("All selected pets were removed from this booking.", "warning");
+  showMessage(`All selected pets were removed from this ${flowLabel()}.`, "warning");
 }
 
 function bindRemoveButtons() {
@@ -485,7 +547,7 @@ function bindRemoveButtons() {
 
       if (petToRemove) {
         showMessage(
-          `${petToRemove.petName} was removed from this booking.`,
+          `${petToRemove.petName} was removed from this ${flowLabel()}.`,
           "warning",
         );
       }
@@ -551,7 +613,7 @@ function resetAddPetForm() {
   setFieldError(elements.size, elements.sizeError, "");
 }
 
-function handleAddPetSubmit(event) {
+async function handleAddPetSubmit(event) {
   event.preventDefault();
 
   const formValues = getFormValues(elements.addPetForm);
@@ -569,38 +631,67 @@ function handleAddPetSubmit(event) {
     return;
   }
 
-  const newPet = createPetObject(formValues);
+  let newPet = null;
 
   try {
-    // Save to global pet list
-    addPetToSavedPets(newPet);
+    elements.savePetBtn.disabled = true;
+    elements.savePetBtn.textContent = "Saving...";
 
-    // Add to current booking
+    if (IS_CLINIC_VISIT) {
+      const response = await API.addPet({
+        pet_name: formValues.petName.trim(),
+        species: formValues.petType,
+        breed: formValues.breed.trim() || null,
+        weight: formValues.weight || null,
+        fur_type: formValues.furType || null,
+        size: normalizePetSize(formValues.size) || null,
+        medical_conditions: formValues.medicalNotes.trim() || null,
+      });
+      newPet = normalizeApiPet(response.pet);
+      addPetToSavedPets(newPet);
+    } else {
+      newPet = createPetObject(formValues);
+      addPetToSavedPets(newPet);
+    }
+
     addPetToBooking(newPet);
 
     resetAddPetForm();
     renderExistingPets();
     renderSelectedPets();
     showMessage(
-      `${newPet.petName} was added and saved to your pet list.`,
+      `${newPet.petName} was added, saved to your pet list, and selected.`,
       "success",
     );
   } catch (error) {
     showMessage(error.message, "error");
+  } finally {
+    elements.savePetBtn.disabled = false;
+    elements.savePetBtn.textContent = IS_CLINIC_VISIT
+      ? "Save and Select Pet"
+      : "Save Pet to Booking";
   }
 }
 
 function handleBack() {
-  window.location.href = "./booking.html";
+  window.location.href = IS_CLINIC_VISIT
+    ? "./clinic-visit-date.html"
+    : "./booking.html";
 }
 
 function handleNext() {
   const bookingSchedule = getBookingSchedule();
   const bookingPets = getBookingPets();
 
-  if (!bookingSchedule?.date || !bookingSchedule?.time) {
+  if (
+    !bookingSchedule?.date ||
+    !bookingSchedule?.time ||
+    (IS_CLINIC_VISIT && !bookingSchedule?.window_id)
+  ) {
     showMessage(
-      "Please go back to Step 1 and select a valid date and time before continuing.",
+      IS_CLINIC_VISIT
+        ? "Please go back to Step 1 and select a valid clinic visit date and time before continuing."
+        : "Please go back to Step 1 and select a valid date and time before continuing.",
       "error",
     );
     return;
@@ -614,8 +705,18 @@ function handleNext() {
     return;
   }
 
+  if (IS_CLINIC_VISIT && bookingPets.length !== 1) {
+    showMessage(
+      "Please select exactly one pet for the clinic visit.",
+      "error",
+    );
+    return;
+  }
+
   saveStepTwoDraft();
-  window.location.href = "./booking-services.html";
+  window.location.href = IS_CLINIC_VISIT
+    ? "./clinic-visit-reason.html"
+    : "./booking-services.html";
 }
 
 function setFieldError(input, errorElement, message) {
@@ -743,7 +844,28 @@ async function initStepState() {
   }
 }
 
+function configurePageForFlow() {
+  if (!IS_CLINIC_VISIT) {
+    return;
+  }
+
+  document.title = "Clinic Visit - Pet Information";
+  elements.backLink.href = "./clinic-visit-date.html";
+  elements.backLabel.textContent = "Back to Date";
+  elements.pageTitle.textContent = "Pet Information";
+  elements.savedPetsInstruction.textContent =
+    "Select one pet from your saved pet list.";
+  elements.selectAllExistingPetsBtn.classList.add("hidden");
+  elements.selectedPetsTitle.textContent = "Selected Pet";
+  elements.savePetBtn.textContent = "Save and Select Pet";
+}
+
 function initBookingPetStep() {
+  if (IS_CLINIC_VISIT && !requireCustomerSession("./sign-in.html")) {
+    return;
+  }
+
+  configurePageForFlow();
   bindEvents();
   initStepState();
 }

@@ -63,9 +63,9 @@ export async function loadPetsFromApi() {
 
 // ── Booking pets (sessionStorage) ────────────────────────────────────────
 
-export function getBookingPets() {
+export function getBookingPets(storageKey = BOOKING_PETS_KEY) {
   try {
-    const raw = sessionStorage.getItem(BOOKING_PETS_KEY);
+    const raw = sessionStorage.getItem(storageKey);
     return raw ? JSON.parse(raw) : [];
   } catch (error) {
     console.error("Failed to read booking pets:", error);
@@ -73,8 +73,8 @@ export function getBookingPets() {
   }
 }
 
-export function saveBookingPets(pets) {
-  sessionStorage.setItem(BOOKING_PETS_KEY, JSON.stringify(pets));
+export function saveBookingPets(pets, storageKey = BOOKING_PETS_KEY) {
+  sessionStorage.setItem(storageKey, JSON.stringify(pets));
 }
 
 export function getBookingSchedule() {
@@ -109,11 +109,17 @@ export function addPetToSavedPets(newPet) {
   return updatedPets;
 }
 
-export function addPetToBooking(newPet) {
-  const currentBookingPets = getBookingPets();
+export function addPetToBooking(
+  newPet,
+  {
+    storageKey = BOOKING_PETS_KEY,
+    maxPets = MAX_PETS_PER_BOOKING,
+  } = {},
+) {
+  const currentBookingPets = getBookingPets(storageKey);
 
-  if (currentBookingPets.length >= MAX_PETS_PER_BOOKING) {
-    throw new Error(`Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`);
+  if (currentBookingPets.length >= maxPets) {
+    throw new Error(`Only ${maxPets} ${maxPets === 1 ? "pet is" : "pets are"} allowed.`);
   }
 
   const alreadyExists = currentBookingPets.some((pet) => pet.id === newPet.id);
@@ -122,16 +128,16 @@ export function addPetToBooking(newPet) {
   }
 
   const updatedBookingPets = [...currentBookingPets, newPet];
-  saveBookingPets(updatedBookingPets);
+  saveBookingPets(updatedBookingPets, storageKey);
   return updatedBookingPets;
 }
 
-export function removePetFromBooking(petId) {
-  const updatedBookingPets = getBookingPets().filter((pet) => pet.id !== petId);
-  saveBookingPets(updatedBookingPets);
+export function removePetFromBooking(petId, storageKey = BOOKING_PETS_KEY) {
+  const updatedBookingPets = getBookingPets(storageKey).filter((pet) => pet.id !== petId);
+  saveBookingPets(updatedBookingPets, storageKey);
   return updatedBookingPets;
 }
 
-export function isPetAlreadySelected(petId) {
-  return getBookingPets().some((pet) => pet.id === petId);
+export function isPetAlreadySelected(petId, storageKey = BOOKING_PETS_KEY) {
+  return getBookingPets(storageKey).some((pet) => pet.id === petId);
 }

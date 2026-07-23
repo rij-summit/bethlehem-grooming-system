@@ -1,4 +1,5 @@
 import { renderWalkInClinicConsentStep } from "./walk-in-clinic-consent-step.js";
+import { validateClinicVisitReason } from "../services/clinic-visit-service.js";
 
 const WALK_IN_CLINIC_COMPLAINT_KEY = "walkInClinicComplaint";
 
@@ -123,13 +124,7 @@ function refreshElements() {
 }
 
 function validate(complaint) {
-  if (!complaint.trim()) {
-    return "Chief complaint is required.";
-  }
-  if (complaint.trim().length < 5) {
-    return "Please provide more detail about the reason for the visit.";
-  }
-  return "";
+  return validateClinicVisitReason(complaint);
 }
 
 function showFieldError(message) {

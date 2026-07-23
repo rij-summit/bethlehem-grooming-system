@@ -62,6 +62,9 @@ var API = (() => {
     "bookingConfirmation",
     "bethlehem.bookingFormLock",
     "bookingPets",
+    "clinicVisitDraft",
+    "clinicVisitPets",
+    "clinicVisitConfirmation",
   ];
   const BOOKING_LOCAL_KEYS = [
     "bethlehem.bookingFormLock",
@@ -420,6 +423,11 @@ var API = (() => {
     return request("GET", `/timeslots?date=${date}`);
   }
 
+  async function getClinicTimeslots(date) {
+    // GET /api/clinic/timeslots?date=YYYY-MM-DD (public)
+    return request("GET", `/clinic/timeslots?date=${encodeURIComponent(date)}`);
+  }
+
   async function getUserPets({ archived = 0 } = {}) {
     // GET /api/pets?archived=0|1  (protected)
     // archived=0 → active pets (booking form default)
@@ -497,6 +505,17 @@ var API = (() => {
       new_date:      newDate,
       new_window_id: newWindowId,
     }, getCustomerToken());
+  }
+
+  async function submitClinicPreRegistration(payload) {
+    // POST /api/clinic/pre-register (protected — customer token)
+    // payload: { appointment_date, pet_id, chief_complaint }
+    return request(
+      "POST",
+      "/clinic/pre-register",
+      payload,
+      getCustomerToken(),
+    );
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -851,6 +870,7 @@ var API = (() => {
     sendChatbotMessage,
     // Timeslots
     getTimeslots,
+    getClinicTimeslots,
     // Pets
     getUserPets,
     getPet,
@@ -866,6 +886,7 @@ var API = (() => {
     getGroomingCapacity,
     cancelBooking,
     rescheduleBooking,
+    submitClinicPreRegistration,
     // Admin bookings
     getAdminBookings,
     adminCheckIn,

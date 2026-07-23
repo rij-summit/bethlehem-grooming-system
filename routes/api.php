@@ -28,6 +28,7 @@ Route::post('/chatbot', [ChatbotController::class, 'chat',]);
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots',      [BookingController::class,   'getTimeslots']);
 Route::get('/clinic/status',  [ClinicClosureController::class, 'status']);
+Route::get('/clinic/timeslots', [ClinicWalkinController::class, 'timeslots']);
 Route::get('/system/clock', function () {
     $testClockActive = app()->environment(['local', 'testing']) && filled(config('app.test_now'));
 
@@ -66,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/booking/{id}',        [BookingController::class, 'show']);
     Route::post('/booking/cancel',     [BookingController::class, 'cancel']);
     Route::post('/booking/reschedule', [BookingController::class, 'reschedule']);
+
+    // Customer — Clinic visit pre-registration
+    Route::post('/clinic/pre-register', [ClinicWalkinController::class, 'preRegister']);
 
     // Admin — Customer management (staff can view, admin can manage)
     Route::get('/admin/customers',                          [CustomerController::class, 'index']);

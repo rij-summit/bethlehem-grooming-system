@@ -14,6 +14,7 @@ class ClinicAppointment extends Model
         'status',
         'queue_number',
         'appointment_date',
+        'window_id',
         'user_id',
         'walkin_id',
         'pet_id',
@@ -49,6 +50,11 @@ class ClinicAppointment extends Model
     public function pet()
     {
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
+    }
+
+    public function timeWindow()
+    {
+        return $this->belongsTo(TimeWindow::class, 'window_id', 'window_id');
     }
 
     public function record()
