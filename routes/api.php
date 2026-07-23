@@ -21,6 +21,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\PetMedicalRecordController;
+use App\Http\Controllers\PetVaccinationController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/sign-in',  [AuthController::class, 'signIn']);
@@ -53,6 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pets',                    [PetController::class, 'index']);
     Route::get('/pets/{id}',               [PetController::class, 'show']);
     Route::get('/pets/{petId}/medical-records', [PetMedicalRecordController::class, 'index']);
+    Route::get('/pets/{petId}/vaccinations', [PetVaccinationController::class, 'index']);
     Route::post('/pets',                   [PetController::class, 'store']);
     Route::put('/pets/{id}',               [PetController::class, 'update']);
     Route::post('/pets/{id}/archive',      [PetController::class, 'archive']);

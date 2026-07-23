@@ -80,10 +80,6 @@ class AdminVaccinationInterfaceTest extends TestCase
             '/void`',
             $this->apiLayer,
         );
-        $this->assertStringNotContainsString(
-            'async function getPetVaccinations',
-            $this->apiLayer,
-        );
     }
 
     public function test_component_uses_only_the_central_api_and_refreshes_after_draft_changes(): void
@@ -211,21 +207,23 @@ class AdminVaccinationInterfaceTest extends TestCase
         );
     }
 
-    public function test_existing_medical_and_customer_vaccination_placeholder_remain_intact(): void
+    public function test_existing_medical_and_customer_vaccination_interfaces_remain_separate(): void
     {
         $clientPage = file_get_contents(base_path('pages/client/pet-details.html'));
+        $clientComponent = file_get_contents(base_path('scripts/components/pet-details.js'));
 
         $this->assertStringContainsString('Medical Record', $this->clinicPage);
         $this->assertStringContainsString('clinicSaveRecord', $this->clinicComponent);
         $this->assertStringContainsString('clinicUploadAttachment', $this->clinicComponent);
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPage);
         $this->assertStringContainsString(
-            'No placeholder vaccination information is displayed.',
+            'Published vaccination information recorded by the clinic for this pet.',
             $clientPage,
         );
+        $this->assertStringContainsString('API.getPetVaccinations(petId)', $clientComponent);
         $this->assertStringNotContainsString(
             'getAdminPetVaccinations',
-            file_get_contents(base_path('scripts/components/pet-details.js')),
+            $clientComponent,
         );
     }
 

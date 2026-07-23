@@ -15,8 +15,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const overviewGrid = document.getElementById("petOverviewGrid");
   const groomingRecords = document.getElementById("petGroomingRecords");
   const medicalRecords = document.getElementById("petMedicalRecords");
+  const vaccinationRecords = document.getElementById("petVaccinationRecords");
   const bookGroomingLink = document.getElementById("bookGroomingLink");
   let medicalLoadState = "idle";
+  let vaccinationLoadState = "idle";
 
   const petIdParam = new URLSearchParams(window.location.search).get("pet_id");
   const petId = Number(petIdParam);
@@ -125,6 +127,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (selected === "medical") {
           loadMedicalRecords();
+        }
+        if (selected === "vaccinations") {
+          loadVaccinations();
         }
       });
     });
@@ -420,6 +425,175 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
           </div>
         `;
+      }
+    }
+
+    renderIcons();
+  };
+
+  const vaccinationStatusDetails = (status) => {
+    const statuses = {
+      current: {
+        label: "Current",
+        classes: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        message: "",
+      },
+      due_soon: {
+        label: "Due soon",
+        classes: "border-amber-200 bg-amber-50 text-amber-800",
+        message: "",
+      },
+      overdue: {
+        label: "Overdue",
+        classes: "border-red-200 bg-red-50 text-red-700",
+        message: "The recorded next-due date has passed. Contact the clinic for guidance.",
+      },
+      unknown: {
+        label: "Unknown",
+        classes: "border-slate-200 bg-slate-50 text-slate-600",
+        message: "The clinic did not provide a next-due date for this vaccination.",
+      },
+    };
+
+    return statuses[status] || statuses.unknown;
+  };
+
+  const vaccinationDose = (record) => {
+    if (isMissing(record.dose_amount)) return null;
+    return `${record.dose_amount}${isMissing(record.dose_unit) ? "" : ` ${record.dose_unit}`}`;
+  };
+
+  const renderVaccinationRecord = (record) => {
+    const status = vaccinationStatusDetails(record.due_status);
+    const optionalDetails = [
+      ["Product Name", record.product_name],
+      ["Manufacturer", record.manufacturer],
+      ["Dose", vaccinationDose(record)],
+      ["Route", isMissing(record.route) ? null : titleCase(record.route)],
+      ["Batch Number", record.batch_number],
+      ["Administration Site", record.administration_site],
+      ["Appointment Reference", record.appointment_reference],
+      ["Vaccine Product / Batch Expiration Date", isMissing(record.product_expiry_date) ? null : formatDate(record.product_expiry_date)],
+    ].filter(([, value]) => !isMissing(value));
+
+    return `
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        <div class="border-b border-slate-200 bg-white px-5 py-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccine</p>
+              <h4 class="mt-1 break-words text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.vaccine_name))}</h4>
+            </div>
+            <span
+              class="w-fit rounded-full border px-3 py-1 text-xs font-bold ${status.classes}"
+              aria-label="Vaccination due status: ${escapeHtml(status.label)}"
+            >${escapeHtml(status.label)}</span>
+          </div>
+          ${status.message ? `
+            <p class="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+              ${escapeHtml(status.message)}
+            </p>
+          ` : ""}
+        </div>
+
+        <div class="space-y-5 p-5">
+          <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Administration Date</dt>
+              <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.administered_date))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Due Date</dt>
+              <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Administering Provider</dt>
+              <dd class="mt-1 break-words text-sm font-medium text-slate-700">${escapeHtml(displayValue(record.administering_provider))}</dd>
+            </div>
+          </dl>
+
+          ${optionalDetails.length ? `
+            <div class="border-t border-slate-200 pt-4">
+              <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                ${optionalDetails.map(([label, value]) => `
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                    <dd class="mt-1 break-words text-sm text-slate-700">${escapeHtml(value)}</dd>
+                  </div>
+                `).join("")}
+              </dl>
+            </div>
+          ` : ""}
+        </div>
+      </article>
+    `;
+  };
+
+  const loadVaccinations = async ({ retry = false } = {}) => {
+    if (
+      !vaccinationRecords
+      || vaccinationLoadState === "loading"
+      || (!retry && vaccinationLoadState === "loaded")
+    ) {
+      return;
+    }
+
+    vaccinationLoadState = "loading";
+    vaccinationRecords.innerHTML = `
+      <div class="py-12 text-center" aria-live="polite">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-slate-500">Loading vaccination history...</p>
+      </div>
+    `;
+    renderIcons();
+
+    try {
+      const data = await API.getPetVaccinations(petId);
+      const records = Array.isArray(data.vaccinations) ? data.vaccinations : [];
+
+      if (!records.length) {
+        vaccinationRecords.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+            <i data-lucide="syringe" class="mx-auto h-8 w-8 text-slate-300"></i>
+            <h4 class="mt-3 font-bold text-slate-700">No published vaccination records</h4>
+            <p class="mt-1 text-sm text-slate-500">No published vaccination records are available for this pet yet.</p>
+          </div>
+        `;
+      } else {
+        vaccinationRecords.innerHTML = `<div class="space-y-4">${records.map(renderVaccinationRecord).join("")}</div>`;
+      }
+
+      vaccinationLoadState = "loaded";
+    } catch (error) {
+      vaccinationLoadState = "error";
+
+      if (error?.status === 404) {
+        vaccinationRecords.innerHTML = `
+          <div class="rounded-2xl border border-amber-100 bg-amber-50 px-6 py-10 text-center" role="alert">
+            <i data-lucide="shield-alert" class="mx-auto h-8 w-8 text-amber-500"></i>
+            <h4 class="mt-3 font-bold text-amber-900">Pet profile not found</h4>
+            <p class="mt-1 text-sm text-amber-700">This pet does not exist or is not available for your account.</p>
+          </div>
+        `;
+      } else {
+        vaccinationRecords.innerHTML = `
+          <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center" role="alert">
+            <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
+            <h4 class="mt-3 font-bold text-red-800">Vaccination history could not be loaded</h4>
+            <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
+            <button
+              type="button"
+              data-retry-vaccinations
+              class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+            >
+              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+              Retry
+            </button>
+          </div>
+        `;
+        vaccinationRecords
+          .querySelector("[data-retry-vaccinations]")
+          ?.addEventListener("click", () => loadVaccinations({ retry: true }));
       }
     }
 

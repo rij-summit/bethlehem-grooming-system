@@ -445,6 +445,11 @@ var API = (() => {
     return request("GET", `/pets/${petId}/medical-records`, null, getCustomerToken());
   }
 
+  async function getPetVaccinations(petId) {
+    // GET /api/pets/{petId}/vaccinations  (protected, owner-scoped, and client-safe)
+    return request("GET", `/pets/${petId}/vaccinations`, null, getCustomerToken());
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -964,6 +969,7 @@ var API = (() => {
     getUserPets,
     getPet,
     getPetMedicalRecords,
+    getPetVaccinations,
     addPet,
     updatePet,
     adminUpdatePet,

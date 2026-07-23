@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminVaccinationController;
+use App\Http\Controllers\PetVaccinationController;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -594,9 +595,19 @@ class AdminVaccinationApiTest extends TestCase
         );
 
         $this->assertCount(6, $controllerRoutes);
-        $this->assertFalse($routes->contains(
-            fn (RoutingRoute $route) => $route->uri() === 'api/pets/{petId}/vaccinations',
-        ));
+
+        $clientRoute = $routes->first(
+            fn (RoutingRoute $route) => $route->uri() === 'api/pets/{petId}/vaccinations'
+                && in_array('GET', $route->methods(), true),
+        );
+
+        $this->assertNotNull($clientRoute);
+        $this->assertSame(
+            PetVaccinationController::class.'@index',
+            $clientRoute->getActionName(),
+        );
+        $this->assertContains('auth:sanctum', $clientRoute->gatherMiddleware());
+        $this->assertNotContains('role:admin,staff', $clientRoute->gatherMiddleware());
     }
 
     private function authenticateAs(string $role, int $userId): void
