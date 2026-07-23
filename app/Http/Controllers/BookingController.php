@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\ClinicSetting;
 use App\Models\Notification;
 use App\Models\Pet;
 use App\Models\Service;
@@ -12,6 +13,7 @@ use App\Models\TimeWindow;
 use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
+use App\Services\AvailabilityTimeWindowService;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -46,9 +48,15 @@ class BookingController extends Controller
     }
 
     // ── GET AVAILABLE TIME WINDOWS ────────────────────────
-    public function getTimeslots(Request $request)
+    public function getTimeslots(
+        Request $request,
+        AvailabilityTimeWindowService $timeWindows,
+    )
     {
         $date = $request->query('date', Carbon::today()->toDateString());
+        $settings = ClinicSetting::current();
+        $availability = $settings->serviceAvailability('grooming');
+        $cutoffPassed = $settings->isSameDayPreRegistrationCutoffPassed('grooming', $date);
 
         $totalBooked = Booking::where('booking_date', $date)
             ->whereNotIn('status', ['cancelled'])
@@ -57,9 +65,9 @@ class BookingController extends Controller
         $dayFull = $totalBooked >= self::DAILY_CAPACITY;
         $dailyRemaining = max(0, self::DAILY_CAPACITY - $totalBooked);
 
-        $windows = TimeWindow::where('is_active', 1)->get();
+        $windows = $timeWindows->availableWindows($settings, 'grooming');
 
-        $result = $windows->map(function ($window) use ($date, $dayFull, $dailyRemaining) {
+        $result = $windows->map(function ($window) use ($date, $dayFull, $dailyRemaining, $cutoffPassed) {
             $booked = Booking::where('window_id', $window->window_id)
                 ->where('booking_date', $date)
                 ->whereNotIn('status', ['cancelled'])
@@ -67,19 +75,22 @@ class BookingController extends Controller
 
             return [
                 'window_id' => $window->window_id,
-                'window_label' => $window->window_label,
+                'window_label' => $window->displayLabel(),
                 'start_time' => $window->start_time,
                 'end_time' => $window->end_time,
                 'max_slots' => $window->max_slots,
                 'booked' => $booked,
                 'remaining' => $dailyRemaining,
                 'is_full' => $dayFull,
+                'is_cutoff' => $cutoffPassed,
                 'recommended' => false,
             ];
         });
 
         // ── AI FEATURE: Mark least congested as recommended ──
-        $available = $result->where('is_full', false);
+        $available = $result
+            ->where('is_full', false)
+            ->where('is_cutoff', false);
         if ($available->isNotEmpty()) {
             $minBooked = $available->min('booked');
             $recommended = $available->firstWhere('booked', $minBooked);
@@ -100,6 +111,8 @@ class BookingController extends Controller
             'day_full' => $dayFull,
             'total_booked' => $totalBooked,
             'capacity' => self::DAILY_CAPACITY,
+            'cutoff_passed' => $cutoffPassed,
+            'availability' => $availability,
             'windows' => $result->values(),
         ]);
     }
@@ -140,6 +153,17 @@ class BookingController extends Controller
         $user = $request->user();
         $date = $request->booking_date;
         $petCount = (int) $request->number_of_pets;
+        $settings = ClinicSetting::current();
+
+        if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $date)) {
+            $cutoffLabel = $settings
+                ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
+
+            return response()->json([
+                'success' => false,
+                'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
+            ], 422);
+        }
 
         // ── Check if day is full ──────────────────────────
         $totalBooked = Booking::where('booking_date', $date)
@@ -154,7 +178,24 @@ class BookingController extends Controller
         }
 
         // ── Load selected time window ───────────────────────
-        $window = TimeWindow::find($request->window_id);
+        $window = TimeWindow::query()
+            ->whereKey($request->window_id)
+            ->where('is_active', 1)
+            ->first();
+
+        if (
+            ! $window
+            || ! $settings->isWindowWithinOperatingHours(
+                'grooming',
+                $window->start_time,
+                $window->end_time,
+            )
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+            ], 422);
+        }
 
         // ── Check duplicate booking ───────────────────────
         $duplicate = Booking::where('user_id', $user->user_id)
@@ -618,8 +659,36 @@ class BookingController extends Controller
 
         // Check that the target date still has enough daily capacity
         $newDate = $request->new_date;
-        $newWindow = TimeWindow::find($request->new_window_id);
+        $settings = ClinicSetting::current();
+        $newWindow = TimeWindow::query()
+            ->whereKey($request->new_window_id)
+            ->where('is_active', true)
+            ->first();
         $petCount = (int) $booking->number_of_pets;
+
+        if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $newDate)) {
+            $cutoffLabel = $settings
+                ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
+
+            return response()->json([
+                'success' => false,
+                'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
+            ], 422);
+        }
+
+        if (
+            ! $newWindow
+            || ! $settings->isWindowWithinOperatingHours(
+                'grooming',
+                $newWindow->start_time,
+                $newWindow->end_time,
+            )
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+            ], 422);
+        }
 
         $dayBooked = Booking::where('booking_date', $newDate)
             ->whereNotIn('status', ['cancelled'])
@@ -643,7 +712,7 @@ class BookingController extends Controller
         Notification::create([
             'type' => 'rescheduled',
             'booking_id' => $booking->booking_id,
-            'message' => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->window_label}.",
+            'message' => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->displayLabel()}.",
             'is_read' => 0,
             'created_at' => now(),
         ]);
@@ -654,7 +723,7 @@ class BookingController extends Controller
             'booking' => [
                 'booking_reference' => $booking->booking_reference,
                 'booking_date' => $booking->booking_date,
-                'window' => $newWindow->window_label,
+                'window' => $newWindow->displayLabel(),
                 'reschedule_count' => $booking->reschedule_count,
             ],
         ]);

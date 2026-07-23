@@ -175,9 +175,20 @@ function adminSidebar() {
       if (!this.isAdmin) return;
 
       this.blockDatesModal.open = true;
-      this.blockForm = { startDate: "", endDate: "", reason: "", busy: false, error: "", warning: "" };
+      this.clearBlockedDateForm();
       await this.loadBlockedDates();
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    clearBlockedDateForm() {
+      this.blockForm = {
+        startDate: "",
+        endDate: "",
+        reason: "",
+        busy: false,
+        error: "",
+        warning: "",
+      };
     },
 
     async loadBlockedDates() {
@@ -186,6 +197,10 @@ function adminSidebar() {
         this.blockedDates = data.blocked_dates || [];
       } catch {
         this.blockedDates = [];
+      } finally {
+        this.$nextTick(() => {
+          if (window.lucide) window.lucide.createIcons();
+        });
       }
     },
 

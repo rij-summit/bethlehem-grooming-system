@@ -102,8 +102,9 @@
             >
               <p class="font-semibold text-slate-600">Pre-registration Guidelines:</p>
               <ul class="mt-2 space-y-1">
-                <li>• Pet grooming hours: 8:00 AM to 5:00 PM</li>
+                <li id="operatingHoursText">• Loading pet grooming hours...</li>
                 <li>• Past dates and past time slots are unavailable</li>
+                <li>• 12:00 PM to 1:00 PM is reserved as a break</li>
                 <li>• Pre-registration is limited to the next 3 days only</li>
                 <li class="flex items-center gap-1.5">
                   <span class="inline-block h-3 w-3 shrink-0 rounded bg-[#fef9c3]"></span>
@@ -121,7 +122,10 @@
               </h3>
             </div>
 
-            <div id="timeSlots" class="mt-5 grid grid-cols-2 gap-3"></div>
+            <div
+              id="timeSlots"
+              class="mt-5 grid max-h-80 grid-cols-2 gap-3 overflow-y-auto overscroll-contain pr-1"
+            ></div>
 
             <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm">
               <p

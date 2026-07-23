@@ -28,6 +28,12 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::create('clinic_settings', function (Blueprint $table) {
             $table->id();
             $table->unsignedTinyInteger('groomers_on_duty')->default(2);
+            $table->time('clinic_open_time')->default('08:00:00');
+            $table->time('clinic_close_time')->default('17:00:00');
+            $table->time('clinic_prereg_cutoff_time')->default('14:00:00');
+            $table->time('grooming_open_time')->default('08:00:00');
+            $table->time('grooming_close_time')->default('17:00:00');
+            $table->time('grooming_prereg_cutoff_time')->default('14:00:00');
             $table->timestamps();
         });
 

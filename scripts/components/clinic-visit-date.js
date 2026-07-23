@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   await initBookingCalendar({
+    service: "clinic",
     dateOnly: false,
     storageKey: CLINIC_VISIT_DRAFT_KEY,
     dateField: "appointmentDate",

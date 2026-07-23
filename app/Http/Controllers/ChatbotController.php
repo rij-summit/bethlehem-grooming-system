@@ -13,14 +13,6 @@ use Throwable;
 
 class ChatbotController extends Controller
 {
-    private const OPEN_HOUR = 8;
-
-    private const CLOSE_HOUR = 17;
-
-    private const OPERATING_HOURS_TIME = '8:00 AM to 5:00 PM';
-
-    private const OPERATING_HOURS = '8:00 AM to 5:00 PM daily';
-
     private const IDENTITY_REPLY = 'I am the virtual assistant of Bethlehem Animal Clinic.';
 
     private const OFF_TOPIC_REPLY = 'I can only answer questions related to Bethlehem Animal Clinic.';
@@ -208,7 +200,7 @@ class ChatbotController extends Controller
 
                                     'Allowed current system information:',
                                     '- Current clinic status: ' . $allowedSystemContext['clinic_status'] . '.',
-                                    '- Normal operating hours: ' . self::OPERATING_HOURS . '.',
+                                    '- Normal operating hours: ' . $allowedSystemContext['clinic_operating_hours'] . ' daily.',
                                     '- Groomers currently present/on duty: ' . $allowedSystemContext['groomers_on_duty'] . '.',
                                     'Use only the allowed current system information listed above when answering questions about live clinic status or groomer count.',
                                     'Do not claim access to bookings, customers, pets, queues, payments, inventory, staff records, or other live system information.',
@@ -217,7 +209,7 @@ class ChatbotController extends Controller
                                     '- Limit bold formatting to 1 or 2 short phrases per message.',
                                     '- Bold direct answers such as **open**, **closed**, **yes**, **no**, **available**, or **unavailable**.',
                                     '- Bold important actions as a complete action phrase, such as **contact us directly** or **bring your pet to the clinic**.',
-                                    '- Bold important numbers or details only when they directly answer the question, such as **8:00 AM to 5:00 PM**, **24-hour notice**, a price, a date, or a queue position.',
+                                    '- Bold important numbers or details only when they directly answer the question, such as configured operating hours, **24-hour notice**, a price, a date, or a queue position.',
                                     '- Do not bold Bethlehem Animal Clinic, the clinic name, words copied from the customer question, or filler words such as please, here, and directly by themselves.',
                                     'Questions about grooming prices, grooming costs, pet grooming rates, or service fees are clinic-related even if the customer does not mention Bethlehem Animal Clinic by name.',
                                     'If verified prices are unavailable, do not refuse as off-topic; say that verified prices are unavailable here and ask the customer to contact Bethlehem Animal Clinic directly.',
@@ -371,14 +363,21 @@ class ChatbotController extends Controller
     }
 
     /**
-     * @return array{clinic_status: string, clinic_is_open: bool, clinic_status_reason: string, groomers_on_duty: int}
+     * @return array{
+     *     clinic_status: string,
+     *     clinic_is_open: bool,
+     *     clinic_status_reason: string,
+     *     clinic_operating_hours: string,
+     *     groomers_on_duty: int
+     * }
      */
     private function getAllowedSystemContext(): array
     {
         $now = now();
+        $settings = ClinicSetting::current();
         $isStaffClosedToday = $this->isStaffClosedToday();
         $isBlockedToday = $this->isBlockedToday();
-        $isWithinOperatingHours = $this->isWithinOperatingHours($now);
+        $isWithinOperatingHours = $settings->isWithinOperatingHours('clinic', $now);
 
         $clinicStatusReason = 'within_operating_hours';
 
@@ -400,7 +399,11 @@ class ChatbotController extends Controller
             'clinic_status' => $isOpen ? 'open' : 'closed',
             'clinic_is_open' => $isOpen,
             'clinic_status_reason' => $clinicStatusReason,
-            'groomers_on_duty' => $this->getGroomersOnDuty(),
+            'clinic_operating_hours' => $settings->serviceAvailability('clinic')['operating_hours_label'],
+            'groomers_on_duty' => (int) (
+                $settings->groomers_on_duty
+                ?? ClinicSetting::DEFAULT_GROOMERS_ON_DUTY
+            ),
         ];
     }
 
@@ -427,22 +430,6 @@ class ChatbotController extends Controller
             ->exists();
     }
 
-    private function isWithinOperatingHours(\DateTimeInterface $now): bool
-    {
-        $hour = (int) $now->format('G');
-
-        return $hour >= self::OPEN_HOUR && $hour < self::CLOSE_HOUR;
-    }
-
-    private function getGroomersOnDuty(): int
-    {
-        $groomersOnDuty = ClinicSetting::query()
-            ->whereKey(ClinicSetting::SINGLETON_ID)
-            ->value('groomers_on_duty');
-
-        return (int) ($groomersOnDuty ?? ClinicSetting::DEFAULT_GROOMERS_ON_DUTY);
-    }
-
     private function asksAboutAllowedSystemContext(string $message): bool
     {
         return $this->asksAboutClinicOpenStatus($message)
@@ -450,7 +437,13 @@ class ChatbotController extends Controller
     }
 
     /**
-     * @param array{clinic_status: string, clinic_is_open: bool, clinic_status_reason: string, groomers_on_duty: int} $allowedSystemContext
+     * @param array{
+     *     clinic_status: string,
+     *     clinic_is_open: bool,
+     *     clinic_status_reason: string,
+     *     clinic_operating_hours: string,
+     *     groomers_on_duty: int
+     * } $allowedSystemContext
      */
     private function answerAllowedSystemContextQuestion(
         string $message,
@@ -461,7 +454,10 @@ class ChatbotController extends Controller
         if ($this->asksAboutClinicOpenStatus($message)) {
             $answers[] = $allowedSystemContext['clinic_is_open']
                 ? 'Bethlehem Animal Clinic is currently **open**.'
-                : $this->clinicClosedReply($allowedSystemContext['clinic_status_reason']);
+                : $this->clinicClosedReply(
+                    $allowedSystemContext['clinic_status_reason'],
+                    $allowedSystemContext['clinic_operating_hours'],
+                );
         }
 
         if ($this->asksAboutGroomersOnDuty($message)) {
@@ -474,12 +470,12 @@ class ChatbotController extends Controller
         return implode(' ', $answers);
     }
 
-    private function clinicClosedReply(string $reason): string
+    private function clinicClosedReply(string $reason, string $operatingHours): string
     {
         return match ($reason) {
             'staff_closed_today' => 'Bethlehem Animal Clinic is currently **closed** for today.',
             'blocked_date' => 'Bethlehem Animal Clinic is **closed** today.',
-            default => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **' . self::OPERATING_HOURS_TIME . '** daily.',
+            default => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **' . $operatingHours . '** daily.',
         };
     }
 

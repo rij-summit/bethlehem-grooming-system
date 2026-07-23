@@ -69,8 +69,10 @@
             <div class="mt-5 rounded-2xl bg-white/80 p-4 text-xs text-slate-500">
               <p class="font-semibold text-slate-600">Pre-registration Guidelines:</p>
               <ul class="mt-2 space-y-1">
+                <li id="operatingHoursText">&bull; Loading clinic hours...</li>
                 <li>&bull; Select today or one of the next two days</li>
                 <li>&bull; Past dates, past times, and clinic closure dates are unavailable</li>
+                <li>&bull; 12:00 PM to 1:00 PM is reserved as a break</li>
                 <li class="flex items-center gap-1.5">
                   <span class="inline-block h-3 w-3 shrink-0 rounded bg-[#fef9c3]"></span>
                   <span>Amber dates are clinic closures or scheduled breaks</span>
@@ -84,7 +86,10 @@
             <p class="mt-2 text-sm text-slate-500">
               Select a date to see its available clinic visit times.
             </p>
-            <div id="timeSlots" class="mt-5 grid grid-cols-2 gap-3"></div>
+            <div
+              id="timeSlots"
+              class="mt-5 grid max-h-80 grid-cols-2 gap-3 overflow-y-auto overscroll-contain pr-1"
+            ></div>
             <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Selected Date and Time

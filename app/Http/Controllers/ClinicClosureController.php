@@ -5,13 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use App\Models\Booking;
 use App\Models\Notification;
 
 class ClinicClosureController extends Controller
 {
-    private const STOP_RECEIVING_HOUR = 17; // 5 PM
-
     // ── ADMIN GUARD ───────────────────────────────────────
     private function requireAdmin(Request $request)
     {
@@ -29,6 +28,7 @@ class ClinicClosureController extends Controller
     public function status()
     {
         $today = Carbon::today()->toDateString();
+        $settings = ClinicSetting::current();
 
         $stoppedToday = ClinicClosure::where('type', 'stop_today')
             ->where('start_date', $today)
@@ -51,6 +51,7 @@ class ClinicClosureController extends Controller
             'success'       => true,
             'stopped_today' => $stoppedToday,
             'blocked_dates' => $blockedDates,
+            'availability'  => $settings->availabilityPayload(),
         ]);
     }
 

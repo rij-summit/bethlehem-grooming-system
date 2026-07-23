@@ -29,8 +29,13 @@ const state = {
   clinicStatus: {
     stoppedToday: false,
     blockedDates: [],   // [{ id, start_date, end_date, reason }]
+    availability: {
+      clinic: null,
+      grooming: null,
+    },
   },
   options: {
+    service: "grooming",
     dateOnly: false,
     storageKey: "bookingSchedule",
     dateField: "date",
@@ -54,6 +59,7 @@ const elements = {
   selectedScheduleText: document.getElementById("selectedScheduleText"),
   nextStepBtn: document.getElementById("nextStepBtn"),
   clinicNotice: document.getElementById("clinicNotice"),
+  operatingHoursText: document.getElementById("operatingHoursText"),
 };
 
 // =========================
@@ -184,6 +190,14 @@ function updateClinicNotice() {
     elements.clinicNotice.textContent =
       "The clinic is not accepting bookings for today.";
     elements.clinicNotice.classList.remove("hidden");
+  } else if (isSameDayPreRegistrationCutoffPassed(getTodayKeyInManila())) {
+    const availability = getActiveAvailability();
+    const serviceLabel = state.options.service === "clinic" ? "clinic" : "grooming";
+    const cutoffLabel =
+      availability?.pre_registration_cutoff_label || "the configured cutoff time";
+    elements.clinicNotice.textContent =
+      `Same-day ${serviceLabel} pre-registration closed at ${cutoffLabel}. Please choose another date.`;
+    elements.clinicNotice.classList.remove("hidden");
   } else {
     elements.clinicNotice.classList.add("hidden");
   }
@@ -193,7 +207,8 @@ function isDateDisabled(dateKey) {
   return (
     isPastDate(dateKey) ||
     isBeyondBookingWindow(dateKey) ||
-    getClinicBlock(dateKey) !== null
+    getClinicBlock(dateKey) !== null ||
+    isSameDayPreRegistrationCutoffPassed(dateKey)
   );
 }
 
@@ -209,12 +224,37 @@ function timeStringToMinutes(timeStr) {
   return h * 60 + m;
 }
 
+function getActiveAvailability() {
+  return state.clinicStatus.availability?.[state.options.service] || null;
+}
+
+function isSameDayPreRegistrationCutoffPassed(dateKey) {
+  if (!isToday(dateKey)) return false;
+
+  const cutoff = getActiveAvailability()?.pre_registration_cutoff_time;
+  if (!cutoff) return false;
+
+  return getCurrentMinutesInManila() > timeStringToMinutes(cutoff);
+}
+
+function updateOperatingHoursText() {
+  if (!elements.operatingHoursText) return;
+
+  const availability = getActiveAvailability();
+  if (!availability) return;
+
+  const serviceLabel =
+    state.options.service === "clinic" ? "Clinic" : "Pet grooming";
+  elements.operatingHoursText.textContent =
+    `• ${serviceLabel} hours: ${availability.operating_hours_label}`;
+}
+
 /**
  * Check if a slot from the API should be disabled for the selected date.
  * For today, disable any slot whose start time has already passed in Manila time.
  */
 function isSlotDisabled(slot) {
-  if (slot.is_full || slot.is_past) return true;
+  if (slot.is_full || slot.is_past || slot.is_cutoff) return true;
 
   if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
@@ -235,10 +275,18 @@ async function loadClinicStatus() {
     state.clinicStatus = {
       stoppedToday: Boolean(data.stopped_today),
       blockedDates: Array.isArray(data.blocked_dates) ? data.blocked_dates : [],
+      availability: {
+        clinic: data.availability?.clinic || null,
+        grooming: data.availability?.grooming || null,
+      },
     };
   } catch {
     // Non-fatal — fall back to no restrictions
-    state.clinicStatus = { stoppedToday: false, blockedDates: [] };
+    state.clinicStatus = {
+      stoppedToday: false,
+      blockedDates: [],
+      availability: { clinic: null, grooming: null },
+    };
   }
 }
 
@@ -254,6 +302,11 @@ async function fetchTimeslots(dateKey) {
     const data = await state.options.fetchTimeslots(dateKey);
     state.timeslots = data.windows || [];
     state.dayFull   = data.day_full === true;
+    if (data.availability) {
+      state.clinicStatus.availability[state.options.service] =
+        data.availability;
+      updateOperatingHoursText();
+    }
   } catch {
     state.timeslots = [];
     state.dayFull   = false;
@@ -389,9 +442,11 @@ function renderTimeSlots() {
       ? `<span class="block text-xs mt-0.5 font-semibold text-red-500">Full</span>`
       : slot.is_past
         ? `<span class="block text-xs mt-0.5 font-semibold text-slate-400">Time passed</span>`
-        : slot.recommended
-          ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>`
-          : "";
+        : slot.is_cutoff
+          ? `<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>`
+          : slot.recommended
+            ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>`
+            : "";
 
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
@@ -582,5 +637,6 @@ export async function initBookingCalendar(options = {}) {
   renderMonthHeader();
   renderCalendarGrid();
   updateClinicNotice();
+  updateOperatingHoursText();
   updateSelectedSchedule();
 }

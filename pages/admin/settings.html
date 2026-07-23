@@ -159,7 +159,7 @@
         </header>
 
         <main
-          x-data="{ activeSettingsTab: 'general', sundayOpen: true, sundayStart: '09:00 AM', sundayEnd: '04:00 PM', appointmentReminders: true, noShowAlerts: true, paymentReceipt: true }"
+          x-data="adminSettings()"
           class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
           <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-4 lg:backdrop-blur">
@@ -191,7 +191,7 @@
 
                   <button
                     type="button"
-                    @click="activeSettingsTab = 'availability'"
+                    @click="activeSettingsTab = 'availability'; loadBlockedDates()"
                     class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
                     :class="activeSettingsTab === 'availability' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'"
                   >
@@ -369,224 +369,214 @@
               </div>
             </form>
 
-            <form x-show="activeSettingsTab === 'availability'" class="space-y-6">
-              <!-- BACKEND: Replace static operating hours with clinic availability data once endpoints are ready. -->
+            <form x-show="activeSettingsTab === 'availability'" class="space-y-6" @submit.prevent>
               <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
                 <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Availability</p>
-                      <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Operating Hours</h3>
-                      <p class="mt-1 text-sm text-slate-500">Toggle off days the clinic is closed.</p>
+                      <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Service Hours &amp; Pre-registration</h3>
+                      <p class="mt-1 text-sm text-slate-500">Configure operating hours and the same-day customer cutoff for each service.</p>
                     </div>
-                    <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
-                      <i data-lucide="save" class="h-4 w-4"></i>
-                      <span>Save Hours</span>
-                    </button>
+
+                    <div class="inline-flex w-full rounded-2xl border border-[#cfe0ee] bg-[#eef5fb] p-1 sm:w-auto" role="group" aria-label="Availability service">
+                      <button
+                        type="button"
+                        @click="selectAvailabilityService('clinic')"
+                        :aria-pressed="availabilityService === 'clinic'"
+                        class="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold transition sm:flex-none"
+                        :class="availabilityService === 'clinic' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#315b7e] hover:bg-white'"
+                      >
+                        <i data-lucide="stethoscope" class="h-4 w-4"></i>
+                        <span>Clinic</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="selectAvailabilityService('grooming')"
+                        :aria-pressed="availabilityService === 'grooming'"
+                        class="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold transition sm:flex-none"
+                        :class="availabilityService === 'grooming' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#315b7e] hover:bg-white'"
+                      >
+                        <i data-lucide="scissors" class="h-4 w-4"></i>
+                        <span>Grooming</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div class="px-5 py-5 lg:px-6">
-                  <div class="hidden border-b border-slate-100 pb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid lg:grid-cols-4 lg:gap-4">
-                    <span>Day</span>
-                    <span>Open</span>
-                    <span>Close</span>
-                    <span class="text-right">Open</span>
+                  <div x-show="availabilityLoading" class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-5 text-sm font-semibold text-slate-500">
+                    Loading availability settings...
                   </div>
 
-                  <div class="divide-y divide-slate-100">
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Monday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Monday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Tuesday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Tuesday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Wednesday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Wednesday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Thursday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Thursday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Friday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="08:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="06:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Friday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Saturday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input type="text" value="09:00 AM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input type="text" value="04:00 PM" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button type="button" aria-label="Saturday is open" class="flex h-8 w-14 items-center justify-end rounded-full bg-[#315b7e] p-1">
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="grid gap-3 py-4 lg:grid-cols-4 lg:items-center lg:gap-4">
-                      <div class="text-sm font-semibold text-[#315b7e]">Sunday</div>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <input
-                          type="text"
-                          x-model="sundayStart"
-                          :readonly="!sundayOpen"
-                          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none"
-                          :class="sundayOpen ? 'bg-[#f8fbfe] text-slate-700 focus:border-[#315b7e]' : 'bg-slate-100 text-slate-400'"
-                        />
-                      </label>
-                      <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Close</span>
-                        <input
-                          type="text"
-                          x-model="sundayEnd"
-                          :readonly="!sundayOpen"
-                          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none"
-                          :class="sundayOpen ? 'bg-[#f8fbfe] text-slate-700 focus:border-[#315b7e]' : 'bg-slate-100 text-slate-400'"
-                        />
-                      </label>
-                      <div class="flex items-center justify-between gap-3 lg:justify-end">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Open</span>
-                        <button
-                          type="button"
-                          @click="sundayOpen = !sundayOpen"
-                          :aria-label="sundayOpen ? 'Sunday is open' : 'Sunday is closed'"
-                          class="flex h-8 w-14 items-center rounded-full p-1 transition"
-                          :class="sundayOpen ? 'justify-end bg-[#315b7e]' : 'justify-start bg-slate-200'"
-                        >
-                          <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="border-t border-[#e8f0f8] bg-[#f8fbfe] px-5 py-5 lg:px-6">
-                  <!-- BACKEND: Wire this footer to the blocked dates feature after availability APIs are ready. -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="flex items-start gap-3">
-                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
-                        <i data-lucide="calendar-off" class="h-5 w-5"></i>
+                  <div x-show="!availabilityLoading">
+                    <div class="mb-5 flex items-start gap-3 rounded-2xl bg-[#eef5fb] px-4 py-3">
+                      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#315b7e] shadow-sm">
+                        <i :data-lucide="availabilityService === 'clinic' ? 'stethoscope' : 'scissors'" class="h-5 w-5"></i>
                       </div>
                       <div>
-                        <h4 class="text-lg font-bold text-[#1f3850]">Block Dates</h4>
-                        <p class="mt-1 text-sm text-slate-500">Set holidays, vacations, or clinic closure periods.</p>
+                        <h4 class="font-bold text-[#1f3850]" x-text="`${activeAvailabilityLabel} Availability`"></h4>
+                        <p class="mt-0.5 text-sm text-slate-500" x-text="availabilityService === 'clinic' ? 'Used for clinic visits, walk-ins, and clinic time rules.' : 'Used for grooming schedules and grooming time rules.'"></p>
                       </div>
                     </div>
 
-                    <div class="grid flex-1 gap-3 sm:grid-cols-2">
+                    <div class="grid gap-4 lg:grid-cols-3">
                       <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Start Date</span>
-                        <input type="date" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                        <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Opening Time`"></span>
+                        <input
+                          type="time"
+                          x-model="activeAvailability.open_time"
+                          class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                        />
                       </label>
                       <label class="block">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">End Date</span>
-                        <input type="date" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#315b7e]" />
+                        <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Closing Time`"></span>
+                        <input
+                          type="time"
+                          x-model="activeAvailability.close_time"
+                          class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                        />
+                      </label>
+                      <label class="block">
+                        <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Same-day Pre-registration Cutoff</span>
+                        <input
+                          type="time"
+                          x-model="activeAvailability.pre_registration_cutoff_time"
+                          class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                        />
+                        <span class="mt-1.5 block text-xs text-slate-400">This is the same-day submission deadline and the latest selectable window end.</span>
                       </label>
                     </div>
-                  </div>
 
-                  <div class="mt-4 grid gap-3 lg:grid-cols-2 lg:items-end">
-                    <label class="block">
-                      <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Reason</span>
-                      <input type="text" placeholder="e.g. Clinic holiday" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#315b7e]" />
-                    </label>
-                    <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                      <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
-                        Clear
+                    <div class="mt-4 rounded-2xl border border-[#cfe0ee] bg-[#f8fbfe] px-4 py-3 text-sm text-slate-600">
+                      Complete one-hour windows are generated automatically. The 12:00 PM to 1:00 PM break remains unavailable.
+                    </div>
+
+                    <p x-show="availabilityError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="availabilityError"></p>
+                    <p x-show="availabilitySuccess" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" x-text="availabilitySuccess"></p>
+
+                    <div class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        @click="resetAvailability()"
+                        :disabled="availabilitySaving"
+                        class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Reset
                       </button>
-                      <button type="button" class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#284a67]">
-                        <i data-lucide="calendar-plus" class="h-4 w-4"></i>
-                        <span>Block Dates</span>
+                      <button
+                        type="button"
+                        @click="saveAvailability()"
+                        :disabled="availabilitySaving"
+                        class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <i data-lucide="save" class="h-4 w-4"></i>
+                        <span x-text="availabilitySaving ? 'Saving...' : `Save ${activeAvailabilityLabel} Availability`"></span>
                       </button>
                     </div>
-                  </div>
-
-                  <div class="mt-4 rounded-2xl border border-dashed border-[#bfd3e3] bg-white px-4 py-3 text-sm text-slate-500">
-                    No blocked dates added yet.
                   </div>
                 </div>
               </div>
+
+              <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+                <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
+                  <div class="flex items-start gap-3">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
+                      <i data-lucide="calendar-off" class="h-5 w-5"></i>
+                    </div>
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Availability</p>
+                      <h3 class="mt-1 text-xl font-bold text-[#1f3850]">Block Dates</h3>
+                      <p class="mt-1 text-sm text-slate-500">Set holidays, vacations, or closure periods for both Clinic and Grooming.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="px-5 py-5 lg:px-6">
+                  <div class="grid gap-4 lg:grid-cols-3">
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Start Date</span>
+                      <input
+                        type="date"
+                        x-model="blockForm.startDate"
+                        :min="todayDate()"
+                        class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">End Date</span>
+                      <input
+                        type="date"
+                        x-model="blockForm.endDate"
+                        :min="blockForm.startDate || todayDate()"
+                        class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</span>
+                      <input
+                        type="text"
+                        x-model="blockForm.reason"
+                        maxlength="255"
+                        placeholder="e.g. Clinic holiday"
+                        class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
+                      />
+                    </label>
+                  </div>
+
+                  <p x-show="blockForm.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="blockForm.error"></p>
+                  <p x-show="blockForm.warning" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700" x-text="blockForm.warning"></p>
+
+                  <div class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      @click="clearBlockedDateForm()"
+                      :disabled="blockForm.busy"
+                      class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      @click="submitBlockedDate()"
+                      :disabled="blockForm.busy"
+                      class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <i data-lucide="calendar-plus" class="h-4 w-4"></i>
+                      <span x-text="blockForm.busy ? 'Saving...' : 'Block Dates'"></span>
+                    </button>
+                  </div>
+
+                  <div class="mt-6">
+                    <h4 class="text-sm font-bold uppercase tracking-wide text-[#5c7690]">Current Blocked Dates</h4>
+                    <div x-show="blockedDates.length === 0" class="mt-3 rounded-2xl border border-dashed border-[#bfd3e3] bg-[#f8fbfe] px-4 py-4 text-sm text-slate-500">
+                      No blocked dates added yet.
+                    </div>
+                    <div x-show="blockedDates.length > 0" class="mt-3 space-y-3">
+                      <template x-for="blockedDate in blockedDates" :key="blockedDate.id">
+                        <div class="flex flex-col gap-3 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p class="font-semibold text-[#1f3850]">
+                              <span x-text="blockedDate.start_date"></span>
+                              <span x-show="blockedDate.end_date !== blockedDate.start_date"> to <span x-text="blockedDate.end_date"></span></span>
+                            </p>
+                            <p class="mt-0.5 text-sm text-slate-500" x-text="blockedDate.reason || 'No reason provided'"></p>
+                          </div>
+                          <button
+                            type="button"
+                            @click="removeBlockedDate(blockedDate.id)"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </form>
 
             <form x-show="activeSettingsTab === 'capacity'" class="space-y-6">
@@ -837,5 +827,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-sidebar-20260719"></script>
+    <script src="../../scripts/components/admin-settings.js?v=availability-20260723"></script>
   </body>
 </html>

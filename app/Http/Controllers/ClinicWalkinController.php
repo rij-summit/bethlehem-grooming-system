@@ -6,10 +6,12 @@ use App\Http\Requests\StoreClinicPreRegistrationRequest;
 use App\Http\Requests\StoreClinicWalkinRequest;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\TimeWindow;
 use App\Models\User;
 use App\Models\Walkin;
+use App\Services\AvailabilityTimeWindowService;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -17,7 +19,10 @@ use Illuminate\Support\Facades\DB;
 
 class ClinicWalkinController extends Controller
 {
-    public function timeslots(Request $request)
+    public function timeslots(
+        Request $request,
+        AvailabilityTimeWindowService $timeWindows,
+    )
     {
         $today = now()->toDateString();
         $lastAvailableDate = now()->addDays(2)->toDateString();
@@ -30,12 +35,16 @@ class ClinicWalkinController extends Controller
             ],
         ]);
         $appointmentDate = $data['date'];
+        $settings = ClinicSetting::current();
+        $availability = $settings->serviceAvailability('clinic');
+        $cutoffPassed = $settings->isSameDayPreRegistrationCutoffPassed(
+            'clinic',
+            $appointmentDate,
+        );
 
-        $windows = TimeWindow::query()
-            ->where('is_active', true)
-            ->orderBy('start_time')
-            ->get()
-            ->map(function (TimeWindow $window) use ($appointmentDate) {
+        $windows = $timeWindows
+            ->availableWindows($settings, 'clinic')
+            ->map(function (TimeWindow $window) use ($appointmentDate, $cutoffPassed) {
                 $booked = ClinicAppointment::query()
                     ->whereDate('appointment_date', $appointmentDate)
                     ->where('window_id', $window->window_id)
@@ -53,12 +62,17 @@ class ClinicWalkinController extends Controller
                     'remaining' => max(0, $capacity - $booked),
                     'is_full' => $booked >= $capacity,
                     'is_past' => $this->windowHasStarted($appointmentDate, $window),
+                    'is_cutoff' => $cutoffPassed,
                     'recommended' => false,
                 ];
             });
 
         $recommended = $windows
-            ->filter(fn (array $window) => ! $window['is_full'] && ! $window['is_past'])
+            ->filter(
+                fn (array $window) => ! $window['is_full']
+                    && ! $window['is_past']
+                    && ! $window['is_cutoff'],
+            )
             ->sortBy([['booked', 'asc'], ['start_time', 'asc']])
             ->first();
 
@@ -74,6 +88,8 @@ class ClinicWalkinController extends Controller
             'success' => true,
             'date' => $appointmentDate,
             'day_full' => false,
+            'cutoff_passed' => $cutoffPassed,
+            'availability' => $availability,
             'windows' => $windows->values(),
         ]);
     }
@@ -84,6 +100,17 @@ class ClinicWalkinController extends Controller
             $data = $request->validated();
             $user = $request->user();
             $appointmentDate = $data['appointment_date'];
+            $settings = ClinicSetting::current();
+
+            if ($settings->isSameDayPreRegistrationCutoffPassed('clinic', $appointmentDate)) {
+                $cutoffLabel = $settings
+                    ->serviceAvailability('clinic')['pre_registration_cutoff_label'];
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Same-day clinic pre-registration closes at {$cutoffLabel}. Please choose another date.",
+                ], 422);
+            }
 
             $closure = ClinicClosure::query()
                 ->where('is_active', true)
@@ -112,6 +139,17 @@ class ClinicWalkinController extends Controller
                 ->where('is_active', true)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if (! $settings->isWindowWithinOperatingHours(
+                'clinic',
+                $window->start_time,
+                $window->end_time,
+            )) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected clinic visit time is not available under the current operating hours and cutoff.',
+                ], 422);
+            }
 
             if ($this->windowHasStarted($appointmentDate, $window)) {
                 return response()->json([

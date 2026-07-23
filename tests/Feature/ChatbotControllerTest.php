@@ -20,6 +20,12 @@ class ChatbotControllerTest extends TestCase
         Schema::create('clinic_settings', function (Blueprint $table) {
             $table->id();
             $table->unsignedTinyInteger('groomers_on_duty')->default(2);
+            $table->time('clinic_open_time')->default('08:00:00');
+            $table->time('clinic_close_time')->default('17:00:00');
+            $table->time('clinic_prereg_cutoff_time')->default('14:00:00');
+            $table->time('grooming_open_time')->default('08:00:00');
+            $table->time('grooming_close_time')->default('17:00:00');
+            $table->time('grooming_prereg_cutoff_time')->default('14:00:00');
             $table->timestamps();
         });
 
@@ -116,7 +122,37 @@ class ChatbotControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJson([
-                'reply' => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **8:00 AM to 5:00 PM** daily.',
+                'reply' => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **8:00 AM – 5:00 PM** daily.',
+            ]);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_current_clinic_status_uses_configured_operating_hours(): void
+    {
+        DB::table('clinic_settings')->where('id', 1)->update([
+            'clinic_open_time' => '10:00:00',
+            'clinic_close_time' => '12:30:00',
+        ]);
+
+        Http::fake();
+
+        $this->postJson('/api/chatbot', [
+            'message' => 'Is the clinic open today?',
+        ])
+            ->assertOk()
+            ->assertJson([
+                'reply' => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **10:00 AM – 12:30 PM** daily.',
+            ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-07-16 10:00:00'));
+
+        $this->postJson('/api/chatbot', [
+            'message' => 'Is the clinic open today?',
+        ])
+            ->assertOk()
+            ->assertJson([
+                'reply' => 'Bethlehem Animal Clinic is currently **open**.',
             ]);
 
         Http::assertNothingSent();
@@ -291,7 +327,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $systemPrompt,
-                    'Normal operating hours: 8:00 AM to 5:00 PM daily.'
+                    'Normal operating hours: 8:00 AM – 5:00 PM daily.'
                 )
                 && str_contains(
                     $systemPrompt,

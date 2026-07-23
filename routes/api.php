@@ -173,6 +173,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/clinic/blocked-dates',               [ClinicClosureController::class, 'blockedDates']);
         Route::post('/admin/clinic/blocked-dates',              [ClinicClosureController::class, 'addBlockedDate']);
         Route::delete('/admin/clinic/blocked-dates/{id}',       [ClinicClosureController::class, 'removeBlockedDate']);
+        Route::get('/admin/clinic/settings/availability',       [ClinicSettingController::class, 'availability']);
+        Route::patch('/admin/clinic/settings/availability',     [ClinicSettingController::class, 'updateAvailability']);
         Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
     });
 });

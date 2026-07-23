@@ -660,6 +660,24 @@ var API = (() => {
     );
   }
 
+  async function getAvailabilitySettings() {
+    return request(
+      "GET",
+      "/admin/clinic/settings/availability",
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function adminUpdateAvailability(payload) {
+    return request(
+      "PATCH",
+      "/admin/clinic/settings/availability",
+      payload,
+      getAdminToken(),
+    );
+  }
+
   async function getBlockedDates() {
     // GET /api/admin/clinic/blocked-dates  (protected — admin token)
     return request("GET", "/admin/clinic/blocked-dates", null, getAdminToken());
@@ -914,6 +932,8 @@ var API = (() => {
     adminStopToday,
     adminReopenToday,
     adminUpdateGroomersOnDuty,
+    getAvailabilitySettings,
+    adminUpdateAvailability,
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,
