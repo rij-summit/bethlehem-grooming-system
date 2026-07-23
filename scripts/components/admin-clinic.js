@@ -51,6 +51,7 @@ function buildClinicActionButtons(appt) {
   if (s === "in_consultation")   { parts.push(btn("Finish Consultation", "finish-consultation", primary)); parts.push(btn("Record", "record", outline)); }
   if (s === "for_payment")       { parts.push(btn("Process Payment", "pay", primary)); parts.push(btn("Record", "record", outline)); }
   if (s === "completed")         { parts.push(btn("View Record", "record", outline)); }
+  if (appt.pet?.id)              { parts.push(btn("Vaccinations", "vaccinations", outline)); }
   return parts.join("");
 }
 
@@ -203,6 +204,12 @@ function adminClinic() {
           window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt } }));
           return;
         }
+        if (action === "vaccinations") {
+          window.dispatchEvent(new CustomEvent("clinic-open-modal", {
+            detail: { appt, section: "vaccinations" },
+          }));
+          return;
+        }
         if (action === "pay") {
           window.dispatchEvent(new CustomEvent("clinic-open-pay-modal", { detail: { appt } }));
           return;
@@ -346,6 +353,8 @@ function adminClinicModal() {
     modalError: "",
     title:      "Medical Record",
     apptId:     null,
+    currentAppt: null,
+    activeSection: "medical",
     attachments: [],
     attachmentFile: null,
     attachmentLabel: "",
@@ -364,11 +373,13 @@ function adminClinicModal() {
       window.addEventListener("clinic-open-modal", (e) => this.openModal(e.detail));
     },
 
-    openModal({ appt } = {}) {
+    openModal({ appt, section = "medical" } = {}) {
       if (!appt) return;
       this.apptId     = appt.id;
+      this.currentAppt = appt;
+      this.activeSection = "medical";
       this.modalError = "";
-      this.title      = `Record — ${appt.ownerName}${appt.pet?.name ? " / " + appt.pet.name : ""}`;
+      this.title      = `Patient Record — ${appt.ownerName}${appt.pet?.name ? " / " + appt.pet.name : ""}`;
       const r = appt.record  || {};
       const v = appt.vitals  || {};
       this.attachments = (r.attachments || []).map((attachment) => ({ ...attachment }));
@@ -393,6 +404,23 @@ function adminClinicModal() {
         medications:          (r.medications || []).map((m) => ({ ...m })),
       };
       this.open = true;
+      this.selectSection(section);
+    },
+
+    selectSection(section) {
+      this.activeSection = section === "vaccinations" ? "vaccinations" : "medical";
+
+      if (this.activeSection === "vaccinations" && this.currentAppt) {
+        window.dispatchEvent(new CustomEvent("clinic-vaccinations-open", {
+          detail: { appt: this.currentAppt },
+        }));
+      }
+    },
+
+    closeModal() {
+      if (this.saving) return;
+      this.open = false;
+      this.activeSection = "medical";
     },
 
     selectAttachment(event) {

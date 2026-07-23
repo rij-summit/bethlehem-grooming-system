@@ -342,19 +342,48 @@
     <!-- Medical Record Modal -->
     <div
       x-data="adminClinicModal()"
+      x-cloak
       x-show="open"
       x-transition
+      @keydown.escape.window="if (open && activeSection === 'medical') closeModal()"
       class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
     >
-      <div class="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+      <div class="w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <h2 class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
-          <button type="button" @click="open = false" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <h2 id="patient-record-title" class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
+          <button type="button" @click="closeModal()" aria-label="Close patient record" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <i data-lucide="x" class="h-5 w-5"></i>
           </button>
         </div>
 
-        <form @submit.prevent="saveRecord()" class="space-y-5 px-6 py-5">
+        <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+          <div class="flex gap-2 overflow-x-auto" role="tablist" aria-label="Patient record sections">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="activeSection === 'medical'"
+              @click="selectSection('medical')"
+              class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
+              :class="activeSection === 'medical' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'"
+            >
+              <i data-lucide="stethoscope" class="h-4 w-4"></i>
+              Medical Record
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="activeSection === 'vaccinations'"
+              @click="selectSection('vaccinations')"
+              class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
+              :class="activeSection === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'"
+            >
+              <i data-lucide="syringe" class="h-4 w-4"></i>
+              Vaccinations
+            </button>
+          </div>
+        </div>
+
+        <form x-show="activeSection === 'medical'" @submit.prevent="saveRecord()" class="space-y-5 px-6 py-5">
           <!-- Vitals -->
           <section>
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Vitals</h3>
@@ -520,12 +549,437 @@
           <div x-show="modalError" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="modalError"></div>
 
           <div class="flex justify-end gap-3 border-t border-slate-200 pt-4">
-            <button type="button" @click="open = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button type="button" @click="closeModal()" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             <button type="submit" :disabled="saving" class="rounded-xl bg-[#315b7e] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-60">
               <span x-text="saving ? 'Saving…' : 'Save Record'"></span>
             </button>
           </div>
         </form>
+
+        <!-- Vaccination management -->
+        <section
+          x-data="adminClinicVaccinations()"
+          x-show="activeSection === 'vaccinations'"
+          class="px-4 py-5 sm:px-6"
+          role="tabpanel"
+          aria-label="Vaccination records"
+        >
+          <div class="mb-5 flex flex-col gap-4 rounded-2xl border border-[#d7e3ef] bg-[#eef5fb] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 items-center gap-3">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                <i data-lucide="paw-print" class="h-5 w-5"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="truncate text-base font-bold text-[#2f4b66]" x-text="pet?.name || 'Selected patient'"></p>
+                <p class="mt-0.5 text-xs text-slate-500">
+                  <span x-text="pet?.species || 'Species not provided'"></span>
+                  <span aria-hidden="true"> · </span>
+                  <span x-text="appointment?.appointment_reference || 'Appointment unavailable'"></span>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              @click="openCreateForm()"
+              :disabled="loading || petNotFound || !pet?.id"
+              class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <i data-lucide="plus" class="h-4 w-4"></i>
+              Add Vaccination Record
+            </button>
+          </div>
+
+          <div x-show="loading" class="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center" aria-live="polite">
+            <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>
+            <p class="mt-3 text-sm font-semibold text-slate-600">Loading vaccination history…</p>
+          </div>
+
+          <div
+            x-show="!loading && error"
+            class="rounded-2xl border px-5 py-8 text-center"
+            :class="petNotFound ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'"
+            role="alert"
+          >
+            <i :data-lucide="petNotFound ? 'paw-print' : 'circle-alert'" class="mx-auto h-7 w-7" :class="petNotFound ? 'text-amber-700' : 'text-red-600'"></i>
+            <p class="mt-3 text-sm font-bold" :class="petNotFound ? 'text-amber-800' : 'text-red-700'" x-text="petNotFound ? 'Patient record unavailable' : 'Vaccination history could not be loaded'"></p>
+            <p class="mx-auto mt-1 max-w-lg text-sm" :class="petNotFound ? 'text-amber-700' : 'text-red-600'" x-text="error"></p>
+            <button x-show="!petNotFound" type="button" @click="loadVaccinations()" class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+              Retry
+            </button>
+          </div>
+
+          <div x-show="!loading && !error && records.length === 0" class="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+              <i data-lucide="syringe" class="h-6 w-6"></i>
+            </div>
+            <p class="mt-4 text-sm font-bold text-slate-700">No vaccination records have been added for this pet.</p>
+            <p class="mt-1 text-xs text-slate-400">Create a draft to begin this patient’s vaccination history.</p>
+          </div>
+
+          <div x-show="!loading && !error && records.length > 0" class="grid gap-4 lg:grid-cols-2">
+            <template x-for="record in records" :key="record.id">
+              <article class="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="min-w-0">
+                    <p class="break-words text-base font-bold text-[#2f4b66]" x-text="record.vaccine_name"></p>
+                    <p class="mt-0.5 break-words text-sm text-slate-500" x-text="record.product_name || 'Product name not provided'"></p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 sm:justify-end">
+                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" :class="stateBadgeClass(record.state)" x-text="stateLabel(record.state)"></span>
+                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" :class="dueBadgeClass(record.due_status)" x-text="dueLabel(record.due_status)"></span>
+                  </div>
+                </div>
+
+                <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Administered</dt>
+                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Next Due</dt>
+                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Provider</dt>
+                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="providerLabel(record)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Dose</dt>
+                    <dd class="mt-0.5 font-medium text-slate-700" x-text="doseLabel(record)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Manufacturer</dt>
+                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="displayValue(record.manufacturer)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Batch Number</dt>
+                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="displayValue(record.batch_number)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Product Expiration</dt>
+                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.product_expiry_date)"></dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold text-slate-400">Route / Site</dt>
+                    <dd class="mt-0.5 break-words font-medium capitalize text-slate-700" x-text="[record.route?.replace('_', ' '), record.administration_site].filter(Boolean).join(' · ') || 'Not provided'"></dd>
+                  </div>
+                </dl>
+
+                <div x-show="record.published_at" class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                  <p class="text-xs font-bold text-emerald-700">Published record</p>
+                  <p class="mt-1 text-[11px] text-emerald-600" x-text="`${formatDateTime(record.published_at)}${record.published_by_user_name ? ' · ' + record.published_by_user_name : ''}`"></p>
+                </div>
+
+                <div x-show="record.state === 'voided'" class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                  <p class="text-xs font-bold text-red-700">Voided historical record</p>
+                  <p class="mt-1 break-words text-xs text-red-600" x-text="record.void_reason || 'Reason not provided'"></p>
+                  <p class="mt-1 text-[11px] text-red-500" x-text="`${formatDateTime(record.voided_at)}${record.voided_by_user_name ? ' · ' + record.voided_by_user_name : ''}`"></p>
+                </div>
+
+                <div class="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                  <button type="button" @click="openDetails(record)" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Details</button>
+                  <button x-show="record.state === 'draft'" type="button" @click="openEditForm(record)" :disabled="actionBusyId === record.id" class="rounded-xl border border-[#bfd2e4] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Edit</button>
+                  <button x-show="record.state === 'draft'" type="button" @click="publishRecord(record)" :disabled="actionBusyId === record.id" class="rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="actionBusyId === record.id ? 'Publishing…' : 'Publish'"></button>
+                  <button x-show="record.state === 'published'" type="button" @click="openVoidDialog(record)" :disabled="actionBusyId === record.id" class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50">Void</button>
+                </div>
+              </article>
+            </template>
+          </div>
+
+          <!-- Draft create/edit dialog -->
+          <div
+            x-show="formModal.open"
+            style="display:none"
+            x-transition
+            class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
+            @keydown.escape.window="if (formModal.open) closeForm()"
+          >
+            <div class="w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-form-title">
+              <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+                <div>
+                  <h3 id="vaccination-form-title" class="text-lg font-bold text-[#2f4b66]" x-text="formModal.mode === 'edit' ? 'Edit Vaccination Draft' : 'Add Vaccination Record'"></h3>
+                  <p class="mt-1 text-xs text-slate-500">
+                    Patient:
+                    <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span>
+                    <span aria-hidden="true"> · </span>
+                    Saving creates a draft and does not publish it.
+                  </p>
+                </div>
+                <button type="button" @click="closeForm()" :disabled="formModal.saving" aria-label="Close vaccination form" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 disabled:opacity-50">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+
+              <form @submit.prevent="saveDraft()" novalidate>
+                <div class="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+                  <div
+                    x-show="formErrorSummary"
+                    x-ref="vaccinationValidationSummary"
+                    tabindex="-1"
+                    class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 outline-none focus:ring-2 focus:ring-red-300"
+                    role="alert"
+                  >
+                    <p class="font-bold">Please review the vaccination form.</p>
+                    <p class="mt-1" x-text="formErrorSummary"></p>
+                  </div>
+
+                  <section>
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccination information</h4>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label for="vaccination-vaccine-name" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Name <span class="text-red-600" aria-hidden="true">*</span></label>
+                        <input id="vaccination-vaccine-name" type="text" maxlength="150" required x-model="form.vaccine_name" :aria-invalid="Boolean(fieldError('vaccine_name'))" aria-describedby="vaccination-vaccine-name-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-vaccine-name-error" x-show="fieldError('vaccine_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('vaccine_name')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-administered-date" class="mb-1 block text-xs font-semibold text-slate-600">Administration Date <span class="text-red-600" aria-hidden="true">*</span></label>
+                        <input id="vaccination-administered-date" type="date" required x-model="form.administered_date" :aria-invalid="Boolean(fieldError('administered_date'))" aria-describedby="vaccination-administered-date-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-administered-date-error" x-show="fieldError('administered_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_date')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-product-name" class="mb-1 block text-xs font-semibold text-slate-600">Product Name</label>
+                        <input id="vaccination-product-name" type="text" maxlength="150" x-model="form.product_name" :aria-invalid="Boolean(fieldError('product_name'))" aria-describedby="vaccination-product-name-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-product-name-error" x-show="fieldError('product_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('product_name')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-manufacturer" class="mb-1 block text-xs font-semibold text-slate-600">Manufacturer</label>
+                        <input id="vaccination-manufacturer" type="text" maxlength="150" x-model="form.manufacturer" :aria-invalid="Boolean(fieldError('manufacturer'))" aria-describedby="vaccination-manufacturer-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-manufacturer-error" x-show="fieldError('manufacturer')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('manufacturer')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-batch-number" class="mb-1 block text-xs font-semibold text-slate-600">Batch Number</label>
+                        <input id="vaccination-batch-number" type="text" maxlength="100" x-model="form.batch_number" :aria-invalid="Boolean(fieldError('batch_number'))" aria-describedby="vaccination-batch-number-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-batch-number-error" x-show="fieldError('batch_number')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('batch_number')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-inventory-item" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Inventory Item</label>
+                        <select id="vaccination-inventory-item" x-model="form.inventory_item_id" :disabled="inventoryLoading" :aria-invalid="Boolean(fieldError('inventory_item_id'))" aria-describedby="vaccination-inventory-item-help vaccination-inventory-item-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100">
+                          <option value="" x-text="inventoryLoading ? 'Loading vaccine items…' : 'No inventory link'"></option>
+                          <template x-for="item in inventoryOptions()" :key="item.id">
+                            <option :value="String(item.id)" x-text="inventoryOptionLabel(item)"></option>
+                          </template>
+                        </select>
+                        <p id="vaccination-inventory-item-help" class="mt-1 text-xs text-slate-400">Optional and informational only. Stock will not be deducted.</p>
+                        <p x-show="inventoryError" class="mt-1 text-xs text-amber-700" x-text="inventoryError"></p>
+                        <p id="vaccination-inventory-item-error" x-show="fieldError('inventory_item_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('inventory_item_id')"></p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Schedule and administration</h4>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label for="vaccination-next-due-date" class="mb-1 block text-xs font-semibold text-slate-600">Next Due Date</label>
+                        <input id="vaccination-next-due-date" type="date" x-model="form.next_due_date" :min="form.administered_date || null" :aria-invalid="Boolean(fieldError('next_due_date'))" aria-describedby="vaccination-next-due-date-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-next-due-date-error" x-show="fieldError('next_due_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('next_due_date')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-product-expiry" class="mb-1 block text-xs font-semibold text-slate-600">Product Expiration Date</label>
+                        <input id="vaccination-product-expiry" type="date" x-model="form.product_expiry_date" :min="form.administered_date || null" :aria-invalid="Boolean(fieldError('product_expiry_date'))" aria-describedby="vaccination-product-expiry-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-product-expiry-error" x-show="fieldError('product_expiry_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('product_expiry_date')"></p>
+                      </div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label for="vaccination-dose-amount" class="mb-1 block text-xs font-semibold text-slate-600">Dose Amount</label>
+                          <input id="vaccination-dose-amount" type="number" min="0.001" step="0.001" x-model="form.dose_amount" :aria-invalid="Boolean(fieldError('dose_amount'))" aria-describedby="vaccination-dose-amount-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                          <p id="vaccination-dose-amount-error" x-show="fieldError('dose_amount')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_amount')"></p>
+                        </div>
+                        <div>
+                          <label for="vaccination-dose-unit" class="mb-1 block text-xs font-semibold text-slate-600">Dose Unit</label>
+                          <input id="vaccination-dose-unit" type="text" maxlength="30" placeholder="e.g. mL" x-model="form.dose_unit" :aria-invalid="Boolean(fieldError('dose_unit'))" aria-describedby="vaccination-dose-unit-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                          <p id="vaccination-dose-unit-error" x-show="fieldError('dose_unit')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_unit')"></p>
+                        </div>
+                      </div>
+                      <div>
+                        <label for="vaccination-route" class="mb-1 block text-xs font-semibold text-slate-600">Route</label>
+                        <select id="vaccination-route" x-model="form.route" :aria-invalid="Boolean(fieldError('route'))" aria-describedby="vaccination-route-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
+                          <option value="">Not provided</option>
+                          <template x-for="routeOption in administrationRoutes" :key="routeOption.value">
+                            <option :value="routeOption.value" x-text="routeOption.label"></option>
+                          </template>
+                        </select>
+                        <p id="vaccination-route-error" x-show="fieldError('route')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('route')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-site" class="mb-1 block text-xs font-semibold text-slate-600">Administration Site</label>
+                        <input id="vaccination-site" type="text" maxlength="100" placeholder="e.g. Right shoulder" x-model="form.administration_site" :aria-invalid="Boolean(fieldError('administration_site'))" aria-describedby="vaccination-site-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-site-error" x-show="fieldError('administration_site')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administration_site')"></p>
+                      </div>
+                      <div>
+                        <label for="vaccination-appointment" class="mb-1 block text-xs font-semibold text-slate-600">Clinic Appointment</label>
+                        <select id="vaccination-appointment" x-model="form.clinic_appointment_id" :aria-invalid="Boolean(fieldError('clinic_appointment_id'))" aria-describedby="vaccination-appointment-help vaccination-appointment-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
+                          <option value="">No appointment link</option>
+                          <template x-for="option in appointmentOptions()" :key="option.id">
+                            <option :value="String(option.id)" x-text="option.label"></option>
+                          </template>
+                        </select>
+                        <p id="vaccination-appointment-help" class="mt-1 text-xs text-slate-400">Only the selected pet’s current or existing linked appointment is available here.</p>
+                        <p id="vaccination-appointment-error" x-show="fieldError('clinic_appointment_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('clinic_appointment_id')"></p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Provider and notes</h4>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label for="vaccination-provider-name" class="mb-1 block text-xs font-semibold text-slate-600">Administering Provider Name</label>
+                        <input id="vaccination-provider-name" type="text" maxlength="200" placeholder="e.g. Dr. Ana Santos" x-model="form.administered_by_name" :aria-invalid="Boolean(fieldError('administered_by_name'))" aria-describedby="vaccination-provider-help vaccination-provider-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p id="vaccination-provider-help" class="mt-1 text-xs text-slate-400">Required before publication when no staff account is already linked.</p>
+                        <p x-show="formModal.linkedProviderAccountName" class="mt-1 text-xs font-medium text-[#315b7e]">Linked provider account: <span x-text="formModal.linkedProviderAccountName"></span></p>
+                        <p id="vaccination-provider-error" x-show="fieldError('administered_by_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_by_name')"></p>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label for="vaccination-notes" class="mb-1 block text-xs font-semibold text-slate-600">Notes</label>
+                        <textarea id="vaccination-notes" rows="3" x-model="form.notes" :aria-invalid="Boolean(fieldError('notes'))" aria-describedby="vaccination-notes-error" class="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
+                        <p id="vaccination-notes-error" x-show="fieldError('notes')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('notes')"></p>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+                  <button type="button" @click="closeForm()" :disabled="formModal.saving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                  <button type="submit" :disabled="formModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-60">
+                    <span x-text="formModal.saving ? 'Saving Draft…' : (formModal.mode === 'edit' ? 'Save Draft Changes' : 'Save as Draft')"></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Read-only detail dialog -->
+          <div
+            x-show="detailModal.open"
+            style="display:none"
+            x-transition
+            class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
+            @keydown.escape.window="if (detailModal.open) closeDetails()"
+          >
+            <div class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-detail-title">
+              <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+                <div>
+                  <h3 id="vaccination-detail-title" class="text-lg font-bold text-[#2f4b66]">Vaccination Record Details</h3>
+                  <p class="mt-1 text-xs text-slate-500" x-text="pet?.name || 'Selected patient'"></p>
+                </div>
+                <button type="button" @click="closeDetails()" aria-label="Close vaccination details" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+
+              <div x-show="detailModal.loading" class="px-5 py-12 text-center sm:px-6" aria-live="polite">
+                <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>
+                <p class="mt-3 text-sm text-slate-500">Loading complete record…</p>
+              </div>
+
+              <div x-show="!detailModal.loading && detailModal.error" class="px-5 py-10 text-center sm:px-6" role="alert">
+                <p class="text-sm font-bold text-red-700">Details could not be loaded.</p>
+                <p class="mt-1 text-sm text-red-600" x-text="detailModal.error"></p>
+                <button type="button" @click="retryDetails()" class="mt-4 rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Retry</button>
+              </div>
+
+              <div x-show="!detailModal.loading && detailModal.record" class="max-h-[75vh] overflow-y-auto px-5 py-5 sm:px-6">
+                <template x-if="detailModal.record">
+                  <div>
+                    <div class="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p class="text-xl font-bold text-[#2f4b66]" x-text="detailModal.record.vaccine_name"></p>
+                        <p class="mt-1 text-sm text-slate-500" x-text="detailModal.record.product_name || 'Product name not provided'"></p>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold" :class="stateBadgeClass(detailModal.record.state)" x-text="stateLabel(detailModal.record.state)"></span>
+                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold" :class="dueBadgeClass(detailModal.record.due_status)" x-text="dueLabel(detailModal.record.due_status)"></span>
+                      </div>
+                    </div>
+
+                    <dl class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <div><dt class="text-xs font-semibold text-slate-400">Administration Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.administered_date)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Next Due Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.next_due_date)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Product Expiration</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.product_expiry_date)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Manufacturer</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.manufacturer)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.batch_number)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="doseLabel(detailModal.record)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-1 break-words text-sm font-medium capitalize text-slate-700" x-text="displayValue(detailModal.record.route).replace('_', ' ')"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Administration Site</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administration_site)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Administering Provider</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="providerLabel(detailModal.record)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Provider Account</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administered_by_user_name)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Clinic Appointment</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.clinic_appointment_reference)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Inventory Item</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.inventory_item_name)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Recorded By</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.recorded_by_user_name)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Created</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDateTime(detailModal.record.created_at)"></dd></div>
+                      <div><dt class="text-xs font-semibold text-slate-400">Last Updated</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDateTime(detailModal.record.updated_at)"></dd></div>
+                    </dl>
+
+                    <div class="mt-5 rounded-2xl bg-slate-50 p-4">
+                      <p class="text-xs font-semibold text-slate-400">Notes</p>
+                      <p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700" x-text="displayValue(detailModal.record.notes)"></p>
+                    </div>
+
+                    <div x-show="detailModal.record.published_at" class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                      <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Publication</p>
+                      <p class="mt-1 text-sm text-emerald-800">Published <span x-text="formatDateTime(detailModal.record.published_at)"></span><span x-show="detailModal.record.published_by_user_name"> by <span x-text="detailModal.record.published_by_user_name"></span></span>.</p>
+                    </div>
+
+                    <div x-show="detailModal.record.voided_at" class="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+                      <p class="text-xs font-bold uppercase tracking-wide text-red-700">Void information</p>
+                      <p class="mt-1 whitespace-pre-wrap break-words text-sm text-red-800" x-text="displayValue(detailModal.record.void_reason)"></p>
+                      <p class="mt-1 text-xs text-red-600">Voided <span x-text="formatDateTime(detailModal.record.voided_at)"></span><span x-show="detailModal.record.voided_by_user_name"> by <span x-text="detailModal.record.voided_by_user_name"></span></span>.</p>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+                <button type="button" @click="closeDetails()" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Void confirmation dialog -->
+          <div
+            x-show="voidModal.open"
+            style="display:none"
+            x-transition
+            class="fixed inset-0 z-[240] flex items-center justify-center bg-slate-900/75 px-4"
+            @keydown.escape.window="if (voidModal.open) closeVoidDialog()"
+          >
+            <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="vaccination-void-title" aria-describedby="vaccination-void-description">
+              <div class="px-6 py-5">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                  <i data-lucide="circle-alert" class="h-6 w-6"></i>
+                </div>
+                <h3 id="vaccination-void-title" class="mt-4 text-lg font-bold text-slate-800">Void Published Record</h3>
+                <p id="vaccination-void-description" class="mt-2 text-sm leading-6 text-slate-600">
+                  Voiding preserves this vaccination as historical information. It does not delete the record, and the record cannot be published again.
+                </p>
+                <p class="mt-2 text-sm font-semibold text-[#315b7e]" x-text="voidModal.record?.vaccine_name"></p>
+
+                <label for="vaccination-void-reason" class="mt-4 block text-xs font-semibold text-slate-600">Void Reason <span class="text-red-600" aria-hidden="true">*</span></label>
+                <textarea id="vaccination-void-reason" rows="3" maxlength="500" required x-model="voidModal.reason" :aria-invalid="Boolean(voidModal.error)" aria-describedby="vaccination-void-error" class="mt-1 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-red-500"></textarea>
+                <p id="vaccination-void-error" x-show="voidModal.error" class="mt-2 text-xs font-semibold text-red-600" x-text="voidModal.error" role="alert"></p>
+              </div>
+              <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+                <button type="button" @click="closeVoidDialog()" :disabled="voidModal.saving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Keep Record</button>
+                <button type="button" @click="submitVoid()" :disabled="voidModal.saving" class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60" x-text="voidModal.saving ? 'Voiding…' : 'Confirm Void'"></button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            x-show="toast.show"
+            style="display:none"
+            x-transition
+            class="fixed right-4 top-20 z-[260] flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
+            :class="toast.ok ? 'bg-emerald-600' : 'bg-red-600'"
+            role="status"
+            aria-live="polite"
+          >
+            <i :data-lucide="toast.ok ? 'check-circle' : 'circle-alert'" class="h-5 w-5 shrink-0"></i>
+            <span x-text="toast.message"></span>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -570,6 +1024,7 @@
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-sidebar-20260719"></script>
     <script src="../../scripts/components/admin-clinic.js"></script>
+    <script src="../../scripts/components/admin-vaccinations.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

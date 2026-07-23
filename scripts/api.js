@@ -840,6 +840,77 @@ var API = (() => {
     );
   }
 
+  async function getAdminPetVaccinations(petId) {
+    return request(
+      "GET",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminPetVaccination(petId, vaccinationId) {
+    return request(
+      "GET",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminPetVaccination(petId, payload) {
+    return request(
+      "POST",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function updateAdminPetVaccination(petId, vaccinationId, payload) {
+    return request(
+      "PATCH",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function publishAdminPetVaccination(petId, vaccinationId) {
+    return request(
+      "POST",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}/publish`,
+      {},
+      getAdminToken(),
+    );
+  }
+
+  async function voidAdminPetVaccination(petId, vaccinationId, voidReason) {
+    return request(
+      "POST",
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}/void`,
+      { void_reason: voidReason },
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminInventoryItems({
+    category = "",
+    includeInactive = false,
+    page = 1,
+  } = {}) {
+    const params = new URLSearchParams({ page: String(page) });
+    if (category) params.set("category", category);
+    if (includeInactive) params.set("include_inactive", "1");
+
+    return request(
+      "GET",
+      `/inventory/items?${params.toString()}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
     // GET /api/admin/reports/customer-activity  (protected - admin token)
     const params = new URLSearchParams();
@@ -965,5 +1036,13 @@ var API = (() => {
     clinicUploadAttachment,
     clinicDownloadAttachment,
     clinicDeleteAttachment,
+    // Staff vaccination records
+    getAdminPetVaccinations,
+    getAdminPetVaccination,
+    createAdminPetVaccination,
+    updateAdminPetVaccination,
+    publishAdminPetVaccination,
+    voidAdminPetVaccination,
+    getAdminInventoryItems,
   };
 })();
