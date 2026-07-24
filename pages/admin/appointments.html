@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
+    <link rel="stylesheet" href="../../css/custom.css?v=medical-concern-ui-20260724" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1088,9 +1088,43 @@
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
+                              <button
+                                type="button"
+                                @click="openMedicalConcerns(booking, pet)"
+                                class="admin-pet-medical-concern-indicator"
+                                :class="medicalConcernIndicatorClass(booking, pet)"
+                                :aria-label="'Open medical concern history for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                              >
+                                <i data-lucide="triangle-alert" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                <span x-text="medicalConcernIndicatorLabel(booking, pet)"></span>
+                              </button>
+                            </template>
                           </div>
 
                           <div class="admin-queued-pet-actions">
+                            <button
+                              type="button"
+                              @click="openMedicalConcerns(booking, pet)"
+                              class="admin-queued-pet-concerns"
+                            >
+                              <i data-lucide="clipboard-plus" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="medicalConcernState(booking, pet).loading ? 'Loading concerns...' : 'Concerns'"></span>
+                              <span
+                                x-show="medicalConcernSummary(booking, pet).totalCount > 0"
+                                class="admin-pet-medical-concern-count"
+                                x-text="medicalConcernSummary(booking, pet).totalCount"
+                              ></span>
+                            </button>
+                            <button
+                              x-show="canReportMedicalConcern(booking, pet)"
+                              type="button"
+                              @click="openReportMedicalConcern(booking, pet)"
+                              class="admin-queued-pet-report-concern"
+                            >
+                              <i data-lucide="message-square-warning" class="h-4 w-4" aria-hidden="true"></i>
+                              Report Medical Concern
+                            </button>
                             <div
                               class="admin-queued-pet-start-wrap"
                               :class="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'is-capacity-disabled' : ''"
@@ -1339,6 +1373,18 @@
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
+                              <button
+                                type="button"
+                                @click="openMedicalConcerns(booking, pet)"
+                                class="admin-pet-medical-concern-indicator"
+                                :class="medicalConcernIndicatorClass(booking, pet)"
+                                :aria-label="'Open medical concern history for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                              >
+                                <i data-lucide="triangle-alert" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                <span x-text="medicalConcernIndicatorLabel(booking, pet)"></span>
+                              </button>
+                            </template>
                             <!-- Per-pet elapsed + ETA -->
                             <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
                               <span x-text="getPetElapsed(pet)"></span>
@@ -1349,6 +1395,28 @@
                           </div>
 
                           <div class="admin-queued-pet-actions">
+                            <button
+                              type="button"
+                              @click="openMedicalConcerns(booking, pet)"
+                              class="admin-queued-pet-concerns"
+                            >
+                              <i data-lucide="clipboard-plus" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="medicalConcernState(booking, pet).loading ? 'Loading concerns...' : 'Concerns'"></span>
+                              <span
+                                x-show="medicalConcernSummary(booking, pet).totalCount > 0"
+                                class="admin-pet-medical-concern-count"
+                                x-text="medicalConcernSummary(booking, pet).totalCount"
+                              ></span>
+                            </button>
+                            <button
+                              x-show="canReportMedicalConcern(booking, pet)"
+                              type="button"
+                              @click="openReportMedicalConcern(booking, pet)"
+                              class="admin-queued-pet-report-concern"
+                            >
+                              <i data-lucide="message-square-warning" class="h-4 w-4" aria-hidden="true"></i>
+                              Report Medical Concern
+                            </button>
                             <template x-if="pet.isGroomingStarted">
                               <button
                                 type="button"
@@ -1676,6 +1744,601 @@
               </article>
             </template>
           </section>
+
+          <!-- Per-pet grooming medical concern history and form -->
+          <div
+            x-show="medicalConcernModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-dialog-title"
+            @click.self="closeMedicalConcerns()"
+            @keydown.escape.window="medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns()"
+          >
+            <section
+              x-ref="medicalConcernDialog"
+              tabindex="-1"
+              class="admin-medical-concern-dialog"
+            >
+              <header class="admin-medical-concern-header">
+                <div class="admin-medical-concern-header-icon" aria-hidden="true">
+                  <i data-lucide="message-square-warning" class="h-6 w-6"></i>
+                </div>
+                <div class="min-w-0">
+                  <p class="admin-medical-concern-kicker">Grooming medical attention</p>
+                  <h3
+                    id="medical-concern-dialog-title"
+                    class="admin-medical-concern-title"
+                    x-text="medicalConcernModal.view === 'form' ? (medicalConcernFormModal.mode === 'edit' ? 'Edit Medical Concern' : 'Report Medical Concern') : 'Medical Concern History'"
+                  ></h3>
+                  <p class="admin-medical-concern-context">
+                    <strong x-text="medicalConcernModal.context?.pet_name ?? medicalConcernModal.pet?.petName ?? medicalConcernModal.pet?.pet_name ?? medicalConcernModal.pet?.name ?? 'Selected pet'"></strong>
+                    <span aria-hidden="true">&middot;</span>
+                    <span x-text="medicalConcernModal.context?.booking_reference ?? medicalConcernModal.booking?.bookingReference ?? 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="closeMedicalConcerns()"
+                  :disabled="medicalConcernFormModal.saving || medicalConcernTerminal.busy"
+                  class="admin-medical-concern-close"
+                  aria-label="Close medical concern dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </header>
+
+              <!-- Concern history -->
+              <div
+                x-show="medicalConcernModal.view === 'history'"
+                class="admin-medical-concern-body"
+              >
+                <div class="admin-medical-concern-advisory" role="note">
+                  <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>
+                    Recommended grooming actions are advisory only. Reporting a concern does not pause,
+                    stop, finish, or otherwise change grooming automatically.
+                  </p>
+                </div>
+
+                <div class="admin-medical-concern-toolbar">
+                  <div>
+                    <p class="font-bold text-[#1f3850]">Concern records</p>
+                    <p class="text-xs text-slate-500">
+                      Active, resolved, and cancelled history for this booking pet only.
+                    </p>
+                  </div>
+                  <button
+                    x-show="canReportMedicalConcern(medicalConcernModal.booking, medicalConcernModal.pet)"
+                    type="button"
+                    @click="openCreateMedicalConcern()"
+                    :disabled="medicalConcernModal.loading || medicalConcernModal.notFound"
+                    class="admin-medical-concern-primary"
+                  >
+                    <i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>
+                    Report Medical Concern
+                  </button>
+                </div>
+
+                <div
+                  x-show="medicalConcernModal.loading"
+                  class="admin-medical-concern-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="admin-medical-concern-spinner" aria-hidden="true"></span>
+                  <p>Loading medical concern history...</p>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && medicalConcernModal.error"
+                  class="admin-medical-concern-state is-error"
+                  role="alert"
+                >
+                  <i
+                    :data-lucide="medicalConcernModal.notFound ? 'file-question' : 'circle-alert'"
+                    class="h-8 w-8"
+                    aria-hidden="true"
+                  ></i>
+                  <p
+                    class="font-bold"
+                    x-text="medicalConcernModal.notFound ? 'Grooming pet record unavailable' : 'Medical concern history could not be loaded'"
+                  ></p>
+                  <p class="text-sm" x-text="medicalConcernModal.error"></p>
+                  <button
+                    x-show="!medicalConcernModal.notFound"
+                    type="button"
+                    @click="loadMedicalConcerns()"
+                    class="admin-medical-concern-retry"
+                  >
+                    <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                    Retry
+                  </button>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && !medicalConcernModal.error && medicalConcernModal.concerns.length === 0"
+                  class="admin-medical-concern-state"
+                >
+                  <i data-lucide="clipboard" class="h-9 w-9 text-slate-400" aria-hidden="true"></i>
+                  <p class="font-bold text-slate-700">
+                    No medical concerns have been reported for this pet.
+                  </p>
+                  <p class="text-sm text-slate-500">
+                    This message only describes concern records in this system.
+                  </p>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && !medicalConcernModal.error && medicalConcernModal.concerns.length > 0"
+                  class="admin-medical-concern-list"
+                >
+                  <template x-for="concern in medicalConcernModal.concerns" :key="concern.id">
+                    <article class="admin-medical-concern-card">
+                      <div class="admin-medical-concern-card-head">
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="admin-medical-concern-category" x-text="concern.category"></h4>
+                            <span
+                              class="admin-medical-concern-badge"
+                              :class="medicalConcernSeverityClass(concern.severity)"
+                              x-text="medicalConcernSeverityLabel(concern.severity) || 'Unknown severity'"
+                            ></span>
+                            <span
+                              class="admin-medical-concern-badge"
+                              :class="medicalConcernStatusClass(concern.status)"
+                              x-text="medicalConcernStatusLabel(concern.status)"
+                            ></span>
+                          </div>
+                          <p class="admin-medical-concern-meta">
+                            Reported <span x-text="formatMedicalConcernDateTime(concern.reported_at)"></span>
+                            by <span x-text="concern.reported_by_name || 'Staff name unavailable'"></span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          @click="toggleMedicalConcernDetails(concern)"
+                          class="admin-medical-concern-details-toggle"
+                          :aria-expanded="Boolean(expandedMedicalConcernIds[String(concern.id)])"
+                        >
+                          <span x-text="expandedMedicalConcernIds[String(concern.id)] ? 'Hide details' : 'View details'"></span>
+                          <i
+                            data-lucide="chevron-down"
+                            class="h-4 w-4 transition-transform"
+                            :class="expandedMedicalConcernIds[String(concern.id)] ? 'rotate-180' : ''"
+                          ></i>
+                        </button>
+                      </div>
+
+                      <div class="admin-medical-concern-card-summary">
+                        <p>
+                          <span>Recommended action</span>
+                          <strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong>
+                        </p>
+                        <p>
+                          <span>Customer response</span>
+                          <strong x-text="medicalConcernResponseLabel(concern.customer_response_status)"></strong>
+                        </p>
+                        <p>
+                          <span>Customer information</span>
+                          <strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked'"></strong>
+                        </p>
+                      </div>
+
+                      <div
+                        x-show="expandedMedicalConcernIds[String(concern.id)]"
+                        x-transition
+                        class="admin-medical-concern-details"
+                      >
+                        <p
+                          x-show="medicalConcernDetailLoadingIds[String(concern.id)]"
+                          class="admin-medical-concern-detail-loading"
+                          role="status"
+                        >
+                          Refreshing complete concern details...
+                        </p>
+
+                        <div class="admin-medical-concern-text-grid">
+                          <section>
+                            <h5>Internal staff observation</h5>
+                            <p x-text="concern.internal_description || 'Not provided'"></p>
+                          </section>
+                          <section>
+                            <h5>Customer-visible message</h5>
+                            <p x-text="concern.customer_message || 'Not provided'"></p>
+                          </section>
+                        </div>
+
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Pet</span><strong x-text="concern.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong></p>
+                          <p><span>Booking reference</span><strong x-text="concern.booking_reference || medicalConcernModal.context?.booking_reference || 'Not provided'"></strong></p>
+                          <p><span>Acknowledgment required</span><strong x-text="medicalConcernYesNo(concern.acknowledgment_required)"></strong></p>
+                          <p><span>Consent required</span><strong x-text="medicalConcernYesNo(concern.consent_required)"></strong></p>
+                          <p><span>Customer response</span><strong x-text="medicalConcernResponseLabel(concern.customer_response_status)"></strong></p>
+                          <p><span>Customer response exists</span><strong x-text="medicalConcernYesNo(concern.has_customer_response)"></strong></p>
+                          <p><span>Customer notified</span><strong x-text="formatMedicalConcernDateTime(concern.customer_notified_at)"></strong></p>
+                          <p><span>Customer-visible fields</span><strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked after notification or response'"></strong></p>
+                          <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong></p>
+                          <p><span>Action behavior</span><strong>Advisory only</strong></p>
+                          <p><span>Created</span><strong x-text="formatMedicalConcernDateTime(concern.created_at)"></strong></p>
+                          <p><span>Last updated</span><strong x-text="formatMedicalConcernDateTime(concern.updated_at)"></strong></p>
+                        </div>
+
+                        <div
+                          x-show="concern.acknowledgment_required || concern.consent_required"
+                          class="admin-medical-concern-future-note"
+                        >
+                          Customer notification and response will be handled in a later workflow.
+                        </div>
+
+                        <section
+                          x-show="concern.internal_resolution_notes || concern.customer_resolution_summary || concern.resolved_at"
+                          class="admin-medical-concern-resolution"
+                        >
+                          <h5>Resolution information</h5>
+                          <div class="admin-medical-concern-text-grid">
+                            <p><span>Internal notes</span><strong x-text="concern.internal_resolution_notes || 'Not provided'"></strong></p>
+                            <p><span>Customer-safe summary</span><strong x-text="concern.customer_resolution_summary || 'Not provided'"></strong></p>
+                            <p><span>Resolved or cancelled by</span><strong x-text="concern.resolved_by_name || 'Not provided'"></strong></p>
+                            <p><span>Resolved or cancelled at</span><strong x-text="formatMedicalConcernDateTime(concern.resolved_at)"></strong></p>
+                          </div>
+                        </section>
+                      </div>
+
+                      <div
+                        x-show="concern.available_staff_actions?.length > 0"
+                        class="admin-medical-concern-card-actions"
+                      >
+                        <button
+                          x-show="canEditMedicalConcern(concern)"
+                          type="button"
+                          @click="openEditMedicalConcern(concern)"
+                          class="admin-medical-concern-secondary"
+                        >
+                          <i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>
+                          Edit
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'resolve')"
+                          type="button"
+                          @click="openMedicalConcernTerminalDialog('resolve', concern)"
+                          class="admin-medical-concern-resolve"
+                        >
+                          <i data-lucide="circle-check" class="h-4 w-4" aria-hidden="true"></i>
+                          Resolve Concern
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'cancel')"
+                          type="button"
+                          @click="openMedicalConcernTerminalDialog('cancel', concern)"
+                          class="admin-medical-concern-cancel"
+                        >
+                          <i data-lucide="ban" class="h-4 w-4" aria-hidden="true"></i>
+                          Cancel Concern
+                        </button>
+                      </div>
+                    </article>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Create and edit concern form -->
+              <form
+                x-show="medicalConcernModal.view === 'form'"
+                class="admin-medical-concern-body"
+                @submit.prevent="saveMedicalConcern()"
+                novalidate
+              >
+                <button
+                  type="button"
+                  @click="returnToMedicalConcernHistory()"
+                  :disabled="medicalConcernFormModal.saving"
+                  class="admin-medical-concern-back"
+                >
+                  <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                  Back to concern history
+                </button>
+
+                <div
+                  x-show="medicalConcernFormErrorSummary"
+                  x-ref="medicalConcernValidationSummary"
+                  tabindex="-1"
+                  class="admin-medical-concern-validation"
+                  role="alert"
+                >
+                  <p class="font-bold">Please review the medical concern form.</p>
+                  <p x-text="medicalConcernFormErrorSummary"></p>
+                  <button
+                    x-show="medicalConcernModal.duplicateMessage"
+                    type="button"
+                    @click="returnToMedicalConcernHistory()"
+                    class="admin-medical-concern-retry"
+                  >
+                    Open existing concern history
+                  </button>
+                </div>
+
+                <div
+                  x-show="medicalConcernFormModal.mode === 'edit' && !medicalConcernFormModal.customerFieldsEditable"
+                  class="admin-medical-concern-locked"
+                  role="note"
+                >
+                  <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>
+                    Customer-visible information is locked because it was already sent or answered.
+                    Only internal staff observation and internal resolution notes remain editable.
+                  </p>
+                </div>
+
+                <div class="admin-medical-concern-form-grid">
+                  <div>
+                    <label for="medical-concern-category">
+                      Concern Category <span aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="medical-concern-category"
+                      type="text"
+                      maxlength="50"
+                      required
+                      x-model="medicalConcernForm.category"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('category'))"
+                      aria-describedby="medical-concern-category-error"
+                      placeholder="e.g. Skin irritation"
+                    />
+                    <p id="medical-concern-category-error" x-show="medicalConcernFieldError('category')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('category')"></p>
+                  </div>
+
+                  <div>
+                    <label for="medical-concern-severity">
+                      Severity <span aria-hidden="true">*</span>
+                    </label>
+                    <select
+                      id="medical-concern-severity"
+                      required
+                      x-model="medicalConcernForm.severity"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('severity'))"
+                      aria-describedby="medical-concern-severity-error"
+                    >
+                      <option value="">Select severity</option>
+                      <template x-for="option in medicalConcernSeverities" :key="option.value">
+                        <option :value="option.value" x-text="option.label"></option>
+                      </template>
+                    </select>
+                    <p id="medical-concern-severity-error" x-show="medicalConcernFieldError('severity')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('severity')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-internal-description">
+                      Internal Staff Observation <span aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-internal-description"
+                      rows="4"
+                      required
+                      x-model="medicalConcernForm.internal_description"
+                      :aria-invalid="Boolean(medicalConcernFieldError('internal_description'))"
+                      aria-describedby="medical-concern-internal-description-help medical-concern-internal-description-error"
+                      placeholder="Record the complete internal staff observation."
+                    ></textarea>
+                    <p id="medical-concern-internal-description-help" class="admin-medical-concern-help">
+                      Internal staff information. Do not copy this automatically into the customer message.
+                    </p>
+                    <p id="medical-concern-internal-description-error" x-show="medicalConcernFieldError('internal_description')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('internal_description')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-customer-message">
+                      Customer-Visible Message <span aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-customer-message"
+                      rows="4"
+                      required
+                      x-model="medicalConcernForm.customer_message"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('customer_message'))"
+                      aria-describedby="medical-concern-customer-message-help medical-concern-customer-message-error"
+                      placeholder="Enter a separate, clear message suitable for the customer."
+                    ></textarea>
+                    <p id="medical-concern-customer-message-help" class="admin-medical-concern-help">
+                      Customer notification is not sent in this step.
+                    </p>
+                    <p id="medical-concern-customer-message-error" x-show="medicalConcernFieldError('customer_message')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('customer_message')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-recommended-action">
+                      Recommended Grooming Action <span aria-hidden="true">*</span>
+                    </label>
+                    <select
+                      id="medical-concern-recommended-action"
+                      required
+                      x-model="medicalConcernForm.recommended_grooming_action"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('recommended_grooming_action'))"
+                      aria-describedby="medical-concern-action-help medical-concern-action-error"
+                    >
+                      <option value="">Select recommended action</option>
+                      <template x-for="option in medicalConcernActions" :key="option.value">
+                        <option :value="option.value" x-text="option.label"></option>
+                      </template>
+                    </select>
+                    <p id="medical-concern-action-help" class="admin-medical-concern-help is-advisory">
+                      This records the recommended action. It does not yet pause or stop grooming automatically.
+                    </p>
+                    <p id="medical-concern-action-error" x-show="medicalConcernFieldError('recommended_grooming_action')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('recommended_grooming_action')"></p>
+                  </div>
+
+                  <fieldset class="admin-medical-concern-requirements is-full">
+                    <legend>Future customer response requirements</legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        x-model="medicalConcernForm.acknowledgment_required"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      />
+                      <span>
+                        <strong>Require customer acknowledgment</strong>
+                        <small>Recorded now; the response workflow will be added later.</small>
+                      </span>
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        x-model="medicalConcernForm.consent_required"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      />
+                      <span>
+                        <strong>Require customer consent</strong>
+                        <small>Recorded now; no consent request is sent in this step.</small>
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  <div x-show="medicalConcernFormModal.mode === 'edit'" class="is-full">
+                    <label for="medical-concern-internal-resolution-notes">
+                      Internal Resolution Notes <span class="is-optional">(optional)</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-internal-resolution-notes"
+                      rows="3"
+                      x-model="medicalConcernForm.internal_resolution_notes"
+                      :aria-invalid="Boolean(medicalConcernFieldError('internal_resolution_notes'))"
+                      aria-describedby="medical-concern-internal-resolution-notes-error"
+                    ></textarea>
+                    <p id="medical-concern-internal-resolution-notes-error" x-show="medicalConcernFieldError('internal_resolution_notes')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('internal_resolution_notes')"></p>
+                  </div>
+                </div>
+
+                <footer class="admin-medical-concern-form-actions">
+                  <button
+                    type="button"
+                    @click="returnToMedicalConcernHistory()"
+                    :disabled="medicalConcernFormModal.saving"
+                    class="admin-medical-concern-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    :disabled="medicalConcernFormModal.saving"
+                    class="admin-medical-concern-primary"
+                  >
+                    <span x-show="medicalConcernFormModal.saving" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="medicalConcernFormModal.saving ? 'Saving...' : (medicalConcernFormModal.mode === 'edit' ? 'Save Changes' : 'Report Concern')"></span>
+                  </button>
+                </footer>
+              </form>
+            </section>
+          </div>
+
+          <!-- Resolve or cancel medical concern confirmation -->
+          <div
+            x-show="medicalConcernTerminal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-terminal-title"
+            aria-describedby="medical-concern-terminal-description"
+            @click.self="closeMedicalConcernTerminalDialog()"
+          >
+            <section
+              x-ref="medicalConcernTerminalDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div
+                class="admin-medical-concern-terminal-icon"
+                :class="medicalConcernTerminal.type === 'cancel' ? 'is-cancel' : 'is-resolve'"
+                aria-hidden="true"
+              >
+                <i :data-lucide="medicalConcernTerminal.type === 'cancel' ? 'ban' : 'circle-check'" class="h-6 w-6"></i>
+              </div>
+              <h3
+                id="medical-concern-terminal-title"
+                x-text="medicalConcernTerminal.type === 'cancel' ? 'Cancel Medical Concern' : 'Resolve Medical Concern'"
+              ></h3>
+              <p
+                id="medical-concern-terminal-description"
+                x-text="medicalConcernTerminal.type === 'cancel'
+                  ? 'Cancellation preserves the concern history and should only be used for a duplicate or incorrect concern. It does not delete the record.'
+                  : 'Resolution closes the concern while preserving its complete history. It does not finish or otherwise change grooming.'"
+              ></p>
+
+              <div class="admin-medical-concern-terminal-fields">
+                <label for="medical-concern-terminal-internal">
+                  <span x-text="medicalConcernTerminal.type === 'cancel' ? 'Internal Cancellation Reason' : 'Internal Resolution Notes'"></span>
+                  <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-terminal-internal"
+                  rows="3"
+                  required
+                  x-model="medicalConcernTerminal.internal_reason"
+                  :aria-invalid="Boolean(medicalConcernTerminal.errors.internal_reason)"
+                  aria-describedby="medical-concern-terminal-internal-error"
+                ></textarea>
+                <p id="medical-concern-terminal-internal-error" x-show="medicalConcernTerminal.errors.internal_reason" class="admin-medical-concern-field-error" x-text="medicalConcernTerminal.errors.internal_reason"></p>
+
+                <label for="medical-concern-terminal-customer">
+                  <span x-text="medicalConcernTerminal.type === 'cancel' ? 'Customer-Safe Cancellation Summary' : 'Customer-Safe Resolution Summary'"></span>
+                  <strong x-show="medicalConcernTerminal.type === 'resolve'" aria-hidden="true">*</strong>
+                  <small x-show="medicalConcernTerminal.type === 'cancel'">(optional)</small>
+                </label>
+                <textarea
+                  id="medical-concern-terminal-customer"
+                  rows="3"
+                  x-model="medicalConcernTerminal.customer_summary"
+                  :required="medicalConcernTerminal.type === 'resolve'"
+                  :aria-invalid="Boolean(medicalConcernTerminal.errors.customer_summary)"
+                  aria-describedby="medical-concern-terminal-customer-error"
+                ></textarea>
+                <p id="medical-concern-terminal-customer-error" x-show="medicalConcernTerminal.errors.customer_summary" class="admin-medical-concern-field-error" x-text="medicalConcernTerminal.errors.customer_summary"></p>
+              </div>
+
+              <p x-show="medicalConcernTerminal.error" class="admin-medical-concern-terminal-error" role="alert" x-text="medicalConcernTerminal.error"></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernTerminalDialog()"
+                  :disabled="medicalConcernTerminal.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Keep Concern Open
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernTerminal()"
+                  :disabled="medicalConcernTerminal.busy"
+                  :class="medicalConcernTerminal.type === 'cancel' ? 'admin-medical-concern-cancel' : 'admin-medical-concern-resolve'"
+                >
+                  <span x-show="medicalConcernTerminal.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernTerminal.busy ? 'Saving...' : (medicalConcernTerminal.type === 'cancel' ? 'Cancel Concern' : 'Resolve Concern')"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <!-- Medical concern operation feedback -->
+          <div
+            x-show="medicalConcernToast.show"
+            x-transition
+            style="display: none"
+            class="admin-medical-concern-toast"
+            :class="medicalConcernToast.ok ? 'is-success' : 'is-error'"
+            role="status"
+            aria-live="polite"
+          >
+            <i :data-lucide="medicalConcernToast.ok ? 'circle-check' : 'circle-alert'" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+            <span x-text="medicalConcernToast.message"></span>
+          </div>
 
           <!-- Payment Modal -->
           <div
@@ -2277,7 +2940,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/api.js?v=medical-concern-ui-20260724"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -2291,6 +2954,7 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=queue-progress-20260709"></script>
+    <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=medical-concern-ui-20260724"></script>
   </body>
 </html>

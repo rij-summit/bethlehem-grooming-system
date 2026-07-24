@@ -569,6 +569,79 @@ var API = (() => {
     );
   }
 
+  function adminBookingPetConcernPath(bookingId, bookingPetId) {
+    return `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/medical-concerns`;
+  }
+
+  async function getAdminBookingPetMedicalConcerns(bookingId, bookingPetId) {
+    return request(
+      "GET",
+      adminBookingPetConcernPath(bookingId, bookingPetId),
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminBookingPetMedicalConcern(bookingId, bookingPetId, payload) {
+    return request(
+      "POST",
+      adminBookingPetConcernPath(bookingId, bookingPetId),
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminBookingPetMedicalConcern(bookingId, bookingPetId, concernId) {
+    return request(
+      "GET",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function updateAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "PATCH",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function cancelAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/cancel`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function resolveAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resolve`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
   async function adminCancelBooking(bookingId) {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
@@ -989,6 +1062,12 @@ var API = (() => {
     adminStartPetGrooming,
     adminMarkDone,
     adminMarkPetDone,
+    getAdminBookingPetMedicalConcerns,
+    createAdminBookingPetMedicalConcern,
+    getAdminBookingPetMedicalConcern,
+    updateAdminBookingPetMedicalConcern,
+    cancelAdminBookingPetMedicalConcern,
+    resolveAdminBookingPetMedicalConcern,
     adminCancelBooking,
     // Admin customers
     getCustomers,

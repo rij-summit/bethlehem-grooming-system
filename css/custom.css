@@ -2793,6 +2793,841 @@ body.customer-detail-modal-open {
   white-space: pre-line;
 }
 
+.admin-pet-medical-concern-indicator {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  border: 1px solid;
+  border-radius: 9999px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: left;
+}
+
+.admin-pet-medical-concern-indicator.is-low {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.admin-pet-medical-concern-indicator.is-moderate {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.admin-pet-medical-concern-indicator.is-urgent {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-pet-medical-concern-indicator.is-history {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.admin-queued-pet-concerns,
+.admin-queued-pet-report-concern {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-queued-pet-concerns {
+  border: 1px solid #9fb6ca;
+  background: #ffffff;
+  color: #315b7e;
+}
+
+.admin-queued-pet-concerns:hover {
+  border-color: #315b7e;
+  background: #eef5fb;
+}
+
+.admin-queued-pet-report-concern {
+  border: 1px solid #f59e0b;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.admin-queued-pet-report-concern:hover {
+  border-color: #d97706;
+  background: #ffedd5;
+}
+
+.admin-pet-medical-concern-count {
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #315b7e;
+  color: #ffffff;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.admin-medical-concern-overlay,
+.admin-medical-concern-terminal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.admin-medical-concern-terminal-overlay {
+  z-index: 80;
+}
+
+.admin-medical-concern-dialog {
+  display: flex;
+  width: min(66rem, 100%);
+  max-height: min(92vh, 58rem);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d7e3ef;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.3);
+}
+
+.admin-medical-concern-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(135deg, #244866, #315b7e);
+  color: #ffffff;
+}
+
+.admin-medical-concern-header-icon {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.admin-medical-concern-kicker {
+  color: #cfe0ee;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-medical-concern-title {
+  margin-top: 0.1rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+  color: #dbe9f4;
+  font-size: 0.8rem;
+}
+
+.admin-medical-concern-close {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border-radius: 0.75rem;
+  color: #dbe9f4;
+}
+
+.admin-medical-concern-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.admin-medical-concern-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-medical-concern-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.admin-medical-concern-advisory,
+.admin-medical-concern-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border: 1px solid #bae6fd;
+  border-radius: 0.9rem;
+  background: #f0f9ff;
+  padding: 0.85rem 1rem;
+  color: #075985;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.admin-medical-concern-locked {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.admin-medical-concern-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.admin-medical-concern-primary,
+.admin-medical-concern-secondary,
+.admin-medical-concern-resolve,
+.admin-medical-concern-cancel,
+.admin-medical-concern-retry,
+.admin-medical-concern-back {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-medical-concern-primary {
+  border-color: #315b7e;
+  background: #315b7e;
+  color: #ffffff;
+}
+
+.admin-medical-concern-primary:hover:not(:disabled) {
+  background: #274b69;
+}
+
+.admin-medical-concern-secondary,
+.admin-medical-concern-back {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+}
+
+.admin-medical-concern-secondary:hover:not(:disabled),
+.admin-medical-concern-back:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.admin-medical-concern-resolve {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.admin-medical-concern-resolve:hover:not(:disabled) {
+  border-color: #4ade80;
+  background: #dcfce7;
+}
+
+.admin-medical-concern-cancel {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-medical-concern-cancel:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fee2e2;
+}
+
+.admin-medical-concern-primary:disabled,
+.admin-medical-concern-secondary:disabled,
+.admin-medical-concern-resolve:disabled,
+.admin-medical-concern-cancel:disabled,
+.admin-medical-concern-back:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-medical-concern-retry {
+  border-color: currentColor;
+  background: #ffffff;
+  color: inherit;
+}
+
+.admin-medical-concern-back {
+  margin-bottom: 1rem;
+}
+
+.admin-medical-concern-state {
+  display: flex;
+  min-height: 12rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 1rem;
+  background: #f8fafc;
+  padding: 2rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.admin-medical-concern-state.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-medical-concern-spinner,
+.admin-medical-concern-button-spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 3px solid #dbe9f4;
+  border-top-color: #315b7e;
+  border-radius: 9999px;
+  animation: admin-medical-concern-spin 0.8s linear infinite;
+}
+
+.admin-medical-concern-button-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+}
+
+@keyframes admin-medical-concern-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-medical-concern-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-medical-concern-card {
+  overflow: hidden;
+  border: 1px solid #d8e3ed;
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.admin-medical-concern-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.admin-medical-concern-category {
+  overflow-wrap: anywhere;
+  color: #1e293b;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-meta {
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.admin-medical-concern-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid;
+  border-radius: 9999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-badge.is-low,
+.admin-medical-concern-badge.is-open {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.admin-medical-concern-badge.is-moderate,
+.admin-medical-concern-badge.is-awaiting {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.admin-medical-concern-badge.is-urgent {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-medical-concern-badge.is-referred,
+.admin-medical-concern-badge.is-review {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.admin-medical-concern-badge.is-resolved {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.admin-medical-concern-badge.is-cancelled,
+.admin-medical-concern-badge.is-unknown {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.admin-medical-concern-details-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.65rem;
+  padding: 0.45rem 0.6rem;
+  color: #315b7e;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-details-toggle:hover {
+  background: #eef5fb;
+}
+
+.admin-medical-concern-card-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+}
+
+.admin-medical-concern-card-summary p,
+.admin-medical-concern-detail-grid p {
+  min-width: 0;
+}
+
+.admin-medical-concern-card-summary span,
+.admin-medical-concern-card-summary strong,
+.admin-medical-concern-detail-grid span,
+.admin-medical-concern-detail-grid strong {
+  display: block;
+}
+
+.admin-medical-concern-card-summary span,
+.admin-medical-concern-detail-grid span {
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-medical-concern-card-summary strong,
+.admin-medical-concern-detail-grid strong {
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.admin-medical-concern-details {
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem;
+}
+
+.admin-medical-concern-detail-loading {
+  margin-bottom: 0.75rem;
+  color: #315b7e;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.admin-medical-concern-text-grid,
+.admin-medical-concern-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.admin-medical-concern-text-grid section,
+.admin-medical-concern-resolution {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  padding: 0.8rem;
+}
+
+.admin-medical-concern-text-grid h5,
+.admin-medical-concern-resolution h5 {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-medical-concern-text-grid section > p {
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.admin-medical-concern-detail-grid {
+  margin-top: 0.8rem;
+}
+
+.admin-medical-concern-future-note {
+  margin-top: 0.8rem;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0.4rem;
+  background: #fffbeb;
+  padding: 0.65rem 0.75rem;
+  color: #92400e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.admin-medical-concern-resolution {
+  margin-top: 0.8rem;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.admin-medical-concern-resolution .admin-medical-concern-text-grid {
+  margin-top: 0.6rem;
+}
+
+.admin-medical-concern-resolution .admin-medical-concern-text-grid p {
+  min-width: 0;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.admin-medical-concern-resolution .admin-medical-concern-text-grid span,
+.admin-medical-concern-resolution .admin-medical-concern-text-grid strong {
+  display: block;
+}
+
+.admin-medical-concern-resolution .admin-medical-concern-text-grid strong {
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+  color: #334155;
+  white-space: pre-line;
+}
+
+.admin-medical-concern-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+}
+
+.admin-medical-concern-validation {
+  margin-bottom: 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.9rem;
+  background: #fef2f2;
+  padding: 0.85rem 1rem;
+  color: #b91c1c;
+  font-size: 0.78rem;
+}
+
+.admin-medical-concern-validation:focus {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+.admin-medical-concern-validation .admin-medical-concern-retry {
+  margin-top: 0.65rem;
+}
+
+.admin-medical-concern-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.admin-medical-concern-form-grid .is-full {
+  grid-column: 1 / -1;
+}
+
+.admin-medical-concern-form-grid label,
+.admin-medical-concern-terminal-fields label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-form-grid label > span:not(.is-optional),
+.admin-medical-concern-terminal-fields label > strong {
+  color: #dc2626;
+}
+
+.admin-medical-concern-form-grid .is-optional,
+.admin-medical-concern-terminal-fields label > small {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.admin-medical-concern-form-grid input[type="text"],
+.admin-medical-concern-form-grid select,
+.admin-medical-concern-form-grid textarea,
+.admin-medical-concern-terminal-fields textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.7rem 0.8rem;
+  color: #334155;
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.admin-medical-concern-form-grid textarea,
+.admin-medical-concern-terminal-fields textarea {
+  resize: vertical;
+}
+
+.admin-medical-concern-form-grid input:focus,
+.admin-medical-concern-form-grid select:focus,
+.admin-medical-concern-form-grid textarea:focus,
+.admin-medical-concern-terminal-fields textarea:focus {
+  border-color: #315b7e;
+  box-shadow: 0 0 0 3px rgba(49, 91, 126, 0.12);
+}
+
+.admin-medical-concern-form-grid input:disabled,
+.admin-medical-concern-form-grid select:disabled,
+.admin-medical-concern-form-grid textarea:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.admin-medical-concern-help {
+  margin-top: 0.3rem;
+  color: #64748b;
+  font-size: 0.68rem;
+}
+
+.admin-medical-concern-help.is-advisory {
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.admin-medical-concern-field-error {
+  margin-top: 0.3rem;
+  color: #dc2626;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.admin-medical-concern-requirements {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid #d8e3ed;
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+}
+
+.admin-medical-concern-requirements legend {
+  padding: 0 0.35rem;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-requirements label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.admin-medical-concern-requirements input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+  accent-color: #315b7e;
+}
+
+.admin-medical-concern-requirements strong,
+.admin-medical-concern-requirements small {
+  display: block;
+}
+
+.admin-medical-concern-requirements strong {
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.admin-medical-concern-requirements small {
+  margin-top: 0.1rem;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.admin-medical-concern-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.admin-medical-concern-terminal-dialog {
+  width: min(32rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 1.25rem;
+  background: #ffffff;
+  padding: 1.25rem;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35);
+}
+
+.admin-medical-concern-terminal-icon {
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+}
+
+.admin-medical-concern-terminal-icon.is-resolve {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.admin-medical-concern-terminal-icon.is-cancel {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.admin-medical-concern-terminal-dialog > h3 {
+  margin-top: 0.9rem;
+  color: #1e293b;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.admin-medical-concern-terminal-dialog > p {
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.admin-medical-concern-terminal-fields {
+  margin-top: 1rem;
+}
+
+.admin-medical-concern-terminal-fields label:not(:first-child) {
+  margin-top: 0.85rem;
+}
+
+.admin-medical-concern-terminal-error {
+  margin-top: 0.75rem;
+  border-radius: 0.7rem;
+  background: #fef2f2;
+  padding: 0.65rem 0.75rem;
+  color: #b91c1c !important;
+  font-weight: 700;
+}
+
+.admin-medical-concern-terminal-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.admin-medical-concern-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 90;
+  display: flex;
+  max-width: min(28rem, calc(100vw - 2rem));
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid;
+  border-radius: 0.9rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.2);
+}
+
+.admin-medical-concern-toast.is-success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.admin-medical-concern-toast.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 @media (max-width: 767px) {
   .admin-queued-owner-toggle,
   .admin-queued-owner-summary {
@@ -2829,6 +3664,8 @@ body.customer-detail-modal-open {
 
   .admin-queued-pet-start,
   .admin-queued-pet-print,
+  .admin-queued-pet-concerns,
+  .admin-queued-pet-report-concern,
   .admin-in-progress-pet-finish,
   .admin-in-progress-pet-queued {
     flex: 1 1 0;
@@ -2836,6 +3673,61 @@ body.customer-detail-modal-open {
 
   .admin-queued-pet-notes {
     grid-template-columns: 1fr;
+  }
+
+  .admin-medical-concern-overlay,
+  .admin-medical-concern-terminal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .admin-medical-concern-dialog {
+    width: 100%;
+    max-height: 96vh;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .admin-medical-concern-terminal-dialog {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .admin-medical-concern-header,
+  .admin-medical-concern-body {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .admin-medical-concern-toolbar,
+  .admin-medical-concern-card-head,
+  .admin-medical-concern-form-actions,
+  .admin-medical-concern-terminal-dialog > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-medical-concern-card-summary,
+  .admin-medical-concern-form-grid,
+  .admin-medical-concern-text-grid,
+  .admin-medical-concern-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-medical-concern-details-toggle {
+    align-self: flex-start;
+  }
+
+  .admin-medical-concern-card-actions {
+    justify-content: stretch;
+  }
+
+  .admin-medical-concern-card-actions > button,
+  .admin-medical-concern-toolbar > button,
+  .admin-medical-concern-form-actions > button,
+  .admin-medical-concern-terminal-dialog > footer > button {
+    flex: 1 1 auto;
+    width: 100%;
   }
 }
 
