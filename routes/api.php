@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\AdminVaccinationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
@@ -105,6 +106,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/bookings/{id}/picked-up', [AdminBookingController::class, 'markPickedUp']);
         Route::post('/admin/bookings/{id}/late-check-in', [AdminBookingController::class, 'lateCheckIn']);
         Route::get('/admin/bookings/no-shows', [AdminBookingController::class, 'noShowIndex']);
+
+        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns', [AdminGroomingMedicalConcernController::class, 'index']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns', [AdminGroomingMedicalConcernController::class, 'store']);
+        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'show']);
+        Route::patch('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'update']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel', [AdminGroomingMedicalConcernController::class, 'cancel']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve', [AdminGroomingMedicalConcernController::class, 'resolve']);
 
         Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
         Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);

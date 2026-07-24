@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
+use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WalkinController;
@@ -40,6 +41,12 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/picked-up'],
         ['POST', 'api/admin/bookings/{id}/late-check-in'],
         ['GET', 'api/admin/bookings/no-shows'],
+        ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns'],
+        ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
+        ['PATCH', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve'],
         ['POST', 'api/admin/bookings/{id}/pay'],
         ['POST', 'api/admin/bookings/{id}/pay-now'],
         ['POST', 'api/admin/bookings/{id}/release'],
@@ -307,6 +314,12 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'mark picked up' => ['POST', '/api/admin/bookings/1/picked-up'],
             'late check in no-show' => ['POST', '/api/admin/bookings/1/late-check-in'],
             'no-show listing' => ['GET', '/api/admin/bookings/no-shows'],
+            'list medical concerns' => ['GET', '/api/admin/bookings/1/pets/1/medical-concerns'],
+            'create medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns'],
+            'view medical concern' => ['GET', '/api/admin/bookings/1/pets/1/medical-concerns/1'],
+            'update medical concern' => ['PATCH', '/api/admin/bookings/1/pets/1/medical-concerns/1'],
+            'cancel medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns/1/cancel'],
+            'resolve medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns/1/resolve'],
             'record final payment' => ['POST', '/api/admin/bookings/1/pay'],
             'record early payment' => ['POST', '/api/admin/bookings/1/pay-now'],
             'release paid booking' => ['POST', '/api/admin/bookings/1/release'],
@@ -448,6 +461,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $controllerClasses = [
             AdminBookingController::class,
+            AdminGroomingMedicalConcernController::class,
             NotificationController::class,
             PaymentController::class,
             WalkinController::class,
