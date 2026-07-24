@@ -6,12 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class CustomerNotification extends Model
 {
-    protected $table      = 'customer_notifications';
-    public    $timestamps = false;
+    protected $table = 'customer_notifications';
+
+    public $timestamps = false;
 
     protected $fillable = [
         'user_id',
         'booking_id',
+        'grooming_medical_concern_id',
         'type',
         'message',
         'is_read',
@@ -19,6 +21,7 @@ class CustomerNotification extends Model
     ];
 
     protected $casts = [
+        'is_read' => 'boolean',
         'created_at' => 'datetime',
     ];
 
@@ -30,5 +33,13 @@ class CustomerNotification extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function groomingMedicalConcern()
+    {
+        return $this->belongsTo(
+            GroomingMedicalConcern::class,
+            'grooming_medical_concern_id',
+        );
     }
 }

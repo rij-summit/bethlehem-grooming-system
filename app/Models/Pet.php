@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class Pet extends Model
 {
     protected $table = 'pets';
+
     protected $primaryKey = 'pet_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -38,5 +40,10 @@ class Pet extends Model
     public function vaccinationRecords()
     {
         return $this->hasMany(VaccinationRecord::class, 'pet_id', 'pet_id');
+    }
+
+    public function groomingMedicalConcerns()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'pet_id', 'pet_id');
     }
 }

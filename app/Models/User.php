@@ -10,7 +10,9 @@ class User extends Authenticatable
     use HasApiTokens;
 
     protected $table = 'users';
+
     protected $primaryKey = 'user_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -55,5 +57,29 @@ class User extends Authenticatable
     public function vaccinationsVoided()
     {
         return $this->hasMany(VaccinationRecord::class, 'voided_by_user_id', 'user_id');
+    }
+
+    public function groomingMedicalConcernsReported()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'reported_by_user_id', 'user_id');
+    }
+
+    public function groomingMedicalConcernActionsApplied()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'action_applied_by_user_id', 'user_id');
+    }
+
+    public function groomingMedicalConcernsResolved()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'resolved_by_user_id', 'user_id');
+    }
+
+    public function groomingMedicalConcernResponses()
+    {
+        return $this->hasMany(
+            GroomingMedicalConcernResponse::class,
+            'responded_by_user_id',
+            'user_id',
+        );
     }
 }

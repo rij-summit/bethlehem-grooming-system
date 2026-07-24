@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\BookingService;
-use App\Models\Walkin;
 
 class Booking extends Model
 {
     protected $table = 'bookings';
+
     protected $primaryKey = 'booking_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -64,5 +64,10 @@ class Booking extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class, 'booking_id', 'booking_id');
+    }
+
+    public function groomingMedicalConcerns()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'booking_id', 'booking_id');
     }
 }

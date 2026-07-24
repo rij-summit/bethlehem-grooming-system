@@ -29,12 +29,12 @@ class ClinicAppointment extends Model
     ];
 
     protected $casts = [
-        'paid'                    => 'boolean',
-        'appointment_date'        => 'date',
-        'checked_in_at'           => 'datetime',
+        'paid' => 'boolean',
+        'appointment_date' => 'date',
+        'checked_in_at' => 'datetime',
         'consultation_started_at' => 'datetime',
-        'consultation_finished_at'=> 'datetime',
-        'archived_at'             => 'datetime',
+        'consultation_finished_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     public function user()
@@ -70,5 +70,14 @@ class ClinicAppointment extends Model
     public function vaccinationRecords()
     {
         return $this->hasMany(VaccinationRecord::class, 'clinic_appointment_id', 'id');
+    }
+
+    public function groomingMedicalConcerns()
+    {
+        return $this->hasMany(
+            GroomingMedicalConcern::class,
+            'clinic_appointment_id',
+            'id',
+        );
     }
 }

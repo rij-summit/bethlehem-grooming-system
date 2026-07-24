@@ -6,8 +6,28 @@ use Illuminate\Database\Eloquent\Model;
 
 class BookingPet extends Model
 {
+    public const GROOMING_STATE_NOT_STARTED = 'not_started';
+
+    public const GROOMING_STATE_IN_PROGRESS = 'in_progress';
+
+    public const GROOMING_STATE_PAUSED = 'paused';
+
+    public const GROOMING_STATE_STOPPED = 'stopped';
+
+    public const GROOMING_STATE_FINISHED = 'finished';
+
+    public const GROOMING_STATES = [
+        self::GROOMING_STATE_NOT_STARTED,
+        self::GROOMING_STATE_IN_PROGRESS,
+        self::GROOMING_STATE_PAUSED,
+        self::GROOMING_STATE_STOPPED,
+        self::GROOMING_STATE_FINISHED,
+    ];
+
     protected $table = 'booking_pets';
+
     protected $primaryKey = 'booking_pet_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -19,6 +39,7 @@ class BookingPet extends Model
         'groomer_id',
         'grooming_start_time',
         'grooming_end_time',
+        'grooming_state',
     ];
 
     protected $casts = [
@@ -38,5 +59,19 @@ class BookingPet extends Model
     public function pet()
     {
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
+    }
+
+    public function groomingMedicalConcerns()
+    {
+        return $this->hasMany(
+            GroomingMedicalConcern::class,
+            'booking_pet_id',
+            'booking_pet_id',
+        );
+    }
+
+    public static function isValidGroomingState(string $state): bool
+    {
+        return in_array($state, self::GROOMING_STATES, true);
     }
 }
