@@ -495,6 +495,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ['GET', 'api/pets/{id}'],
             ['GET', 'api/pets/{petId}/medical-records'],
             ['GET', 'api/pets/{petId}/vaccinations'],
+            ['GET', 'api/pets/{petId}/medical-concerns'],
+            ['GET', 'api/pets/{petId}/medical-concerns/{publicId}'],
             ['GET', 'api/customer/notifications'],
             ['PATCH', 'api/customer/notifications/read-all'],
             ['PATCH', 'api/customer/notifications/{id}/read'],
