@@ -1755,7 +1755,7 @@
             aria-modal="true"
             aria-labelledby="medical-concern-dialog-title"
             @click.self="closeMedicalConcerns()"
-            @keydown.escape.window="medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns()"
+            @keydown.escape.window="medicalConcernNotify.open ? closeMedicalConcernNotifyDialog() : (medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns())"
           >
             <section
               x-ref="medicalConcernDialog"
@@ -1969,8 +1969,16 @@
                         <div
                           x-show="concern.acknowledgment_required || concern.consent_required"
                           class="admin-medical-concern-future-note"
+                          x-text="concern.customer_notified_at
+                            ? 'The customer was notified. Their acknowledgment or consent response will be handled in a later workflow.'
+                            : 'Send this concern to the customer when the message is ready. Their response will be handled in a later workflow.'"
                         >
-                          Customer notification and response will be handled in a later workflow.
+                        </div>
+                        <div
+                          x-show="!concern.customer_account_linked && !concern.customer_notified_at"
+                          class="admin-medical-concern-future-note"
+                        >
+                          No linked customer account
                         </div>
 
                         <section
@@ -1991,6 +1999,15 @@
                         x-show="concern.available_staff_actions?.length > 0"
                         class="admin-medical-concern-card-actions"
                       >
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'notify_customer')"
+                          type="button"
+                          @click="openMedicalConcernNotifyDialog(concern)"
+                          class="admin-medical-concern-send"
+                        >
+                          <i data-lucide="send" class="h-4 w-4" aria-hidden="true"></i>
+                          Send to Customer
+                        </button>
                         <button
                           x-show="canEditMedicalConcern(concern)"
                           type="button"
@@ -2233,6 +2250,88 @@
                   </button>
                 </footer>
               </form>
+            </section>
+          </div>
+
+          <!-- Send medical concern to customer confirmation -->
+          <div
+            x-show="medicalConcernNotify.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-notify-title"
+            aria-describedby="medical-concern-notify-description"
+            @click.self="closeMedicalConcernNotifyDialog()"
+          >
+            <section
+              x-ref="medicalConcernNotifyDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true">
+                <i data-lucide="send" class="h-6 w-6"></i>
+              </div>
+              <h3 id="medical-concern-notify-title">Send to Customer</h3>
+              <p id="medical-concern-notify-description">
+                Review the customer-safe details below. After sending, customer-visible details can no longer be edited normally.
+              </p>
+
+              <div class="admin-medical-concern-detail-grid">
+                <p>
+                  <span>Pet</span>
+                  <strong x-text="medicalConcernNotify.concern?.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong>
+                </p>
+                <p>
+                  <span>Severity</span>
+                  <strong x-text="medicalConcernSeverityLabel(medicalConcernNotify.concern?.severity) || 'Unknown'"></strong>
+                </p>
+                <p>
+                  <span>Recommended action</span>
+                  <strong x-text="medicalConcernActionLabel(medicalConcernNotify.concern?.recommended_grooming_action)"></strong>
+                </p>
+                <p>
+                  <span>Acknowledgment required</span>
+                  <strong x-text="medicalConcernYesNo(medicalConcernNotify.concern?.acknowledgment_required)"></strong>
+                </p>
+                <p>
+                  <span>Consent required</span>
+                  <strong x-text="medicalConcernYesNo(medicalConcernNotify.concern?.consent_required)"></strong>
+                </p>
+              </div>
+
+              <section class="admin-medical-concern-resolution">
+                <h5>Customer-visible message</h5>
+                <p x-text="medicalConcernNotify.concern?.customer_message || 'Not provided'"></p>
+              </section>
+
+              <p
+                x-show="medicalConcernNotify.error"
+                class="admin-medical-concern-terminal-error"
+                role="alert"
+                x-text="medicalConcernNotify.error"
+              ></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernNotifyDialog()"
+                  :disabled="medicalConcernNotify.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Review Again
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernNotification()"
+                  :disabled="medicalConcernNotify.busy"
+                  class="admin-medical-concern-send"
+                >
+                  <span x-show="medicalConcernNotify.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernNotify.busy ? 'Sending...' : 'Send to Customer'"></span>
+                </button>
+              </footer>
             </section>
           </div>
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Models\BookingPet;
+use App\Models\CustomerNotification;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingMedicalConcernResponse;
 use App\Models\User;
@@ -26,6 +27,7 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns'],
         ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
         ['PATCH', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve'],
     ];
@@ -112,6 +114,7 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'create' => ['POST', self::BASE_URI, []],
             'show' => ['GET', self::BASE_URI.'/1', []],
             'update' => ['PATCH', self::BASE_URI.'/1', []],
+            'notify customer' => ['POST', self::BASE_URI.'/1/notify-customer', []],
             'cancel' => ['POST', self::BASE_URI.'/1/cancel', []],
             'resolve' => ['POST', self::BASE_URI.'/1/resolve', []],
         ];
@@ -174,6 +177,285 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
         $this->assertDatabaseHas('grooming_medical_concerns', [
             'id' => $concern->id,
         ]);
+    }
+
+    #[DataProvider('authorizedRoles')]
+    public function test_staff_and_admin_can_transactionally_notify_an_eligible_concern(
+        int $userId,
+    ): void {
+        $this->authenticateAs($userId);
+        $concern = $this->createConcern([
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+        ]);
+
+        $response = $this->postJson(
+            self::BASE_URI."/{$concern->id}/notify-customer",
+        )
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('already_notified', false)
+            ->assertJsonPath('concern.status', GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER)
+            ->assertJsonPath(
+                'concern.customer_response_status',
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            )
+            ->assertJsonPath('concern.customer_visible_fields_editable', false)
+            ->assertJsonPath(
+                'notification.type',
+                CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN,
+            )
+            ->assertJsonPath('notification.pet_id', 1000)
+            ->assertJsonPath('notification.pet_name', 'Zeus');
+
+        $this->assertNotNull($response->json('concern.customer_notified_at'));
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 4,
+            'booking_id' => 10,
+            'grooming_medical_concern_id' => $concern->id,
+            'type' => CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN,
+            'is_read' => 0,
+        ]);
+        $this->assertDatabaseHas('grooming_medical_concerns', [
+            'id' => $concern->id,
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now()->toDateTimeString(),
+        ]);
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
+    }
+
+    public function test_notification_without_a_required_response_keeps_open_state(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern([
+            'acknowledgment_required' => false,
+            'consent_required' => false,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED,
+        ]);
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/notify-customer")
+            ->assertOk()
+            ->assertJsonPath('concern.status', GroomingMedicalConcern::STATUS_OPEN)
+            ->assertJsonPath(
+                'concern.customer_response_status',
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED,
+            );
+
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
+    }
+
+    public function test_notification_rejects_blank_terminal_unlinked_and_inconsistent_concerns_without_side_effects(): void
+    {
+        $this->authenticateAs(2);
+        $initialNotificationCount = CustomerNotification::query()->count();
+
+        $blank = $this->createConcern([
+            'category' => 'blank message',
+            'customer_message' => '   ',
+        ]);
+        $this->postJson(self::BASE_URI."/{$blank->id}/notify-customer")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('customer_message');
+
+        $terminal = $this->createConcern([
+            'category' => 'terminal',
+            'status' => GroomingMedicalConcern::STATUS_RESOLVED,
+        ]);
+        $this->postJson(self::BASE_URI."/{$terminal->id}/notify-customer")
+            ->assertConflict();
+
+        $inconsistent = $this->createConcern([
+            'category' => 'inconsistent',
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED,
+        ]);
+        $this->postJson(self::BASE_URI."/{$inconsistent->id}/notify-customer")
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'The concern requirement flags and customer-response status are inconsistent.',
+            );
+
+        $unlinked = $this->createConcern([
+            'category' => 'guest walk-in',
+        ]);
+        DB::table('pets')->where('pet_id', 1000)->update(['user_id' => null]);
+        $this->postJson(self::BASE_URI."/{$unlinked->id}/notify-customer")
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'No linked customer account.',
+            ]);
+
+        $this->assertSame(
+            $initialNotificationCount,
+            CustomerNotification::query()->count(),
+        );
+        foreach ([$blank, $terminal, $inconsistent, $unlinked] as $concern) {
+            $this->assertNull($concern->fresh()->customer_notified_at);
+        }
+    }
+
+    public function test_repeated_notification_is_idempotent_and_keeps_original_owner_and_timestamp(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern();
+        $uri = self::BASE_URI."/{$concern->id}/notify-customer";
+
+        $first = $this->postJson($uri)
+            ->assertOk()
+            ->assertJsonPath('already_notified', false);
+        $notifiedAt = $first->json('concern.customer_notified_at');
+        $notificationId = $first->json('notification.id');
+
+        DB::table('pets')->where('pet_id', 1000)->update(['user_id' => 3]);
+        Carbon::setTestNow(now()->addMinutes(10));
+
+        $this->postJson($uri)
+            ->assertOk()
+            ->assertJsonPath('already_notified', true)
+            ->assertJsonPath('notification.id', $notificationId)
+            ->assertJsonPath('concern.customer_notified_at', $notifiedAt);
+
+        $this->assertSame(
+            1,
+            CustomerNotification::query()
+                ->where('grooming_medical_concern_id', $concern->id)
+                ->count(),
+        );
+        $this->assertDatabaseHas('customer_notifications', [
+            'id' => $notificationId,
+            'user_id' => 4,
+        ]);
+    }
+
+    public function test_notification_insert_failure_rolls_back_concern_release(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern();
+        $initialNotificationCount = CustomerNotification::query()->count();
+
+        DB::statement(
+            "CREATE TRIGGER reject_concern_notification
+             BEFORE INSERT ON customer_notifications
+             WHEN NEW.type = 'grooming_medical_concern'
+             BEGIN
+                 SELECT RAISE(ABORT, 'simulated notification failure');
+             END",
+        );
+
+        try {
+            $this->postJson(
+                self::BASE_URI."/{$concern->id}/notify-customer",
+            )->assertServerError();
+        } finally {
+            DB::statement('DROP TRIGGER IF EXISTS reject_concern_notification');
+        }
+
+        $concern->refresh();
+        $this->assertNull($concern->customer_notified_at);
+        $this->assertSame(GroomingMedicalConcern::STATUS_OPEN, $concern->status);
+        $this->assertSame(
+            $initialNotificationCount,
+            CustomerNotification::query()->count(),
+        );
+    }
+
+    public function test_concern_notification_linkage_is_customer_safe_and_read_is_not_a_response(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern([
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'internal_description' => 'PRIVATE STAFF OBSERVATION',
+            'internal_resolution_notes' => 'PRIVATE STAFF RESOLUTION',
+            'report_token' => '10000000-0000-4000-8000-000000000013',
+        ]);
+
+        $notificationId = $this->postJson(
+            self::BASE_URI."/{$concern->id}/notify-customer",
+        )
+            ->assertOk()
+            ->json('notification.id');
+
+        $this->authenticateAs(4);
+        $response = $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $notificationId,
+                'type' => CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN,
+                'concern_public_id' => $concern->public_id,
+                'pet_id' => 1000,
+                'pet_name' => 'Zeus',
+                'destination' => "./pet-details.html?pet_id=1000&tab=notifications&concern={$concern->public_id}",
+            ]);
+
+        foreach ([
+            'PRIVATE STAFF OBSERVATION',
+            'PRIVATE STAFF RESOLUTION',
+            '10000000-0000-4000-8000-000000000013',
+            'reported_by_user_id',
+            'booking_pet_id',
+            'statement_text',
+            'signature',
+            'inventory',
+            'payment',
+        ] as $privateValue) {
+            $this->assertStringNotContainsString(
+                $privateValue,
+                $response->getContent(),
+            );
+        }
+
+        $this->patchJson("/api/customer/notifications/{$notificationId}/read")
+            ->assertOk();
+
+        $concern->refresh();
+        $this->assertSame(
+            GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            $concern->customer_response_status,
+        );
+        $this->assertSame(
+            GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            $concern->status,
+        );
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
+
+        $this->authenticateAs(3);
+        $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonMissing([
+                'concern_public_id' => $concern->public_id,
+            ]);
+        $this->patchJson("/api/customer/notifications/{$notificationId}/read")
+            ->assertNotFound();
+    }
+
+    public function test_notification_locks_customer_visible_fields_but_keeps_staff_notes_editable(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern();
+        $uri = self::BASE_URI."/{$concern->id}";
+
+        $this->postJson("{$uri}/notify-customer")
+            ->assertOk()
+            ->assertJsonPath('concern.customer_visible_fields_editable', false)
+            ->assertJsonMissing(['notify_customer']);
+
+        $this->patchJson($uri, [
+            'customer_message' => 'Attempted customer-visible rewrite.',
+        ])->assertConflict();
+
+        $this->patchJson($uri, [
+            'internal_description' => 'Internal follow-up after sending.',
+        ])
+            ->assertOk()
+            ->assertJsonPath(
+                'concern.internal_description',
+                'Internal follow-up after sending.',
+            )
+            ->assertJsonPath('concern.customer_visible_fields_editable', false);
     }
 
     public function test_nested_scoping_is_generic_and_multi_pet_histories_never_mix(): void
@@ -1080,6 +1362,7 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'created_at',
             'updated_at',
             'customer_visible_fields_editable',
+            'customer_account_linked',
             'staff_internal_fields_editable',
             'available_staff_actions',
         ];

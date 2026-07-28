@@ -39,6 +39,15 @@ function emptyGroomingConcernTerminalDialog() {
   };
 }
 
+function emptyGroomingConcernNotifyDialog() {
+  return {
+    open: false,
+    concern: null,
+    busy: false,
+    error: "",
+  };
+}
+
 function adminGroomingConcernState() {
   return {
     medicalConcernCache: {},
@@ -64,6 +73,7 @@ function adminGroomingConcernState() {
     medicalConcernFormErrors: {},
     medicalConcernFormErrorSummary: "",
     medicalConcernTerminal: emptyGroomingConcernTerminalDialog(),
+    medicalConcernNotify: emptyGroomingConcernNotifyDialog(),
     expandedMedicalConcernIds: {},
     medicalConcernDetailLoadingIds: {},
     medicalConcernToast: {
@@ -292,6 +302,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
+      this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
       this.refreshIcons?.();
       this.$nextTick?.(() => this.$refs.medicalConcernDialog?.focus());
       await this.loadMedicalConcerns(booking, pet);
@@ -314,6 +325,7 @@ function adminGroomingConcernState() {
       if (
         this.medicalConcernFormModal.saving
         || this.medicalConcernTerminal.busy
+        || this.medicalConcernNotify.busy
       ) {
         return;
       }
@@ -324,6 +336,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
+      this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
     },
 
     openCreateMedicalConcern() {
@@ -569,7 +582,65 @@ function adminGroomingConcernState() {
         && (
           Boolean(concern.customer_visible_fields_editable)
           || Boolean(concern.staff_internal_fields_editable)
+      );
+    },
+
+    openMedicalConcernNotifyDialog(concern) {
+      if (!this.medicalConcernActionAvailable(concern, "notify_customer")) {
+        return;
+      }
+
+      this.medicalConcernNotify = {
+        open: true,
+        concern,
+        busy: false,
+        error: "",
+      };
+      this.refreshIcons?.();
+      this.$nextTick?.(() => this.$refs.medicalConcernNotifyDialog?.focus());
+    },
+
+    closeMedicalConcernNotifyDialog() {
+      if (this.medicalConcernNotify.busy) return;
+      this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
+    },
+
+    async submitMedicalConcernNotification() {
+      if (this.medicalConcernNotify.busy) return;
+
+      const booking = this.medicalConcernModal.booking;
+      const pet = this.medicalConcernModal.pet;
+      const concern = this.medicalConcernNotify.concern;
+      const bookingId = booking?.id;
+      const bookingPetId = this.bookingPetIdentifier(pet);
+      if (!bookingId || !bookingPetId || !concern?.id) return;
+
+      this.medicalConcernNotify.busy = true;
+      this.medicalConcernNotify.error = "";
+
+      try {
+        const response =
+          await API.notifyCustomerAboutAdminBookingPetMedicalConcern(
+            bookingId,
+            bookingPetId,
+            concern.id,
+          );
+
+        this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
+        await this.loadMedicalConcerns(booking, pet);
+        this.showMedicalConcernToast(
+          response.message || "Medical concern sent to the customer.",
         );
+      } catch (error) {
+        this.medicalConcernNotify.error =
+          error.message || "The concern could not be sent to the customer.";
+
+        if (error.status === 404 || error.status === 409 || error.status === 422) {
+          await this.loadMedicalConcerns(booking, pet);
+        }
+      } finally {
+        this.medicalConcernNotify.busy = false;
+      }
     },
 
     async toggleMedicalConcernDetails(concern) {

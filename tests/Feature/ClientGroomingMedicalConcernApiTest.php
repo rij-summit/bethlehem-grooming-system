@@ -346,7 +346,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         }
     }
 
-    public function test_routes_are_read_only_owner_scoped_and_central_helpers_do_not_activate_the_client_ui(): void
+    public function test_routes_are_read_only_owner_scoped_and_central_helpers_power_the_read_only_client_ui(): void
     {
         $routes = collect(Route::getRoutes()->getRoutes());
         $customerConcernRoutes = $routes->filter(
@@ -387,8 +387,11 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
 
         $clientPage = file_get_contents(base_path('pages/client/pet-details.html'));
         $clientComponent = file_get_contents(base_path('scripts/components/pet-details.js'));
-        $this->assertStringNotContainsString('medical-concerns', $clientPage);
-        $this->assertStringNotContainsString('getPetMedicalConcerns', $clientComponent);
+        $this->assertStringContainsString('Medical-Concern Notifications', $clientPage);
+        $this->assertStringContainsString('getPetMedicalConcerns', $clientComponent);
+        $this->assertStringContainsString('getPetMedicalConcern', $clientComponent);
+        $this->assertStringNotContainsString('submitConcernAcknowledgment', $clientComponent);
+        $this->assertStringNotContainsString('submitConcernConsent', $clientComponent);
         $this->assertStringContainsString('data-pet-panel="grooming"', $clientPage);
         $this->assertStringContainsString('data-pet-panel="medical"', $clientPage);
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPage);

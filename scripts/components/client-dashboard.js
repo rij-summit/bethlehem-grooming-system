@@ -239,15 +239,17 @@
       return;
     }
 
-    list.innerHTML = notifications.map((n) => {
+    list.innerHTML = notifications.map((n, index) => {
       const icon = notifIcon(n);
       const message = formatNotificationMessage(n);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
       return `
-        <div class="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-slate-50 ${bg}"
-             data-notif-id="${n.id}">
+        <button type="button"
+             class="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${bg}"
+             data-notif-id="${n.id}"
+             data-notif-index="${index}">
           <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}"></span>
           <div class="min-w-0 flex-1">
             <div class="flex items-start gap-2">
@@ -256,15 +258,25 @@
             </div>
             <p class="mt-1 text-xs text-slate-400">${time}</p>
           </div>
-        </div>`;
+        </button>`;
     }).join("");
 
     // Mark single notification as read on click
     list.querySelectorAll("[data-notif-id]").forEach((el) => {
       el.addEventListener("click", async () => {
         const id = el.dataset.notifId;
+        const notification = notifications[Number(el.dataset.notifIndex)];
         try {
           await API.markCustomerNotificationRead(id);
+
+          if (
+            notification?.type === "grooming_medical_concern"
+            && notification.destination
+          ) {
+            window.location.href = notification.destination;
+            return;
+          }
+
           await loadNotifications();
         } catch { /* silent */ }
       });
@@ -280,6 +292,10 @@
 
     if (type === "grooming_finished") {
       return groomingFinishedIcon(notification);
+    }
+
+    if (type === "grooming_medical_concern") {
+      return "!";
     }
 
     const icons = {

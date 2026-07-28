@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\CustomerNotification;
+use Illuminate\Http\Request;
 
 class CustomerNotificationController extends Controller
 {
@@ -13,7 +13,12 @@ class CustomerNotificationController extends Controller
         $userId = $request->user()->user_id;
 
         $notifications = CustomerNotification::where('user_id', $userId)
-            ->with(['booking.bookingPets.pet', 'booking.timeWindow'])
+            ->with([
+                'booking.bookingPets.pet',
+                'booking.timeWindow',
+                'groomingMedicalConcern:id,public_id,pet_id',
+                'groomingMedicalConcern.pet:pet_id,pet_name,species',
+            ])
             ->orderBy('is_read', 'asc')
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc')
@@ -22,17 +27,28 @@ class CustomerNotificationController extends Controller
             ->map(function ($n) {
                 $petNames = $this->notificationPetNames($n);
                 $petTypes = $this->notificationPetTypes($n, $petNames);
+                $concern = $n->type === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
+                    ? $n->groomingMedicalConcern
+                    : null;
+                $pet = $concern?->pet;
 
                 return [
-                    'id'              => $n->id,
-                    'type'            => $n->type,
-                    'message'         => $this->formatNotificationMessage($n->message),
+                    'id' => $n->id,
+                    'type' => $n->type,
+                    'message' => $this->formatNotificationMessage($n->message),
                     'display_message' => $this->formatCustomerNotificationMessage($n, $petNames),
-                    'pet_names'       => $petNames,
-                    'pet_types'       => $petTypes,
-                    'is_read'         => (bool) $n->is_read,
-                    'created_at'      => $n->created_at?->toDateTimeString(),
-                    'booking_id'      => $n->booking_id,
+                    'pet_names' => $petNames,
+                    'pet_types' => $petTypes,
+                    'is_read' => (bool) $n->is_read,
+                    'created_at' => $n->created_at?->toDateTimeString(),
+                    'booking_id' => $n->booking_id,
+                    'concern_public_id' => $concern?->public_id,
+                    'pet_id' => $pet?->pet_id,
+                    'pet_name' => $pet?->pet_name,
+                    'destination' => $this->concernDestination(
+                        $pet?->pet_id,
+                        $concern?->public_id,
+                    ),
                 ];
             });
 
@@ -52,16 +68,16 @@ class CustomerNotificationController extends Controller
         $pickupPetTypes = $pickupNotif ? $this->notificationPetTypes($pickupNotif, $pickupPetNames) : [];
 
         return response()->json([
-            'success'         => true,
-            'unread_count'    => $unreadCount,
-            'notifications'   => $notifications,
-            'pickup_alert'    => $pickupNotif ? [
-                'id'              => $pickupNotif->id,
-                'message'         => $this->formatNotificationMessage($pickupNotif->message),
+            'success' => true,
+            'unread_count' => $unreadCount,
+            'notifications' => $notifications,
+            'pickup_alert' => $pickupNotif ? [
+                'id' => $pickupNotif->id,
+                'message' => $this->formatNotificationMessage($pickupNotif->message),
                 'display_message' => $this->formatCustomerNotificationMessage($pickupNotif, $pickupPetNames),
-                'pet_names'       => $pickupPetNames,
-                'pet_types'       => $pickupPetTypes,
-                'booking_id'      => $pickupNotif->booking_id,
+                'pet_names' => $pickupPetNames,
+                'pet_types' => $pickupPetTypes,
+                'booking_id' => $pickupNotif->booking_id,
             ] : null,
         ]);
     }
@@ -73,7 +89,7 @@ class CustomerNotificationController extends Controller
             ->where('user_id', $request->user()->user_id)
             ->first();
 
-        if (!$notif) {
+        if (! $notif) {
             return response()->json(['success' => false, 'message' => 'Not found.'], 404);
         }
 
@@ -94,14 +110,24 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetNames(CustomerNotification $notification): array
     {
+        if (
+            $notification->type
+            === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
+        ) {
+            return collect([$notification->groomingMedicalConcern?->pet?->pet_name])
+                ->filter()
+                ->values()
+                ->all();
+        }
+
         $petNames = ($notification->booking?->bookingPets ?? collect())
-            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
+            ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
             ->unique()
             ->values()
             ->all();
 
-        if (!in_array($notification->type, ['grooming_started', 'grooming_finished'], true)) {
+        if (! in_array($notification->type, ['grooming_started', 'grooming_finished'], true)) {
             return $petNames;
         }
 
@@ -112,8 +138,19 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetTypes(CustomerNotification $notification, array $petNames): array
     {
+        if (
+            $notification->type
+            === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
+        ) {
+            return collect([$notification->groomingMedicalConcern?->pet?->species])
+                ->map(fn ($type) => mb_strtolower(trim((string) $type)))
+                ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
+                ->values()
+                ->all();
+        }
+
         $matchedNames = array_flip(array_map(
-            fn($name) => mb_strtolower(trim((string) $name)),
+            fn ($name) => mb_strtolower(trim((string) $name)),
             $petNames,
         ));
 
@@ -127,8 +164,8 @@ class CustomerNotificationController extends Controller
 
                 return $name !== '' && isset($matchedNames[$name]);
             })
-            ->map(fn($bookingPet) => mb_strtolower(trim((string) $bookingPet->pet?->species)))
-            ->filter(fn($type) => in_array($type, ['dog', 'cat'], true))
+            ->map(fn ($bookingPet) => mb_strtolower(trim((string) $bookingPet->pet?->species)))
+            ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
             ->unique()
             ->values()
             ->all();
@@ -150,18 +187,18 @@ class CustomerNotificationController extends Controller
         $timeLabel = $notification->booking?->timeWindow?->window_label;
 
         return match ($notification->type) {
-            'grooming_started' => "Great news! {$subject} " . ($isPlural ? 'have' : 'has') . " Started Grooming. We'll let you know as soon as they're ready for pickup!",
-            'grooming_finished' => "{$subject} " . ($isPlural ? 'are' : 'is') . " Finished with grooming. We'll keep you updated on the rest of the appointment.",
-            'ready_for_pickup' => 'Your ' . ($isPlural ? 'pets are' : 'pet is') . ' now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
-            'pickup_reminder'  => "Reminder: {$subject} " . ($isPlural ? 'are' : 'is') . " still waiting to be picked up at the clinic. Please come at your earliest convenience!",
-            'picked_up'        => "{$subject} " . ($isPlural ? 'have' : 'has') . " been released. Thank you for visiting Bethlehem Animal Clinic!",
-            'reminder_24h'     => $timeLabel
+            'grooming_started' => "Great news! {$subject} ".($isPlural ? 'have' : 'has')." Started Grooming. We'll let you know as soon as they're ready for pickup!",
+            'grooming_finished' => "{$subject} ".($isPlural ? 'are' : 'is')." Finished with grooming. We'll keep you updated on the rest of the appointment.",
+            'ready_for_pickup' => 'Your '.($isPlural ? 'pets are' : 'pet is').' now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
+            'pickup_reminder' => "Reminder: {$subject} ".($isPlural ? 'are' : 'is').' still waiting to be picked up at the clinic. Please come at your earliest convenience!',
+            'picked_up' => "{$subject} ".($isPlural ? 'have' : 'has').' been released. Thank you for visiting Bethlehem Animal Clinic!',
+            'reminder_24h' => $timeLabel
                 ? "Reminder: {$subject}'s grooming appointment is tomorrow at {$timeLabel}. Please don't forget!"
                 : $this->formatNotificationMessage($notification->message),
-            'reminder_3h'      => $timeLabel
+            'reminder_3h' => $timeLabel
                 ? "Heads up! {$subject}'s grooming appointment is in about 3 hours at {$timeLabel}. See you soon!"
                 : $this->formatNotificationMessage($notification->message),
-            default            => $this->formatNotificationMessage($notification->message),
+            default => $this->formatNotificationMessage($notification->message),
         };
     }
 
@@ -176,7 +213,7 @@ class CustomerNotificationController extends Controller
                 return false;
             }
 
-            return preg_match('/(^|[^\pL\pN])' . preg_quote($name, '/') . '($|[^\pL\pN])/iu', $text) === 1;
+            return preg_match('/(^|[^\pL\pN])'.preg_quote($name, '/').'($|[^\pL\pN])/iu', $text) === 1;
         }));
     }
 
@@ -202,7 +239,7 @@ class CustomerNotificationController extends Controller
     private function formatNameList(array $names): string
     {
         $cleanNames = array_values(array_filter(array_map(
-            fn($name) => trim((string) $name),
+            fn ($name) => trim((string) $name),
             $names,
         )));
 
@@ -211,9 +248,24 @@ class CustomerNotificationController extends Controller
         }
 
         if (count($cleanNames) === 2) {
-            return $cleanNames[0] . ' and ' . $cleanNames[1];
+            return $cleanNames[0].' and '.$cleanNames[1];
         }
 
-        return implode(', ', array_slice($cleanNames, 0, -1)) . ', and ' . end($cleanNames);
+        return implode(', ', array_slice($cleanNames, 0, -1)).', and '.end($cleanNames);
+    }
+
+    private function concernDestination(
+        ?int $petId,
+        ?string $publicId,
+    ): ?string {
+        if (! $petId || ! $publicId) {
+            return null;
+        }
+
+        return './pet-details.html?'.http_build_query([
+            'pet_id' => $petId,
+            'tab' => 'notifications',
+            'concern' => $publicId,
+        ]);
     }
 }

@@ -16,12 +16,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const groomingRecords = document.getElementById("petGroomingRecords");
   const medicalRecords = document.getElementById("petMedicalRecords");
   const vaccinationRecords = document.getElementById("petVaccinationRecords");
+  const concernNotifications = document.getElementById("petConcernNotifications");
+  const concernDetail = document.getElementById("petConcernDetail");
   const bookGroomingLink = document.getElementById("bookGroomingLink");
   let medicalLoadState = "idle";
   let vaccinationLoadState = "idle";
+  let concernLoadState = "idle";
+  let requestedConcernHandled = false;
 
-  const petIdParam = new URLSearchParams(window.location.search).get("pet_id");
+  const profileParams = new URLSearchParams(window.location.search);
+  const petIdParam = profileParams.get("pet_id");
   const petId = Number(petIdParam);
+  const requestedTab = profileParams.get("tab");
+  const requestedConcernPublicId = profileParams.get("concern");
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -49,6 +56,19 @@ document.addEventListener("DOMContentLoaded", () => {
       year: "numeric",
       month: "long",
       day: "numeric",
+    });
+  };
+
+  const formatDateTime = (value) => {
+    if (isMissing(value)) return "Not provided.";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     });
   };
 
@@ -106,33 +126,43 @@ document.addEventListener("DOMContentLoaded", () => {
   const setupTabs = () => {
     const tabs = document.querySelectorAll("[data-pet-tab]");
     const panels = document.querySelectorAll("[data-pet-panel]");
+    const validTabs = new Set(
+      Array.from(tabs).map((tab) => tab.dataset.petTab),
+    );
+
+    const activateTab = (selected) => {
+      if (!validTabs.has(selected)) return;
+
+      tabs.forEach((candidate) => {
+        const active = candidate.dataset.petTab === selected;
+        candidate.setAttribute("aria-selected", String(active));
+        candidate.classList.toggle("bg-[#315b7e]", active);
+        candidate.classList.toggle("text-white", active);
+        candidate.classList.toggle("shadow-sm", active);
+        candidate.classList.toggle("text-[#2f4b66]", !active);
+        candidate.classList.toggle("hover:bg-slate-50", !active);
+      });
+
+      panels.forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.petPanel !== selected);
+      });
+
+      if (selected === "medical") {
+        loadMedicalRecords();
+      }
+      if (selected === "vaccinations") {
+        loadVaccinations();
+      }
+      if (selected === "notifications") {
+        loadConcernNotifications();
+      }
+    };
 
     tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        const selected = tab.dataset.petTab;
-
-        tabs.forEach((candidate) => {
-          const active = candidate.dataset.petTab === selected;
-          candidate.setAttribute("aria-selected", String(active));
-          candidate.classList.toggle("bg-[#315b7e]", active);
-          candidate.classList.toggle("text-white", active);
-          candidate.classList.toggle("shadow-sm", active);
-          candidate.classList.toggle("text-[#2f4b66]", !active);
-          candidate.classList.toggle("hover:bg-slate-50", !active);
-        });
-
-        panels.forEach((panel) => {
-          panel.classList.toggle("hidden", panel.dataset.petPanel !== selected);
-        });
-
-        if (selected === "medical") {
-          loadMedicalRecords();
-        }
-        if (selected === "vaccinations") {
-          loadVaccinations();
-        }
-      });
+      tab.addEventListener("click", () => activateTab(tab.dataset.petTab));
     });
+
+    activateTab(validTabs.has(requestedTab) ? requestedTab : "overview");
   };
 
   const loadProfile = async () => {
@@ -595,6 +625,348 @@ document.addEventListener("DOMContentLoaded", () => {
           .querySelector("[data-retry-vaccinations]")
           ?.addEventListener("click", () => loadVaccinations({ retry: true }));
       }
+    }
+
+    renderIcons();
+  };
+
+  const concernSeverityClasses = (severity) => ({
+    low: "border-sky-200 bg-sky-50 text-sky-700",
+    moderate: "border-amber-200 bg-amber-50 text-amber-800",
+    urgent: "border-red-200 bg-red-50 text-red-700",
+  })[severity] || "border-slate-200 bg-slate-50 text-slate-600";
+
+  const concernStatusClasses = (status) => ({
+    open: "border-sky-200 bg-sky-50 text-sky-700",
+    awaiting_customer: "border-amber-200 bg-amber-50 text-amber-800",
+    referred_to_clinic: "border-violet-200 bg-violet-50 text-violet-700",
+    under_clinic_review: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    cancelled: "border-slate-200 bg-slate-100 text-slate-600",
+  })[status] || "border-slate-200 bg-slate-50 text-slate-600";
+
+  const concernActionLabel = (action, apiLabel = null) => apiLabel || ({
+    continue_with_observation: "Continue with observation",
+    pause_grooming: "Pause grooming",
+    stop_grooming: "Stop grooming",
+  })[action] || titleCase(action);
+
+  const requiredConcernAction = (concern) => {
+    if (concern.required_customer_action === "consent") {
+      return {
+        title: "Your decision is required",
+        message: "Consent response controls will be provided in a later step. Contact the clinic if you need immediate guidance.",
+      };
+    }
+    if (concern.required_customer_action === "acknowledgment") {
+      return {
+        title: "Acknowledgment required",
+        message: "Acknowledgment controls will be provided in a later step. Reading this notice does not count as acknowledgment.",
+      };
+    }
+    return null;
+  };
+
+  const concernUrgencyGuidance = (concern) => concern.severity === "urgent"
+    ? `
+      <p class="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+        This concern has urgent workflow priority. It is not a final veterinary diagnosis. Contact the clinic if you need prompt guidance.
+      </p>
+    `
+    : `
+      <p class="mt-3 text-xs leading-5 text-slate-500">
+        Severity describes workflow urgency and is not a final veterinary diagnosis.
+      </p>
+    `;
+
+  const renderConcernSummary = (concern) => {
+    const requiredAction = requiredConcernAction(concern);
+
+    return `
+      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Concern notification</p>
+            <p class="mt-1 text-sm text-slate-500">${escapeHtml(formatDateTime(concern.concern_date))}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernSeverityClasses(concern.severity)}">
+              ${escapeHtml(concern.severity_label || titleCase(concern.severity))}
+            </span>
+            <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernStatusClasses(concern.status)}">
+              ${escapeHtml(concern.status_label || titleCase(concern.status))}
+            </span>
+          </div>
+        </div>
+
+        <p class="mt-4 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
+
+        <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Recommended action</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concernActionLabel(concern.recommended_grooming_action, concern.recommended_grooming_action_label))}</dd>
+            <p class="mt-1 text-xs text-slate-500">A recommendation only; it does not confirm the action was applied.</p>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer response</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concern.customer_response_status_label || titleCase(concern.customer_response_status))}</dd>
+          </div>
+        </dl>
+
+        ${requiredAction ? `
+          <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p class="text-sm font-bold text-amber-900">${escapeHtml(requiredAction.title)}</p>
+            <p class="mt-1 text-sm leading-6 text-amber-800">${escapeHtml(requiredAction.message)}</p>
+          </div>
+        ` : ""}
+
+        ${concernUrgencyGuidance(concern)}
+
+        <button
+          type="button"
+          data-open-concern="${escapeHtml(concern.public_id)}"
+          class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274b69]"
+        >
+          <i data-lucide="eye" class="h-4 w-4"></i>
+          View concern details
+        </button>
+      </article>
+    `;
+  };
+
+  const concernDetailFields = (concern) => [
+    ["Concern date", formatDateTime(concern.concern_date)],
+    ["Customer notified", formatDateTime(concern.customer_notified_at)],
+    ["Severity", concern.severity_label || titleCase(concern.severity)],
+    ["Status", concern.status_label || titleCase(concern.status)],
+    ["Recommended action", concernActionLabel(concern.recommended_grooming_action, concern.recommended_grooming_action_label)],
+    ["Applied action", isMissing(concern.applied_grooming_action)
+      ? "No applied action has been recorded."
+      : concernActionLabel(concern.applied_grooming_action, concern.applied_grooming_action_label)],
+    ["Acknowledgment required", formatBoolean(concern.acknowledgment_required)],
+    ["Consent required", formatBoolean(concern.consent_required)],
+    ["Customer response", concern.customer_response_status_label || titleCase(concern.customer_response_status)],
+    ["Clinic appointment reference", displayValue(concern.clinic_appointment_reference)],
+    ["Resolution time", formatDateTime(concern.resolved_at)],
+  ];
+
+  const renderConcernDetail = (concern) => {
+    const requiredAction = requiredConcernAction(concern);
+
+    concernDetail.innerHTML = `
+      <button
+        type="button"
+        data-close-concern-detail
+        class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#315b7e] hover:bg-slate-50"
+      >
+        <i data-lucide="arrow-left" class="h-4 w-4"></i>
+        Back to notifications
+      </button>
+
+      <article class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        <header class="border-b border-slate-200 bg-white p-4 sm:p-5">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Medical-concern notification</p>
+              <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(concern.pet_name))}</h4>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernSeverityClasses(concern.severity)}">
+                ${escapeHtml(concern.severity_label || titleCase(concern.severity))}
+              </span>
+              <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernStatusClasses(concern.status)}">
+                ${escapeHtml(concern.status_label || titleCase(concern.status))}
+              </span>
+            </div>
+          </div>
+          ${concernUrgencyGuidance(concern)}
+        </header>
+
+        <div class="space-y-5 p-4 sm:p-5">
+          <section>
+            <h5 class="font-bold text-[#2f4b66]">Message from the grooming team</h5>
+            <p class="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
+          </section>
+
+          <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            ${concernDetailFields(concern).map(([label, value]) => `
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                <dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd>
+              </div>
+            `).join("")}
+          </dl>
+
+          <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
+            <h5 class="font-bold text-[#2f4b66]">Recommended and applied actions</h5>
+            <p class="mt-2 text-sm leading-6 text-slate-600">
+              The recommended action is staff guidance. It should not be treated as completed unless an applied action is shown above.
+            </p>
+          </section>
+
+          ${requiredAction ? `
+            <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <h5 class="font-bold text-amber-900">${escapeHtml(requiredAction.title)}</h5>
+              <p class="mt-1 text-sm leading-6 text-amber-800">${escapeHtml(requiredAction.message)}</p>
+            </section>
+          ` : ""}
+
+          ${!isMissing(concern.customer_resolution_summary) ? `
+            <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <h5 class="font-bold text-emerald-900">Customer-safe resolution</h5>
+              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-emerald-800">${escapeHtml(concern.customer_resolution_summary)}</p>
+            </section>
+          ` : ""}
+
+          <p class="text-xs leading-5 text-slate-500">
+            This view is read-only. Opening or reading it does not record acknowledgment or consent.
+          </p>
+        </div>
+      </article>
+    `;
+
+    concernDetail.querySelector("[data-close-concern-detail]")
+      ?.addEventListener("click", closeConcernDetail);
+  };
+
+  const closeConcernDetail = () => {
+    concernDetail?.classList.add("hidden");
+    concernNotifications?.classList.remove("hidden");
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", "notifications");
+    url.searchParams.delete("concern");
+    window.history.replaceState({}, "", url);
+    renderIcons();
+  };
+
+  const openConcernDetail = async (publicId, { updateHistory = true } = {}) => {
+    if (!concernDetail || !concernNotifications || !publicId) return;
+
+    concernNotifications.classList.add("hidden");
+    concernDetail.classList.remove("hidden");
+    concernDetail.innerHTML = `
+      <div class="py-12 text-center" role="status">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-slate-500">Loading concern details...</p>
+      </div>
+    `;
+    renderIcons();
+
+    try {
+      const response = await API.getPetMedicalConcern(petId, publicId);
+      renderConcernDetail(response.concern || {});
+
+      if (updateHistory) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", "notifications");
+        url.searchParams.set("concern", publicId);
+        window.history.pushState({}, "", url);
+      }
+    } catch (error) {
+      const notFound = error?.status === 404;
+      concernDetail.innerHTML = `
+        <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
+          <i data-lucide="${notFound ? "file-question" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
+          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Medical concern not found" : "Concern details could not be loaded"}</h4>
+          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This concern does not exist or is not available for this pet." : escapeHtml(error?.message || "Please try again later.")}</p>
+          <div class="mt-4 flex flex-wrap justify-center gap-2">
+            <button type="button" data-close-concern-detail class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back</button>
+            ${notFound ? "" : `
+              <button type="button" data-retry-concern-detail class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274b69]">
+                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                Retry
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+      concernDetail.querySelector("[data-close-concern-detail]")
+        ?.addEventListener("click", closeConcernDetail);
+      concernDetail.querySelector("[data-retry-concern-detail]")
+        ?.addEventListener("click", () => openConcernDetail(publicId, { updateHistory: false }));
+    }
+
+    renderIcons();
+  };
+
+  const attachConcernSummaryActions = () => {
+    concernNotifications
+      ?.querySelectorAll("[data-open-concern]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          openConcernDetail(button.dataset.openConcern);
+        });
+      });
+  };
+
+  const loadConcernNotifications = async ({ retry = false } = {}) => {
+    if (
+      !concernNotifications
+      || concernLoadState === "loading"
+      || (!retry && concernLoadState === "loaded")
+    ) {
+      return;
+    }
+
+    concernLoadState = "loading";
+    concernDetail?.classList.add("hidden");
+    concernNotifications.classList.remove("hidden");
+    concernNotifications.innerHTML = `
+      <div class="py-12 text-center" role="status">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-slate-500">Loading medical-concern notifications...</p>
+      </div>
+    `;
+    renderIcons();
+
+    try {
+      const response = await API.getPetMedicalConcerns(petId);
+      const concerns = Array.isArray(response.concerns) ? response.concerns : [];
+
+      if (!concerns.length) {
+        concernNotifications.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+            <i data-lucide="bell-off" class="mx-auto h-8 w-8 text-slate-300"></i>
+            <h4 class="mt-3 font-bold text-slate-700">No medical-concern notifications</h4>
+            <p class="mt-1 text-sm text-slate-500">No medical-concern notifications are available for this pet.</p>
+          </div>
+        `;
+      } else {
+        concernNotifications.innerHTML = `
+          <div class="space-y-4">
+            ${concerns.map(renderConcernSummary).join("")}
+          </div>
+        `;
+        attachConcernSummaryActions();
+      }
+
+      concernLoadState = "loaded";
+
+      if (requestedConcernPublicId && !requestedConcernHandled) {
+        requestedConcernHandled = true;
+        await openConcernDetail(requestedConcernPublicId, {
+          updateHistory: false,
+        });
+      }
+    } catch (error) {
+      concernLoadState = "error";
+      const notFound = error?.status === 404;
+      concernNotifications.innerHTML = `
+        <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
+          <i data-lucide="${notFound ? "shield-alert" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
+          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Pet profile not found" : "Medical-concern notifications could not be loaded"}</h4>
+          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This pet does not exist or is not available for your account." : escapeHtml(error?.message || "Please try again later.")}</p>
+          ${notFound ? "" : `
+            <button type="button" data-retry-concerns class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+              Retry
+            </button>
+          `}
+        </div>
+      `;
+      concernNotifications
+        .querySelector("[data-retry-concerns]")
+        ?.addEventListener("click", () => loadConcernNotifications({ retry: true }));
     }
 
     renderIcons();

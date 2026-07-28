@@ -660,6 +660,19 @@ var API = (() => {
     );
   }
 
+  async function notifyCustomerAboutAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/notify-customer`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function adminCancelBooking(bookingId) {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
@@ -1088,6 +1101,7 @@ var API = (() => {
     updateAdminBookingPetMedicalConcern,
     cancelAdminBookingPetMedicalConcern,
     resolveAdminBookingPetMedicalConcern,
+    notifyCustomerAboutAdminBookingPetMedicalConcern,
     adminCancelBooking,
     // Admin customers
     getCustomers,

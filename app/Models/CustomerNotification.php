@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class CustomerNotification extends Model
 {
+    public const TYPE_GROOMING_MEDICAL_CONCERN = 'grooming_medical_concern';
+
     protected $table = 'customer_notifications';
 
     public $timestamps = false;

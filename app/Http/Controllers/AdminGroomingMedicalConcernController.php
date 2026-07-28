@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\BookingPet;
+use App\Models\CustomerNotification;
 use App\Models\GroomingMedicalConcern;
 use App\Models\Pet;
 use App\Models\User;
@@ -11,6 +12,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -33,7 +35,8 @@ class AdminGroomingMedicalConcernController extends Controller
 
     private const RESPONSE_RELATIONS = [
         'booking:booking_id,booking_reference',
-        'pet:pet_id,pet_name,species',
+        'pet:pet_id,user_id,pet_name,species',
+        'pet.user:user_id,role',
         'actionAppliedBy:user_id,first_name,last_name',
         'clinicAppointment:id,appointment_reference',
     ];
@@ -391,6 +394,132 @@ class AdminGroomingMedicalConcernController extends Controller
         });
     }
 
+    public function notifyCustomer(
+        int $bookingId,
+        int $bookingPetId,
+        int $concernId,
+    ) {
+        $this->findBookingPetContext($bookingId, $bookingPetId);
+
+        return DB::transaction(function () use (
+            $bookingId,
+            $bookingPetId,
+            $concernId,
+        ) {
+            $context = $this->findBookingPetContext(
+                $bookingId,
+                $bookingPetId,
+                lockForUpdate: true,
+            );
+            $concern = $this->findScopedConcern(
+                $context,
+                $concernId,
+                lockForUpdate: true,
+            );
+
+            $existingNotification = CustomerNotification::query()
+                ->where('grooming_medical_concern_id', $concern->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingNotification || $concern->customer_notified_at !== null) {
+                if (! $existingNotification || $concern->customer_notified_at === null) {
+                    return $this->conflict(
+                        'This medical concern has inconsistent notification data and cannot be sent again.',
+                    );
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'This medical concern was already sent to the customer.',
+                    'already_notified' => true,
+                    'notification' => $this->formatNotificationResult(
+                        $existingNotification,
+                        $concern,
+                        $context->pet,
+                    ),
+                    'concern' => $this->formatConcern(
+                        $this->loadResponseContext($concern),
+                    ),
+                ]);
+            }
+
+            if ($this->isTerminal($concern)) {
+                return $this->conflict(
+                    'Resolved or cancelled medical concerns cannot be newly sent to a customer.',
+                );
+            }
+
+            if (trim((string) $concern->customer_message) === '') {
+                throw ValidationException::withMessages([
+                    'customer_message' => [
+                        'A customer-visible message is required before sending.',
+                    ],
+                ]);
+            }
+
+            if (! $this->hasValidNotificationRequirements($concern)) {
+                return $this->conflict(
+                    'The concern requirement flags and customer-response status are inconsistent.',
+                );
+            }
+
+            $customer = User::query()
+                ->whereKey($context->pet->user_id)
+                ->where('role', 'customer')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $customer) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No linked customer account.',
+                ], 422);
+            }
+
+            $notifiedAt = now();
+            $notification = CustomerNotification::create([
+                'user_id' => $customer->user_id,
+                'booking_id' => $concern->booking_id,
+                'grooming_medical_concern_id' => $concern->id,
+                'type' => CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN,
+                'message' => $this->customerNotificationMessage(
+                    $context->pet,
+                    $concern,
+                ),
+                'is_read' => false,
+                'created_at' => $notifiedAt,
+            ]);
+
+            $requiresResponse = $concern->acknowledgment_required
+                || $concern->consent_required;
+
+            $concern->forceFill([
+                'customer_notified_at' => $notifiedAt,
+                'status' => $requiresResponse
+                    ? GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER
+                    : GroomingMedicalConcern::STATUS_OPEN,
+                'customer_response_status' => $requiresResponse
+                    ? GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING
+                    : GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED,
+            ])->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Medical concern sent to the customer.',
+                'already_notified' => false,
+                'notification' => $this->formatNotificationResult(
+                    $notification,
+                    $concern,
+                    $context->pet,
+                ),
+                'concern' => $this->formatConcern(
+                    $this->loadResponseContext($concern),
+                ),
+            ]);
+        });
+    }
+
     public function resolve(
         Request $request,
         int $bookingId,
@@ -625,6 +754,20 @@ class AdminGroomingMedicalConcernController extends Controller
     {
         $terminal = $this->isTerminal($concern);
         $customerVisibleFieldsEditable = $this->customerVisibleFieldsAreEditable($concern);
+        $customerAccountLinked = $this->customerAccountLinked($concern);
+        $availableStaffActions = $terminal
+            ? []
+            : ['update', 'cancel', 'resolve'];
+
+        if (
+            ! $terminal
+            && $concern->customer_notified_at === null
+            && trim((string) $concern->customer_message) !== ''
+            && $customerAccountLinked
+            && $this->hasValidNotificationRequirements($concern)
+        ) {
+            $availableStaffActions[] = 'notify_customer';
+        }
 
         return [
             'id' => $concern->id,
@@ -662,10 +805,75 @@ class AdminGroomingMedicalConcernController extends Controller
             'created_at' => $concern->created_at?->toIso8601String(),
             'updated_at' => $concern->updated_at?->toIso8601String(),
             'customer_visible_fields_editable' => $customerVisibleFieldsEditable,
+            'customer_account_linked' => $customerAccountLinked,
             'staff_internal_fields_editable' => ! $terminal,
-            'available_staff_actions' => $terminal
-                ? []
-                : ['update', 'cancel', 'resolve'],
+            'available_staff_actions' => $availableStaffActions,
+        ];
+    }
+
+    private function customerAccountLinked(
+        GroomingMedicalConcern $concern,
+    ): bool {
+        return $concern->pet?->user?->role === 'customer';
+    }
+
+    private function hasValidNotificationRequirements(
+        GroomingMedicalConcern $concern,
+    ): bool {
+        $validFlagValues = [0, 1, '0', '1', false, true];
+
+        if (
+            ! in_array(
+                $concern->getRawOriginal('acknowledgment_required'),
+                $validFlagValues,
+                true,
+            )
+            || ! in_array(
+                $concern->getRawOriginal('consent_required'),
+                $validFlagValues,
+                true,
+            )
+            || ! GroomingMedicalConcern::isValidCustomerResponseStatus(
+                (string) $concern->customer_response_status,
+            )
+        ) {
+            return false;
+        }
+
+        $requiresResponse = $concern->acknowledgment_required
+            || $concern->consent_required;
+        $expectedStatus = $requiresResponse
+            ? GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING
+            : GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED;
+
+        return $concern->customer_response_status === $expectedStatus;
+    }
+
+    private function customerNotificationMessage(
+        Pet $pet,
+        GroomingMedicalConcern $concern,
+    ): string {
+        return sprintf(
+            'Medical concern for %s: %s',
+            $pet->pet_name,
+            Str::limit(trim((string) $concern->customer_message), 180),
+        );
+    }
+
+    private function formatNotificationResult(
+        CustomerNotification $notification,
+        GroomingMedicalConcern $concern,
+        Pet $pet,
+    ): array {
+        return [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'message' => $notification->message,
+            'is_read' => (bool) $notification->is_read,
+            'created_at' => $notification->created_at?->toIso8601String(),
+            'concern_public_id' => $concern->public_id,
+            'pet_id' => $pet->pet_id,
+            'pet_name' => $pet->pet_name,
         ];
     }
 

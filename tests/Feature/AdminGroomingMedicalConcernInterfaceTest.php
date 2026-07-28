@@ -33,7 +33,7 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->customStyles = file_get_contents(base_path('css/custom.css'));
     }
 
-    public function test_central_api_layer_exposes_all_six_booking_pet_concern_operations(): void
+    public function test_central_api_layer_exposes_all_seven_booking_pet_concern_operations(): void
     {
         foreach ([
             'getAdminBookingPetMedicalConcerns',
@@ -42,6 +42,7 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
             'updateAdminBookingPetMedicalConcern',
             'cancelAdminBookingPetMedicalConcern',
             'resolveAdminBookingPetMedicalConcern',
+            'notifyCustomerAboutAdminBookingPetMedicalConcern',
         ] as $helper) {
             $this->assertStringContainsString("async function {$helper}", $this->apiLayer);
             $this->assertMatchesRegularExpression(
@@ -56,6 +57,7 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         );
         $this->assertStringContainsString('/cancel`', $this->apiLayer);
         $this->assertStringContainsString('/resolve`', $this->apiLayer);
+        $this->assertStringContainsString('/notify-customer`', $this->apiLayer);
         $this->assertStringNotContainsString('fetch(', $this->concernComponent);
     }
 
@@ -267,6 +269,44 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         );
     }
 
+    public function test_send_to_customer_requires_confirmation_and_refreshes_locked_history(): void
+    {
+        foreach ([
+            'Send to Customer',
+            'After sending, customer-visible details can no longer be edited normally.',
+            'Customer-visible message',
+            'Acknowledgment required',
+            'Consent required',
+            'No linked customer account',
+            'Customer notified',
+            'Locked after notification or response',
+        ] as $content) {
+            $this->assertStringContainsString($content, $this->appointmentsPage);
+        }
+
+        foreach ([
+            'openMedicalConcernNotifyDialog(concern)',
+            'submitMedicalConcernNotification()',
+            'API.notifyCustomerAboutAdminBookingPetMedicalConcern(',
+            'await this.loadMedicalConcerns(booking, pet);',
+            'medicalConcernActionAvailable(concern, "notify_customer")',
+        ] as $behavior) {
+            $this->assertStringContainsString(
+                $behavior,
+                $this->appointmentsPage.$this->concernComponent,
+            );
+        }
+
+        $this->assertStringContainsString(
+            '.admin-medical-concern-send',
+            $this->customStyles,
+        );
+        $this->assertStringNotContainsString(
+            'resend',
+            strtolower($this->appointmentsPage.$this->concernComponent),
+        );
+    }
+
     public function test_interface_is_responsive_and_existing_grooming_and_customer_controls_remain(): void
     {
         $this->assertStringContainsString(
@@ -305,7 +345,7 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPetPage);
     }
 
-    public function test_concern_component_does_not_call_grooming_payment_capacity_or_notification_mutations(): void
+    public function test_concern_component_does_not_call_unrelated_grooming_payment_capacity_or_notification_mutations(): void
     {
         foreach ([
             'adminStartPetGrooming',
