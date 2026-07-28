@@ -33,7 +33,7 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->customStyles = file_get_contents(base_path('css/custom.css'));
     }
 
-    public function test_central_api_layer_exposes_all_seven_booking_pet_concern_operations(): void
+    public function test_central_api_layer_exposes_all_nine_booking_pet_concern_operations(): void
     {
         foreach ([
             'getAdminBookingPetMedicalConcerns',
@@ -43,6 +43,8 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
             'cancelAdminBookingPetMedicalConcern',
             'resolveAdminBookingPetMedicalConcern',
             'notifyCustomerAboutAdminBookingPetMedicalConcern',
+            'applyAdminBookingPetMedicalConcernAction',
+            'resumeAdminBookingPetGrooming',
         ] as $helper) {
             $this->assertStringContainsString("async function {$helper}", $this->apiLayer);
             $this->assertMatchesRegularExpression(
@@ -58,6 +60,8 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->assertStringContainsString('/cancel`', $this->apiLayer);
         $this->assertStringContainsString('/resolve`', $this->apiLayer);
         $this->assertStringContainsString('/notify-customer`', $this->apiLayer);
+        $this->assertStringContainsString('/apply-recommended-action`', $this->apiLayer);
+        $this->assertStringContainsString('/resume-grooming`', $this->apiLayer);
         $this->assertStringNotContainsString('fetch(', $this->concernComponent);
     }
 
@@ -304,6 +308,55 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->assertStringNotContainsString(
             'resend',
             strtolower($this->appointmentsPage.$this->concernComponent),
+        );
+    }
+
+    public function test_operational_action_interface_uses_server_availability_and_explicit_safety_override(): void
+    {
+        foreach ([
+            "medicalConcernActionAvailable(concern, 'apply_recommended_action')",
+            "medicalConcernActionAvailable(concern, 'resume_grooming')",
+            "openMedicalConcernActionDialog('apply', concern)",
+            "openMedicalConcernActionDialog('resume', concern)",
+            'API.applyAdminBookingPetMedicalConcernAction(',
+            'API.resumeAdminBookingPetGrooming(',
+            'safety_override_reason',
+            'A safety override reason is required.',
+            'This does not create customer consent',
+            'Payment review required',
+            'Current grooming state',
+            'Applied action',
+            'recommendedActionEditable: Boolean(concern.recommended_action_editable)',
+        ] as $behavior) {
+            $this->assertStringContainsString(
+                $behavior,
+                $this->appointmentsPage.$this->concernComponent,
+            );
+        }
+
+        foreach ([
+            'The pet will remain in clinic holding but will no longer count as actively being groomed.',
+            'It will not be marked normally finished, and payment still requires staff review.',
+            'It does not start or resume grooming automatically.',
+            'The pet will return to In progress with its original start time preserved.',
+        ] as $wording) {
+            $this->assertStringContainsString(
+                $wording,
+                $this->appointmentsPage.$this->concernComponent,
+            );
+        }
+
+        $this->assertStringContainsString(
+            ':disabled="!medicalConcernFormModal.internalNotesEditable"',
+            $this->appointmentsPage,
+        );
+        $this->assertStringContainsString(
+            ':disabled="!medicalConcernFormModal.recommendedActionEditable"',
+            $this->appointmentsPage,
+        );
+        $this->assertStringContainsString(
+            'petGroomingState(pet) === "in_progress"',
+            $this->dashboardComponent,
         );
     }
 

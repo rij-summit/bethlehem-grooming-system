@@ -46,6 +46,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
         ['PATCH', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/apply-recommended-action'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve'],
         ['POST', 'api/admin/bookings/{id}/pay'],
@@ -172,6 +174,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('groomer_id')->nullable();
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
+            $table->string('grooming_state', 20)->default('not_started');
             $table->unique(['pet_queue_date', 'pet_queue_number']);
         });
 

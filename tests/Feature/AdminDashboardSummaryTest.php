@@ -76,6 +76,9 @@ class AdminDashboardSummaryTest extends TestCase
             $table->text('special_instructions')->nullable();
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
+            $table->string('grooming_state', 20)->default(
+                BookingPet::GROOMING_STATE_NOT_STARTED,
+            );
             $table->unique(['pet_queue_date', 'pet_queue_number']);
         });
 
@@ -225,7 +228,7 @@ class AdminDashboardSummaryTest extends TestCase
             $booking->setRelation('payments', collect());
             $booking->setRelation('bookingPets', collect($species)->map(function ($type, $index) {
                 $pet = new Pet([
-                    'pet_name' => 'Pet ' . ($index + 1),
+                    'pet_name' => 'Pet '.($index + 1),
                     'species' => $type,
                 ]);
                 $bookingPet = new BookingPet;
@@ -432,7 +435,7 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertSame(1, DB::table('customer_notifications')->count());
 
         $request = Request::create('/api/customer/notifications', 'GET');
-        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+        $request->setUserResolver(fn () => (object) ['user_id' => 1]);
 
         $payload = (new CustomerNotificationController)->index($request)->getData(true);
         $notification = $payload['notifications'][0];
@@ -478,6 +481,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 1,
                 'grooming_start_time' => '2026-06-24 10:00:00',
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 2,
@@ -485,6 +489,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 2,
                 'grooming_start_time' => '2026-06-24 10:05:00',
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 3,
@@ -492,6 +497,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 3,
                 'grooming_start_time' => '2026-06-24 10:10:00',
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
         ]);
 
@@ -501,7 +507,7 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertSame('grooming_finished', DB::table('customer_notifications')->value('type'));
 
         $request = Request::create('/api/customer/notifications', 'GET');
-        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+        $request->setUserResolver(fn () => (object) ['user_id' => 1]);
 
         $payload = (new CustomerNotificationController)->index($request)->getData(true);
         $notification = $payload['notifications'][0];
@@ -549,6 +555,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 1,
                 'grooming_start_time' => '2026-06-24 10:00:00',
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 2,
@@ -556,6 +563,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 2,
                 'grooming_start_time' => '2026-06-24 10:05:00',
                 'grooming_end_time' => '2026-06-24 11:00:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
             ],
             [
                 'booking_pet_id' => 3,
@@ -563,6 +571,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 3,
                 'grooming_start_time' => '2026-06-24 10:10:00',
                 'grooming_end_time' => '2026-06-24 11:05:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
             ],
         ]);
 
@@ -572,7 +581,7 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertSame('ready_for_pickup', DB::table('customer_notifications')->value('type'));
 
         $request = Request::create('/api/customer/notifications', 'GET');
-        $request->setUserResolver(fn() => (object) ['user_id' => 1]);
+        $request->setUserResolver(fn () => (object) ['user_id' => 1]);
 
         $payload = (new CustomerNotificationController)->index($request)->getData(true);
         $notification = $payload['notifications'][0];
@@ -705,12 +714,14 @@ class AdminDashboardSummaryTest extends TestCase
                 'booking_id' => 1,
                 'pet_id' => 1,
                 'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 2,
                 'booking_id' => 1,
                 'pet_id' => 2,
                 'grooming_start_time' => '2026-06-24 10:05:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
         ]);
 
@@ -757,12 +768,14 @@ class AdminDashboardSummaryTest extends TestCase
                 'booking_id' => 1,
                 'pet_id' => 1,
                 'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 2,
                 'booking_id' => 1,
                 'pet_id' => 2,
                 'grooming_start_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
             ],
         ]);
 
@@ -809,6 +822,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 1,
                 'grooming_start_time' => '2026-06-24 10:00:00',
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
             ],
             [
                 'booking_pet_id' => 2,
@@ -816,6 +830,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => 2,
                 'grooming_start_time' => null,
                 'grooming_end_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
             ],
         ]);
 
@@ -846,5 +861,78 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertTrue($finalFinish->getData(true)['all_pets_finished']);
         $this->assertSame('released', $finalFinish->getData(true)['booking_status']);
         $this->assertSame('released', DB::table('bookings')->where('booking_id', 1)->value('status'));
+    }
+
+    public function test_paused_and_stopped_pets_are_not_active_groomers_and_cannot_start_or_finish(): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'STATE-GUARDS',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => 4,
+            'status' => 'checked_in',
+            'dropped_off_at' => '2026-06-24 09:00:00',
+        ]);
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'pet_name' => 'Active', 'species' => 'dog'],
+            ['pet_id' => 2, 'pet_name' => 'Paused', 'species' => 'dog'],
+            ['pet_id' => 3, 'pet_name' => 'Stopped', 'species' => 'cat'],
+            ['pet_id' => 4, 'pet_name' => 'Waiting', 'species' => 'cat'],
+        ]);
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 1,
+                'booking_id' => 1,
+                'pet_id' => 1,
+                'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+            ],
+            [
+                'booking_pet_id' => 2,
+                'booking_id' => 1,
+                'pet_id' => 2,
+                'grooming_start_time' => '2026-06-24 10:05:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+            ],
+            [
+                'booking_pet_id' => 3,
+                'booking_id' => 1,
+                'pet_id' => 3,
+                'grooming_start_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            ],
+            [
+                'booking_pet_id' => 4,
+                'booking_id' => 1,
+                'pet_id' => 4,
+                'grooming_start_time' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+            ],
+        ]);
+
+        $controller = new AdminBookingController;
+        $this->assertSame(422, $controller->startPetGrooming(1, 2)->getStatusCode());
+        $this->assertSame(422, $controller->startPetGrooming(1, 3)->getStatusCode());
+
+        DB::table('bookings')->where('booking_id', 1)->update(['status' => 'in_progress']);
+        $this->assertSame(422, $controller->markPetDone(1, 2)->getStatusCode());
+        $this->assertSame(422, $controller->markPetDone(1, 3)->getStatusCode());
+        $this->assertSame(422, $controller->markDone(1)->getStatusCode());
+
+        $dashboard = $controller->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+        $this->assertSame(1, $dashboard['groomerCapacity']['active_pets']);
+        $this->assertSame(4, $dashboard['capacity']['current']);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 2,
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+            'grooming_end_time' => null,
+        ]);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 3,
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
     }
 }

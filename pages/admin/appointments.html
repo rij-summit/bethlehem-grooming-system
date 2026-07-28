@@ -1088,6 +1088,13 @@
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services">
+                              Grooming state:
+                              <strong x-text="petGroomingStateLabel(pet)"></strong>
+                              <span x-show="petGroomingState(pet) === 'stopped'">
+                                &middot; Payment review required
+                              </span>
+                            </p>
                             <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
                               <button
                                 type="button"
@@ -1127,17 +1134,17 @@
                             </button>
                             <div
                               class="admin-queued-pet-start-wrap"
-                              :class="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'is-capacity-disabled' : ''"
-                              :title="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'Groomer currently busy' : ''"
+                              :class="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'is-capacity-disabled' : ''"
+                              :title="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'Groomer currently busy' : ''"
                             >
                               <button
                                 type="button"
                                 @click="confirmStartGroomingPet(booking, pet)"
-                                :disabled="isPetGroomingStarted(pet) || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                :disabled="petGroomingState(pet) !== 'not_started' || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
                                 class="admin-queued-pet-start"
-                                :class="isPetGroomingFinished(pet) ? 'is-finished' : (isPetGroomingStarted(pet) || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
+                                :class="petGroomingState(pet) === 'finished' ? 'is-finished' : (petGroomingState(pet) !== 'not_started' || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
                               >
-                                <span x-text="isPetGroomingFinished(pet) ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isPetGroomingStarted(pet) ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'))"></span>
+                                <span x-text="petGroomingState(pet) !== 'not_started' ? petGroomingStateLabel(pet) : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
                               </button>
                             </div>
                             <button
@@ -1373,6 +1380,13 @@
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services">
+                              Grooming state:
+                              <strong x-text="petGroomingStateLabel(pet)"></strong>
+                              <span x-show="petGroomingState(pet) === 'stopped'">
+                                &middot; Payment review required
+                              </span>
+                            </p>
                             <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
                               <button
                                 type="button"
@@ -1386,7 +1400,7 @@
                               </button>
                             </template>
                             <!-- Per-pet elapsed + ETA -->
-                            <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
+                            <p x-show="isPetGroomingInProgress(pet)" class="mt-0.5 text-xs text-[#315b7e] font-medium">
                               <span x-text="getPetElapsed(pet)"></span>
                               <template x-if="getPetEstDone(booking, pet)">
                                 <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
@@ -1417,18 +1431,18 @@
                               <i data-lucide="message-square-warning" class="h-4 w-4" aria-hidden="true"></i>
                               Report Medical Concern
                             </button>
-                            <template x-if="pet.isGroomingStarted">
+                            <template x-if="isPetGroomingInProgress(pet)">
                               <button
                                 type="button"
                                 @click="confirmMarkPetDone(booking, pet)"
-                                :disabled="pet.isGroomingFinished || isActionBusy('markPetDone', booking.id)"
+                                :disabled="isActionBusy('markPetDone', booking.id)"
                                 class="admin-in-progress-pet-finish"
-                                :class="pet.isGroomingFinished ? 'is-finished' : (isActionBusy('markPetDone', booking.id) ? 'is-disabled' : '')"
+                                :class="isActionBusy('markPetDone', booking.id) ? 'is-disabled' : ''"
                               >
-                                <span x-text="pet.isGroomingFinished ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finished')"></span>
+                                <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
                               </button>
                             </template>
-                            <template x-if="!pet.isGroomingStarted">
+                            <template x-if="petGroomingState(pet) === 'not_started'">
                               <div
                                 class="admin-queued-pet-start-wrap"
                                 :class="isGroomerCapacityFull ? 'is-capacity-disabled' : ''"
@@ -1755,7 +1769,7 @@
             aria-modal="true"
             aria-labelledby="medical-concern-dialog-title"
             @click.self="closeMedicalConcerns()"
-            @keydown.escape.window="medicalConcernNotify.open ? closeMedicalConcernNotifyDialog() : (medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns())"
+            @keydown.escape.window="medicalConcernActionDialog.open ? closeMedicalConcernActionDialog() : (medicalConcernNotify.open ? closeMedicalConcernNotifyDialog() : (medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns()))"
           >
             <section
               x-ref="medicalConcernDialog"
@@ -1965,10 +1979,19 @@
                           <p><span>Customer notified</span><strong x-text="formatMedicalConcernDateTime(concern.customer_notified_at)"></strong></p>
                           <p><span>Customer-visible fields</span><strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked after notification or response'"></strong></p>
                           <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong></p>
-                          <p><span>Action behavior</span><strong>Advisory only</strong></p>
+                          <p><span>Current grooming state</span><strong x-text="concern.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                          <p><span>Applied action</span><strong x-text="medicalConcernActionLabel(concern.applied_grooming_action)"></strong></p>
+                          <p x-show="concern.action_applied_at"><span>Applied by</span><strong x-text="concern.action_applied_by_name || 'Staff name unavailable'"></strong></p>
+                          <p x-show="concern.action_applied_at"><span>Applied at</span><strong x-text="formatMedicalConcernDateTime(concern.action_applied_at)"></strong></p>
                           <p><span>Created</span><strong x-text="formatMedicalConcernDateTime(concern.created_at)"></strong></p>
                           <p><span>Last updated</span><strong x-text="formatMedicalConcernDateTime(concern.updated_at)"></strong></p>
                         </div>
+
+                        <div
+                          x-show="concern.recommended_action_blocked_reason && !concern.applied_grooming_action"
+                          class="admin-medical-concern-future-note"
+                          x-text="concern.recommended_action_blocked_reason"
+                        ></div>
 
                         <div
                           x-show="concern.acknowledgment_required || concern.consent_required"
@@ -2022,6 +2045,24 @@
                         >
                           <i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>
                           Edit
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'apply_recommended_action')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('apply', concern)"
+                          class="admin-medical-concern-primary"
+                        >
+                          <i data-lucide="play-circle" class="h-4 w-4" aria-hidden="true"></i>
+                          <span x-text="'Apply ' + medicalConcernActionLabel(concern.recommended_grooming_action)"></span>
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'resume_grooming')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('resume', concern)"
+                          class="admin-medical-concern-resolve"
+                        >
+                          <i data-lucide="rotate-cw" class="h-4 w-4" aria-hidden="true"></i>
+                          Resume Grooming
                         </button>
                         <button
                           x-show="medicalConcernActionAvailable(concern, 'resolve')"
@@ -2091,7 +2132,8 @@
                   <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
                   <p>
                     Customer-visible information is locked because it was already sent or answered.
-                    Only internal staff observation and internal resolution notes remain editable.
+                    Internal staff observation remains editable. Action-audit notes are also locked
+                    after an operational action is applied.
                   </p>
                 </div>
 
@@ -2181,7 +2223,7 @@
                       id="medical-concern-recommended-action"
                       required
                       x-model="medicalConcernForm.recommended_grooming_action"
-                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :disabled="!medicalConcernFormModal.recommendedActionEditable"
                       :aria-invalid="Boolean(medicalConcernFieldError('recommended_grooming_action'))"
                       aria-describedby="medical-concern-action-help medical-concern-action-error"
                     >
@@ -2230,6 +2272,7 @@
                       id="medical-concern-internal-resolution-notes"
                       rows="3"
                       x-model="medicalConcernForm.internal_resolution_notes"
+                      :disabled="!medicalConcernFormModal.internalNotesEditable"
                       :aria-invalid="Boolean(medicalConcernFieldError('internal_resolution_notes'))"
                       aria-describedby="medical-concern-internal-resolution-notes-error"
                     ></textarea>
@@ -2336,6 +2379,147 @@
                 >
                   <span x-show="medicalConcernNotify.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
                   <span x-text="medicalConcernNotify.busy ? 'Sending...' : 'Send to Customer'"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <!-- Apply or resume per-pet grooming action -->
+          <div
+            x-show="medicalConcernActionDialog.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-action-title"
+            aria-describedby="medical-concern-action-description"
+            @click.self="closeMedicalConcernActionDialog()"
+          >
+            <section
+              x-ref="medicalConcernActionDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true">
+                <i
+                  :data-lucide="medicalConcernActionDialog.type === 'resume' ? 'rotate-cw' : 'play-circle'"
+                  class="h-6 w-6"
+                ></i>
+              </div>
+              <h3
+                id="medical-concern-action-title"
+                x-text="medicalConcernActionDialog.type === 'resume'
+                  ? 'Resume Grooming'
+                  : 'Apply ' + medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action)"
+              ></h3>
+              <p
+                id="medical-concern-action-description"
+                x-text="medicalConcernActionDialog.type === 'resume'
+                  ? 'The pet will return to In progress with its original start time preserved. This concern will be resolved in the same operation.'
+                  : medicalConcernOperationalEffect(medicalConcernActionDialog.concern)"
+              ></p>
+
+              <div class="admin-medical-concern-detail-grid">
+                <p><span>Pet</span><strong x-text="medicalConcernActionDialog.concern?.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong></p>
+                <p><span>Current state</span><strong x-text="medicalConcernActionDialog.concern?.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action)"></strong></p>
+                <p><span>Customer requirement</span><strong x-text="medicalConcernDisplayValue(medicalConcernActionDialog.concern?.customer_response_requirement, 'None')"></strong></p>
+                <p><span>Customer response</span><strong x-text="medicalConcernResponseLabel(medicalConcernActionDialog.concern?.customer_response_status)"></strong></p>
+              </div>
+
+              <div
+                x-show="medicalConcernActionDialog.type === 'apply' && medicalConcernActionDialog.concern?.safety_override_required"
+                class="admin-medical-concern-terminal-fields"
+              >
+                <p class="admin-medical-concern-future-note">
+                  Safety override required. This does not create customer consent or change the
+                  customer response, which remains pending or declined.
+                </p>
+                <label for="medical-concern-safety-override">
+                  Safety Override Reason <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-safety-override"
+                  rows="3"
+                  maxlength="1000"
+                  required
+                  x-model="medicalConcernActionDialog.safety_override_reason"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.safety_override_reason)"
+                  aria-describedby="medical-concern-safety-override-error"
+                ></textarea>
+                <p
+                  id="medical-concern-safety-override-error"
+                  x-show="medicalConcernActionDialog.errors.safety_override_reason"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.safety_override_reason"
+                ></p>
+              </div>
+
+              <div
+                x-show="medicalConcernActionDialog.type === 'resume'"
+                class="admin-medical-concern-terminal-fields"
+              >
+                <label for="medical-concern-resume-internal">
+                  Internal Resolution Notes <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-resume-internal"
+                  rows="3"
+                  required
+                  x-model="medicalConcernActionDialog.internal_resolution_notes"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.internal_resolution_notes)"
+                ></textarea>
+                <p
+                  x-show="medicalConcernActionDialog.errors.internal_resolution_notes"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.internal_resolution_notes"
+                ></p>
+
+                <label for="medical-concern-resume-customer">
+                  Customer-Safe Resolution Summary <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-resume-customer"
+                  rows="3"
+                  required
+                  x-model="medicalConcernActionDialog.customer_resolution_summary"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.customer_resolution_summary)"
+                ></textarea>
+                <p
+                  x-show="medicalConcernActionDialog.errors.customer_resolution_summary"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.customer_resolution_summary"
+                ></p>
+              </div>
+
+              <p
+                x-show="medicalConcernActionDialog.error"
+                class="admin-medical-concern-terminal-error"
+                role="alert"
+                x-text="medicalConcernActionDialog.error"
+              ></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernActionDialog()"
+                  :disabled="medicalConcernActionDialog.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Keep Current State
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernAction()"
+                  :disabled="medicalConcernActionDialog.busy"
+                  class="admin-medical-concern-primary"
+                >
+                  <span x-show="medicalConcernActionDialog.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernActionDialog.busy
+                    ? 'Saving...'
+                    : (medicalConcernActionDialog.type === 'resume' ? 'Resume Grooming' : 'Apply Action')"
+                  ></span>
                 </button>
               </footer>
             </section>

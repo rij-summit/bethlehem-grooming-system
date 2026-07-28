@@ -28,6 +28,8 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
         ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
         ['PATCH', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/apply-recommended-action'],
+        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel'],
         ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve'],
     ];
@@ -115,6 +117,16 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'show' => ['GET', self::BASE_URI.'/1', []],
             'update' => ['PATCH', self::BASE_URI.'/1', []],
             'notify customer' => ['POST', self::BASE_URI.'/1/notify-customer', []],
+            'apply recommended action' => [
+                'POST',
+                self::BASE_URI.'/1/apply-recommended-action',
+                [],
+            ],
+            'resume grooming' => [
+                'POST',
+                self::BASE_URI.'/1/resume-grooming',
+                [],
+            ],
             'cancel' => ['POST', self::BASE_URI.'/1/cancel', []],
             'resolve' => ['POST', self::BASE_URI.'/1/resolve', []],
         ];
@@ -1010,6 +1022,191 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
         ])->assertConflict();
     }
 
+    public function test_pause_and_resume_are_atomic_per_pet_and_preserve_start_time(): void
+    {
+        $this->authenticateAs(2);
+        DB::table('bookings')->where('booking_id', 10)->update([
+            'status' => 'in_progress',
+        ]);
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+            'grooming_start_time' => '2026-07-24 13:00:00',
+        ]);
+        $concern = $this->createConcern([
+            'recommended_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+        ]);
+        $countsBefore = $this->protectedModuleCounts();
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action")
+            ->assertOk()
+            ->assertJsonPath('safety_override_used', false)
+            ->assertJsonPath('concern.applied_grooming_action', 'pause_grooming')
+            ->assertJsonPath('concern.booking_pet_grooming_state', 'paused')
+            ->assertJsonPath('concern.resume_grooming_available', true);
+
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 100,
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+            'grooming_start_time' => '2026-07-24 13:00:00',
+            'grooming_end_time' => null,
+        ]);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 101,
+            'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+        ]);
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 10,
+            'status' => 'in_progress',
+            'paid' => false,
+        ]);
+        $this->assertSame($countsBefore, $this->protectedModuleCounts());
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action")
+            ->assertConflict();
+        $this->postJson(self::BASE_URI."/{$concern->id}/cancel", [
+            'internal_cancellation_reason' => 'Do not hide the applied pause.',
+        ])->assertConflict();
+        $this->postJson(self::BASE_URI."/{$concern->id}/resolve", [
+            'internal_resolution_notes' => 'Attempted ordinary resolution.',
+            'customer_resolution_summary' => 'Attempted resolution.',
+        ])->assertConflict();
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/resume-grooming", [
+            'internal_resolution_notes' => 'Area checked and safe to continue.',
+            'customer_resolution_summary' => 'Grooming safely resumed.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('concern.status', GroomingMedicalConcern::STATUS_RESOLVED)
+            ->assertJsonPath('concern.booking_pet_grooming_state', 'in_progress')
+            ->assertJsonPath('concern.applied_grooming_action', 'pause_grooming');
+
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 100,
+            'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+            'grooming_start_time' => '2026-07-24 13:00:00',
+            'grooming_end_time' => null,
+        ]);
+        $this->assertDatabaseHas('grooming_medical_concerns', [
+            'id' => $concern->id,
+            'status' => GroomingMedicalConcern::STATUS_RESOLVED,
+            'resolved_by_user_id' => 2,
+            'customer_resolution_summary' => 'Grooming safely resumed.',
+        ]);
+        $this->postJson(self::BASE_URI."/{$concern->id}/resume-grooming", [
+            'internal_resolution_notes' => 'Duplicate.',
+            'customer_resolution_summary' => 'Duplicate.',
+        ])->assertConflict();
+    }
+
+    public function test_safety_override_is_required_audited_and_does_not_fabricate_consent(): void
+    {
+        $this->authenticateAs(1);
+        DB::table('bookings')->where('booking_id', 10)->update([
+            'status' => 'in_progress',
+        ]);
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+            'grooming_start_time' => '2026-07-24 13:15:00',
+        ]);
+        $concern = $this->createConcern([
+            'recommended_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            'consent_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_DECLINED,
+            'internal_resolution_notes' => 'Earlier internal note.',
+        ]);
+        $responsesBefore = DB::table('grooming_medical_concern_responses')->count();
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('safety_override_reason');
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action", [
+            'safety_override_reason' => 'Immediate stop required to protect the pet.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('safety_override_used', true)
+            ->assertJsonPath('concern.booking_pet_grooming_state', 'stopped')
+            ->assertJsonPath(
+                'concern.customer_response_status',
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_DECLINED,
+            );
+
+        $stored = GroomingMedicalConcern::query()->findOrFail($concern->id);
+        $this->assertStringContainsString('Earlier internal note.', $stored->internal_resolution_notes);
+        $this->assertStringContainsString('Safety override', $stored->internal_resolution_notes);
+        $this->assertStringContainsString('Admin User', $stored->internal_resolution_notes);
+        $this->assertStringContainsString(
+            'Immediate stop required to protect the pet.',
+            $stored->internal_resolution_notes,
+        );
+        $this->assertSame(
+            $responsesBefore,
+            DB::table('grooming_medical_concern_responses')->count(),
+        );
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 100,
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_start_time' => '2026-07-24 13:15:00',
+            'grooming_end_time' => null,
+        ]);
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 10,
+            'status' => 'in_progress',
+            'paid' => false,
+        ]);
+
+        $this->patchJson(self::BASE_URI."/{$concern->id}", [
+            'internal_resolution_notes' => 'Overwrite audit.',
+        ])->assertConflict();
+        $this->patchJson(self::BASE_URI."/{$concern->id}", [
+            'recommended_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+        ])->assertConflict();
+        $this->postJson(self::BASE_URI."/{$concern->id}/resume-grooming", [
+            'internal_resolution_notes' => 'Should not resume.',
+            'customer_resolution_summary' => 'Should not resume.',
+        ])->assertConflict();
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/resolve", [
+            'internal_resolution_notes' => 'Stopped workflow handed to staff review.',
+            'customer_resolution_summary' => 'Grooming remains stopped.',
+        ])->assertOk();
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 100,
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
+    }
+
+    public function test_continue_requires_the_configured_response_and_never_changes_grooming_state(): void
+    {
+        $this->authenticateAs(2);
+        $concern = $this->createConcern([
+            'recommended_grooming_action' => GroomingMedicalConcern::ACTION_CONTINUE_WITH_OBSERVATION,
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+        ]);
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action", [
+            'safety_override_reason' => 'Continue cannot use an override.',
+        ])->assertConflict();
+
+        $concern->forceFill([
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_ACKNOWLEDGED,
+        ])->save();
+
+        $this->postJson(self::BASE_URI."/{$concern->id}/apply-recommended-action")
+            ->assertOk()
+            ->assertJsonPath('concern.applied_grooming_action', 'continue_with_observation')
+            ->assertJsonPath('concern.booking_pet_grooming_state', 'not_started');
+
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 100,
+            'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+            'grooming_start_time' => null,
+            'grooming_end_time' => null,
+        ]);
+    }
+
     public function test_concern_lifecycle_has_no_grooming_payment_notification_clinic_or_inventory_side_effects(): void
     {
         $this->authenticateAs(2);
@@ -1353,6 +1550,15 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'action_applied_at',
             'action_applied_by_user_id',
             'action_applied_by_name',
+            'booking_pet_grooming_state',
+            'booking_pet_grooming_state_label',
+            'recommended_action_can_be_applied',
+            'recommended_action_blocked_reason',
+            'safety_override_available',
+            'safety_override_required',
+            'resume_grooming_available',
+            'resume_grooming_blocked_reason',
+            'customer_response_requirement',
             'status',
             'acknowledgment_required',
             'consent_required',
@@ -1369,8 +1575,10 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'created_at',
             'updated_at',
             'customer_visible_fields_editable',
+            'recommended_action_editable',
             'customer_account_linked',
             'staff_internal_fields_editable',
+            'internal_resolution_notes_editable',
             'available_staff_actions',
         ];
     }

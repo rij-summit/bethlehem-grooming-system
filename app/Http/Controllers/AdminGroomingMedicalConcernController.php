@@ -34,8 +34,11 @@ class AdminGroomingMedicalConcernController extends Controller
         'consent_required',
     ];
 
+    private const SAFETY_OVERRIDE_MAX_LENGTH = 1000;
+
     private const RESPONSE_RELATIONS = [
-        'booking:booking_id,booking_reference',
+        'booking:booking_id,booking_reference,status,archived_at',
+        'bookingPet:booking_pet_id,booking_id,pet_id,grooming_state,grooming_start_time,grooming_end_time',
         'pet:pet_id,user_id,pet_name,species',
         'pet.user:user_id,role',
         'actionAppliedBy:user_id,first_name,last_name',
@@ -283,6 +286,24 @@ class AdminGroomingMedicalConcernController extends Controller
                 return $this->conflict('Resolved or cancelled medical concerns cannot be updated.');
             }
 
+            if (
+                $request->exists('internal_resolution_notes')
+                && $concern->applied_grooming_action !== null
+            ) {
+                return $this->conflict(
+                    'Internal action-audit notes cannot be overwritten after a grooming action has been applied.',
+                );
+            }
+
+            if (
+                $request->exists('recommended_grooming_action')
+                && $concern->applied_grooming_action !== null
+            ) {
+                return $this->conflict(
+                    'The recommended grooming action cannot be changed after it has been operationally applied.',
+                );
+            }
+
             $submittedCustomerFields = array_values(array_filter(
                 self::CUSTOMER_VISIBLE_FIELDS,
                 fn (string $field) => $request->exists($field),
@@ -379,12 +400,21 @@ class AdminGroomingMedicalConcernController extends Controller
                 return $this->conflict('This medical concern is already terminal and cannot be cancelled.');
             }
 
+            if ($concern->applied_grooming_action !== null) {
+                return $this->conflict(
+                    'A medical concern cannot be cancelled after an operational grooming action has been applied.',
+                );
+            }
+
             $concern->forceFill([
                 'status' => GroomingMedicalConcern::STATUS_CANCELLED,
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $request->user()->user_id,
                 'resolved_by_name' => $this->formatAuthenticatedUserName($request->user()),
-                'internal_resolution_notes' => $validated['internal_cancellation_reason'],
+                'internal_resolution_notes' => $this->appendInternalAuditEntry(
+                    $concern->internal_resolution_notes,
+                    $validated['internal_cancellation_reason'],
+                ),
                 'customer_resolution_summary' => $validated['customer_cancellation_summary'] ?? null,
             ])->save();
 
@@ -522,6 +552,207 @@ class AdminGroomingMedicalConcernController extends Controller
         });
     }
 
+    public function applyRecommendedAction(
+        Request $request,
+        int $bookingId,
+        int $bookingPetId,
+        int $concernId,
+    ) {
+        $context = $this->findBookingPetContext($bookingId, $bookingPetId);
+        $this->findScopedConcern($context, $concernId);
+
+        $this->trimRequestStrings($request, ['safety_override_reason']);
+        $validated = $request->validate([
+            'safety_override_reason' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:'.self::SAFETY_OVERRIDE_MAX_LENGTH,
+            ],
+            ...$this->serverManagedRules(),
+        ]);
+
+        return DB::transaction(function () use (
+            $request,
+            $bookingId,
+            $bookingPetId,
+            $concernId,
+            $validated,
+        ) {
+            $context = $this->findBookingPetContext(
+                $bookingId,
+                $bookingPetId,
+                lockForUpdate: true,
+            );
+            $concern = $this->findScopedConcern(
+                $context,
+                $concernId,
+                lockForUpdate: true,
+            );
+            $this->setConcernContext($concern, $context);
+
+            $availability = $this->recommendedActionAvailability($concern);
+            if (
+                ! $availability['can_apply']
+                && ! $availability['safety_override_available']
+            ) {
+                return $this->conflict($availability['blocked_reason']);
+            }
+
+            $overrideReason = trim(
+                (string) ($validated['safety_override_reason'] ?? ''),
+            );
+            $usingSafetyOverride = ! $availability['can_apply']
+                && $availability['safety_override_available'];
+
+            if ($usingSafetyOverride && $overrideReason === '') {
+                throw ValidationException::withMessages([
+                    'safety_override_reason' => [
+                        'A safety override reason is required to pause or stop grooming before the required customer response.',
+                    ],
+                ]);
+            }
+
+            if (! $usingSafetyOverride && $overrideReason !== '') {
+                throw ValidationException::withMessages([
+                    'safety_override_reason' => [
+                        'A safety override is not required for this action.',
+                    ],
+                ]);
+            }
+
+            $action = $concern->recommended_grooming_action;
+            $stateUpdates = match ($action) {
+                GroomingMedicalConcern::ACTION_PAUSE_GROOMING => [
+                    'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+                ],
+                GroomingMedicalConcern::ACTION_STOP_GROOMING => [
+                    'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+                ],
+                default => [],
+            };
+
+            if ($stateUpdates !== []) {
+                $context->forceFill($stateUpdates)->save();
+            }
+
+            $appliedAt = now();
+            $staffName = $this->formatAuthenticatedUserName($request->user());
+            $concernUpdates = [
+                'applied_grooming_action' => $action,
+                'action_applied_at' => $appliedAt,
+                'action_applied_by_user_id' => $request->user()->user_id,
+            ];
+
+            if ($usingSafetyOverride) {
+                $concernUpdates['internal_resolution_notes'] =
+                    $this->appendInternalAuditEntry(
+                        $concern->internal_resolution_notes,
+                        sprintf(
+                            '[Safety override | %s | %s | %s] %s',
+                            $appliedAt->toIso8601String(),
+                            $staffName,
+                            $this->groomingActionLabel($action),
+                            $overrideReason,
+                        ),
+                    );
+            }
+
+            $concern->forceFill($concernUpdates)->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => $usingSafetyOverride
+                    ? 'Recommended grooming action applied with a documented safety override.'
+                    : 'Recommended grooming action applied.',
+                'safety_override_used' => $usingSafetyOverride,
+                'concern' => $this->formatConcern(
+                    $this->loadResponseContext($concern),
+                ),
+            ]);
+        });
+    }
+
+    public function resumeGrooming(
+        Request $request,
+        int $bookingId,
+        int $bookingPetId,
+        int $concernId,
+    ) {
+        $context = $this->findBookingPetContext($bookingId, $bookingPetId);
+        $this->findScopedConcern($context, $concernId);
+
+        $this->trimRequestStrings($request, [
+            'internal_resolution_notes',
+            'customer_resolution_summary',
+        ]);
+        $validated = $request->validate([
+            'internal_resolution_notes' => ['required', 'string'],
+            'customer_resolution_summary' => ['required', 'string'],
+            ...$this->serverManagedRules([
+                'internal_resolution_notes',
+                'customer_resolution_summary',
+            ]),
+        ]);
+
+        return DB::transaction(function () use (
+            $request,
+            $bookingId,
+            $bookingPetId,
+            $concernId,
+            $validated,
+        ) {
+            $context = $this->findBookingPetContext(
+                $bookingId,
+                $bookingPetId,
+                lockForUpdate: true,
+            );
+            $concern = $this->findScopedConcern(
+                $context,
+                $concernId,
+                lockForUpdate: true,
+            );
+            $this->setConcernContext($concern, $context);
+
+            $resumeAvailability = $this->resumeAvailability($concern);
+            if (! $resumeAvailability['can_resume']) {
+                return $this->conflict($resumeAvailability['blocked_reason']);
+            }
+
+            $resolvedAt = now();
+            $staffName = $this->formatAuthenticatedUserName($request->user());
+
+            $context->forceFill([
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+            ])->save();
+
+            $concern->forceFill([
+                'status' => GroomingMedicalConcern::STATUS_RESOLVED,
+                'resolved_at' => $resolvedAt,
+                'resolved_by_user_id' => $request->user()->user_id,
+                'resolved_by_name' => $staffName,
+                'internal_resolution_notes' => $this->appendInternalAuditEntry(
+                    $concern->internal_resolution_notes,
+                    sprintf(
+                        '[Resume grooming | %s | %s] %s',
+                        $resolvedAt->toIso8601String(),
+                        $staffName,
+                        $validated['internal_resolution_notes'],
+                    ),
+                ),
+                'customer_resolution_summary' => $validated['customer_resolution_summary'],
+            ])->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Grooming resumed and the medical concern was resolved.',
+                'concern' => $this->formatConcern(
+                    $this->loadResponseContext($concern),
+                ),
+            ]);
+        });
+    }
+
     public function resolve(
         Request $request,
         int $bookingId,
@@ -567,12 +798,26 @@ class AdminGroomingMedicalConcernController extends Controller
                 return $this->conflict('This medical concern is already terminal and cannot be resolved again.');
             }
 
+            if (
+                $concern->applied_grooming_action
+                    === GroomingMedicalConcern::ACTION_PAUSE_GROOMING
+                && $context->grooming_state
+                    === BookingPet::GROOMING_STATE_PAUSED
+            ) {
+                return $this->conflict(
+                    'A concern that is actively pausing grooming must be closed through Resume Grooming.',
+                );
+            }
+
             $concern->forceFill([
                 'status' => GroomingMedicalConcern::STATUS_RESOLVED,
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $request->user()->user_id,
                 'resolved_by_name' => $this->formatAuthenticatedUserName($request->user()),
-                'internal_resolution_notes' => $validated['internal_resolution_notes'],
+                'internal_resolution_notes' => $this->appendInternalAuditEntry(
+                    $concern->internal_resolution_notes,
+                    $validated['internal_resolution_notes'],
+                ),
                 'customer_resolution_summary' => $validated['customer_resolution_summary'],
             ])->save();
 
@@ -742,6 +987,8 @@ class AdminGroomingMedicalConcernController extends Controller
 
     private function formatBookingPetContext(BookingPet $context): array
     {
+        $groomingState = $this->bookingPetGroomingState($context);
+
         return [
             'booking_id' => $context->booking_id,
             'booking_reference' => $context->booking?->booking_reference,
@@ -749,6 +996,8 @@ class AdminGroomingMedicalConcernController extends Controller
             'pet_id' => $context->pet_id,
             'pet_name' => $context->pet?->pet_name,
             'pet_species' => $context->pet?->species,
+            'grooming_state' => $groomingState,
+            'grooming_state_label' => $this->groomingStateLabel($groomingState),
         ];
     }
 
@@ -758,9 +1007,27 @@ class AdminGroomingMedicalConcernController extends Controller
         $customerResponse = $this->safeCustomerResponseSummary($concern);
         $customerVisibleFieldsEditable = $this->customerVisibleFieldsAreEditable($concern);
         $customerAccountLinked = $this->customerAccountLinked($concern);
+        $actionAvailability = $this->recommendedActionAvailability($concern);
+        $resumeAvailability = $this->resumeAvailability($concern);
+        $groomingState = $this->bookingPetGroomingState($concern->bookingPet);
         $availableStaffActions = $terminal
             ? []
-            : ['update', 'cancel', 'resolve'];
+            : ['update'];
+
+        if (! $terminal && $concern->applied_grooming_action === null) {
+            $availableStaffActions[] = 'cancel';
+        }
+
+        if (
+            ! $terminal
+            && ! (
+                $concern->applied_grooming_action
+                    === GroomingMedicalConcern::ACTION_PAUSE_GROOMING
+                && $groomingState === BookingPet::GROOMING_STATE_PAUSED
+            )
+        ) {
+            $availableStaffActions[] = 'resolve';
+        }
 
         if (
             ! $terminal
@@ -770,6 +1037,17 @@ class AdminGroomingMedicalConcernController extends Controller
             && $this->hasValidNotificationRequirements($concern)
         ) {
             $availableStaffActions[] = 'notify_customer';
+        }
+
+        if (
+            $actionAvailability['can_apply']
+            || $actionAvailability['safety_override_available']
+        ) {
+            $availableStaffActions[] = 'apply_recommended_action';
+        }
+
+        if ($resumeAvailability['can_resume']) {
+            $availableStaffActions[] = 'resume_grooming';
         }
 
         return [
@@ -793,6 +1071,16 @@ class AdminGroomingMedicalConcernController extends Controller
             'action_applied_at' => $concern->action_applied_at?->toIso8601String(),
             'action_applied_by_user_id' => $concern->action_applied_by_user_id,
             'action_applied_by_name' => $this->formatUserName($concern->actionAppliedBy),
+            'booking_pet_grooming_state' => $groomingState,
+            'booking_pet_grooming_state_label' => $this->groomingStateLabel($groomingState),
+            'recommended_action_can_be_applied' => $actionAvailability['can_apply'],
+            'recommended_action_blocked_reason' => $actionAvailability['blocked_reason'],
+            'safety_override_available' => $actionAvailability['safety_override_available'],
+            'safety_override_required' => $actionAvailability['safety_override_available']
+                && ! $actionAvailability['can_apply'],
+            'resume_grooming_available' => $resumeAvailability['can_resume'],
+            'resume_grooming_blocked_reason' => $resumeAvailability['blocked_reason'],
+            'customer_response_requirement' => $this->customerResponseRequirement($concern),
             'status' => $concern->status,
             'acknowledgment_required' => $concern->acknowledgment_required,
             'consent_required' => $concern->consent_required,
@@ -809,8 +1097,12 @@ class AdminGroomingMedicalConcernController extends Controller
             'created_at' => $concern->created_at?->toIso8601String(),
             'updated_at' => $concern->updated_at?->toIso8601String(),
             'customer_visible_fields_editable' => $customerVisibleFieldsEditable,
+            'recommended_action_editable' => $customerVisibleFieldsEditable
+                && $concern->applied_grooming_action === null,
             'customer_account_linked' => $customerAccountLinked,
             'staff_internal_fields_editable' => ! $terminal,
+            'internal_resolution_notes_editable' => ! $terminal
+                && $concern->applied_grooming_action === null,
             'available_staff_actions' => $availableStaffActions,
         ];
     }
@@ -886,6 +1178,237 @@ class AdminGroomingMedicalConcernController extends Controller
             : GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED;
 
         return $concern->customer_response_status === $expectedStatus;
+    }
+
+    private function recommendedActionAvailability(
+        GroomingMedicalConcern $concern,
+    ): array {
+        $blocked = fn (string $reason, bool $override = false) => [
+            'can_apply' => false,
+            'blocked_reason' => $reason,
+            'safety_override_available' => $override,
+        ];
+
+        if ($this->isTerminal($concern)) {
+            return $blocked('Resolved or cancelled concerns cannot apply grooming actions.');
+        }
+
+        if ($concern->applied_grooming_action !== null) {
+            return $blocked('The recommended grooming action has already been applied.');
+        }
+
+        $booking = $concern->booking;
+        $bookingPet = $concern->bookingPet;
+        if (! $booking || ! $bookingPet) {
+            return $blocked('The booking-pet grooming context is unavailable.');
+        }
+
+        if (! $this->bookingIsOperationallyActive($booking)) {
+            return $blocked('The booking is no longer active for grooming actions.');
+        }
+
+        $state = $this->bookingPetGroomingState($bookingPet);
+        $action = $concern->recommended_grooming_action;
+        $stateIsCompatible = match ($action) {
+            GroomingMedicalConcern::ACTION_CONTINUE_WITH_OBSERVATION => in_array($state, [
+                BookingPet::GROOMING_STATE_NOT_STARTED,
+                BookingPet::GROOMING_STATE_IN_PROGRESS,
+            ], true),
+            GroomingMedicalConcern::ACTION_PAUSE_GROOMING => $state === BookingPet::GROOMING_STATE_IN_PROGRESS,
+            GroomingMedicalConcern::ACTION_STOP_GROOMING => in_array($state, [
+                BookingPet::GROOMING_STATE_NOT_STARTED,
+                BookingPet::GROOMING_STATE_IN_PROGRESS,
+                BookingPet::GROOMING_STATE_PAUSED,
+            ], true),
+            default => false,
+        };
+
+        if (! $stateIsCompatible || ! $this->groomingTimestampsMatchState($bookingPet, $state)) {
+            return $blocked(sprintf(
+                '%s cannot be applied while the selected pet is %s.',
+                $this->groomingActionLabel((string) $action),
+                strtolower($this->groomingStateLabel($state)),
+            ));
+        }
+
+        if ($this->requiredCustomerResponseIsComplete($concern)) {
+            return [
+                'can_apply' => true,
+                'blocked_reason' => null,
+                'safety_override_available' => false,
+            ];
+        }
+
+        $overrideAvailable = in_array($action, [
+            GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            GroomingMedicalConcern::ACTION_STOP_GROOMING,
+        ], true)
+            && $this->customerResponseRequirement($concern) !== 'none'
+            && in_array($concern->customer_response_status, [
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_DECLINED,
+            ], true);
+
+        $requirement = $this->customerResponseRequirement($concern) === 'consent'
+            ? 'customer approval'
+            : 'customer acknowledgment';
+
+        return $blocked(
+            ucfirst($requirement).' is required before this action can be applied normally.',
+            $overrideAvailable,
+        );
+    }
+
+    private function resumeAvailability(
+        GroomingMedicalConcern $concern,
+    ): array {
+        $blocked = fn (string $reason) => [
+            'can_resume' => false,
+            'blocked_reason' => $reason,
+        ];
+
+        if ($this->isTerminal($concern)) {
+            return $blocked('Resolved or cancelled concerns cannot resume grooming.');
+        }
+
+        if (
+            $concern->applied_grooming_action
+            !== GroomingMedicalConcern::ACTION_PAUSE_GROOMING
+        ) {
+            return $blocked('Resume Grooming is available only after an applied Pause Grooming action.');
+        }
+
+        if (! $concern->booking || ! $this->bookingIsOperationallyActive($concern->booking)) {
+            return $blocked('The booking is no longer active for grooming.');
+        }
+
+        $bookingPet = $concern->bookingPet;
+        $state = $this->bookingPetGroomingState($bookingPet);
+        if (
+            ! $bookingPet
+            || $state !== BookingPet::GROOMING_STATE_PAUSED
+            || ! $this->groomingTimestampsMatchState($bookingPet, $state)
+        ) {
+            return $blocked('Only the paused pet associated with this concern can resume grooming.');
+        }
+
+        if (! $this->requiredCustomerResponseIsComplete($concern)) {
+            return $blocked(
+                $this->customerResponseRequirement($concern) === 'consent'
+                    ? 'Customer approval is required before grooming can resume.'
+                    : 'Customer acknowledgment is required before grooming can resume.',
+            );
+        }
+
+        return [
+            'can_resume' => true,
+            'blocked_reason' => null,
+        ];
+    }
+
+    private function requiredCustomerResponseIsComplete(
+        GroomingMedicalConcern $concern,
+    ): bool {
+        return match ($this->customerResponseRequirement($concern)) {
+            'consent' => $concern->customer_response_status
+                === GroomingMedicalConcern::CUSTOMER_RESPONSE_APPROVED,
+            'acknowledgment' => $concern->customer_response_status
+                === GroomingMedicalConcern::CUSTOMER_RESPONSE_ACKNOWLEDGED,
+            default => true,
+        };
+    }
+
+    private function customerResponseRequirement(
+        GroomingMedicalConcern $concern,
+    ): string {
+        if ($concern->consent_required) {
+            return 'consent';
+        }
+
+        if ($concern->acknowledgment_required) {
+            return 'acknowledgment';
+        }
+
+        return 'none';
+    }
+
+    private function bookingIsOperationallyActive(Booking $booking): bool
+    {
+        return $booking->archived_at === null
+            && in_array(
+                $booking->status,
+                self::ACTIVE_GROOMING_BOOKING_STATUSES,
+                true,
+            );
+    }
+
+    private function groomingTimestampsMatchState(
+        BookingPet $bookingPet,
+        string $state,
+    ): bool {
+        return match ($state) {
+            BookingPet::GROOMING_STATE_NOT_STARTED => $bookingPet->grooming_start_time === null
+                && $bookingPet->grooming_end_time === null,
+            BookingPet::GROOMING_STATE_IN_PROGRESS,
+            BookingPet::GROOMING_STATE_PAUSED => $bookingPet->grooming_start_time !== null
+                && $bookingPet->grooming_end_time === null,
+            BookingPet::GROOMING_STATE_STOPPED => $bookingPet->grooming_end_time === null,
+            BookingPet::GROOMING_STATE_FINISHED => $bookingPet->grooming_start_time !== null
+                && $bookingPet->grooming_end_time !== null,
+            default => false,
+        };
+    }
+
+    private function bookingPetGroomingState(?BookingPet $bookingPet): string
+    {
+        if (! $bookingPet) {
+            return BookingPet::GROOMING_STATE_NOT_STARTED;
+        }
+
+        $state = (string) $bookingPet->grooming_state;
+
+        return BookingPet::isValidGroomingState($state)
+            ? $state
+            : BookingPet::GROOMING_STATE_NOT_STARTED;
+    }
+
+    private function groomingStateLabel(string $state): string
+    {
+        return match ($state) {
+            BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
+            BookingPet::GROOMING_STATE_PAUSED => 'Paused',
+            BookingPet::GROOMING_STATE_STOPPED => 'Stopped',
+            BookingPet::GROOMING_STATE_FINISHED => 'Finished',
+            default => 'Not started',
+        };
+    }
+
+    private function groomingActionLabel(string $action): string
+    {
+        return match ($action) {
+            GroomingMedicalConcern::ACTION_PAUSE_GROOMING => 'Pause grooming',
+            GroomingMedicalConcern::ACTION_STOP_GROOMING => 'Stop grooming',
+            default => 'Continue with observation',
+        };
+    }
+
+    private function appendInternalAuditEntry(
+        ?string $existingNotes,
+        string $entry,
+    ): string {
+        $existing = trim((string) $existingNotes);
+        $entry = trim($entry);
+
+        return $existing === '' ? $entry : "{$existing}\n\n{$entry}";
+    }
+
+    private function setConcernContext(
+        GroomingMedicalConcern $concern,
+        BookingPet $context,
+    ): void {
+        $concern->setRelation('booking', $context->booking);
+        $concern->setRelation('bookingPet', $context);
+        $concern->setRelation('pet', $context->pet);
     }
 
     private function customerNotificationMessage(

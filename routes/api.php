@@ -117,6 +117,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'show']);
         Route::patch('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'update']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer', [AdminGroomingMedicalConcernController::class, 'notifyCustomer']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/apply-recommended-action', [AdminGroomingMedicalConcernController::class, 'applyRecommendedAction']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming', [AdminGroomingMedicalConcernController::class, 'resumeGrooming']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel', [AdminGroomingMedicalConcernController::class, 'cancel']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve', [AdminGroomingMedicalConcernController::class, 'resolve']);
 

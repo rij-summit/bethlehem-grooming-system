@@ -950,6 +950,10 @@ function adminDashboard() {
     },
 
     isPetGroomingFinished(pet) {
+      if (this.petGroomingState(pet) === "finished") {
+        return true;
+      }
+
       if (pet?.isGroomingFinished === true) {
         return true;
       }
@@ -970,6 +974,12 @@ function adminDashboard() {
     },
 
     isPetGroomingStarted(pet) {
+      if (["in_progress", "paused", "stopped", "finished"].includes(
+        this.petGroomingState(pet),
+      )) {
+        return true;
+      }
+
       if (pet?.isGroomingStarted === true) {
         return true;
       }
@@ -991,9 +1001,7 @@ function adminDashboard() {
 
     hasActiveGroomingPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) =>
-        this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
-      );
+      return pets.some((pet) => this.petGroomingState(pet) === "in_progress");
     },
 
     hasStartedGroomingPets(booking) {
@@ -1017,9 +1025,43 @@ function adminDashboard() {
 
     getWaitingGroomingPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.filter((pet) =>
-        !this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
-      );
+      return pets.filter((pet) => this.petGroomingState(pet) === "not_started");
+    },
+
+    petGroomingState(pet) {
+      const explicit = String(
+        pet?.groomingState ?? pet?.grooming_state ?? "",
+      ).trim().toLowerCase();
+      if (["not_started", "in_progress", "paused", "stopped", "finished"].includes(explicit)) {
+        return explicit;
+      }
+
+      if (pet?.isGroomingFinished === true) return "finished";
+      if (pet?.isGroomingStarted === true) return "in_progress";
+
+      const finished = pet?.groomingFinishedAtIso
+        ?? pet?.grooming_finished_at
+        ?? pet?.groomingFinishedAt;
+      if (finished) return "finished";
+
+      const started = pet?.groomingStartedAtIso
+        ?? pet?.grooming_start_time
+        ?? pet?.groomingStartedAt;
+      return started ? "in_progress" : "not_started";
+    },
+
+    petGroomingStateLabel(pet) {
+      return {
+        not_started: "Not started",
+        in_progress: "In progress",
+        paused: "Paused",
+        stopped: "Grooming stopped",
+        finished: "Finished",
+      }[this.petGroomingState(pet)] || "Not started";
+    },
+
+    isPetGroomingInProgress(pet) {
+      return this.petGroomingState(pet) === "in_progress";
     },
 
     hasEarlierQueuedUnfinishedPets(booking) {

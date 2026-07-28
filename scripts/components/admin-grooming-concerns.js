@@ -48,6 +48,20 @@ function emptyGroomingConcernNotifyDialog() {
   };
 }
 
+function emptyGroomingConcernActionDialog() {
+  return {
+    open: false,
+    type: "",
+    concern: null,
+    safety_override_reason: "",
+    internal_resolution_notes: "",
+    customer_resolution_summary: "",
+    busy: false,
+    errors: {},
+    error: "",
+  };
+}
+
 function adminGroomingConcernState() {
   return {
     medicalConcernCache: {},
@@ -67,6 +81,8 @@ function adminGroomingConcernState() {
       mode: "create",
       concernId: null,
       customerFieldsEditable: true,
+      recommendedActionEditable: true,
+      internalNotesEditable: true,
       saving: false,
     },
     medicalConcernForm: emptyGroomingConcernForm(),
@@ -74,6 +90,7 @@ function adminGroomingConcernState() {
     medicalConcernFormErrorSummary: "",
     medicalConcernTerminal: emptyGroomingConcernTerminalDialog(),
     medicalConcernNotify: emptyGroomingConcernNotifyDialog(),
+    medicalConcernActionDialog: emptyGroomingConcernActionDialog(),
     expandedMedicalConcernIds: {},
     medicalConcernDetailLoadingIds: {},
     medicalConcernToast: {
@@ -162,6 +179,7 @@ function adminGroomingConcernState() {
     canReportMedicalConcern(booking, pet) {
       if (!booking?.id || !this.bookingPetIdentifier(pet)) return false;
       if (this.isPetGroomingFinished?.(pet)) return false;
+      if (["stopped", "finished"].includes(this.petGroomingState?.(pet))) return false;
 
       const status = this.normalizeStatus?.(booking.status) || String(booking.status || "");
       return ["checked_in", "queued", "waiting", "in-progress"].includes(status);
@@ -303,6 +321,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
       this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
+      this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
       this.refreshIcons?.();
       this.$nextTick?.(() => this.$refs.medicalConcernDialog?.focus());
       await this.loadMedicalConcerns(booking, pet);
@@ -326,6 +345,7 @@ function adminGroomingConcernState() {
         this.medicalConcernFormModal.saving
         || this.medicalConcernTerminal.busy
         || this.medicalConcernNotify.busy
+        || this.medicalConcernActionDialog.busy
       ) {
         return;
       }
@@ -337,6 +357,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
       this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
+      this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
     },
 
     openCreateMedicalConcern() {
@@ -360,6 +381,8 @@ function adminGroomingConcernState() {
         mode: "create",
         concernId: null,
         customerFieldsEditable: true,
+        recommendedActionEditable: true,
+        internalNotesEditable: true,
         saving: false,
       };
       this.medicalConcernFormErrors = {};
@@ -387,6 +410,8 @@ function adminGroomingConcernState() {
         mode: "edit",
         concernId: concern.id,
         customerFieldsEditable: Boolean(concern.customer_visible_fields_editable),
+        recommendedActionEditable: Boolean(concern.recommended_action_editable),
+        internalNotesEditable: Boolean(concern.internal_resolution_notes_editable),
         saving: false,
       };
       this.medicalConcernFormErrors = {};
@@ -458,8 +483,11 @@ function adminGroomingConcernState() {
         internal_description: text("internal_description"),
       };
       const resolutionNotes = text("internal_resolution_notes");
-      if (resolutionNotes || this.medicalConcernFormModal.mode === "edit") {
-        payload.internal_resolution_notes = resolutionNotes || null;
+      if (
+        this.medicalConcernFormModal.internalNotesEditable
+        && resolutionNotes
+      ) {
+        payload.internal_resolution_notes = resolutionNotes;
       }
 
       if (
@@ -470,12 +498,18 @@ function adminGroomingConcernState() {
           category: text("category"),
           severity: text("severity"),
           customer_message: text("customer_message"),
-          recommended_grooming_action: text("recommended_grooming_action"),
           acknowledgment_required: Boolean(
             this.medicalConcernForm.acknowledgment_required,
           ),
           consent_required: Boolean(this.medicalConcernForm.consent_required),
         });
+      }
+
+      if (
+        this.medicalConcernFormModal.mode === "create"
+        || this.medicalConcernFormModal.recommendedActionEditable
+      ) {
+        payload.recommended_grooming_action = text("recommended_grooming_action");
       }
 
       if (this.medicalConcernFormModal.mode === "create") {
@@ -640,6 +674,129 @@ function adminGroomingConcernState() {
         }
       } finally {
         this.medicalConcernNotify.busy = false;
+      }
+    },
+
+    openMedicalConcernActionDialog(type, concern) {
+      const actionName = type === "resume"
+        ? "resume_grooming"
+        : "apply_recommended_action";
+      if (!this.medicalConcernActionAvailable(concern, actionName)) return;
+
+      this.medicalConcernActionDialog = {
+        ...emptyGroomingConcernActionDialog(),
+        open: true,
+        type,
+        concern,
+      };
+      this.refreshIcons?.();
+      this.$nextTick?.(() => this.$refs.medicalConcernActionDialog?.focus());
+    },
+
+    closeMedicalConcernActionDialog() {
+      if (this.medicalConcernActionDialog.busy) return;
+      this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
+    },
+
+    medicalConcernOperationalEffect(concern) {
+      return {
+        continue_with_observation:
+          "This records that grooming may continue with observation. It does not start or resume grooming automatically.",
+        pause_grooming:
+          "The pet will remain in clinic holding but will no longer count as actively being groomed.",
+        stop_grooming:
+          "The pet will stop active grooming. It will not be marked normally finished, and payment still requires staff review.",
+      }[concern?.recommended_grooming_action] || "The server will validate the current per-pet grooming state.";
+    },
+
+    validateMedicalConcernActionDialog() {
+      const dialog = this.medicalConcernActionDialog;
+      const errors = {};
+      if (
+        dialog.type === "apply"
+        && dialog.concern?.safety_override_required
+        && !String(dialog.safety_override_reason || "").trim()
+      ) {
+        errors.safety_override_reason = "A safety override reason is required.";
+      }
+      if (dialog.type === "resume") {
+        if (!String(dialog.internal_resolution_notes || "").trim()) {
+          errors.internal_resolution_notes = "Internal resolution notes are required.";
+        }
+        if (!String(dialog.customer_resolution_summary || "").trim()) {
+          errors.customer_resolution_summary =
+            "A customer-safe resolution summary is required.";
+        }
+      }
+      dialog.errors = errors;
+      dialog.error = Object.values(errors)[0] || "";
+      return Object.keys(errors).length === 0;
+    },
+
+    async submitMedicalConcernAction() {
+      const dialog = this.medicalConcernActionDialog;
+      if (dialog.busy || !this.validateMedicalConcernActionDialog()) return;
+
+      const booking = this.medicalConcernModal.booking;
+      const pet = this.medicalConcernModal.pet;
+      const concern = dialog.concern;
+      const bookingId = booking?.id;
+      const bookingPetId = this.bookingPetIdentifier(pet);
+      if (!bookingId || !bookingPetId || !concern?.id) return;
+
+      dialog.busy = true;
+      dialog.error = "";
+      try {
+        const response = dialog.type === "resume"
+          ? await API.resumeAdminBookingPetGrooming(
+              bookingId,
+              bookingPetId,
+              concern.id,
+              {
+                internal_resolution_notes:
+                  String(dialog.internal_resolution_notes || "").trim(),
+                customer_resolution_summary:
+                  String(dialog.customer_resolution_summary || "").trim(),
+              },
+            )
+          : await API.applyAdminBookingPetMedicalConcernAction(
+              bookingId,
+              bookingPetId,
+              concern.id,
+              concern.safety_override_required
+                ? {
+                    safety_override_reason:
+                      String(dialog.safety_override_reason || "").trim(),
+                  }
+                : {},
+            );
+
+        this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
+        await this.loadMedicalConcerns(booking, pet);
+        await this.loadAdminBookings?.();
+        this.showMedicalConcernToast(
+          response.message || "Per-pet grooming state updated.",
+        );
+      } catch (error) {
+        const backendErrors = error.errors || {};
+        dialog.errors = {
+          safety_override_reason: this.firstMedicalConcernError(
+            backendErrors.safety_override_reason,
+          ),
+          internal_resolution_notes: this.firstMedicalConcernError(
+            backendErrors.internal_resolution_notes,
+          ),
+          customer_resolution_summary: this.firstMedicalConcernError(
+            backendErrors.customer_resolution_summary,
+          ),
+        };
+        dialog.error = error.message || "The grooming action could not be applied.";
+        if ([404, 409, 422].includes(error.status)) {
+          await this.loadMedicalConcerns(booking, pet);
+          await this.loadAdminBookings?.();
+        }
+      } finally {
+        dialog.busy = false;
       }
     },
 

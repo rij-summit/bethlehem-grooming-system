@@ -699,6 +699,34 @@ var API = (() => {
     );
   }
 
+  async function applyAdminBookingPetMedicalConcernAction(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload = {},
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/apply-recommended-action`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function resumeAdminBookingPetGrooming(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resume-grooming`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
   async function adminCancelBooking(bookingId) {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
@@ -1130,6 +1158,8 @@ var API = (() => {
     cancelAdminBookingPetMedicalConcern,
     resolveAdminBookingPetMedicalConcern,
     notifyCustomerAboutAdminBookingPetMedicalConcern,
+    applyAdminBookingPetMedicalConcernAction,
+    resumeAdminBookingPetGrooming,
     adminCancelBooking,
     // Admin customers
     getCustomers,
