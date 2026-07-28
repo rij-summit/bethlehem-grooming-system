@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\CustomerNotification;
 use App\Models\GroomingMedicalConcern;
+use App\Models\GroomingMedicalConcernResponse;
 use App\Models\Pet;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -39,6 +40,7 @@ class AdminGroomingMedicalConcernController extends Controller
         'pet.user:user_id,role',
         'actionAppliedBy:user_id,first_name,last_name',
         'clinicAppointment:id,appointment_reference',
+        'responses:id,concern_id,responded_by_name,response_kind,decision,responded_at',
     ];
 
     public function index(int $bookingId, int $bookingPetId)
@@ -753,6 +755,7 @@ class AdminGroomingMedicalConcernController extends Controller
     private function formatConcern(GroomingMedicalConcern $concern): array
     {
         $terminal = $this->isTerminal($concern);
+        $customerResponse = $this->safeCustomerResponseSummary($concern);
         $customerVisibleFieldsEditable = $this->customerVisibleFieldsAreEditable($concern);
         $customerAccountLinked = $this->customerAccountLinked($concern);
         $availableStaffActions = $terminal
@@ -796,6 +799,7 @@ class AdminGroomingMedicalConcernController extends Controller
             'customer_response_status' => $concern->customer_response_status,
             'customer_notified_at' => $concern->customer_notified_at?->toIso8601String(),
             'has_customer_response' => (bool) ($concern->responses_exists ?? false),
+            'customer_response' => $customerResponse,
             'clinic_appointment_id' => $concern->clinic_appointment_id,
             'clinic_appointment_reference' => $concern->clinicAppointment?->appointment_reference,
             'customer_resolution_summary' => $concern->customer_resolution_summary,
@@ -808,6 +812,41 @@ class AdminGroomingMedicalConcernController extends Controller
             'customer_account_linked' => $customerAccountLinked,
             'staff_internal_fields_editable' => ! $terminal,
             'available_staff_actions' => $availableStaffActions,
+        ];
+    }
+
+    private function safeCustomerResponseSummary(
+        GroomingMedicalConcern $concern,
+    ): ?array {
+        $responses = $concern->relationLoaded('responses')
+            ? $concern->responses
+            : $concern->responses()
+                ->select([
+                    'id',
+                    'concern_id',
+                    'responded_by_name',
+                    'response_kind',
+                    'decision',
+                    'responded_at',
+                ])
+                ->get();
+        $response = $responses->firstWhere(
+            'response_kind',
+            GroomingMedicalConcernResponse::KIND_CONSENT,
+        ) ?? $responses->firstWhere(
+            'response_kind',
+            GroomingMedicalConcernResponse::KIND_ACKNOWLEDGMENT,
+        );
+
+        if (! $response) {
+            return null;
+        }
+
+        return [
+            'response_kind' => $response->response_kind,
+            'decision' => $response->decision,
+            'responded_by_name' => $response->responded_by_name,
+            'responded_at' => $response->responded_at?->toIso8601String(),
         ];
     }
 

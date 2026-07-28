@@ -468,6 +468,32 @@ var API = (() => {
     );
   }
 
+  async function acknowledgePetMedicalConcern(petId, publicId) {
+    return request(
+      "POST",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/acknowledge`,
+      {},
+      getCustomerToken(),
+    );
+  }
+
+  async function submitPetMedicalConcernConsent(
+    petId,
+    publicId,
+    decision,
+    signatureName,
+  ) {
+    return request(
+      "POST",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/consent`,
+      {
+        decision,
+        signature_name: signatureName,
+      },
+      getCustomerToken(),
+    );
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -1076,6 +1102,8 @@ var API = (() => {
     getPetVaccinations,
     getPetMedicalConcerns,
     getPetMedicalConcern,
+    acknowledgePetMedicalConcern,
+    submitPetMedicalConcernConsent,
     addPet,
     updatePet,
     adminUpdatePet,

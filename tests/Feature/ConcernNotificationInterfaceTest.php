@@ -165,7 +165,7 @@ class ConcernNotificationInterfaceTest extends TestCase
         }
     }
 
-    public function test_customer_concern_interface_is_read_only_responsive_and_preserves_other_tabs(): void
+    public function test_customer_concern_response_interface_is_accessible_responsive_and_preserves_other_tabs(): void
     {
         foreach ([
             'data-pet-panel="overview"',
@@ -185,18 +185,25 @@ class ConcernNotificationInterfaceTest extends TestCase
         }
 
         foreach ([
-            'submitConcernAcknowledgment',
-            'approveConcernConsent',
-            'declineConcernConsent',
-            'customer_signature',
+            'acknowledgePetMedicalConcern',
+            'submitPetMedicalConcernConsent',
+            'data-submit-concern-acknowledgment',
+            'data-submit-concern-consent="approved"',
+            'data-submit-concern-consent="declined"',
+            'data-concern-signature',
             'response_statement',
-            'createConcernResponse',
-        ] as $writeControl) {
-            $this->assertStringNotContainsString(
-                $writeControl,
+            'role="alert"',
+            'aria-live="polite"',
+            'maxlength="200"',
+        ] as $responseControl) {
+            $this->assertStringContainsString(
+                $responseControl,
                 $this->clientPetPage.$this->clientPetComponent.$this->apiLayer,
             );
         }
+
+        $this->assertStringNotContainsString('fetch(', $this->clientPetComponent);
+        $this->assertStringNotContainsString('checked value="approved"', $this->clientPetComponent);
 
         foreach ([
             'concern.internal_description',

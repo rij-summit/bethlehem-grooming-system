@@ -1958,6 +1958,10 @@
                           <p><span>Consent required</span><strong x-text="medicalConcernYesNo(concern.consent_required)"></strong></p>
                           <p><span>Customer response</span><strong x-text="medicalConcernResponseLabel(concern.customer_response_status)"></strong></p>
                           <p><span>Customer response exists</span><strong x-text="medicalConcernYesNo(concern.has_customer_response)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Response kind</span><strong x-text="medicalConcernDisplayValue(concern.customer_response?.response_kind)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Decision</span><strong x-text="medicalConcernResponseLabel(concern.customer_response?.decision)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Responded by</span><strong x-text="concern.customer_response?.responded_by_name || 'Not provided'"></strong></p>
+                          <p x-show="concern.customer_response"><span>Response time</span><strong x-text="formatMedicalConcernDateTime(concern.customer_response?.responded_at)"></strong></p>
                           <p><span>Customer notified</span><strong x-text="formatMedicalConcernDateTime(concern.customer_notified_at)"></strong></p>
                           <p><span>Customer-visible fields</span><strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked after notification or response'"></strong></p>
                           <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong></p>
@@ -1970,8 +1974,10 @@
                           x-show="concern.acknowledgment_required || concern.consent_required"
                           class="admin-medical-concern-future-note"
                           x-text="concern.customer_notified_at
-                            ? 'The customer was notified. Their acknowledgment or consent response will be handled in a later workflow.'
-                            : 'Send this concern to the customer when the message is ready. Their response will be handled in a later workflow.'"
+                            ? (concern.customer_response
+                              ? 'The customer response is permanent. Staff must still apply any operational grooming action separately.'
+                              : 'The customer was notified. Any required acknowledgment or consent remains pending until the customer submits it.')
+                            : 'Send this concern to the customer when the message is ready.'"
                         >
                         </div>
                         <div

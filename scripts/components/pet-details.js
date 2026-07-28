@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let vaccinationLoadState = "idle";
   let concernLoadState = "idle";
   let requestedConcernHandled = false;
+  let concernResponseSubmitting = false;
 
   const profileParams = new URLSearchParams(window.location.search);
   const petIdParam = profileParams.get("pet_id");
@@ -655,13 +656,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (concern.required_customer_action === "consent") {
       return {
         title: "Your decision is required",
-        message: "Consent response controls will be provided in a later step. Contact the clinic if you need immediate guidance.",
+        message: "Open the concern details to approve or decline using your typed signature.",
       };
     }
     if (concern.required_customer_action === "acknowledgment") {
       return {
         title: "Acknowledgment required",
-        message: "Acknowledgment controls will be provided in a later step. Reading this notice does not count as acknowledgment.",
+        message: "Open the concern details to confirm receipt and understanding. Reading this notice does not count as acknowledgment.",
       };
     }
     return null;
@@ -750,8 +751,224 @@ document.addEventListener("DOMContentLoaded", () => {
     ["Resolution time", formatDateTime(concern.resolved_at)],
   ];
 
-  const renderConcernDetail = (concern) => {
+  const concernResponseError = (error) => {
+    const validationMessages = Object.values(error?.errors || {})
+      .flat()
+      .filter(Boolean);
+    return validationMessages[0] || error?.message || "Your response could not be submitted. Please try again.";
+  };
+
+  const renderConcernResponseSection = (concern) => {
+    const submitted = concern.submitted_response;
+
+    if (submitted) {
+      return `
+        <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-live="polite">
+          <h5 class="font-bold text-emerald-900">Response recorded</h5>
+          <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Response</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(submitted.decision_label || titleCase(submitted.decision))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Submitted by</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(submitted.responded_by_name))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Submitted at</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(submitted.responded_at))}</dd>
+            </div>
+          </dl>
+          <p class="mt-3 text-sm leading-6 text-emerald-800">
+            This response is permanent and cannot be edited. Staff must still apply any operational grooming action separately.
+          </p>
+        </section>
+      `;
+    }
+
+    if (
+      concern.required_customer_action !== "acknowledgment"
+      && concern.required_customer_action !== "consent"
+    ) {
+      return "";
+    }
+
+    const statement = displayValue(concern.response_statement);
+    const commonNotice = `
+      <p class="mt-3 text-sm leading-6 text-amber-800">
+        Opening or reading this notification is not a response. Once submitted, your response cannot be edited.
+        No grooming action is applied automatically.
+      </p>
+      <div
+        data-concern-response-error
+        class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        role="alert"
+        tabindex="-1"
+      ></div>
+    `;
+
+    if (concern.required_customer_action === "acknowledgment") {
+      return `
+        <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h5 class="font-bold text-amber-900">Acknowledgment required</h5>
+          <p class="mt-1 text-sm leading-6 text-amber-800">
+            Acknowledgment confirms that you received and understood this notice.
+          </p>
+          <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(statement)}</blockquote>
+          ${commonNotice}
+          <button
+            type="button"
+            data-submit-concern-acknowledgment
+            class="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#315b7e] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#274b69] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Acknowledge notice
+          </button>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <h5 class="font-bold text-amber-900">Your consent decision is required</h5>
+        <p class="mt-1 text-sm leading-6 text-amber-800">
+          Approval accepts the proposed action. Decline refuses it. Neither choice means the action has already occurred.
+        </p>
+        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(statement)}</blockquote>
+        <label class="mt-4 block" for="concernSignatureName">
+          <span class="text-sm font-bold text-amber-900">Typed signature name <span aria-hidden="true">*</span></span>
+          <input
+            id="concernSignatureName"
+            data-concern-signature
+            type="text"
+            maxlength="200"
+            autocomplete="name"
+            required
+            class="mt-2 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+            aria-describedby="concernSignatureHelp"
+          />
+          <span id="concernSignatureHelp" class="mt-1 block text-xs leading-5 text-amber-800">
+            Type your name for either approval or refusal.
+          </span>
+        </label>
+        ${commonNotice}
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            data-submit-concern-consent="approved"
+            class="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Approve proposed action
+          </button>
+          <button
+            type="button"
+            data-submit-concern-consent="declined"
+            class="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-300 bg-white px-5 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Decline proposed action
+          </button>
+        </div>
+      </section>
+    `;
+  };
+
+  const attachConcernResponseActions = (concern) => {
+    const errorBox = concernDetail.querySelector("[data-concern-response-error]");
+    const responseButtons = Array.from(concernDetail.querySelectorAll(
+      "[data-submit-concern-acknowledgment], [data-submit-concern-consent]",
+    ));
+    const signatureInput = concernDetail.querySelector("[data-concern-signature]");
+
+    const showError = (message) => {
+      if (!errorBox) return;
+      errorBox.textContent = message;
+      errorBox.classList.remove("hidden");
+      errorBox.focus();
+    };
+    const setBusy = (busy) => {
+      concernResponseSubmitting = busy;
+      responseButtons.forEach((button) => {
+        if (!button.dataset.defaultLabel) {
+          button.dataset.defaultLabel = button.textContent.trim();
+        }
+        button.disabled = busy;
+        button.setAttribute("aria-busy", String(busy));
+        button.textContent = busy ? "Submitting..." : button.dataset.defaultLabel;
+      });
+      if (signatureInput) signatureInput.disabled = busy;
+    };
+
+    concernDetail
+      .querySelector("[data-submit-concern-acknowledgment]")
+      ?.addEventListener("click", async () => {
+        if (concernResponseSubmitting) return;
+        const confirmed = window.confirm(
+          "Submit this acknowledgment? It will permanently confirm that you received and understood the notice.",
+        );
+        if (!confirmed) return;
+
+        errorBox?.classList.add("hidden");
+        setBusy(true);
+        try {
+          const response = await API.acknowledgePetMedicalConcern(
+            petId,
+            concern.public_id,
+          );
+          concernLoadState = "idle";
+          await openConcernDetail(concern.public_id, {
+            updateHistory: false,
+            successMessage: response.message,
+          });
+        } catch (error) {
+          setBusy(false);
+          showError(concernResponseError(error));
+        }
+      });
+
+    responseButtons
+      .filter((button) => button.hasAttribute("data-submit-concern-consent"))
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          if (concernResponseSubmitting) return;
+          const signatureName = signatureInput?.value.trim() || "";
+          const decision = button.dataset.submitConcernConsent;
+
+          if (!signatureName) {
+            showError("Type your signature name before submitting your decision.");
+            signatureInput?.focus();
+            return;
+          }
+
+          const decisionLabel = decision === "approved" ? "Approve" : "Decline";
+          const confirmed = window.confirm(
+            `${decisionLabel} the proposed action? This decision and typed signature cannot be edited after submission.`,
+          );
+          if (!confirmed) return;
+
+          errorBox?.classList.add("hidden");
+          setBusy(true);
+          try {
+            const response = await API.submitPetMedicalConcernConsent(
+              petId,
+              concern.public_id,
+              decision,
+              signatureName,
+            );
+            concernLoadState = "idle";
+            await openConcernDetail(concern.public_id, {
+              updateHistory: false,
+              successMessage: response.message,
+            });
+          } catch (error) {
+            setBusy(false);
+            showError(concernResponseError(error));
+          }
+        });
+      });
+  };
+
+  const renderConcernDetail = (concern, successMessage = "") => {
     const requiredAction = requiredConcernAction(concern);
+    concernResponseSubmitting = false;
 
     concernDetail.innerHTML = `
       <button
@@ -783,6 +1000,12 @@ document.addEventListener("DOMContentLoaded", () => {
         </header>
 
         <div class="space-y-5 p-4 sm:p-5">
+          ${successMessage ? `
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800" role="status" aria-live="polite">
+              ${escapeHtml(successMessage)}
+            </div>
+          ` : ""}
+
           <section>
             <h5 class="font-bold text-[#2f4b66]">Message from the grooming team</h5>
             <p class="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
@@ -811,6 +1034,8 @@ document.addEventListener("DOMContentLoaded", () => {
             </section>
           ` : ""}
 
+          ${renderConcernResponseSection(concern)}
+
           ${!isMissing(concern.customer_resolution_summary) ? `
             <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <h5 class="font-bold text-emerald-900">Customer-safe resolution</h5>
@@ -819,7 +1044,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ` : ""}
 
           <p class="text-xs leading-5 text-slate-500">
-            This view is read-only. Opening or reading it does not record acknowledgment or consent.
+            Opening or reading this view does not record acknowledgment or consent.
           </p>
         </div>
       </article>
@@ -827,6 +1052,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     concernDetail.querySelector("[data-close-concern-detail]")
       ?.addEventListener("click", closeConcernDetail);
+    attachConcernResponseActions(concern);
   };
 
   const closeConcernDetail = () => {
@@ -836,10 +1062,16 @@ document.addEventListener("DOMContentLoaded", () => {
     url.searchParams.set("tab", "notifications");
     url.searchParams.delete("concern");
     window.history.replaceState({}, "", url);
+    if (concernLoadState === "idle") {
+      loadConcernNotifications({ retry: true });
+    }
     renderIcons();
   };
 
-  const openConcernDetail = async (publicId, { updateHistory = true } = {}) => {
+  const openConcernDetail = async (
+    publicId,
+    { updateHistory = true, successMessage = "" } = {},
+  ) => {
     if (!concernDetail || !concernNotifications || !publicId) return;
 
     concernNotifications.classList.add("hidden");
@@ -854,7 +1086,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const response = await API.getPetMedicalConcern(petId, publicId);
-      renderConcernDetail(response.concern || {});
+      renderConcernDetail(response.concern || {}, successMessage);
 
       if (updateHistory) {
         const url = new URL(window.location.href);
@@ -863,6 +1095,7 @@ document.addEventListener("DOMContentLoaded", () => {
         window.history.pushState({}, "", url);
       }
     } catch (error) {
+      concernResponseSubmitting = false;
       const notFound = error?.status === 404;
       concernDetail.innerHTML = `
         <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">

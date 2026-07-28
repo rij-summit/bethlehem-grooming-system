@@ -908,6 +908,12 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
         $this->assertArrayNotHasKey('statement_text', $detail);
         $this->assertStringNotContainsString('staff@example.test', json_encode($detail));
         $this->assertStringNotContainsString('09170000002', json_encode($detail));
+        $this->assertSame('acknowledgment', $detail['customer_response']['response_kind']);
+        $this->assertSame('acknowledged', $detail['customer_response']['decision']);
+        $this->assertSame('Pet Owner', $detail['customer_response']['responded_by_name']);
+        $this->assertSame(now()->toIso8601String(), $detail['customer_response']['responded_at']);
+        $this->assertArrayNotHasKey('signature_name', $detail['customer_response']);
+        $this->assertArrayNotHasKey('responded_by_user_id', $detail['customer_response']);
     }
 
     public function test_cancel_requires_reason_preserves_evidence_and_sets_server_audit(): void
@@ -1353,6 +1359,7 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'customer_response_status',
             'customer_notified_at',
             'has_customer_response',
+            'customer_response',
             'clinic_appointment_id',
             'clinic_appointment_reference',
             'customer_resolution_summary',

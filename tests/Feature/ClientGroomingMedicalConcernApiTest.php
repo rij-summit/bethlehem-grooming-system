@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\PetGroomingMedicalConcernController;
 use App\Models\GroomingMedicalConcern;
+use App\Models\GroomingMedicalConcernResponse;
 use App\Models\User;
+use App\Services\GroomingMedicalConcernResponseStatement;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Routing\Route as RoutingRoute;
@@ -293,6 +295,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         $cases = [
             [
                 'message' => 'Consent case.',
+                'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
                 'acknowledgment_required' => true,
                 'consent_required' => true,
                 'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
@@ -302,6 +305,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
             ],
             [
                 'message' => 'Acknowledgment case.',
+                'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
                 'acknowledgment_required' => true,
                 'consent_required' => false,
                 'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
@@ -332,6 +336,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         foreach ($cases as $case) {
             $concern = $this->createConcern([
                 'customer_message' => $case['message'],
+                'status' => $case['status'] ?? GroomingMedicalConcern::STATUS_OPEN,
                 'acknowledgment_required' => $case['acknowledgment_required'],
                 'consent_required' => $case['consent_required'],
                 'customer_response_status' => $case['customer_response_status'],
@@ -346,7 +351,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         }
     }
 
-    public function test_routes_are_read_only_owner_scoped_and_central_helpers_power_the_read_only_client_ui(): void
+    public function test_routes_are_owner_scoped_and_central_helpers_power_read_and_response_ui(): void
     {
         $routes = collect(Route::getRoutes()->getRoutes());
         $customerConcernRoutes = $routes->filter(
@@ -356,20 +361,34 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
             ),
         );
 
-        $this->assertCount(2, $customerConcernRoutes);
+        $this->assertCount(4, $customerConcernRoutes);
         $customerConcernRoutes->each(function (RoutingRoute $route): void {
-            $this->assertContains('GET', $route->methods());
-            $this->assertContains('HEAD', $route->methods());
-            $this->assertNotContains('POST', $route->methods());
             $this->assertNotContains('PATCH', $route->methods());
             $this->assertNotContains('PUT', $route->methods());
             $this->assertNotContains('DELETE', $route->methods());
             $this->assertContains('auth:sanctum', $route->gatherMiddleware());
             $this->assertNotContains('role:admin,staff', $route->gatherMiddleware());
         });
+        $this->assertCount(
+            2,
+            $customerConcernRoutes->filter(
+                fn (RoutingRoute $route) => in_array('GET', $route->methods(), true),
+            ),
+        );
+        $this->assertCount(
+            2,
+            $customerConcernRoutes->filter(
+                fn (RoutingRoute $route) => in_array('POST', $route->methods(), true),
+            ),
+        );
 
         $apiLayer = file_get_contents(base_path('scripts/api.js'));
-        foreach (['getPetMedicalConcerns', 'getPetMedicalConcern'] as $helper) {
+        foreach ([
+            'getPetMedicalConcerns',
+            'getPetMedicalConcern',
+            'acknowledgePetMedicalConcern',
+            'submitPetMedicalConcernConsent',
+        ] as $helper) {
             $this->assertStringContainsString("async function {$helper}", $apiLayer);
             $this->assertMatchesRegularExpression(
                 '/\n\s+'.preg_quote($helper, '/').',/',
@@ -390,11 +409,338 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         $this->assertStringContainsString('Medical-Concern Notifications', $clientPage);
         $this->assertStringContainsString('getPetMedicalConcerns', $clientComponent);
         $this->assertStringContainsString('getPetMedicalConcern', $clientComponent);
-        $this->assertStringNotContainsString('submitConcernAcknowledgment', $clientComponent);
-        $this->assertStringNotContainsString('submitConcernConsent', $clientComponent);
+        $this->assertStringContainsString('acknowledgePetMedicalConcern', $clientComponent);
+        $this->assertStringContainsString('submitPetMedicalConcernConsent', $clientComponent);
         $this->assertStringContainsString('data-pet-panel="grooming"', $clientPage);
         $this->assertStringContainsString('data-pet-panel="medical"', $clientPage);
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPage);
+    }
+
+    public function test_response_routes_require_authentication_and_hide_foreign_or_unnotified_records(): void
+    {
+        $concern = $this->createConcern([
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now(),
+        ]);
+
+        $this->postJson(self::LIST_URI."/{$concern->public_id}/acknowledge")
+            ->assertUnauthorized();
+        $this->postJson(self::LIST_URI."/{$concern->public_id}/consent", [
+            'decision' => GroomingMedicalConcernResponse::DECISION_APPROVED,
+            'signature_name' => 'Mochi Owner',
+        ])->assertUnauthorized();
+
+        $this->authenticateAs(20);
+        $foreign = $this->postJson(
+            self::LIST_URI."/{$concern->public_id}/acknowledge",
+        )
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Pet not found.',
+            ]);
+        $missing = $this->postJson(
+            '/api/pets/999/medical-concerns/'.$concern->public_id.'/acknowledge',
+        )
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Pet not found.',
+            ]);
+        $this->assertSame($foreign->getContent(), $missing->getContent());
+
+        $this->authenticateAs(30);
+        $this->postJson(
+            self::LIST_URI."/{$concern->public_id}/acknowledge",
+        )
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Pet not found.',
+            ]);
+
+        $this->authenticateAs(10);
+        $this->postJson(
+            '/api/pets/102/medical-concerns/'.$concern->public_id.'/acknowledge',
+        )
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Medical concern not found.',
+            ]);
+
+        $unnotified = $this->createConcern([
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+        ]);
+        $this->postJson(
+            self::LIST_URI."/{$unnotified->public_id}/acknowledge",
+        )
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Medical concern not found.',
+            ]);
+
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
+    }
+
+    public function test_owner_acknowledgment_stores_server_controlled_immutable_evidence_and_updates_concern(): void
+    {
+        $this->authenticateAs(10);
+        $concern = $this->createConcern([
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'consent_required' => false,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now(),
+        ]);
+        $uri = self::LIST_URI."/{$concern->public_id}/acknowledge";
+
+        $this->postJson($uri, [
+            'statement_text' => 'Browser-controlled statement.',
+            'statement_version' => 'browser-v99',
+            'responded_by_name' => 'Impersonated owner',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'statement_text',
+                'statement_version',
+                'responded_by_name',
+            ]);
+
+        $beforeBooking = DB::table('bookings')->where('booking_id', 1)->first();
+        $beforeBookingPet = DB::table('booking_pets')->where('booking_pet_id', 11)->first();
+
+        $response = $this->postJson($uri)
+            ->assertCreated()
+            ->assertJsonPath('concern.status', GroomingMedicalConcern::STATUS_OPEN)
+            ->assertJsonPath(
+                'concern.customer_response_status',
+                GroomingMedicalConcern::CUSTOMER_RESPONSE_ACKNOWLEDGED,
+            )
+            ->assertJsonPath(
+                'response.response_kind',
+                GroomingMedicalConcernResponse::KIND_ACKNOWLEDGMENT,
+            )
+            ->assertJsonPath(
+                'response.decision',
+                GroomingMedicalConcernResponse::DECISION_ACKNOWLEDGED,
+            );
+
+        $stored = GroomingMedicalConcernResponse::query()->sole();
+        $this->assertSame(
+            GroomingMedicalConcernResponseStatement::ACKNOWLEDGMENT_VERSION,
+            $stored->statement_version,
+        );
+        $this->assertStringContainsString('Mochi', $stored->statement_text);
+        $this->assertStringContainsString(
+            'Customer-safe concern message.',
+            $stored->statement_text,
+        );
+        $this->assertStringContainsString('Pause grooming', $stored->statement_text);
+        $this->assertStringNotContainsString('Internal staff observation.', $stored->statement_text);
+        $this->assertSame('Mochi Owner', $stored->responded_by_name);
+        $this->assertSame(10, $stored->responded_by_user_id);
+        $this->assertNull($stored->signature_name);
+        $this->assertSame(now()->toIso8601String(), $stored->responded_at->toIso8601String());
+        $this->assertArrayNotHasKey('signature_name', $response->json('response'));
+        $this->assertArrayNotHasKey('responded_by_user_id', $response->json('response'));
+
+        $this->assertEquals(
+            $beforeBooking,
+            DB::table('bookings')->where('booking_id', 1)->first(),
+        );
+        $this->assertEquals(
+            $beforeBookingPet,
+            DB::table('booking_pets')->where('booking_pet_id', 11)->first(),
+        );
+        $this->assertDatabaseCount('clinic_appointments', 1);
+
+        $this->getJson(self::LIST_URI."/{$concern->public_id}")
+            ->assertOk()
+            ->assertJsonPath('concern.required_customer_action', 'none')
+            ->assertJsonPath(
+                'concern.submitted_response.decision',
+                GroomingMedicalConcernResponse::DECISION_ACKNOWLEDGED,
+            )
+            ->assertJsonPath('concern.submitted_response.responded_by_name', 'Mochi Owner');
+
+        $this->postJson($uri)
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'This customer response has already been submitted and cannot be changed.',
+            );
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 1);
+    }
+
+    public function test_consent_approval_and_decline_require_signature_and_preserve_exact_decisions(): void
+    {
+        $this->authenticateAs(10);
+
+        foreach ([
+            GroomingMedicalConcernResponse::DECISION_APPROVED,
+            GroomingMedicalConcernResponse::DECISION_DECLINED,
+        ] as $index => $decision) {
+            $concern = $this->createConcern([
+                'category' => "consent-{$index}",
+                'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+                'acknowledgment_required' => true,
+                'consent_required' => true,
+                'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+                'customer_notified_at' => now(),
+            ]);
+            $uri = self::LIST_URI."/{$concern->public_id}/consent";
+
+            $this->postJson($uri, ['decision' => $decision])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('signature_name');
+            $this->postJson($uri, [
+                'decision' => 'maybe',
+                'signature_name' => 'Typed Evidence',
+            ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('decision');
+
+            $apiResponse = $this->postJson($uri, [
+                'decision' => $decision,
+                'signature_name' => "Typed Evidence {$index}",
+            ])
+                ->assertCreated()
+                ->assertJsonPath('concern.status', GroomingMedicalConcern::STATUS_OPEN)
+                ->assertJsonPath('concern.customer_response_status', $decision)
+                ->assertJsonPath('response.decision', $decision);
+
+            $stored = GroomingMedicalConcernResponse::query()
+                ->where('concern_id', $concern->id)
+                ->sole();
+            $this->assertSame(
+                GroomingMedicalConcernResponse::KIND_CONSENT,
+                $stored->response_kind,
+            );
+            $this->assertSame(
+                GroomingMedicalConcernResponseStatement::CONSENT_VERSION,
+                $stored->statement_version,
+            );
+            $this->assertSame("Typed Evidence {$index}", $stored->signature_name);
+            $this->assertStringContainsString('Selecting Approve', $stored->statement_text);
+            $this->assertStringContainsString('Selecting Decline', $stored->statement_text);
+            $this->assertStringNotContainsString(
+                "Typed Evidence {$index}",
+                $apiResponse->getContent(),
+            );
+            $this->assertDatabaseMissing('grooming_medical_concern_responses', [
+                'concern_id' => $concern->id,
+                'response_kind' => GroomingMedicalConcernResponse::KIND_ACKNOWLEDGMENT,
+            ]);
+
+            $this->postJson($uri, [
+                'decision' => $decision === GroomingMedicalConcernResponse::DECISION_APPROVED
+                    ? GroomingMedicalConcernResponse::DECISION_DECLINED
+                    : GroomingMedicalConcernResponse::DECISION_APPROVED,
+                'signature_name' => 'Changed Decision',
+            ])->assertConflict();
+        }
+
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 2);
+    }
+
+    public function test_failed_response_insert_rolls_back_concern_status_and_response_evidence(): void
+    {
+        $this->authenticateAs(10);
+        $concern = $this->createConcern([
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now(),
+        ]);
+
+        DB::statement(
+            "CREATE TRIGGER fail_customer_concern_response
+             BEFORE INSERT ON grooming_medical_concern_responses
+             BEGIN
+                 SELECT RAISE(FAIL, 'forced response failure');
+             END",
+        );
+
+        try {
+            $this->postJson(
+                self::LIST_URI."/{$concern->public_id}/acknowledge",
+            )->assertStatus(500);
+        } finally {
+            DB::statement('DROP TRIGGER IF EXISTS fail_customer_concern_response');
+        }
+
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
+        $this->assertDatabaseHas('grooming_medical_concerns', [
+            'id' => $concern->id,
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+        ]);
+    }
+
+    public function test_wrong_response_kind_terminal_and_no_requirement_states_are_rejected(): void
+    {
+        $this->authenticateAs(10);
+
+        $consent = $this->createConcern([
+            'category' => 'consent-only',
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'consent_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now(),
+        ]);
+        $this->postJson(
+            self::LIST_URI."/{$consent->public_id}/acknowledge",
+        )
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'Consent is required for this medical concern; acknowledgment cannot be submitted instead.',
+            );
+
+        $acknowledgment = $this->createConcern([
+            'category' => 'ack-only',
+            'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+            'acknowledgment_required' => true,
+            'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+            'customer_notified_at' => now(),
+        ]);
+        $this->postJson(
+            self::LIST_URI."/{$acknowledgment->public_id}/consent",
+            [
+                'decision' => GroomingMedicalConcernResponse::DECISION_APPROVED,
+                'signature_name' => 'Mochi Owner',
+            ],
+        )
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'Consent is not required for this medical concern.',
+            );
+
+        foreach ([
+            GroomingMedicalConcern::STATUS_RESOLVED,
+            GroomingMedicalConcern::STATUS_CANCELLED,
+        ] as $index => $status) {
+            $terminal = $this->createConcern([
+                'category' => "terminal-{$index}",
+                'status' => $status,
+                'acknowledgment_required' => true,
+                'customer_response_status' => GroomingMedicalConcern::CUSTOMER_RESPONSE_PENDING,
+                'customer_notified_at' => now(),
+            ]);
+            $this->postJson(
+                self::LIST_URI."/{$terminal->public_id}/acknowledge",
+            )->assertConflict();
+        }
+
+        $this->assertDatabaseCount('grooming_medical_concern_responses', 0);
     }
 
     private function createExistingSchema(): void
@@ -559,6 +905,11 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
             'customer_action_required',
             'required_customer_action',
             'required_customer_action_label',
+            'response_statement',
+            'response_statement_version',
+            'typed_signature_required',
+            'allowed_consent_decisions',
+            'submitted_response',
         ];
     }
 
