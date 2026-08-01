@@ -171,6 +171,14 @@ class GroomingMedicalConcern extends Model
         return $this->hasMany(CustomerNotification::class, 'grooming_medical_concern_id');
     }
 
+    public function stoppedPaymentReview()
+    {
+        return $this->hasOne(
+            GroomingStoppedPaymentReview::class,
+            'grooming_medical_concern_id',
+        );
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereNotIn('status', [

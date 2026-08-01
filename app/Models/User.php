@@ -82,4 +82,13 @@ class User extends Authenticatable
             'user_id',
         );
     }
+
+    public function groomingStoppedPaymentReviews()
+    {
+        return $this->hasMany(
+            GroomingStoppedPaymentReview::class,
+            'reviewed_by_user_id',
+            'user_id',
+        );
+    }
 }

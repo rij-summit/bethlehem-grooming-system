@@ -70,4 +70,13 @@ class Booking extends Model
     {
         return $this->hasMany(GroomingMedicalConcern::class, 'booking_id', 'booking_id');
     }
+
+    public function groomingStoppedPaymentReviews()
+    {
+        return $this->hasMany(
+            GroomingStoppedPaymentReview::class,
+            'booking_id',
+            'booking_id',
+        );
+    }
 }
