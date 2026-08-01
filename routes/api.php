@@ -12,6 +12,7 @@ use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
+use App\Http\Controllers\GroomingStoppedPaymentReviewController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
@@ -121,6 +122,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming', [AdminGroomingMedicalConcernController::class, 'resumeGrooming']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel', [AdminGroomingMedicalConcernController::class, 'cancel']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve', [AdminGroomingMedicalConcernController::class, 'resolve']);
+
+        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'show']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'store']);
 
         Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
         Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);

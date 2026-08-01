@@ -706,6 +706,22 @@ class AdminBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'Booking must be in Released status.'], 422);
         }
 
+        $blockingPet = $booking->bookingPets->first(
+            fn (BookingPet $bookingPet) => $this->bookingPetGroomingState($bookingPet)
+                !== BookingPet::GROOMING_STATE_FINISHED,
+        );
+
+        if ($blockingPet) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pickup completion is unavailable until every booking pet is finished. '
+                    .($blockingPet->pet?->pet_name ?? "Booking pet #{$blockingPet->booking_pet_id}")
+                    .' is '.$this->groomingStateLabel(
+                        $this->bookingPetGroomingState($blockingPet),
+                    ).'.',
+            ], 422);
+        }
+
         $petName = $this->petNames($booking);
         $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
 
@@ -768,6 +784,23 @@ class AdminBookingController extends Controller
 
         if (! in_array($booking->status, ['for_pickup', 'released'])) {
             return response()->json(['success' => false, 'message' => 'Only For Pickup or Released bookings can be archived here.'], 422);
+        }
+
+        $booking->loadMissing('bookingPets.pet');
+        $blockingPet = $booking->bookingPets->first(
+            fn (BookingPet $bookingPet) => $this->bookingPetGroomingState($bookingPet)
+                !== BookingPet::GROOMING_STATE_FINISHED,
+        );
+
+        if ($blockingPet) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Final pickup progression is unavailable until every booking pet is finished. '
+                    .($blockingPet->pet?->pet_name ?? "Booking pet #{$blockingPet->booking_pet_id}")
+                    .' is '.$this->groomingStateLabel(
+                        $this->bookingPetGroomingState($blockingPet),
+                    ).'.',
+            ], 422);
         }
 
         $booking->update([

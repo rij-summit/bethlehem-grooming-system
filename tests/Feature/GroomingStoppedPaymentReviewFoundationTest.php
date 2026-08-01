@@ -282,14 +282,23 @@ class GroomingStoppedPaymentReviewFoundationTest extends TestCase
         $this->assertSame('75.50', $review->adjustmentAmount());
     }
 
-    public function test_no_stopped_payment_review_routes_exist_in_the_foundation_step(): void
+    public function test_stopped_payment_reviews_have_no_update_or_delete_routes(): void
     {
-        $uris = collect(Route::getRoutes())->map(fn ($route) => $route->uri());
+        $routes = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn ($route) => str_contains(
+                $route->uri(),
+                'stopped-payment-review',
+            ));
 
-        $this->assertFalse($uris->contains(
-            fn (string $uri) => str_contains($uri, 'stopped-payment-review')
-                || str_contains($uri, 'payment-review'),
-        ));
+        $this->assertCount(2, $routes);
+        $this->assertSame(
+            ['GET', 'HEAD', 'POST'],
+            $routes->flatMap(fn ($route) => $route->methods())
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+        );
     }
 
     private function createExistingSchema(): void
