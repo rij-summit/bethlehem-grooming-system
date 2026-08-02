@@ -3646,6 +3646,739 @@ body.customer-detail-modal-open {
   color: #b91c1c;
 }
 
+/* Stopped-grooming payment review */
+.admin-queued-pet-payment-review {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid #b45309;
+  border-radius: 0.7rem;
+  background: #fff7ed;
+  padding: 0.6rem 0.85rem;
+  color: #9a3412;
+  font-size: 0.8rem;
+  font-weight: 800;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-queued-pet-payment-review:hover:not(:disabled) {
+  border-color: #9a3412;
+  background: #ffedd5;
+}
+
+.admin-queued-pet-payment-review:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.admin-stopped-payment-review-overlay,
+.admin-stopped-payment-review-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.admin-stopped-payment-review-confirm-overlay {
+  z-index: 82;
+}
+
+.admin-stopped-payment-review-dialog {
+  display: flex;
+  width: min(68rem, 100%);
+  max-height: min(94vh, 62rem);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d7e3ef;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.32);
+}
+
+.admin-stopped-payment-review-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(135deg, #7c2d12, #b45309);
+  color: #ffffff;
+}
+
+.admin-stopped-payment-review-header-icon {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.admin-stopped-payment-review-kicker {
+  color: #ffedd5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-stopped-payment-review-title {
+  margin-top: 0.1rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+  color: #ffedd5;
+  font-size: 0.8rem;
+}
+
+.admin-stopped-payment-review-close {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border-radius: 0.75rem;
+  color: #ffedd5;
+}
+
+.admin-stopped-payment-review-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.admin-stopped-payment-review-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-stopped-payment-review-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.admin-stopped-payment-review-state {
+  display: flex;
+  min-height: 13rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  color: #475569;
+  text-align: left;
+}
+
+.admin-stopped-payment-review-state.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.admin-stopped-payment-review-state strong,
+.admin-stopped-payment-review-state p {
+  display: block;
+}
+
+.admin-stopped-payment-review-state p {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.admin-stopped-payment-review-spinner,
+.admin-stopped-payment-review-button-spinner {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  border: 2px solid #cbd5e1;
+  border-top-color: #b45309;
+  border-radius: 9999px;
+  animation: admin-medical-concern-spin 0.8s linear infinite;
+}
+
+.admin-stopped-payment-review-button-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-color: rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+}
+
+.admin-stopped-payment-review-retry,
+.admin-stopped-payment-review-primary,
+.admin-stopped-payment-review-secondary {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.95rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-retry,
+.admin-stopped-payment-review-primary {
+  border: 1px solid #b45309;
+  background: #b45309;
+  color: #ffffff;
+}
+
+.admin-stopped-payment-review-retry:hover:not(:disabled),
+.admin-stopped-payment-review-primary:hover:not(:disabled) {
+  border-color: #92400e;
+  background: #92400e;
+}
+
+.admin-stopped-payment-review-secondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.admin-stopped-payment-review-secondary:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.admin-stopped-payment-review-primary:disabled,
+.admin-stopped-payment-review-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-stopped-payment-review-ineligible {
+  display: flex;
+  gap: 0.9rem;
+  border: 1px solid #fed7aa;
+  border-radius: 1rem;
+  background: #fff7ed;
+  padding: 1rem;
+  color: #9a3412;
+}
+
+.admin-stopped-payment-review-ineligible-icon {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  background: #ffedd5;
+}
+
+.admin-stopped-payment-review-ineligible h4 {
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-ineligible p {
+  margin: 0.2rem 0 0.75rem;
+  font-size: 0.82rem;
+}
+
+.admin-stopped-payment-review-workflow,
+.admin-stopped-payment-review-completed {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-stopped-payment-review-advisory,
+.admin-stopped-payment-review-payment-pending {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1px solid #fed7aa;
+  border-radius: 0.9rem;
+  background: #fff7ed;
+  padding: 0.8rem 0.9rem;
+  color: #9a3412;
+  font-size: 0.8rem;
+}
+
+.admin-stopped-payment-review-advisory strong {
+  display: block;
+}
+
+.admin-stopped-payment-review-advisory p {
+  margin-top: 0.15rem;
+}
+
+.admin-stopped-payment-review-payment-pending {
+  margin-top: 1rem;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.admin-stopped-payment-review-summary,
+.admin-stopped-payment-review-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.admin-stopped-payment-review-summary > div,
+.admin-stopped-payment-review-amounts > div {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  padding: 0.75rem;
+}
+
+.admin-stopped-payment-review-summary span,
+.admin-stopped-payment-review-amounts span,
+.admin-stopped-payment-review-readonly-text > span,
+.admin-stopped-payment-review-confirm-explanation > span {
+  display: block;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-stopped-payment-review-summary strong,
+.admin-stopped-payment-review-amounts strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 0.2rem;
+  color: #1e293b;
+  font-size: 0.85rem;
+}
+
+.admin-stopped-payment-review-services {
+  overflow: hidden;
+  border: 1px solid #d7e3ef;
+  border-radius: 1rem;
+}
+
+.admin-stopped-payment-review-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0.85rem 1rem;
+}
+
+.admin-stopped-payment-review-section-heading h4 {
+  color: #1f3850;
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-section-heading p {
+  margin-top: 0.1rem;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.admin-stopped-payment-review-subtotal {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.admin-stopped-payment-review-subtotal span {
+  display: block;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-stopped-payment-review-subtotal strong {
+  color: #9a3412;
+  font-size: 1.05rem;
+}
+
+.admin-stopped-payment-review-service-list {
+  display: grid;
+}
+
+.admin-stopped-payment-review-service-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.admin-stopped-payment-review-service-line + .admin-stopped-payment-review-service-line {
+  border-top: 1px solid #eef2f7;
+}
+
+.admin-stopped-payment-review-service-line strong {
+  color: #1e293b;
+  font-size: 0.82rem;
+}
+
+.admin-stopped-payment-review-service-line div > span {
+  display: block;
+  margin-top: 0.1rem;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.admin-stopped-payment-review-no-services {
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.admin-stopped-payment-review-decisions {
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-decisions legend,
+.admin-stopped-payment-review-field label {
+  color: #1f3850;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.55rem;
+}
+
+.admin-stopped-payment-review-decision {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.9rem;
+  padding: 0.8rem;
+  cursor: pointer;
+}
+
+.admin-stopped-payment-review-decision.is-selected {
+  border-color: #b45309;
+  background: #fff7ed;
+}
+
+.admin-stopped-payment-review-decision input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+  accent-color: #b45309;
+}
+
+.admin-stopped-payment-review-decision strong,
+.admin-stopped-payment-review-decision small {
+  display: block;
+}
+
+.admin-stopped-payment-review-decision strong {
+  color: #1e293b;
+  font-size: 0.82rem;
+}
+
+.admin-stopped-payment-review-decision small {
+  margin-top: 0.15rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.admin-stopped-payment-review-amounts {
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-field {
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-field textarea,
+.admin-stopped-payment-review-money-input {
+  width: 100%;
+  margin-top: 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.8rem;
+  background: #ffffff;
+}
+
+.admin-stopped-payment-review-field textarea {
+  min-height: 7rem;
+  padding: 0.7rem 0.8rem;
+  color: #1e293b;
+  font-size: 0.82rem;
+  resize: vertical;
+}
+
+.admin-stopped-payment-review-money-input {
+  display: flex;
+  max-width: 18rem;
+  align-items: center;
+  overflow: hidden;
+}
+
+.admin-stopped-payment-review-money-input > span {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0 0.75rem;
+  color: #475569;
+  font-weight: 800;
+}
+
+.admin-stopped-payment-review-money-input input {
+  min-width: 0;
+  flex: 1;
+  padding: 0.7rem 0.8rem;
+  color: #1e293b;
+  outline: none;
+}
+
+.admin-stopped-payment-review-field textarea:focus,
+.admin-stopped-payment-review-money-input:focus-within {
+  border-color: #b45309;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.12);
+  outline: none;
+}
+
+.admin-stopped-payment-review-field-help {
+  margin-top: 0.25rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.admin-stopped-payment-review-field-error {
+  margin-top: 0.3rem;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.admin-stopped-payment-review-validation {
+  margin-top: 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.8rem;
+  background: #fef2f2;
+  padding: 0.75rem;
+  color: #991b1b;
+  font-size: 0.78rem;
+}
+
+.admin-stopped-payment-review-validation:focus {
+  outline: 3px solid rgba(185, 28, 28, 0.18);
+}
+
+.admin-stopped-payment-review-text-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.admin-stopped-payment-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-completed-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.9rem;
+  background: #f0fdf4;
+  padding: 0.85rem;
+  color: #166534;
+}
+
+.admin-stopped-payment-review-completed-icon {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  background: #dcfce7;
+}
+
+.admin-stopped-payment-review-completed-heading h4 {
+  font-weight: 900;
+}
+
+.admin-stopped-payment-review-completed-heading p {
+  margin-top: 0.1rem;
+  font-size: 0.76rem;
+}
+
+.admin-stopped-payment-review-readonly-text,
+.admin-stopped-payment-review-confirm-explanation {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  padding: 0.8rem;
+}
+
+.admin-stopped-payment-review-readonly-text p,
+.admin-stopped-payment-review-confirm-explanation p {
+  margin-top: 0.35rem;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.admin-stopped-payment-review-confirm-dialog {
+  width: min(34rem, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  border: 1px solid #fed7aa;
+  border-radius: 1.25rem;
+  background: #ffffff;
+  padding: 1.25rem;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.34);
+}
+
+.admin-stopped-payment-review-confirm-icon {
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.admin-stopped-payment-review-confirm-dialog > h3 {
+  margin-top: 0.8rem;
+  color: #1e293b;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.admin-stopped-payment-review-confirm-dialog > p {
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.admin-stopped-payment-review-confirm-summary {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-confirm-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #eef2f7;
+  padding-bottom: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.admin-stopped-payment-review-confirm-summary dt {
+  color: #64748b;
+}
+
+.admin-stopped-payment-review-confirm-summary dd {
+  color: #1e293b;
+  font-weight: 800;
+  text-align: right;
+}
+
+.admin-stopped-payment-review-confirm-explanation {
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-confirm-warning,
+.admin-stopped-payment-review-confirm-error {
+  margin-top: 0.8rem !important;
+  border-radius: 0.75rem;
+  padding: 0.7rem;
+  font-weight: 700;
+}
+
+.admin-stopped-payment-review-confirm-warning {
+  background: #eff6ff;
+  color: #1e3a8a !important;
+}
+
+.admin-stopped-payment-review-confirm-error {
+  background: #fef2f2;
+  color: #b91c1c !important;
+}
+
+.admin-stopped-payment-review-confirm-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.admin-stopped-payment-review-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 92;
+  display: flex;
+  max-width: min(30rem, calc(100vw - 2rem));
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid;
+  border-radius: 0.9rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.2);
+}
+
+.admin-stopped-payment-review-toast.is-success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.admin-stopped-payment-review-toast.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-queued-pet-payment-review:focus-visible,
+.admin-stopped-payment-review-close:focus-visible,
+.admin-stopped-payment-review-retry:focus-visible,
+.admin-stopped-payment-review-primary:focus-visible,
+.admin-stopped-payment-review-secondary:focus-visible,
+.admin-stopped-payment-review-decision:has(input:focus-visible) {
+  outline: 3px solid rgba(49, 91, 126, 0.28);
+  outline-offset: 2px;
+}
+
 @media (max-width: 767px) {
   .admin-queued-owner-toggle,
   .admin-queued-owner-summary {
@@ -3684,6 +4417,7 @@ body.customer-detail-modal-open {
   .admin-queued-pet-print,
   .admin-queued-pet-concerns,
   .admin-queued-pet-report-concern,
+  .admin-queued-pet-payment-review,
   .admin-in-progress-pet-finish,
   .admin-in-progress-pet-queued {
     flex: 1 1 0;
@@ -3694,7 +4428,9 @@ body.customer-detail-modal-open {
   }
 
   .admin-medical-concern-overlay,
-  .admin-medical-concern-terminal-overlay {
+  .admin-medical-concern-terminal-overlay,
+  .admin-stopped-payment-review-overlay,
+  .admin-stopped-payment-review-confirm-overlay {
     align-items: flex-end;
     padding: 0;
   }
@@ -3703,6 +4439,47 @@ body.customer-detail-modal-open {
     width: 100%;
     max-height: 96vh;
     border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .admin-stopped-payment-review-dialog {
+    width: 100%;
+    max-height: 96vh;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .admin-stopped-payment-review-confirm-dialog {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .admin-stopped-payment-review-header,
+  .admin-stopped-payment-review-body {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .admin-stopped-payment-review-summary,
+  .admin-stopped-payment-review-amounts,
+  .admin-stopped-payment-review-decision-grid,
+  .admin-stopped-payment-review-text-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-stopped-payment-review-section-heading,
+  .admin-stopped-payment-review-actions,
+  .admin-stopped-payment-review-confirm-dialog > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-stopped-payment-review-subtotal {
+    text-align: left;
+  }
+
+  .admin-stopped-payment-review-primary,
+  .admin-stopped-payment-review-secondary {
+    width: 100%;
   }
 
   .admin-medical-concern-terminal-dialog {

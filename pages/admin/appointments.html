@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=medical-concern-ui-20260724" />
+    <link rel="stylesheet" href="../../css/custom.css?v=stopped-payment-review-ui-20260803" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1092,7 +1092,12 @@
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
                               <span x-show="petGroomingState(pet) === 'stopped'">
-                                &middot; Payment review required
+                                &middot;
+                                <span x-text="stoppedPaymentReviewCardLabel(booking, pet)">Payment review required</span>
+                                <span
+                                  x-show="stoppedPaymentReviewStatus(booking, pet) === 'completed'"
+                                  x-text="' · ' + stoppedPaymentReviewCardDetail(booking, pet)"
+                                ></span>
                               </span>
                             </p>
                             <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
@@ -1122,6 +1127,17 @@
                                 class="admin-pet-medical-concern-count"
                                 x-text="medicalConcernSummary(booking, pet).totalCount"
                               ></span>
+                            </button>
+                            <button
+                              x-show="isStoppedPaymentReviewPet(pet)"
+                              type="button"
+                              @click="openStoppedPaymentReview(booking, pet, $event.currentTarget)"
+                              :disabled="stoppedPaymentReviewState(booking, pet).loading"
+                              class="admin-queued-pet-payment-review"
+                              :aria-label="stoppedPaymentReviewActionLabel(booking, pet) + ' for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                            >
+                              <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
                             </button>
                             <button
                               x-show="canReportMedicalConcern(booking, pet)"
@@ -1384,7 +1400,12 @@
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
                               <span x-show="petGroomingState(pet) === 'stopped'">
-                                &middot; Payment review required
+                                &middot;
+                                <span x-text="stoppedPaymentReviewCardLabel(booking, pet)">Payment review required</span>
+                                <span
+                                  x-show="stoppedPaymentReviewStatus(booking, pet) === 'completed'"
+                                  x-text="' · ' + stoppedPaymentReviewCardDetail(booking, pet)"
+                                ></span>
                               </span>
                             </p>
                             <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
@@ -1421,6 +1442,17 @@
                                 class="admin-pet-medical-concern-count"
                                 x-text="medicalConcernSummary(booking, pet).totalCount"
                               ></span>
+                            </button>
+                            <button
+                              x-show="isStoppedPaymentReviewPet(pet)"
+                              type="button"
+                              @click="openStoppedPaymentReview(booking, pet, $event.currentTarget)"
+                              :disabled="stoppedPaymentReviewState(booking, pet).loading"
+                              class="admin-queued-pet-payment-review"
+                              :aria-label="stoppedPaymentReviewActionLabel(booking, pet) + ' for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                            >
+                              <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
                             </button>
                             <button
                               x-show="canReportMedicalConcern(booking, pet)"
@@ -1758,6 +1790,475 @@
               </article>
             </template>
           </section>
+
+          <!-- Per-pet stopped-grooming payment review -->
+          <div
+            x-show="stoppedPaymentReviewModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stopped-payment-review-title"
+            @click.self="closeStoppedPaymentReview()"
+            @keydown.escape.window="stoppedPaymentReviewConfirmation.open ? closeStoppedPaymentReviewConfirmation() : closeStoppedPaymentReview()"
+          >
+            <section
+              x-ref="stoppedPaymentReviewDialog"
+              tabindex="-1"
+              class="admin-stopped-payment-review-dialog"
+            >
+              <header class="admin-stopped-payment-review-header">
+                <div class="admin-stopped-payment-review-header-icon" aria-hidden="true">
+                  <i data-lucide="badge-dollar-sign" class="h-6 w-6"></i>
+                </div>
+                <div class="min-w-0">
+                  <p class="admin-stopped-payment-review-kicker">Stopped grooming · selected pet only</p>
+                  <h3 id="stopped-payment-review-title" class="admin-stopped-payment-review-title">
+                    Stopped-Grooming Payment Review
+                  </h3>
+                  <p class="admin-stopped-payment-review-context">
+                    <strong x-text="stoppedPaymentReviewModal.review?.pet_name ?? stoppedPaymentReviewModal.pet?.petName ?? stoppedPaymentReviewModal.pet?.pet_name ?? stoppedPaymentReviewModal.pet?.name ?? 'Selected pet'"></strong>
+                    <span aria-hidden="true">&middot;</span>
+                    <span x-text="stoppedPaymentReviewModal.review?.booking_reference ?? stoppedPaymentReviewModal.booking?.bookingReference ?? 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="closeStoppedPaymentReview()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-close"
+                  aria-label="Close stopped-grooming payment review dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </header>
+
+              <div class="admin-stopped-payment-review-body">
+                <div
+                  x-show="stoppedPaymentReviewModal.loading"
+                  class="admin-stopped-payment-review-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="admin-stopped-payment-review-spinner" aria-hidden="true"></span>
+                  <p>Loading payment review status...</p>
+                </div>
+
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && stoppedPaymentReviewModal.error"
+                  class="admin-stopped-payment-review-state is-error"
+                  role="alert"
+                >
+                  <i data-lucide="circle-alert" class="h-7 w-7" aria-hidden="true"></i>
+                  <div>
+                    <strong x-text="stoppedPaymentReviewModal.notFound ? 'Grooming pet record unavailable' : 'Payment review could not be loaded'"></strong>
+                    <p x-text="stoppedPaymentReviewModal.error"></p>
+                  </div>
+                  <button
+                    x-show="!stoppedPaymentReviewModal.notFound"
+                    type="button"
+                    @click="loadStoppedPaymentReview()"
+                    class="admin-stopped-payment-review-retry"
+                  >
+                    Retry
+                  </button>
+                </div>
+
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.loaded && !stoppedPaymentReviewModal.review"
+                  class="admin-stopped-payment-review-state is-error"
+                  role="alert"
+                >
+                  <i data-lucide="circle-alert" class="h-7 w-7" aria-hidden="true"></i>
+                  <div>
+                    <strong>Payment review data unavailable</strong>
+                    <p>The server did not return a payment review status for this pet.</p>
+                  </div>
+                  <button type="button" @click="loadStoppedPaymentReview()" class="admin-stopped-payment-review-retry">
+                    Retry
+                  </button>
+                </div>
+
+                <!-- Safe ineligible state supplied by the backend -->
+                <section
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'pending' && !stoppedPaymentReviewModal.review?.review_creation_allowed"
+                  class="admin-stopped-payment-review-ineligible"
+                  role="status"
+                >
+                  <div class="admin-stopped-payment-review-ineligible-icon" aria-hidden="true">
+                    <i data-lucide="shield-alert" class="h-6 w-6"></i>
+                  </div>
+                  <div>
+                    <h4>Payment review is not currently available</h4>
+                    <p x-text="stoppedPaymentReviewModal.review?.review_creation_blocked_reason || 'This stopped pet is not eligible for review.'"></p>
+                    <button type="button" @click="loadStoppedPaymentReview()" class="admin-stopped-payment-review-retry">
+                      Retry status
+                    </button>
+                  </div>
+                </section>
+
+                <!-- Eligible pending review -->
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'pending' && stoppedPaymentReviewModal.review?.review_creation_allowed"
+                  class="admin-stopped-payment-review-workflow"
+                >
+                  <div class="admin-stopped-payment-review-advisory" role="note">
+                    <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                    <div>
+                      <strong>This review applies only to this pet.</strong>
+                      <p>
+                        Completing this review will not enable final payment yet. Payment integration will be added in the next step.
+                      </p>
+                    </div>
+                  </div>
+
+                  <section class="admin-stopped-payment-review-summary" aria-label="Selected pet and Stop Grooming context">
+                    <div>
+                      <span>Booking reference</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.booking_reference || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Pet</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.pet_name || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Species</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.pet_species || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Grooming state</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.grooming_state_label || 'Stopped'"></strong>
+                    </div>
+                    <div>
+                      <span>Stop Grooming concern</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.concern_public_id || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Action applied</span>
+                      <strong x-text="formatStoppedPaymentDateTime(stoppedPaymentReviewModal.review?.applied_stop_grooming_at)"></strong>
+                    </div>
+                  </section>
+
+                  <section class="admin-stopped-payment-review-services" aria-labelledby="stopped-payment-review-services-title">
+                    <div class="admin-stopped-payment-review-section-heading">
+                      <div>
+                        <h4 id="stopped-payment-review-services-title">Saved services and add-ons</h4>
+                        <p>Prices come from this pet's booking-service snapshots.</p>
+                      </div>
+                      <div class="admin-stopped-payment-review-subtotal">
+                        <span>Original pet subtotal</span>
+                        <strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong>
+                      </div>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-service-list">
+                      <template x-for="line in (stoppedPaymentReviewModal.review?.service_breakdown || [])" :key="line.booking_service_id">
+                        <div class="admin-stopped-payment-review-service-line">
+                          <div>
+                            <strong x-text="line.label || 'Unnamed service'"></strong>
+                            <span x-text="line.line_type === 'add_on' ? 'Add-on' : 'Grooming service'"></span>
+                          </div>
+                          <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
+                        </div>
+                      </template>
+                      <p
+                        x-show="(stoppedPaymentReviewModal.review?.service_breakdown || []).length === 0"
+                        class="admin-stopped-payment-review-no-services"
+                      >
+                        No saved booking-service lines were found. The original pet subtotal is ₱0.00.
+                      </p>
+                    </div>
+                  </section>
+
+                  <form @submit.prevent="openStoppedPaymentReviewConfirmation()" novalidate>
+                    <fieldset class="admin-stopped-payment-review-decisions">
+                      <legend>Review decision <span aria-hidden="true">*</span></legend>
+                      <p class="admin-stopped-payment-review-field-help">Choose one permanent decision. No option is selected by default.</p>
+                      <div class="admin-stopped-payment-review-decision-grid">
+                        <template x-for="decision in stoppedPaymentReviewDecisions" :key="decision.value">
+                          <label
+                            class="admin-stopped-payment-review-decision"
+                            :class="stoppedPaymentReviewForm.decision === decision.value ? 'is-selected' : ''"
+                          >
+                            <input
+                              type="radio"
+                              name="stopped-payment-review-decision"
+                              :value="decision.value"
+                              :checked="stoppedPaymentReviewForm.decision === decision.value"
+                              @change="selectStoppedPaymentReviewDecision(decision.value)"
+                              :aria-invalid="Boolean(stoppedPaymentReviewFieldError('decision'))"
+                            />
+                            <span>
+                              <strong x-text="decision.label"></strong>
+                              <small x-text="decision.description"></small>
+                            </span>
+                          </label>
+                        </template>
+                      </div>
+                      <p x-show="stoppedPaymentReviewFieldError('decision')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('decision')"></p>
+                    </fieldset>
+
+                    <div class="admin-stopped-payment-review-amounts">
+                      <div>
+                        <span>Original subtotal</span>
+                        <strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong>
+                      </div>
+                      <div>
+                        <span>Final reviewed charge</span>
+                        <strong x-text="stoppedPaymentReviewFinalChargeDisplay()"></strong>
+                      </div>
+                      <div>
+                        <span>Adjustment</span>
+                        <strong x-text="stoppedPaymentReviewAdjustmentDisplay()"></strong>
+                      </div>
+                    </div>
+
+                    <div x-show="stoppedPaymentReviewForm.decision === 'partial_charge'" class="admin-stopped-payment-review-field">
+                      <label for="stopped-payment-review-final-charge">
+                        Final Charge <span aria-hidden="true">*</span>
+                      </label>
+                      <div class="admin-stopped-payment-review-money-input">
+                        <span aria-hidden="true">₱</span>
+                        <input
+                          id="stopped-payment-review-final-charge"
+                          type="text"
+                          inputmode="decimal"
+                          autocomplete="off"
+                          placeholder="0.00"
+                          x-model="stoppedPaymentReviewForm.final_pet_charge"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('final_pet_charge'))"
+                          aria-describedby="stopped-payment-review-final-charge-help stopped-payment-review-final-charge-error"
+                        />
+                      </div>
+                      <p id="stopped-payment-review-final-charge-help" class="admin-stopped-payment-review-field-help">
+                        Must be greater than zero, less than the original subtotal, and use no more than two decimal places.
+                      </p>
+                      <p id="stopped-payment-review-final-charge-error" x-show="stoppedPaymentReviewFieldError('final_pet_charge')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('final_pet_charge')"></p>
+                    </div>
+
+                    <div
+                      x-show="stoppedPaymentReviewErrorSummary"
+                      x-ref="stoppedPaymentReviewValidationSummary"
+                      tabindex="-1"
+                      class="admin-stopped-payment-review-validation"
+                      role="alert"
+                    >
+                      <strong>Please review the highlighted fields.</strong>
+                      <p x-text="stoppedPaymentReviewErrorSummary"></p>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-text-grid">
+                      <div class="admin-stopped-payment-review-field">
+                        <label for="stopped-payment-review-internal-reason">
+                          Internal staff reason <span aria-hidden="true">*</span>
+                        </label>
+                        <textarea
+                          id="stopped-payment-review-internal-reason"
+                          rows="5"
+                          maxlength="5000"
+                          x-model="stoppedPaymentReviewForm.internal_reason"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('internal_reason'))"
+                          aria-describedby="stopped-payment-review-internal-help stopped-payment-review-internal-error"
+                        ></textarea>
+                        <p id="stopped-payment-review-internal-help" class="admin-stopped-payment-review-field-help">
+                          Visible only to authorized staff. This is not shown to the customer.
+                        </p>
+                        <p id="stopped-payment-review-internal-error" x-show="stoppedPaymentReviewFieldError('internal_reason')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('internal_reason')"></p>
+                      </div>
+
+                      <div class="admin-stopped-payment-review-field">
+                        <label for="stopped-payment-review-customer-explanation">
+                          Customer-friendly explanation <span aria-hidden="true">*</span>
+                        </label>
+                        <textarea
+                          id="stopped-payment-review-customer-explanation"
+                          rows="5"
+                          maxlength="2000"
+                          x-model="stoppedPaymentReviewForm.customer_explanation"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('customer_explanation'))"
+                          aria-describedby="stopped-payment-review-customer-help stopped-payment-review-customer-error"
+                        ></textarea>
+                        <p id="stopped-payment-review-customer-help" class="admin-stopped-payment-review-field-help">
+                          This may later appear on customer and payment-related summaries. Enter it separately from the internal reason.
+                        </p>
+                        <p id="stopped-payment-review-customer-error" x-show="stoppedPaymentReviewFieldError('customer_explanation')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('customer_explanation')"></p>
+                      </div>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-payment-pending" role="note">
+                      <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                      <p>
+                        Payment remains blocked for stopped pets in this step. Completing this review does not collect payment, create a transaction, or move the booking.
+                      </p>
+                    </div>
+
+                    <footer class="admin-stopped-payment-review-actions">
+                      <button type="button" @click="closeStoppedPaymentReview()" class="admin-stopped-payment-review-secondary">
+                        Cancel
+                      </button>
+                      <button
+                        x-ref="stoppedPaymentReviewCompleteButton"
+                        type="submit"
+                        class="admin-stopped-payment-review-primary"
+                      >
+                        Review and Confirm
+                      </button>
+                    </footer>
+                  </form>
+                </div>
+
+                <!-- Permanent completed review -->
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'completed'"
+                  class="admin-stopped-payment-review-completed"
+                >
+                  <div class="admin-stopped-payment-review-completed-heading">
+                    <div class="admin-stopped-payment-review-completed-icon" aria-hidden="true">
+                      <i data-lucide="badge-check" class="h-7 w-7"></i>
+                    </div>
+                    <div>
+                      <h4>Payment Review Completed</h4>
+                      <p>This is a permanent, immutable record. It cannot be edited or deleted.</p>
+                    </div>
+                  </div>
+
+                  <section class="admin-stopped-payment-review-summary" aria-label="Completed payment review context">
+                    <div><span>Decision</span><strong x-text="stoppedPaymentReviewModal.review?.decision_label || stoppedPaymentReviewDecisionLabel(stoppedPaymentReviewModal.review?.decision)"></strong></div>
+                    <div><span>Original pet subtotal</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong></div>
+                    <div><span>Final pet charge</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.final_pet_charge)"></strong></div>
+                    <div><span>Adjustment</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.adjustment)"></strong></div>
+                    <div><span>Reviewed by</span><strong x-text="stoppedPaymentReviewModal.review?.reviewed_by_name || 'Not provided'"></strong></div>
+                    <div><span>Reviewed at</span><strong x-text="formatStoppedPaymentDateTime(stoppedPaymentReviewModal.review?.reviewed_at)"></strong></div>
+                    <div><span>Stop Grooming concern</span><strong x-text="stoppedPaymentReviewModal.review?.concern_public_id || 'Not provided'"></strong></div>
+                    <div><span>Grooming state</span><strong x-text="stoppedPaymentReviewModal.review?.grooming_state_label || 'Stopped'"></strong></div>
+                  </section>
+
+                  <section class="admin-stopped-payment-review-services" aria-labelledby="completed-payment-review-services-title">
+                    <div class="admin-stopped-payment-review-section-heading">
+                      <div>
+                        <h4 id="completed-payment-review-services-title">Saved service breakdown</h4>
+                        <p>Only this pet's booking-service lines are included.</p>
+                      </div>
+                    </div>
+                    <div class="admin-stopped-payment-review-service-list">
+                      <template x-for="line in (stoppedPaymentReviewModal.review?.service_breakdown || [])" :key="line.booking_service_id">
+                        <div class="admin-stopped-payment-review-service-line">
+                          <div>
+                            <strong x-text="line.label || 'Unnamed service'"></strong>
+                            <span x-text="line.line_type === 'add_on' ? 'Add-on' : 'Grooming service'"></span>
+                          </div>
+                          <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
+                        </div>
+                      </template>
+                      <p x-show="(stoppedPaymentReviewModal.review?.service_breakdown || []).length === 0" class="admin-stopped-payment-review-no-services">
+                        No saved booking-service lines were recorded for this pet.
+                      </p>
+                    </div>
+                  </section>
+
+                  <div class="admin-stopped-payment-review-text-grid">
+                    <section class="admin-stopped-payment-review-readonly-text">
+                      <span>Internal staff reason</span>
+                      <p x-text="stoppedPaymentReviewModal.review?.internal_reason || 'Not provided'"></p>
+                    </section>
+                    <section class="admin-stopped-payment-review-readonly-text">
+                      <span>Customer-friendly explanation</span>
+                      <p x-text="stoppedPaymentReviewModal.review?.customer_explanation || 'Not provided'"></p>
+                    </section>
+                  </div>
+
+                  <div class="admin-stopped-payment-review-payment-pending" role="note">
+                    <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                    <p>Payment review is complete. Final payment processing will be enabled in the next integration step.</p>
+                  </div>
+
+                  <footer class="admin-stopped-payment-review-actions">
+                    <button type="button" @click="closeStoppedPaymentReview()" class="admin-stopped-payment-review-primary">
+                      Close
+                    </button>
+                  </footer>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Permanent review confirmation -->
+          <div
+            x-show="stoppedPaymentReviewConfirmation.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stopped-payment-review-confirm-title"
+            aria-describedby="stopped-payment-review-confirm-description"
+          >
+            <section
+              x-ref="stoppedPaymentReviewConfirmationDialog"
+              tabindex="-1"
+              class="admin-stopped-payment-review-confirm-dialog"
+            >
+              <div class="admin-stopped-payment-review-confirm-icon" aria-hidden="true">
+                <i data-lucide="shield-check" class="h-7 w-7"></i>
+              </div>
+              <h3 id="stopped-payment-review-confirm-title">Complete Permanent Payment Review?</h3>
+              <p id="stopped-payment-review-confirm-description">
+                This completed review will be saved as a permanent record and cannot be edited or deleted.
+              </p>
+
+              <dl class="admin-stopped-payment-review-confirm-summary">
+                <div><dt>Pet</dt><dd x-text="stoppedPaymentReviewModal.review?.pet_name || 'Selected pet'"></dd></div>
+                <div><dt>Original subtotal</dt><dd x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></dd></div>
+                <div><dt>Decision</dt><dd x-text="stoppedPaymentReviewDecisionLabel(stoppedPaymentReviewForm.decision)"></dd></div>
+                <div><dt>Final reviewed charge</dt><dd x-text="stoppedPaymentReviewFinalChargeDisplay()"></dd></div>
+                <div><dt>Adjustment</dt><dd x-text="stoppedPaymentReviewAdjustmentDisplay()"></dd></div>
+              </dl>
+
+              <section class="admin-stopped-payment-review-confirm-explanation">
+                <span>Customer-friendly explanation</span>
+                <p x-text="stoppedPaymentReviewForm.customer_explanation"></p>
+              </section>
+
+              <p class="admin-stopped-payment-review-confirm-warning">
+                This applies only to the selected pet and does not collect payment or move the booking.
+              </p>
+              <p x-show="stoppedPaymentReviewConfirmation.error" class="admin-stopped-payment-review-confirm-error" role="alert" x-text="stoppedPaymentReviewConfirmation.error"></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeStoppedPaymentReviewConfirmation()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-secondary"
+                >
+                  Go Back
+                </button>
+                <button
+                  type="button"
+                  @click="submitStoppedPaymentReview()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-primary"
+                >
+                  <span x-show="stoppedPaymentReviewConfirmation.busy" class="admin-stopped-payment-review-button-spinner" aria-hidden="true"></span>
+                  <span x-text="stoppedPaymentReviewConfirmation.busy ? 'Saving permanent review...' : 'Confirm and Complete'"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <div
+            x-show="stoppedPaymentReviewToast.show"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-toast"
+            :class="stoppedPaymentReviewToast.ok ? 'is-success' : 'is-error'"
+            role="status"
+            aria-live="polite"
+          >
+            <i :data-lucide="stoppedPaymentReviewToast.ok ? 'circle-check' : 'circle-alert'" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+            <span x-text="stoppedPaymentReviewToast.message"></span>
+          </div>
 
           <!-- Per-pet grooming medical concern history and form -->
           <div
@@ -3244,6 +3745,7 @@
 
     <!-- Shared dashboard content script -->
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=medical-concern-ui-20260724"></script>
+    <script src="../../scripts/components/admin-stopped-payment-review.js?v=stopped-payment-review-ui-20260803"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=stopped-payment-review-ui-20260803"></script>
   </body>
 </html>

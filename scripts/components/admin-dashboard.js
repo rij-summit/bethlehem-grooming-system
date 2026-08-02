@@ -487,6 +487,7 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
 function adminDashboard() {
   return {
     ...adminGroomingConcernState(),
+    ...adminStoppedPaymentReviewState(),
     activeTab: "incoming",
     todayCount: 0,
     weekCount: 0,
@@ -3811,6 +3812,7 @@ function adminDashboard() {
         this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
         await this.refreshMedicalConcernIndicators();
+        await this.refreshStoppedPaymentReviewStatuses();
       } catch (error) {
         this._stopPollOnFailure("_bookingInterval", "loadAdminBookings", error);
       }
