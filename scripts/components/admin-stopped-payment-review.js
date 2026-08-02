@@ -461,6 +461,7 @@ function adminStoppedPaymentReviewState() {
         );
         const exactRetry = Boolean(response?.review?.already_reviewed);
         await this.loadStoppedPaymentReview(booking, pet);
+        await this.loadAdminBookings?.();
         this.stoppedPaymentReviewConfirmation = emptyStoppedPaymentReviewConfirmation();
         this.showStoppedPaymentReviewToast(
           exactRetry

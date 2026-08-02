@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WalkinController;
+use App\Models\BookingPet;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -364,13 +365,17 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'final_price' => 500,
             'amount_paid' => 500,
             'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 1, 'amount' => 250],
+                ['booking_service_id' => 2, 'amount' => 250],
+            ],
         ])
             ->assertOk()
-            ->assertJsonPath('final_price', 500);
+            ->assertJsonPath('final_price', '500.00');
 
         $this->assertDatabaseHas('bookings', [
             'booking_id' => 1,
-            'status' => 'archived',
+            'status' => 'released',
             'paid' => true,
         ]);
         $this->assertDatabaseHas('payments', [
@@ -387,12 +392,27 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'queue_number' => 2,
             'paid' => true,
         ]);
+        DB::table('pets')->insert([
+            'pet_id' => 3,
+            'pet_name' => 'Ready',
+            'species' => 'dog',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 3,
+            'booking_id' => 2,
+            'pet_id' => 3,
+            'pet_queue_date' => now()->toDateString(),
+            'pet_queue_number' => 3,
+            'grooming_start_time' => now()->subHour(),
+            'grooming_end_time' => now(),
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+        ]);
 
         $this->postJson('/api/admin/bookings/2/release')
             ->assertOk();
         $this->assertDatabaseHas('bookings', [
             'booking_id' => 2,
-            'status' => 'archived',
+            'status' => 'released',
         ]);
 
         $this->postJson('/api/admin/walk-in', [
@@ -576,6 +596,22 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                 'pet_id' => 2,
                 'pet_queue_date' => now()->toDateString(),
                 'pet_queue_number' => 2,
+            ],
+        ]);
+        DB::table('booking_services')->insert([
+            [
+                'booking_service_id' => 1,
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'service_id' => 1,
+                'price_at_booking' => 250,
+            ],
+            [
+                'booking_service_id' => 2,
+                'booking_id' => 1,
+                'booking_pet_id' => 2,
+                'service_id' => 1,
+                'price_at_booking' => 250,
             ],
         ]);
     }

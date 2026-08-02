@@ -8,8 +8,9 @@ use App\Models\BookingService;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingStoppedPaymentReview;
 use App\Models\Pet;
-use App\Models\Service;
 use App\Models\User;
+use App\Services\GroomingPaymentReadinessService;
+use App\Services\GroomingServicePriceResolver;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -29,6 +30,10 @@ class GroomingStoppedPaymentReviewController extends Controller
         'released',
         'archived',
     ];
+
+    public function __construct(
+        private readonly GroomingServicePriceResolver $servicePrices,
+    ) {}
 
     public function show(int $bookingId, int $bookingPetId)
     {
@@ -127,6 +132,7 @@ class GroomingStoppedPaymentReviewController extends Controller
                     'reviewed_by_name' => $this->formatAuthenticatedUserName($reviewer),
                     'reviewed_at' => now(),
                 ]);
+                $paymentReadiness = $this->advanceBookingToPaymentWhenReady($context);
 
                 return response()->json([
                     'success' => true,
@@ -137,6 +143,7 @@ class GroomingStoppedPaymentReviewController extends Controller
                         $concern,
                         $review,
                     ),
+                    'payment_readiness' => $paymentReadiness,
                 ], 201);
             });
         } catch (UniqueConstraintViolationException) {
@@ -372,6 +379,7 @@ class GroomingStoppedPaymentReviewController extends Controller
         $query = BookingService::query()
             ->where('booking_id', $context->booking_id)
             ->where('booking_pet_id', $context->booking_pet_id)
+            ->with('service')
             ->orderBy('booking_service_id');
 
         if ($lockForUpdate) {
@@ -384,9 +392,7 @@ class GroomingStoppedPaymentReviewController extends Controller
             'addon_id',
             'price_at_booking',
         ]);
-        $serviceNames = Service::query()
-            ->whereIn('service_id', $rows->pluck('service_id')->filter()->unique())
-            ->pluck('service_name', 'service_id');
+        $serviceNames = $rows->pluck('service.service_name', 'service_id');
         $addonNames = DB::table('addons')
             ->whereIn('addon_id', $rows->pluck('addon_id')->filter()->unique())
             ->pluck('addon_name', 'addon_id');
@@ -395,11 +401,14 @@ class GroomingStoppedPaymentReviewController extends Controller
         $lines = $rows->map(function (BookingService $row) use (
             $serviceNames,
             $addonNames,
+            $context,
             &$subtotalInCents,
         ) {
-            $price = $this->centsToMoney(
-                $this->moneyToCents($row->price_at_booking),
+            $resolvedPrice = $this->servicePrices->bookingServicePrice(
+                $row,
+                $context->pet?->size,
             );
+            $price = $resolvedPrice['amount'];
             $subtotalInCents += $this->moneyToCents($price);
             $isAddon = $row->addon_id !== null;
 
@@ -412,6 +421,7 @@ class GroomingStoppedPaymentReviewController extends Controller
                     ? ($addonNames[$row->addon_id] ?? "Add-on #{$row->addon_id}")
                     : ($serviceNames[$row->service_id] ?? "Service #{$row->service_id}"),
                 'price_at_booking' => $price,
+                'price_source' => $resolvedPrice['source'],
             ];
         })->values()->all();
 
@@ -485,6 +495,8 @@ class GroomingStoppedPaymentReviewController extends Controller
             );
         }
 
+        $paymentReadiness = $this->advanceBookingToPaymentWhenReady($context);
+
         return response()->json([
             'success' => true,
             'message' => 'This stopped-grooming payment review was already completed.',
@@ -495,6 +507,7 @@ class GroomingStoppedPaymentReviewController extends Controller
                 $review,
                 alreadyReviewed: true,
             ),
+            'payment_readiness' => $paymentReadiness,
         ]);
     }
 
@@ -566,7 +579,33 @@ class GroomingStoppedPaymentReviewController extends Controller
             'reviewed_at' => $review?->reviewed_at?->toIso8601String(),
             'already_reviewed' => $alreadyReviewed,
             'immutable' => $review !== null,
-            'payment_integration_pending' => true,
+            'payment_integration_pending' => false,
+            'booking_status' => $context->booking?->status,
+        ];
+    }
+
+    private function advanceBookingToPaymentWhenReady(BookingPet $context): array
+    {
+        $booking = $context->booking;
+        $summary = app(GroomingPaymentReadinessService::class)->summarize(
+            $booking,
+            true,
+        );
+
+        if (
+            $summary['payment_ready']
+            && ! (bool) $booking->paid
+            && ! in_array($booking->status, ['cancelled', 'no_show', 'released', 'archived'], true)
+            && $booking->archived_at === null
+        ) {
+            $booking->update(['status' => 'for_payment']);
+        }
+
+        return [
+            'payment_ready' => $summary['payment_ready'],
+            'payment_blocked_reason' => $summary['payment_blocked_reason'],
+            'final_booking_total' => $summary['final_booking_total'],
+            'booking_status' => $booking->status,
         ];
     }
 

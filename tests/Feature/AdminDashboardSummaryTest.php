@@ -833,11 +833,31 @@ class AdminDashboardSummaryTest extends TestCase
                 'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
             ],
         ]);
+        DB::table('booking_services')->insert([
+            [
+                'booking_service_id' => 1,
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'service_id' => null,
+                'price_at_booking' => 250,
+            ],
+            [
+                'booking_service_id' => 2,
+                'booking_id' => 1,
+                'booking_pet_id' => 2,
+                'service_id' => null,
+                'price_at_booking' => 250,
+            ],
+        ]);
 
         $paymentResponse = (new PaymentController)->payNow(new Request([
             'final_price' => 500,
             'amount_paid' => 500,
             'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 1, 'amount' => 250],
+                ['booking_service_id' => 2, 'amount' => 250],
+            ],
         ]), 1);
 
         $this->assertSame(200, $paymentResponse->getStatusCode());

@@ -14,9 +14,12 @@ use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
 use App\Services\AvailabilityTimeWindowService;
+use App\Services\GroomingPaymentReadinessService;
+use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class BookingController extends Controller
 {
@@ -51,8 +54,7 @@ class BookingController extends Controller
     public function getTimeslots(
         Request $request,
         AvailabilityTimeWindowService $timeWindows,
-    )
-    {
+    ) {
         $date = $request->query('date', Carbon::today()->toDateString());
         $settings = ClinicSetting::current();
         $availability = $settings->serviceAvailability('grooming');
@@ -118,8 +120,10 @@ class BookingController extends Controller
     }
 
     // ── SUBMIT A BOOKING ──────────────────────────────────
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        GroomingServicePriceResolver $servicePrices,
+    ) {
         $today = now()->toDateString();
 
         $validated = $request->validate([
@@ -277,7 +281,7 @@ class BookingController extends Controller
             ]);
 
             // ── Save services for this pet ────────────────
-            $petSize = $petData['size'] ?? null;
+            $petSize = $pet->size ?? $petData['size'] ?? null;
             $slugsToSave = [];
 
             $packageSlug = $petData['services']['package'] ?? null;
@@ -300,13 +304,7 @@ class BookingController extends Controller
                         continue;
                     }
 
-                    $price = match ($petSize) {
-                        'small' => $service->price_small ?? $service->base_price,
-                        'medium' => $service->price_medium ?? $service->base_price,
-                        'large',
-                        'extra_large' => $service->price_large ?? $service->base_price,
-                        default => $service->base_price,
-                    };
+                    $price = $servicePrices->servicePrice($service, $petSize);
 
                     BookingService::create([
                         'booking_id' => $booking->booking_id,
@@ -379,6 +377,11 @@ class BookingController extends Controller
         }
 
         $relations = ['timeWindow', 'bookingPets.pet', 'bookingServices.service'];
+        if (Schema::hasTable('payments')) {
+            $relations['payments'] = fn ($query) => $query
+                ->where('payment_status', 'paid')
+                ->orderByDesc('paid_at');
+        }
 
         $activeQuery = Booking::where('user_id', $userId)
             ->whereNotIn('status', ['archived']);
@@ -417,12 +420,16 @@ class BookingController extends Controller
 
         $format = function ($b) use ($petId) {
             $bookingPets = $b->bookingPets ?? collect();
+            $paymentSummary = (bool) $b->paid
+                ? app(GroomingPaymentReadinessService::class)->summarize($b)
+                : null;
+            $paymentPetsById = collect($paymentSummary['pets'] ?? [])->keyBy('booking_pet_id');
 
             if ($petId !== null) {
                 $bookingPets = $bookingPets->where('pet_id', $petId);
             }
 
-            $pets = $bookingPets->map(function ($bp) use ($b) {
+            $pets = $bookingPets->map(function ($bp) use ($b, $paymentPetsById) {
                 $services = ($b->bookingServices ?? collect())
                     ->where('booking_pet_id', $bp->booking_pet_id)
                     ->map(fn ($bookingService) => [
@@ -435,10 +442,13 @@ class BookingController extends Controller
 
                 $groomingStatus = match (true) {
                     in_array($b->status, ['cancelled', 'no_show'], true) => $b->status,
+                    $bp->grooming_state === BookingPet::GROOMING_STATE_STOPPED => 'stopped',
+                    $bp->grooming_state === BookingPet::GROOMING_STATE_PAUSED => 'paused',
                     $bp->grooming_end_time !== null => 'grooming_finished',
                     $bp->grooming_start_time !== null => 'in_progress',
                     default => $b->status,
                 };
+                $paymentPet = $paymentPetsById->get($bp->booking_pet_id);
 
                 return [
                     'pet_id' => $bp->pet_id,
@@ -453,8 +463,59 @@ class BookingController extends Controller
                         ? Carbon::parse($bp->grooming_end_time)->format('g:i A')
                         : null,
                     'services' => $services,
+                    'payment_review' => $paymentPet
+                        && ($paymentPet['payment_kind'] ?? null) === 'stopped_reviewed'
+                        ? [
+                            'status' => 'completed',
+                            'decision' => $paymentPet['review_decision'],
+                            'decision_label' => $paymentPet['review_decision_label'],
+                            'original_amount' => $paymentPet['review_original_pet_subtotal'],
+                            'final_amount' => $paymentPet['final_pet_charge'],
+                            'adjustment' => $paymentPet['adjustment'],
+                            'customer_explanation' => $paymentPet['customer_explanation'],
+                            'reviewed_at' => $paymentPet['reviewed_at'],
+                        ]
+                        : null,
                 ];
             })->values();
+
+            $paidPayment = $b->relationLoaded('payments')
+                ? $b->payments->first()
+                : null;
+            $customerPaymentSummary = null;
+            if ($paymentSummary && $paidPayment) {
+                $safePets = collect($paymentSummary['pets']);
+                if ($petId !== null) {
+                    $safePets = $safePets->where('pet_id', $petId);
+                }
+
+                $customerPaymentSummary = [
+                    'status' => 'paid',
+                    'final_booking_total' => $paymentSummary['final_booking_total'],
+                    'amount_tendered' => $paidPayment->amount_tendered,
+                    'change_amount' => $paidPayment->change_amount,
+                    'payment_method' => $paidPayment->payment_method,
+                    'payment_method_label' => (float) $paidPayment->total_amount === 0.0
+                        ? 'No payment required'
+                        : ucfirst((string) $paidPayment->payment_method),
+                    'paid_at' => $paidPayment->paid_at?->toIso8601String(),
+                    'pets' => $safePets->map(fn (array $pet) => [
+                        'pet_id' => $pet['pet_id'],
+                        'pet_name' => $pet['pet_name'],
+                        'pet_species' => $pet['pet_species'],
+                        'grooming_state' => $pet['grooming_state'],
+                        'payment_kind' => $pet['payment_kind'],
+                        'service_breakdown' => $pet['service_breakdown'],
+                        'original_pet_subtotal' => $pet['original_pet_subtotal'],
+                        'final_pet_charge' => $pet['final_pet_charge'],
+                        'adjustment' => $pet['adjustment'],
+                        'review_decision' => $pet['review_decision'],
+                        'review_decision_label' => $pet['review_decision_label'],
+                        'customer_explanation' => $pet['customer_explanation'],
+                        'reviewed_at' => $pet['reviewed_at'],
+                    ])->values()->all(),
+                ];
+            }
 
             return [
                 'booking_id' => $b->booking_id,
@@ -465,6 +526,7 @@ class BookingController extends Controller
                     : null,
                 'status' => $b->status,
                 'paid' => (bool) $b->paid,
+                'payment_summary' => $customerPaymentSummary,
                 'number_of_pets' => $b->number_of_pets,
                 'reschedule_count' => $b->reschedule_count ?? 0,
                 'cancel_count' => $b->cancel_count ?? 0,

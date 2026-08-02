@@ -141,13 +141,15 @@ class AdminStoppedPaymentReviewInterfaceTest extends TestCase
     {
         foreach ([
             'This review applies only to this pet.',
-            'Completing this review will not enable final payment yet.',
+            'Completing this review may move the owner booking to For Payment when every pet is finished or reviewed.',
             'Saved services and add-ons',
-            "Prices come from this pet's booking-service snapshots.",
+            'Saved booking prices are used. Invalid legacy zero snapshots use the configured size or service rate without overwriting the saved row.',
             'Original pet subtotal',
             'line.booking_service_id',
             'line.line_type',
             'line.price_at_booking',
+            'line.price_source',
+            'Configured rate recovered',
             'concern_public_id',
             'applied_stop_grooming_at',
         ] as $content) {
@@ -250,7 +252,7 @@ class AdminStoppedPaymentReviewInterfaceTest extends TestCase
         }
     }
 
-    public function test_completed_display_is_read_only_and_payment_integration_remains_explicitly_pending(): void
+    public function test_completed_display_is_read_only_and_refreshes_integrated_payment_readiness(): void
     {
         foreach ([
             'Decision',
@@ -262,8 +264,8 @@ class AdminStoppedPaymentReviewInterfaceTest extends TestCase
             'Reviewed by',
             'Reviewed at',
             'Saved service breakdown',
-            'Payment review is complete. Final payment processing will be enabled in the next integration step.',
-            'Completing this review does not collect payment, create a transaction, or move the booking.',
+            'Payment review is complete. When every pet is finished or reviewed, this booking will move to For Payment automatically.',
+            'Completing this review does not collect payment or create a transaction.',
         ] as $content) {
             $this->assertStringContainsString($content, $this->appointmentsPage);
         }
@@ -273,8 +275,8 @@ class AdminStoppedPaymentReviewInterfaceTest extends TestCase
             'async submitStoppedPaymentReview() {',
             'applyStoppedPaymentReviewBackendErrors(error) {',
         );
+        $this->assertStringContainsString('loadAdminBookings', $submission);
         foreach ([
-            'loadAdminBookings',
             'processPayment',
             'payNow',
             'releaseBooking',

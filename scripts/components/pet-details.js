@@ -74,6 +74,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const formatWeight = (value) => isMissing(value) ? "Not provided." : `${value} kg`;
+  const formatPeso = (value) => new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  }).format(Number(value || 0));
 
   const formatBoolean = (value) => {
     if (value === null || value === undefined || value === "") return "Not provided.";
@@ -213,6 +217,8 @@ document.addEventListener("DOMContentLoaded", () => {
       checked_in: ["Checked In", "bg-amber-50 text-amber-700"],
       in_progress: ["Being Groomed", "bg-violet-50 text-violet-700"],
       grooming_finished: ["Grooming Finished", "bg-emerald-50 text-emerald-700"],
+      paused: ["Grooming Paused", "bg-amber-50 text-amber-800"],
+      stopped: ["Grooming Stopped", "bg-red-50 text-red-700"],
       for_payment: ["For Payment", "bg-orange-50 text-orange-700"],
       for_pickup: ["Ready for Pickup", "bg-cyan-50 text-cyan-700"],
       released: ["Released", "bg-emerald-50 text-emerald-700"],
@@ -237,6 +243,22 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Selected Services", services.length ? services.join(", ") : "Not provided."],
       ["Payment Status", booking.paid ? "Paid" : "Unpaid"],
     ];
+    const review = pet.payment_review;
+    const paymentReview = review ? `
+      <section class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4" aria-label="Stopped grooming payment review">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h5 class="font-bold text-amber-900">Payment Review Completed</h5>
+          <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-800">${escapeHtml(displayValue(review.decision_label))}</span>
+        </div>
+        <dl class="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+          <div><dt class="font-semibold text-amber-800">Original amount</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.original_amount))}</dd></div>
+          <div><dt class="font-semibold text-amber-800">Final reviewed amount</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.final_amount))}</dd></div>
+          <div><dt class="font-semibold text-amber-800">Adjustment</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.adjustment))}</dd></div>
+        </dl>
+        <p class="mt-3 text-sm text-slate-700">${escapeHtml(displayValue(review.customer_explanation))}</p>
+        <p class="mt-2 text-xs text-slate-500">Reviewed ${escapeHtml(formatDateTime(review.reviewed_at))}</p>
+      </section>
+    ` : "";
 
     return `
       <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -255,6 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           `).join("")}
         </dl>
+        ${paymentReview}
       </article>
     `;
   };

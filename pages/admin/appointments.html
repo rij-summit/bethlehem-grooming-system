@@ -1024,11 +1024,17 @@
                 </button>
 
                 <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
+                  <template x-if="!booking.paid && !bookingHasPayNowBlockedPet(booking)">
                     <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
                       <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
                       Pay Now
                     </button>
+                  </template>
+                  <template x-if="!booking.paid && bookingHasPayNowBlockedPet(booking)">
+                    <div class="admin-queued-owner-action cursor-not-allowed bg-slate-100 text-slate-500" title="Pay Now is unavailable while a pet is paused or stopped.">
+                      <i data-lucide="shield-alert" class="h-4 w-4" aria-hidden="true"></i>
+                      Pay Now unavailable
+                    </div>
                   </template>
                   <template x-if="booking.paid">
                     <div class="admin-queued-owner-action btn-already-paid">
@@ -1326,11 +1332,17 @@
                 </button>
 
                 <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
+                  <template x-if="!booking.paid && !bookingHasPayNowBlockedPet(booking)">
                     <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
                       <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
                       Pay Now
                     </button>
+                  </template>
+                  <template x-if="!booking.paid && bookingHasPayNowBlockedPet(booking)">
+                    <div class="admin-queued-owner-action cursor-not-allowed bg-slate-100 text-slate-500" title="Pay Now is unavailable while a pet is paused or stopped.">
+                      <i data-lucide="shield-alert" class="h-4 w-4" aria-hidden="true"></i>
+                      Pay Now unavailable
+                    </div>
                   </template>
                   <template x-if="booking.paid">
                     <div class="admin-queued-owner-action btn-already-paid">
@@ -1605,7 +1617,7 @@
                         @click="releaseBooking(booking)"
                         class="btn-release rounded-xl px-6 py-3 text-base font-semibold transition"
                       >
-                        Release
+                        Move to Pickup
                       </button>
                     </template>
 
@@ -1614,11 +1626,14 @@
                       <button
                         type="button"
                         @click="openPaymentModal(booking, false)"
+                        :disabled="booking.paymentReady === false"
                         class="btn-process-payment rounded-xl px-6 py-3 text-base font-semibold transition"
+                        :class="booking.paymentReady === false ? 'cursor-not-allowed opacity-50' : ''"
                       >
                         Process Payment
                       </button>
                     </template>
+                    <p x-show="!booking.paid && booking.paymentReady === false" class="max-w-xs text-right text-xs text-amber-700" x-text="booking.paymentBlockedReason"></p>
 
                     <button
                       type="button"
@@ -1908,7 +1923,7 @@
                     <div>
                       <strong>This review applies only to this pet.</strong>
                       <p>
-                        Completing this review will not enable final payment yet. Payment integration will be added in the next step.
+                        Completing this review may move the owner booking to For Payment when every pet is finished or reviewed. It does not collect payment.
                       </p>
                     </div>
                   </div>
@@ -1944,7 +1959,7 @@
                     <div class="admin-stopped-payment-review-section-heading">
                       <div>
                         <h4 id="stopped-payment-review-services-title">Saved services and add-ons</h4>
-                        <p>Prices come from this pet's booking-service snapshots.</p>
+                        <p>Saved booking prices are used. Invalid legacy zero snapshots use the configured size or service rate without overwriting the saved row.</p>
                       </div>
                       <div class="admin-stopped-payment-review-subtotal">
                         <span>Original pet subtotal</span>
@@ -1957,7 +1972,7 @@
                         <div class="admin-stopped-payment-review-service-line">
                           <div>
                             <strong x-text="line.label || 'Unnamed service'"></strong>
-                            <span x-text="line.line_type === 'add_on' ? 'Add-on' : 'Grooming service'"></span>
+                            <span x-text="(line.line_type === 'add_on' ? 'Add-on' : 'Grooming service') + (line.price_source === 'booking_snapshot' ? '' : ' · Configured rate recovered')"></span>
                           </div>
                           <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
                         </div>
@@ -2089,7 +2104,7 @@
                     <div class="admin-stopped-payment-review-payment-pending" role="note">
                       <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
                       <p>
-                        Payment remains blocked for stopped pets in this step. Completing this review does not collect payment, create a transaction, or move the booking.
+                        Completing this review does not collect payment or create a transaction. It may make the owner booking ready for the normal payment step.
                       </p>
                     </div>
 
@@ -2146,7 +2161,7 @@
                         <div class="admin-stopped-payment-review-service-line">
                           <div>
                             <strong x-text="line.label || 'Unnamed service'"></strong>
-                            <span x-text="line.line_type === 'add_on' ? 'Add-on' : 'Grooming service'"></span>
+                            <span x-text="(line.line_type === 'add_on' ? 'Add-on' : 'Grooming service') + (line.price_source === 'booking_snapshot' ? '' : ' · Configured rate recovered')"></span>
                           </div>
                           <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
                         </div>
@@ -2170,7 +2185,7 @@
 
                   <div class="admin-stopped-payment-review-payment-pending" role="note">
                     <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
-                    <p>Payment review is complete. Final payment processing will be enabled in the next integration step.</p>
+                    <p>Payment review is complete. When every pet is finished or reviewed, this booking will move to For Payment automatically.</p>
                   </div>
 
                   <footer class="admin-stopped-payment-review-actions">
@@ -2221,7 +2236,7 @@
               </section>
 
               <p class="admin-stopped-payment-review-confirm-warning">
-                This applies only to the selected pet and does not collect payment or move the booking.
+                This applies only to the selected pet and does not collect payment. The booking may move to For Payment when every pet is ready.
               </p>
               <p x-show="stoppedPaymentReviewConfirmation.error" class="admin-stopped-payment-review-confirm-error" role="alert" x-text="stoppedPaymentReviewConfirmation.error"></p>
 
@@ -3181,13 +3196,27 @@
                             </div>
                           </div>
 
-                          <label class="payment-size-select">
+                          <label x-show="!pet.isStoppedReviewed" class="payment-size-select">
                             <select x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
                               <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
                                 <option :value="option.value" :selected="option.value === pet.sizeKey" x-text="option.label"></option>
                               </template>
                             </select>
                           </label>
+                          <span x-show="pet.isStoppedReviewed" class="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">Grooming stopped</span>
+                        </div>
+
+                        <div x-show="pet.isStoppedReviewed" class="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <strong class="text-amber-900">Payment review completed</strong>
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-800" x-text="pet.reviewDecisionLabel"></span>
+                          </div>
+                          <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div><dt class="text-xs font-semibold text-slate-500">Original subtotal</dt><dd class="font-bold" x-text="formatPeso(pet.originalSubtotal)"></dd></div>
+                            <div><dt class="text-xs font-semibold text-slate-500">Adjustment</dt><dd class="font-bold" x-text="formatPeso(pet.adjustment)"></dd></div>
+                            <div><dt class="text-xs font-semibold text-slate-500">Reviewed charge</dt><dd class="font-bold text-[#16a34a]" x-text="formatPeso(pet.finalReviewedCharge)"></dd></div>
+                          </dl>
+                          <p class="mt-3"><span class="font-semibold">Customer explanation:</span> <span x-text="pet.customerExplanation || 'Not provided'"></span></p>
                         </div>
 
                         <template x-if="pet.lines.length === 0">
@@ -3200,10 +3229,10 @@
                               <div class="payment-service-copy">
                                 <p class="payment-service-name" x-text="line.name"></p>
                                 <p class="payment-service-description" x-text="line.description"></p>
-                                <p class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
+                                <p x-show="!pet.isStoppedReviewed" class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
                               </div>
 
-                              <label class="payment-price-input">
+                              <label x-show="!pet.isStoppedReviewed" class="payment-price-input">
                                 <span>&#8369;</span>
                                 <input
                                   type="number"
@@ -3219,12 +3248,13 @@
                                   @blur="enforcePaymentMinimum(pet, line)"
                                 />
                               </label>
+                              <strong x-show="pet.isStoppedReviewed" class="text-sm text-slate-700" x-text="formatPeso(line.amount)"></strong>
                             </div>
                           </template>
                         </div>
 
                         <div class="payment-pet-subtotal">
-                          <span x-text="'Subtotal - ' + (pet.name || ('Pet ' + (petIndex + 1)))"></span>
+                          <span x-text="(pet.isStoppedReviewed ? 'Reviewed charge - ' : 'Subtotal - ') + (pet.name || ('Pet ' + (petIndex + 1)))"></span>
                           <strong x-text="formatPeso(paymentPetSubtotal(pet))"></strong>
                         </div>
                       </article>
@@ -3237,7 +3267,7 @@
                   <strong x-text="formatPeso(paymentTotalDue)"></strong>
                 </div>
 
-                <div>
+                <div x-show="paymentTotalDue > 0">
                   <label class="mb-1 block text-xs font-semibold text-slate-500">Amount Paid (&#8369;)</label>
                   <input
                     type="number"
@@ -3252,6 +3282,11 @@
                   />
                 </div>
 
+                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <p class="font-bold">No payment required</p>
+                  <p class="mt-1">This ₱0.00 completion will be recorded without cash tender or change.</p>
+                </div>
+
                 <div class="rounded-xl border px-4 py-3"
                   :class="paymentChange >= 0 ? 'border-[#86efac] bg-[#f0fdf4]' : 'border-red-200 bg-red-50'">
                   <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Change</p>
@@ -3260,7 +3295,7 @@
                     x-text="paymentChange >= 0 ? formatPeso(paymentChange) : '-'"></p>
                 </div>
 
-                <div>
+                <div x-show="paymentTotalDue > 0">
                   <label class="mb-1 block text-xs font-semibold text-slate-500">Payment Method</label>
                   <select
                     x-model="paymentModal.paymentMethod"
@@ -3272,6 +3307,10 @@
                     <option value="card">Card</option>
                     <option value="others">Others</option>
                   </select>
+                </div>
+                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-semibold text-slate-500">Completion method</p>
+                  <p class="mt-1 text-sm font-bold text-slate-700">No payment required</p>
                 </div>
 
                 <div>
@@ -3322,7 +3361,7 @@
                   <i data-lucide="check-circle-2" class="h-7 w-7"></i>
                 </div>
                 <div class="min-w-0">
-                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Booking archived'"></p>
+                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Ready for pickup'"></p>
                   <h4 class="receipt-success-title">Payment Successful</h4>
                   <p class="receipt-success-ref">
                     Ref: <span x-text="receiptModal.bookingReference"></span>
@@ -3411,12 +3450,13 @@
                         <h5 class="text-lg font-semibold text-[#2f4b66]">Service Information</h5>
                       </div>
 
-                      <!-- Frontend-only: prices shown here are the admin-entered amounts from the payment form. -->
+                      <!-- Persisted server payment data, including immutable stopped-pet reviews. -->
                       <div class="space-y-3">
                         <template x-for="pet in receiptModal.pets" :key="'services-' + pet.id">
                           <article class="receipt-inner-card">
                             <div class="mb-3">
                               <p class="font-semibold text-[#2f4b66]" x-text="pet.name"></p>
+                              <span x-show="pet.stoppedReviewed" class="mt-2 inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">Grooming stopped</span>
                             </div>
 
                             <div class="space-y-2">
@@ -3433,8 +3473,16 @@
                             </div>
 
                             <div class="receipt-service-subtotal">
-                              <span>Subtotal</span>
+                              <span x-text="pet.stoppedReviewed ? 'Final reviewed charge' : 'Subtotal'"></span>
                               <strong x-text="formatPeso(pet.subtotal)"></strong>
+                            </div>
+                            <div x-show="pet.stoppedReviewed" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+                              <p class="font-bold text-amber-900" x-text="'Payment Review Completed · ' + (pet.reviewDecisionLabel || 'Reviewed')"></p>
+                              <div class="mt-2 grid grid-cols-2 gap-2">
+                                <p>Original: <strong x-text="formatPeso(pet.originalSubtotal)"></strong></p>
+                                <p>Adjustment: <strong x-text="formatPeso(pet.adjustment)"></strong></p>
+                              </div>
+                              <p class="mt-2" x-text="pet.customerExplanation || 'No customer explanation provided.'"></p>
                             </div>
                           </article>
                         </template>

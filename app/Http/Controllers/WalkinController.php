@@ -11,10 +11,15 @@ use App\Models\Service;
 use App\Models\User;
 use App\Models\Walkin;
 use App\Services\DailyPetQueue;
+use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
 
 class WalkinController extends Controller
 {
+    public function __construct(
+        private readonly GroomingServicePriceResolver $servicePrices,
+    ) {}
+
     public function store(StoreWalkinRequest $request)
     {
         $queueDate = now()->toDateString();
@@ -154,12 +159,7 @@ class WalkinController extends Controller
 
     private function resolvePrice(Service $service, ?string $size): float
     {
-        return match ($size) {
-            'small' => (float) ($service->price_small ?? $service->base_price),
-            'medium' => (float) ($service->price_medium ?? $service->base_price),
-            'large', 'extra_large' => (float) ($service->price_large ?? $service->base_price),
-            default => (float) $service->base_price,
-        };
+        return (float) $this->servicePrices->servicePrice($service, $size);
     }
 
     private function findOrCreatePet(?User $user, array $petData): Pet

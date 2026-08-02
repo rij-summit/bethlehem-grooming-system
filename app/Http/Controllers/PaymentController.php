@@ -7,10 +7,13 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\Payment;
+use App\Services\GroomingPaymentReadinessService;
 use App\Support\PaymentAmountLimit;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
@@ -18,270 +21,307 @@ class PaymentController extends Controller
     private function validatePayload(Request $request): array
     {
         $data = $request->validate([
-            'final_price' => 'required|numeric|min:0.01',
-            'amount_paid' => 'required|numeric|min:0.01',
+            'final_price' => 'required|numeric|decimal:0,2|min:0',
+            'amount_paid' => 'nullable|numeric|decimal:0,2|min:0',
             'payment_method' => 'nullable|in:cash,gcash,maya,card,others',
             'notes' => 'nullable|string|max:500',
             'service_prices' => 'nullable|array',
             'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',
-            'service_prices.*.amount' => 'required_with:service_prices|numeric|min:0.01',
+            'service_prices.*.amount' => 'required_with:service_prices|numeric|decimal:0,2|min:0.01',
         ]);
 
-        if ($data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
+        if ((float) $data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
             throw new PaymentLimitExceededException('final price');
         }
 
-        if ($data['amount_paid'] > PaymentLimitExceededException::MAX_VALUE) {
+        if ((float) ($data['amount_paid'] ?? 0) > PaymentLimitExceededException::MAX_VALUE) {
             throw new PaymentLimitExceededException('amount paid');
         }
 
-        $maximumAmountPaid = PaymentAmountLimit::maximumFor((float) $data['final_price']);
-
-        if ((float) $data['amount_paid'] > $maximumAmountPaid) {
-            throw ValidationException::withMessages([
-                'amount_paid' => 'Amount paid cannot exceed ₱'.number_format($maximumAmountPaid, 2).'.',
-            ]);
-        }
-
-        foreach ($data['service_prices'] ?? [] as $servicePrice) {
-            if (($servicePrice['amount'] ?? 0) > PaymentLimitExceededException::MAX_VALUE) {
-                throw new PaymentLimitExceededException('service price');
+        if (array_key_exists('amount_paid', $data) && (float) $data['final_price'] > 0) {
+            $maximum = PaymentAmountLimit::maximumFor((float) $data['final_price']);
+            if ((float) $data['amount_paid'] > $maximum) {
+                throw ValidationException::withMessages([
+                    'amount_paid' => 'Amount paid cannot exceed '
+                        ."\u{20B1}".number_format($maximum, 2).'.',
+                ]);
             }
         }
 
-        $servicePriceTotal = round(collect($data['service_prices'] ?? [])->sum(
-            fn ($servicePrice) => (float) ($servicePrice['amount'] ?? 0),
-        ), 2);
-
-        if ($servicePriceTotal > 0 && abs($servicePriceTotal - round((float) $data['final_price'], 2)) > 0.01) {
-            throw ValidationException::withMessages([
-                'final_price' => 'Final price must match the submitted service prices.',
-            ]);
+        foreach ($data['service_prices'] ?? [] as $servicePrice) {
+            if ((float) ($servicePrice['amount'] ?? 0) > PaymentLimitExceededException::MAX_VALUE) {
+                throw new PaymentLimitExceededException('service price');
+            }
         }
 
         return $data;
     }
 
-    private function updateBookingServicePrices(Booking $booking, array $servicePrices): void
-    {
-        $booking->loadMissing('bookingServices');
-
-        $bookedServiceIds = $booking->bookingServices
+    private function updateBookingServicePrices(
+        Booking $booking,
+        array $servicePrices,
+        array $editableBookingPetIds,
+    ): void {
+        $editableServiceIds = BookingService::query()
+            ->where('booking_id', $booking->booking_id)
+            ->whereIn('booking_pet_id', $editableBookingPetIds)
+            ->lockForUpdate()
             ->pluck('booking_service_id')
             ->map(fn ($id) => (int) $id);
+        $allServiceIds = BookingService::query()
+            ->where('booking_id', $booking->booking_id)
+            ->pluck('booking_service_id')
+            ->map(fn ($id) => (int) $id);
+        $submittedPrices = collect($servicePrices)->mapWithKeys(fn ($line) => [
+            (int) $line['booking_service_id'] => $this->paymentReadiness()->centsToMoney(
+                $this->paymentReadiness()->moneyToCents($line['amount']),
+            ),
+        ]);
 
-        if ($bookedServiceIds->isEmpty()) {
-            return;
-        }
-
-        if (empty($servicePrices)) {
-            throw ValidationException::withMessages([
-                'service_prices' => 'Please submit a confirmed price for every booked service.',
-            ]);
-        }
-
-        $submittedPrices = collect($servicePrices)->mapWithKeys(function ($servicePrice) {
-            return [
-                (int) $servicePrice['booking_service_id'] => round((float) $servicePrice['amount'], 2),
-            ];
-        });
-
-        if ($submittedPrices->keys()->diff($bookedServiceIds)->isNotEmpty()) {
+        if ($submittedPrices->keys()->diff($allServiceIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
                 'service_prices' => 'One or more service prices do not belong to this booking.',
             ]);
         }
 
-        if ($bookedServiceIds->diff($submittedPrices->keys())->isNotEmpty()) {
+        if ($submittedPrices->keys()->diff($editableServiceIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'service_prices' => 'Please submit a confirmed price for every booked service.',
+                'service_prices' => 'Stopped-pet service prices are historical and cannot be changed during payment.',
+            ]);
+        }
+
+        if ($editableServiceIds->diff($submittedPrices->keys())->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'service_prices' => 'Please submit a confirmed price for every normally finished pet service.',
             ]);
         }
 
         foreach ($submittedPrices as $bookingServiceId => $amount) {
-            BookingService::where('booking_id', $booking->booking_id)
+            BookingService::query()
+                ->where('booking_id', $booking->booking_id)
                 ->where('booking_service_id', $bookingServiceId)
                 ->update(['price_at_booking' => $amount]);
         }
     }
 
-    private function createPaymentRecord(Booking $booking, array $data): Payment
-    {
-        $change = round($data['amount_paid'] - $data['final_price'], 2);
-
-        return Payment::create([
+    private function createPaymentRecord(
+        Booking $booking,
+        string $finalTotal,
+        string $amountTendered,
+        string $paymentMethod,
+        ?string $notes,
+        ?int $processedBy,
+    ): Payment {
+        $money = $this->paymentReadiness();
+        $attributes = [
             'booking_id' => $booking->booking_id,
-            'total_amount' => $data['final_price'],
-            'amount_tendered' => $data['amount_paid'],
-            'change_amount' => $change,
-            'payment_method' => $data['payment_method'] ?? 'cash',
+            'total_amount' => $finalTotal,
+            'amount_tendered' => $amountTendered,
+            'change_amount' => $money->centsToMoney(
+                $money->moneyToCents($amountTendered) - $money->moneyToCents($finalTotal),
+            ),
+            'payment_method' => $paymentMethod,
             'payment_status' => 'paid',
-            'notes' => $data['notes'] ?? null,
+            'notes' => $notes,
             'paid_at' => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('payments', 'processed_by')) {
+            $attributes['processed_by'] = $processedBy;
+        }
+
+        return Payment::create($attributes);
     }
 
-    // ── PROCESS PAYMENT ───────────────────────────────────
-    // for_payment → archived  (creates payment record)
     public function store(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
 
-        if ($data['amount_paid'] < $data['final_price']) {
-            return response()->json(['success' => false, 'message' => 'Amount paid cannot be less than the final price.'], 422);
-        }
+        try {
+            $result = DB::transaction(function () use ($request, $bookingId, $data) {
+                $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
+                if (! $booking) {
+                    return $this->transactionError('Booking not found.', 404);
+                }
 
-        $result = DB::transaction(function () use ($bookingId, $data) {
-            $booking = Booking::whereKey($bookingId)->lockForUpdate()->first();
+                if ($booking->status !== 'for_payment') {
+                    return $this->transactionError('Booking is not awaiting payment.', 422);
+                }
 
-            if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
-            }
+                if ($this->alreadyPaid($booking)) {
+                    return $this->transactionError('This booking has already been paid.', 409);
+                }
 
-            if ($booking->status !== 'for_payment') {
-                return ['error' => [
-                    'message' => 'Booking is not awaiting payment.',
-                    'status' => 422,
-                ]];
-            }
+                $summary = $this->paymentReadiness()->summarize($booking, true);
+                if (! $summary['payment_ready']) {
+                    return $this->transactionError(
+                        'Final payment is unavailable. '.$summary['payment_blocked_reason'],
+                        422,
+                    );
+                }
 
-            $bookingPets = $booking->bookingPets()
-                ->with('pet:pet_id,pet_name')
-                ->lockForUpdate()
-                ->get();
-            $blockingPet = $this->firstPetOutsideStates(
-                $bookingPets,
-                [BookingPet::GROOMING_STATE_FINISHED],
-            );
+                $finishedBookingPetIds = collect($summary['pets'])
+                    ->where('payment_kind', 'finished')
+                    ->pluck('booking_pet_id')
+                    ->all();
+                $this->updateBookingServicePrices(
+                    $booking,
+                    $data['service_prices'] ?? [],
+                    $finishedBookingPetIds,
+                );
 
-            if ($blockingPet) {
-                return ['error' => [
-                    'message' => 'Normal payment is available only after every booking pet is finished. '
-                        .$this->blockingPetDescription($blockingPet).'.',
-                    'status' => 422,
-                ]];
-            }
+                $summary = $this->paymentReadiness()->summarize($booking, true);
+                $serverTotal = (string) $summary['final_booking_total'];
+                $this->validateSubmittedTotal($data['final_price'], $serverTotal);
+                [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
+                    $data,
+                    $serverTotal,
+                );
+                $payment = $this->createPaymentRecord(
+                    $booking,
+                    $serverTotal,
+                    $amountTendered,
+                    $paymentMethod,
+                    $notes,
+                    $request->user()?->user_id,
+                );
 
-            $booking->load(['user', 'bookingServices.service']);
-            $booking->setRelation('bookingPets', $bookingPets);
-            $this->updateBookingServicePrices($booking, $data['service_prices'] ?? []);
-            $payment = $this->createPaymentRecord($booking, $data);
+                $booking->update([
+                    'status' => 'released',
+                    'paid' => true,
+                    'total_amount' => $serverTotal,
+                    'archived_at' => null,
+                ]);
 
-            $booking->update([
-                'status' => 'archived',
-                'paid' => true,
-                'total_amount' => $data['final_price'],
-                'archived_at' => now(),
-            ]);
-
-            return ['payment' => $payment];
-        });
-
-        if (isset($result['error'])) {
+                return compact('booking', 'payment', 'summary');
+            });
+        } catch (UniqueConstraintViolationException) {
             return response()->json([
                 'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
+                'message' => 'This booking was paid by another request. Refresh to view the completed payment.',
+            ], 409);
+        }
+
+        if (isset($result['error'])) {
+            return $this->transactionErrorResponse($result);
         }
 
         $payment = $result['payment'];
 
         return response()->json([
             'success' => true,
-            'message' => 'Payment processed. Booking archived.',
+            'message' => 'Payment processed. Booking is ready for pickup.',
+            'booking_status' => $result['booking']->status,
             'change' => $payment->change_amount,
-            'final_price' => $data['final_price'],
-            'amount_paid' => $data['amount_paid'],
+            'final_price' => $payment->total_amount,
+            'amount_paid' => $payment->amount_tendered,
             'payment_method' => $payment->payment_method,
+            'payment_method_label' => $result['summary']['zero_total']
+                ? 'No payment required'
+                : ucfirst((string) $payment->payment_method),
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
+            'zero_total' => $result['summary']['zero_total'],
+            'payment_summary' => $result['summary'],
         ]);
     }
 
-    // ── PAY NOW (early payment from checked_in or in_progress) ───────────
-    // Records owner-level payment without advancing a booking that still has
-    // queued or in-progress pets. The final pet completion performs the move.
     public function payNow(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
 
-        $result = DB::transaction(function () use ($bookingId, $data) {
-            $booking = Booking::whereKey($bookingId)->lockForUpdate()->first();
+        try {
+            $result = DB::transaction(function () use ($request, $bookingId, $data) {
+                $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
+                if (! $booking) {
+                    return $this->transactionError('Booking not found.', 404);
+                }
 
-            if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
-            }
+                if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
+                    return $this->transactionError(
+                        'Early payment is only available for checked-in or in-progress bookings.',
+                        422,
+                    );
+                }
 
-            if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
-                return ['error' => [
-                    'message' => 'Early payment is only available for checked-in or in-progress bookings.',
-                    'status' => 422,
-                ]];
-            }
+                if ($this->alreadyPaid($booking)) {
+                    return $this->transactionError('This booking has already been paid.', 409);
+                }
 
-            if ($booking->paid) {
-                return ['error' => ['message' => 'This booking has already been paid.', 'status' => 422]];
-            }
+                $bookingPets = $booking->bookingPets()
+                    ->with('pet:pet_id,pet_name')
+                    ->lockForUpdate()
+                    ->get();
+                $blockingPet = $bookingPets->first(fn (BookingPet $bookingPet) => in_array(
+                    $bookingPet->grooming_state,
+                    [BookingPet::GROOMING_STATE_PAUSED, BookingPet::GROOMING_STATE_STOPPED],
+                    true,
+                ));
 
-            $bookingPets = $booking->bookingPets()
-                ->with('pet:pet_id,pet_name')
-                ->lockForUpdate()
-                ->get();
-            $blockingPet = $bookingPets->first(fn (BookingPet $bookingPet) => in_array(
-                $bookingPet->grooming_state,
-                [
-                    BookingPet::GROOMING_STATE_PAUSED,
-                    BookingPet::GROOMING_STATE_STOPPED,
-                ],
-                true,
-            ));
+                if ($blockingPet) {
+                    return $this->transactionError(
+                        'Pay Now is unavailable while a booking pet is paused or stopped. '
+                            .$this->blockingPetDescription($blockingPet).'.',
+                        422,
+                    );
+                }
 
-            if ($blockingPet) {
-                return ['error' => [
-                    'message' => 'Pay Now is unavailable while a booking pet is paused or stopped. '
-                        .$this->blockingPetDescription($blockingPet).'.',
-                    'status' => 422,
-                ]];
-            }
+                $this->updateBookingServicePrices(
+                    $booking,
+                    $data['service_prices'] ?? [],
+                    $bookingPets->pluck('booking_pet_id')->all(),
+                );
+                $serverTotalCents = BookingService::query()
+                    ->where('booking_id', $booking->booking_id)
+                    ->lockForUpdate()
+                    ->get(['price_at_booking'])
+                    ->sum(fn (BookingService $line) => $this->paymentReadiness()
+                        ->moneyToCents($line->price_at_booking));
 
-            if ($data['amount_paid'] < $data['final_price']) {
-                return ['error' => ['message' => 'Amount paid cannot be less than the final price.', 'status' => 422]];
-            }
+                if ($serverTotalCents <= 0) {
+                    return $this->transactionError('Pay Now requires a positive booking total.', 422);
+                }
 
-            $this->updateBookingServicePrices($booking, $data['service_prices'] ?? []);
-            $payment = $this->createPaymentRecord($booking, $data);
-            $petCount = $bookingPets->count();
-            $remainingPets = $bookingPets
-                ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
-                ->count();
-            $allPetsFinished = $petCount > 0 && $remainingPets === 0;
+                $serverTotal = $this->paymentReadiness()->centsToMoney($serverTotalCents);
+                $this->validateSubmittedTotal($data['final_price'], $serverTotal);
+                [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
+                    $data,
+                    $serverTotal,
+                    allowZeroTotal: false,
+                );
+                $payment = $this->createPaymentRecord(
+                    $booking,
+                    $serverTotal,
+                    $amountTendered,
+                    $paymentMethod,
+                    $notes,
+                    $request->user()?->user_id,
+                );
+                $allPetsFinished = $bookingPets->isNotEmpty()
+                    && $bookingPets->every(fn (BookingPet $pet) => $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED
+                        && $pet->grooming_end_time !== null
+                    );
+                $remainingPets = $bookingPets->count()
+                    - $bookingPets->where('grooming_state', BookingPet::GROOMING_STATE_FINISHED)->count();
+                $updates = ['paid' => true, 'total_amount' => $serverTotal];
 
-            $bookingUpdates = [
-                'paid' => true,
-                'total_amount' => $data['final_price'],
-            ];
+                if ($allPetsFinished) {
+                    $updates['status'] = 'released';
+                    $updates['grooming_finished_at'] = $booking->grooming_finished_at ?? now();
+                }
 
-            // This is a defensive concurrency guard. During the normal UI flow,
-            // the final Finished action is what advances an early-paid booking.
-            if ($allPetsFinished) {
-                $bookingUpdates['status'] = 'released';
-                $bookingUpdates['grooming_finished_at'] = $booking->grooming_finished_at ?? now();
-            }
+                $booking->update($updates);
 
-            $booking->update($bookingUpdates);
-
-            return [
-                'booking' => $booking,
-                'payment' => $payment,
-                'allPetsFinished' => $allPetsFinished,
-                'remainingPets' => $remainingPets,
-            ];
-        });
-
-        if (isset($result['error'])) {
+                return compact('booking', 'payment', 'allPetsFinished', 'remainingPets');
+            });
+        } catch (UniqueConstraintViolationException) {
             return response()->json([
                 'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
+                'message' => 'This booking was paid by another request. Refresh to view the completed payment.',
+            ], 409);
+        }
+
+        if (isset($result['error'])) {
+            return $this->transactionErrorResponse($result);
         }
 
         $payment = $result['payment'];
@@ -292,8 +332,8 @@ class PaymentController extends Controller
                 ? 'Payment recorded. Booking is ready for pickup.'
                 : 'Early payment recorded. Booking will remain in its current schedule until every pet is finished.',
             'change' => $payment->change_amount,
-            'final_price' => $data['final_price'],
-            'amount_paid' => $data['amount_paid'],
+            'final_price' => $payment->total_amount,
+            'amount_paid' => $payment->amount_tendered,
             'payment_method' => $payment->payment_method,
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
             'all_pets_finished' => $result['allPetsFinished'],
@@ -302,161 +342,82 @@ class PaymentController extends Controller
         ]);
     }
 
-    // ── RELEASE (already-paid booking) ───────────────────
-    // for_payment + paid=true → archived
+    /** Move an already-paid legacy For Payment booking into To Be Picked Up. */
     public function release($bookingId)
     {
         $result = DB::transaction(function () use ($bookingId) {
-            $booking = Booking::whereKey($bookingId)->lockForUpdate()->first();
-
+            $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return $this->transactionError('Booking not found.', 404);
             }
 
             if ($booking->status !== 'for_payment') {
-                return ['error' => [
-                    'message' => 'Booking is not in For Payment status.',
-                    'status' => 422,
-                ]];
+                return $this->transactionError('Booking is not in For Payment status.', 422);
             }
 
             if (! $booking->paid) {
-                return ['error' => [
-                    'message' => 'Booking has not been paid yet.',
-                    'status' => 422,
-                ]];
+                return $this->transactionError('Booking has not been paid yet.', 422);
             }
 
-            $bookingPets = $booking->bookingPets()
-                ->with('pet:pet_id,pet_name')
-                ->lockForUpdate()
-                ->get();
-            $blockingPet = $this->firstPetOutsideStates(
-                $bookingPets,
-                [BookingPet::GROOMING_STATE_FINISHED],
-            );
-
-            if ($blockingPet) {
-                return ['error' => [
-                    'message' => 'Release is unavailable until every booking pet is finished. '
-                        .$this->blockingPetDescription($blockingPet).'.',
-                    'status' => 422,
-                ]];
+            $summary = $this->paymentReadiness()->summarize($booking, true);
+            if (! $summary['payment_ready']) {
+                return $this->transactionError(
+                    'Release to pickup is unavailable. '.$summary['payment_blocked_reason'],
+                    422,
+                );
             }
 
-            $booking->update([
-                'status' => 'archived',
-                'archived_at' => now(),
-            ]);
+            $booking->update(['status' => 'released', 'archived_at' => null]);
 
-            return ['booking' => $booking];
+            return compact('booking');
         });
 
         if (isset($result['error'])) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
+            return $this->transactionErrorResponse($result);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Booking released and archived.',
+            'message' => 'Booking is ready for physical pickup.',
+            'booking_status' => 'released',
         ]);
-    }
-
-    // ── TRANSACTION LIST ──────────────────────────────────
-    // GET /admin/transactions
-    private function firstPetOutsideStates($bookingPets, array $allowedStates): ?BookingPet
-    {
-        return $bookingPets->first(
-            fn (BookingPet $bookingPet) => ! in_array(
-                $bookingPet->grooming_state,
-                $allowedStates,
-                true,
-            ),
-        );
-    }
-
-    private function blockingPetDescription(BookingPet $bookingPet): string
-    {
-        $petName = $bookingPet->pet?->pet_name
-            ?? "Booking pet #{$bookingPet->booking_pet_id}";
-
-        return $petName.' is '.$this->groomingStateLabel(
-            (string) $bookingPet->grooming_state,
-        );
-    }
-
-    private function groomingStateLabel(string $state): string
-    {
-        return match ($state) {
-            BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
-            BookingPet::GROOMING_STATE_PAUSED => 'Paused',
-            BookingPet::GROOMING_STATE_STOPPED => 'Stopped',
-            BookingPet::GROOMING_STATE_FINISHED => 'Finished',
-            default => 'Not started',
-        };
     }
 
     public function index(Request $request)
     {
         $search = trim((string) $request->query('search', ''));
-        $period = $request->query('period', 'day');
-        $date = $request->query('date', '');
-        $week = $request->query('week', '');
-        $month = $request->query('month', '');
-        $year = $request->query('year', '');
+        $period = (string) $request->query('period', 'day');
+        $date = (string) $request->query('date', '');
+        $week = (string) $request->query('week', '');
+        $month = (string) $request->query('month', '');
+        $year = (string) $request->query('year', '');
 
         if (! in_array($period, ['day', 'week', 'month', 'year'], true)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a valid transaction period.',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction period.'], 422);
         }
-
         if ($period === 'day' && $date && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a valid transaction date.',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction date.'], 422);
         }
-
         if ($period === 'week' && $week && ! $this->isValidWeekValue($week)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a valid transaction week.',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction week.'], 422);
         }
-
         if ($period === 'month' && $month && ! preg_match('/^\d{4}-\d{2}$/', $month)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a valid transaction month.',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction month.'], 422);
         }
-
         if ($period === 'year' && $year && ! preg_match('/^\d{4}$/', $year)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a valid transaction year.',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction year.'], 422);
         }
 
-        $query = Payment::with([
-            'booking.user',
-            'booking.bookingPets.pet',
-            'booking.bookingServices.service',
-        ])->where('payment_status', 'paid')->orderBy('paid_at', 'desc');
-
+        $query = Payment::with(['booking.user'])
+            ->where('payment_status', 'paid')
+            ->orderBy('paid_at', 'desc');
         $this->applyPeriodFilter($query, $period, $date, $week, $month, $year);
 
         if ($search !== '') {
             $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
-
-            $query->where(function ($q) use ($search, $nameTerms) {
-                $q->whereHas('booking.user', function ($q2) use ($search, $nameTerms) {
-                    $q2->where(function ($nameQuery) use ($search, $nameTerms) {
+            $query->where(function ($query) use ($search, $nameTerms) {
+                $query->whereHas('booking.user', function ($userQuery) use ($search, $nameTerms) {
+                    $userQuery->where(function ($nameQuery) use ($search, $nameTerms) {
                         $nameQuery->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere(function ($fullNameQuery) use ($nameTerms) {
@@ -468,13 +429,12 @@ class PaymentController extends Controller
                                 }
                             });
                     });
-                })->orWhereHas('booking.bookingPets.pet', function ($q2) use ($search) {
-                    $q2->where('pet_name', 'like', "%{$search}%");
-                });
+                })->orWhereHas('booking.bookingPets.pet', fn ($petQuery) => $petQuery->where('pet_name', 'like', "%{$search}%")
+                );
             });
         }
 
-        $transactions = $query->get()->map(fn ($p) => $this->formatTransaction($p));
+        $transactions = $query->get()->map(fn (Payment $payment) => $this->formatTransaction($payment));
 
         return response()->json([
             'success' => true,
@@ -492,32 +452,18 @@ class PaymentController extends Controller
     {
         if ($period === 'day' && $date) {
             $query->whereDate('paid_at', $date);
-
-            return;
-        }
-
-        if ($period === 'week' && $week) {
-            [$weekStart, $weekEnd] = $this->weekRange($week);
-            $query->whereDate('paid_at', '>=', $weekStart->toDateString())
-                ->whereDate('paid_at', '<=', $weekEnd->toDateString());
-
-            return;
-        }
-
-        if ($period === 'month' && $month) {
+        } elseif ($period === 'week' && $week) {
+            [$start, $end] = $this->weekRange($week);
+            $query->whereDate('paid_at', '>=', $start->toDateString())
+                ->whereDate('paid_at', '<=', $end->toDateString());
+        } elseif ($period === 'month' && $month) {
             [$selectedYear, $selectedMonth] = explode('-', $month);
             $query->whereYear('paid_at', (int) $selectedYear)
                 ->whereMonth('paid_at', (int) $selectedMonth);
-
-            return;
-        }
-
-        if ($period === 'year' && $year) {
+        } elseif ($period === 'year' && $year) {
             $query->whereYear('paid_at', (int) $year);
         }
     }
-
-    // ── FORMAT ────────────────────────────────────────────
 
     private function isValidWeekValue(string $week): bool
     {
@@ -527,65 +473,152 @@ class PaymentController extends Controller
 
         $year = (int) $matches[1];
         $weekNumber = (int) $matches[2];
-        if ($year < 1 || $weekNumber < 1) {
-            return false;
-        }
 
-        $lastIsoWeek = Carbon::create($year, 12, 28)->isoWeek();
-
-        return $weekNumber <= $lastIsoWeek;
+        return $year > 0
+            && $weekNumber > 0
+            && $weekNumber <= Carbon::create($year, 12, 28)->isoWeek();
     }
 
     private function weekRange(string $week): array
     {
         preg_match('/^(\d{4})-W(\d{2})$/', $week, $matches);
+        $start = Carbon::now()->setISODate((int) $matches[1], (int) $matches[2], 1)->startOfDay();
 
-        $weekStart = Carbon::now()
-            ->setISODate((int) $matches[1], (int) $matches[2], 1)
-            ->startOfDay();
-        $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
-
-        return [$weekStart, $weekEnd];
+        return [$start, $start->copy()->addDays(6)->endOfDay()];
     }
 
     private function formatTransaction(Payment $payment): array
     {
         $booking = $payment->booking;
-        $user = $booking?->user;
-        $bpets = $booking?->bookingPets ?? collect();
-        $firstPet = $bpets->first()?->pet;
-
-        $petName = $firstPet?->pet_name ?? '—';
-        if ($bpets->count() > 1) {
-            $petName .= ' +'.($bpets->count() - 1).' more';
-        }
-
-        $bookedServices = $booking?->bookingServices ?? collect();
-        $serviceLabel = $bookedServices
-            ->map(fn ($bs) => $bs->service?->service_name)
-            ->filter()->unique()->implode(', ') ?: 'Grooming';
+        $summary = $booking
+            ? $this->paymentReadiness()->summarize($booking)
+            : ['pets' => []];
+        $pets = collect($summary['pets'] ?? []);
+        $petName = $pets->pluck('pet_name')->filter()->implode(', ') ?: '—';
+        $serviceLabel = $pets->flatMap(fn (array $pet) => $pet['service_breakdown'] ?? [])
+            ->pluck('label')->filter()->unique()->implode(', ') ?: 'Grooming';
 
         return [
-            'id' => $payment->payment_id,
+            'id' => $payment->getKey(),
             'bookingId' => $booking?->booking_id,
             'reference' => $booking?->booking_reference ?? '—',
-            'ownerName' => trim(($user?->first_name ?? '').' '.($user?->last_name ?? '')),
+            'ownerName' => trim(($booking?->user?->first_name ?? '').' '.($booking?->user?->last_name ?? '')),
             'petName' => $petName,
             'serviceLabel' => $serviceLabel,
             'finalPrice' => (float) $payment->total_amount,
             'amountPaid' => (float) $payment->amount_tendered,
             'changeGiven' => (float) $payment->change_amount,
             'paymentMethod' => $payment->payment_method,
+            'paymentMethodLabel' => (float) $payment->total_amount === 0.0
+                ? 'No payment required'
+                : ucfirst((string) $payment->payment_method),
+            'zeroTotal' => (float) $payment->total_amount === 0.0,
             'notes' => $payment->notes,
-            'paidAt' => $payment->paid_at
-                ? Carbon::parse($payment->paid_at)->format('Y-m-d H:i:s')
-                : null,
-            'paidAtFormatted' => $payment->paid_at
-                ? Carbon::parse($payment->paid_at)->format('g:i A')
-                : '—',
-            'dateKey' => $payment->paid_at
-                ? Carbon::parse($payment->paid_at)->toDateString()
-                : 'unknown',
+            'paidAt' => $payment->paid_at?->format('Y-m-d H:i:s'),
+            'paidAtFormatted' => $payment->paid_at?->format('g:i A') ?? '—',
+            'dateKey' => $payment->paid_at?->toDateString() ?? 'unknown',
+            'paymentSummary' => $summary,
         ];
+    }
+
+    private function validateSubmittedTotal(string|int|float $submitted, string $serverTotal): void
+    {
+        if ($this->paymentReadiness()->moneyToCents($submitted)
+            !== $this->paymentReadiness()->moneyToCents($serverTotal)) {
+            throw ValidationException::withMessages([
+                'final_price' => 'The submitted total does not match the server-calculated booking total.',
+            ]);
+        }
+    }
+
+    private function resolvePaymentInput(
+        array $data,
+        string $serverTotal,
+        bool $allowZeroTotal = true,
+    ): array {
+        $money = $this->paymentReadiness();
+        $totalCents = $money->moneyToCents($serverTotal);
+        $amountCents = $money->moneyToCents($data['amount_paid'] ?? 0);
+
+        if ($totalCents === 0) {
+            if (! $allowZeroTotal) {
+                throw ValidationException::withMessages([
+                    'final_price' => 'This payment flow requires a positive total.',
+                ]);
+            }
+            if ($amountCents !== 0) {
+                throw ValidationException::withMessages([
+                    'amount_paid' => 'A zero-total completion cannot record cash tender or change.',
+                ]);
+            }
+
+            $marker = 'Zero-total completion: no payment required.';
+            $notes = trim((string) ($data['notes'] ?? ''));
+
+            return ['0.00', 'others', $notes === '' ? $marker : $marker.' '.$notes];
+        }
+
+        if (! array_key_exists('amount_paid', $data)) {
+            throw ValidationException::withMessages(['amount_paid' => 'Amount paid is required.']);
+        }
+        if ($amountCents < $totalCents) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Amount paid cannot be less than the final price.',
+            ]);
+        }
+
+        $maximum = PaymentAmountLimit::maximumFor($totalCents / 100);
+        if ($amountCents > (int) round($maximum * 100)) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Amount paid cannot exceed ₱'.number_format($maximum, 2).'.',
+            ]);
+        }
+
+        return [
+            $money->centsToMoney($amountCents),
+            $data['payment_method'] ?? 'cash',
+            $data['notes'] ?? null,
+        ];
+    }
+
+    private function alreadyPaid(Booking $booking): bool
+    {
+        return (bool) $booking->paid
+            || Payment::query()
+                ->where('booking_id', $booking->booking_id)
+                ->where('payment_status', 'paid')
+                ->lockForUpdate()
+                ->exists();
+    }
+
+    private function blockingPetDescription(BookingPet $bookingPet): string
+    {
+        $petName = $bookingPet->pet?->pet_name ?? "Booking pet #{$bookingPet->booking_pet_id}";
+
+        return $petName.' is '.match ($bookingPet->grooming_state) {
+            BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
+            BookingPet::GROOMING_STATE_PAUSED => 'Paused',
+            BookingPet::GROOMING_STATE_STOPPED => 'Stopped',
+            BookingPet::GROOMING_STATE_FINISHED => 'Finished',
+            default => 'Not started',
+        };
+    }
+
+    private function transactionError(string $message, int $status): array
+    {
+        return ['error' => compact('message', 'status')];
+    }
+
+    private function transactionErrorResponse(array $result)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $result['error']['message'],
+        ], $result['error']['status']);
+    }
+
+    private function paymentReadiness(): GroomingPaymentReadinessService
+    {
+        return app(GroomingPaymentReadinessService::class);
     }
 }

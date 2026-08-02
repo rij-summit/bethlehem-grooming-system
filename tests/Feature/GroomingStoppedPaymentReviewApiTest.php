@@ -283,6 +283,65 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         );
     }
 
+    public function test_legacy_zero_snapshots_recover_size_and_ala_carte_prices_without_rewriting_rows(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('pets')->where('pet_id', 101)->update(['size' => 'medium']);
+        DB::table('services')->where('service_id', 1)->update([
+            'service_name' => 'Deluxe Dog Grooming',
+            'slug' => 'deluxe_dog_grooming',
+            'base_price' => 0,
+            'price_small' => null,
+            'price_medium' => null,
+            'price_large' => null,
+        ]);
+        DB::table('services')->where('service_id', 2)->update([
+            'service_name' => 'Facial Trimming',
+            'slug' => 'facial_trimming',
+            'base_price' => 0,
+        ]);
+        DB::table('booking_services')->where('booking_pet_id', 301)->delete();
+        DB::table('booking_services')->insert([
+            [
+                'booking_service_id' => 501,
+                'booking_id' => 201,
+                'booking_pet_id' => 301,
+                'service_id' => 1,
+                'price_at_booking' => '0.00',
+            ],
+            [
+                'booking_service_id' => 502,
+                'booking_id' => 201,
+                'booking_pet_id' => 301,
+                'service_id' => 2,
+                'price_at_booking' => '0.00',
+            ],
+        ]);
+
+        $this->getJson($this->showUri())
+            ->assertOk()
+            ->assertJsonPath('review.original_pet_subtotal', '900.00')
+            ->assertJsonPath('review.service_breakdown.0.price_at_booking', '750.00')
+            ->assertJsonPath('review.service_breakdown.0.price_source', 'catalog_fallback')
+            ->assertJsonPath('review.service_breakdown.1.price_at_booking', '150.00')
+            ->assertJsonPath('review.service_breakdown.1.price_source', 'catalog_fallback');
+
+        $this->postJson($this->storeUri(), $this->fullChargePayload())
+            ->assertCreated()
+            ->assertJsonPath('review.original_pet_subtotal', '900.00')
+            ->assertJsonPath('review.final_pet_charge', '900.00');
+
+        $this->assertSame(
+            [501 => 0, 502 => 0],
+            DB::table('booking_services')
+                ->where('booking_pet_id', 301)
+                ->orderBy('booking_service_id')
+                ->pluck('price_at_booking', 'booking_service_id')
+                ->map(fn ($price) => (int) $price)
+                ->all(),
+        );
+    }
+
     public function test_zero_service_pet_requires_no_charge(): void
     {
         $this->authenticateAs('staff');
@@ -430,6 +489,7 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             'already_reviewed',
             'immutable',
             'payment_integration_pending',
+            'booking_status',
         ], array_keys($review));
         $this->assertArrayNotHasKey('user', $review);
         $this->assertArrayNotHasKey('concern', $review);
@@ -461,7 +521,7 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         ];
     }
 
-    public function test_completed_review_does_not_enable_pay_now_or_normal_payment(): void
+    public function test_completed_review_keeps_pay_now_blocked_but_enables_reviewed_normal_payment(): void
     {
         $this->authenticateAs('staff');
         $this->postJson($this->storeUri(), $this->fullChargePayload())
@@ -469,14 +529,24 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
 
         $this->postJson('/api/admin/bookings/201/pay-now', $this->paymentPayload())
             ->assertUnprocessable();
-        DB::table('bookings')->where('booking_id', 201)->update(['status' => 'for_payment']);
-        $this->postJson('/api/admin/bookings/201/pay', $this->paymentPayload())
-            ->assertUnprocessable()
-            ->assertJsonPath(
-                'message',
-                'Normal payment is available only after every booking pet is finished. Alpha is Stopped.',
-            );
-        $this->assertSame(0, DB::table('payments')->count());
+        $this->assertSame('for_payment', DB::table('bookings')->where('booking_id', 201)->value('status'));
+        $response = $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => 825,
+            'amount_paid' => 900,
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 503, 'amount' => 200],
+            ],
+        ])->assertOk();
+
+        $response->assertJsonPath('booking_status', 'released')
+            ->assertJsonPath('payment_summary.pets.0.payment_kind', 'stopped_reviewed')
+            ->assertJsonPath('payment_summary.pets.1.payment_kind', 'finished');
+        $this->assertSame(1, DB::table('payments')->count());
+        $this->assertSame(825.0, (float) DB::table('payments')->value('total_amount'));
+        $this->assertSame('released', DB::table('bookings')->where('booking_id', 201)->value('status'));
+        $this->assertSame(BookingPet::GROOMING_STATE_STOPPED, DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_state'));
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_end_time'));
     }
 
     #[DataProvider('releaseBlockedStates')]
@@ -521,13 +591,13 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'Pickup completion is unavailable until every booking pet is finished. Alpha is Stopped.',
+                'Pickup completion is unavailable. Payment review is required for Alpha.',
             );
         $this->postJson('/api/admin/bookings/201/archive')
             ->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'Final pickup progression is unavailable until every booking pet is finished. Alpha is Stopped.',
+                'Final pickup progression is unavailable. Payment review is required for Alpha.',
             );
         $this->assertSame(
             'released',
@@ -561,7 +631,185 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         $this->postJson('/api/admin/bookings/201/release')->assertOk();
     }
 
-    public function test_review_creation_has_no_payment_workflow_or_unrelated_side_effects(): void
+    public function test_partial_review_is_used_in_mixed_total_without_overwriting_stopped_prices(): void
+    {
+        $this->authenticateAs('staff');
+        $this->postJson($this->storeUri(), $this->partialChargePayload('300.00'))
+            ->assertCreated();
+
+        $originalStoppedPrices = DB::table('booking_services')
+            ->whereIn('booking_service_id', [501, 502])
+            ->pluck('price_at_booking', 'booking_service_id')
+            ->map(fn ($value) => (float) $value)
+            ->all();
+
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '525.00',
+            'amount_paid' => '600.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 503, 'amount' => '225.00'],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('final_price', '525.00')
+            ->assertJsonPath('change', '75.00')
+            ->assertJsonPath('payment_summary.pets.0.final_pet_charge', '300.00')
+            ->assertJsonPath('payment_summary.pets.1.final_pet_charge', '225.00');
+
+        $this->assertSame($originalStoppedPrices, DB::table('booking_services')
+            ->whereIn('booking_service_id', [501, 502])
+            ->pluck('price_at_booking', 'booking_service_id')
+            ->map(fn ($value) => (float) $value)
+            ->all());
+        $this->assertSame(225.0, (float) DB::table('booking_services')
+            ->where('booking_service_id', 503)->value('price_at_booking'));
+        $this->assertSame(525.0, (float) DB::table('payments')->value('total_amount'));
+        $this->assertSame(525.0, (float) DB::table('bookings')->where('booking_id', 201)->value('total_amount'));
+    }
+
+    public function test_frontend_total_or_stopped_service_manipulation_is_rejected_and_rolled_back(): void
+    {
+        $this->authenticateAs('staff');
+        $this->postJson($this->storeUri(), $this->partialChargePayload('300.00'))
+            ->assertCreated();
+
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '1.00',
+            'amount_paid' => '600.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 503, 'amount' => '250.00'],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('final_price');
+        $this->assertSame(200.0, (float) DB::table('booking_services')
+            ->where('booking_service_id', 503)->value('price_at_booking'));
+        $this->assertSame(0, DB::table('payments')->count());
+
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '500.00',
+            'amount_paid' => '500.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 501, 'amount' => '300.00'],
+                ['booking_service_id' => 503, 'amount' => '200.00'],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('service_prices');
+        $this->assertSame(500.0, (float) DB::table('booking_services')
+            ->where('booking_service_id', 501)->value('price_at_booking'));
+    }
+
+    public function test_all_no_charge_stopped_pets_complete_zero_total_then_pickup_archives(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('booking_pets')->where('booking_pet_id', 302)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
+
+        $this->postJson($this->storeUri(), $this->noChargePayload())->assertCreated();
+        $this->postJson(
+            '/api/admin/bookings/201/pets/302/medical-concerns/402/stopped-payment-review',
+            $this->noChargePayload(),
+        )->assertCreated()
+            ->assertJsonPath('payment_readiness.payment_ready', true)
+            ->assertJsonPath('payment_readiness.final_booking_total', '0.00')
+            ->assertJsonPath('payment_readiness.booking_status', 'for_payment');
+
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '0.00',
+            'amount_paid' => '0.00',
+            'payment_method' => 'cash',
+            'service_prices' => [],
+        ])->assertOk()
+            ->assertJsonPath('zero_total', true)
+            ->assertJsonPath('payment_method', 'others')
+            ->assertJsonPath('amount_paid', '0.00')
+            ->assertJsonPath('change', '0.00')
+            ->assertJsonPath('booking_status', 'released');
+
+        $this->assertDatabaseHas('payments', [
+            'booking_id' => 201,
+            'total_amount' => 0,
+            'amount_tendered' => 0,
+            'change_amount' => 0,
+            'payment_method' => 'others',
+            'payment_status' => 'paid',
+        ]);
+        $this->postJson('/api/admin/bookings/201/picked-up')->assertOk();
+        $this->assertSame('archived', DB::table('bookings')->where('booking_id', 201)->value('status'));
+        $this->assertSame(BookingPet::GROOMING_STATE_STOPPED, DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_state'));
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_end_time'));
+    }
+
+    public function test_duplicate_normal_payment_is_blocked_and_transaction_details_are_privacy_safe(): void
+    {
+        $this->authenticateAs('staff');
+        $this->postJson($this->storeUri(), $this->fullChargePayload())->assertCreated();
+        $payload = [
+            'final_price' => '825.00',
+            'amount_paid' => '825.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 503, 'amount' => '200.00'],
+            ],
+        ];
+        $this->postJson('/api/admin/bookings/201/pay', $payload)->assertOk();
+        $this->postJson('/api/admin/bookings/201/pay', $payload)->assertStatus(422);
+        $this->assertSame(1, DB::table('payments')->count());
+
+        $json = $this->getJson('/api/admin/transactions?period=day')
+            ->assertOk()
+            ->assertJsonPath('transactions.0.paymentSummary.pets.0.review_decision', 'full_charge')
+            ->assertJsonPath('transactions.0.paymentSummary.pets.0.customer_explanation', 'The charge reflects completed grooming work.')
+            ->json();
+        $encoded = json_encode($json);
+        $this->assertStringNotContainsString('Stopped before completion.', $encoded);
+        $this->assertStringNotContainsString('internal_reason', $encoded);
+    }
+
+    public function test_customer_history_exposes_only_owner_scoped_reviewed_payment_facts(): void
+    {
+        $this->authenticateAs('staff');
+        $this->postJson($this->storeUri(), $this->partialChargePayload('300.00'))
+            ->assertCreated();
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '500.00',
+            'amount_paid' => '500.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 503, 'amount' => '200.00'],
+            ],
+        ])->assertOk();
+
+        $this->authenticateAs('customer');
+        $response = $this->getJson('/api/booking/history?pet_id=101')->assertOk();
+        $paidBooking = collect($response->json('bookings'))->firstWhere('booking_id', 201);
+        $this->assertNotNull($paidBooking);
+        $this->assertSame('500.00', $paidBooking['payment_summary']['final_booking_total']);
+        $this->assertCount(1, $paidBooking['payment_summary']['pets']);
+        $safePet = $paidBooking['payment_summary']['pets'][0];
+        $this->assertSame('Alpha', $safePet['pet_name']);
+        $this->assertSame('partial_charge', $safePet['review_decision']);
+        $this->assertSame('300.00', $safePet['final_pet_charge']);
+        $this->assertSame('The charge reflects completed grooming work.', $safePet['customer_explanation']);
+        $encoded = json_encode($response->json());
+        $this->assertStringNotContainsString('Stopped before completion.', $encoded);
+        $this->assertStringNotContainsString('internal_reason', $encoded);
+        $this->assertStringNotContainsString('reviewed_by_user_id', $encoded);
+
+        DB::table('users')->insert([
+            'user_id' => 4,
+            'first_name' => 'Other',
+            'last_name' => 'Customer',
+            'role' => 'customer',
+        ]);
+        Sanctum::actingAs(User::findOrFail(4));
+        $this->getJson('/api/booking/history')->assertOk()->assertJsonCount(0, 'bookings');
+    }
+
+    public function test_review_creation_only_advances_payment_readiness_without_financial_side_effects(): void
     {
         $this->authenticateAs('staff');
         $booking = DB::table('bookings')->where('booking_id', 201)->first();
@@ -582,7 +830,11 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         $this->postJson($this->storeUri(), $this->partialChargePayload('300.00'))
             ->assertCreated();
 
-        $this->assertEquals($booking, DB::table('bookings')->where('booking_id', 201)->first());
+        $updatedBooking = DB::table('bookings')->where('booking_id', 201)->first();
+        $this->assertSame('for_payment', $updatedBooking->status);
+        foreach (['paid', 'total_amount', 'archived_at', 'grooming_finished_at'] as $field) {
+            $this->assertEquals($booking->{$field}, $updatedBooking->{$field});
+        }
         $this->assertEquals($bookingPet, DB::table('booking_pets')->where('booking_pet_id', 301)->first());
         $this->assertEquals($concern, DB::table('grooming_medical_concerns')->where('id', 401)->first());
         $this->assertSame(
@@ -612,6 +864,7 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             $table->unsignedInteger('user_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
+            $table->string('size')->nullable();
             $table->boolean('is_archived')->default(false);
             $table->foreign('user_id')->references('user_id')->on('users')->nullOnDelete();
         });
@@ -643,6 +896,11 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         Schema::create('services', function (Blueprint $table) {
             $table->increments('service_id');
             $table->string('service_name');
+            $table->string('slug')->nullable()->unique();
+            $table->decimal('base_price', 8, 2)->default(0);
+            $table->decimal('price_small', 8, 2)->nullable();
+            $table->decimal('price_medium', 8, 2)->nullable();
+            $table->decimal('price_large', 8, 2)->nullable();
         });
         Schema::create('addons', function (Blueprint $table) {
             $table->increments('addon_id');
@@ -709,6 +967,8 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             $table->unsignedInteger('booking_id')->nullable();
             $table->string('type');
             $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->dateTime('created_at')->nullable();
         });
         Schema::create('inventory_transactions', function (Blueprint $table) {
             $table->id();
@@ -726,8 +986,8 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             ['user_id' => 3, 'first_name' => 'Admin', 'last_name' => 'Reviewer', 'role' => 'admin'],
         ]);
         DB::table('pets')->insert([
-            ['pet_id' => 101, 'user_id' => 1, 'pet_name' => 'Alpha', 'species' => 'Dog'],
-            ['pet_id' => 102, 'user_id' => 1, 'pet_name' => 'Beta', 'species' => 'Cat'],
+            ['pet_id' => 101, 'user_id' => 1, 'pet_name' => 'Alpha', 'species' => 'Dog', 'size' => 'medium'],
+            ['pet_id' => 102, 'user_id' => 1, 'pet_name' => 'Beta', 'species' => 'Cat', 'size' => 'small'],
         ]);
         DB::table('bookings')->insert([
             [
@@ -772,8 +1032,8 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             ],
         ]);
         DB::table('services')->insert([
-            ['service_id' => 1, 'service_name' => 'Basic Grooming'],
-            ['service_id' => 2, 'service_name' => 'Nail Trim'],
+            ['service_id' => 1, 'service_name' => 'Basic Grooming', 'slug' => 'basic_grooming'],
+            ['service_id' => 2, 'service_name' => 'Nail Trim', 'slug' => 'nail_trim'],
         ]);
         DB::table('addons')->insert([
             ['addon_id' => 1, 'addon_name' => 'Coat Conditioner'],

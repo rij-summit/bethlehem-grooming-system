@@ -911,6 +911,19 @@
   }
 
   function buildHistoryCard(b) {
+    const reviewedPets = (b.payment_summary?.pets || [])
+      .filter((pet) => pet.payment_kind === "stopped_reviewed");
+    const paymentReviewSummary = reviewedPets.length ? `
+      <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
+        ${reviewedPets.map((pet) => `
+          <div class="rounded-xl bg-amber-50 p-3 text-xs text-slate-700">
+            <p class="font-bold text-amber-900">${escapeHtml(pet.pet_name)} &middot; Payment Review Completed</p>
+            <p class="mt-1">${escapeHtml(pet.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet.final_pet_charge)}</p>
+            <p class="mt-1">${escapeHtml(pet.customer_explanation || "No customer explanation provided.")}</p>
+          </div>
+        `).join("")}
+      </div>
+    ` : "";
     const timeLabel  = b.time_window?.window_label ?? "—";
     const petNames   = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
     const paidBadge  = b.paid
@@ -925,6 +938,7 @@
         </div>
         <p class="text-xs text-slate-400 mb-1">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
         <p class="text-xs text-slate-500">${petNames}</p>
+        ${paymentReviewSummary}
       </div>`;
   }
 
@@ -1100,6 +1114,13 @@
     if (!dateStr) return "—";
     const d = new Date(dateStr + "T00:00:00");
     return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+  }
+
+  function formatPaymentPeso(value) {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+    }).format(Number(value || 0));
   }
 
   // Expose for coordination with the notification poller (pickup popup sequencing).

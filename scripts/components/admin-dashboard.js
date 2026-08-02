@@ -3200,6 +3200,12 @@ function adminDashboard() {
 
     // ── Payment ───────────────────────────────────────────────────────────────
 
+    bookingHasPayNowBlockedPet(booking) {
+      return (booking?.pets || []).some((pet) =>
+        ["paused", "stopped"].includes(pet?.groomingState ?? pet?.grooming_state),
+      );
+    },
+
     get paymentTotalDue() {
       return this.paymentModal.petBreakdown.reduce(
         (sum, pet) => sum + this.paymentPetSubtotal(pet),
@@ -3209,7 +3215,7 @@ function adminDashboard() {
 
     get paymentLineCount() {
       return this.paymentModal.petBreakdown.reduce(
-        (count, pet) => count + (Array.isArray(pet.lines) ? pet.lines.length : 0),
+        (count, pet) => count + (pet.isStoppedReviewed ? 0 : (Array.isArray(pet.lines) ? pet.lines.length : 0)),
         0,
       );
     },
@@ -3225,27 +3231,37 @@ function adminDashboard() {
 
     get canSubmitPayment() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
+      const isZeroTotal = !this.paymentModal.isEarlyPayment && this.paymentTotalDue === 0;
 
       return (
         !this.paymentModal.busy &&
-        this.paymentLineCount > 0 &&
-        this.paymentTotalDue > 0 &&
+        this.paymentModal.petBreakdown.length > 0 &&
+        (isZeroTotal || this.paymentTotalDue > 0) &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        this.paymentChange >= 0 &&
-        paid <= this.paymentMaximumAmount
+        (isZeroTotal || this.paymentChange >= 0) &&
+        (isZeroTotal || paid <= this.paymentMaximumAmount)
       );
     },
 
     openPaymentModal(booking, isEarlyPayment = false) {
+      if (!isEarlyPayment && booking?.paymentReady === false) {
+        alert(booking?.paymentBlockedReason || "This booking is not ready for final payment.");
+        return;
+      }
+
+      const petBreakdown = this.buildPaymentBreakdown(booking, { lockFixedPrices: true });
+      const zeroTotal = !isEarlyPayment
+        && petBreakdown.length > 0
+        && petBreakdown.reduce((sum, pet) => sum + this.paymentPetSubtotal(pet), 0) === 0;
       this.paymentModal = {
         open: true,
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: true }),
-        amountPaid: "",
-        paymentMethod: "cash",
+        petBreakdown,
+        amountPaid: zeroTotal ? "0.00" : "",
+        paymentMethod: zeroTotal ? "others" : "cash",
         notes: "",
         busy: false,
         error: "",
@@ -3263,6 +3279,10 @@ function adminDashboard() {
     buildPaymentBreakdown(booking, paymentOptions = {}) {
       const pets = this.normalizePaymentPets(booking);
       const services = this.normalizePaymentServices(booking?.services);
+      const serverSummary = booking?.paymentSummary ?? booking?.payment_summary ?? {};
+      const serverPets = new Map(
+        (serverSummary?.pets || []).map((pet) => [String(pet.booking_pet_id), pet]),
+      );
 
       /*
        * Backend handoff:
@@ -3271,6 +3291,30 @@ function adminDashboard() {
        * preferred so the frontend can show the exact minimum price rule.
        */
       return pets.map((pet, petIndex) => {
+        const serverPet = serverPets.get(String(pet.bookingPetId)) || null;
+        if (serverPet?.payment_kind === "stopped_reviewed") {
+          return {
+            ...pet,
+            isStoppedReviewed: true,
+            groomingState: "stopped",
+            lines: (serverPet.service_breakdown || []).map((line, lineIndex) => ({
+              id: line.booking_service_id ?? `stopped-${petIndex}-${lineIndex}`,
+              bookingServiceId: line.booking_service_id,
+              name: line.label || "Grooming Service",
+              description: line.line_type === "add_on" ? "Saved add-on price" : "Saved original service price",
+              amount: Number(line.price_at_booking || 0).toFixed(2),
+              isFixedPriceLocked: true,
+            })),
+            originalSubtotal: Number(serverPet.review_original_pet_subtotal ?? serverPet.original_pet_subtotal ?? 0),
+            finalReviewedCharge: Number(serverPet.final_pet_charge || 0),
+            adjustment: Number(serverPet.adjustment || 0),
+            reviewDecision: serverPet.review_decision,
+            reviewDecisionLabel: serverPet.review_decision_label,
+            customerExplanation: serverPet.customer_explanation || "",
+            reviewedAt: serverPet.reviewed_at || null,
+          };
+        }
+
         const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
         const inferredSizeKey = inferPaymentSizeFromServices(petServices, pet.petTypeKey);
         const pricedPet = inferredSizeKey
@@ -3286,6 +3330,7 @@ function adminDashboard() {
 
         return {
           ...pricedPet,
+          isStoppedReviewed: false,
           lines,
         };
       });
@@ -3328,6 +3373,7 @@ function adminDashboard() {
           sizeKey,
           sizeLabel: formatPaymentSizeLabel(sizeKey),
           services: Array.isArray(pet?.services) ? pet.services : [],
+          groomingState: pet?.groomingState ?? pet?.grooming_state ?? "not_started",
         };
       });
     },
@@ -3508,6 +3554,10 @@ function adminDashboard() {
     },
 
     paymentPetSubtotal(pet) {
+      if (pet?.isStoppedReviewed) {
+        return Number(pet.finalReviewedCharge || 0);
+      }
+
       return (pet?.lines || []).reduce((sum, line) => {
         const amount = parseFloat(line.amount);
         return Number.isFinite(amount) ? sum + amount : sum;
@@ -3553,12 +3603,13 @@ function adminDashboard() {
 
     hasMissingPaymentPrices() {
       return this.paymentModal.petBreakdown.some((pet) =>
-        (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
+        !pet.isStoppedReviewed && (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
       );
     },
 
     getInvalidPaymentLine() {
       for (const pet of this.paymentModal.petBreakdown) {
+        if (pet.isStoppedReviewed) continue;
         for (const line of pet.lines || []) {
           const amount = parseFloat(line.amount);
           const minimum = parseFloat(line.minAmount) || 0.01;
@@ -3620,6 +3671,7 @@ function adminDashboard() {
       const servicePrices = [];
 
       pets.forEach((pet) => {
+        if (pet?.isStoppedReviewed) return;
         (Array.isArray(pet?.lines) ? pet.lines : []).forEach((line) => {
           const bookingServiceId =
             line?.bookingServiceId ?? line?.booking_service_id ?? null;
@@ -3639,13 +3691,40 @@ function adminDashboard() {
       return servicePrices;
     },
 
+    buildServerPaymentReceiptPets(summary, fallbackPets = []) {
+      if (!Array.isArray(summary?.pets)) {
+        return this.buildPaymentReceiptPets(fallbackPets);
+      }
+
+      return summary.pets.map((pet, index) => ({
+        id: pet.booking_pet_id ?? `receipt-pet-${index + 1}`,
+        name: this.formatReceiptValue(pet.pet_name, `Pet ${index + 1}`),
+        species: this.formatReceiptValue(pet.pet_species),
+        breed: "Not specified",
+        sizeLabel: "Not specified",
+        stoppedReviewed: pet.payment_kind === "stopped_reviewed",
+        groomingStateLabel: pet.grooming_state_label,
+        reviewDecisionLabel: pet.review_decision_label,
+        originalSubtotal: Number(pet.review_original_pet_subtotal ?? pet.original_pet_subtotal ?? 0),
+        adjustment: Number(pet.adjustment || 0),
+        customerExplanation: pet.customer_explanation || "",
+        lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
+          id: line.booking_service_id ?? `${index}-${lineIndex}`,
+          name: this.formatReceiptValue(line.label, "Grooming Service"),
+          price: Number(line.price_at_booking || 0),
+        })),
+        subtotal: Number(pet.final_pet_charge || 0),
+      }));
+    },
+
     async submitPayment() {
       const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
       const fp = Number(this.paymentTotalDue.toFixed(2));
-      const ap = parseFloat(amountPaid);
+      const isZeroTotal = !isEarlyPayment && fp === 0;
+      const ap = isZeroTotal ? 0 : parseFloat(amountPaid);
       const paymentMethod = this.paymentModal.paymentMethod || "cash";
 
-      if (this.paymentLineCount === 0) {
+      if (this.paymentModal.petBreakdown.length === 0) {
         this.paymentModal.error = "No booked services were found for this payment.";
         return;
       }
@@ -3661,15 +3740,15 @@ function adminDashboard() {
         return;
       }
 
-      if (!fp || fp <= 0) {
+      if (isEarlyPayment && (!fp || fp <= 0)) {
         this.paymentModal.error = "Please enter service prices before confirming payment.";
         return;
       }
-      if (!ap || ap < fp) {
+      if (!isZeroTotal && (!ap || ap < fp)) {
         this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
         return;
       }
-      if (ap > this.paymentMaximumAmount) {
+      if (!isZeroTotal && ap > this.paymentMaximumAmount) {
         this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
         return;
       }
@@ -3695,7 +3774,10 @@ function adminDashboard() {
           ? await API.payNow(booking.id, payload)
           : await API.processPayment(booking.id, payload);
 
-        const receiptPets = this.buildPaymentReceiptPets(this.paymentModal.petBreakdown);
+        const receiptPets = this.buildServerPaymentReceiptPets(
+          res?.payment_summary,
+          this.paymentModal.petBreakdown,
+        );
         const receiptPetNames = receiptPets.map((pet) => pet.name).filter(Boolean).join(", ");
         const receiptServiceNames = [
           ...new Set(
@@ -3717,16 +3799,19 @@ function adminDashboard() {
           appointmentDate: this.formatReceiptValue(booking.appointmentDate, "No date selected"),
           appointmentTime: this.formatReceiptValue(booking.appointmentTime, "No time selected"),
           pets:          receiptPets,
-          finalPrice:    fp,
-          amountPaid:    ap,
+          finalPrice:    Number(res.final_price ?? fp),
+          amountPaid:    Number(res.amount_paid ?? ap),
           change:        res.change ?? (ap - fp),
-          paymentMethod: paymentMethod,
+          paymentMethod: res.payment_method_label ?? res.payment_method ?? paymentMethod,
           paidAt:        res.paid_at ?? new Date().toLocaleString("en-PH"),
           isEarlyPayment,
         };
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
         await this.loadAdminBookings();
         await this.loadNotifications();
+        if (!isEarlyPayment && res?.booking_status === "released") {
+          this.setTab("to-be-picked-up");
+        }
         if (isEarlyPayment && res?.all_pets_finished) {
           this.setTab("to-be-picked-up");
         }

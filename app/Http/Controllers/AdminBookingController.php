@@ -10,6 +10,7 @@ use App\Models\CustomerNotification;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\DailyPetQueue;
+use App\Services\GroomingPaymentReadinessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -496,15 +497,31 @@ class AdminBookingController extends Controller
                 ]];
             }
 
-            $hasIneligiblePet = $unfinishedPets->contains(
-                fn (BookingPet $bookingPet) => $bookingPet->grooming_state !== BookingPet::GROOMING_STATE_IN_PROGRESS
-                    || $bookingPet->grooming_start_time === null
-                    || $bookingPet->grooming_end_time !== null,
+            $paymentSummary = $this->paymentReadiness()->summarize($booking, true);
+            $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
+            $petsToFinish = $unfinishedPets->filter(
+                fn (BookingPet $bookingPet) => $bookingPet->grooming_state
+                    === BookingPet::GROOMING_STATE_IN_PROGRESS,
             );
+            $hasIneligiblePet = $unfinishedPets->contains(function (BookingPet $bookingPet) use ($paymentPetsById) {
+                if ($bookingPet->grooming_state === BookingPet::GROOMING_STATE_IN_PROGRESS) {
+                    return $bookingPet->grooming_start_time === null
+                        || $bookingPet->grooming_end_time !== null;
+                }
+
+                return ! (bool) ($paymentPetsById->get($bookingPet->booking_pet_id)['payment_ready'] ?? false);
+            });
 
             if ($hasIneligiblePet) {
                 return ['error' => [
-                    'message' => 'All unfinished pets must be in progress before the booking can be finished. Paused or stopped pets cannot be finished normally.',
+                    'message' => 'All unfinished pets must be in progress, or stopped with a completed exact payment review. Paused and unreviewed stopped pets block completion.',
+                    'status' => 422,
+                ]];
+            }
+
+            if ($petsToFinish->isEmpty()) {
+                return ['error' => [
+                    'message' => 'There are no in-progress pets to finish normally.',
                     'status' => 422,
                 ]];
             }
@@ -512,7 +529,7 @@ class AdminBookingController extends Controller
             $finishedAt = now();
             BookingPet::whereIn(
                 'booking_pet_id',
-                $unfinishedPets->pluck('booking_pet_id'),
+                $petsToFinish->pluck('booking_pet_id'),
             )->update([
                 'grooming_end_time' => $finishedAt,
                 'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
@@ -582,13 +599,14 @@ class AdminBookingController extends Controller
                 'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
             ]);
 
-            $remainingPets = BookingPet::where('booking_id', $booking->booking_id)
-                ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
+            $paymentSummary = $this->paymentReadiness()->summarize($booking, true);
+            $remainingPets = collect($paymentSummary['pets'])
+                ->where('payment_ready', false)
                 ->count();
             $petName = $bookingPet->pet()->value('pet_name') ?: 'Pet';
             $completion = null;
 
-            if ($remainingPets === 0) {
+            if ($paymentSummary['payment_ready']) {
                 $completion = $this->completeGroomingBooking($booking, $finishedAt);
             } else {
                 $booking->loadMissing('user');
@@ -609,7 +627,7 @@ class AdminBookingController extends Controller
                 'booking' => $booking,
                 'bookingPet' => $bookingPet,
                 'petName' => $petName,
-                'allPetsFinished' => $remainingPets === 0,
+                'allPetsPaymentReady' => $paymentSummary['payment_ready'],
                 'remainingPets' => $remainingPets,
                 'finishedAt' => $finishedAt,
                 'completion' => $completion,
@@ -623,7 +641,7 @@ class AdminBookingController extends Controller
             ], $result['error']['status']);
         }
 
-        $allPetsFinished = $result['allPetsFinished'];
+        $allPetsFinished = $result['allPetsPaymentReady'];
         $remainingPets = $result['remainingPets'];
         $remainingLabel = $remainingPets === 1 ? 'pet remains' : 'pets remain';
 
@@ -637,6 +655,7 @@ class AdminBookingController extends Controller
             'finished_at' => $result['finishedAt']->toIso8601String(),
             'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
             'all_pets_finished' => $allPetsFinished,
+            'all_pets_payment_ready' => $allPetsFinished,
             'remaining_pets' => $remainingPets,
             'booking_status' => $allPetsFinished
                 ? $result['completion']['status']
@@ -696,49 +715,50 @@ class AdminBookingController extends Controller
     // released → archived + customer notification
     public function markPickedUp($id)
     {
-        $booking = Booking::with(['user', 'bookingPets.pet'])->find($id);
+        $result = DB::transaction(function () use ($id) {
+            $booking = Booking::query()->whereKey($id)->lockForUpdate()->first();
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+            if ($booking->status !== 'released') {
+                return ['error' => ['message' => 'Booking must be in Released status.', 'status' => 422]];
+            }
+            if (! (bool) $booking->paid) {
+                return ['error' => ['message' => 'Payment must be completed before physical pickup.', 'status' => 422]];
+            }
 
-        if (! $booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
+            $paymentSummary = $this->paymentReadiness()->summarize($booking, true);
+            if (! $paymentSummary['payment_ready']) {
+                return ['error' => [
+                    'message' => 'Pickup completion is unavailable. '.$paymentSummary['payment_blocked_reason'],
+                    'status' => 422,
+                ]];
+            }
 
-        if ($booking->status !== 'released') {
-            return response()->json(['success' => false, 'message' => 'Booking must be in Released status.'], 422);
-        }
+            $booking->loadMissing(['user', 'bookingPets.pet']);
+            $petName = $this->petNames($booking);
+            $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
+            $booking->update(['status' => 'archived', 'archived_at' => now()]);
 
-        $blockingPet = $booking->bookingPets->first(
-            fn (BookingPet $bookingPet) => $this->bookingPetGroomingState($bookingPet)
-                !== BookingPet::GROOMING_STATE_FINISHED,
-        );
+            if ($booking->user) {
+                CustomerNotification::create([
+                    'user_id' => $booking->user->user_id,
+                    'booking_id' => $booking->booking_id,
+                    'type' => 'picked_up',
+                    'message' => "{$petName} {$petVerb} been released. Thank you for visiting Bethlehem Animal Clinic!",
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+            }
 
-        if ($blockingPet) {
+            return ['booking' => $booking];
+        });
+
+        if (isset($result['error'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Pickup completion is unavailable until every booking pet is finished. '
-                    .($blockingPet->pet?->pet_name ?? "Booking pet #{$blockingPet->booking_pet_id}")
-                    .' is '.$this->groomingStateLabel(
-                        $this->bookingPetGroomingState($blockingPet),
-                    ).'.',
-            ], 422);
-        }
-
-        $petName = $this->petNames($booking);
-        $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
-
-        $booking->update([
-            'status' => 'archived',
-            'archived_at' => now(),
-        ]);
-
-        if ($booking->user) {
-            CustomerNotification::create([
-                'user_id' => $booking->user->user_id,
-                'booking_id' => $booking->booking_id,
-                'type' => 'picked_up',
-                'message' => "{$petName} {$petVerb} been released. Thank you for visiting Bethlehem Animal Clinic!",
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
 
         return response()->json([
@@ -776,37 +796,44 @@ class AdminBookingController extends Controller
 
     public function archive($id)
     {
-        $booking = Booking::find($id);
+        $result = DB::transaction(function () use ($id) {
+            $booking = Booking::query()->whereKey($id)->lockForUpdate()->first();
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+            if (! in_array($booking->status, ['for_pickup', 'released'], true)) {
+                return ['error' => [
+                    'message' => 'Only For Pickup or Released bookings can be archived here.',
+                    'status' => 422,
+                ]];
+            }
+            if (! (bool) $booking->paid) {
+                return ['error' => [
+                    'message' => 'Payment must be completed before the booking can be archived.',
+                    'status' => 422,
+                ]];
+            }
 
-        if (! $booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
+            $paymentSummary = $this->paymentReadiness()->summarize($booking, true);
+            if (! $paymentSummary['payment_ready']) {
+                return ['error' => [
+                    'message' => 'Final pickup progression is unavailable. '
+                        .$paymentSummary['payment_blocked_reason'],
+                    'status' => 422,
+                ]];
+            }
 
-        if (! in_array($booking->status, ['for_pickup', 'released'])) {
-            return response()->json(['success' => false, 'message' => 'Only For Pickup or Released bookings can be archived here.'], 422);
-        }
+            $booking->update(['status' => 'archived', 'archived_at' => now()]);
 
-        $booking->loadMissing('bookingPets.pet');
-        $blockingPet = $booking->bookingPets->first(
-            fn (BookingPet $bookingPet) => $this->bookingPetGroomingState($bookingPet)
-                !== BookingPet::GROOMING_STATE_FINISHED,
-        );
+            return ['booking' => $booking];
+        });
 
-        if ($blockingPet) {
+        if (isset($result['error'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Final pickup progression is unavailable until every booking pet is finished. '
-                    .($blockingPet->pet?->pet_name ?? "Booking pet #{$blockingPet->booking_pet_id}")
-                    .' is '.$this->groomingStateLabel(
-                        $this->bookingPetGroomingState($blockingPet),
-                    ).'.',
-            ], 422);
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
         }
-
-        $booking->update([
-            'status' => 'archived',
-            'archived_at' => now(),
-        ]);
 
         return response()->json([
             'success' => true,
@@ -983,6 +1010,8 @@ class AdminBookingController extends Controller
         ), 2);
         $canUseSavedServicePrices = ! $paidTotal
             || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - round($paidTotal, 2)) <= 0.01);
+        $paymentSummary = $this->paymentReadiness()->summarize($booking);
+        $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
 
         return [
             // Fields the card templates read directly
@@ -1019,6 +1048,14 @@ class AdminBookingController extends Controller
             'numberOfPets' => $booking->number_of_pets,
             'paidAmount' => $paidTotal,
             'paid_amount' => $paidTotal,
+            'paymentReady' => $paymentSummary['payment_ready'],
+            'payment_ready' => $paymentSummary['payment_ready'],
+            'paymentBlockedReason' => $paymentSummary['payment_blocked_reason'],
+            'payment_blocked_reason' => $paymentSummary['payment_blocked_reason'],
+            'finalPaymentTotal' => $paymentSummary['final_booking_total'],
+            'final_payment_total' => $paymentSummary['final_booking_total'],
+            'paymentSummary' => $paymentSummary,
+            'payment_summary' => $paymentSummary,
             'payment' => $paidPayment ? [
                 'id' => $paidPayment->payment_id ?? $paidPayment->id ?? null,
                 'finalPrice' => (float) $paidPayment->total_amount,
@@ -1032,9 +1069,10 @@ class AdminBookingController extends Controller
                     : null,
                 'paid_at' => $paidPayment->paid_at,
             ] : null,
-            'pets' => $bpets->values()->map(function ($bp, $petIndex) {
+            'pets' => $bpets->values()->map(function ($bp, $petIndex) use ($paymentPetsById) {
                 $pet = $bp->pet;
                 $groomingState = $this->bookingPetGroomingState($bp);
+                $paymentPet = $paymentPetsById->get($bp->booking_pet_id, []);
 
                 return [
                     'id' => $bp->booking_pet_id,
@@ -1071,7 +1109,12 @@ class AdminBookingController extends Controller
                     'grooming_state' => $groomingState,
                     'groomingStateLabel' => $this->groomingStateLabel($groomingState),
                     'grooming_state_label' => $this->groomingStateLabel($groomingState),
-                    'paymentReviewRequired' => $groomingState === BookingPet::GROOMING_STATE_STOPPED,
+                    'paymentReviewRequired' => $groomingState === BookingPet::GROOMING_STATE_STOPPED
+                        && ($paymentPet['review_status'] ?? 'pending') !== 'completed',
+                    'paymentReviewCompleted' => ($paymentPet['review_status'] ?? null) === 'completed',
+                    'paymentReviewDecision' => $paymentPet['review_decision'] ?? null,
+                    'paymentReviewDecisionLabel' => $paymentPet['review_decision_label'] ?? null,
+                    'reviewedFinalCharge' => $paymentPet['final_pet_charge'] ?? null,
                 ];
             })->values(),
             'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {
@@ -1183,7 +1226,14 @@ class AdminBookingController extends Controller
                 ->first();
         }
 
-        return null;
+        if (! (bool) $booking->paid) {
+            return null;
+        }
+
+        return $booking->payments()
+            ->where('payment_status', 'paid')
+            ->orderByDesc('paid_at')
+            ->first();
     }
 
     private function recentActivity(): array
@@ -1199,7 +1249,7 @@ class AdminBookingController extends Controller
                 $ownerLastName = $booking?->user?->last_name ?: $this->ownerName($booking);
 
                 return [
-                    'id' => 'payment-'.$payment->payment_id,
+                    'id' => 'payment-'.$payment->getKey(),
                     'type' => 'payment',
                     'title' => 'Payment collected',
                     'subtitle' => "\u{20B1}".number_format((float) $payment->total_amount).' - '.($ownerLastName ?: 'Customer'),
@@ -1355,6 +1405,11 @@ class AdminBookingController extends Controller
             BookingPet::GROOMING_STATE_FINISHED => 'Finished',
             default => 'Not started',
         };
+    }
+
+    private function paymentReadiness(): GroomingPaymentReadinessService
+    {
+        return app(GroomingPaymentReadinessService::class);
     }
 
     // Maps DB status values to the tab keys the frontend uses
