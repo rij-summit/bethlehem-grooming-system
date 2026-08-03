@@ -14,6 +14,12 @@ use Throwable;
 
 class AdminClinicController extends Controller
 {
+    private const CLINICAL_CONTENT_EDITABLE_STATUSES = [
+        'checked_in',
+        'in_consultation',
+        'for_payment',
+    ];
+
     // ── Queue index ──────────────────────────────────────────────────────────
 
     public function index()
@@ -172,7 +178,7 @@ class AdminClinicController extends Controller
 
     public function saveRecord(Request $request, int $id)
     {
-        $request->validate([
+        $data = $request->validate([
             'chief_complaint' => ['nullable', 'string', 'max:1000'],
             'diagnosis' => ['nullable', 'string', 'max:2000'],
             'findings' => ['nullable', 'string', 'max:2000'],
@@ -197,41 +203,51 @@ class AdminClinicController extends Controller
             'medications.*.instructions' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $appt = ClinicAppointment::findOrFail($id);
+        return DB::transaction(function () use ($data, $id) {
+            $appt = ClinicAppointment::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertClinicalContentEditable($appt);
 
-        return DB::transaction(function () use ($request, $appt) {
             // Upsert medical record
             $record = ClinicRecord::updateOrCreate(
                 ['clinic_appointment_id' => $appt->id],
                 [
-                    'chief_complaint' => $request->chief_complaint ?? $appt->chief_complaint,
-                    'diagnosis' => $request->diagnosis,
-                    'findings' => $request->findings,
-                    'treatment_given' => $request->treatment_given,
-                    'follow_up_date' => $request->follow_up_date,
-                    'follow_up_notes' => $request->follow_up_notes,
-                    'vet_notes' => $request->vet_notes,
+                    'chief_complaint' => $data['chief_complaint'] ?? $appt->chief_complaint,
+                    'diagnosis' => $data['diagnosis'] ?? null,
+                    'findings' => $data['findings'] ?? null,
+                    'treatment_given' => $data['treatment_given'] ?? null,
+                    'follow_up_date' => $data['follow_up_date'] ?? null,
+                    'follow_up_notes' => $data['follow_up_notes'] ?? null,
+                    'vet_notes' => $data['vet_notes'] ?? null,
                 ]
             );
 
             // Upsert vitals
-            if ($request->hasAny(['weight_kg', 'temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm', 'body_condition_score'])) {
+            if (collect([
+                'weight_kg',
+                'temperature_c',
+                'heart_rate_bpm',
+                'respiratory_rate_bpm',
+                'body_condition_score',
+            ])->contains(fn (string $field) => array_key_exists($field, $data))) {
                 ClinicVital::updateOrCreate(
                     ['clinic_appointment_id' => $appt->id],
                     [
-                        'weight_kg' => $request->weight_kg,
-                        'temperature_c' => $request->temperature_c,
-                        'heart_rate_bpm' => $request->heart_rate_bpm,
-                        'respiratory_rate_bpm' => $request->respiratory_rate_bpm,
-                        'body_condition_score' => $request->body_condition_score,
+                        'weight_kg' => $data['weight_kg'] ?? null,
+                        'temperature_c' => $data['temperature_c'] ?? null,
+                        'heart_rate_bpm' => $data['heart_rate_bpm'] ?? null,
+                        'respiratory_rate_bpm' => $data['respiratory_rate_bpm'] ?? null,
+                        'body_condition_score' => $data['body_condition_score'] ?? null,
                     ]
                 );
             }
 
             // Replace medications
-            if ($request->has('medications')) {
+            if (array_key_exists('medications', $data)) {
                 $record->medications()->delete();
-                foreach ($request->medications as $med) {
+                foreach ($data['medications'] ?? [] as $med) {
                     $record->medications()->create($med);
                 }
             }
@@ -249,45 +265,52 @@ class AdminClinicController extends Controller
 
     public function uploadAttachment(Request $request, int $id)
     {
-        $request->validate([
+        $data = $request->validate([
             'file' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,pdf,dcm'],
             'label' => ['nullable', 'string', 'max:200'],
         ]);
 
-        $appt = ClinicAppointment::findOrFail($id);
-        $record = ClinicRecord::firstOrCreate(
-            ['clinic_appointment_id' => $appt->id],
-            ['chief_complaint' => $appt->chief_complaint]
-        );
+        return DB::transaction(function () use ($data, $id) {
+            $appt = ClinicAppointment::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertClinicalContentEditable($appt);
 
-        $file = $request->file('file');
-        $path = $file->store("clinic/attachments/{$appt->id}", 'local');
+            $record = ClinicRecord::firstOrCreate(
+                ['clinic_appointment_id' => $appt->id],
+                ['chief_complaint' => $appt->chief_complaint]
+            );
 
-        if (! $path) {
+            $file = $data['file'];
+            $path = $file->store("clinic/attachments/{$appt->id}", 'local');
+
+            if (! $path) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The attachment could not be stored.',
+                ], 500);
+            }
+
+            try {
+                $attachment = $record->attachments()->create([
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_type' => $file->getMimeType(),
+                    'file_size_bytes' => $file->getSize(),
+                    'label' => $data['label'] ?? null,
+                ]);
+            } catch (Throwable $exception) {
+                Storage::disk('local')->delete($path);
+
+                throw $exception;
+            }
+
             return response()->json([
-                'success' => false,
-                'message' => 'The attachment could not be stored.',
-            ], 500);
-        }
-
-        try {
-            $attachment = $record->attachments()->create([
-                'file_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'file_type' => $file->getMimeType(),
-                'file_size_bytes' => $file->getSize(),
-                'label' => $request->label,
+                'success' => true,
+                'attachment' => $this->formatAttachment($attachment, $appt->id),
             ]);
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
-
-            throw $exception;
-        }
-
-        return response()->json([
-            'success' => true,
-            'attachment' => $this->formatAttachment($attachment, $appt->id),
-        ]);
+        });
     }
 
     public function downloadAttachment(int $id, int $attachmentId)
@@ -311,19 +334,40 @@ class AdminClinicController extends Controller
 
     public function deleteAttachment(int $id, int $attachmentId)
     {
-        $attachment = $this->findScopedAttachment($id, $attachmentId);
-        $disk = $this->attachmentDisk($attachment->file_path);
+        return DB::transaction(function () use ($attachmentId, $id) {
+            $appointment = ClinicAppointment::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->first();
+            if (! $appointment) {
+                $this->attachmentNotFound();
+            }
+            $this->assertClinicalContentEditable($appointment);
 
-        if ($disk !== null && ! Storage::disk($disk)->delete($attachment->file_path)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The attachment could not be deleted.',
-            ], 500);
-        }
+            $attachment = ClinicAttachment::query()
+                ->whereKey($attachmentId)
+                ->whereHas(
+                    'record',
+                    fn ($query) => $query->where('clinic_appointment_id', $id),
+                )
+                ->lockForUpdate()
+                ->first();
+            if (! $attachment) {
+                $this->attachmentNotFound();
+            }
 
-        $attachment->delete();
+            $disk = $this->attachmentDisk($attachment->file_path);
+            if ($disk !== null && ! Storage::disk($disk)->delete($attachment->file_path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The attachment could not be deleted.',
+                ], 500);
+            }
 
-        return response()->json(['success' => true]);
+            $attachment->delete();
+
+            return response()->json(['success' => true]);
+        });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -479,5 +523,22 @@ class AdminClinicController extends Controller
             'success' => false,
             'message' => 'Attachment not found.',
         ], 404));
+    }
+
+    private function assertClinicalContentEditable(
+        ClinicAppointment $appointment,
+    ): void {
+        if (in_array(
+            $appointment->status,
+            self::CLINICAL_CONTENT_EDITABLE_STATUSES,
+            true,
+        )) {
+            return;
+        }
+
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Clinical records can only be modified while the appointment is Checked In, In Consultation, or For Payment.',
+        ], 409));
     }
 }

@@ -83,6 +83,15 @@ class User extends Authenticatable
         );
     }
 
+    public function groomingMedicalConcernResponsesCaptured()
+    {
+        return $this->hasMany(
+            GroomingMedicalConcernResponse::class,
+            'captured_by_user_id',
+            'user_id',
+        );
+    }
+
     public function groomingStoppedPaymentReviews()
     {
         return $this->hasMany(

@@ -1024,6 +1024,115 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertSame('legacy public contents', $download->streamedContent());
     }
 
+    #[DataProvider('lockedClinicalHistoryStatuses')]
+    public function test_terminal_and_pre_arrival_appointments_reject_all_ordinary_clinical_mutations(
+        string $status,
+    ): void {
+        Storage::fake('local');
+        Storage::fake('public');
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment(status: $status);
+        $attachmentId = $this->createAttachment(
+            1,
+            'clinic/attachments/1/locked-history.pdf',
+            'preserved clinical attachment',
+        );
+        $recordId = DB::table('clinic_records')->where('clinic_appointment_id', 1)->value('id');
+        DB::table('clinic_vitals')->insert([
+            'clinic_appointment_id' => 1,
+            'weight_kg' => 5.25,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('clinic_medications')->insert([
+            'clinic_record_id' => $recordId,
+            'drug_name' => 'Preserved medicine',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $message = 'Clinical records can only be modified while the appointment is Checked In, In Consultation, or For Payment.';
+        $this->postJson('/api/admin/clinic-appointments/1/record', [
+            'diagnosis' => 'Forbidden replacement',
+            'weight_kg' => 9.99,
+            'medications' => [['drug_name' => 'Forbidden medicine']],
+        ])->assertConflict()->assertJsonPath('message', $message);
+        $this->post('/api/admin/clinic-appointments/1/attachments', [
+            'file' => UploadedFile::fake()->create('forbidden.pdf', 20, 'application/pdf'),
+        ])->assertConflict()->assertJsonPath('message', $message);
+        $this->deleteJson("/api/admin/clinic-appointments/1/attachments/{$attachmentId}")
+            ->assertConflict()
+            ->assertJsonPath('message', $message);
+
+        $this->assertDatabaseHas('clinic_records', [
+            'id' => $recordId,
+            'chief_complaint' => 'Attachment test',
+            'diagnosis' => null,
+        ]);
+        $this->assertDatabaseHas('clinic_vitals', [
+            'clinic_appointment_id' => 1,
+            'weight_kg' => 5.25,
+        ]);
+        $this->assertDatabaseHas('clinic_medications', [
+            'clinic_record_id' => $recordId,
+            'drug_name' => 'Preserved medicine',
+        ]);
+        $this->assertDatabaseHas('clinic_attachments', ['id' => $attachmentId]);
+        Storage::disk('local')->assertExists('clinic/attachments/1/locked-history.pdf');
+        Storage::disk('local')->assertMissing('clinic/attachments/1/forbidden.pdf');
+    }
+
+    public static function lockedClinicalHistoryStatuses(): array
+    {
+        return [
+            'waiting to arrive' => ['waiting_to_arrive'],
+            'completed' => ['completed'],
+            'cancelled' => ['cancelled'],
+            'no-show' => ['no_show'],
+        ];
+    }
+
+    #[DataProvider('editableClinicalHistoryStatuses')]
+    public function test_valid_clinical_stages_keep_record_vitals_medication_and_attachment_operations_available(
+        string $status,
+    ): void {
+        Storage::fake('local');
+        Storage::fake('public');
+        $this->authenticateAs('admin');
+        $this->insertClinicAppointment(status: $status);
+
+        $this->postJson('/api/admin/clinic-appointments/1/record', [
+            'diagnosis' => 'Permitted diagnosis',
+            'weight_kg' => 6.75,
+            'medications' => [['drug_name' => 'Permitted medicine']],
+        ])
+            ->assertOk()
+            ->assertJsonPath('record.diagnosis', 'Permitted diagnosis')
+            ->assertJsonPath('record.medications.0.drug_name', 'Permitted medicine');
+
+        $upload = $this->post('/api/admin/clinic-appointments/1/attachments', [
+            'file' => UploadedFile::fake()->create('permitted.pdf', 20, 'application/pdf'),
+            'label' => 'Permitted attachment',
+        ])->assertOk();
+        $attachmentId = $upload->json('attachment.id');
+
+        $this->deleteJson("/api/admin/clinic-appointments/1/attachments/{$attachmentId}")
+            ->assertOk();
+        $this->assertDatabaseCount('clinic_records', 1);
+        $this->assertDatabaseCount('clinic_vitals', 1);
+        $this->assertDatabaseCount('clinic_medications', 1);
+        $this->assertDatabaseCount('clinic_attachments', 0);
+    }
+
+    public static function editableClinicalHistoryStatuses(): array
+    {
+        return [
+            'checked in' => ['checked_in'],
+            'in consultation' => ['in_consultation'],
+            'for payment' => ['for_payment'],
+        ];
+    }
+
     public function test_every_clinic_administration_route_has_the_expected_role_middleware(): void
     {
         $expected = [
