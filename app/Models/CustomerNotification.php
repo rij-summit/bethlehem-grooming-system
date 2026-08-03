@@ -16,6 +16,7 @@ class CustomerNotification extends Model
         'user_id',
         'booking_id',
         'grooming_medical_concern_id',
+        'grooming_clinic_referral_id',
         'type',
         'message',
         'is_read',
@@ -42,6 +43,14 @@ class CustomerNotification extends Model
         return $this->belongsTo(
             GroomingMedicalConcern::class,
             'grooming_medical_concern_id',
+        );
+    }
+
+    public function groomingClinicReferral()
+    {
+        return $this->belongsTo(
+            GroomingClinicReferral::class,
+            'grooming_clinic_referral_id',
         );
     }
 }

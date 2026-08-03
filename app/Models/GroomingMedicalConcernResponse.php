@@ -97,6 +97,14 @@ class GroomingMedicalConcernResponse extends Model
         return $this->belongsTo(User::class, 'captured_by_user_id', 'user_id');
     }
 
+    public function clinicReferralConsent()
+    {
+        return $this->hasOne(
+            GroomingClinicReferral::class,
+            'consent_response_id',
+        );
+    }
+
     public static function isValidKind(string $kind): bool
     {
         return in_array($kind, self::KINDS, true);

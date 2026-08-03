@@ -100,4 +100,58 @@ class User extends Authenticatable
             'user_id',
         );
     }
+
+    public function groomingClinicReferralsOwnedAtReferral()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'owner_user_id_at_referral',
+            'user_id',
+        );
+    }
+
+    public function groomingClinicReferralsReferred()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'referred_by_user_id',
+            'user_id',
+        );
+    }
+
+    public function groomingClinicReferralsAccepted()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'accepted_by_user_id',
+            'user_id',
+        );
+    }
+
+    public function groomingClinicReferralReviewsStarted()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'clinic_review_started_by_user_id',
+            'user_id',
+        );
+    }
+
+    public function groomingClinicReferralsCancelled()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'cancelled_by_user_id',
+            'user_id',
+        );
+    }
+
+    public function groomingClinicReferralsResolved()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'resolved_by_user_id',
+            'user_id',
+        );
+    }
 }

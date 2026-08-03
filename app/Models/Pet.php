@@ -55,4 +55,13 @@ class Pet extends Model
             'pet_id',
         );
     }
+
+    public function groomingClinicReferrals()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'pet_id',
+            'pet_id',
+        );
+    }
 }

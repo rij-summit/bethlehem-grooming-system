@@ -179,6 +179,14 @@ class GroomingMedicalConcern extends Model
         );
     }
 
+    public function clinicReferral()
+    {
+        return $this->hasOne(
+            GroomingClinicReferral::class,
+            'grooming_medical_concern_id',
+        );
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereNotIn('status', [

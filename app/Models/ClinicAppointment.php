@@ -80,4 +80,13 @@ class ClinicAppointment extends Model
             'id',
         );
     }
+
+    public function groomingClinicReferral()
+    {
+        return $this->hasOne(
+            GroomingClinicReferral::class,
+            'clinic_appointment_id',
+            'id',
+        );
+    }
 }

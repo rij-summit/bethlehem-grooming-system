@@ -79,6 +79,15 @@ class BookingPet extends Model
         );
     }
 
+    public function groomingClinicReferrals()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'booking_pet_id',
+            'booking_pet_id',
+        );
+    }
+
     public static function isValidGroomingState(string $state): bool
     {
         return in_array($state, self::GROOMING_STATES, true);

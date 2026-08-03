@@ -79,4 +79,13 @@ class Booking extends Model
             'booking_id',
         );
     }
+
+    public function groomingClinicReferrals()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'booking_id',
+            'booking_id',
+        );
+    }
 }
