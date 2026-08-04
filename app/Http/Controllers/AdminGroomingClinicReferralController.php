@@ -25,6 +25,7 @@ class AdminGroomingClinicReferralController extends Controller
                     GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
                     GroomingClinicReferral::STATUS_ACCEPTED,
                     GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                    GroomingClinicReferral::STATUS_COMPLETED,
                 ]),
             ],
             'urgency' => [

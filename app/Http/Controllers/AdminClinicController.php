@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ClinicReferralAssessmentException;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
+use App\Models\GroomingClinicReferral;
 use App\Services\ClinicAppointmentSequence;
+use App\Services\GroomingClinicReferralAssessmentService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -25,7 +29,7 @@ class AdminClinicController extends Controller
 
     public function index()
     {
-        $with = ['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record'];
+        $with = $this->appointmentRelations();
 
         $incoming = ClinicAppointment::with($with)
             ->where('appointment_date', now()->toDateString())
@@ -107,36 +111,61 @@ class AdminClinicController extends Controller
         return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
-    public function startConsultation(int $id)
-    {
-        $appt = ClinicAppointment::findOrFail($id);
-
-        if ($appt->status !== 'checked_in') {
-            return response()->json(['success' => false, 'message' => 'Appointment must be checked in first.'], 422);
+    public function startConsultation(
+        Request $request,
+        int $id,
+        GroomingClinicReferralAssessmentService $assessment,
+    ) {
+        try {
+            $result = $assessment->start($id, $request->user());
+        } catch (ClinicReferralAssessmentException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
-        $appt->update([
-            'status' => 'in_consultation',
-            'consultation_started_at' => now(),
-        ]);
+        $appointment = $result['appointment']->fresh($this->appointmentRelations());
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
+        return response()->json([
+            'success' => true,
+            'message' => $result['already_synchronized']
+                ? 'Clinic consultation was already started and synchronized.'
+                : 'Clinic consultation started.',
+            'referral_linked' => $result['referral_linked'],
+            'already_synchronized' => $result['already_synchronized'],
+            'appointment' => $this->formatAppointment($appointment),
+        ]);
     }
 
-    public function finishConsultation(int $id)
-    {
-        $appt = ClinicAppointment::findOrFail($id);
-
-        if ($appt->status !== 'in_consultation') {
-            return response()->json(['success' => false, 'message' => 'Appointment is not in consultation.'], 422);
+    public function finishConsultation(
+        Request $request,
+        int $id,
+        GroomingClinicReferralAssessmentService $assessment,
+    ) {
+        try {
+            $result = $assessment->finish($id, $request->user(), $request->all());
+        } catch (ClinicReferralAssessmentException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
-        $appt->update([
-            'status' => 'for_payment',
-            'consultation_finished_at' => now(),
-        ]);
+        $appointment = $result['appointment']->fresh($this->appointmentRelations());
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
+        return response()->json([
+            'success' => true,
+            'message' => $result['already_synchronized']
+                ? 'The permanent clinic assessment result was already saved.'
+                : ($result['referral_linked']
+                    ? 'Clinic assessment completed. Grooming remains stopped for this visit.'
+                    : 'Clinic consultation finished.'),
+            'referral_linked' => $result['referral_linked'],
+            'already_synchronized' => $result['already_synchronized'],
+            'appointment' => $this->formatAppointment($appointment),
+            'grooming_payment_readiness' => $result['payment_readiness'],
+        ]);
     }
 
     public function markPaid(Request $request, int $id)
@@ -374,11 +403,20 @@ class AdminClinicController extends Controller
 
     private function formatAppointment(ClinicAppointment $a): array
     {
+        $a->loadMissing($this->appointmentRelations());
         $user = $a->user;
         $walkin = $a->walkin;
         $pet = $a->pet;
-        $vitals = $a->vitals;
-        $record = $a->record;
+        $vitals = Schema::hasTable('clinic_vitals') ? $a->vitals : null;
+        $record = Schema::hasTable('clinic_records') ? $a->record : null;
+        $timeWindow = Schema::hasTable('clinic_time_windows') ? $a->timeWindow : null;
+        $referral = Schema::hasTable('grooming_clinic_referrals')
+            ? $a->groomingClinicReferral
+            : null;
+        $bookingPet = $referral?->bookingPet;
+        $stoppedReview = $bookingPet && Schema::hasTable('grooming_stopped_payment_reviews')
+            ? $bookingPet->groomingStoppedPaymentReview
+            : null;
 
         $ownerName = $user
             ? trim(($user->first_name ?? '').' '.($user->last_name ?? ''))
@@ -393,11 +431,11 @@ class AdminClinicController extends Controller
             'status' => $a->status,
             'queue_number' => $a->queue_number,
             'appointment_date' => $a->appointment_date?->toDateString(),
-            'time_window' => $a->timeWindow ? [
-                'window_id' => $a->timeWindow->window_id,
-                'window_label' => $a->timeWindow->displayLabel(),
-                'start_time' => $a->timeWindow->start_time,
-                'end_time' => $a->timeWindow->end_time,
+            'time_window' => $timeWindow ? [
+                'window_id' => $timeWindow->window_id,
+                'window_label' => $timeWindow->displayLabel(),
+                'start_time' => $timeWindow->start_time,
+                'end_time' => $timeWindow->end_time,
             ] : null,
             'chief_complaint' => $a->chief_complaint,
             'total_amount' => $a->total_amount,
@@ -424,7 +462,63 @@ class AdminClinicController extends Controller
                 'body_condition_score' => $vitals->body_condition_score,
             ] : null,
             'record' => $this->formatRecord($record, $a->id),
+            'grooming_referral' => $referral ? [
+                'public_id' => $referral->public_id,
+                'status' => $referral->status,
+                'status_label' => GroomingClinicReferral::statusLabel($referral->status),
+                'urgency' => $referral->urgency,
+                'urgency_label' => GroomingClinicReferral::urgencyLabel($referral->urgency),
+                'grooming_state' => $bookingPet?->grooming_state,
+                'grooming_state_label' => $this->groomingStateLabel($bookingPet?->grooming_state),
+                'assessment_started' => $referral->clinic_review_started_at !== null,
+                'assessment_started_at' => $referral->clinic_review_started_at?->toIso8601String(),
+                'assessment_completed' => $referral->resolved_at !== null,
+                'assessment_completed_at' => $referral->resolved_at?->toIso8601String(),
+                'completed_by_name' => $referral->resolved_by_name,
+                'customer_resolution_summary' => $referral->customer_resolution_summary,
+                'grooming_outcome' => 'stopped',
+                'grooming_outcome_label' => 'Grooming Session Stopped',
+                'stopped_payment_review_status' => $stoppedReview ? 'completed' : 'pending',
+            ] : null,
         ];
+    }
+
+    private function appointmentRelations(): array
+    {
+        $relations = [
+            'user',
+            'walkin',
+            'pet',
+        ];
+
+        if (Schema::hasTable('clinic_time_windows')) {
+            $relations[] = 'timeWindow';
+        }
+        if (Schema::hasTable('clinic_vitals')) {
+            $relations[] = 'vitals';
+        }
+        if (Schema::hasTable('clinic_records')) {
+            $relations[] = 'record';
+        }
+
+        if (Schema::hasTable('grooming_clinic_referrals')) {
+            $relations[] = Schema::hasTable('grooming_stopped_payment_reviews')
+                ? 'groomingClinicReferral.bookingPet.groomingStoppedPaymentReview'
+                : 'groomingClinicReferral.bookingPet';
+        }
+
+        return $relations;
+    }
+
+    private function groomingStateLabel(?string $state): string
+    {
+        return match ($state) {
+            'in_progress' => 'In progress',
+            'paused' => 'Paused',
+            'stopped' => 'Stopped',
+            'finished' => 'Finished',
+            default => 'Not started',
+        };
     }
 
     private function formatRecord(?ClinicRecord $record, int $appointmentId): ?array

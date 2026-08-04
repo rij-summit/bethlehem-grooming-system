@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\AdminGroomingClinicReferralController;
 use App\Http\Controllers\GroomingClinicReferralController;
+use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\CustomerNotification;
 use App\Models\GroomingClinicReferral;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingMedicalConcernResponse;
 use App\Models\User;
+use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingClinicReferralStatement;
+use App\Services\GroomingPaymentReadinessService;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Routing\Route as RoutingRoute;
@@ -60,6 +63,7 @@ class GroomingClinicReferralApiTest extends TestCase
             'clinic_appointments',
             'clinic_closures',
             'clinic_settings',
+            'booking_services',
             'booking_pets',
             'bookings',
             'walkins',
@@ -586,7 +590,7 @@ class GroomingClinicReferralApiTest extends TestCase
 
         foreach ([
             'signature_name', 'statement_text', 'statement_hash', 'password_hash',
-            'emergency_without_consent_reason', 'internal_resolution_notes',
+            'emergency_without_consent_reason',
         ] as $privateField) {
             $this->assertStringNotContainsString($privateField, $response->getContent());
         }
@@ -899,12 +903,307 @@ class GroomingClinicReferralApiTest extends TestCase
         $this->assertSame('pending_clinic_acceptance', $referral->fresh()->status);
     }
 
+    public function test_ordinary_consultation_start_and_finish_remain_unchanged(): void
+    {
+        DB::table('clinic_appointments')->insert([
+            'id' => 90,
+            'appointment_reference' => 'CL-20260804-090',
+            'appointment_type' => 'walk_in',
+            'status' => 'checked_in',
+            'queue_number' => 90,
+            'appointment_date' => '2026-08-04',
+            'pet_id' => 1000,
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->authenticateAs(2);
+
+        $this->postJson('/api/admin/clinic-appointments/90/start-consultation')
+            ->assertOk()
+            ->assertJsonPath('referral_linked', false)
+            ->assertJsonPath('appointment.status', 'in_consultation');
+
+        $this->postJson('/api/admin/clinic-appointments/90/finish-consultation')
+            ->assertOk()
+            ->assertJsonPath('referral_linked', false)
+            ->assertJsonPath('appointment.status', 'for_payment');
+    }
+
+    public function test_referral_consultation_requires_explicit_exact_stop_and_start_is_idempotent(): void
+    {
+        [$referral, $appointmentId] = $this->acceptRoutineReferralForAssessment(
+            GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+        );
+        $siblingBefore = DB::table('booking_pets')->where('booking_pet_id', 101)->first();
+        $this->authenticateAs(2);
+
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/start-consultation")
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'Stop Grooming must be applied to this pet before the clinic consultation can begin.',
+            );
+
+        $this->postJson(
+            '/api/admin/bookings/10/pets/100/medical-concerns/401/apply-recommended-action',
+            ['clinic_transfer_stop' => true],
+        )
+            ->assertOk()
+            ->assertJsonPath('clinic_transfer_stop_applied', true);
+
+        $started = $this->postJson(
+            "/api/admin/clinic-appointments/{$appointmentId}/start-consultation",
+        )
+            ->assertOk()
+            ->assertJsonPath('referral_linked', true)
+            ->assertJsonPath('already_synchronized', false)
+            ->assertJsonPath('appointment.status', 'in_consultation');
+
+        $this->assertSame('under_clinic_review', $referral->fresh()->status);
+        $this->assertSame(
+            GroomingMedicalConcern::STATUS_UNDER_CLINIC_REVIEW,
+            DB::table('grooming_medical_concerns')->where('id', 401)->value('status'),
+        );
+        $this->assertSame(
+            BookingPet::GROOMING_STATE_STOPPED,
+            DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_state'),
+        );
+        $this->assertNull(
+            DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_end_time'),
+        );
+        $siblingAfter = DB::table('booking_pets')->where('booking_pet_id', 101)->first();
+        $this->assertSame($siblingBefore->grooming_state, $siblingAfter->grooming_state);
+        $this->assertSame($siblingBefore->grooming_start_time, $siblingAfter->grooming_start_time);
+        $this->assertDatabaseHas('customer_notifications', [
+            'grooming_clinic_referral_id' => $referral->id,
+            'type' => CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED,
+        ]);
+        $started->assertJsonPath('appointment.grooming_referral.grooming_outcome', 'stopped');
+
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/start-consultation")
+            ->assertOk()
+            ->assertJsonPath('already_synchronized', true);
+        $this->assertSame(1, DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referral->id)
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED)
+            ->count());
+
+        $this->postJson('/api/admin/bookings/10/pets/100/medical-concerns/401/resume-grooming', [
+            'internal_resolution_notes' => 'Attempted resume during assessment.',
+            'customer_resolution_summary' => 'Attempted resume during assessment.',
+        ])->assertConflict()->assertJsonPath(
+            'message',
+            'Grooming cannot resume because this pet was transferred to clinic care and the grooming session was ended.',
+        );
+    }
+
+    public function test_referral_assessment_completion_is_permanent_safe_and_idempotent(): void
+    {
+        [$referral, $appointmentId] = $this->acceptRoutineReferralForAssessment(
+            GroomingMedicalConcern::ACTION_STOP_GROOMING,
+        );
+        $this->authenticateAs(2);
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/start-consultation")
+            ->assertOk();
+
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/finish-consultation", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'internal_resolution_notes',
+                'customer_resolution_summary',
+            ]);
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/finish-consultation", [
+            'internal_resolution_notes' => 'PRIVATE assessment outcome.',
+            'customer_resolution_summary' => 'Initial clinic assessment completed safely.',
+            'grooming_clearance_status' => 'cleared_to_resume',
+        ])->assertUnprocessable()->assertJsonValidationErrors('grooming_clearance_status');
+
+        $payload = [
+            'internal_resolution_notes' => 'PRIVATE assessment outcome.',
+            'customer_resolution_summary' => 'Initial clinic assessment completed safely.',
+        ];
+        $this->postJson(
+            "/api/admin/clinic-appointments/{$appointmentId}/finish-consultation",
+            $payload,
+        )
+            ->assertOk()
+            ->assertJsonPath('already_synchronized', false)
+            ->assertJsonPath('appointment.status', 'for_payment')
+            ->assertJsonPath('appointment.grooming_referral.assessment_completed', true)
+            ->assertJsonPath(
+                'appointment.grooming_referral.customer_resolution_summary',
+                $payload['customer_resolution_summary'],
+            );
+
+        $referral->refresh();
+        $this->assertSame(GroomingClinicReferral::STATUS_COMPLETED, $referral->status);
+        $this->assertSame(GroomingClinicReferral::CLEARANCE_NOT_APPLICABLE, $referral->grooming_clearance_status);
+        $this->assertSame($payload['internal_resolution_notes'], $referral->internal_resolution_notes);
+        $this->assertSame(
+            GroomingMedicalConcern::STATUS_RESOLVED,
+            DB::table('grooming_medical_concerns')->where('id', 401)->value('status'),
+        );
+        $this->assertSame(
+            BookingPet::GROOMING_STATE_STOPPED,
+            DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_state'),
+        );
+        $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_end_time'));
+        $this->assertDatabaseHas('customer_notifications', [
+            'grooming_clinic_referral_id' => $referral->id,
+            'type' => CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED,
+        ]);
+
+        $this->postJson(
+            "/api/admin/clinic-appointments/{$appointmentId}/finish-consultation",
+            $payload,
+        )->assertOk()->assertJsonPath('already_synchronized', true);
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/finish-consultation", [
+            ...$payload,
+            'customer_resolution_summary' => 'A conflicting replacement summary.',
+        ])->assertConflict();
+        $this->assertSame(1, DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referral->id)
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED)
+            ->count());
+
+        $readiness = app(GroomingPaymentReadinessService::class)
+            ->summarize(Booking::query()->findOrFail(10));
+        $this->assertFalse($readiness['payment_ready']);
+        $this->assertStringContainsString('Payment review is required', $readiness['payment_blocked_reason']);
+        $assessment = app(GroomingClinicReferralAssessmentService::class);
+        $this->assertSame(
+            'The grooming workflow is complete, but the linked clinic appointment must be paid and completed before pickup.',
+            $assessment->pickupBlockedReason(Booking::query()->findOrFail(10)),
+        );
+        DB::table('clinic_appointments')->where('id', $appointmentId)->update([
+            'status' => 'completed',
+            'paid' => true,
+        ]);
+        $this->assertNull($assessment->pickupBlockedReason(Booking::query()->findOrFail(10)));
+
+        $this->postJson('/api/admin/bookings/10/pets/100/medical-concerns/401/resume-grooming', [
+            'internal_resolution_notes' => 'Attempted resume after completion.',
+            'customer_resolution_summary' => 'Attempted resume after completion.',
+        ])->assertConflict()->assertJsonPath(
+            'message',
+            'Grooming cannot resume because this pet was transferred to clinic care and the grooming session was ended.',
+        );
+
+        $this->authenticateAs(4);
+        $customer = $this->getJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}",
+        )
+            ->assertOk()
+            ->assertJsonPath('referral.clinic_assessment_completed', true)
+            ->assertJsonPath('referral.grooming_outcome', 'stopped')
+            ->assertJsonPath('referral.customer_resolution_summary', $payload['customer_resolution_summary']);
+        $this->assertStringNotContainsString('PRIVATE assessment outcome', $customer->getContent());
+        $this->assertStringNotContainsString('internal_resolution_notes', $customer->getContent());
+        $this->assertStringNotContainsString('resolved_by_user_id', $customer->getContent());
+    }
+
+    public function test_unregistered_referral_assessment_creates_no_portal_notifications(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 200)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 402)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $this->authenticateAs(2);
+        $created = $this->postJson(
+            '/api/admin/bookings/20/pets/200/medical-concerns/402/clinic-referral',
+            $this->payload([
+                'urgency' => 'emergency',
+                'request_token' => '40000000-0000-4000-8000-000000000004',
+                'emergency_without_consent_reason' => 'Immediate clinic intake is required.',
+            ]),
+        )->assertCreated();
+        $publicId = $created->json('referral.public_id');
+        $accepted = $this->postJson("/api/admin/clinic-referrals/{$publicId}/accept")
+            ->assertCreated();
+        $appointmentId = (int) $accepted->json('referral.clinic_appointment.id');
+
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/start-consultation")
+            ->assertOk();
+        $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/finish-consultation", [
+            'internal_resolution_notes' => 'Internal assessment completed.',
+            'customer_resolution_summary' => 'Initial clinic assessment completed.',
+        ])->assertOk();
+
+        $referralId = GroomingClinicReferral::query()
+            ->where('public_id', $publicId)
+            ->value('id');
+        $this->assertSame(0, DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referralId)
+            ->count());
+    }
+
+    public function test_accepted_referral_blocks_resume_and_active_referral_blocks_payment_and_pickup(): void
+    {
+        [$referral] = $this->acceptRoutineReferralForAssessment(
+            GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+        );
+        $this->authenticateAs(2);
+
+        $this->postJson('/api/admin/bookings/10/pets/100/medical-concerns/401/resume-grooming', [
+            'internal_resolution_notes' => 'Attempted resume.',
+            'customer_resolution_summary' => 'Attempted resume.',
+        ])
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'Grooming cannot resume because this pet was transferred to clinic care and the grooming session was ended.',
+            );
+
+        $readiness = app(GroomingPaymentReadinessService::class)
+            ->summarize(Booking::query()->findOrFail(10));
+        $this->assertFalse($readiness['payment_ready']);
+        $this->assertStringContainsString('active clinic referral', $readiness['payment_blocked_reason']);
+        $this->assertSame(
+            'Physical pickup is unavailable while a linked clinic referral is active.',
+            app(GroomingClinicReferralAssessmentService::class)
+                ->pickupBlockedReason(Booking::query()->findOrFail(10)),
+        );
+        $this->assertSame(GroomingClinicReferral::STATUS_ACCEPTED, $referral->fresh()->status);
+    }
+
     private function createRoutineReferral(): GroomingClinicReferral
     {
         $this->authenticateAs(2);
         $this->postJson(self::STAFF_URI, $this->payload())->assertCreated();
 
         return GroomingClinicReferral::query()->firstOrFail();
+    }
+
+    /** @return array{0: GroomingClinicReferral, 1: int} */
+    private function acceptRoutineReferralForAssessment(string $appliedAction): array
+    {
+        $state = $appliedAction === GroomingMedicalConcern::ACTION_PAUSE_GROOMING
+            ? BookingPet::GROOMING_STATE_PAUSED
+            : BookingPet::GROOMING_STATE_STOPPED;
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => $state,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 401)->update([
+            'applied_grooming_action' => $appliedAction,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $referral = $this->createRoutineReferral();
+        $this->authenticateAs(4);
+        $this->postJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}/consent",
+            ['decision' => 'approved', 'signature_name' => 'Pet Owner'],
+        )->assertCreated();
+        $this->authenticateAs(2);
+        $accepted = $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertCreated();
+
+        return [$referral->fresh(), (int) $accepted->json('referral.clinic_appointment.id')];
     }
 
     private function payload(array $overrides = []): array
@@ -1000,6 +1299,14 @@ class GroomingClinicReferralApiTest extends TestCase
             $table->foreign('booking_id')->references('booking_id')->on('bookings')->restrictOnDelete();
             $table->foreign('pet_id')->references('pet_id')->on('pets')->restrictOnDelete();
         });
+        Schema::create('booking_services', function (Blueprint $table) {
+            $table->increments('booking_service_id');
+            $table->unsignedInteger('booking_id');
+            $table->unsignedInteger('booking_pet_id');
+            $table->unsignedInteger('service_id')->nullable();
+            $table->unsignedInteger('addon_id')->nullable();
+            $table->decimal('price_at_booking', 8, 2)->default(0);
+        });
         Schema::create('clinic_appointments', function (Blueprint $table) {
             $table->id();
             $table->string('appointment_reference')->unique();
@@ -1067,6 +1374,12 @@ class GroomingClinicReferralApiTest extends TestCase
             $table->boolean('acknowledgment_required')->default(false);
             $table->boolean('consent_required')->default(false);
             $table->string('customer_response_status')->default('not_required');
+            $table->timestamp('customer_notified_at')->nullable();
+            $table->unsignedInteger('resolved_by_user_id')->nullable();
+            $table->string('resolved_by_name', 200)->nullable();
+            $table->timestamp('resolved_at')->nullable();
+            $table->text('internal_resolution_notes')->nullable();
+            $table->text('customer_resolution_summary')->nullable();
             $table->timestamps();
             $table->unique(['id', 'booking_id', 'booking_pet_id', 'pet_id'], 'gmc_review_context_uq');
             $table->foreign(['booking_pet_id', 'booking_id', 'pet_id'], 'gmc_booking_pet_fk')

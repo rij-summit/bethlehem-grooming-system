@@ -10,6 +10,7 @@ use App\Models\CustomerNotification;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\DailyPetQueue;
+use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingPaymentReadinessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -735,6 +736,15 @@ class AdminBookingController extends Controller
                 ]];
             }
 
+            $pickupBlockedReason = app(GroomingClinicReferralAssessmentService::class)
+                ->pickupBlockedReason($booking, true);
+            if ($pickupBlockedReason) {
+                return ['error' => [
+                    'message' => $pickupBlockedReason,
+                    'status' => 409,
+                ]];
+            }
+
             $booking->loadMissing(['user', 'bookingPets.pet']);
             $petName = $this->petNames($booking);
             $petVerb = $this->hasMultiplePets($booking) ? 'have' : 'has';
@@ -820,6 +830,15 @@ class AdminBookingController extends Controller
                     'message' => 'Final pickup progression is unavailable. '
                         .$paymentSummary['payment_blocked_reason'],
                     'status' => 422,
+                ]];
+            }
+
+            $pickupBlockedReason = app(GroomingClinicReferralAssessmentService::class)
+                ->pickupBlockedReason($booking, true);
+            if ($pickupBlockedReason) {
+                return ['error' => [
+                    'message' => $pickupBlockedReason,
+                    'status' => 409,
                 ]];
             }
 

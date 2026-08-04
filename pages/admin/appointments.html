@@ -2591,6 +2591,15 @@
                           Resume Grooming
                         </button>
                         <button
+                          x-show="medicalConcernActionAvailable(concern, 'stop_for_clinic_transfer')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('clinic_stop', concern)"
+                          class="admin-medical-concern-cancel"
+                        >
+                          <i data-lucide="octagon-x" class="h-4 w-4" aria-hidden="true"></i>
+                          Stop Grooming for Clinic Transfer
+                        </button>
+                        <button
                           x-show="medicalConcernActionAvailable(concern, 'resolve')"
                           type="button"
                           @click="openMedicalConcernTerminalDialog('resolve', concern)"
@@ -2937,13 +2946,17 @@
                 id="medical-concern-action-title"
                 x-text="medicalConcernActionDialog.type === 'resume'
                   ? 'Resume Grooming'
-                  : 'Apply ' + medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action)"
+                  : (medicalConcernActionDialog.type === 'clinic_stop'
+                    ? 'Stop Grooming for Clinic Transfer'
+                    : 'Apply ' + medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action))"
               ></h3>
               <p
                 id="medical-concern-action-description"
                 x-text="medicalConcernActionDialog.type === 'resume'
                   ? 'The pet will return to In progress with its original start time preserved. This concern will be resolved in the same operation.'
-                  : medicalConcernOperationalEffect(medicalConcernActionDialog.concern)"
+                  : (medicalConcernActionDialog.type === 'clinic_stop'
+                    ? clinicTransferStopEffect()
+                    : medicalConcernOperationalEffect(medicalConcernActionDialog.concern))"
               ></p>
 
               <div class="admin-medical-concern-detail-grid">
@@ -3044,7 +3057,9 @@
                   <span x-show="medicalConcernActionDialog.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
                   <span x-text="medicalConcernActionDialog.busy
                     ? 'Saving...'
-                    : (medicalConcernActionDialog.type === 'resume' ? 'Resume Grooming' : 'Apply Action')"
+                    : (medicalConcernActionDialog.type === 'resume'
+                      ? 'Resume Grooming'
+                      : (medicalConcernActionDialog.type === 'clinic_stop' ? 'Stop Grooming Permanently' : 'Apply Action'))"
                   ></span>
                 </button>
               </footer>
@@ -3376,6 +3391,27 @@
                         <span><strong>Paid-booking review warning</strong><small>This booking was already paid. If the pet’s grooming charge changes, an administrator correction or refund workflow will be required.</small></span>
                       </div>
 
+                      <div
+                        x-show="['accepted', 'under_clinic_review'].includes(clinicReferralModal.response.referral?.status)"
+                        class="admin-medical-concern-locked"
+                        role="status"
+                      >
+                        <i data-lucide="shield-alert" class="h-5 w-5" aria-hidden="true"></i>
+                        <span>
+                          <strong x-text="clinicReferralModal.response.referral?.grooming_state === 'stopped' ? 'Grooming session stopped — pet transferred to clinic care.' : 'Stop Grooming must be applied before consultation.'"></strong>
+                          <small>This pet cannot return to grooming during this visit after clinic transfer.</small>
+                        </span>
+                      </div>
+
+                      <div
+                        x-show="clinicReferralModal.response.referral?.status === 'completed'"
+                        class="admin-medical-concern-locked"
+                        role="status"
+                      >
+                        <i data-lucide="badge-check" class="h-5 w-5" aria-hidden="true"></i>
+                        <span><strong>Clinic assessment completed — grooming will not resume during this visit.</strong><small>Grooming Session Stopped</small></span>
+                      </div>
+
                       <section class="admin-medical-concern-resolution">
                         <h5>Referral status</h5>
                         <div class="admin-medical-concern-detail-grid">
@@ -3400,6 +3436,13 @@
                           <p><span>Clinic date</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_date, 'Not created')"></strong></p>
                           <p><span>Accepted by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.accepted_by_name, 'Not accepted')"></strong></p>
                           <p><span>Accepted time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.accepted_at)"></strong></p>
+                          <p><span>Assessment start</span><strong x-text="clinicReferralModal.response.referral?.assessment_started ? clinicReferralFormatDateTime(clinicReferralModal.response.referral?.clinic_review_started_at) : 'Not started'"></strong></p>
+                          <p><span>Assessment completion</span><strong x-text="clinicReferralModal.response.referral?.assessment_completed ? clinicReferralFormatDateTime(clinicReferralModal.response.referral?.resolved_at) : 'Not completed'"></strong></p>
+                          <p><span>Completed by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.resolved_by_name, 'Not completed')"></strong></p>
+                          <p><span>Grooming outcome</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_outcome_label, 'Pending clinic transfer')"></strong></p>
+                          <p><span>Stopped-payment review</span><strong class="capitalize" x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.stopped_payment_review_status, 'Pending')"></strong></p>
+                          <p><span>Grooming payment</span><strong x-text="clinicReferralModal.response.referral?.grooming_payment_ready ? 'Ready' : clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_payment_blocked_reason, 'Not ready')"></strong></p>
+                          <p><span>Physical pickup</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.physical_pickup_blocked_reason, 'No referral block')"></strong></p>
                           <p><span>Grooming clearance</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_clearance_status_label)"></strong></p>
                         </div>
                       </section>
@@ -3409,6 +3452,7 @@
                         <p><span>Customer-friendly explanation</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.customer_explanation)"></strong></p>
                         <p x-show="clinicReferralModal.response.referral?.customer_cancellation_summary"><span>Customer-safe cancellation summary</span><strong x-text="clinicReferralModal.response.referral?.customer_cancellation_summary"></strong></p>
                         <p x-show="clinicReferralModal.response.referral?.customer_resolution_summary"><span>Customer-safe resolution summary</span><strong x-text="clinicReferralModal.response.referral?.customer_resolution_summary"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.internal_resolution_notes"><span>Internal assessment resolution notes</span><strong x-text="clinicReferralModal.response.referral?.internal_resolution_notes"></strong></p>
                       </div>
 
                       <p x-show="!clinicReferralModal.response.referral?.future_clinic_acceptance_eligible" class="admin-medical-concern-future-note" x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_blocked_reason"></p>

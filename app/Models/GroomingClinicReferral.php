@@ -78,7 +78,7 @@ class GroomingClinicReferral extends Model
         self::CLEARANCE_PENDING => 'Pending',
         self::CLEARANCE_CLEARED_TO_RESUME => 'Cleared to resume',
         self::CLEARANCE_DO_NOT_RESUME => 'Do not resume',
-        self::CLEARANCE_NOT_APPLICABLE => 'Not applicable',
+        self::CLEARANCE_NOT_APPLICABLE => 'Not Applicable — Grooming Session Stopped',
     ];
 
     private const IMMUTABLE_COLUMNS = [

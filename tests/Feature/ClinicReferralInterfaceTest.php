@@ -203,10 +203,14 @@ class ClinicReferralInterfaceTest extends TestCase
             'API.getCustomerNotifications().catch(() => ({ notifications: [] }))',
             $this->clientComponent,
         );
-        $this->assertStringContainsString(
-            '["grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"].includes(notification.type)',
-            $this->clientComponent,
-        );
+        foreach ([
+            '"grooming_clinic_referral_requested"',
+            '"grooming_clinic_referral_accepted"',
+            '"grooming_clinic_assessment_started"',
+            '"grooming_clinic_assessment_completed"',
+        ] as $notificationType) {
+            $this->assertStringContainsString($notificationType, $this->clientComponent);
+        }
         $this->assertStringContainsString(
             'Number(notification.pet_id) === petId',
             $this->clientComponent,

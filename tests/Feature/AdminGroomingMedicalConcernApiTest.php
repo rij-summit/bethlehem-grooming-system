@@ -1558,6 +1558,8 @@ class AdminGroomingMedicalConcernApiTest extends TestCase
             'safety_override_required',
             'resume_grooming_available',
             'resume_grooming_blocked_reason',
+            'clinic_transfer_stop_available',
+            'clinic_transfer_stop_blocked_reason',
             'customer_response_requirement',
             'status',
             'acknowledgment_required',

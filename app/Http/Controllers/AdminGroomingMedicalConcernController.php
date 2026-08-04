@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\CustomerNotification;
+use App\Models\GroomingClinicReferral;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingMedicalConcernResponse;
 use App\Models\Pet;
@@ -13,6 +14,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -563,6 +565,7 @@ class AdminGroomingMedicalConcernController extends Controller
 
         $this->trimRequestStrings($request, ['safety_override_reason']);
         $validated = $request->validate([
+            'clinic_transfer_stop' => ['sometimes', 'boolean'],
             'safety_override_reason' => [
                 'sometimes',
                 'nullable',
@@ -590,6 +593,56 @@ class AdminGroomingMedicalConcernController extends Controller
                 lockForUpdate: true,
             );
             $this->setConcernContext($concern, $context);
+
+            if ((bool) ($validated['clinic_transfer_stop'] ?? false)) {
+                $availability = $this->clinicTransferStopAvailability($concern);
+                if (! $availability['can_stop']) {
+                    return $this->conflict($availability['blocked_reason']);
+                }
+                if (filled($validated['safety_override_reason'] ?? null)) {
+                    throw ValidationException::withMessages([
+                        'safety_override_reason' => [
+                            'A safety override is not used when stopping grooming for an accepted clinic transfer.',
+                        ],
+                    ]);
+                }
+
+                $appliedAt = now();
+                $staffName = $this->formatAuthenticatedUserName($request->user());
+                $previousAppliedAt = $concern->action_applied_at?->toIso8601String()
+                    ?? 'time unavailable';
+                $previousStaff = $this->formatUserName($concern->actionAppliedBy)
+                    ?? 'staff member unavailable';
+
+                $context->forceFill([
+                    'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+                ])->save();
+                $concern->forceFill([
+                    'applied_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+                    'action_applied_at' => $appliedAt,
+                    'action_applied_by_user_id' => $request->user()->user_id,
+                    'internal_resolution_notes' => $this->appendInternalAuditEntry(
+                        $concern->internal_resolution_notes,
+                        sprintf(
+                            '[Clinic transfer Stop | %s | %s] Previous Pause was applied at %s by %s. Grooming was explicitly stopped before clinic consultation.',
+                            $appliedAt->toIso8601String(),
+                            $staffName,
+                            $previousAppliedAt,
+                            $previousStaff,
+                        ),
+                    ),
+                ])->save();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Grooming stopped for clinic transfer. The pet cannot resume grooming during this visit.',
+                    'safety_override_used' => false,
+                    'clinic_transfer_stop_applied' => true,
+                    'concern' => $this->formatConcern(
+                        $this->loadResponseContext($concern),
+                    ),
+                ]);
+            }
 
             $availability = $this->recommendedActionAvailability($concern);
             if (
@@ -1049,6 +1102,10 @@ class AdminGroomingMedicalConcernController extends Controller
         if ($resumeAvailability['can_resume']) {
             $availableStaffActions[] = 'resume_grooming';
         }
+        $clinicTransferStopAvailability = $this->clinicTransferStopAvailability($concern);
+        if ($clinicTransferStopAvailability['can_stop']) {
+            $availableStaffActions[] = 'stop_for_clinic_transfer';
+        }
 
         return [
             'id' => $concern->id,
@@ -1080,6 +1137,8 @@ class AdminGroomingMedicalConcernController extends Controller
                 && ! $actionAvailability['can_apply'],
             'resume_grooming_available' => $resumeAvailability['can_resume'],
             'resume_grooming_blocked_reason' => $resumeAvailability['blocked_reason'],
+            'clinic_transfer_stop_available' => $clinicTransferStopAvailability['can_stop'],
+            'clinic_transfer_stop_blocked_reason' => $clinicTransferStopAvailability['blocked_reason'],
             'customer_response_requirement' => $this->customerResponseRequirement($concern),
             'status' => $concern->status,
             'acknowledgment_required' => $concern->acknowledgment_required,
@@ -1267,6 +1326,21 @@ class AdminGroomingMedicalConcernController extends Controller
             'blocked_reason' => $reason,
         ];
 
+        if (
+            Schema::hasTable('grooming_clinic_referrals')
+            && $concern->clinicReferral()
+                ->whereIn('status', [
+                    GroomingClinicReferral::STATUS_ACCEPTED,
+                    GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                    GroomingClinicReferral::STATUS_COMPLETED,
+                ])
+                ->exists()
+        ) {
+            return $blocked(
+                'Grooming cannot resume because this pet was transferred to clinic care and the grooming session was ended.',
+            );
+        }
+
         if ($this->isTerminal($concern)) {
             return $blocked('Resolved or cancelled concerns cannot resume grooming.');
         }
@@ -1304,6 +1378,39 @@ class AdminGroomingMedicalConcernController extends Controller
             'can_resume' => true,
             'blocked_reason' => null,
         ];
+    }
+
+    /** @return array{can_stop: bool, blocked_reason: ?string} */
+    private function clinicTransferStopAvailability(
+        GroomingMedicalConcern $concern,
+    ): array {
+        $blocked = fn (string $reason) => [
+            'can_stop' => false,
+            'blocked_reason' => $reason,
+        ];
+
+        if (! Schema::hasTable('grooming_clinic_referrals')) {
+            return $blocked('No accepted clinic referral is linked to this concern.');
+        }
+
+        $referral = $concern->clinicReferral()->first();
+        if (! $referral || $referral->status !== GroomingClinicReferral::STATUS_ACCEPTED) {
+            return $blocked('Only an accepted clinic referral can permanently stop a paused grooming session.');
+        }
+
+        $bookingPet = $concern->bookingPet;
+        if (
+            ! $bookingPet
+            || $bookingPet->grooming_state !== BookingPet::GROOMING_STATE_PAUSED
+            || $bookingPet->grooming_end_time !== null
+            || $concern->applied_grooming_action !== GroomingMedicalConcern::ACTION_PAUSE_GROOMING
+            || $concern->action_applied_at === null
+            || $concern->action_applied_by_user_id === null
+        ) {
+            return $blocked('The exact accepted referral must still have an applied Pause Grooming action on its paused pet.');
+        }
+
+        return ['can_stop' => true, 'blocked_reason' => null];
     }
 
     private function requiredCustomerResponseIsComplete(

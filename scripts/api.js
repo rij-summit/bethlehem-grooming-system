@@ -1073,8 +1073,8 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/start-consultation`, {}, getAdminToken());
   }
 
-  async function clinicFinishConsultation(id) {
-    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, {}, getAdminToken());
+  async function clinicFinishConsultation(id, payload = {}) {
+    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, payload, getAdminToken());
   }
 
   async function clinicMarkPaid(id, payload) {

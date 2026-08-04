@@ -10,12 +10,15 @@ use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingMedicalConcernResponse;
 use App\Models\Pet;
 use App\Models\User;
+use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingClinicReferralStatement;
+use App\Services\GroomingPaymentReadinessService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class GroomingClinicReferralController extends Controller
@@ -900,6 +903,14 @@ class GroomingClinicReferralController extends Controller
             $referral,
             $concern,
         );
+        $paymentReadiness = Schema::hasTable('booking_services')
+            ? app(GroomingPaymentReadinessService::class)->summarize($booking)
+            : ['payment_ready' => false, 'payment_blocked_reason' => null];
+        $pickupBlockedReason = app(GroomingClinicReferralAssessmentService::class)
+            ->pickupBlockedReason($booking);
+        $stoppedReview = Schema::hasTable('grooming_stopped_payment_reviews')
+            ? $bookingPet->groomingStoppedPaymentReview()->first()
+            : null;
 
         return [
             'public_id' => $referral->public_id,
@@ -947,6 +958,27 @@ class GroomingClinicReferralController extends Controller
             'clinic_appointment_date' => $referral->clinicAppointment?->appointment_date?->toDateString(),
             'accepted_by_name' => $referral->accepted_by_name,
             'accepted_at' => $referral->accepted_at?->toIso8601String(),
+            'grooming_state' => $bookingPet->grooming_state,
+            'grooming_state_label' => $this->groomingStateLabel($bookingPet->grooming_state),
+            'clinic_review_started_by_name' => $referral->clinic_review_started_by_name,
+            'clinic_review_started_at' => $referral->clinic_review_started_at?->toIso8601String(),
+            'assessment_started' => $referral->clinic_review_started_at !== null,
+            'assessment_completed' => $referral->resolved_at !== null,
+            'resolved_by_name' => $referral->resolved_by_name,
+            'grooming_outcome' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'stopped' : null,
+            'grooming_outcome_label' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'Grooming Session Stopped' : null,
+            'stopped_payment_review_status' => $stoppedReview ? 'completed' : 'pending',
+            'grooming_payment_ready' => $paymentReadiness['payment_ready'],
+            'grooming_payment_blocked_reason' => $paymentReadiness['payment_blocked_reason'],
+            'physical_pickup_blocked_reason' => $pickupBlockedReason,
             'grooming_clearance_status' => $referral->grooming_clearance_status,
             'grooming_clearance_status_label' => GroomingClinicReferral::groomingClearanceLabel(
                 $referral->grooming_clearance_status,
@@ -999,6 +1031,26 @@ class GroomingClinicReferralController extends Controller
             'clinic_appointment_date' => $referral->clinicAppointment?->appointment_date?->toDateString(),
             'accepted_at' => $referral->accepted_at?->toIso8601String(),
             'clinic_assessment_started' => $referral->clinic_review_started_at !== null,
+            'clinic_assessment_started_at' => $referral->clinic_review_started_at?->toIso8601String(),
+            'clinic_assessment_completed' => $referral->resolved_at !== null,
+            'clinic_assessment_completed_at' => $referral->resolved_at?->toIso8601String(),
+            'grooming_outcome' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'stopped' : null,
+            'grooming_outcome_label' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'Grooming Stopped' : null,
+            'customer_next_step' => $referral->status === GroomingClinicReferral::STATUS_COMPLETED
+                ? 'The clinic assessment is complete. Grooming will not continue during this visit. Please wait for the clinic\'s remaining payment, care, and pickup instructions.'
+                : ($referral->status === GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW
+                    ? 'The clinic assessment is in progress. Grooming has stopped for this visit.'
+                    : ($referral->status === GroomingClinicReferral::STATUS_ACCEPTED
+                        ? 'The clinic accepted this referral. Grooming has stopped for this visit, and consultation has not started yet.'
+                        : null)),
             'customer_cancellation_summary' => $referral->customer_cancellation_summary,
             'customer_resolution_summary' => $referral->customer_resolution_summary,
         ];
@@ -1048,6 +1100,17 @@ class GroomingClinicReferralController extends Controller
             'no_show' => 'No Show',
             null => null,
             default => 'Unknown',
+        };
+    }
+
+    private function groomingStateLabel(?string $state): string
+    {
+        return match ($state) {
+            BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
+            BookingPet::GROOMING_STATE_PAUSED => 'Paused',
+            BookingPet::GROOMING_STATE_STOPPED => 'Stopped',
+            BookingPet::GROOMING_STATE_FINISHED => 'Finished',
+            default => 'Not started',
         };
     }
 

@@ -686,7 +686,7 @@ function adminGroomingConcernState() {
     openMedicalConcernActionDialog(type, concern) {
       const actionName = type === "resume"
         ? "resume_grooming"
-        : "apply_recommended_action";
+        : (type === "clinic_stop" ? "stop_for_clinic_transfer" : "apply_recommended_action");
       if (!this.medicalConcernActionAvailable(concern, actionName)) return;
 
       this.medicalConcernActionDialog = {
@@ -713,6 +713,10 @@ function adminGroomingConcernState() {
         stop_grooming:
           "The pet will stop active grooming. It will not be marked normally finished, and payment still requires staff review.",
       }[concern?.recommended_grooming_action] || "The server will validate the current per-pet grooming state.";
+    },
+
+    clinicTransferStopEffect() {
+      return "This explicitly ends grooming for this visit so the accepted clinic consultation can begin. The prior Pause audit is preserved in staff notes, no grooming finish time is created, and this does not authorize veterinary treatment.";
     },
 
     validateMedicalConcernActionDialog() {
@@ -769,12 +773,14 @@ function adminGroomingConcernState() {
               bookingId,
               bookingPetId,
               concern.id,
-              concern.safety_override_required
+              dialog.type === "clinic_stop"
+                ? { clinic_transfer_stop: true }
+                : (concern.safety_override_required
                 ? {
                     safety_override_reason:
                       String(dialog.safety_override_reason || "").trim(),
                   }
-                : {},
+                : {}),
             );
 
         this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();

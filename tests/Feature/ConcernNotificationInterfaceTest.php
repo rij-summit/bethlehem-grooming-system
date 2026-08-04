@@ -78,10 +78,15 @@ class ConcernNotificationInterfaceTest extends TestCase
         $this->assertNotFalse($readPosition);
         $this->assertNotFalse($navigatePosition);
         $this->assertLessThan($navigatePosition, $readPosition);
-        $this->assertStringContainsString(
-            '["grooming_medical_concern", "grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"]',
-            $clickHandler,
-        );
+        foreach ([
+            '"grooming_medical_concern"',
+            '"grooming_clinic_referral_requested"',
+            '"grooming_clinic_referral_accepted"',
+            '"grooming_clinic_assessment_started"',
+            '"grooming_clinic_assessment_completed"',
+        ] as $notificationType) {
+            $this->assertStringContainsString($notificationType, $clickHandler);
+        }
 
         foreach ([
             "'groomingMedicalConcern:id,public_id,pet_id'",

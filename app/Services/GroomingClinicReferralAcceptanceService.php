@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\Walkin;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class GroomingClinicReferralAcceptanceService
 {
@@ -23,6 +24,7 @@ class GroomingClinicReferralAcceptanceService
         GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
         GroomingClinicReferral::STATUS_ACCEPTED,
         GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+        GroomingClinicReferral::STATUS_COMPLETED,
     ];
 
     private const ACTIVE_APPOINTMENT_STATUSES = [
@@ -119,6 +121,16 @@ class GroomingClinicReferralAcceptanceService
             $response,
         );
         $appointment = $referral->clinicAppointment;
+        $stoppedReview = $bookingPet && Schema::hasTable('grooming_stopped_payment_reviews')
+            ? $bookingPet->groomingStoppedPaymentReview
+            : null;
+        $paymentReadiness = $booking && Schema::hasTable('booking_services')
+            ? app(GroomingPaymentReadinessService::class)->summarize($booking)
+            : null;
+        $pickupBlockedReason = $booking
+            ? app(GroomingClinicReferralAssessmentService::class)
+                ->pickupBlockedReason($booking)
+            : null;
 
         return [
             'public_id' => $referral->public_id,
@@ -170,8 +182,34 @@ class GroomingClinicReferralAcceptanceService
             'financial_correction_review_required' => (bool) $booking?->paid,
             'accepted_by_name' => $referral->accepted_by_name,
             'accepted_at' => $referral->accepted_at?->toIso8601String(),
+            'clinic_review_started_by_name' => $referral->clinic_review_started_by_name,
+            'clinic_review_started_at' => $referral->clinic_review_started_at?->toIso8601String(),
+            'assessment_started' => $referral->clinic_review_started_at !== null,
+            'assessment_completed' => $referral->resolved_at !== null,
+            'resolved_by_name' => $referral->resolved_by_name,
+            'resolved_at' => $referral->resolved_at?->toIso8601String(),
+            'internal_resolution_notes' => $referral->internal_resolution_notes,
+            'customer_resolution_summary' => $referral->customer_resolution_summary,
+            'grooming_outcome' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'stopped' : null,
+            'grooming_outcome_label' => in_array($referral->status, [
+                GroomingClinicReferral::STATUS_ACCEPTED,
+                GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                GroomingClinicReferral::STATUS_COMPLETED,
+            ], true) ? 'Grooming Session Stopped' : null,
+            'stopped_payment_review_status' => $stoppedReview ? 'completed' : 'pending',
+            'grooming_payment_ready' => $paymentReadiness['payment_ready'] ?? false,
+            'grooming_payment_blocked_reason' => $paymentReadiness['payment_blocked_reason'] ?? null,
+            'physical_pickup_blocked_reason' => $pickupBlockedReason,
             'accepted_notification_sent' => $referral->notifications
                 ->contains('type', CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED),
+            'assessment_started_notification_sent' => $referral->notifications
+                ->contains('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED),
+            'assessment_completed_notification_sent' => $referral->notifications
+                ->contains('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED),
             'clinic_appointment' => $appointment ? [
                 'id' => $appointment->id,
                 'reference' => $appointment->appointment_reference,
@@ -180,6 +218,9 @@ class GroomingClinicReferralAcceptanceService
                 'queue_number' => $appointment->queue_number,
                 'appointment_date' => $appointment->appointment_date?->toDateString(),
                 'consultation_started' => $appointment->consultation_started_at !== null,
+                'consultation_started_at' => $appointment->consultation_started_at?->toIso8601String(),
+                'consultation_completed' => $appointment->consultation_finished_at !== null,
+                'consultation_completed_at' => $appointment->consultation_finished_at?->toIso8601String(),
             ] : null,
             'grooming_clearance_status' => $referral->grooming_clearance_status,
             'grooming_clearance_status_label' => GroomingClinicReferral::groomingClearanceLabel(

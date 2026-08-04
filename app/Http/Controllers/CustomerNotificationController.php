@@ -316,6 +316,8 @@ class CustomerNotificationController extends Controller
         return in_array($type, [
             CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED,
             CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED,
+            CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED,
+            CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED,
         ], true);
     }
 }

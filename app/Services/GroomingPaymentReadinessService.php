@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\GroomingClinicReferral;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingStoppedPaymentReview;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,12 @@ class GroomingPaymentReadinessService
             ->orderBy('booking_pet_id');
         $hasReviewFoundation = Schema::hasTable('grooming_stopped_payment_reviews')
             && Schema::hasTable('grooming_medical_concerns');
+        $hasReferralFoundation = Schema::hasTable('grooming_clinic_referrals');
         if ($hasReviewFoundation) {
             $petQuery->with('groomingStoppedPaymentReview.groomingMedicalConcern');
+        }
+        if ($hasReferralFoundation) {
+            $petQuery->with('groomingClinicReferrals:id,booking_id,booking_pet_id,pet_id,status');
         }
         $serviceQuery = BookingService::query()
             ->where('booking_id', $booking->booking_id)
@@ -67,6 +72,7 @@ class GroomingPaymentReadinessService
             $serviceNames,
             $addonNames,
             $hasReviewFoundation,
+            $hasReferralFoundation,
             &$bookingTotalCents,
             &$firstBlockedReason,
         ) {
@@ -108,8 +114,27 @@ class GroomingPaymentReadinessService
             $paymentReady = false;
             $blockedReason = null;
             $finalChargeCents = null;
+            $activeReferral = $hasReferralFoundation
+                ? $bookingPet->groomingClinicReferrals->first(
+                    fn (GroomingClinicReferral $referral) => in_array(
+                        $referral->status,
+                        [
+                            GroomingClinicReferral::STATUS_PENDING_CONSENT,
+                            GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
+                            GroomingClinicReferral::STATUS_ACCEPTED,
+                            GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                        ],
+                        true,
+                    )
+                    && (int) $referral->booking_id === (int) $bookingPet->booking_id
+                    && (int) $referral->pet_id === (int) $bookingPet->pet_id,
+                )
+                : null;
 
-            if ($state === BookingPet::GROOMING_STATE_FINISHED) {
+            if ($activeReferral) {
+                $blockedReason = 'Grooming payment is unavailable while '
+                    .$this->petLabel($bookingPet).' has an active clinic referral.';
+            } elseif ($state === BookingPet::GROOMING_STATE_FINISHED) {
                 if ($bookingPet->grooming_end_time === null) {
                     $blockedReason = $this->petLabel($bookingPet)
                         .' is marked Finished but has no grooming finish time.';
@@ -151,6 +176,8 @@ class GroomingPaymentReadinessService
                 'payment_kind' => $paymentKind,
                 'payment_ready' => $paymentReady,
                 'payment_blocked_reason' => $blockedReason,
+                'active_clinic_referral' => $activeReferral !== null,
+                'clinic_referral_status' => $activeReferral?->status,
                 'service_breakdown' => $lines->all(),
                 'original_pet_subtotal' => $this->centsToMoney($originalSubtotalCents),
                 'final_pet_charge' => $finalChargeCents !== null
