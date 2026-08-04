@@ -252,6 +252,12 @@ function adminGroomingConcernState() {
           this.applyMedicalConcernStateToModal(nextState);
         }
 
+        this.refreshClinicReferralStatusesForConcerns?.(
+          booking,
+          pet,
+          nextState.concerns,
+        );
+
         return response;
       } catch (error) {
         const notFound = error.status === 404;
@@ -774,6 +780,12 @@ function adminGroomingConcernState() {
         this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
         await this.loadMedicalConcerns(booking, pet);
         await this.loadAdminBookings?.();
+        await this.loadClinicReferralStatus?.(
+          booking,
+          pet,
+          concern,
+          { updateModal: this.clinicReferralModal?.open },
+        );
         this.showMedicalConcernToast(
           response.message || "Per-pet grooming state updated.",
         );

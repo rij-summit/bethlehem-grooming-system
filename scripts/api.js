@@ -494,6 +494,33 @@ var API = (() => {
     );
   }
 
+  function petClinicReferralPath(petId, publicId) {
+    return `/pets/${encodeURIComponent(petId)}/grooming-clinic-referrals/${encodeURIComponent(publicId)}`;
+  }
+
+  async function getPetGroomingClinicReferral(petId, publicId) {
+    return request(
+      "GET",
+      petClinicReferralPath(petId, publicId),
+      null,
+      getCustomerToken(),
+    );
+  }
+
+  async function submitPetGroomingClinicReferralConsent(
+    petId,
+    publicId,
+    decision,
+    signatureName,
+  ) {
+    return request(
+      "POST",
+      `${petClinicReferralPath(petId, publicId)}/consent`,
+      { decision, signature_name: signatureName },
+      getCustomerToken(),
+    );
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -722,6 +749,47 @@ var API = (() => {
     return request(
       "POST",
       `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resume-grooming`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  function adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId) {
+    return `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/clinic-referral`;
+  }
+
+  async function getAdminBookingPetClinicReferral(bookingId, bookingPetId, concernId) {
+    return request(
+      "GET",
+      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminBookingPetClinicReferral(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function recordAdminBookingPetClinicReferralInPersonConsent(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId)}/in-person-consent`,
       payload,
       getAdminToken(),
     );
@@ -1155,6 +1223,8 @@ var API = (() => {
     getPetMedicalConcern,
     acknowledgePetMedicalConcern,
     submitPetMedicalConcernConsent,
+    getPetGroomingClinicReferral,
+    submitPetGroomingClinicReferralConsent,
     addPet,
     updatePet,
     adminUpdatePet,
@@ -1183,6 +1253,9 @@ var API = (() => {
     notifyCustomerAboutAdminBookingPetMedicalConcern,
     applyAdminBookingPetMedicalConcernAction,
     resumeAdminBookingPetGrooming,
+    getAdminBookingPetClinicReferral,
+    createAdminBookingPetClinicReferral,
+    recordAdminBookingPetClinicReferralInPersonConsent,
     getAdminStoppedPaymentReview,
     createAdminStoppedPaymentReview,
     adminCancelBooking,

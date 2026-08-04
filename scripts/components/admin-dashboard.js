@@ -487,6 +487,7 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
 function adminDashboard() {
   return {
     ...adminGroomingConcernState(),
+    ...adminClinicReferralState(),
     ...adminStoppedPaymentReviewState(),
     activeTab: "incoming",
     todayCount: 0,

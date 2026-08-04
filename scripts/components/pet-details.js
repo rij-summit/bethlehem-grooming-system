@@ -24,12 +24,16 @@ document.addEventListener("DOMContentLoaded", () => {
   let concernLoadState = "idle";
   let requestedConcernHandled = false;
   let concernResponseSubmitting = false;
+  let requestedReferralHandled = false;
+  let clinicReferralResponseSubmitting = false;
+  let clinicReferralSignatureDraft = "";
 
   const profileParams = new URLSearchParams(window.location.search);
   const petIdParam = profileParams.get("pet_id");
   const petId = Number(petIdParam);
   const requestedTab = profileParams.get("tab");
   const requestedConcernPublicId = profileParams.get("concern");
+  const requestedReferralPublicId = profileParams.get("referral");
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1114,6 +1118,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (updateHistory) {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", "notifications");
+        url.searchParams.delete("referral");
         url.searchParams.set("concern", publicId);
         window.history.pushState({}, "", url);
       }
@@ -1145,6 +1150,342 @@ document.addEventListener("DOMContentLoaded", () => {
     renderIcons();
   };
 
+  const clinicReferralStatusLabel = (referral) => ({
+    pending_consent: "Pending Customer Consent",
+    pending_clinic_acceptance: "Pending Clinic Acceptance",
+    accepted: "Accepted by Clinic",
+    under_clinic_review: "Under Clinic Review",
+    completed: "Completed",
+    cancelled: "Cancelled",
+  })[referral.status] || referral.status_label || titleCase(referral.status);
+
+  const clinicReferralUrgencyClasses = (urgency) => ({
+    routine: "border-blue-200 bg-blue-50 text-blue-800",
+    urgent: "border-amber-200 bg-amber-50 text-amber-800",
+    emergency: "border-red-200 bg-red-50 text-red-800",
+  })[urgency] || "border-slate-200 bg-slate-50 text-slate-700";
+
+  const clinicReferralStatusClasses = (status) => ({
+    pending_consent: "border-amber-200 bg-amber-50 text-amber-800",
+    pending_clinic_acceptance: "border-blue-200 bg-blue-50 text-blue-800",
+    accepted: "border-violet-200 bg-violet-50 text-violet-800",
+    under_clinic_review: "border-indigo-200 bg-indigo-50 text-indigo-800",
+    completed: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    cancelled: "border-slate-300 bg-slate-100 text-slate-700",
+  })[status] || "border-slate-200 bg-slate-50 text-slate-700";
+
+  const clinicReferralTerminal = (referral) => ["completed", "cancelled"].includes(
+    String(referral.status || "").toLowerCase(),
+  );
+
+  const clinicReferralConsentRecorded = (referral) =>
+    referral.consent_state === "recorded";
+
+  const renderClinicReferralConsent = (referral) => {
+    if (clinicReferralConsentRecorded(referral)) {
+      return `
+        <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-live="polite">
+          <h5 class="font-bold text-emerald-900">Permanent response recorded</h5>
+          <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Decision</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(titleCase(referral.consent_decision))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Responding owner</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(referral.consent_responded_by_name))}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Responded at</dt>
+              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(referral.consent_responded_at))}</dd>
+            </div>
+          </dl>
+          <details class="mt-3 text-xs text-emerald-800">
+            <summary class="cursor-pointer font-semibold">Audit statement version</summary>
+            <p class="mt-1">${escapeHtml(displayValue(referral.consent_statement_version))}</p>
+          </details>
+          <p class="mt-3 text-sm leading-6 text-emerald-800">The original response is permanent and cannot be edited, replaced, or deleted.</p>
+        </section>
+      `;
+    }
+
+    if (!referral.consent_required || clinicReferralTerminal(referral)) return "";
+
+    return `
+      <section class="rounded-xl border border-amber-200 bg-amber-50 p-4" data-clinic-referral-consent-panel>
+        <h5 class="font-bold text-amber-900">Your clinic-referral decision is required</h5>
+        <p class="mt-1 text-sm leading-6 text-amber-800">
+          Read the complete server-provided statement before choosing. No decision is selected for you.
+        </p>
+        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(displayValue(referral.consent_statement))}</blockquote>
+        <details class="mt-3 text-xs text-amber-800">
+          <summary class="cursor-pointer font-semibold">Statement version</summary>
+          <p class="mt-1">${escapeHtml(displayValue(referral.consent_statement_version))}</p>
+        </details>
+        <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          Approval covers referral creation, transfer to clinic intake, and an initial veterinary assessment. It does not automatically authorize diagnostics, medication, treatment, emergency procedures, additional clinic charges, or any other veterinary service.
+        </div>
+        <label class="mt-4 block" for="clinicReferralSignatureName">
+          <span class="text-sm font-bold text-amber-900">Typed signature name <span aria-hidden="true">*</span></span>
+          <input
+            id="clinicReferralSignatureName"
+            data-clinic-referral-signature
+            type="text"
+            maxlength="200"
+            autocomplete="name"
+            value="${escapeHtml(clinicReferralSignatureDraft)}"
+            class="mt-2 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+            aria-describedby="clinicReferralSignatureHelp clinicReferralResponseError"
+          />
+          <span id="clinicReferralSignatureHelp" class="mt-1 block text-xs leading-5 text-amber-800">This response is permanent after submission.</span>
+        </label>
+        <div id="clinicReferralResponseError" data-clinic-referral-response-error class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert" tabindex="-1"></div>
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button type="button" data-clinic-referral-decision="approved" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60">Approve clinic referral</button>
+          <button type="button" data-clinic-referral-decision="declined" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-300 bg-white px-5 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60">Decline clinic referral</button>
+        </div>
+      </section>
+    `;
+  };
+
+  const clinicReferralDetailFields = (referral) => [
+    ["Booking reference", displayValue(referral.booking_reference)],
+    ["Referral date", formatDateTime(referral.referred_at)],
+    ["Status", clinicReferralStatusLabel(referral)],
+    ["Urgency", referral.urgency_label || titleCase(referral.urgency)],
+    ["Consent required", formatBoolean(referral.consent_required)],
+    ["Consent state", clinicReferralConsentRecorded(referral)
+      ? titleCase(referral.consent_decision)
+      : "Waiting for Response"],
+    ["Clinic acceptance", referral.clinic_accepted ? "Accepted" : "Not yet accepted"],
+    ["Clinic appointment reference", displayValue(referral.clinic_appointment_reference)],
+    ["Clinic assessment", referral.clinic_assessment_started ? "Started" : "Not started"],
+  ];
+
+  const renderClinicReferralDetail = (referral, successMessage = "") => {
+    clinicReferralResponseSubmitting = false;
+    concernDetail.innerHTML = `
+      <button type="button" data-close-clinic-referral class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#315b7e] hover:bg-slate-50">
+        <i data-lucide="arrow-left" class="h-4 w-4"></i>
+        Back to notifications
+      </button>
+      <article class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        <header class="border-b border-slate-200 bg-white p-4 sm:p-5">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Clinic referral request</p>
+              <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(referral.pet_name))}</h4>
+              <p class="mt-1 break-all text-xs text-slate-500">Reference: ${escapeHtml(displayValue(referral.public_id))}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full border px-3 py-1 text-xs font-bold ${clinicReferralUrgencyClasses(referral.urgency)}">${escapeHtml(referral.urgency_label || titleCase(referral.urgency))}</span>
+              <span class="rounded-full border px-3 py-1 text-xs font-bold ${clinicReferralStatusClasses(referral.status)}">${escapeHtml(clinicReferralStatusLabel(referral))}</span>
+            </div>
+          </div>
+        </header>
+        <div class="space-y-5 p-4 sm:p-5">
+          ${successMessage ? `<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800" role="status" aria-live="polite">${escapeHtml(successMessage)}</div>` : ""}
+          <section>
+            <h5 class="font-bold text-[#2f4b66]">Why this referral was requested</h5>
+            <p class="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(referral.customer_explanation))}</p>
+          </section>
+          <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            ${clinicReferralDetailFields(referral).map(([label, value]) => `
+              <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt><dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd></div>
+            `).join("")}
+          </dl>
+          <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
+            <h5 class="font-bold text-[#2f4b66]">What happens next</h5>
+            <p class="mt-2 text-sm leading-6 text-slate-600">A clinic referral request does not itself create an appointment or authorize treatment. Clinic acceptance and appointment information will appear here when a later clinic workflow records them.</p>
+          </section>
+          ${renderClinicReferralConsent(referral)}
+          ${!isMissing(referral.customer_cancellation_summary) ? `<section class="rounded-xl border border-slate-200 bg-white p-4"><h5 class="font-bold text-slate-800">Cancellation update</h5><p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">${escapeHtml(referral.customer_cancellation_summary)}</p></section>` : ""}
+          ${!isMissing(referral.customer_resolution_summary) ? `<section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h5 class="font-bold text-emerald-900">Referral resolution</h5><p class="mt-2 whitespace-pre-line text-sm leading-6 text-emerald-800">${escapeHtml(referral.customer_resolution_summary)}</p></section>` : ""}
+        </div>
+      </article>
+      <div data-clinic-referral-confirmation class="fixed inset-0 z-[70] hidden items-center justify-center overflow-y-auto bg-slate-900/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="clinicReferralConfirmationTitle">
+        <div data-clinic-referral-confirmation-card class="my-auto w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" tabindex="-1">
+          <h4 id="clinicReferralConfirmationTitle" class="text-lg font-bold text-[#2f4b66]">Confirm permanent referral response</h4>
+          <p class="mt-2 text-sm leading-6 text-slate-600">Your response cannot be edited, replaced, or deleted after submission.</p>
+          <dl class="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
+            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Pet</dt><dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(displayValue(referral.pet_name))}</dd></div>
+            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Decision</dt><dd data-clinic-referral-confirm-decision class="mt-1 text-sm font-semibold text-slate-700"></dd></div>
+            <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Typed signature name</dt><dd data-clinic-referral-confirm-name class="mt-1 break-words text-sm font-semibold text-slate-700"></dd></div>
+          </dl>
+          <p data-clinic-referral-decline-warning class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">A routine referral may be cancelled. An urgent or emergency safety referral may remain pending clinic acceptance. Declining does not erase the referral and does not automatically resume grooming.</p>
+          <p class="mt-3 text-xs leading-5 text-slate-500">Approval covers referral creation, clinic intake transfer, and initial assessment only—not diagnostics, medication, treatment, emergency procedures, added charges, or other services.</p>
+          <div data-clinic-referral-confirm-error class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert" tabindex="-1"></div>
+          <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" data-cancel-clinic-referral-confirm class="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Back</button>
+            <button type="button" data-submit-clinic-referral-confirm class="min-h-11 rounded-xl bg-[#315b7e] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">Submit Permanent Response</button>
+          </div>
+        </div>
+      </div>
+    `;
+    concernDetail.querySelector("[data-close-clinic-referral]")
+      ?.addEventListener("click", closeClinicReferralDetail);
+    attachClinicReferralConsentActions(referral);
+    renderIcons();
+  };
+
+  const attachClinicReferralConsentActions = (referral) => {
+    const signatureInput = concernDetail.querySelector("[data-clinic-referral-signature]");
+    const decisionButtons = Array.from(concernDetail.querySelectorAll("[data-clinic-referral-decision]"));
+    const errorBox = concernDetail.querySelector("[data-clinic-referral-response-error]");
+    const confirmation = concernDetail.querySelector("[data-clinic-referral-confirmation]");
+    const confirmationCard = concernDetail.querySelector("[data-clinic-referral-confirmation-card]");
+    const confirmSubmit = concernDetail.querySelector("[data-submit-clinic-referral-confirm]");
+    let selectedDecision = "";
+    let originatingButton = null;
+
+    signatureInput?.addEventListener("input", () => {
+      clinicReferralSignatureDraft = signatureInput.value;
+    });
+
+    const showError = (box, message) => {
+      if (!box) return;
+      box.textContent = message;
+      box.classList.remove("hidden");
+      box.focus();
+    };
+    const setBusy = (busy) => {
+      clinicReferralResponseSubmitting = busy;
+      decisionButtons.forEach((button) => { button.disabled = busy; });
+      if (signatureInput) signatureInput.disabled = busy;
+      if (confirmSubmit) {
+        confirmSubmit.disabled = busy;
+        confirmSubmit.textContent = busy ? "Submitting..." : "Submit Permanent Response";
+      }
+    };
+    const closeConfirmation = () => {
+      confirmation?.classList.add("hidden");
+      confirmation?.classList.remove("flex");
+      originatingButton?.focus();
+    };
+
+    decisionButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (clinicReferralResponseSubmitting) return;
+        const signatureName = signatureInput?.value.trim() || "";
+        clinicReferralSignatureDraft = signatureInput?.value || "";
+        if (!signatureName) {
+          showError(errorBox, "Type your signature name before choosing Approve or Decline.");
+          signatureInput?.focus();
+          return;
+        }
+        selectedDecision = button.dataset.clinicReferralDecision;
+        originatingButton = button;
+        errorBox?.classList.add("hidden");
+        concernDetail.querySelector("[data-clinic-referral-confirm-decision]").textContent =
+          selectedDecision === "approved" ? "Approve" : "Decline";
+        concernDetail.querySelector("[data-clinic-referral-confirm-name]").textContent = signatureName;
+        concernDetail.querySelector("[data-clinic-referral-decline-warning]")
+          ?.classList.toggle("hidden", selectedDecision !== "declined");
+        confirmation?.classList.remove("hidden");
+        confirmation?.classList.add("flex");
+        confirmationCard?.focus();
+      });
+    });
+
+    concernDetail.querySelector("[data-cancel-clinic-referral-confirm]")
+      ?.addEventListener("click", closeConfirmation);
+
+    confirmSubmit?.addEventListener("click", async () => {
+      if (clinicReferralResponseSubmitting || !selectedDecision) return;
+      const signatureName = signatureInput?.value.trim() || "";
+      const confirmError = concernDetail.querySelector("[data-clinic-referral-confirm-error]");
+      confirmError?.classList.add("hidden");
+      setBusy(true);
+      try {
+        const response = await API.submitPetGroomingClinicReferralConsent(
+          petId,
+          referral.public_id,
+          selectedDecision,
+          signatureName,
+        );
+        clinicReferralSignatureDraft = "";
+        concernLoadState = "idle";
+        await openClinicReferralDetail(referral.public_id, {
+          updateHistory: false,
+          successMessage: response.message || "Your permanent response was recorded.",
+        });
+      } catch (error) {
+        if (error?.status === 409) {
+          clinicReferralSignatureDraft = "";
+          await openClinicReferralDetail(referral.public_id, {
+            updateHistory: false,
+            successMessage: "The original permanent response was preserved and reloaded.",
+          });
+          return;
+        }
+        setBusy(false);
+        showError(
+          confirmError,
+          concernResponseError(error),
+        );
+      }
+    });
+  };
+
+  const closeClinicReferralDetail = () => {
+    concernDetail?.classList.add("hidden");
+    concernNotifications?.classList.remove("hidden");
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", "notifications");
+    url.searchParams.delete("referral");
+    window.history.replaceState({}, "", url);
+    clinicReferralResponseSubmitting = false;
+    clinicReferralSignatureDraft = "";
+    if (concernLoadState === "idle") loadConcernNotifications({ retry: true });
+    renderIcons();
+  };
+
+  const openClinicReferralDetail = async (
+    publicId,
+    { updateHistory = true, successMessage = "" } = {},
+  ) => {
+    if (!concernDetail || !concernNotifications || !publicId) return;
+    concernNotifications.classList.add("hidden");
+    concernDetail.classList.remove("hidden");
+    concernDetail.innerHTML = `
+      <div class="py-12 text-center" role="status" aria-live="polite">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-slate-500">Loading clinic referral details...</p>
+      </div>
+    `;
+    renderIcons();
+    try {
+      const response = await API.getPetGroomingClinicReferral(petId, publicId);
+      renderClinicReferralDetail(response.referral || {}, successMessage);
+      if (updateHistory) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", "notifications");
+        url.searchParams.delete("concern");
+        url.searchParams.set("referral", publicId);
+        window.history.pushState({}, "", url);
+      }
+    } catch (error) {
+      clinicReferralResponseSubmitting = false;
+      const notFound = error?.status === 404;
+      concernDetail.innerHTML = `
+        <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
+          <i data-lucide="${notFound ? "file-question" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
+          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Clinic referral not found" : "Clinic referral could not be loaded"}</h4>
+          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This referral does not exist or is not available for this pet and account." : escapeHtml(error?.message || "Please try again later.")}</p>
+          <div class="mt-4 flex flex-wrap justify-center gap-2">
+            <button type="button" data-close-clinic-referral class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Back</button>
+            ${notFound ? "" : `<button type="button" data-retry-clinic-referral class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white"><i data-lucide="refresh-cw" class="h-4 w-4"></i>Retry</button>`}
+          </div>
+        </div>
+      `;
+      concernDetail.querySelector("[data-close-clinic-referral]")
+        ?.addEventListener("click", closeClinicReferralDetail);
+      concernDetail.querySelector("[data-retry-clinic-referral]")
+        ?.addEventListener("click", () => openClinicReferralDetail(publicId, { updateHistory: false }));
+    }
+    renderIcons();
+  };
+
   const attachConcernSummaryActions = () => {
     concernNotifications
       ?.querySelectorAll("[data-open-concern]")
@@ -1155,12 +1496,63 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   };
 
+  const renderClinicReferralNotificationSummary = (notification) => `
+    <article class="rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:p-5">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.12em] text-blue-700">Clinic referral request</p>
+          <p class="mt-1 text-sm text-blue-800">${escapeHtml(formatDateTime(notification.created_at))}</p>
+        </div>
+        <span class="w-fit rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-800">${notification.is_read ? "Read" : "Unread"}</span>
+      </div>
+      <p class="mt-3 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(notification.display_message || notification.message))}</p>
+      <button
+        type="button"
+        data-open-clinic-referral="${escapeHtml(notification.referral_public_id)}"
+        data-clinic-referral-notification-id="${escapeHtml(notification.id)}"
+        data-clinic-referral-notification-read="${notification.is_read ? "1" : "0"}"
+        class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274b69]"
+      >
+        <i data-lucide="heart-pulse" class="h-4 w-4"></i>
+        View clinic referral
+      </button>
+    </article>
+  `;
+
+  const attachClinicReferralNotificationActions = () => {
+    concernNotifications
+      ?.querySelectorAll("[data-open-clinic-referral]")
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const publicId = button.dataset.openClinicReferral;
+          if (button.dataset.clinicReferralNotificationRead !== "1") {
+            try {
+              await API.markCustomerNotificationRead(
+                button.dataset.clinicReferralNotificationId,
+              );
+            } catch {
+              // Detail authorization remains server-enforced; a read-state error does not fabricate a response.
+            }
+          }
+          await openClinicReferralDetail(publicId);
+        });
+      });
+  };
+
   const loadConcernNotifications = async ({ retry = false } = {}) => {
     if (
       !concernNotifications
       || concernLoadState === "loading"
       || (!retry && concernLoadState === "loaded")
     ) {
+      return;
+    }
+
+    if (requestedReferralPublicId && !requestedReferralHandled) {
+      requestedReferralHandled = true;
+      await openClinicReferralDetail(requestedReferralPublicId, {
+        updateHistory: false,
+      });
       return;
     }
 
@@ -1176,10 +1568,20 @@ document.addEventListener("DOMContentLoaded", () => {
     renderIcons();
 
     try {
-      const response = await API.getPetMedicalConcerns(petId);
+      const [response, notificationResponse] = await Promise.all([
+        API.getPetMedicalConcerns(petId),
+        API.getCustomerNotifications().catch(() => ({ notifications: [] })),
+      ]);
       const concerns = Array.isArray(response.concerns) ? response.concerns : [];
+      const referralNotifications = Array.isArray(notificationResponse.notifications)
+        ? notificationResponse.notifications.filter((notification) =>
+            notification.type === "grooming_clinic_referral_requested"
+            && Number(notification.pet_id) === petId
+            && notification.referral_public_id,
+          )
+        : [];
 
-      if (!concerns.length) {
+      if (!concerns.length && !referralNotifications.length) {
         concernNotifications.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
             <i data-lucide="bell-off" class="mx-auto h-8 w-8 text-slate-300"></i>
@@ -1190,10 +1592,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         concernNotifications.innerHTML = `
           <div class="space-y-4">
+            ${referralNotifications.map(renderClinicReferralNotificationSummary).join("")}
             ${concerns.map(renderConcernSummary).join("")}
           </div>
         `;
         attachConcernSummaryActions();
+        attachClinicReferralNotificationActions();
       }
 
       concernLoadState = "loaded";

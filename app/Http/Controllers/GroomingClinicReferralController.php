@@ -978,6 +978,8 @@ class GroomingClinicReferralController extends Controller
             'consent_required' => (bool) $referral->consent_required,
             'consent_state' => $response ? 'recorded' : 'pending',
             'consent_decision' => $response?->decision,
+            'consent_responded_by_name' => $response?->responded_by_name,
+            'consent_responded_at' => $response?->responded_at?->toIso8601String(),
             'consent_statement' => $statement,
             'consent_statement_version' => $statementVersion,
             'clinic_accepted' => $referral->accepted_at !== null,

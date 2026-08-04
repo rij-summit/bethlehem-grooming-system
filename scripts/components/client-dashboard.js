@@ -270,7 +270,9 @@
           await API.markCustomerNotificationRead(id);
 
           if (
-            notification?.type === "grooming_medical_concern"
+            ["grooming_medical_concern", "grooming_clinic_referral_requested"].includes(
+              notification?.type,
+            )
             && notification.destination
           ) {
             window.location.href = notification.destination;
@@ -296,6 +298,10 @@
 
     if (type === "grooming_medical_concern") {
       return "!";
+    }
+
+    if (type === "grooming_clinic_referral_requested") {
+      return "+";
     }
 
     const icons = {

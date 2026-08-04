@@ -2541,9 +2541,19 @@
                       </div>
 
                       <div
-                        x-show="concern.available_staff_actions?.length > 0"
+                        x-show="concern.available_staff_actions?.length > 0 || clinicReferralActionVisible(medicalConcernModal.booking, medicalConcernModal.pet, concern)"
                         class="admin-medical-concern-card-actions"
                       >
+                        <button
+                          x-show="clinicReferralActionVisible(medicalConcernModal.booking, medicalConcernModal.pet, concern)"
+                          type="button"
+                          @click="openClinicReferral(medicalConcernModal.booking, medicalConcernModal.pet, concern, $event.currentTarget)"
+                          class="admin-medical-concern-secondary"
+                          :aria-label="clinicReferralActionLabel(medicalConcernModal.booking, medicalConcernModal.pet, concern) + ' for ' + (medicalConcernModal.pet?.name || medicalConcernModal.pet?.petName || 'selected pet')"
+                        >
+                          <i data-lucide="heart-pulse" class="h-4 w-4" aria-hidden="true"></i>
+                          <span x-text="clinicReferralActionLabel(medicalConcernModal.booking, medicalConcernModal.pet, concern)"></span>
+                        </button>
                         <button
                           x-show="medicalConcernActionAvailable(concern, 'notify_customer')"
                           type="button"
@@ -3143,6 +3153,379 @@
           >
             <i :data-lucide="medicalConcernToast.ok ? 'circle-check' : 'circle-alert'" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
             <span x-text="medicalConcernToast.message"></span>
+          </div>
+
+          <!-- Exact booking-pet and concern scoped clinic-referral dialog -->
+          <div
+            x-show="clinicReferralModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clinic-referral-dialog-title"
+            @keydown.escape.window="closeClinicReferral()"
+            @click.self="closeClinicReferral()"
+          >
+            <section
+              x-ref="clinicReferralDialog"
+              class="admin-medical-concern-dialog"
+              tabindex="-1"
+            >
+              <header class="admin-medical-concern-header">
+                <div class="admin-medical-concern-header-icon" aria-hidden="true">
+                  <i data-lucide="heart-pulse" class="h-5 w-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="admin-medical-concern-kicker">Grooming to clinic</p>
+                  <h2 id="clinic-referral-dialog-title" class="admin-medical-concern-title">
+                    Clinic Referral
+                  </h2>
+                  <p class="admin-medical-concern-context">
+                    <strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name || 'Selected pet'"></strong>
+                    <span aria-hidden="true"> · </span>
+                    <span x-text="clinicReferralModal.booking?.reference || clinicReferralModal.booking?.bookingReference || clinicReferralModal.booking?.booking_reference || 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="admin-medical-concern-close"
+                  @click="closeClinicReferral()"
+                  aria-label="Close clinic referral dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
+                </button>
+              </header>
+
+              <div class="admin-medical-concern-body">
+                <div class="admin-medical-concern-advisory" role="note">
+                  <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>This creates a clinic referral request. It does not automatically create a clinic appointment or authorize veterinary treatment.</p>
+                </div>
+
+                <div x-show="clinicReferralModal.loading" class="admin-medical-concern-state" role="status" aria-live="polite">
+                  <span class="admin-medical-concern-spinner" aria-hidden="true"></span>
+                  <p>Loading clinic referral status...</p>
+                </div>
+
+                <div x-show="!clinicReferralModal.loading && clinicReferralModal.error" class="admin-medical-concern-state is-error" role="alert">
+                  <i data-lucide="circle-alert" class="h-6 w-6" aria-hidden="true"></i>
+                  <h3 x-text="clinicReferralModal.notFound ? 'Clinic referral context not found' : 'Clinic referral could not be loaded'"></h3>
+                  <p x-text="clinicReferralModal.error"></p>
+                  <button
+                    x-show="!clinicReferralModal.notFound"
+                    type="button"
+                    class="admin-medical-concern-retry"
+                    @click="loadClinicReferralStatus()"
+                  >
+                    <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                    Retry
+                  </button>
+                </div>
+
+                <template x-if="!clinicReferralModal.loading && !clinicReferralModal.error && clinicReferralModal.response">
+                  <div>
+                    <!-- Safe backend ineligibility state -->
+                    <section
+                      x-show="!clinicReferralModal.response.exists && clinicReferralModal.view === 'status'"
+                      class="admin-medical-concern-state"
+                    >
+                      <i data-lucide="shield-alert" class="h-7 w-7" aria-hidden="true"></i>
+                      <h3>Clinic referral is not available</h3>
+                      <p x-text="clinicReferralCreationBlockedReason(clinicReferralModal.booking, clinicReferralModal.pet, clinicReferralModal.concern)"></p>
+                      <button
+                        x-show="clinicReferralEffectiveCanCreate(clinicReferralModal.booking, clinicReferralModal.pet, clinicReferralModal.concern)"
+                        type="button"
+                        class="admin-medical-concern-primary"
+                        @click="startClinicReferralRequest()"
+                      >
+                        Refer to Clinic
+                      </button>
+                    </section>
+
+                    <!-- New request form -->
+                    <form
+                      x-show="clinicReferralModal.view === 'form'"
+                      @submit.prevent="openClinicReferralConfirmation()"
+                      novalidate
+                    >
+                      <button type="button" class="admin-medical-concern-back" @click="clinicReferralModal.view = 'status'">
+                        <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                        Back to status
+                      </button>
+
+                      <section class="admin-medical-concern-resolution">
+                        <h5>Selected pet and concern</h5>
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Pet</span><strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name || 'Not provided'"></strong></p>
+                          <p><span>Type and breed</span><strong x-text="(clinicReferralModal.pet?.petType || clinicReferralModal.pet?.species || 'Not provided') + ' · ' + clinicReferralPetBreed()"></strong></p>
+                          <p><span>Concern reference</span><strong x-text="clinicReferralConcernReference()"></strong></p>
+                          <p><span>Severity</span><strong x-text="medicalConcernSeverityLabel(clinicReferralModal.concern?.severity) || 'Not provided'"></strong></p>
+                          <p><span>Current grooming state</span><strong x-text="clinicReferralModal.response.context?.grooming_state || clinicReferralModal.concern?.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                          <p><span>Applied grooming action</span><strong x-text="clinicReferralModal.concern?.applied_grooming_action_label || clinicReferralModal.concern?.applied_grooming_action || 'No applied Pause or Stop action'"></strong></p>
+                        </div>
+                      </section>
+
+                      <div
+                        x-show="clinicReferralFormErrorSummary"
+                        x-ref="clinicReferralValidation"
+                        class="admin-medical-concern-validation"
+                        role="alert"
+                        tabindex="-1"
+                      >
+                        <strong>Check the referral details.</strong>
+                        <span x-text="clinicReferralFormErrorSummary"></span>
+                      </div>
+
+                      <fieldset class="admin-medical-concern-requirements is-full">
+                        <legend>Urgency <span aria-hidden="true">*</span></legend>
+                        <label>
+                          <input x-ref="clinicReferralUrgencyRoutine" type="radio" name="clinic-referral-urgency" value="routine" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Routine</strong><small>Customer consent is required before clinic acceptance.</small></span>
+                        </label>
+                        <label>
+                          <input type="radio" name="clinic-referral-urgency" value="urgent" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Urgent</strong><small>Consent is normally required; documented immediate intake can be requested.</small></span>
+                        </label>
+                        <label>
+                          <input type="radio" name="clinic-referral-urgency" value="emergency" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Emergency</strong><small>A documented intake-before-consent reason is required. This is not treatment consent.</small></span>
+                        </label>
+                        <p x-show="clinicReferralFormErrors.urgency" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.urgency"></p>
+                      </fieldset>
+
+                      <div class="admin-medical-concern-form-grid">
+                        <div class="is-full">
+                          <label for="clinic-referral-internal-reason">Internal referral reason <span aria-hidden="true">*</span></label>
+                          <textarea
+                            id="clinic-referral-internal-reason"
+                            x-model="clinicReferralForm.referral_reason"
+                            maxlength="5000"
+                            rows="5"
+                            aria-describedby="clinic-referral-internal-help clinic-referral-internal-error"
+                          ></textarea>
+                          <p id="clinic-referral-internal-help" class="admin-medical-concern-help">Visible only to authorized staff. <span x-text="(clinicReferralForm.referral_reason || '').length + ' / 5000'"></span></p>
+                          <p id="clinic-referral-internal-error" x-show="clinicReferralFormErrors.referral_reason" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.referral_reason"></p>
+                        </div>
+                        <div class="is-full">
+                          <label for="clinic-referral-customer-explanation">Customer-friendly explanation <span aria-hidden="true">*</span></label>
+                          <textarea
+                            id="clinic-referral-customer-explanation"
+                            x-model="clinicReferralForm.customer_explanation"
+                            maxlength="2000"
+                            rows="5"
+                            aria-describedby="clinic-referral-customer-help clinic-referral-customer-error"
+                          ></textarea>
+                          <p id="clinic-referral-customer-help" class="admin-medical-concern-help is-advisory">The customer will be able to read this explanation. <span x-text="(clinicReferralForm.customer_explanation || '').length + ' / 2000'"></span></p>
+                          <p id="clinic-referral-customer-error" x-show="clinicReferralFormErrors.customer_explanation" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.customer_explanation"></p>
+                        </div>
+                      </div>
+
+                      <label x-show="clinicReferralForm.urgency === 'urgent'" class="admin-medical-concern-locked">
+                        <input type="checkbox" x-model="clinicReferralForm.allow_intake_before_consent" />
+                        <span><strong>Allow clinic intake before customer consent</strong><small>Use only when immediate clinic intake may be necessary.</small></span>
+                      </label>
+
+                      <div x-show="clinicReferralNeedsEmergencyReason()" class="admin-medical-concern-terminal-fields">
+                        <label for="clinic-referral-emergency-reason">Internal intake-before-consent reason <span aria-hidden="true">*</span></label>
+                        <textarea
+                          id="clinic-referral-emergency-reason"
+                          x-model="clinicReferralForm.emergency_without_consent_reason"
+                          maxlength="5000"
+                          rows="4"
+                        ></textarea>
+                        <p class="admin-medical-concern-help">Internal only. It does not create or fabricate customer consent.</p>
+                        <p x-show="clinicReferralFormErrors.emergency_without_consent_reason" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.emergency_without_consent_reason"></p>
+                      </div>
+
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="closeClinicReferral()">Cancel</button>
+                        <button x-ref="clinicReferralSubmitButton" type="submit" class="admin-medical-concern-primary">Review Referral Request</button>
+                      </footer>
+                    </form>
+
+                    <!-- Permanent staff referral status -->
+                    <div x-show="clinicReferralModal.response.exists && clinicReferralModal.view === 'status'">
+                      <div class="admin-medical-concern-toolbar">
+                        <div>
+                          <p class="admin-medical-concern-kicker">Referral reference</p>
+                          <strong x-text="clinicReferralModal.response.referral?.public_id"></strong>
+                        </div>
+                        <button type="button" class="admin-medical-concern-retry" @click="loadClinicReferralStatus()">
+                          <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                          Refresh status
+                        </button>
+                      </div>
+
+                      <div
+                        x-show="!clinicReferralModal.response.referral?.exact_pause_or_stop_applied"
+                        class="admin-medical-concern-state is-error"
+                        role="alert"
+                      >
+                        <i data-lucide="triangle-alert" class="h-6 w-6" aria-hidden="true"></i>
+                        <h3>Clinic acceptance is currently blocked</h3>
+                        <p>Apply Pause Grooming or Stop Grooming to this exact concern first.</p>
+                      </div>
+
+                      <div
+                        x-show="clinicReferralModal.response.referral?.financial_correction_review_required"
+                        class="admin-medical-concern-locked"
+                        role="note"
+                      >
+                        <i data-lucide="badge-dollar-sign" class="h-5 w-5" aria-hidden="true"></i>
+                        <span><strong>Paid-booking review warning</strong><small>This booking was already paid. If the pet’s grooming charge changes, an administrator correction or refund workflow will be required.</small></span>
+                      </div>
+
+                      <section class="admin-medical-concern-resolution">
+                        <h5>Referral status</h5>
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Status</span><strong x-text="clinicReferralStatusLabel(clinicReferralModal.response.referral)"></strong></p>
+                          <p><span>Urgency</span><strong x-text="clinicReferralUrgencyLabel(clinicReferralModal.response.referral?.urgency)"></strong></p>
+                          <p><span>Pet</span><strong x-text="clinicReferralModal.response.referral?.pet_name"></strong></p>
+                          <p><span>Booking</span><strong x-text="clinicReferralModal.response.referral?.booking_reference"></strong></p>
+                          <p><span>Concern</span><strong x-text="clinicReferralModal.response.referral?.concern_public_id"></strong></p>
+                          <p><span>Referred by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.referred_by_name)"></strong></p>
+                          <p><span>Referral time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.referred_at)"></strong></p>
+                          <p><span>Customer notified</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.customer_notified_at)"></strong></p>
+                          <p><span>Consent</span><strong x-text="clinicReferralConsentLabel(clinicReferralModal.response.referral)"></strong></p>
+                          <p><span>Response channel</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_response_channel_label, 'Not yet recorded')"></strong></p>
+                          <p><span>Responding owner or decision-maker</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_responded_by_name, 'Not yet recorded')"></strong></p>
+                          <p><span>Captured by staff</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_captured_by_name, 'Not applicable')"></strong></p>
+                          <p><span>Response time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.consent_responded_at)"></strong></p>
+                          <p><span>Pause or Stop applied</span><strong x-text="clinicReferralModal.response.referral?.exact_pause_or_stop_applied ? 'Yes' : 'No'"></strong></p>
+                          <p><span>Clinic acceptance eligible</span><strong x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_eligible ? 'Yes' : 'No'"></strong></p>
+                          <p><span>Clinic appointment</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_reference, 'Not created')"></strong></p>
+                          <p><span>Grooming clearance</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_clearance_status_label)"></strong></p>
+                        </div>
+                      </section>
+
+                      <div class="admin-medical-concern-text-grid">
+                        <p><span>Internal referral reason</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.referral_reason)"></strong></p>
+                        <p><span>Customer-friendly explanation</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.customer_explanation)"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.customer_cancellation_summary"><span>Customer-safe cancellation summary</span><strong x-text="clinicReferralModal.response.referral?.customer_cancellation_summary"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.customer_resolution_summary"><span>Customer-safe resolution summary</span><strong x-text="clinicReferralModal.response.referral?.customer_resolution_summary"></strong></p>
+                      </div>
+
+                      <p x-show="!clinicReferralModal.response.referral?.future_clinic_acceptance_eligible" class="admin-medical-concern-future-note" x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_blocked_reason"></p>
+
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="closeClinicReferral()">Close</button>
+                        <button
+                          x-show="canRecordClinicReferralInPersonConsent(clinicReferralModal.response.referral)"
+                          type="button"
+                          class="admin-medical-concern-primary"
+                          @click="openClinicReferralInPersonConsent()"
+                        >
+                          Record In-Person Consent
+                        </button>
+                      </footer>
+                    </div>
+
+                    <!-- Unregistered-owner consent capture -->
+                    <form x-show="clinicReferralModal.view === 'in_person'" @submit.prevent="confirmClinicReferralInPersonConsent()" novalidate>
+                      <button type="button" class="admin-medical-concern-back" @click="clinicReferralModal.view = 'status'">
+                        <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                        Back to referral status
+                      </button>
+                      <div class="admin-medical-concern-advisory" role="note">
+                        <i data-lucide="user-check" class="h-5 w-5" aria-hidden="true"></i>
+                        <p>You are recording the owner or decision-maker’s response. You are not responding on their behalf.</p>
+                      </div>
+                      <div x-show="clinicReferralInPerson.error" class="admin-medical-concern-validation" role="alert" x-text="clinicReferralInPerson.error"></div>
+                      <div class="admin-medical-concern-form-grid">
+                        <div class="is-full">
+                          <label for="clinic-referral-in-person-decision">Decision <span aria-hidden="true">*</span></label>
+                          <select id="clinic-referral-in-person-decision" x-ref="clinicReferralInPersonDecision" x-model="clinicReferralInPerson.decision">
+                            <option value="">Select a decision</option>
+                            <option value="approved">Approved</option>
+                            <option value="declined">Declined</option>
+                          </select>
+                          <p x-show="clinicReferralInPerson.errors.decision" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.decision"></p>
+                        </div>
+                        <div>
+                          <label for="clinic-referral-decision-maker">Decision-maker name <span aria-hidden="true">*</span></label>
+                          <input id="clinic-referral-decision-maker" type="text" maxlength="200" x-model="clinicReferralInPerson.decision_maker_name" autocomplete="name" />
+                          <p x-show="clinicReferralInPerson.errors.decision_maker_name" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.decision_maker_name"></p>
+                        </div>
+                        <div>
+                          <label for="clinic-referral-in-person-signature">Typed or captured signature name <span aria-hidden="true">*</span></label>
+                          <input id="clinic-referral-in-person-signature" type="text" maxlength="200" x-model="clinicReferralInPerson.signature_name" autocomplete="off" />
+                          <p x-show="clinicReferralInPerson.errors.signature_name" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.signature_name"></p>
+                        </div>
+                      </div>
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="clinicReferralModal.view = 'status'">Cancel</button>
+                        <button type="submit" class="admin-medical-concern-primary">Review Permanent Response</button>
+                      </footer>
+                    </form>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <!-- Staff request confirmation -->
+            <div
+              x-show="clinicReferralConfirmation.open"
+              style="display: none"
+              class="admin-medical-concern-terminal-overlay"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="clinic-referral-confirm-title"
+            >
+              <section x-ref="clinicReferralConfirmationDialog" class="admin-medical-concern-terminal-dialog" tabindex="-1">
+                <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true"><i data-lucide="heart-pulse" class="h-6 w-6"></i></div>
+                <h3 id="clinic-referral-confirm-title">Confirm Clinic Referral</h3>
+                <p>This permanent request cannot be edited normally after creation.</p>
+                <div class="admin-medical-concern-detail-grid">
+                  <p><span>Pet</span><strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name"></strong></p>
+                  <p><span>Concern</span><strong x-text="clinicReferralConcernReference()"></strong></p>
+                  <p><span>Urgency</span><strong x-text="clinicReferralUrgencyLabel(clinicReferralForm.urgency)"></strong></p>
+                  <p><span>Consent path</span><strong x-text="clinicReferralConsentSummary()"></strong></p>
+                </div>
+                <section class="admin-medical-concern-resolution">
+                  <h5>Customer-friendly explanation</h5>
+                  <p x-text="clinicReferralForm.customer_explanation"></p>
+                </section>
+                <p class="admin-medical-concern-future-note">No clinic appointment is created. Grooming is not automatically paused or stopped. Veterinary treatment is not automatically authorized.</p>
+                <p x-show="clinicReferralConfirmation.error" class="admin-medical-concern-terminal-error" role="alert" x-text="clinicReferralConfirmation.error"></p>
+                <footer class="admin-medical-concern-form-actions">
+                  <button type="button" class="admin-medical-concern-secondary" :disabled="clinicReferralConfirmation.busy" @click="closeClinicReferralConfirmation()">Back</button>
+                  <button type="button" class="admin-medical-concern-primary" :disabled="clinicReferralConfirmation.busy" @click="submitClinicReferral()">
+                    <span x-show="clinicReferralConfirmation.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="clinicReferralConfirmation.busy ? 'Creating...' : 'Create Referral Request'"></span>
+                  </button>
+                </footer>
+              </section>
+            </div>
+
+            <!-- In-person permanent response confirmation -->
+            <div
+              x-show="clinicReferralInPerson.confirming"
+              style="display: none"
+              class="admin-medical-concern-terminal-overlay"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="clinic-referral-in-person-confirm-title"
+            >
+              <section x-ref="clinicReferralInPersonConfirm" class="admin-medical-concern-terminal-dialog" tabindex="-1">
+                <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true"><i data-lucide="user-check" class="h-6 w-6"></i></div>
+                <h3 id="clinic-referral-in-person-confirm-title">Confirm In-Person Consent</h3>
+                <p>This response is permanent and cannot be edited, replaced, or deleted.</p>
+                <div class="admin-medical-concern-detail-grid">
+                  <p><span>Pet</span><strong x-text="clinicReferralModal.response?.referral?.pet_name"></strong></p>
+                  <p><span>Decision</span><strong x-text="clinicReferralInPerson.decision === 'approved' ? 'Approved' : 'Declined'"></strong></p>
+                  <p><span>Decision-maker</span><strong x-text="clinicReferralInPerson.decision_maker_name"></strong></p>
+                </div>
+                <p x-show="clinicReferralInPerson.error" class="admin-medical-concern-terminal-error" role="alert" x-text="clinicReferralInPerson.error"></p>
+                <footer class="admin-medical-concern-form-actions">
+                  <button type="button" class="admin-medical-concern-secondary" :disabled="clinicReferralInPerson.busy" @click="clinicReferralInPerson.confirming = false">Back</button>
+                  <button type="button" class="admin-medical-concern-primary" :disabled="clinicReferralInPerson.busy" @click="submitClinicReferralInPersonConsent()">
+                    <span x-show="clinicReferralInPerson.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="clinicReferralInPerson.busy ? 'Recording...' : 'Record Permanent Response'"></span>
+                  </button>
+                </footer>
+              </section>
+            </div>
           </div>
 
           <!-- Payment Modal -->
@@ -3793,6 +4176,7 @@
 
     <!-- Shared dashboard content script -->
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
+    <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=stopped-payment-review-ui-20260803"></script>
     <script src="../../scripts/components/admin-dashboard.js?v=stopped-payment-review-ui-20260803"></script>
   </body>

@@ -314,6 +314,8 @@ class GroomingClinicReferralApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('referral.pet_name', 'Zeus')
             ->assertJsonPath('referral.consent_state', 'pending')
+            ->assertJsonPath('referral.consent_responded_by_name', null)
+            ->assertJsonPath('referral.consent_responded_at', null)
             ->assertJsonPath(
                 'referral.consent_statement_version',
                 GroomingClinicReferralStatement::CONSENT_VERSION,
@@ -338,12 +340,22 @@ class GroomingClinicReferralApiTest extends TestCase
         $this->assertNull($record->captured_by_name);
         $this->assertSame($record->id, $referral->fresh()->consent_response_id);
 
+        $completedStatus = $this->getJson($uri)
+            ->assertOk()
+            ->assertJsonPath('referral.consent_responded_by_name', 'Pet Owner')
+            ->assertJsonPath(
+                'referral.consent_responded_at',
+                $record->responded_at?->toIso8601String(),
+            );
+
         foreach ([
             'referral_reason', 'emergency_without_consent_reason',
             'referred_by_user_id', 'referred_by_name', 'signature_name',
-            'captured_by_name', 'internal_resolution_notes',
+            'signature_hash', 'statement_hash', 'captured_by_name',
+            'captured_by_user_id', 'internal_resolution_notes',
         ] as $privateField) {
             $this->assertStringNotContainsString($privateField, $response->getContent());
+            $this->assertStringNotContainsString($privateField, $completedStatus->getContent());
         }
 
         $this->postJson("{$uri}/consent", [
@@ -362,6 +374,37 @@ class GroomingClinicReferralApiTest extends TestCase
             'decision' => 'approved',
             'signature_name' => 'Other Customer',
         ])->assertNotFound();
+    }
+
+    public function test_customer_consent_audit_fields_ignore_a_linked_non_referral_response_kind(): void
+    {
+        $referral = $this->createRoutineReferral();
+        $response = GroomingMedicalConcernResponse::create([
+            'concern_id' => $referral->grooming_medical_concern_id,
+            'responded_by_user_id' => 4,
+            'responded_by_name' => 'Pet Owner',
+            'response_channel' => GroomingMedicalConcernResponse::CHANNEL_PORTAL,
+            'response_kind' => GroomingMedicalConcernResponse::KIND_CONSENT,
+            'decision' => GroomingMedicalConcernResponse::DECISION_APPROVED,
+            'statement_text' => 'Unrelated grooming-action consent statement.',
+            'statement_version' => 'grooming-action-v1',
+            'signature_name' => 'Private Stored Signature',
+            'responded_at' => now(),
+        ]);
+        $referral->forceFill(['consent_response_id' => $response->id])->save();
+
+        $this->authenticateAs(4);
+        $result = $this->getJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}",
+        )
+            ->assertOk()
+            ->assertJsonPath('referral.consent_state', 'pending')
+            ->assertJsonPath('referral.consent_decision', null)
+            ->assertJsonPath('referral.consent_responded_by_name', null)
+            ->assertJsonPath('referral.consent_responded_at', null);
+
+        $this->assertStringNotContainsString('Private Stored Signature', $result->getContent());
+        $this->assertStringNotContainsString('grooming-action-v1', $result->getContent());
     }
 
     public function test_declined_routine_cancels_but_declined_emergency_override_remains_pending_acceptance(): void
