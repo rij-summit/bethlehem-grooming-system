@@ -12,6 +12,7 @@ use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
+use App\Http\Controllers\GroomingClinicReferralController;
 use App\Http\Controllers\GroomingStoppedPaymentReviewController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NotificationController;
@@ -62,6 +63,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pets/{petId}/medical-concerns/{publicId}', [PetGroomingMedicalConcernController::class, 'show']);
     Route::post('/pets/{petId}/medical-concerns/{publicId}/acknowledge', [PetGroomingMedicalConcernController::class, 'acknowledge']);
     Route::post('/pets/{petId}/medical-concerns/{publicId}/consent', [PetGroomingMedicalConcernController::class, 'consent']);
+    Route::get('/pets/{petId}/grooming-clinic-referrals/{publicId}', [GroomingClinicReferralController::class, 'customerShow']);
+    Route::post('/pets/{petId}/grooming-clinic-referrals/{publicId}/consent', [GroomingClinicReferralController::class, 'customerConsent']);
     Route::post('/pets', [PetController::class, 'store']);
     Route::put('/pets/{id}', [PetController::class, 'update']);
     Route::post('/pets/{id}/archive', [PetController::class, 'archive']);
@@ -122,6 +125,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming', [AdminGroomingMedicalConcernController::class, 'resumeGrooming']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel', [AdminGroomingMedicalConcernController::class, 'cancel']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve', [AdminGroomingMedicalConcernController::class, 'resolve']);
+
+        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral', [GroomingClinicReferralController::class, 'staffShow']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral', [GroomingClinicReferralController::class, 'store']);
+        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral/in-person-consent', [GroomingClinicReferralController::class, 'inPersonConsent']);
 
         Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'show']);
         Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'store']);

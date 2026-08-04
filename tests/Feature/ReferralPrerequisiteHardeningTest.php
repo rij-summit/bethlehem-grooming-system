@@ -159,9 +159,14 @@ class ReferralPrerequisiteHardeningTest extends TestCase
             $this->assertTrue(true);
         }
 
-        $hasReferralSubmissionRoute = collect(Route::getRoutes()->getRoutes())
-            ->contains(fn ($route) => str_contains($route->uri(), 'clinic-referral'));
-        $this->assertFalse($hasReferralSubmissionRoute);
+        $hasOutOfScopeReferralRoute = collect(Route::getRoutes()->getRoutes())
+            ->contains(fn ($route) => str_contains($route->uri(), 'clinic-referral')
+                && (
+                    array_intersect(['PATCH', 'PUT', 'DELETE'], $route->methods()) !== []
+                    || str_contains($route->uri(), 'accept')
+                    || str_contains($route->uri(), 'appointment')
+                ));
+        $this->assertFalse($hasOutOfScopeReferralRoute);
     }
 
     public function test_response_and_clinic_uniqueness_constraints_are_enforced_without_cross_appointment_collisions(): void

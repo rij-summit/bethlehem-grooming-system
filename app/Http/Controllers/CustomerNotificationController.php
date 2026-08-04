@@ -18,6 +18,8 @@ class CustomerNotificationController extends Controller
                 'booking.timeWindow',
                 'groomingMedicalConcern:id,public_id,pet_id',
                 'groomingMedicalConcern.pet:pet_id,pet_name,species',
+                'groomingClinicReferral:id,public_id,pet_id',
+                'groomingClinicReferral.pet:pet_id,pet_name,species',
             ])
             ->orderBy('is_read', 'asc')
             ->orderBy('created_at', 'desc')
@@ -31,6 +33,11 @@ class CustomerNotificationController extends Controller
                     ? $n->groomingMedicalConcern
                     : null;
                 $pet = $concern?->pet;
+                $referral = $n->type
+                    === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
+                        ? $n->groomingClinicReferral
+                        : null;
+                $referralPet = $referral?->pet;
 
                 return [
                     'id' => $n->id,
@@ -43,12 +50,18 @@ class CustomerNotificationController extends Controller
                     'created_at' => $n->created_at?->toDateTimeString(),
                     'booking_id' => $n->booking_id,
                     'concern_public_id' => $concern?->public_id,
-                    'pet_id' => $pet?->pet_id,
-                    'pet_name' => $pet?->pet_name,
-                    'destination' => $this->concernDestination(
-                        $pet?->pet_id,
-                        $concern?->public_id,
-                    ),
+                    'referral_public_id' => $referral?->public_id,
+                    'pet_id' => $referralPet?->pet_id ?? $pet?->pet_id,
+                    'pet_name' => $referralPet?->pet_name ?? $pet?->pet_name,
+                    'destination' => $referral
+                        ? $this->referralDestination(
+                            $referralPet?->pet_id,
+                            $referral->public_id,
+                        )
+                        : $this->concernDestination(
+                            $pet?->pet_id,
+                            $concern?->public_id,
+                        ),
                 ];
             });
 
@@ -120,6 +133,16 @@ class CustomerNotificationController extends Controller
                 ->all();
         }
 
+        if (
+            $notification->type
+            === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
+        ) {
+            return collect([$notification->groomingClinicReferral?->pet?->pet_name])
+                ->filter()
+                ->values()
+                ->all();
+        }
+
         $petNames = ($notification->booking?->bookingPets ?? collect())
             ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
@@ -143,6 +166,17 @@ class CustomerNotificationController extends Controller
             === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
         ) {
             return collect([$notification->groomingMedicalConcern?->pet?->species])
+                ->map(fn ($type) => mb_strtolower(trim((string) $type)))
+                ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
+                ->values()
+                ->all();
+        }
+
+        if (
+            $notification->type
+            === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
+        ) {
+            return collect([$notification->groomingClinicReferral?->pet?->species])
                 ->map(fn ($type) => mb_strtolower(trim((string) $type)))
                 ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
                 ->values()
@@ -266,6 +300,21 @@ class CustomerNotificationController extends Controller
             'pet_id' => $petId,
             'tab' => 'notifications',
             'concern' => $publicId,
+        ]);
+    }
+
+    private function referralDestination(
+        ?int $petId,
+        ?string $publicId,
+    ): ?string {
+        if (! $petId || ! $publicId) {
+            return null;
+        }
+
+        return './pet-details.html?'.http_build_query([
+            'pet_id' => $petId,
+            'tab' => 'notifications',
+            'referral' => $publicId,
         ]);
     }
 }

@@ -486,7 +486,13 @@ class GroomingClinicReferralFoundationTest extends TestCase
 
         $routes = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($route) => str_contains($route->uri(), 'clinic-referral'));
-        $this->assertCount(0, $routes);
+        $this->assertNotEmpty($routes);
+        $this->assertFalse($routes->contains(
+            fn ($route) => array_intersect(
+                ['PATCH', 'PUT', 'DELETE'],
+                $route->methods(),
+            ) !== [],
+        ));
     }
 
     private function createPrerequisiteSchema(): void

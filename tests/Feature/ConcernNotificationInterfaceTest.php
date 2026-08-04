@@ -87,8 +87,8 @@ class ConcernNotificationInterfaceTest extends TestCase
             "'groomingMedicalConcern:id,public_id,pet_id'",
             "'groomingMedicalConcern.pet:pet_id,pet_name,species'",
             "'concern_public_id' => \$concern?->public_id",
-            "'pet_id' => \$pet?->pet_id",
-            "'destination' => \$this->concernDestination(",
+            '$referralPet?->pet_id ?? $pet?->pet_id',
+            ': $this->concernDestination(',
         ] as $linkage) {
             $this->assertStringContainsString(
                 $linkage,
