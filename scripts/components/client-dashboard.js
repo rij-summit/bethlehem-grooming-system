@@ -270,7 +270,7 @@
           await API.markCustomerNotificationRead(id);
 
           if (
-            ["grooming_medical_concern", "grooming_clinic_referral_requested"].includes(
+            ["grooming_medical_concern", "grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"].includes(
               notification?.type,
             )
             && notification.destination
@@ -300,7 +300,7 @@
       return "!";
     }
 
-    if (type === "grooming_clinic_referral_requested") {
+    if (["grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"].includes(type)) {
       return "+";
     }
 

@@ -160,12 +160,18 @@ class ReferralPrerequisiteHardeningTest extends TestCase
         }
 
         $hasOutOfScopeReferralRoute = collect(Route::getRoutes()->getRoutes())
-            ->contains(fn ($route) => str_contains($route->uri(), 'clinic-referral')
-                && (
-                    array_intersect(['PATCH', 'PUT', 'DELETE'], $route->methods()) !== []
-                    || str_contains($route->uri(), 'accept')
-                    || str_contains($route->uri(), 'appointment')
-                ));
+            ->contains(function ($route): bool {
+                if (! str_contains($route->uri(), 'clinic-referral')) {
+                    return false;
+                }
+
+                $isApprovedAcceptanceRoute = $route->uri() === 'api/admin/clinic-referrals/{publicId}/accept'
+                    && in_array('POST', $route->methods(), true);
+
+                return array_intersect(['PATCH', 'PUT', 'DELETE'], $route->methods()) !== []
+                    || (str_contains($route->uri(), 'accept') && ! $isApprovedAcceptanceRoute)
+                    || str_contains($route->uri(), 'appointment');
+            });
         $this->assertFalse($hasOutOfScopeReferralRoute);
     }
 

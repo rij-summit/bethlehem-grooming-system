@@ -1155,6 +1155,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['GET', 'api/admin/clinic/settings/availability', 'role:admin'],
             ['PATCH', 'api/admin/clinic/settings/availability', 'role:admin'],
             ['PATCH', 'api/admin/clinic/settings/groomers-on-duty', 'role:admin'],
+            ['GET', 'api/admin/clinic-referrals', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-referrals/{publicId}', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-referrals/{publicId}/accept', 'role:admin,staff'],
         ];
 
         $routes = collect(Route::getRoutes()->getRoutes());

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\AdminGroomingClinicReferralController;
 use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\AdminVaccinationController;
 use App\Http\Controllers\AuthController;
@@ -147,6 +148,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Clinic administration — available only to the project's staff/admin roles.
     Route::middleware('role:admin,staff')->group(function () {
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
+
+        Route::get('/admin/clinic-referrals', [AdminGroomingClinicReferralController::class, 'index']);
+        Route::get('/admin/clinic-referrals/{publicId}', [AdminGroomingClinicReferralController::class, 'show']);
+        Route::post('/admin/clinic-referrals/{publicId}/accept', [AdminGroomingClinicReferralController::class, 'accept']);
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::post('/admin/clinic-appointments/{id}/check-in', [AdminClinicController::class, 'checkIn']);

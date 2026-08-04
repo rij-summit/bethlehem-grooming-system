@@ -79,7 +79,7 @@ class ConcernNotificationInterfaceTest extends TestCase
         $this->assertNotFalse($navigatePosition);
         $this->assertLessThan($navigatePosition, $readPosition);
         $this->assertStringContainsString(
-            '["grooming_medical_concern", "grooming_clinic_referral_requested"]',
+            '["grooming_medical_concern", "grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"]',
             $clickHandler,
         );
 

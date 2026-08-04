@@ -1259,6 +1259,8 @@ document.addEventListener("DOMContentLoaded", () => {
       : "Waiting for Response"],
     ["Clinic acceptance", referral.clinic_accepted ? "Accepted" : "Not yet accepted"],
     ["Clinic appointment reference", displayValue(referral.clinic_appointment_reference)],
+    ["Clinic appointment status", displayValue(referral.clinic_appointment_status_label)],
+    ["Clinic appointment date", displayValue(referral.clinic_appointment_date)],
     ["Clinic assessment", referral.clinic_assessment_started ? "Started" : "Not started"],
   ];
 
@@ -1296,7 +1298,9 @@ document.addEventListener("DOMContentLoaded", () => {
           </dl>
           <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
             <h5 class="font-bold text-[#2f4b66]">What happens next</h5>
-            <p class="mt-2 text-sm leading-6 text-slate-600">A clinic referral request does not itself create an appointment or authorize treatment. Clinic acceptance and appointment information will appear here when a later clinic workflow records them.</p>
+            <p class="mt-2 text-sm leading-6 text-slate-600">${referral.clinic_accepted
+              ? `The clinic accepted this referral and your pet has entered clinic intake. ${escapeHtml(displayValue(referral.clinic_appointment_reference))} is currently ${escapeHtml(displayValue(referral.clinic_appointment_status_label, "Checked In"))}. Treatment, procedures, and additional charges may still require separate approval.`
+              : "A clinic referral request does not itself create an appointment or authorize treatment. Clinic acceptance and appointment information will appear here after the clinic accepts the referral."}</p>
           </section>
           ${renderClinicReferralConsent(referral)}
           ${!isMissing(referral.customer_cancellation_summary) ? `<section class="rounded-xl border border-slate-200 bg-white p-4"><h5 class="font-bold text-slate-800">Cancellation update</h5><p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">${escapeHtml(referral.customer_cancellation_summary)}</p></section>` : ""}
@@ -1575,7 +1579,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const concerns = Array.isArray(response.concerns) ? response.concerns : [];
       const referralNotifications = Array.isArray(notificationResponse.notifications)
         ? notificationResponse.notifications.filter((notification) =>
-            notification.type === "grooming_clinic_referral_requested"
+            ["grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"].includes(notification.type)
             && Number(notification.pet_id) === petId
             && notification.referral_public_id,
           )

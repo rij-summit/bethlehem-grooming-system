@@ -939,6 +939,14 @@ class GroomingClinicReferralController extends Controller
             'future_clinic_acceptance_blocked_reason' => $acceptanceBlockedReason,
             'clinic_appointment_exists' => $referral->clinic_appointment_id !== null,
             'clinic_appointment_reference' => $referral->clinicAppointment?->appointment_reference,
+            'clinic_appointment_status' => $referral->clinicAppointment?->status,
+            'clinic_appointment_status_label' => $this->clinicAppointmentStatusLabel(
+                $referral->clinicAppointment?->status,
+            ),
+            'clinic_queue_number' => $referral->clinicAppointment?->queue_number,
+            'clinic_appointment_date' => $referral->clinicAppointment?->appointment_date?->toDateString(),
+            'accepted_by_name' => $referral->accepted_by_name,
+            'accepted_at' => $referral->accepted_at?->toIso8601String(),
             'grooming_clearance_status' => $referral->grooming_clearance_status,
             'grooming_clearance_status_label' => GroomingClinicReferral::groomingClearanceLabel(
                 $referral->grooming_clearance_status,
@@ -984,6 +992,12 @@ class GroomingClinicReferralController extends Controller
             'consent_statement_version' => $statementVersion,
             'clinic_accepted' => $referral->accepted_at !== null,
             'clinic_appointment_reference' => $referral->clinicAppointment?->appointment_reference,
+            'clinic_appointment_status' => $referral->clinicAppointment?->status,
+            'clinic_appointment_status_label' => $this->clinicAppointmentStatusLabel(
+                $referral->clinicAppointment?->status,
+            ),
+            'clinic_appointment_date' => $referral->clinicAppointment?->appointment_date?->toDateString(),
+            'accepted_at' => $referral->accepted_at?->toIso8601String(),
             'clinic_assessment_started' => $referral->clinic_review_started_at !== null,
             'customer_cancellation_summary' => $referral->customer_cancellation_summary,
             'customer_resolution_summary' => $referral->customer_resolution_summary,
@@ -1020,6 +1034,21 @@ class GroomingClinicReferralController extends Controller
             ->where('concern_id', $referral->grooming_medical_concern_id)
             ->where('response_kind', GroomingMedicalConcernResponse::KIND_CLINIC_REFERRAL_CONSENT)
             ->first();
+    }
+
+    private function clinicAppointmentStatusLabel(?string $status): ?string
+    {
+        return match ($status) {
+            'waiting_to_arrive' => 'Waiting to Arrive',
+            'checked_in' => 'Checked In',
+            'in_consultation' => 'In Consultation',
+            'for_payment' => 'For Payment',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+            'no_show' => 'No Show',
+            null => null,
+            default => 'Unknown',
+        };
     }
 
     private function acceptanceAvailability(

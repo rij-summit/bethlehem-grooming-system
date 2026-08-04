@@ -110,7 +110,10 @@ function buildClinicCard(appt) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 function adminClinic() {
+  const clinicReferralState = window.adminClinicReferralQueueState?.() || {};
+
   return {
+    ...clinicReferralState,
     loading: true,
     error:   "",
     activeTab: "queued",
@@ -122,6 +125,7 @@ function adminClinic() {
     completed:      [],
 
     tabs: [
+      { key: "referrals",    label: "Grooming Referrals" },
       { key: "incoming",     label: "Incoming" },
       { key: "queued",       label: "In Queue" },
       { key: "consultation", label: "In Consultation" },
@@ -133,7 +137,9 @@ function adminClinic() {
 
     init() {
       this.checkAuth();
+      this.initializeClinicReferralQueue?.();
       this.loadQueue();
+      this.loadClinicReferrals?.();
       this.bindGlobalActions();
     },
 
@@ -164,6 +170,7 @@ function adminClinic() {
 
     tabCount(key) {
       return {
+        referrals:    this.clinicReferralPendingCount,
         incoming:     this.incoming.length,
         queued:       this.queued.length,
         consultation: this.inConsultation.length,
@@ -178,6 +185,7 @@ function adminClinic() {
 
     listFor(key) {
       return {
+        referrals:    this.clinicReferrals,
         incoming:     this.incoming,
         queued:       this.queued,
         consultation: this.inConsultation,
@@ -188,6 +196,7 @@ function adminClinic() {
 
     emptyLabel(key) {
       return {
+        referrals:    "No grooming referrals match the selected filters.",
         incoming:     "No incoming appointments right now.",
         queued:       "Queue is empty.",
         consultation: "No active consultations.",

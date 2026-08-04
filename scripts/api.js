@@ -1038,6 +1038,33 @@ var API = (() => {
     return request("GET", "/admin/clinic-appointments", null, getAdminToken());
   }
 
+  async function getAdminClinicReferrals(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.urgency) params.set("urgency", filters.urgency);
+    if (filters.search) params.set("search", filters.search);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/clinic-referrals${query}`, null, getAdminToken());
+  }
+
+  async function getAdminClinicReferral(publicId) {
+    return request(
+      "GET",
+      `/admin/clinic-referrals/${encodeURIComponent(publicId)}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function acceptAdminClinicReferral(publicId) {
+    return request(
+      "POST",
+      `/admin/clinic-referrals/${encodeURIComponent(publicId)}/accept`,
+      {},
+      getAdminToken(),
+    );
+  }
+
   async function clinicCheckIn(id) {
     return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
   }
@@ -1302,6 +1329,9 @@ var API = (() => {
     submitClinicWalkIn,
     // Clinic queue
     getClinicAppointments,
+    getAdminClinicReferrals,
+    getAdminClinicReferral,
+    acceptAdminClinicReferral,
     clinicCheckIn,
     clinicStartConsultation,
     clinicFinishConsultation,

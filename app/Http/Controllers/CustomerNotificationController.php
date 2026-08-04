@@ -33,10 +33,9 @@ class CustomerNotificationController extends Controller
                     ? $n->groomingMedicalConcern
                     : null;
                 $pet = $concern?->pet;
-                $referral = $n->type
-                    === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
-                        ? $n->groomingClinicReferral
-                        : null;
+                $referral = $this->isClinicReferralNotification($n->type)
+                    ? $n->groomingClinicReferral
+                    : null;
                 $referralPet = $referral?->pet;
 
                 return [
@@ -133,10 +132,7 @@ class CustomerNotificationController extends Controller
                 ->all();
         }
 
-        if (
-            $notification->type
-            === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
-        ) {
+        if ($this->isClinicReferralNotification($notification->type)) {
             return collect([$notification->groomingClinicReferral?->pet?->pet_name])
                 ->filter()
                 ->values()
@@ -172,10 +168,7 @@ class CustomerNotificationController extends Controller
                 ->all();
         }
 
-        if (
-            $notification->type
-            === CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED
-        ) {
+        if ($this->isClinicReferralNotification($notification->type)) {
             return collect([$notification->groomingClinicReferral?->pet?->species])
                 ->map(fn ($type) => mb_strtolower(trim((string) $type)))
                 ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
@@ -316,5 +309,13 @@ class CustomerNotificationController extends Controller
             'tab' => 'notifications',
             'referral' => $publicId,
         ]);
+    }
+
+    private function isClinicReferralNotification(string $type): bool
+    {
+        return in_array($type, [
+            CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED,
+            CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED,
+        ], true);
     }
 }

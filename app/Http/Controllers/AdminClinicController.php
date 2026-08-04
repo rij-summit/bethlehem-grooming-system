@@ -6,6 +6,7 @@ use App\Models\ClinicAppointment;
 use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
+use App\Services\ClinicAppointmentSequence;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,9 +74,9 @@ class AdminClinicController extends Controller
 
     // ── Status transitions ───────────────────────────────────────────────────
 
-    public function checkIn(int $id)
+    public function checkIn(int $id, ClinicAppointmentSequence $clinicSequence)
     {
-        $appt = DB::transaction(function () use ($id) {
+        $appt = DB::transaction(function () use ($id, $clinicSequence) {
             $appointment = ClinicAppointment::whereKey($id)->lockForUpdate()->firstOrFail();
 
             if ($appointment->status !== 'waiting_to_arrive') {
@@ -85,10 +86,9 @@ class AdminClinicController extends Controller
             $queueNumber = $appointment->queue_number;
 
             if (! $queueNumber) {
-                $queueNumber = ((int) ClinicAppointment::query()
-                    ->where('appointment_date', $appointment->appointment_date->toDateString())
-                    ->lockForUpdate()
-                    ->max('queue_number')) + 1;
+                $queueNumber = $clinicSequence->nextQueueNumber(
+                    $appointment->appointment_date->toDateString(),
+                );
             }
 
             $appointment->update([

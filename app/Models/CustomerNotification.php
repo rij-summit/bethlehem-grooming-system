@@ -10,6 +10,8 @@ class CustomerNotification extends Model
 
     public const TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED = 'grooming_clinic_referral_requested';
 
+    public const TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED = 'grooming_clinic_referral_accepted';
+
     protected $table = 'customer_notifications';
 
     public $timestamps = false;

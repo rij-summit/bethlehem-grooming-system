@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AdminGroomingClinicReferralController;
 use App\Http\Controllers\GroomingClinicReferralController;
 use App\Models\BookingPet;
 use App\Models\CustomerNotification;
@@ -57,6 +58,8 @@ class GroomingClinicReferralApiTest extends TestCase
             'grooming_medical_concern_responses',
             'grooming_medical_concerns',
             'clinic_appointments',
+            'clinic_closures',
+            'clinic_settings',
             'booking_pets',
             'bookings',
             'walkins',
@@ -89,6 +92,24 @@ class GroomingClinicReferralApiTest extends TestCase
         }
 
         foreach ([
+            ['GET', 'api/admin/clinic-referrals'],
+            ['GET', 'api/admin/clinic-referrals/{publicId}'],
+            ['POST', 'api/admin/clinic-referrals/{publicId}/accept'],
+        ] as [$method, $uri]) {
+            $route = $routes->first(fn (RoutingRoute $route) => $route->uri() === $uri
+                && in_array($method, $route->methods(), true));
+            $this->assertNotNull($route);
+            $this->assertSame(AdminGroomingClinicReferralController::class, $route->getControllerClass());
+            $this->assertContains('auth:sanctum', $route->gatherMiddleware());
+            $this->assertContains('role:admin,staff', $route->gatherMiddleware());
+        }
+
+        $this->getJson('/api/admin/clinic-referrals')->assertUnauthorized();
+        $this->postJson(self::STAFF_URI)->assertUnauthorized();
+        $this->authenticateAs(4);
+        $this->getJson('/api/admin/clinic-referrals')->assertForbidden();
+
+        foreach ([
             ['GET', 'api/pets/{petId}/grooming-clinic-referrals/{publicId}'],
             ['POST', 'api/pets/{petId}/grooming-clinic-referrals/{publicId}/consent'],
         ] as [$method, $uri]) {
@@ -98,8 +119,6 @@ class GroomingClinicReferralApiTest extends TestCase
             $this->assertContains('auth:sanctum', $route->gatherMiddleware());
         }
 
-        $this->postJson(self::STAFF_URI)->assertUnauthorized();
-        $this->authenticateAs(4);
         $this->postJson(self::STAFF_URI)->assertForbidden();
     }
 
@@ -524,6 +543,362 @@ class GroomingClinicReferralApiTest extends TestCase
         $this->assertStringNotContainsString('PRIVATE INTERNAL', $response->getContent());
     }
 
+    public function test_queue_sorts_by_urgency_and_whitelists_staff_safe_fields(): void
+    {
+        foreach ([
+            [401, 100, 'routine', '10000000-0000-4000-8000-000000000001'],
+            [403, 101, 'emergency', '30000000-0000-4000-8000-000000000003'],
+        ] as [$concernId, $bookingPetId, $urgency, $token]) {
+            DB::table('booking_pets')->where('booking_pet_id', $bookingPetId)->update([
+                'grooming_state' => $urgency === 'routine' ? 'paused' : 'stopped',
+            ]);
+            DB::table('grooming_medical_concerns')->where('id', $concernId)->update([
+                'applied_grooming_action' => $urgency === 'routine' ? 'pause_grooming' : 'stop_grooming',
+                'action_applied_at' => now(),
+                'action_applied_by_user_id' => 2,
+            ]);
+            $this->authenticateAs(2);
+            $created = $this->postJson(
+                "/api/admin/bookings/10/pets/{$bookingPetId}/medical-concerns/{$concernId}/clinic-referral",
+                $this->payload([
+                    'urgency' => $urgency,
+                    'request_token' => $token,
+                    'emergency_without_consent_reason' => $urgency === 'emergency'
+                        ? 'Immediate safety intake is required.'
+                        : null,
+                ]),
+            )->assertCreated();
+
+            if ($urgency === 'routine') {
+                $this->authenticateAs(4);
+                $this->postJson(
+                    "/api/pets/1000/grooming-clinic-referrals/{$created->json('referral.public_id')}/consent",
+                    ['decision' => 'approved', 'signature_name' => 'Pet Owner'],
+                )->assertCreated();
+            }
+        }
+
+        $this->authenticateAs(2);
+        $response = $this->getJson('/api/admin/clinic-referrals')
+            ->assertOk()
+            ->assertJsonPath('referrals.0.urgency', 'emergency')
+            ->assertJsonPath('referrals.1.urgency', 'routine');
+
+        foreach ([
+            'signature_name', 'statement_text', 'statement_hash', 'password_hash',
+            'emergency_without_consent_reason', 'internal_resolution_notes',
+        ] as $privateField) {
+            $this->assertStringNotContainsString($privateField, $response->getContent());
+        }
+
+        $this->getJson('/api/admin/clinic-referrals?urgency=emergency')
+            ->assertOk()
+            ->assertJsonCount(1, 'referrals')
+            ->assertJsonPath('referrals.0.pet.name', 'Luna');
+        $this->getJson('/api/admin/clinic-referrals?search=BOOKING-10')
+            ->assertOk()
+            ->assertJsonCount(2, 'referrals');
+        $this->getJson('/api/admin/clinic-referrals/not-a-real-referral')
+            ->assertNotFound()
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Clinic referral not found.',
+            ]);
+    }
+
+    public function test_approved_routine_acceptance_creates_one_same_day_appointment_and_safe_notification(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 401)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $referral = $this->createRoutineReferral();
+
+        $this->authenticateAs(4);
+        $this->postJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}/consent",
+            ['decision' => 'approved', 'signature_name' => 'Pet Owner'],
+        )->assertCreated();
+
+        $beforePetCount = DB::table('pets')->count();
+        $beforeUserCount = DB::table('users')->count();
+        $beforeBookingPet = DB::table('booking_pets')->where('booking_pet_id', 100)->first();
+        $this->authenticateAs(2);
+        $accepted = $this->postJson(
+            "/api/admin/clinic-referrals/{$referral->public_id}/accept",
+        )
+            ->assertCreated()
+            ->assertJsonPath('already_accepted', false)
+            ->assertJsonPath('referral.status', GroomingClinicReferral::STATUS_ACCEPTED)
+            ->assertJsonPath('referral.clinic_appointment.status', 'checked_in')
+            ->assertJsonPath('referral.clinic_appointment.queue_number', 1)
+            ->assertJsonPath('referral.clinic_appointment.appointment_date', '2026-08-04')
+            ->assertJsonPath('referral.accepted_by_name', 'Staff Member');
+
+        $appointment = DB::table('clinic_appointments')->first();
+        $this->assertSame('walk_in', $appointment->appointment_type);
+        $this->assertSame('checked_in', $appointment->status);
+        $this->assertSame(1000, $appointment->pet_id);
+        $this->assertSame(4, $appointment->user_id);
+        $this->assertNull($appointment->walkin_id);
+        $this->assertSame('We recommend an initial clinic assessment.', $appointment->chief_complaint);
+        $this->assertStringStartsWith('CL-20260804-', $appointment->appointment_reference);
+        $this->assertSame($beforePetCount, DB::table('pets')->count());
+        $this->assertSame($beforeUserCount, DB::table('users')->count());
+        $this->assertSame('referred_to_clinic', DB::table('grooming_medical_concerns')->where('id', 401)->value('status'));
+        $this->assertNull(DB::table('grooming_medical_concerns')->where('id', 401)->value('clinic_appointment_id'));
+        $this->assertSame($beforeBookingPet->grooming_state, DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_state'));
+        $this->assertSame($beforeBookingPet->grooming_end_time, DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_end_time'));
+
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 4,
+            'grooming_clinic_referral_id' => $referral->id,
+            'type' => CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED,
+        ]);
+        $this->assertDatabaseCount('customer_notifications', 2);
+        $notification = DB::table('customer_notifications')
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED)
+            ->value('message');
+        $this->assertStringContainsString($appointment->appointment_reference, $notification);
+        $this->assertStringNotContainsString('PRIVATE INTERNAL', $notification);
+
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertOk()
+            ->assertJsonPath('already_accepted', true)
+            ->assertJsonPath('referral.clinic_appointment.reference', $appointment->appointment_reference);
+        $this->assertDatabaseCount('clinic_appointments', 1);
+        $this->assertDatabaseCount('customer_notifications', 2);
+
+        $this->authenticateAs(4);
+        $customer = $this->getJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}",
+        )
+            ->assertOk()
+            ->assertJsonPath('referral.clinic_accepted', true)
+            ->assertJsonPath('referral.clinic_appointment_reference', $appointment->appointment_reference)
+            ->assertJsonPath('referral.clinic_appointment_status', 'checked_in');
+        $this->assertStringNotContainsString('queue_number', $customer->getContent());
+        $this->assertStringNotContainsString('PRIVATE INTERNAL', $customer->getContent());
+
+        $notifications = $this->getJson('/api/customer/notifications')
+            ->assertOk();
+        $this->assertSame(
+            $referral->public_id,
+            $notifications->json('notifications.0.referral_public_id'),
+        );
+        $this->assertStringContainsString(
+            'referral='.$referral->public_id,
+            $notifications->json('notifications.0.destination'),
+        );
+    }
+
+    public function test_consent_and_applied_action_rules_block_acceptance_without_side_effects(): void
+    {
+        $referral = $this->createRoutineReferral();
+        $this->authenticateAs(2);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict();
+        $this->assertDatabaseCount('clinic_appointments', 0);
+
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 401)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict()
+            ->assertJsonPath('message', 'Clinic-referral consent is still pending.');
+
+        DB::table('clinic_appointments')->insert([
+            'appointment_reference' => 'CL-20260804-999',
+            'appointment_type' => 'walk_in',
+            'status' => 'checked_in',
+            'queue_number' => 99,
+            'appointment_date' => '2026-08-04',
+            'pet_id' => 1000,
+            'total_amount' => 0,
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $referral->forceFill([
+            'status' => GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
+        ])->save();
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict();
+        $this->assertDatabaseCount('clinic_appointments', 1);
+    }
+
+    public function test_emergency_unregistered_acceptance_reuses_walkin_and_exact_pet(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 200)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 402)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $this->authenticateAs(2);
+        $publicId = $this->postJson(
+            '/api/admin/bookings/20/pets/200/medical-concerns/402/clinic-referral',
+            $this->payload([
+                'urgency' => 'emergency',
+                'request_token' => '20000000-0000-4000-8000-000000000002',
+                'emergency_without_consent_reason' => 'Immediate safety intake.',
+            ]),
+        )->assertCreated()->json('referral.public_id');
+
+        $this->postJson("/api/admin/clinic-referrals/{$publicId}/accept")
+            ->assertCreated()
+            ->assertJsonPath('referral.pet.pet_id', 1002)
+            ->assertJsonPath('referral.clinic_appointment.status', 'checked_in');
+
+        $appointment = DB::table('clinic_appointments')->first();
+        $this->assertSame(1002, $appointment->pet_id);
+        $this->assertSame(1, $appointment->walkin_id);
+        $this->assertNull($appointment->user_id);
+        $this->assertDatabaseCount('walkins', 1);
+        $this->assertDatabaseCount('pets', 3);
+        $this->assertDatabaseCount('users', 5);
+        $this->assertDatabaseCount('customer_notifications', 0);
+
+        $this->postJson("/api/admin/clinic-referrals/{$publicId}/accept")
+            ->assertOk()
+            ->assertJsonPath('already_accepted', true);
+        $this->assertDatabaseCount('walkins', 1);
+        $this->assertDatabaseCount('clinic_appointments', 1);
+    }
+
+    public function test_urgent_override_preserves_decline_and_admin_can_accept(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 101)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 403)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $this->authenticateAs(2);
+        $publicId = $this->postJson(
+            '/api/admin/bookings/10/pets/101/medical-concerns/403/clinic-referral',
+            $this->payload([
+                'urgency' => 'urgent',
+                'request_token' => '30000000-0000-4000-8000-000000000003',
+                'emergency_without_consent_reason' => 'Documented urgent intake is required.',
+            ]),
+        )->assertCreated()->json('referral.public_id');
+
+        $this->authenticateAs(4);
+        $this->postJson(
+            "/api/pets/1001/grooming-clinic-referrals/{$publicId}/consent",
+            ['decision' => 'declined', 'signature_name' => 'Pet Owner'],
+        )
+            ->assertCreated()
+            ->assertJsonPath('referral.status', 'pending_clinic_acceptance')
+            ->assertJsonPath('referral.consent_decision', 'declined');
+
+        $this->authenticateAs(1);
+        DB::table('bookings')->where('booking_id', 10)->update(['paid' => true]);
+        $this->getJson('/api/admin/clinic-referrals')->assertOk();
+        $this->postJson("/api/admin/clinic-referrals/{$publicId}/accept")
+            ->assertCreated()
+            ->assertJsonPath('referral.consent_decision', 'declined')
+            ->assertJsonPath('referral.status', 'accepted')
+            ->assertJsonPath('referral.accepted_by_name', 'Admin User')
+            ->assertJsonPath('referral.financial_correction_review_required', true);
+
+        $this->assertSame(
+            GroomingMedicalConcern::CUSTOMER_RESPONSE_NOT_REQUIRED,
+            DB::table('grooming_medical_concerns')->where('id', 403)->value('customer_response_status'),
+        );
+        $this->assertTrue((bool) DB::table('bookings')->where('booking_id', 10)->value('paid'));
+    }
+
+    public function test_routine_closure_blocks_acceptance_but_does_not_mutate_workflow(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 401)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $referral = $this->createRoutineReferral();
+        $this->authenticateAs(4);
+        $this->postJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}/consent",
+            ['decision' => 'approved', 'signature_name' => 'Pet Owner'],
+        )->assertCreated();
+        DB::table('clinic_closures')->insert([
+            'type' => 'blocked_date',
+            'start_date' => '2026-08-04',
+            'end_date' => '2026-08-04',
+            'reason' => 'Closed for maintenance.',
+            'is_active' => true,
+        ]);
+
+        $this->authenticateAs(2);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict()
+            ->assertJsonPath('message', 'The clinic is closed or blocked for the effective clinic date.');
+
+        $this->assertDatabaseCount('clinic_appointments', 0);
+        $this->assertSame('pending_clinic_acceptance', $referral->fresh()->status);
+        $this->assertSame('open', DB::table('grooming_medical_concerns')->where('id', 401)->value('status'));
+        $this->assertSame('paused', DB::table('booking_pets')->where('booking_pet_id', 100)->value('grooming_state'));
+        $this->assertDatabaseCount('customer_notifications', 1);
+    }
+
+    public function test_closed_concern_inactive_booking_and_finished_pet_each_block_acceptance(): void
+    {
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_PAUSED,
+        ]);
+        DB::table('grooming_medical_concerns')->where('id', 401)->update([
+            'applied_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            'action_applied_at' => now(),
+            'action_applied_by_user_id' => 2,
+        ]);
+        $referral = $this->createRoutineReferral();
+        $this->authenticateAs(4);
+        $this->postJson(
+            "/api/pets/1000/grooming-clinic-referrals/{$referral->public_id}/consent",
+            ['decision' => 'approved', 'signature_name' => 'Pet Owner'],
+        )->assertCreated();
+        $this->authenticateAs(2);
+
+        DB::table('grooming_medical_concerns')->where('id', 401)->update(['status' => 'resolved']);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict();
+        DB::table('grooming_medical_concerns')->where('id', 401)->update(['status' => 'open']);
+
+        DB::table('bookings')->where('booking_id', 10)->update(['status' => 'released']);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict();
+        DB::table('bookings')->where('booking_id', 10)->update(['status' => 'in_progress']);
+
+        DB::table('booking_pets')->where('booking_pet_id', 100)->update([
+            'grooming_state' => 'finished',
+            'grooming_end_time' => now(),
+        ]);
+        $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
+            ->assertConflict();
+
+        $this->assertDatabaseCount('clinic_appointments', 0);
+        $this->assertDatabaseCount('customer_notifications', 1);
+        $this->assertSame('pending_clinic_acceptance', $referral->fresh()->status);
+    }
+
     private function createRoutineReferral(): GroomingClinicReferral
     {
         $this->authenticateAs(2);
@@ -584,13 +959,23 @@ class GroomingClinicReferralApiTest extends TestCase
             $table->string('fname')->nullable();
             $table->string('mname')->nullable();
             $table->string('lname')->nullable();
+            $table->string('email')->nullable();
+            $table->string('phone')->nullable();
+            $table->boolean('sedation_consent')->default(false);
+            $table->boolean('terms_agreed')->default(false);
             $table->unsignedInteger('user_id')->nullable();
+            $table->string('appointment_type')->default('grooming');
+            $table->text('chief_complaint')->nullable();
+            $table->timestamps();
         });
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->unsignedInteger('user_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
+            $table->string('breed')->nullable();
+            $table->string('size')->nullable();
+            $table->decimal('weight', 8, 2)->nullable();
             $table->foreign('user_id')->references('user_id')->on('users')->nullOnDelete();
         });
         Schema::create('bookings', function (Blueprint $table) {
@@ -618,6 +1003,47 @@ class GroomingClinicReferralApiTest extends TestCase
         Schema::create('clinic_appointments', function (Blueprint $table) {
             $table->id();
             $table->string('appointment_reference')->unique();
+            $table->string('appointment_type')->default('walk_in');
+            $table->string('status')->default('checked_in');
+            $table->unsignedSmallInteger('queue_number')->nullable();
+            $table->date('appointment_date');
+            $table->unsignedInteger('window_id')->nullable();
+            $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
+            $table->text('chief_complaint')->nullable();
+            $table->decimal('total_amount', 10, 2)->nullable();
+            $table->boolean('paid')->default(false);
+            $table->text('notes')->nullable();
+            $table->timestamp('checked_in_at')->nullable();
+            $table->timestamp('consultation_started_at')->nullable();
+            $table->timestamp('consultation_finished_at')->nullable();
+            $table->timestamp('archived_at')->nullable();
+            $table->timestamps();
+            $table->foreign('user_id')->references('user_id')->on('users')->nullOnDelete();
+            $table->foreign('walkin_id')->references('id')->on('walkins')->nullOnDelete();
+            $table->foreign('pet_id')->references('pet_id')->on('pets')->nullOnDelete();
+        });
+        Schema::create('clinic_settings', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedTinyInteger('groomers_on_duty')->default(2);
+            $table->time('clinic_open_time')->default('08:00:00');
+            $table->time('clinic_close_time')->default('17:00:00');
+            $table->time('clinic_prereg_cutoff_time')->default('14:00:00');
+            $table->time('grooming_open_time')->default('08:00:00');
+            $table->time('grooming_close_time')->default('17:00:00');
+            $table->time('grooming_prereg_cutoff_time')->default('14:00:00');
+            $table->timestamps();
+        });
+        Schema::create('clinic_closures', function (Blueprint $table) {
+            $table->id();
+            $table->string('type');
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->string('reason')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->unsignedInteger('created_by')->nullable();
+            $table->timestamps();
         });
         Schema::create('grooming_medical_concerns', function (Blueprint $table) {
             $table->id();
@@ -636,6 +1062,7 @@ class GroomingClinicReferralApiTest extends TestCase
             $table->string('applied_grooming_action')->nullable();
             $table->timestamp('action_applied_at')->nullable();
             $table->unsignedInteger('action_applied_by_user_id')->nullable();
+            $table->unsignedBigInteger('clinic_appointment_id')->nullable();
             $table->string('status')->default('open');
             $table->boolean('acknowledgment_required')->default(false);
             $table->boolean('consent_required')->default(false);
@@ -689,6 +1116,16 @@ class GroomingClinicReferralApiTest extends TestCase
             ['user_id' => 3, 'first_name' => 'Customer', 'last_name' => 'Blocked', 'role' => 'customer'],
             ['user_id' => 4, 'first_name' => 'Pet', 'last_name' => 'Owner', 'role' => 'customer'],
             ['user_id' => 5, 'first_name' => 'Other', 'last_name' => 'Customer', 'role' => 'customer'],
+        ]);
+        DB::table('clinic_settings')->insert([
+            'id' => 1,
+            'groomers_on_duty' => 2,
+            'clinic_open_time' => '08:00:00',
+            'clinic_close_time' => '17:00:00',
+            'clinic_prereg_cutoff_time' => '14:00:00',
+            'grooming_open_time' => '08:00:00',
+            'grooming_close_time' => '17:00:00',
+            'grooming_prereg_cutoff_time' => '14:00:00',
         ]);
         DB::table('walkins')->insert([
             'id' => 1,

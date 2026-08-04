@@ -3395,6 +3395,11 @@
                           <p><span>Pause or Stop applied</span><strong x-text="clinicReferralModal.response.referral?.exact_pause_or_stop_applied ? 'Yes' : 'No'"></strong></p>
                           <p><span>Clinic acceptance eligible</span><strong x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_eligible ? 'Yes' : 'No'"></strong></p>
                           <p><span>Clinic appointment</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_reference, 'Not created')"></strong></p>
+                          <p><span>Clinic appointment status</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_status_label, 'Not created')"></strong></p>
+                          <p><span>Clinic queue number</span><strong x-text="clinicReferralModal.response.referral?.clinic_queue_number ? '#' + clinicReferralModal.response.referral.clinic_queue_number : 'Not assigned'"></strong></p>
+                          <p><span>Clinic date</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_date, 'Not created')"></strong></p>
+                          <p><span>Accepted by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.accepted_by_name, 'Not accepted')"></strong></p>
+                          <p><span>Accepted time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.accepted_at)"></strong></p>
                           <p><span>Grooming clearance</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_clearance_status_label)"></strong></p>
                         </div>
                       </section>

@@ -204,7 +204,7 @@ class ClinicReferralInterfaceTest extends TestCase
             $this->clientComponent,
         );
         $this->assertStringContainsString(
-            'notification.type === "grooming_clinic_referral_requested"',
+            '["grooming_clinic_referral_requested", "grooming_clinic_referral_accepted"].includes(notification.type)',
             $this->clientComponent,
         );
         $this->assertStringContainsString(

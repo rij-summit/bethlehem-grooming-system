@@ -12,6 +12,7 @@ use App\Models\TimeWindow;
 use App\Models\User;
 use App\Models\Walkin;
 use App\Services\AvailabilityTimeWindowService;
+use App\Services\ClinicAppointmentSequence;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -22,8 +23,7 @@ class ClinicWalkinController extends Controller
     public function timeslots(
         Request $request,
         AvailabilityTimeWindowService $timeWindows,
-    )
-    {
+    ) {
         $today = now()->toDateString();
         $lastAvailableDate = now()->addDays(2)->toDateString();
         $data = $request->validate([
@@ -94,9 +94,11 @@ class ClinicWalkinController extends Controller
         ]);
     }
 
-    public function preRegister(StoreClinicPreRegistrationRequest $request)
-    {
-        return DB::transaction(function () use ($request) {
+    public function preRegister(
+        StoreClinicPreRegistrationRequest $request,
+        ClinicAppointmentSequence $clinicSequence,
+    ) {
+        return DB::transaction(function () use ($request, $clinicSequence) {
             $data = $request->validated();
             $user = $request->user();
             $appointmentDate = $data['appointment_date'];
@@ -191,7 +193,8 @@ class ClinicWalkinController extends Controller
                 ], 422);
             }
 
-            $reference = $this->nextAppointmentReference($appointmentDate);
+            $sequence = $clinicSequence->reserve($appointmentDate, false);
+            $reference = $sequence['appointment_reference'];
 
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
@@ -241,9 +244,11 @@ class ClinicWalkinController extends Controller
         });
     }
 
-    public function store(StoreClinicWalkinRequest $request)
-    {
-        return DB::transaction(function () use ($request) {
+    public function store(
+        StoreClinicWalkinRequest $request,
+        ClinicAppointmentSequence $clinicSequence,
+    ) {
+        return DB::transaction(function () use ($request, $clinicSequence) {
             $data = $request->validated();
             $data = PetWeightSize::withComputedSize($data);
 
@@ -266,12 +271,9 @@ class ClinicWalkinController extends Controller
 
             $pet = $this->findOrCreatePet($user, $data);
 
-            // Atomically assign today's clinic queue number.
-            $queueNumber = ((int) ClinicAppointment::where('appointment_date', now()->toDateString())
-                ->lockForUpdate()
-                ->max('queue_number')) + 1;
-
-            $reference = $this->nextAppointmentReference(now()->toDateString());
+            $sequence = $clinicSequence->reserve(now()->toDateString(), true);
+            $queueNumber = $sequence['queue_number'];
+            $reference = $sequence['appointment_reference'];
 
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
@@ -309,22 +311,6 @@ class ClinicWalkinController extends Controller
                 'returning_customer' => $user !== null,
             ], 201);
         });
-    }
-
-    private function nextAppointmentReference(string $appointmentDate): string
-    {
-        $date = Carbon::parse($appointmentDate);
-        $prefix = 'CL-'.$date->format('Ymd').'-';
-        $lastReference = ClinicAppointment::query()
-            ->where('appointment_reference', 'like', $prefix.'%')
-            ->lockForUpdate()
-            ->orderByDesc('appointment_reference')
-            ->value('appointment_reference');
-        $nextNumber = $lastReference
-            ? ((int) substr($lastReference, strlen($prefix))) + 1
-            : 1;
-
-        return $prefix.str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
     }
 
     private function windowHasStarted(string $appointmentDate, TimeWindow $window): bool
