@@ -925,7 +925,7 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+      if (this.isPetReferredToClinic(pet) || pet?.isGroomingStarted || this.isGroomerCapacityFull) {
         if (this.isGroomerCapacityFull) {
           this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
         }
@@ -976,6 +976,10 @@ function adminDashboard() {
     },
 
     isPetGroomingStarted(pet) {
+      if (this.isPetReferredToClinic(pet)) {
+        return false;
+      }
+
       if (["in_progress", "paused", "stopped", "finished"].includes(
         this.petGroomingState(pet),
       )) {
@@ -1022,7 +1026,9 @@ function adminDashboard() {
 
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) => !this.isPetGroomingFinished(pet));
+      return pets.some((pet) =>
+        !this.isPetReferredToClinic(pet) && !this.isPetGroomingFinished(pet),
+      );
     },
 
     getWaitingGroomingPets(booking) {
@@ -1031,6 +1037,10 @@ function adminDashboard() {
     },
 
     petGroomingState(pet) {
+      if (this.isPetReferredToClinic(pet)) {
+        return "referred_to_clinic";
+      }
+
       const explicit = String(
         pet?.groomingState ?? pet?.grooming_state ?? "",
       ).trim().toLowerCase();
@@ -1059,7 +1069,12 @@ function adminDashboard() {
         paused: "Paused",
         stopped: "Grooming stopped",
         finished: "Finished",
+        referred_to_clinic: "Referred to clinic",
       }[this.petGroomingState(pet)] || "Not started";
+    },
+
+    isPetReferredToClinic(pet) {
+      return pet?.hasClinicReferral === true || pet?.has_clinic_referral === true;
     },
 
     isPetGroomingInProgress(pet) {
@@ -2035,7 +2050,11 @@ function adminDashboard() {
       );
       for (const booking of sortedInProgress) {
         for (const pet of booking.pets ?? []) {
-          if (!this.isPetGroomingStarted(pet) || this.isPetGroomingFinished(pet)) continue;
+          if (
+            this.isPetReferredToClinic(pet) ||
+            !this.isPetGroomingStarted(pet) ||
+            this.isPetGroomingFinished(pet)
+          ) continue;
           const duration = getPetDuration(booking, pet);
           const startIso = pet.groomingStartedAtIso;
           let estDone;
@@ -2725,8 +2744,8 @@ function adminDashboard() {
       );
     },
 
-    // Keeps the backend pet records intact while presenting Queued cards as
-    // dogs first, cats second, and any other species afterward.
+    // Hides clinic-referred pets from the active grooming card, then presents
+    // the remaining records as dogs first, cats second, and others afterward.
     getQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
       const speciesRank = (pet) => {
@@ -2740,6 +2759,7 @@ function adminDashboard() {
       };
 
       return pets
+        .filter((pet) => !this.isPetReferredToClinic(pet))
         .map((pet, originalIndex) => ({ pet, originalIndex }))
         .sort((left, right) =>
           speciesRank(left.pet) - speciesRank(right.pet) ||

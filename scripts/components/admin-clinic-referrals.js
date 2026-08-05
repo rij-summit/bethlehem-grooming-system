@@ -433,6 +433,7 @@ function adminClinicReferralState() {
         this.clinicReferralConfirmation = emptyClinicReferralConfirmation();
         this.clinicReferralModal.view = "status";
         await this.loadClinicReferralStatus(booking, pet, concern);
+        await this.loadAdminBookings?.();
         this.showMedicalConcernToast?.(
           response.message || (response.already_exists
             ? "The existing clinic referral was recovered."

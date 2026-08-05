@@ -220,6 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
       waiting_to_arrive: ["Scheduled", "bg-blue-50 text-blue-700"],
       checked_in: ["Checked In", "bg-amber-50 text-amber-700"],
       in_progress: ["Being Groomed", "bg-violet-50 text-violet-700"],
+      referred_to_clinic: ["Referred to Clinic", "bg-violet-50 text-violet-700"],
       grooming_finished: ["Grooming Finished", "bg-emerald-50 text-emerald-700"],
       paused: ["Grooming Paused", "bg-amber-50 text-amber-800"],
       stopped: ["Grooming Stopped", "bg-red-50 text-red-700"],

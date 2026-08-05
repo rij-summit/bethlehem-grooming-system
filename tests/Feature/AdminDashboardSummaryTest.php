@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Models\Booking;
 use App\Models\BookingPet;
+use App\Models\GroomingClinicReferral;
 use App\Models\Pet;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -82,6 +83,14 @@ class AdminDashboardSummaryTest extends TestCase
             $table->unique(['pet_queue_date', 'pet_queue_number']);
         });
 
+        Schema::create('grooming_clinic_referrals', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('booking_id');
+            $table->unsignedInteger('booking_pet_id');
+            $table->unsignedInteger('pet_id');
+            $table->string('status', 30);
+        });
+
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->string('pet_name');
@@ -142,6 +151,7 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
+        Schema::dropIfExists('grooming_clinic_referrals');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
@@ -953,6 +963,97 @@ class AdminDashboardSummaryTest extends TestCase
             'booking_pet_id' => 3,
             'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
             'grooming_end_time' => null,
+        ]);
+    }
+
+    public function test_schedule_hides_single_pet_owner_card_after_clinic_referral(): void
+    {
+        $this->insertReferralScheduleBooking([
+            BookingPet::GROOMING_STATE_IN_PROGRESS,
+        ]);
+        $this->insertClinicReferral(1, 1);
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+
+        $this->assertSame([], collect($schedule['inProgressList'])->pluck('id')->all());
+        $this->assertSame(0, $schedule['groomerCapacity']['active_pets']);
+    }
+
+    public function test_schedule_hides_owner_card_when_only_unfinished_pet_is_referred(): void
+    {
+        $this->insertReferralScheduleBooking([
+            BookingPet::GROOMING_STATE_FINISHED,
+            BookingPet::GROOMING_STATE_IN_PROGRESS,
+        ]);
+        $this->insertClinicReferral(1, 2);
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+
+        $this->assertSame([], collect($schedule['inProgressList'])->pluck('id')->all());
+        $this->assertSame(0, $schedule['groomerCapacity']['active_pets']);
+    }
+
+    public function test_schedule_keeps_owner_card_when_another_unfinished_pet_remains(): void
+    {
+        $this->insertReferralScheduleBooking([
+            BookingPet::GROOMING_STATE_IN_PROGRESS,
+            BookingPet::GROOMING_STATE_IN_PROGRESS,
+        ]);
+        $this->insertClinicReferral(1, 1);
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+
+        $this->assertSame([1], collect($schedule['inProgressList'])->pluck('id')->all());
+        $this->assertSame(1, $schedule['groomerCapacity']['active_pets']);
+        $pets = collect($schedule['inProgressList'][0]['pets'])->keyBy('bookingPetId');
+        $this->assertTrue($pets[1]['hasClinicReferral']);
+        $this->assertFalse($pets[2]['hasClinicReferral']);
+    }
+
+    private function insertReferralScheduleBooking(array $states): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'REFERRAL-SCHEDULE',
+            'booking_date' => '2026-06-24',
+            'number_of_pets' => count($states),
+            'status' => 'in_progress',
+            'queue_number' => 1,
+            'grooming_started_at' => '2026-06-24 10:00:00',
+        ]);
+
+        foreach ($states as $index => $state) {
+            $id = $index + 1;
+            $finished = $state === BookingPet::GROOMING_STATE_FINISHED;
+            DB::table('pets')->insert([
+                'pet_id' => $id,
+                'pet_name' => "Pet {$id}",
+                'species' => 'dog',
+            ]);
+            DB::table('booking_pets')->insert([
+                'booking_pet_id' => $id,
+                'booking_id' => 1,
+                'pet_id' => $id,
+                'grooming_start_time' => '2026-06-24 10:00:00',
+                'grooming_end_time' => $finished ? '2026-06-24 11:00:00' : null,
+                'grooming_state' => $state,
+            ]);
+        }
+    }
+
+    private function insertClinicReferral(int $bookingId, int $bookingPetId): void
+    {
+        DB::table('grooming_clinic_referrals')->insert([
+            'booking_id' => $bookingId,
+            'booking_pet_id' => $bookingPetId,
+            'pet_id' => $bookingPetId,
+            'status' => GroomingClinicReferral::STATUS_PENDING_CONSENT,
         ]);
     }
 }

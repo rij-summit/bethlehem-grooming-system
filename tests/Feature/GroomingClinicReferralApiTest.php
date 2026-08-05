@@ -66,6 +66,7 @@ class GroomingClinicReferralApiTest extends TestCase
             'booking_services',
             'booking_pets',
             'bookings',
+            'time_windows',
             'walkins',
             'pets',
             'users',
@@ -547,6 +548,73 @@ class GroomingClinicReferralApiTest extends TestCase
         $this->assertStringNotContainsString('PRIVATE INTERNAL', $response->getContent());
     }
 
+    public function test_owner_tracker_hides_only_after_no_unfinished_nonreferred_pet_remains(): void
+    {
+        DB::table('bookings')->where('booking_id', 10)->update([
+            'booking_date' => now()->toDateString(),
+        ]);
+        $referral = $this->createRoutineReferral();
+
+        $this->authenticateAs(4);
+        $this->getJson('/api/booking/history')
+            ->assertOk()
+            ->assertJsonPath('bookings.0.booking_id', 10)
+            ->assertJsonPath('bookings.0.show_grooming_tracker', true)
+            ->assertJsonPath('bookings.0.pets.0.pet_name', 'Zeus')
+            ->assertJsonPath('bookings.0.pets.0.grooming_status', 'referred_to_clinic')
+            ->assertJsonPath('bookings.0.pets.0.clinic_referred', true)
+            ->assertJsonPath('bookings.0.pets.0.active_in_grooming', false)
+            ->assertJsonPath('bookings.0.pets.1.pet_name', 'Luna')
+            ->assertJsonPath('bookings.0.pets.1.clinic_referred', false)
+            ->assertJsonPath('bookings.0.pets.1.active_in_grooming', true);
+
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('queue.active', 1)
+            ->assertJsonPath('queue.queued', 0)
+            ->assertJsonPath('queue.in_progress', 1);
+
+        $notification = $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonCount(1, 'notifications')
+            ->assertJsonPath(
+                'notifications.0.type',
+                CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED,
+            )
+            ->assertJsonPath('notifications.0.pet_id', 1000)
+            ->assertJsonPath('notifications.0.pet_name', 'Zeus');
+        $this->assertStringContainsString('Zeus', $notification->json('notifications.0.message'));
+        $this->assertStringNotContainsString('Luna', $notification->json('notifications.0.message'));
+
+        DB::table('booking_pets')->where('booking_pet_id', 101)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+            'grooming_end_time' => now(),
+        ]);
+
+        $this->getJson('/api/booking/history')
+            ->assertOk()
+            ->assertJsonPath('bookings.0.show_grooming_tracker', false);
+
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('queue.active', 0)
+            ->assertJsonPath('queue.queued', 0)
+            ->assertJsonPath('queue.in_progress', 0);
+
+        $this->assertSame(1, DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referral->id)
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED)
+            ->count());
+        $this->assertSame(0, DB::table('customer_notifications')
+            ->where('type', 'grooming_tracker_removed')
+            ->count());
+
+        $this->authenticateAs(5);
+        $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonCount(0, 'notifications');
+    }
+
     public function test_queue_sorts_by_urgency_and_whitelists_staff_safe_fields(): void
     {
         foreach ([
@@ -666,9 +734,12 @@ class GroomingClinicReferralApiTest extends TestCase
         $this->assertDatabaseCount('customer_notifications', 2);
         $notification = DB::table('customer_notifications')
             ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED)
-            ->value('message');
-        $this->assertStringContainsString($appointment->appointment_reference, $notification);
-        $this->assertStringNotContainsString('PRIVATE INTERNAL', $notification);
+            ->first();
+        $this->assertSame(4, $notification->user_id);
+        $this->assertStringContainsString('Zeus', $notification->message);
+        $this->assertStringNotContainsString('Luna', $notification->message);
+        $this->assertStringContainsString($appointment->appointment_reference, $notification->message);
+        $this->assertStringNotContainsString('PRIVATE INTERNAL', $notification->message);
 
         $this->postJson("/api/admin/clinic-referrals/{$referral->public_id}/accept")
             ->assertOk()
@@ -979,6 +1050,13 @@ class GroomingClinicReferralApiTest extends TestCase
             'grooming_clinic_referral_id' => $referral->id,
             'type' => CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED,
         ]);
+        $assessmentStartedNotification = DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referral->id)
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED)
+            ->first();
+        $this->assertSame(4, $assessmentStartedNotification->user_id);
+        $this->assertStringContainsString('Zeus', $assessmentStartedNotification->message);
+        $this->assertStringNotContainsString('Luna', $assessmentStartedNotification->message);
         $started->assertJsonPath('appointment.grooming_referral.grooming_outcome', 'stopped');
 
         $this->postJson("/api/admin/clinic-appointments/{$appointmentId}/start-consultation")
@@ -1053,6 +1131,13 @@ class GroomingClinicReferralApiTest extends TestCase
             'grooming_clinic_referral_id' => $referral->id,
             'type' => CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED,
         ]);
+        $assessmentCompletedNotification = DB::table('customer_notifications')
+            ->where('grooming_clinic_referral_id', $referral->id)
+            ->where('type', CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED)
+            ->first();
+        $this->assertSame(4, $assessmentCompletedNotification->user_id);
+        $this->assertStringContainsString('Zeus', $assessmentCompletedNotification->message);
+        $this->assertStringNotContainsString('Luna', $assessmentCompletedNotification->message);
 
         $this->postJson(
             "/api/admin/clinic-appointments/{$appointmentId}/finish-consultation",
@@ -1277,14 +1362,28 @@ class GroomingClinicReferralApiTest extends TestCase
             $table->decimal('weight', 8, 2)->nullable();
             $table->foreign('user_id')->references('user_id')->on('users')->nullOnDelete();
         });
+        Schema::create('time_windows', function (Blueprint $table) {
+            $table->increments('window_id');
+            $table->string('window_label');
+        });
         Schema::create('bookings', function (Blueprint $table) {
             $table->increments('booking_id');
             $table->string('booking_reference')->unique();
             $table->unsignedInteger('user_id')->nullable();
             $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->unsignedInteger('window_id')->nullable();
+            $table->date('booking_date')->nullable();
+            $table->unsignedTinyInteger('number_of_pets')->default(1);
             $table->string('status');
             $table->boolean('paid')->default(false);
+            $table->unsignedTinyInteger('reschedule_count')->default(0);
+            $table->unsignedTinyInteger('cancel_count')->default(0);
+            $table->text('special_notes')->nullable();
+            $table->timestamp('dropped_off_at')->nullable();
+            $table->timestamp('grooming_started_at')->nullable();
+            $table->timestamp('grooming_finished_at')->nullable();
             $table->timestamp('archived_at')->nullable();
+            $table->timestamp('created_at')->nullable();
             $table->foreign('user_id')->references('user_id')->on('users')->nullOnDelete();
             $table->foreign('walkin_id')->references('id')->on('walkins')->nullOnDelete();
         });

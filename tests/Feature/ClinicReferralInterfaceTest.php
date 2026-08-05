@@ -221,6 +221,34 @@ class ClinicReferralInterfaceTest extends TestCase
         );
     }
 
+    public function test_owner_tracker_uses_server_referral_visibility_without_extra_notification(): void
+    {
+        $this->assertStringContainsString(
+            '.filter(b => b.show_grooming_tracker !== false)',
+            $this->clientDashboard,
+        );
+        $this->assertStringNotContainsString(
+            'grooming_tracker_removed',
+            $this->clientDashboard,
+        );
+        $this->assertStringContainsString(
+            '.filter(p => p.clinic_referred !== true)',
+            $this->clientDashboard,
+        );
+        $this->assertStringContainsString(
+            'queue.active ?? (queued + inProgress)',
+            $this->clientDashboard,
+        );
+        $this->assertStringContainsString(
+            '.filter((pet) => !this.isPetReferredToClinic(pet))',
+            $this->dashboardComponent,
+        );
+        $this->assertStringContainsString(
+            'referred_to_clinic: "Referred to clinic"',
+            $this->dashboardComponent,
+        );
+    }
+
     public function test_customer_detail_uses_safe_fields_and_permanent_confirmation(): void
     {
         foreach ([

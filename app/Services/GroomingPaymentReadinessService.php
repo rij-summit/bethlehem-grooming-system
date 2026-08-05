@@ -114,22 +114,24 @@ class GroomingPaymentReadinessService
             $paymentReady = false;
             $blockedReason = null;
             $finalChargeCents = null;
-            $activeReferral = $hasReferralFoundation
+            $clinicReferral = $hasReferralFoundation
                 ? $bookingPet->groomingClinicReferrals->first(
-                    fn (GroomingClinicReferral $referral) => in_array(
-                        $referral->status,
-                        [
-                            GroomingClinicReferral::STATUS_PENDING_CONSENT,
-                            GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
-                            GroomingClinicReferral::STATUS_ACCEPTED,
-                            GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
-                        ],
-                        true,
-                    )
+                    fn (GroomingClinicReferral $referral) => $referral->status
+                    !== GroomingClinicReferral::STATUS_CANCELLED
                     && (int) $referral->booking_id === (int) $bookingPet->booking_id
                     && (int) $referral->pet_id === (int) $bookingPet->pet_id,
                 )
                 : null;
+            $activeReferral = $clinicReferral && in_array(
+                $clinicReferral->status,
+                [
+                    GroomingClinicReferral::STATUS_PENDING_CONSENT,
+                    GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
+                    GroomingClinicReferral::STATUS_ACCEPTED,
+                    GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                ],
+                true,
+            ) ? $clinicReferral : null;
 
             if ($activeReferral) {
                 $blockedReason = 'Grooming payment is unavailable while '
@@ -177,7 +179,8 @@ class GroomingPaymentReadinessService
                 'payment_ready' => $paymentReady,
                 'payment_blocked_reason' => $blockedReason,
                 'active_clinic_referral' => $activeReferral !== null,
-                'clinic_referral_status' => $activeReferral?->status,
+                'has_clinic_referral' => $clinicReferral !== null,
+                'clinic_referral_status' => $clinicReferral?->status,
                 'service_breakdown' => $lines->all(),
                 'original_pet_subtotal' => $this->centsToMoney($originalSubtotalCents),
                 'final_pet_charge' => $finalChargeCents !== null

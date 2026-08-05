@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicSetting;
+use App\Models\GroomingClinicReferral;
 use App\Models\Notification;
 use App\Models\Pet;
 use App\Models\Service;
@@ -18,6 +19,7 @@ use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -377,6 +379,10 @@ class BookingController extends Controller
         }
 
         $relations = ['timeWindow', 'bookingPets.pet', 'bookingServices.service'];
+        $hasReferralFoundation = Schema::hasTable('grooming_clinic_referrals');
+        if ($hasReferralFoundation) {
+            $relations[] = 'bookingPets.groomingClinicReferrals:id,booking_id,booking_pet_id,pet_id,status';
+        }
         if (Schema::hasTable('payments')) {
             $relations['payments'] = fn ($query) => $query
                 ->where('payment_status', 'paid')
@@ -418,8 +424,12 @@ class BookingController extends Controller
             ? collect()
             : $historyQuery->get();
 
-        $format = function ($b) use ($petId) {
+        $format = function ($b) use ($petId, $hasReferralFoundation) {
             $bookingPets = $b->bookingPets ?? collect();
+            $showGroomingTracker = $this->shouldShowGroomingTracker(
+                $bookingPets,
+                $hasReferralFoundation,
+            );
             $paymentSummary = (bool) $b->paid
                 ? app(GroomingPaymentReadinessService::class)->summarize($b)
                 : null;
@@ -429,7 +439,11 @@ class BookingController extends Controller
                 $bookingPets = $bookingPets->where('pet_id', $petId);
             }
 
-            $pets = $bookingPets->map(function ($bp) use ($b, $paymentPetsById) {
+            $pets = $bookingPets->map(function ($bp) use (
+                $b,
+                $paymentPetsById,
+                $hasReferralFoundation,
+            ) {
                 $services = ($b->bookingServices ?? collect())
                     ->where('booking_pet_id', $bp->booking_pet_id)
                     ->map(fn ($bookingService) => [
@@ -440,8 +454,15 @@ class BookingController extends Controller
                     ])
                     ->values();
 
+                $referredToClinic = $this->bookingPetIsReferredToClinic(
+                    $bp,
+                    $hasReferralFoundation,
+                );
+                $groomingFinished = $bp->grooming_state === BookingPet::GROOMING_STATE_FINISHED
+                    || $bp->grooming_end_time !== null;
                 $groomingStatus = match (true) {
                     in_array($b->status, ['cancelled', 'no_show'], true) => $b->status,
+                    $referredToClinic => 'referred_to_clinic',
                     $bp->grooming_state === BookingPet::GROOMING_STATE_STOPPED => 'stopped',
                     $bp->grooming_state === BookingPet::GROOMING_STATE_PAUSED => 'paused',
                     $bp->grooming_end_time !== null => 'grooming_finished',
@@ -456,6 +477,8 @@ class BookingController extends Controller
                     'pet_name' => $bp->pet?->pet_name ?? '—',
                     'breed' => $bp->pet?->breed ?? '—',
                     'grooming_status' => $groomingStatus,
+                    'clinic_referred' => $referredToClinic,
+                    'active_in_grooming' => ! $referredToClinic && ! $groomingFinished,
                     'grooming_started_at' => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,
@@ -525,6 +548,7 @@ class BookingController extends Controller
                     ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
                     : null,
                 'status' => $b->status,
+                'show_grooming_tracker' => $showGroomingTracker,
                 'paid' => (bool) $b->paid,
                 'payment_summary' => $customerPaymentSummary,
                 'number_of_pets' => $b->number_of_pets,
@@ -555,6 +579,62 @@ class BookingController extends Controller
         ]);
     }
 
+    private function shouldShowGroomingTracker($bookingPets, bool $hasReferralFoundation): bool
+    {
+        if (! $hasReferralFoundation) {
+            return true;
+        }
+
+        $hasReferral = $bookingPets->contains(
+            fn (BookingPet $bookingPet) => $this->bookingPetIsReferredToClinic(
+                $bookingPet,
+                $hasReferralFoundation,
+            ),
+        );
+
+        if (! $hasReferral) {
+            return true;
+        }
+
+        return $bookingPets->contains(function (BookingPet $bookingPet): bool {
+            $finished = $bookingPet->grooming_state === BookingPet::GROOMING_STATE_FINISHED
+                || $bookingPet->grooming_end_time !== null;
+            $referred = $this->bookingPetIsReferredToClinic($bookingPet, true);
+
+            return ! $finished && ! $referred;
+        });
+    }
+
+    private function bookingPetIsReferredToClinic(
+        BookingPet $bookingPet,
+        bool $hasReferralFoundation,
+    ): bool {
+        return $hasReferralFoundation
+            && $bookingPet->groomingClinicReferrals->contains(
+                fn (GroomingClinicReferral $referral) => $referral->status
+                    !== GroomingClinicReferral::STATUS_CANCELLED,
+            );
+    }
+
+    private function activeGroomingPetQuery(string $date): Builder
+    {
+        $query = BookingPet::query()
+            ->whereNull('grooming_end_time')
+            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
+            ->whereHas('booking', function (Builder $booking) use ($date) {
+                $booking->where('booking_date', $date)
+                    ->whereIn('status', ['checked_in', 'in_progress']);
+            });
+
+        if (Schema::hasTable('grooming_clinic_referrals')) {
+            $query->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
+                $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+            });
+        }
+
+        return $query;
+    }
+
     // Real-time client dashboard snapshot of today's grooming queue and capacity.
     public function groomingCapacity(Request $request)
     {
@@ -562,12 +642,12 @@ class BookingController extends Controller
 
         $used = $this->dailyIntakeCount($today);
 
-        $queued = Booking::where('booking_date', $today)
-            ->where('status', 'checked_in')
+        $queued = (clone $this->activeGroomingPetQuery($today))
+            ->where('grooming_state', BookingPet::GROOMING_STATE_NOT_STARTED)
             ->count();
 
-        $inProgress = Booking::where('booking_date', $today)
-            ->where('status', 'in_progress')
+        $inProgress = (clone $this->activeGroomingPetQuery($today))
+            ->where('grooming_state', BookingPet::GROOMING_STATE_IN_PROGRESS)
             ->count();
 
         $readyForPickup = Booking::where('booking_date', $today)
@@ -597,6 +677,7 @@ class BookingController extends Controller
                 'is_full' => $used >= $capacity,
             ],
             'queue' => [
+                'active' => $queued + $inProgress,
                 'queued' => $queued,
                 'in_progress' => $inProgress,
                 'ready_for_pickup' => $readyForPickup,

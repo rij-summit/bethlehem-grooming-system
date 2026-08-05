@@ -7,14 +7,17 @@ use App\Models\BookingPet;
 use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\CustomerNotification;
+use App\Models\GroomingClinicReferral;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\DailyPetQueue;
 use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingPaymentReadinessService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AdminBookingController extends Controller
 {
@@ -45,14 +48,21 @@ class AdminBookingController extends Controller
 
     private function activeGroomingPetCount(): int
     {
-        return BookingPet::where(
+        $query = BookingPet::where(
             'grooming_state',
             BookingPet::GROOMING_STATE_IN_PROGRESS,
         )
             ->whereHas('booking', function ($query) {
                 $query->whereIn('status', ['checked_in', 'in_progress']);
-            })
-            ->count();
+            });
+
+        if (Schema::hasTable('grooming_clinic_referrals')) {
+            $query->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
+                $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+            });
+        }
+
+        return $query->count();
     }
 
     private function groomerCapacitySnapshot(): array
@@ -121,16 +131,18 @@ class AdminBookingController extends Controller
         // Removed booking_date filter from active states so cards stay visible
         // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
         // on each query below when re-enabling the date guard for production.
-        $queued = Booking::where('status', 'checked_in')
+        $queuedQuery = Booking::where('status', 'checked_in')
             ->whereDoesntHave('bookingPets', function ($pet) {
                 $pet->whereNotNull('grooming_start_time');
-            })
+            });
+        $this->retainOwnerCardsWithActiveGroomingPets($queuedQuery);
+        $queued = $queuedQuery
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
 
-        $inProgress = Booking::where(function ($query) {
+        $inProgressQuery = Booking::where(function ($query) {
             $query->where('status', 'in_progress')
                 ->orWhere(function ($partialBooking) {
                     $partialBooking->where('status', 'checked_in')
@@ -143,7 +155,9 @@ class AdminBookingController extends Controller
                             $pet->whereNull('grooming_end_time');
                         });
                 });
-        })
+        });
+        $this->retainOwnerCardsWithActiveGroomingPets($inProgressQuery);
+        $inProgress = $inProgressQuery
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -217,6 +231,30 @@ class AdminBookingController extends Controller
             ],
             'groomerCapacity' => $this->groomerCapacitySnapshot(),
         ]);
+    }
+
+    /**
+     * Hide a referred owner's card only when no unfinished grooming pet remains.
+     */
+    private function retainOwnerCardsWithActiveGroomingPets(Builder $query): Builder
+    {
+        if (! Schema::hasTable('grooming_clinic_referrals')) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $booking) {
+            $booking
+                ->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
+                    $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+                })
+                ->orWhereHas('bookingPets', function (Builder $pet) {
+                    $pet->whereNull('grooming_end_time')
+                        ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
+                        ->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
+                            $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+                        });
+                });
+        });
     }
 
     // ── CHECK IN ──────────────────────────────────────────
@@ -1093,6 +1131,9 @@ class AdminBookingController extends Controller
                 $pet = $bp->pet;
                 $groomingState = $this->bookingPetGroomingState($bp);
                 $paymentPet = $paymentPetsById->get($bp->booking_pet_id, []);
+                $hasClinicReferral = (bool) ($paymentPet['has_clinic_referral']
+                    ?? $paymentPet['active_clinic_referral']
+                    ?? false);
 
                 return [
                     'id' => $bp->booking_pet_id,
@@ -1129,6 +1170,10 @@ class AdminBookingController extends Controller
                     'grooming_state' => $groomingState,
                     'groomingStateLabel' => $this->groomingStateLabel($groomingState),
                     'grooming_state_label' => $this->groomingStateLabel($groomingState),
+                    'hasClinicReferral' => $hasClinicReferral,
+                    'has_clinic_referral' => $hasClinicReferral,
+                    'clinicReferralStatus' => $paymentPet['clinic_referral_status'] ?? null,
+                    'clinic_referral_status' => $paymentPet['clinic_referral_status'] ?? null,
                     'paymentReviewRequired' => $groomingState === BookingPet::GROOMING_STATE_STOPPED
                         && ($paymentPet['review_status'] ?? 'pending') !== 'completed',
                     'paymentReviewCompleted' => ($paymentPet['review_status'] ?? null) === 'completed',

@@ -592,7 +592,7 @@
       const scheduled = active.filter(isUpcomingAppointment);
       const atClinic  = active.filter(b =>
         ["checked_in", "in_progress", "for_payment", "released"].includes(b.status)
-      );
+      ).filter(b => b.show_grooming_tracker !== false);
 
       renderAppointments(scheduled);
       renderUpcomingAppointmentsSummary(scheduled);
@@ -702,6 +702,7 @@
     const percent = Math.max(0, Math.min(100, toNumber(capacity.percent ?? ((used / max) * 100))));
     const queued = toNumber(queue.queued);
     const inProgress = toNumber(queue.in_progress);
+    const active = toNumber(queue.active ?? (queued + inProgress));
     const isFull = Boolean(capacity.is_full) || used >= max;
     const isBusy = !isFull && percent >= 80;
 
@@ -720,7 +721,7 @@
       return;
     }
 
-    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(queued);
+    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(active);
     if (groomingQueueSummaryEl) {
       groomingQueueSummaryEl.textContent = `${inProgress} in progress`;
       groomingQueueSummaryEl.className = "text-sm text-[#315b7e] mt-1";
@@ -831,7 +832,9 @@
 
   function buildTrackerCard(b) {
     const timeLabel  = b.time_window?.window_label ?? "—";
-    const petNames   = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
+    const trackerPets = (b.pets || []).filter(p => p.clinic_referred !== true);
+    const petNames   = trackerPets.map(p => p.pet_name).filter(Boolean).join(", ") || "—";
+    const petCount   = trackerPets.length;
     const prePaid    = b.paid
       ? `<span class="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Pre-Paid ✓</span>`
       : "";
@@ -882,7 +885,7 @@
             <p class="text-xs text-slate-400 mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
           </div>
         </div>
-        <p class="text-xs text-slate-500 mb-5">${petNames} &middot; ${b.number_of_pets} pet${b.number_of_pets > 1 ? "s" : ""}</p>
+        <p class="text-xs text-slate-500 mb-5">${petNames} &middot; ${petCount} pet${petCount > 1 ? "s" : ""}</p>
         <div class="relative flex justify-between items-start px-4">
           <!-- background track -->
           <div class="absolute top-[1.0625rem] left-4 right-4 h-1 bg-slate-200 rounded-full"></div>

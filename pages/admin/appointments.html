@@ -1071,7 +1071,7 @@
                   class="admin-queued-pets-panel"
                 >
                   <div class="admin-queued-pets-heading">
-                    <span class="admin-queued-pet-count" x-text="booking.pets?.length || 0"></span>
+                    <span class="admin-queued-pet-count" x-text="getQueuedPets(booking).length"></span>
                   </div>
 
                   <template x-if="!booking.pets || booking.pets.length === 0">
