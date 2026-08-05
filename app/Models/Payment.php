@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Schema;
 
 class Payment extends Model
 {
+    private ?string $resolvedKeyName = null;
+
     protected $table = 'payments';
 
     protected $primaryKey = 'payment_id';
@@ -39,7 +41,25 @@ class Payment extends Model
      */
     public function getKeyName()
     {
-        return Schema::hasColumn($this->getTable(), 'payment_id')
+        if ($this->resolvedKeyName !== null) {
+            return $this->resolvedKeyName;
+        }
+
+        // Hydrated models already reveal which schema variant they came from.
+        // Avoid an information-schema query every time Eloquent asks for the
+        // key while matching eager-loaded payments or serializing a response.
+        if (array_key_exists('payment_id', $this->attributes)) {
+            return $this->resolvedKeyName = 'payment_id';
+        }
+
+        if (array_key_exists('id', $this->attributes)) {
+            return $this->resolvedKeyName = 'id';
+        }
+
+        // New/query models have no attributes yet, so inspect once for this
+        // model instance. An instance-local cache remains correct in tests and
+        // deployments that use either supported payments-table definition.
+        return $this->resolvedKeyName = Schema::hasColumn($this->getTable(), 'payment_id')
             ? 'payment_id'
             : 'id';
     }

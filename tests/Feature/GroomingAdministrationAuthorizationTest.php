@@ -334,6 +334,333 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ];
     }
 
+    public function test_archive_payload_has_constant_query_count_and_keeps_the_page_contract(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 10,
+            'first_name' => 'Jamie',
+            'last_name' => 'Santos',
+            'phone' => '09171234567',
+            'role' => 'customer',
+        ]);
+        DB::table('walkins')->insert([
+            'id' => 20,
+            'fname' => 'Taylor',
+            'lname' => 'Reyes',
+            'phone' => '09981234567',
+        ]);
+        DB::table('time_windows')->insert([
+            'window_id' => 1,
+            'window_label' => '9:00 AM - 10:00 AM',
+            'start_time' => '09:00:00',
+            'end_time' => '10:00:00',
+        ]);
+
+        $bookings = [];
+        $pets = [];
+        $bookingPets = [];
+        $bookingServices = [];
+        $payments = [];
+
+        for ($id = 1; $id <= 12; $id++) {
+            $isWalkin = $id % 2 === 0;
+            $bookings[] = [
+                'booking_id' => $id,
+                'booking_reference' => "ARCHIVE-{$id}",
+                'user_id' => $isWalkin ? null : 10,
+                'walkin_id' => $isWalkin ? 20 : null,
+                'window_id' => 1,
+                'booking_date' => '2026-07-24',
+                'number_of_pets' => 1,
+                'status' => 'archived',
+                'queue_number' => $id,
+                'special_notes' => 'Use sensitive shampoo.',
+                'total_amount' => 500,
+                'paid' => true,
+                'archived_at' => Carbon::parse('2026-07-24 12:00:00')->addMinutes($id),
+                'dropped_off_at' => '2026-07-24 08:45:00',
+                'grooming_started_at' => '2026-07-24 09:00:00',
+                'grooming_finished_at' => '2026-07-24 10:00:00',
+            ];
+            $pets[] = [
+                'pet_id' => $id,
+                'user_id' => $isWalkin ? null : 10,
+                'pet_name' => "Pet {$id}",
+                'species' => 'dog',
+                'breed' => 'Poodle',
+                'weight' => 8.5,
+                'size' => 'small',
+                'fur_type' => 'curly',
+                'medical_conditions' => 'None',
+            ];
+            $bookingPets[] = [
+                'booking_pet_id' => $id,
+                'booking_id' => $id,
+                'pet_id' => $id,
+                'pet_queue_date' => '2026-07-24',
+                'pet_queue_number' => $id,
+                'special_instructions' => 'Trim nails.',
+                'grooming_start_time' => '2026-07-24 09:00:00',
+                'grooming_end_time' => '2026-07-24 10:00:00',
+                'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+            ];
+            $bookingServices[] = [
+                'booking_service_id' => $id,
+                'booking_id' => $id,
+                'booking_pet_id' => $id,
+                'service_id' => 1,
+                'price_at_booking' => 500,
+            ];
+            $payments[] = [
+                'payment_id' => $id,
+                'booking_id' => $id,
+                'total_amount' => 500,
+                'amount_tendered' => 500,
+                'change_amount' => 0,
+                'payment_method' => 'cash',
+                'payment_status' => 'paid',
+                'paid_at' => '2026-07-24 10:05:00',
+            ];
+        }
+
+        DB::table('bookings')->insert($bookings);
+        DB::table('pets')->insert($pets);
+        DB::table('booking_pets')->insert($bookingPets);
+        DB::table('booking_services')->insert($bookingServices);
+        DB::table('payments')->insert($payments);
+
+        $queryCount = 0;
+        DB::listen(function () use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        $response = $this->getJson('/api/admin/bookings/archived');
+
+        $this->assertLessThanOrEqual(
+            10,
+            $queryCount,
+            'Archive queries must not grow with the number of bookings.',
+        );
+        $response->assertJsonStructure([
+            'success',
+            'total',
+            'archived' => [
+                '*' => [
+                    'id',
+                    'queueNumber',
+                    'ownerName',
+                    'contactNumber',
+                    'petName',
+                    'petType',
+                    'breed',
+                    'petSize',
+                    'size',
+                    'serviceLabel',
+                    'appointmentDate',
+                    'appointmentTime',
+                    'dropOffTime',
+                    'startedAt',
+                    'completedAt',
+                    'clientNotified',
+                    'paid',
+                    'status',
+                    'bookingReference',
+                    'specialNotes',
+                    'numberOfPets',
+                    'paidAmount',
+                    'paid_amount',
+                    'paymentReady',
+                    'payment_ready',
+                    'paymentBlockedReason',
+                    'payment_blocked_reason',
+                    'finalPaymentTotal',
+                    'final_payment_total',
+                    'paymentSummary' => [
+                        'payment_ready',
+                        'payment_blocked_reason',
+                        'final_booking_total',
+                        'zero_total',
+                        'pets',
+                    ],
+                    'payment_summary' => [
+                        'payment_ready',
+                        'payment_blocked_reason',
+                        'final_booking_total',
+                        'zero_total',
+                        'pets',
+                    ],
+                    'payment' => [
+                        'id',
+                        'finalPrice',
+                        'final_price',
+                        'amountPaid',
+                        'amount_paid',
+                        'paymentMethod',
+                        'payment_method',
+                        'paidAt',
+                        'paid_at',
+                    ],
+                    'pets' => [
+                        '*' => [
+                            'id',
+                            'bookingPetId',
+                            'booking_pet_id',
+                            'petId',
+                            'pet_id',
+                            'pet_name',
+                            'name',
+                            'petType',
+                            'pet_type',
+                            'petSize',
+                            'pet_size',
+                            'petName',
+                            'species',
+                            'breed',
+                            'size',
+                            'furType',
+                            'weight',
+                            'medicalConditions',
+                            'specialInstructions',
+                            'petQueueNumber',
+                            'groomingStartedAt',
+                            'isGroomingStarted',
+                            'groomingStartedAtIso',
+                            'groomingFinishedAt',
+                            'groomingFinishedAtIso',
+                            'isGroomingFinished',
+                            'groomingState',
+                            'grooming_state',
+                            'groomingStateLabel',
+                            'grooming_state_label',
+                            'paymentReviewRequired',
+                            'paymentReviewCompleted',
+                            'paymentReviewDecision',
+                            'paymentReviewDecisionLabel',
+                            'reviewedFinalCharge',
+                        ],
+                    ],
+                    'services' => [
+                        '*' => [
+                            'id',
+                            'bookingServiceId',
+                            'booking_service_id',
+                            'bookingPetId',
+                            'booking_pet_id',
+                            'petId',
+                            'pet_id',
+                            'petName',
+                            'pet_name',
+                            'serviceId',
+                            'service_id',
+                            'slug',
+                            'serviceSlug',
+                            'service_slug',
+                            'serviceName',
+                            'service_name',
+                            'description',
+                            'name',
+                            'priceAtBooking',
+                            'price_at_booking',
+                            'durationMinutes',
+                            'paidPrice',
+                            'paid_price',
+                            'paidPriceSource',
+                            'paid_price_source',
+                            'paymentTotal',
+                            'payment_total',
+                        ],
+                    ],
+                    'archivedAt',
+                ],
+            ],
+        ]);
+        $response
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('total', 12)
+            ->assertJsonPath('archived.0.id', 12)
+            ->assertJsonPath('archived.0.ownerName', 'Taylor Reyes')
+            ->assertJsonPath('archived.0.contactNumber', '09981234567')
+            ->assertJsonPath('archived.0.bookingReference', 'ARCHIVE-12')
+            ->assertJsonPath('archived.0.petName', 'Pet 12')
+            ->assertJsonPath('archived.0.petType', 'Dog')
+            ->assertJsonPath('archived.0.breed', 'Poodle')
+            ->assertJsonPath('archived.0.appointmentDate', '2026-07-24')
+            ->assertJsonPath('archived.0.appointmentTime', '9:00 AM - 10:00 AM')
+            ->assertJsonPath('archived.0.dropOffTime', '8:45 AM')
+            ->assertJsonPath('archived.0.startedAt', '9:00 AM')
+            ->assertJsonPath('archived.0.completedAt', '10:00 AM')
+            ->assertJsonPath('archived.0.archivedAt', 'Jul 24, 2026 12:12 PM')
+            ->assertJsonPath('archived.0.serviceLabel', 'Basic Grooming')
+            ->assertJsonPath('archived.0.numberOfPets', 1)
+            ->assertJsonPath('archived.0.specialNotes', 'Use sensitive shampoo.')
+            ->assertJsonPath('archived.0.paidAmount', 500)
+            ->assertJsonPath('archived.0.paid_amount', 500)
+            ->assertJsonPath('archived.0.paid', true)
+            ->assertJsonPath('archived.0.status', 'archived')
+            ->assertJsonPath('archived.0.paymentReady', true)
+            ->assertJsonPath('archived.0.payment_ready', true)
+            ->assertJsonPath('archived.0.finalPaymentTotal', '500.00')
+            ->assertJsonPath('archived.0.final_payment_total', '500.00')
+            ->assertJsonPath('archived.0.paymentSummary.payment_ready', true)
+            ->assertJsonPath('archived.0.paymentSummary.final_booking_total', '500.00')
+            ->assertJsonPath('archived.0.payment.finalPrice', 500)
+            ->assertJsonPath('archived.0.payment.final_price', 500)
+            ->assertJsonPath('archived.0.payment.id', 12)
+            ->assertJsonPath('archived.0.payment.amountPaid', 500)
+            ->assertJsonPath('archived.0.payment.paymentMethod', 'cash')
+            ->assertJsonPath('archived.0.pets.0.petName', 'Pet 12')
+            ->assertJsonPath('archived.0.pets.0.bookingPetId', 12)
+            ->assertJsonPath('archived.0.pets.0.petId', 12)
+            ->assertJsonPath('archived.0.pets.0.species', 'Dog')
+            ->assertJsonPath('archived.0.pets.0.breed', 'Poodle')
+            ->assertJsonPath('archived.0.pets.0.size', 'small')
+            ->assertJsonPath('archived.0.pets.0.furType', 'curly')
+            ->assertJsonPath('archived.0.pets.0.weight', '8.5 kg')
+            ->assertJsonPath('archived.0.pets.0.medicalConditions', 'None')
+            ->assertJsonPath('archived.0.pets.0.specialInstructions', 'Trim nails.')
+            ->assertJsonPath('archived.0.pets.0.groomingState', BookingPet::GROOMING_STATE_FINISHED)
+            ->assertJsonPath('archived.0.pets.0.groomingStateLabel', 'Finished')
+            ->assertJsonPath('archived.0.services.0.name', 'Basic Grooming')
+            ->assertJsonPath('archived.0.services.0.bookingServiceId', 12)
+            ->assertJsonPath('archived.0.services.0.serviceId', 1)
+            ->assertJsonPath('archived.0.services.0.serviceSlug', 'basic-grooming')
+            ->assertJsonPath('archived.0.services.0.paidPrice', 500)
+            ->assertJsonPath('archived.0.services.0.paid_price', 500)
+            ->assertJsonPath('archived.0.services.0.paidPriceSource', 'payment_total')
+            ->assertJsonPath('archived.0.services.0.paymentTotal', 500);
+
+        // Non-standard historical records must use the authoritative fallback
+        // instead of fabricating a completed stopped-grooming review.
+        DB::table('booking_pets')->where('booking_pet_id', 12)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
+
+        $this->getJson('/api/admin/bookings/archived?search=ARCHIVE-12')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('archived.0.paymentReady', false)
+            ->assertJsonPath('archived.0.finalPaymentTotal', null)
+            ->assertJsonPath('archived.0.pets.0.paymentReviewRequired', true)
+            ->assertJsonPath('archived.0.pets.0.paymentReviewCompleted', false);
+
+        DB::table('booking_pets')->where('booking_pet_id', 12)->update([
+            'grooming_state' => '',
+            'grooming_end_time' => '2026-07-24 10:00:00',
+        ]);
+
+        $this->getJson('/api/admin/bookings/archived?search=ARCHIVE-12')
+            ->assertOk()
+            ->assertJsonPath('archived.0.paymentReady', false)
+            ->assertJsonPath(
+                'archived.0.paymentSummary.pets.0.grooming_state',
+                BookingPet::GROOMING_STATE_NOT_STARTED,
+            );
+    }
+
     #[DataProvider('authorizedGroomingRoles')]
     public function test_staff_and_admin_can_complete_the_existing_core_grooming_workflow(
         string $role,

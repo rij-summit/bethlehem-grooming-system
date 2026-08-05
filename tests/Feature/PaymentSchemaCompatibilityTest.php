@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Payment;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -45,6 +46,7 @@ class PaymentSchemaCompatibilityTest extends TestCase
         $this->assertSame(1, $payment->getKey());
         $this->assertSame('0.00', $payment->total_amount);
         $this->assertSame(1, Payment::query()->whereKey(1)->count());
+        $this->assertHydratedKeyReadsDoNotHitSchema('id');
     }
 
     public function test_payment_model_supports_active_payment_id_and_processed_by(): void
@@ -77,5 +79,23 @@ class PaymentSchemaCompatibilityTest extends TestCase
         $this->assertSame('payment_id', $payment->getKeyName());
         $this->assertSame(1, $payment->getKey());
         $this->assertSame(7, $payment->processed_by);
+        $this->assertHydratedKeyReadsDoNotHitSchema('payment_id');
+    }
+
+    private function assertHydratedKeyReadsDoNotHitSchema(string $expectedKey): void
+    {
+        $payment = Payment::query()->firstOrFail();
+        $queryCount = 0;
+
+        DB::listen(function () use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        for ($iteration = 0; $iteration < 25; $iteration++) {
+            $this->assertSame($expectedKey, $payment->getKeyName());
+            $this->assertSame(1, $payment->getKey());
+        }
+
+        $this->assertSame(0, $queryCount, 'Reading a hydrated payment key must not inspect the schema.');
     }
 }

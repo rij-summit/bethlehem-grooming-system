@@ -950,6 +950,7 @@ class AdminBookingController extends Controller
         $query = Booking::where('status', 'archived')
             ->with([
                 'user',
+                'walkin',
                 'timeWindow',
                 'bookingPets.pet',
                 'bookingServices.service',
@@ -986,7 +987,7 @@ class AdminBookingController extends Controller
     }
 
     // ── FORMAT BOOKING FOR FRONTEND ───────────────────────
-    private function formatBooking(Booking $booking): array
+    private function formatBooking(Booking $booking, ?array $paymentSummary = null): array
     {
         $user = $booking->user;
         $walkin = $booking->walkin;
@@ -1029,7 +1030,7 @@ class AdminBookingController extends Controller
         ), 2);
         $canUseSavedServicePrices = ! $paidTotal
             || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - round($paidTotal, 2)) <= 0.01);
-        $paymentSummary = $this->paymentReadiness()->summarize($booking);
+        $paymentSummary ??= $this->paymentReadiness()->summarize($booking);
         $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
 
         return [
@@ -1225,13 +1226,128 @@ class AdminBookingController extends Controller
     // Formats a booking record for the archive page
     private function formatArchivedBooking(Booking $booking): array
     {
-        $base = $this->formatBooking($booking);
-
-        $base['archivedAt'] = $booking->archived_at
+        $paymentSummary = $this->canUseSettledArchivePaymentSummary($booking)
+            ? $this->settledArchivePaymentSummary($booking)
+            : $this->paymentReadiness()->summarize($booking);
+        $formatted = $this->formatBooking(
+            $booking,
+            $paymentSummary,
+        );
+        $formatted['archivedAt'] = $booking->archived_at
             ? Carbon::parse($booking->archived_at)->format('M j, Y g:i A')
             : '—';
 
-        return $base;
+        return $formatted;
+    }
+
+    private function canUseSettledArchivePaymentSummary(Booking $booking): bool
+    {
+        $bookingPets = $booking->bookingPets ?? collect();
+        $hasOnlyOrdinaryFinishedPets = $bookingPets->isNotEmpty()
+            && $bookingPets->every(fn (BookingPet $bookingPet) => (string) $bookingPet->grooming_state
+                === BookingPet::GROOMING_STATE_FINISHED
+                && $bookingPet->grooming_end_time !== null);
+        $hasOnlyPositiveServiceSnapshots = ($booking->bookingServices ?? collect())
+            ->every(fn ($bookingService) => $bookingService->addon_id === null
+                && $bookingService->service_id !== null
+                && (float) $bookingService->price_at_booking > 0);
+        $paidPayment = $this->paidPaymentForBooking($booking);
+        $recordedTotal = $paidPayment
+            ? (float) $paidPayment->total_amount
+            : ((bool) $booking->paid ? (float) $booking->total_amount : null);
+        $snapshotTotal = (float) ($booking->bookingServices ?? collect())
+            ->sum(fn ($bookingService) => (float) $bookingService->price_at_booking);
+        $hasConsistentSettledTotal = $recordedTotal !== null
+            && abs($recordedTotal - $snapshotTotal) <= 0.01;
+
+        return $hasOnlyOrdinaryFinishedPets
+            && $hasOnlyPositiveServiceSnapshots
+            && $hasConsistentSettledTotal;
+    }
+
+    /**
+     * Reconstruct the settled payment shape from relations already loaded for
+     * the archive. This keeps the legacy booking response contract without
+     * rerunning live readiness queries for every historical booking.
+     */
+    private function settledArchivePaymentSummary(Booking $booking): array
+    {
+        $bookingPets = ($booking->bookingPets ?? collect())
+            ->sortBy('booking_pet_id')
+            ->values();
+        $servicesByPet = ($booking->bookingServices ?? collect())
+            ->sortBy('booking_service_id')
+            ->groupBy('booking_pet_id');
+        $paidPayment = $this->paidPaymentForBooking($booking);
+        $settledTotal = $paidPayment
+            ? (float) $paidPayment->total_amount
+            : (float) $booking->total_amount;
+
+        $pets = $bookingPets->map(function (BookingPet $bookingPet) use ($servicesByPet) {
+            $groomingState = $this->bookingPetGroomingState($bookingPet);
+            $serviceLines = collect($servicesByPet->get($bookingPet->booking_pet_id, collect()))
+                ->map(function ($bookingService) {
+                    $savedPrice = (float) ($bookingService->price_at_booking ?? 0);
+                    $isAddon = $bookingService->addon_id !== null;
+
+                    return [
+                        'booking_service_id' => (int) $bookingService->booking_service_id,
+                        'line_type' => $isAddon ? 'add_on' : 'service',
+                        'service_id' => $bookingService->service_id !== null
+                            ? (int) $bookingService->service_id
+                            : null,
+                        'addon_id' => $bookingService->addon_id !== null
+                            ? (int) $bookingService->addon_id
+                            : null,
+                        'label' => $isAddon
+                            ? "Add-on #{$bookingService->addon_id}"
+                            : ($bookingService->service?->service_name
+                                ?? "Service #{$bookingService->service_id}"),
+                        'price_at_booking' => number_format($savedPrice, 2, '.', ''),
+                        'price_source' => $savedPrice > 0 ? 'booking_snapshot' : 'unpriced',
+                    ];
+                })
+                ->values();
+            $petSubtotal = $serviceLines->sum(
+                fn (array $line) => (float) $line['price_at_booking'],
+            );
+            $wasStopped = $groomingState === BookingPet::GROOMING_STATE_STOPPED;
+
+            return [
+                'booking_pet_id' => (int) $bookingPet->booking_pet_id,
+                'pet_id' => $bookingPet->pet_id !== null ? (int) $bookingPet->pet_id : null,
+                'pet_name' => $bookingPet->pet?->pet_name ?? 'Pet',
+                'pet_species' => $bookingPet->pet?->species,
+                'grooming_state' => $groomingState,
+                'grooming_state_label' => $this->groomingStateLabel($groomingState),
+                'grooming_finish_time' => $bookingPet->grooming_end_time?->toIso8601String(),
+                'payment_kind' => $wasStopped ? 'stopped_reviewed' : 'finished',
+                'payment_ready' => true,
+                'payment_blocked_reason' => null,
+                'active_clinic_referral' => false,
+                'clinic_referral_status' => null,
+                'service_breakdown' => $serviceLines->all(),
+                'original_pet_subtotal' => number_format($petSubtotal, 2, '.', ''),
+                'final_pet_charge' => number_format($petSubtotal, 2, '.', ''),
+                'adjustment' => '0.00',
+                'review_status' => $wasStopped ? 'completed' : 'pending',
+                'review_id' => null,
+                'review_decision' => null,
+                'review_decision_label' => null,
+                'review_original_pet_subtotal' => null,
+                'customer_explanation' => null,
+                'reviewed_at' => null,
+                'concern_public_id' => null,
+            ];
+        })->values();
+
+        return [
+            'payment_ready' => true,
+            'payment_blocked_reason' => null,
+            'final_booking_total' => number_format($settledTotal, 2, '.', ''),
+            'zero_total' => abs($settledTotal) < 0.005,
+            'pets' => $pets->all(),
+        ];
     }
 
     private function paidPaymentForBooking(Booking $booking): ?Payment
