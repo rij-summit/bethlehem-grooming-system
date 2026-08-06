@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\GroomingClinicReferral;
 use App\Models\Notification;
@@ -28,6 +29,8 @@ class BookingController extends Controller
     private const DAILY_CAPACITY = 20;
 
     private const MAX_PETS_PER_BOOKING = 10;
+
+    private const MAX_PRE_REGISTRATION_DAYS_AHEAD = 2;
 
     private const INTAKE_STATUSES = [
         'checked_in',
@@ -86,6 +89,7 @@ class BookingController extends Controller
                 'booked' => $booked,
                 'remaining' => $dailyRemaining,
                 'is_full' => $dayFull,
+                'is_past' => $this->windowHasStarted($date, $window),
                 'is_cutoff' => $cutoffPassed,
                 'recommended' => false,
             ];
@@ -94,6 +98,7 @@ class BookingController extends Controller
         // ── AI FEATURE: Mark least congested as recommended ──
         $available = $result
             ->where('is_full', false)
+            ->where('is_past', false)
             ->where('is_cutoff', false);
         if ($available->isNotEmpty()) {
             $minBooked = $available->min('booked');
@@ -556,6 +561,7 @@ class BookingController extends Controller
                 'cancel_count' => $b->cancel_count ?? 0,
                 'special_notes' => $b->special_notes,
                 'time_window' => $b->timeWindow ? [
+                    'window_id' => $b->timeWindow->window_id,
                     'window_label' => $b->timeWindow->window_label,
                 ] : null,
                 'dropped_off_at' => $b->dropped_off_at
@@ -767,11 +773,17 @@ class BookingController extends Controller
     public function reschedule(Request $request)
     {
         $today = now()->toDateString();
+        $lastAvailableDate = now()
+            ->addDays(self::MAX_PRE_REGISTRATION_DAYS_AHEAD)
+            ->toDateString();
 
         $request->validate([
             'booking_id' => 'required|exists:bookings,booking_id',
-            'new_date' => 'required|date|after_or_equal:'.$today,
+            'new_date' => 'required|date_format:Y-m-d|after_or_equal:'.$today
+                .'|before_or_equal:'.$lastAvailableDate,
             'new_window_id' => 'required|exists:time_windows,window_id',
+        ], [
+            'new_date.before_or_equal' => 'Grooming can be pre-registered up to three days in advance.',
         ]);
 
         $user = $request->user();
@@ -809,6 +821,16 @@ class BookingController extends Controller
             ->first();
         $petCount = (int) $booking->number_of_pets;
 
+        if (
+            $booking->booking_date === $newDate
+            && (int) $booking->window_id === (int) $request->new_window_id
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Choose a different date or time slot from the current schedule.',
+            ], 422);
+        }
+
         if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $newDate)) {
             $cutoffLabel = $settings
                 ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
@@ -816,6 +838,29 @@ class BookingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
+            ], 422);
+        }
+
+        $closure = ClinicClosure::query()
+            ->where('is_active', true)
+            ->whereDate('start_date', '<=', $newDate)
+            ->whereDate('end_date', '>=', $newDate)
+            ->where(function ($query) use ($newDate) {
+                $query->where('type', 'blocked_date')
+                    ->orWhere(function ($stopToday) use ($newDate) {
+                        $stopToday
+                            ->where('type', 'stop_today')
+                            ->whereDate('start_date', now()->toDateString())
+                            ->whereDate('start_date', $newDate);
+                    });
+            })
+            ->first();
+
+        if ($closure) {
+            return response()->json([
+                'success' => false,
+                'message' => $closure->reason
+                    ?: 'The clinic is not accepting grooming pre-registrations on the selected date.',
             ], 422);
         }
 
@@ -830,6 +875,13 @@ class BookingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+            ], 422);
+        }
+
+        if ($this->windowHasStarted($newDate, $newWindow)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The selected grooming time has already passed.',
             ], 422);
         }
 
@@ -870,5 +922,21 @@ class BookingController extends Controller
                 'reschedule_count' => $booking->reschedule_count,
             ],
         ]);
+    }
+
+    private function windowHasStarted(string $bookingDate, TimeWindow $window): bool
+    {
+        if ($bookingDate !== now()->toDateString()) {
+            return false;
+        }
+
+        $startTime = substr((string) $window->start_time, 0, 8);
+        $startsAt = Carbon::createFromFormat(
+            'Y-m-d H:i:s',
+            "{$bookingDate} {$startTime}",
+            config('app.timezone'),
+        );
+
+        return $startsAt->lessThanOrEqualTo(now());
     }
 }

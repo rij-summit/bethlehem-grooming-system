@@ -809,6 +809,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'windows')
             ->assertJsonPath('windows.0.window_id', 2)
+            ->assertJsonPath('windows.0.is_past', true)
             ->assertJsonPath('windows.0.is_cutoff', true)
             ->assertJsonPath('availability.pre_registration_cutoff_label', '12:00 PM');
 
@@ -836,6 +837,117 @@ class ClinicAdministrationAuthorizationTest extends TestCase
                 'message',
                 'Same-day grooming pre-registration closes at 12:00 PM. Please choose another date.',
             );
+    }
+
+    public function test_customer_cannot_reschedule_to_the_current_date_and_time_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 07:00:00'));
+        $this->authenticateAs('customer', 10);
+        $bookingDate = now()->addDay()->toDateString();
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'BAC-20260724-0001',
+            'user_id' => 10,
+            'window_id' => 1,
+            'booking_date' => $bookingDate,
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+            'reschedule_count' => 0,
+            'cancel_count' => 0,
+        ]);
+
+        $this->postJson('/api/booking/reschedule', [
+            'booking_id' => 1,
+            'new_date' => $bookingDate,
+            'new_window_id' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Choose a different date or time slot from the current schedule.',
+            );
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 1,
+            'booking_date' => $bookingDate,
+            'window_id' => 1,
+            'reschedule_count' => 0,
+        ]);
+    }
+
+    public function test_customer_reschedule_uses_the_three_day_pre_registration_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 07:00:00'));
+        $this->authenticateAs('customer', 10);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'BAC-20260724-0001',
+            'user_id' => 10,
+            'window_id' => 1,
+            'booking_date' => now()->addDay()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+            'reschedule_count' => 0,
+            'cancel_count' => 0,
+        ]);
+
+        $this->postJson('/api/booking/reschedule', [
+            'booking_id' => 1,
+            'new_date' => now()->addDays(3)->toDateString(),
+            'new_window_id' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('new_date')
+            ->assertJsonPath(
+                'errors.new_date.0',
+                'Grooming can be pre-registered up to three days in advance.',
+            );
+    }
+
+    public function test_customer_reschedule_rechecks_clinic_closures(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 07:00:00'));
+        $this->authenticateAs('customer', 10);
+        $currentDate = now()->toDateString();
+        $blockedDate = now()->addDay()->toDateString();
+
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'BAC-20260723-0001',
+            'user_id' => 10,
+            'window_id' => 1,
+            'booking_date' => $currentDate,
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+            'reschedule_count' => 0,
+            'cancel_count' => 0,
+        ]);
+        DB::table('clinic_closures')->insert([
+            'type' => 'blocked_date',
+            'start_date' => $blockedDate,
+            'end_date' => $blockedDate,
+            'reason' => 'Grooming team training',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/api/booking/reschedule', [
+            'booking_id' => 1,
+            'new_date' => $blockedDate,
+            'new_window_id' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Grooming team training');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 1,
+            'booking_date' => $currentDate,
+            'window_id' => 1,
+            'reschedule_count' => 0,
+        ]);
     }
 
     #[DataProvider('authorizedClinicRoles')]

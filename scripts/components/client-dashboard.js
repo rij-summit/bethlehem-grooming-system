@@ -539,6 +539,7 @@
   const rescheduleBookingRef     = document.getElementById("rescheduleBookingRef");
   const rescheduleDate           = document.getElementById("rescheduleDate");
   const rescheduleSlotsContainer = document.getElementById("rescheduleSlotsContainer");
+  const rescheduleAvailabilityIndicator = document.getElementById("rescheduleAvailabilityIndicator");
   const rescheduleMessage        = document.getElementById("rescheduleMessage");
   const submitRescheduleBtn      = document.getElementById("submitRescheduleBtn");
   const cancelModal              = document.getElementById("cancelModal");
@@ -549,23 +550,31 @@
   const cancelMessageEl          = document.getElementById("cancelMessage");
 
   let activeBookingId     = null;
+  let activeRescheduleBooking = null;
   let selectedWindowId    = null;
   let cancelTargetBooking = null;
+  let rescheduleLoadId    = 0;
+  let rescheduleClinicStatus = {
+    stoppedToday: false,
+    blockedDates: [],
+    groomingAvailability: null,
+  };
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
+  const RESCHEDULE_MAX_DAYS_AHEAD = 2;
 
   document.addEventListener("DOMContentLoaded", () => {
-    setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+    setRescheduleDateRange(getRescheduleTodayKey());
     loadDashboardPets();
     loadAppointments();
     loadGroomingCapacity();
 
     Promise.resolve(window.AppClock?.load?.())
       .then(() => {
-        setRescheduleMinDate(window.AppClock?.todayKey?.());
+        setRescheduleDateRange(getRescheduleTodayKey());
       })
       .catch(() => {
-        setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+        setRescheduleDateRange(getRescheduleTodayKey());
       });
   });
 
@@ -616,10 +625,35 @@
     }
   }
 
-  function setRescheduleMinDate(dateKey) {
-    if (rescheduleDate && dateKey) {
-      rescheduleDate.min = dateKey;
-    }
+  function getRescheduleTodayKey() {
+    const appClockDate = window.AppClock?.todayKey?.();
+    if (appClockDate) return appClockDate;
+
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
+  function addDaysToDateKey(dateKey, days) {
+    const [year, month, day] = String(dateKey).split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + days);
+
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  function setRescheduleDateRange(todayKey) {
+    if (!rescheduleDate || !todayKey) return;
+
+    rescheduleDate.min = todayKey;
+    rescheduleDate.max = addDaysToDateKey(todayKey, RESCHEDULE_MAX_DAYS_AHEAD);
   }
 
   function renderMyPetsSummary(pets) {
@@ -981,21 +1015,54 @@
   // ── Reschedule modal ───────────────────────────────────────────────────────
 
   rescheduleDate.addEventListener("change", async function () {
+    const requestId = ++rescheduleLoadId;
     selectedWindowId = null;
+    hideRescheduleAvailability();
+    hideRescheduleMessage();
     enableSubmitIfReady();
     const date = this.value;
     if (!date) return;
+
+    const dateError = getRescheduleDateError(date);
+    this.setCustomValidity(dateError || "");
+    if (dateError) {
+      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+      showRescheduleMessage("error", dateError);
+      return;
+    }
+
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Loading slots...</p>';
     try {
       const data = await API.getTimeslots(date);
-      renderSlots(data.windows || []);
-    } catch {
+      if (requestId !== rescheduleLoadId) return;
+
+      if (data.cutoff_passed) {
+        const cutoffLabel = data.availability?.pre_registration_cutoff_label || "the configured cutoff time";
+        rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+        showRescheduleMessage("error", `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`);
+        return;
+      }
+
+      renderSlots(data);
+    } catch (error) {
+      if (requestId !== rescheduleLoadId) return;
       rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-red-500">Failed to load slots. Try again.</p>';
     }
   });
 
   submitRescheduleBtn.addEventListener("click", async () => {
     if (!activeBookingId || !selectedWindowId || !rescheduleDate.value) return;
+
+    const dateError = getRescheduleDateError(rescheduleDate.value);
+    if (dateError || isCurrentRescheduleSelection(rescheduleDate.value, selectedWindowId)) {
+      showRescheduleMessage(
+        "error",
+        dateError || "Choose a different date or time slot from the current schedule.",
+      );
+      enableSubmitIfReady();
+      return;
+    }
+
     submitRescheduleBtn.disabled = true;
     submitRescheduleBtn.textContent = "Rescheduling...";
     try {
@@ -1017,38 +1084,92 @@
   closeRescheduleModal.addEventListener("click", closeModal);
   rescheduleModal.addEventListener("click", (e) => { if (e.target === rescheduleModal) closeModal(); });
 
-  function openRescheduleModal(booking) {
+  async function openRescheduleModal(booking) {
+    const requestId = ++rescheduleLoadId;
     activeBookingId  = booking.booking_id;
+    activeRescheduleBooking = booking;
     selectedWindowId = null;
     rescheduleBookingRef.textContent =
       `Rescheduling: ${booking.booking_reference} (${booking.reschedule_count ?? 0} of 2 uses)`;
     rescheduleDate.value = "";
+    rescheduleDate.setCustomValidity("");
+    rescheduleDate.disabled = true;
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Select a date to see available slots.</p>';
+    hideRescheduleAvailability();
     hideRescheduleMessage();
     enableSubmitIfReady();
     rescheduleModal.classList.remove("hidden");
     rescheduleModal.classList.add("flex");
+
+    try {
+      await window.AppClock?.load?.();
+      const data = await API.getClinicStatus();
+      if (requestId !== rescheduleLoadId || activeBookingId !== booking.booking_id) return;
+
+      setRescheduleDateRange(getRescheduleTodayKey());
+      rescheduleClinicStatus = {
+        stoppedToday: Boolean(data.stopped_today),
+        blockedDates: Array.isArray(data.blocked_dates) ? data.blocked_dates : [],
+        groomingAvailability: data.availability?.grooming || null,
+      };
+      rescheduleDate.disabled = false;
+    } catch {
+      if (requestId !== rescheduleLoadId || activeBookingId !== booking.booking_id) return;
+
+      showRescheduleMessage("error", "Could not load the current scheduling rules. Close this window and try again.");
+    }
   }
 
   function closeModal() {
+    rescheduleLoadId += 1;
     rescheduleModal.classList.add("hidden");
     rescheduleModal.classList.remove("flex");
     activeBookingId  = null;
+    activeRescheduleBooking = null;
     selectedWindowId = null;
+    rescheduleDate.disabled = false;
+    rescheduleDate.setCustomValidity("");
+    hideRescheduleAvailability();
     submitRescheduleBtn.textContent = "Confirm Reschedule";
   }
 
-  function renderSlots(windows) {
-    const available = windows.filter(w => !w.is_full);
+  function renderSlots(data) {
+    const windows = Array.isArray(data.windows) ? data.windows : [];
+    const selectedDate = rescheduleDate.value;
+    const bookingDate = String(activeRescheduleBooking?.booking_date || "");
+    const sameDate = selectedDate === bookingDate;
+    const petCount = Math.max(1, Number(activeRescheduleBooking?.number_of_pets) || 1);
+    const capacity = Math.max(0, Number(data.capacity) || 0);
+    const totalBooked = Math.max(0, Number(data.total_booked) || 0);
+    const bookedWithoutCurrent = Math.max(
+      0,
+      totalBooked - (sameDate ? petCount : 0),
+    );
+    const remaining = Math.max(0, capacity - bookedWithoutCurrent);
+    const bookingFits = capacity === 0 || bookedWithoutCurrent + petCount <= capacity;
+
+    showRescheduleAvailability(remaining);
+
+    const available = windows.filter((window) =>
+      bookingFits
+      && !window.is_cutoff
+      && !isRescheduleSlotPast(window, selectedDate)
+      && !isCurrentRescheduleSelection(selectedDate, window.window_id, window.window_label)
+    );
+
     if (!available.length) {
-      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">No available slots on this date.</p>';
+      rescheduleSlotsContainer.innerHTML = `<p class="text-sm text-slate-400">${
+        sameDate
+          ? "No other available time slots on this date."
+          : "No available time slots on this date."
+      }</p>`;
       return;
     }
+
     rescheduleSlotsContainer.innerHTML = available.map(w => `
       <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-[#315b7e] has-[:checked]:border-[#315b7e] has-[:checked]:bg-[#eaf4fb]">
         <input type="radio" name="rescheduleSlot" value="${w.window_id}" class="accent-[#315b7e]" />
-        <span class="text-sm text-slate-700">${w.window_label}</span>
-        <span class="ml-auto text-xs text-slate-400">${w.remaining} slot${w.remaining !== 1 ? "s" : ""} left</span>
+        <span class="text-sm text-slate-700">${escapeRescheduleHtml(w.window_label)}</span>
       </label>`).join("");
     rescheduleSlotsContainer.querySelectorAll('input[name="rescheduleSlot"]').forEach(radio => {
       radio.addEventListener("change", () => {
@@ -1059,7 +1180,10 @@
   }
 
   function enableSubmitIfReady() {
-    const ready = !!rescheduleDate.value && !!selectedWindowId;
+    const ready = !!rescheduleDate.value
+      && !!selectedWindowId
+      && !getRescheduleDateError(rescheduleDate.value)
+      && !isCurrentRescheduleSelection(rescheduleDate.value, selectedWindowId);
     submitRescheduleBtn.disabled = !ready;
     submitRescheduleBtn.className = ready
       ? "w-full rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-semibold text-white hover:bg-[#274a67] transition"
@@ -1076,6 +1200,99 @@
   function hideRescheduleMessage() {
     rescheduleMessage.classList.add("hidden");
     rescheduleMessage.textContent = "";
+  }
+
+  function getRescheduleDateError(dateKey) {
+    if (!dateKey) return "";
+
+    const today = rescheduleDate.min || getRescheduleTodayKey();
+    const lastAvailableDate = rescheduleDate.max
+      || addDaysToDateKey(today, RESCHEDULE_MAX_DAYS_AHEAD);
+
+    if (dateKey < today) {
+      return "Past dates are not available for rescheduling.";
+    }
+
+    if (dateKey > lastAvailableDate) {
+      return "Grooming can be pre-registered up to three days in advance.";
+    }
+
+    if (rescheduleClinicStatus.stoppedToday && dateKey === today) {
+      return "The clinic is not accepting grooming pre-registrations today.";
+    }
+
+    const closure = rescheduleClinicStatus.blockedDates.find((block) =>
+      dateKey >= block.start_date && dateKey <= block.end_date
+    );
+    if (closure) {
+      return closure.reason || "The clinic is not accepting grooming pre-registrations on this date.";
+    }
+
+    const cutoff = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_time;
+    if (dateKey === today && cutoff && isRescheduleCutoffPassed(cutoff)) {
+      const cutoffLabel = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_label
+        || "the configured cutoff time";
+      return `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`;
+    }
+
+    return "";
+  }
+
+  function isRescheduleCutoffPassed(cutoff) {
+    const [hours, minutes] = String(cutoff).split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
+
+    const currentMinutes = window.AppClock?.currentMinutes?.();
+    if (!Number.isFinite(currentMinutes)) return false;
+
+    return currentMinutes > (hours * 60 + minutes);
+  }
+
+  function isRescheduleSlotPast(windowData, dateKey) {
+    if (windowData.is_past) return true;
+    if (dateKey !== getRescheduleTodayKey()) return false;
+
+    const [hours, minutes] = String(windowData.start_time || "").split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
+
+    const currentMinutes = window.AppClock?.currentMinutes?.();
+    return Number.isFinite(currentMinutes)
+      && currentMinutes >= (hours * 60 + minutes);
+  }
+
+  function isCurrentRescheduleSelection(dateKey, windowId, windowLabel = null) {
+    if (!activeRescheduleBooking || dateKey !== String(activeRescheduleBooking.booking_date || "")) {
+      return false;
+    }
+
+    const currentWindowId = activeRescheduleBooking.time_window?.window_id;
+    if (currentWindowId !== null && currentWindowId !== undefined) {
+      return Number(currentWindowId) === Number(windowId);
+    }
+
+    return Boolean(windowLabel)
+      && String(activeRescheduleBooking.time_window?.window_label || "") === String(windowLabel);
+  }
+
+  function showRescheduleAvailability(remaining) {
+    rescheduleAvailabilityIndicator.textContent =
+      `${remaining} slot${remaining === 1 ? "" : "s"} left`;
+    rescheduleAvailabilityIndicator.classList.remove("hidden");
+  }
+
+  function hideRescheduleAvailability() {
+    rescheduleAvailabilityIndicator.textContent = "";
+    rescheduleAvailabilityIndicator.classList.add("hidden");
+  }
+
+  function escapeRescheduleHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    })[character]);
   }
 
   function handleCancel(booking) {
