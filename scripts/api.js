@@ -884,6 +884,14 @@ var API = (() => {
     return request("GET", `/admin/bookings/archived${query}`, null, getAdminToken());
   }
 
+  async function getArchivedClinicAppointments({ search = "", date = "" } = {}) {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (date) params.set("date", date);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/clinic-appointments/archived${query}`, null, getAdminToken());
+  }
+
   async function markAllNotificationsRead() {
     // PATCH /api/admin/notifications/read-all  (protected — admin token)
     return request("PATCH", "/admin/notifications/read-all", null, getAdminToken());
@@ -1296,6 +1304,7 @@ var API = (() => {
     // Admin archive
     adminArchiveBooking,
     getArchivedBookings,
+    getArchivedClinicAppointments,
     // Admin notifications
     getNotifications,
     markNotificationRead,

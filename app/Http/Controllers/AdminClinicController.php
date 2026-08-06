@@ -76,6 +76,62 @@ class AdminClinicController extends Controller
         ]);
     }
 
+    public function archivedIndex(Request $request)
+    {
+        $search = trim((string) $request->query('search', ''));
+        $date = trim((string) $request->query('date', ''));
+
+        $query = ClinicAppointment::with($this->appointmentRelations())
+            ->whereIn('status', ['completed', 'cancelled', 'no_show']);
+
+        if ($date !== '') {
+            $query->whereDate('appointment_date', $date);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($archiveQuery) use ($search) {
+                $like = "%{$search}%";
+
+                $archiveQuery
+                    ->where('appointment_reference', 'like', $like)
+                    ->orWhere('chief_complaint', 'like', $like)
+                    ->orWhereHas('user', function ($userQuery) use ($like) {
+                        $userQuery
+                            ->where('first_name', 'like', $like)
+                            ->orWhere('last_name', 'like', $like)
+                            ->orWhere('email', 'like', $like)
+                            ->orWhere('phone', 'like', $like);
+                    })
+                    ->orWhereHas('walkin', function ($walkinQuery) use ($like) {
+                        $walkinQuery
+                            ->where('fname', 'like', $like)
+                            ->orWhere('lname', 'like', $like)
+                            ->orWhere('email', 'like', $like)
+                            ->orWhere('phone', 'like', $like);
+                    })
+                    ->orWhereHas('pet', function ($petQuery) use ($like) {
+                        $petQuery
+                            ->where('pet_name', 'like', $like)
+                            ->orWhere('species', 'like', $like)
+                            ->orWhere('breed', 'like', $like);
+                    });
+            });
+        }
+
+        $archived = $query
+            ->orderByDesc('appointment_date')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(fn (ClinicAppointment $appointment) => $this->formatAppointment($appointment))
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'archived' => $archived,
+            'total' => $archived->count(),
+        ]);
+    }
+
     // ── Status transitions ───────────────────────────────────────────────────
 
     public function checkIn(int $id, ClinicAppointmentSequence $clinicSequence)
@@ -409,11 +465,14 @@ class AdminClinicController extends Controller
         $pet = $a->pet;
         $vitals = Schema::hasTable('clinic_vitals') ? $a->vitals : null;
         $record = Schema::hasTable('clinic_records') ? $a->record : null;
-        $timeWindow = Schema::hasTable('clinic_time_windows') ? $a->timeWindow : null;
+        $timeWindow = Schema::hasTable('time_windows') ? $a->timeWindow : null;
         $referral = Schema::hasTable('grooming_clinic_referrals')
             ? $a->groomingClinicReferral
             : null;
         $bookingPet = $referral?->bookingPet;
+        $booking = $referral?->booking;
+        $concern = $referral?->groomingMedicalConcern;
+        $consentResponse = $referral?->consentResponse;
         $stoppedReview = $bookingPet && Schema::hasTable('grooming_stopped_payment_reviews')
             ? $bookingPet->groomingStoppedPaymentReview
             : null;
@@ -423,6 +482,14 @@ class AdminClinicController extends Controller
             : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : '—');
 
         $contactNumber = $user?->phone ?? $walkin?->phone ?? '—';
+        $ownerEmail = $user?->email ?? $walkin?->email;
+        $appointmentTypeLabel = $referral
+            ? 'Grooming referral'
+            : match ($a->appointment_type) {
+                'pre_registered' => 'Pre-Registered',
+                'scheduled' => 'Scheduled',
+                default => 'Walk-in',
+            };
 
         return [
             'id' => $a->id,
@@ -444,15 +511,35 @@ class AdminClinicController extends Controller
             'checked_in_at' => $a->checked_in_at?->toIso8601String(),
             'consultation_started_at' => $a->consultation_started_at?->toIso8601String(),
             'consultation_finished_at' => $a->consultation_finished_at?->toIso8601String(),
+            'archived_at' => $a->archived_at?->toIso8601String(),
+            'created_at' => $a->created_at?->toIso8601String(),
+            'updated_at' => $a->updated_at?->toIso8601String(),
+            'appointment_type_label' => $appointmentTypeLabel,
+            'final_status_label' => $this->clinicStatusLabel($a->status),
+            'payment_status_label' => $a->paid ? 'Paid' : 'Unpaid',
+            'assigned_veterinarian' => null,
             'ownerName' => $ownerName,
             'contactNumber' => $contactNumber,
             'isWalkin' => $walkin !== null,
+            'owner' => [
+                'name' => $ownerName,
+                'contact_number' => $contactNumber,
+                'email' => $ownerEmail,
+                'customer_type' => $walkin ? 'Walk-in customer' : 'Registered customer',
+            ],
             'pet' => $pet ? [
                 'id' => $pet->pet_id,
                 'name' => $pet->pet_name,
                 'species' => $pet->species,
                 'breed' => $pet->breed,
+                'gender' => $pet->gender,
+                'birthdate' => $pet->birthdate,
                 'weight' => $pet->weight,
+                'color' => $pet->color,
+                'size' => $pet->size,
+                'medical_conditions' => $pet->medical_conditions,
+                'known_allergies' => null,
+                'current_medications' => null,
             ] : null,
             'vitals' => $vitals ? [
                 'weight_kg' => $vitals->weight_kg,
@@ -468,18 +555,43 @@ class AdminClinicController extends Controller
                 'status_label' => GroomingClinicReferral::statusLabel($referral->status),
                 'urgency' => $referral->urgency,
                 'urgency_label' => GroomingClinicReferral::urgencyLabel($referral->urgency),
+                'booking_reference' => $booking?->booking_reference,
+                'referral_reason' => $referral->referral_reason,
+                'customer_explanation' => $referral->customer_explanation,
+                'referred_by_name' => $referral->referred_by_name,
+                'referred_at' => $referral->referred_at?->toIso8601String(),
+                'accepted_by_name' => $referral->accepted_by_name,
+                'accepted_at' => $referral->accepted_at?->toIso8601String(),
+                'clinic_review_started_by_name' => $referral->clinic_review_started_by_name,
                 'grooming_state' => $bookingPet?->grooming_state,
                 'grooming_state_label' => $this->groomingStateLabel($bookingPet?->grooming_state),
+                'concern_category' => $concern?->category,
+                'concern_severity' => $concern?->severity,
+                'consent_decision' => $consentResponse?->decision,
+                'consent_response_channel' => $consentResponse?->response_channel,
+                'consent_signature_name' => $consentResponse?->signature_name,
+                'consent_responded_at' => $consentResponse?->responded_at?->toIso8601String(),
                 'assessment_started' => $referral->clinic_review_started_at !== null,
                 'assessment_started_at' => $referral->clinic_review_started_at?->toIso8601String(),
                 'assessment_completed' => $referral->resolved_at !== null,
                 'assessment_completed_at' => $referral->resolved_at?->toIso8601String(),
                 'completed_by_name' => $referral->resolved_by_name,
+                'internal_resolution_notes' => $referral->internal_resolution_notes,
                 'customer_resolution_summary' => $referral->customer_resolution_summary,
                 'grooming_outcome' => 'stopped',
                 'grooming_outcome_label' => 'Grooming Session Stopped',
                 'stopped_payment_review_status' => $stoppedReview ? 'completed' : 'pending',
             ] : null,
+            'activity' => [
+                'created_by_name' => null,
+                'record_created_at' => $record?->created_at?->toIso8601String(),
+                'assessment_completed_by_name' => $referral?->resolved_by_name,
+                'assessment_completed_at' => $referral?->resolved_at?->toIso8601String()
+                    ?? $a->consultation_finished_at?->toIso8601String(),
+                'edited_by_name' => null,
+                'record_updated_at' => $record?->updated_at?->toIso8601String(),
+                'signed_corrections' => null,
+            ],
         ];
     }
 
@@ -491,7 +603,7 @@ class AdminClinicController extends Controller
             'pet',
         ];
 
-        if (Schema::hasTable('clinic_time_windows')) {
+        if (Schema::hasTable('time_windows')) {
             $relations[] = 'timeWindow';
         }
         if (Schema::hasTable('clinic_vitals')) {
@@ -499,12 +611,28 @@ class AdminClinicController extends Controller
         }
         if (Schema::hasTable('clinic_records')) {
             $relations[] = 'record';
+            if (Schema::hasTable('clinic_medications')) {
+                $relations[] = 'record.medications';
+            }
+            if (Schema::hasTable('clinic_attachments')) {
+                $relations[] = 'record.attachments';
+            }
         }
 
         if (Schema::hasTable('grooming_clinic_referrals')) {
             $relations[] = Schema::hasTable('grooming_stopped_payment_reviews')
                 ? 'groomingClinicReferral.bookingPet.groomingStoppedPaymentReview'
                 : 'groomingClinicReferral.bookingPet';
+
+            if (Schema::hasTable('bookings')) {
+                $relations[] = 'groomingClinicReferral.booking';
+            }
+            if (Schema::hasTable('grooming_medical_concerns')) {
+                $relations[] = 'groomingClinicReferral.groomingMedicalConcern';
+            }
+            if (Schema::hasTable('grooming_medical_concern_responses')) {
+                $relations[] = 'groomingClinicReferral.consentResponse';
+            }
         }
 
         return $relations;
@@ -518,6 +646,20 @@ class AdminClinicController extends Controller
             'stopped' => 'Stopped',
             'finished' => 'Finished',
             default => 'Not started',
+        };
+    }
+
+    private function clinicStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'waiting_to_arrive' => 'Waiting to Arrive',
+            'checked_in' => 'Checked In',
+            'in_consultation' => 'In Consultation',
+            'for_payment' => 'For Payment',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+            'no_show' => 'No Show',
+            default => 'Data is currently unavailable',
         };
     }
 
@@ -538,6 +680,8 @@ class AdminClinicController extends Controller
             'follow_up_date' => $record->follow_up_date?->toDateString(),
             'follow_up_notes' => $record->follow_up_notes,
             'vet_notes' => $record->vet_notes,
+            'created_at' => $record->created_at?->toIso8601String(),
+            'updated_at' => $record->updated_at?->toIso8601String(),
             'medications' => $record->medications->map(fn ($medication) => [
                 'id' => $medication->id,
                 'drug_name' => $medication->drug_name,

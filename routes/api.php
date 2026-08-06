@@ -154,6 +154,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/clinic-referrals/{publicId}/accept', [AdminGroomingClinicReferralController::class, 'accept']);
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
+        Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);
         Route::post('/admin/clinic-appointments/{id}/check-in', [AdminClinicController::class, 'checkIn']);
         Route::post('/admin/clinic-appointments/{id}/start-consultation', [AdminClinicController::class, 'startConsultation']);
         Route::post('/admin/clinic-appointments/{id}/finish-consultation', [AdminClinicController::class, 'finishConsultation']);
