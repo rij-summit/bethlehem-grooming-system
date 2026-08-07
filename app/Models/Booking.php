@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
@@ -33,6 +34,31 @@ class Booking extends Model
         'grooming_finished_at',
         'paid',
     ];
+
+    /**
+     * Keep cancelled pre-registrations out of operational and completed history.
+     * The cancellation markers remain authoritative even if a legacy record's
+     * status was later changed to archived.
+     */
+    public function scopeNeverCancelled(
+        Builder $query,
+        bool $hasCancellationAuditColumns = true,
+    ): Builder
+    {
+        $query->where('status', '!=', 'cancelled');
+
+        if ($hasCancellationAuditColumns) {
+            $query->where(function (Builder $cancellationCount) {
+                $cancellationCount->whereNull('cancel_count')
+                    ->orWhere('cancel_count', 0);
+            })->where(function (Builder $cancellationReason) {
+                $cancellationReason->whereNull('cancellation_reason')
+                    ->orWhere('cancellation_reason', '');
+            });
+        }
+
+        return $query;
+    }
 
     public function user()
     {

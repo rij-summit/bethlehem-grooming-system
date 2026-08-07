@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Walkin;
 use App\Services\AvailabilityTimeWindowService;
 use App\Services\ClinicAppointmentSequence;
+use App\Services\CustomerPreRegistrationAccessService;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -97,10 +98,27 @@ class ClinicWalkinController extends Controller
     public function preRegister(
         StoreClinicPreRegistrationRequest $request,
         ClinicAppointmentSequence $clinicSequence,
+        CustomerPreRegistrationAccessService $preRegistrationAccess,
     ) {
-        return DB::transaction(function () use ($request, $clinicSequence) {
+        return DB::transaction(function () use (
+            $request,
+            $clinicSequence,
+            $preRegistrationAccess,
+        ) {
             $data = $request->validated();
             $user = $request->user();
+            User::query()->whereKey($user->user_id)->lockForUpdate()->first();
+
+            $access = $preRegistrationAccess->forUser((int) $user->user_id);
+            if (! $access['allowed']) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'ongoing_pre_registration',
+                    'message' => $access['message'],
+                    'ongoing' => $access['ongoing'],
+                ], 409);
+            }
+
             $appointmentDate = $data['appointment_date'];
             $settings = ClinicSetting::current();
 

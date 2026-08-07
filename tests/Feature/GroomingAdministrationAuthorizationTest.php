@@ -777,6 +777,332 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ];
     }
 
+    public function test_admin_cancellation_notifies_the_customer_with_the_optional_or_default_reason(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 50,
+            'first_name' => 'Rudito',
+            'last_name' => 'Gracia',
+            'email' => 'rudito@example.test',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            [
+                'booking_id' => 50,
+                'booking_reference' => 'CANCEL-CUSTOM-50',
+                'user_id' => 50,
+                'booking_date' => now()->addDay()->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'incoming',
+            ],
+            [
+                'booking_id' => 51,
+                'booking_reference' => 'CANCEL-DEFAULT-51',
+                'user_id' => 50,
+                'booking_date' => now()->addDays(2)->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'incoming',
+            ],
+        ]);
+
+        $customMessage = 'Your grooming pre-registration CANCEL-CUSTOM-50 has been cancelled by the clinic. Reason: Owner requested a different date.';
+        $defaultMessage = 'Your grooming pre-registration CANCEL-DEFAULT-51 has been cancelled by the clinic.';
+
+        $this->postJson('/api/admin/bookings/50/cancel', [
+            'cancellation_reason' => '  Owner requested a different date.  ',
+        ])
+            ->assertOk()
+            ->assertJsonPath('customer_notified', true);
+
+        $this->postJson('/api/admin/bookings/51/cancel', [
+            'cancellation_reason' => null,
+        ])
+            ->assertOk()
+            ->assertJsonPath('customer_notified', true);
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 50,
+            'status' => 'cancelled',
+            'cancellation_reason' => 'Owner requested a different date.',
+            'cancel_count' => 1,
+        ]);
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 51,
+            'status' => 'cancelled',
+            'cancellation_reason' => 'Cancelled by clinic staff.',
+            'cancel_count' => 1,
+        ]);
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 50,
+            'booking_id' => 50,
+            'type' => 'booking_cancelled',
+            'message' => $customMessage,
+            'is_read' => false,
+        ]);
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 50,
+            'booking_id' => 51,
+            'type' => 'booking_cancelled',
+            'message' => $defaultMessage,
+            'is_read' => false,
+        ]);
+        $this->assertDatabaseCount('customer_notifications', 2);
+
+        $this->postJson('/api/admin/bookings/50/cancel')
+            ->assertUnprocessable();
+        $this->assertDatabaseCount('customer_notifications', 2);
+
+        Sanctum::actingAs(User::query()->findOrFail(50), ['*']);
+
+        $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 2)
+            ->assertJsonFragment([
+                'type' => 'booking_cancelled',
+                'message' => $customMessage,
+                'display_message' => $customMessage,
+            ])
+            ->assertJsonFragment([
+                'type' => 'booking_cancelled',
+                'message' => $defaultMessage,
+                'display_message' => $defaultMessage,
+            ]);
+    }
+
+    public function test_invalid_staff_cancellation_reason_does_not_cancel_or_notify(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 60,
+            'first_name' => 'Customer',
+            'last_name' => 'User',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 60,
+            'booking_reference' => 'CANCEL-VALIDATION-60',
+            'user_id' => 60,
+            'booking_date' => now()->addDay()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'incoming',
+        ]);
+
+        $this->postJson('/api/admin/bookings/60/cancel', [
+            'cancellation_reason' => str_repeat('a', 501),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('cancellation_reason');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 60,
+            'status' => 'incoming',
+            'cancel_count' => 0,
+        ]);
+        $this->assertDatabaseCount('customer_notifications', 0);
+    }
+
+    public function test_customer_notification_failure_rolls_back_admin_cancellation(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 70,
+            'first_name' => 'Customer',
+            'last_name' => 'Rollback',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 70,
+            'booking_reference' => 'CANCEL-ROLLBACK-70',
+            'user_id' => 70,
+            'booking_date' => now()->addDay()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'incoming',
+        ]);
+
+        DB::statement(
+            "CREATE TRIGGER reject_booking_cancellation_notification
+             BEFORE INSERT ON customer_notifications
+             WHEN NEW.type = 'booking_cancelled'
+             BEGIN
+                 SELECT RAISE(ABORT, 'simulated notification failure');
+             END",
+        );
+
+        try {
+            $this->postJson('/api/admin/bookings/70/cancel', [
+                'cancellation_reason' => 'Clinic is unavailable.',
+            ])->assertServerError();
+        } finally {
+            DB::statement('DROP TRIGGER IF EXISTS reject_booking_cancellation_notification');
+        }
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 70,
+            'status' => 'incoming',
+            'cancellation_reason' => null,
+            'cancel_count' => 0,
+        ]);
+        $this->assertDatabaseCount('customer_notifications', 0);
+    }
+
+    public function test_cancelled_pre_registrations_never_appear_in_admin_or_customer_grooming_history(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 80,
+            'first_name' => 'History',
+            'last_name' => 'Customer',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            [
+                'booking_id' => 80,
+                'booking_reference' => 'LEGACY-CANCELLED-ARCHIVE',
+                'user_id' => 80,
+                'booking_date' => now()->subDays(3)->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'archived',
+                'cancellation_reason' => 'Cancelled by clinic staff.',
+                'cancel_count' => 1,
+                'archived_at' => now()->subDays(2),
+            ],
+            [
+                'booking_id' => 81,
+                'booking_reference' => 'COMPLETED-GROOMING-HISTORY',
+                'user_id' => 80,
+                'booking_date' => now()->subDays(2)->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'archived',
+                'cancellation_reason' => null,
+                'cancel_count' => 0,
+                'archived_at' => now()->subDay(),
+            ],
+            [
+                'booking_id' => 82,
+                'booking_reference' => 'CURRENTLY-CANCELLED',
+                'user_id' => 80,
+                'booking_date' => now()->addDay()->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'cancelled',
+                'cancellation_reason' => 'Customer is unavailable.',
+                'cancel_count' => 1,
+                'archived_at' => null,
+            ],
+        ]);
+
+        $this->authenticateAs('admin');
+
+        $this->getJson('/api/admin/bookings/archived')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('archived.0.bookingReference', 'COMPLETED-GROOMING-HISTORY')
+            ->assertJsonMissing(['bookingReference' => 'LEGACY-CANCELLED-ARCHIVE'])
+            ->assertJsonMissing(['bookingReference' => 'CURRENTLY-CANCELLED']);
+
+        Sanctum::actingAs(User::query()->findOrFail(80), ['*']);
+
+        $this->getJson('/api/booking/history')
+            ->assertOk()
+            ->assertJsonCount(0, 'bookings')
+            ->assertJsonPath('history_total', 1)
+            ->assertJsonPath('history.0.booking_reference', 'COMPLETED-GROOMING-HISTORY')
+            ->assertJsonMissing(['booking_reference' => 'LEGACY-CANCELLED-ARCHIVE'])
+            ->assertJsonMissing(['booking_reference' => 'CURRENTLY-CANCELLED']);
+    }
+
+    public function test_customer_capacity_matches_visible_queued_and_in_progress_pets(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 90,
+            'first_name' => 'Capacity',
+            'last_name' => 'Customer',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            [
+                'booking_id' => 90,
+                'booking_reference' => 'CAPACITY-CANCELLED',
+                'user_id' => 90,
+                'booking_date' => now()->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'cancelled',
+                'cancellation_reason' => 'Cancelled by clinic staff.',
+                'cancel_count' => 1,
+                'dropped_off_at' => null,
+            ],
+            [
+                'booking_id' => 91,
+                'booking_reference' => 'CAPACITY-STOPPED',
+                'user_id' => 90,
+                'booking_date' => now()->toDateString(),
+                'number_of_pets' => 1,
+                'status' => 'checked_in',
+                'cancellation_reason' => null,
+                'cancel_count' => 0,
+                'dropped_off_at' => now(),
+            ],
+        ]);
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 90,
+                'booking_id' => 90,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+            ],
+            [
+                'booking_pet_id' => 91,
+                'booking_id' => 91,
+                'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            ],
+        ]);
+
+        Sanctum::actingAs(User::query()->findOrFail(90), ['*']);
+
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('capacity.used', 0)
+            ->assertJsonPath('capacity.remaining', 20)
+            ->assertJsonPath('capacity.percent', 0)
+            ->assertJsonPath('queue.active', 0)
+            ->assertJsonPath('queue.queued', 0)
+            ->assertJsonPath('queue.in_progress', 0);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 92,
+            'booking_reference' => 'CAPACITY-ACTIVE',
+            'user_id' => 90,
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 2,
+            'status' => 'in_progress',
+            'dropped_off_at' => now(),
+        ]);
+        DB::table('booking_pets')->insert([
+            [
+                'booking_pet_id' => 92,
+                'booking_id' => 92,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+                'grooming_start_time' => null,
+            ],
+            [
+                'booking_pet_id' => 93,
+                'booking_id' => 92,
+                'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+                'grooming_start_time' => now(),
+            ],
+        ]);
+
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('capacity.used', 2)
+            ->assertJsonPath('capacity.remaining', 18)
+            ->assertJsonPath('capacity.percent', 10)
+            ->assertJsonPath('queue.active', 2)
+            ->assertJsonPath('queue.queued', 1)
+            ->assertJsonPath('queue.in_progress', 1);
+    }
+
     public function test_groomer_capacity_setting_remains_admin_only(): void
     {
         $this->authenticateAs('staff');

@@ -551,6 +551,16 @@ var API = (() => {
     return request("POST", "/booking/store", payload, getCustomerToken());
   }
 
+  async function getPreRegistrationAccess() {
+    // GET /api/pre-registration/access (protected)
+    return request(
+      "GET",
+      "/pre-registration/access",
+      null,
+      getCustomerToken(),
+    );
+  }
+
   async function getBookingHistory({ historyLimit = null, petId = null } = {}) {
     // GET /api/booking/history  (protected)
     const params = new URLSearchParams();
@@ -818,9 +828,16 @@ var API = (() => {
     );
   }
 
-  async function adminCancelBooking(bookingId) {
+  async function adminCancelBooking(bookingId, cancellationReason = "") {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
-    return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
+    const reason = String(cancellationReason ?? "").trim();
+
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/cancel`,
+      { cancellation_reason: reason || null },
+      getAdminToken(),
+    );
   }
 
   async function getNotifications() {
@@ -1267,6 +1284,7 @@ var API = (() => {
     unarchivePet,
     // Booking
     storeBooking,
+    getPreRegistrationAccess,
     getBookingHistory,
     getGroomingCapacity,
     cancelBooking,

@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=stopped-payment-review-ui-20260803',
+            'scripts/components/admin-dashboard.js?v=booking-cancellation-notification-20260807',
         );
 
         $this->assertNotFalse($dashboardPosition);
@@ -33,7 +33,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=medical-concern-ui-20260724',
+            'scripts/api.js?v=booking-cancellation-notification-20260807',
             $page,
         );
     }

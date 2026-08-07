@@ -113,9 +113,6 @@ document.addEventListener("DOMContentLoaded", () => {
         consent: consentPayload,
       }));
 
-      // Set the 24-hour booking lock so the user can't re-book immediately
-      setBookingFormLock(response.booking.booking_reference);
-
       window.location.href = "./booking-confirmed.html";
     } catch (error) {
       submitBookingButton.disabled = false;
@@ -285,23 +282,4 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Sets a 24-hour lock so the user cannot re-enter the booking form.
-  // Uses the same key as booking-form-access-guard.js so the guard can read it.
-  function setBookingFormLock(reference) {
-    const LOCK_KEY = "bethlehem.bookingFormLock";
-    const now = Date.now();
-    const lock = JSON.stringify({
-      reference: reference || "",
-      lockedAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
-      token: localStorage.getItem("customer_token") || "",
-    });
-
-    try {
-      localStorage.setItem(LOCK_KEY, lock);
-      sessionStorage.setItem(LOCK_KEY, lock);
-    } catch {
-      // Storage unavailable — non-critical, booking already succeeded
-    }
-  }
 });

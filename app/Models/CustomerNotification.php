@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class CustomerNotification extends Model
 {
+    public const TYPE_BOOKING_CANCELLED = 'booking_cancelled';
+
     public const TYPE_GROOMING_MEDICAL_CONCERN = 'grooming_medical_concern';
 
     public const TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED = 'grooming_clinic_referral_requested';

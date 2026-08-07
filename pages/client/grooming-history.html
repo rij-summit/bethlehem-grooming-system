@@ -144,8 +144,13 @@
             </div>
             <div class="flex items-center gap-3">
               <a
+                id="preRegisterButton"
+                data-pre-registration-button
                 href="./pre-register.html"
-                class="flex items-center gap-2 rounded-full bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#274a67] transition"
+                aria-disabled="true"
+                tabindex="-1"
+                title="Checking availability"
+                class="flex cursor-not-allowed items-center gap-2 rounded-full bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white opacity-60 hover:bg-[#274a67] transition"
               >
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Pre-register
@@ -388,5 +393,6 @@
       // ── Boot ──────────────────────────────────────────────────────────────
       loadHistory();
     </script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260807-ongoing-tooltip"></script>
   </body>
 </html>

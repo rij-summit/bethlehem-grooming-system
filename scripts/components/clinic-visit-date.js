@@ -4,11 +4,17 @@ import {
   requireCustomerSession,
   updateClinicVisitDraft,
 } from "../services/clinic-visit-service.js";
+import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=20260807-ongoing-access";
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!requireCustomerSession("./sign-in.html")) {
     return;
   }
+
+  const blocked = await initBookingFormAccessGuard({
+    dashboardPath: "./dashboard.html",
+  });
+  if (blocked) return;
 
   await initBookingCalendar({
     service: "clinic",

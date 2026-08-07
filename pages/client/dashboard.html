@@ -219,8 +219,13 @@
 
               <!-- Pre-register Button -->
               <a
+                id="preRegisterButton"
+                data-pre-registration-button
                 href="./pre-register.html"
-                class="rounded-2xl bg-[#355c84] px-6 py-3 text-white font-semibold hover:bg-[#2d4f73] transition shadow-sm"
+                aria-disabled="true"
+                tabindex="-1"
+                title="Checking availability"
+                class="cursor-not-allowed rounded-2xl bg-[#355c84] px-6 py-3 text-white font-semibold opacity-60 hover:bg-[#2d4f73] transition shadow-sm"
               >
                 Pre-register
               </a>
@@ -539,6 +544,7 @@
 
     <script src="../../scripts/api.js" defer></script>
     <script src="../../scripts/services/app-clock.js" defer></script>
-    <script src="../../scripts/components/client-dashboard.js?v=20260807-history-render-fix" defer></script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260807-ongoing-tooltip"></script>
+    <script src="../../scripts/components/client-dashboard.js?v=20260807-ongoing-tooltip" defer></script>
   </body>
 </html>

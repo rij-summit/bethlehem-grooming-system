@@ -817,28 +817,78 @@ class AdminBookingController extends Controller
 
     // ── ARCHIVE ───────────────────────────────────────────
     // for_pickup (legacy) → archived
-    // Cancel a booking and remove it from active capacity.
-    public function cancel($id)
+    // Cancel a booking, remove it from active capacity, and notify its customer.
+    public function cancel(Request $request, $id)
     {
-        $booking = Booking::find($id);
-
-        if (! $booking) {
-            return response()->json(['success' => false, 'message' => 'Booking not found.'], 404);
-        }
-
-        if (in_array($booking->status, ['cancelled', 'archived', 'no_show'])) {
-            return response()->json(['success' => false, 'message' => 'This booking cannot be cancelled.'], 422);
-        }
-
-        $booking->update([
-            'status' => 'cancelled',
-            'cancellation_reason' => 'Cancelled by clinic staff.',
-            'cancel_count' => ($booking->cancel_count ?? 0) + 1,
+        $validated = $request->validate([
+            'cancellation_reason' => ['nullable', 'string', 'max:500'],
         ]);
+        $customerReason = trim((string) ($validated['cancellation_reason'] ?? ''));
+
+        $result = DB::transaction(function () use ($id, $customerReason) {
+            $booking = Booking::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if (in_array($booking->status, ['cancelled', 'archived', 'no_show'], true)) {
+                return ['error' => [
+                    'message' => 'This booking cannot be cancelled.',
+                    'status' => 422,
+                ]];
+            }
+
+            $booking->update([
+                'status' => 'cancelled',
+                'cancellation_reason' => $customerReason !== ''
+                    ? $customerReason
+                    : 'Cancelled by clinic staff.',
+                'cancel_count' => ($booking->cancel_count ?? 0) + 1,
+            ]);
+
+            $booking->loadMissing('user');
+            $customerNotified = false;
+
+            if ($booking->user) {
+                $reference = trim((string) $booking->booking_reference);
+                $subject = $reference !== ''
+                    ? "Your grooming pre-registration {$reference}"
+                    : 'Your grooming pre-registration';
+                $message = "{$subject} has been cancelled by the clinic.";
+
+                if ($customerReason !== '') {
+                    $message .= " Reason: {$customerReason}";
+                }
+
+                CustomerNotification::create([
+                    'user_id' => $booking->user->user_id,
+                    'booking_id' => $booking->booking_id,
+                    'type' => CustomerNotification::TYPE_BOOKING_CANCELLED,
+                    'message' => $message,
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+                $customerNotified = true;
+            }
+
+            return ['customer_notified' => $customerNotified];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Booking cancelled successfully.',
+            'customer_notified' => $result['customer_notified'],
         ]);
     }
 
@@ -986,6 +1036,7 @@ class AdminBookingController extends Controller
         $date = $request->query('date', '');
 
         $query = Booking::where('status', 'archived')
+            ->neverCancelled()
             ->with([
                 'user',
                 'walkin',

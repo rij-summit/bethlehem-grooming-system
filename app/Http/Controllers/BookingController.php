@@ -12,16 +12,19 @@ use App\Models\Notification;
 use App\Models\Pet;
 use App\Models\Service;
 use App\Models\TimeWindow;
+use App\Models\User;
 use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
 use App\Services\AvailabilityTimeWindowService;
+use App\Services\CustomerPreRegistrationAccessService;
 use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class BookingController extends Controller
@@ -31,29 +34,6 @@ class BookingController extends Controller
     private const MAX_PETS_PER_BOOKING = 10;
 
     private const MAX_PRE_REGISTRATION_DAYS_AHEAD = 2;
-
-    private const INTAKE_STATUSES = [
-        'checked_in',
-        'in_progress',
-        'for_payment',
-        'for_pickup',
-        'released',
-    ];
-
-    private function dailyIntakeCount(string $date): int
-    {
-        return Booking::where(function ($query) use ($date) {
-            $query->whereDate('dropped_off_at', $date)
-                ->orWhere(function ($fallback) use ($date) {
-                    $fallback->whereNull('dropped_off_at')
-                        ->where('booking_date', $date)
-                        ->whereIn('status', self::INTAKE_STATUSES);
-                });
-        })
-            ->whereIn('status', self::INTAKE_STATUSES)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->sum('number_of_pets');
-    }
 
     // ── GET AVAILABLE TIME WINDOWS ────────────────────────
     public function getTimeslots(
@@ -130,6 +110,7 @@ class BookingController extends Controller
     public function store(
         Request $request,
         GroomingServicePriceResolver $servicePrices,
+        CustomerPreRegistrationAccessService $preRegistrationAccess,
     ) {
         $today = now()->toDateString();
 
@@ -161,199 +142,228 @@ class BookingController extends Controller
         );
         $request->merge(['pets' => $validated['pets']]);
 
-        $user = $request->user();
-        $date = $request->booking_date;
-        $petCount = (int) $request->number_of_pets;
-        $settings = ClinicSetting::current();
-
-        if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $date)) {
-            $cutoffLabel = $settings
-                ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
-
-            return response()->json([
-                'success' => false,
-                'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
-            ], 422);
-        }
-
-        // ── Check if day is full ──────────────────────────
-        $totalBooked = Booking::where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled'])
-            ->sum('number_of_pets');
-
-        if ($totalBooked + $petCount > self::DAILY_CAPACITY) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sorry, this date is fully booked. Please choose another date.',
-            ], 422);
-        }
-
-        // ── Load selected time window ───────────────────────
-        $window = TimeWindow::query()
-            ->whereKey($request->window_id)
-            ->where('is_active', 1)
-            ->first();
-
-        if (
-            ! $window
-            || ! $settings->isWindowWithinOperatingHours(
-                'grooming',
-                $window->start_time,
-                $window->end_time,
-            )
+        return DB::transaction(function () use (
+            $request,
+            $servicePrices,
+            $preRegistrationAccess,
         ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
-            ], 422);
-        }
 
-        // ── Check duplicate booking ───────────────────────
-        $duplicate = Booking::where('user_id', $user->user_id)
-            ->where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled', 'archived', 'no_show'])
-            ->first();
+            $user = $request->user();
+            User::query()->whereKey($user->user_id)->lockForUpdate()->first();
 
-        if ($duplicate) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You already have a booking on this date.',
-                'errors' => [
-                    'existing_booking_id' => $duplicate->booking_id,
-                    'existing_booking_ref' => $duplicate->booking_reference,
-                ],
-            ], 422);
-        }
-
-        // ── Generate booking reference ────────────────────
-        $dateStr = Carbon::parse($date)->format('Ymd');
-        $prefix = 'BAC-'.$dateStr.'-';
-        $maxRef = Booking::where('booking_reference', 'like', $prefix.'%')->max('booking_reference');
-        $lastCount = $maxRef ? ((int) substr($maxRef, -4)) + 1 : 1;
-        $reference = $prefix.str_pad($lastCount, 4, '0', STR_PAD_LEFT);
-
-        // ── Create the booking ────────────────────────────
-        $booking = Booking::create([
-            'booking_reference' => $reference,
-            'user_id' => $user->user_id,
-            'window_id' => $request->window_id,
-            'booking_date' => $date,
-            'number_of_pets' => $request->number_of_pets,
-            'booking_type' => 'online',
-            'status' => 'waiting_to_arrive',
-            'special_notes' => $request->special_notes,
-            'total_amount' => 0,
-        ]);
-
-        // ── Save pets ─────────────────────────────────────
-        foreach ($request->pets as $petData) {
-            $pet = null;
-
-            // Reuse existing pet if pet_id is provided and belongs to this user
-            if (! empty($petData['pet_id'])) {
-                $pet = Pet::where('pet_id', $petData['pet_id'])
-                    ->where('user_id', $user->user_id)
-                    ->first();
+            $access = $preRegistrationAccess->forUser((int) $user->user_id);
+            if (! $access['allowed']) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'ongoing_pre_registration',
+                    'message' => $access['message'],
+                    'ongoing' => $access['ongoing'],
+                ], 409);
             }
 
-            if ($pet) {
-                $pet->update([
-                    'breed' => $petData['breed'] ?? $pet->breed,
-                    'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
-                    'weight' => $petData['weight'] ?? $pet->weight,
-                    'size' => $petData['size'] ?? $pet->size,
-                ]);
+            $date = $request->booking_date;
+            $petCount = (int) $request->number_of_pets;
+            $settings = ClinicSetting::current();
+
+            if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $date)) {
+                $cutoffLabel = $settings
+                    ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
+                ], 422);
             }
 
-            // Create a new pet record if none was found
-            if (! $pet) {
-                $pet = Pet::create([
-                    'user_id' => $user->user_id,
-                    'pet_name' => $petData['pet_name'],
-                    'species' => $petData['species'] ?? 'Dog',
-                    'breed' => $petData['breed'] ?? null,
-                    'weight' => $petData['weight'] ?? null,
-                    'color' => $petData['color'] ?? null,
-                    'size' => $petData['size'] ?? null,
-                    'fur_type' => $petData['fur_type'] ?? null,
-                    'medical_conditions' => $petData['medical_conditions'] ?? null,
-                ]);
+            // ── Check if day is full ──────────────────────────
+            $totalBooked = Booking::where('booking_date', $date)
+                ->whereNotIn('status', ['cancelled'])
+                ->sum('number_of_pets');
+
+            if ($totalBooked + $petCount > self::DAILY_CAPACITY) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sorry, this date is fully booked. Please choose another date.',
+                ], 422);
             }
 
-            // Link pet to this booking
-            $bookingPet = BookingPet::create([
-                'booking_id' => $booking->booking_id,
-                'pet_id' => $pet->pet_id,
-                'special_instructions' => $petData['special_instructions'] ?? null,
+            // ── Load selected time window ───────────────────────
+            $window = TimeWindow::query()
+                ->whereKey($request->window_id)
+                ->where('is_active', 1)
+                ->first();
+
+            if (
+                ! $window
+                || ! $settings->isWindowWithinOperatingHours(
+                    'grooming',
+                    $window->start_time,
+                    $window->end_time,
+                )
+            ) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+                ], 422);
+            }
+
+            // ── Check duplicate booking ───────────────────────
+            $duplicate = Booking::where('user_id', $user->user_id)
+                ->where('booking_date', $date)
+                ->whereNotIn('status', ['cancelled', 'archived', 'no_show'])
+                ->first();
+
+            if ($duplicate) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You already have a booking on this date.',
+                    'errors' => [
+                        'existing_booking_id' => $duplicate->booking_id,
+                        'existing_booking_ref' => $duplicate->booking_reference,
+                    ],
+                ], 422);
+            }
+
+            // ── Generate booking reference ────────────────────
+            $dateStr = Carbon::parse($date)->format('Ymd');
+            $prefix = 'BAC-'.$dateStr.'-';
+            $maxRef = Booking::where('booking_reference', 'like', $prefix.'%')->max('booking_reference');
+            $lastCount = $maxRef ? ((int) substr($maxRef, -4)) + 1 : 1;
+            $reference = $prefix.str_pad($lastCount, 4, '0', STR_PAD_LEFT);
+
+            // ── Create the booking ────────────────────────────
+            $booking = Booking::create([
+                'booking_reference' => $reference,
+                'user_id' => $user->user_id,
+                'window_id' => $request->window_id,
+                'booking_date' => $date,
+                'number_of_pets' => $request->number_of_pets,
+                'booking_type' => 'online',
+                'status' => 'waiting_to_arrive',
+                'special_notes' => $request->special_notes,
+                'total_amount' => 0,
             ]);
 
-            // ── Save services for this pet ────────────────
-            $petSize = $pet->size ?? $petData['size'] ?? null;
-            $slugsToSave = [];
+            // ── Save pets ─────────────────────────────────────
+            foreach ($request->pets as $petData) {
+                $pet = null;
 
-            $packageSlug = $petData['services']['package'] ?? null;
-            if ($packageSlug) {
-                $slugsToSave[] = $packageSlug;
-            }
-
-            foreach ($petData['services']['ala_carte'] ?? [] as $slug) {
-                if ($slug) {
-                    $slugsToSave[] = $slug;
+                // Reuse existing pet if pet_id is provided and belongs to this user
+                if (! empty($petData['pet_id'])) {
+                    $pet = Pet::where('pet_id', $petData['pet_id'])
+                        ->where('user_id', $user->user_id)
+                        ->first();
                 }
-            }
 
-            if (! empty($slugsToSave)) {
-                $services = Service::whereIn('slug', $slugsToSave)->get()->keyBy('slug');
-
-                foreach ($slugsToSave as $slug) {
-                    $service = $services->get($slug);
-                    if (! $service) {
-                        continue;
-                    }
-
-                    $price = $servicePrices->servicePrice($service, $petSize);
-
-                    BookingService::create([
-                        'booking_id' => $booking->booking_id,
-                        'booking_pet_id' => $bookingPet->booking_pet_id ?? null,
-                        'service_id' => $service->service_id,
-                        'addon_id' => null,
-                        'price_at_booking' => $price,
+                if ($pet) {
+                    $pet->update([
+                        'breed' => $petData['breed'] ?? $pet->breed,
+                        'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
+                        'weight' => $petData['weight'] ?? $pet->weight,
+                        'size' => $petData['size'] ?? $pet->size,
                     ]);
                 }
+
+                // Create a new pet record if none was found
+                if (! $pet) {
+                    $pet = Pet::create([
+                        'user_id' => $user->user_id,
+                        'pet_name' => $petData['pet_name'],
+                        'species' => $petData['species'] ?? 'Dog',
+                        'breed' => $petData['breed'] ?? null,
+                        'weight' => $petData['weight'] ?? null,
+                        'color' => $petData['color'] ?? null,
+                        'size' => $petData['size'] ?? null,
+                        'fur_type' => $petData['fur_type'] ?? null,
+                        'medical_conditions' => $petData['medical_conditions'] ?? null,
+                    ]);
+                }
+
+                // Link pet to this booking
+                $bookingPet = BookingPet::create([
+                    'booking_id' => $booking->booking_id,
+                    'pet_id' => $pet->pet_id,
+                    'special_instructions' => $petData['special_instructions'] ?? null,
+                ]);
+
+                // ── Save services for this pet ────────────────
+                $petSize = $pet->size ?? $petData['size'] ?? null;
+                $slugsToSave = [];
+
+                $packageSlug = $petData['services']['package'] ?? null;
+                if ($packageSlug) {
+                    $slugsToSave[] = $packageSlug;
+                }
+
+                foreach ($petData['services']['ala_carte'] ?? [] as $slug) {
+                    if ($slug) {
+                        $slugsToSave[] = $slug;
+                    }
+                }
+
+                if (! empty($slugsToSave)) {
+                    $services = Service::whereIn('slug', $slugsToSave)->get()->keyBy('slug');
+
+                    foreach ($slugsToSave as $slug) {
+                        $service = $services->get($slug);
+                        if (! $service) {
+                            continue;
+                        }
+
+                        $price = $servicePrices->servicePrice($service, $petSize);
+
+                        BookingService::create([
+                            'booking_id' => $booking->booking_id,
+                            'booking_pet_id' => $bookingPet->booking_pet_id ?? null,
+                            'service_id' => $service->service_id,
+                            'addon_id' => null,
+                            'price_at_booking' => $price,
+                        ]);
+                    }
+                }
             }
-        }
 
-        // ── Create notification for admin ─────────────────
-        Notification::create([
-            'type' => 'booked',
-            'booking_id' => $booking->booking_id,
-            'message' => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
-            'is_read' => 0,
-            'created_at' => now(),
-        ]);
+            // ── Create notification for admin ─────────────────
+            Notification::create([
+                'type' => 'booked',
+                'booking_id' => $booking->booking_id,
+                'message' => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
+                'is_read' => 0,
+                'created_at' => now(),
+            ]);
 
-        // Reload database-managed timestamps so the confirmation uses the
-        // authoritative booking creation time without changing the schedule.
-        $booking->refresh();
-        $createdAt = Carbon::parse(
-            $booking->created_at,
-            config('app.timezone')
-        )->toIso8601String();
+            // Reload database-managed timestamps so the confirmation uses the
+            // authoritative booking creation time without changing the schedule.
+            $booking->refresh();
+            $createdAt = Carbon::parse(
+                $booking->created_at,
+                config('app.timezone')
+            )->toIso8601String();
 
+            return response()->json([
+                'success' => true,
+                'message' => 'Booking confirmed successfully!',
+                'booking' => [
+                    'booking_id' => $booking->booking_id,
+                    'booking_reference' => $booking->booking_reference,
+                    'booking_date' => $booking->booking_date,
+                    'window' => $window->window_label,
+                    'created_at' => $createdAt,
+                    'status' => $booking->status,
+                    'number_of_pets' => $booking->number_of_pets,
+                ],
+            ], 201);
+        });
+    }
+
+    public function preRegistrationAccess(
+        Request $request,
+        CustomerPreRegistrationAccessService $preRegistrationAccess,
+    ) {
         return response()->json([
             'success' => true,
-            'message' => 'Booking confirmed successfully!',
-            'booking' => [
-                'booking_id' => $booking->booking_id,
-                'booking_reference' => $booking->booking_reference,
-                'booking_date' => $booking->booking_date,
-                'window' => $window->window_label,
-                'created_at' => $createdAt,
-                'status' => $booking->status,
-                'number_of_pets' => $booking->number_of_pets,
-            ],
-        ], 201);
+            ...$preRegistrationAccess->forUser((int) $request->user()->user_id),
+        ]);
     }
 
     // ── GET BOOKING HISTORY ───────────────────────────────
@@ -384,6 +394,10 @@ class BookingController extends Controller
         }
 
         $relations = ['timeWindow', 'bookingPets.pet', 'bookingServices.service'];
+        $hasCancellationAuditColumns = Schema::hasColumns('bookings', [
+            'cancel_count',
+            'cancellation_reason',
+        ]);
         $hasReferralFoundation = Schema::hasTable('grooming_clinic_referrals');
         if ($hasReferralFoundation) {
             $relations[] = 'bookingPets.groomingClinicReferrals:id,booking_id,booking_pet_id,pet_id,status';
@@ -395,6 +409,7 @@ class BookingController extends Controller
         }
 
         $activeQuery = Booking::where('user_id', $userId)
+            ->neverCancelled($hasCancellationAuditColumns)
             ->whereNotIn('status', ['archived']);
 
         if ($petId !== null) {
@@ -408,6 +423,7 @@ class BookingController extends Controller
             ->get();
 
         $historyQuery = Booking::where('user_id', $userId)
+            ->neverCancelled($hasCancellationAuditColumns)
             ->where('status', 'archived');
 
         if ($petId !== null) {
@@ -645,16 +661,16 @@ class BookingController extends Controller
     public function groomingCapacity(Request $request)
     {
         $today = Carbon::today()->toDateString();
+        $activeGroomingPets = $this->activeGroomingPetQuery($today);
 
-        $used = $this->dailyIntakeCount($today);
-
-        $queued = (clone $this->activeGroomingPetQuery($today))
+        $queued = (clone $activeGroomingPets)
             ->where('grooming_state', BookingPet::GROOMING_STATE_NOT_STARTED)
             ->count();
 
-        $inProgress = (clone $this->activeGroomingPetQuery($today))
+        $inProgress = (clone $activeGroomingPets)
             ->where('grooming_state', BookingPet::GROOMING_STATE_IN_PROGRESS)
             ->count();
+        $used = $queued + $inProgress;
 
         $readyForPickup = Booking::where('booking_date', $today)
             ->whereIn('status', ['for_payment', 'for_pickup', 'released'])

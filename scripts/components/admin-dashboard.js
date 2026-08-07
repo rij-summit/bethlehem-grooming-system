@@ -554,6 +554,7 @@ function adminDashboard() {
       busyLabel: "",
       icon: "checkIn",
       variant: "primary",
+      cancellationReason: "",
       busy: false,
       error: "",
     },
@@ -718,8 +719,8 @@ function adminDashboard() {
 
             return response;
           },
-          cancel: async ({ booking }) => {
-            await API.adminCancelBooking(booking.id);
+          cancel: async ({ booking, cancellationReason = "" }) => {
+            await API.adminCancelBooking(booking.id, cancellationReason);
             await this.loadAdminBookings();
           },
           archive: async ({ booking }) => {
@@ -1219,6 +1220,7 @@ function adminDashboard() {
         busyLabel,
         icon,
         variant,
+        cancellationReason: "",
         busy: false,
         error: "",
       };
@@ -1239,6 +1241,7 @@ function adminDashboard() {
         busyLabel: "",
         icon: "checkIn",
         variant: "primary",
+        cancellationReason: "",
         busy: false,
         error: "",
       };
@@ -1265,7 +1268,10 @@ function adminDashboard() {
         } else if (action === "markPetDone") {
           await this.runBookingAction("markPetDone", booking);
         } else if (action === "cancel") {
-          await this.cancelBooking(booking);
+          await this.cancelBooking(
+            booking,
+            this.actionConfirmModal.cancellationReason,
+          );
         } else if (action === "revertQueued") {
           this.revertQueuedBookingFrontendOnly(booking);
         } else if (action === "revertInProgress") {
@@ -1284,8 +1290,8 @@ function adminDashboard() {
       await this.runBookingAction("checkIn", booking);
     },
 
-    async cancelBooking(booking) {
-      await this.runBookingAction("cancel", booking);
+    async cancelBooking(booking, cancellationReason = "") {
+      await this.runBookingAction("cancel", booking, { cancellationReason });
     },
 
     // Legacy local-only fallback used only if a custom integration calls it directly.
@@ -1427,7 +1433,7 @@ function adminDashboard() {
     },
 
     // Runs a booking action with busy-state protection and backend/event integration.
-    async runBookingAction(actionName, booking) {
+    async runBookingAction(actionName, booking, actionOptions = {}) {
       if (!booking || booking.id === undefined || booking.id === null) {
         console.warn(`Cannot run ${actionName}: missing booking id.`);
         return;
@@ -1459,6 +1465,7 @@ function adminDashboard() {
 
         if (typeof handler === "function") {
           response = await handler({
+            ...actionOptions,
             booking: this.cloneBooking(booking),
             dashboard: this,
             state: this.getState(),

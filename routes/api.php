@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Booking
     Route::post('/booking/store', [BookingController::class, 'store']);
+    Route::get('/pre-registration/access', [BookingController::class, 'preRegistrationAccess']);
     Route::get('/booking/history', [BookingController::class, 'history']);
     Route::get('/booking/grooming-capacity', [BookingController::class, 'groomingCapacity']);
     Route::get('/booking/{id}', [BookingController::class, 'show']);

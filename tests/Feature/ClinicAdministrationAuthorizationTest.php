@@ -494,6 +494,78 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseCount('walkins', 0);
     }
 
+    public function test_ongoing_grooming_blocks_a_new_clinic_pre_registration(): void
+    {
+        $this->authenticateAs('customer', 10);
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'cat',
+            'is_archived' => false,
+        ]);
+        DB::table('bookings')->insert([
+            'booking_reference' => 'BAC-ONGOING-1',
+            'user_id' => 10,
+            'window_id' => 1,
+            'booking_date' => now()->addDay()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+        ]);
+
+        $this->postJson('/api/clinic/pre-register', [
+            'appointment_date' => now()->addDay()->toDateString(),
+            'window_id' => 1,
+            'pet_id' => 101,
+            'chief_complaint' => 'Routine wellness consultation',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'ongoing_pre_registration')
+            ->assertJsonPath('ongoing.type', 'grooming');
+
+        $this->assertDatabaseCount('clinic_appointments', 0);
+    }
+
+    public function test_ongoing_clinic_visit_blocks_a_new_grooming_pre_registration(): void
+    {
+        $this->authenticateAs('customer', 10);
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'cat',
+            'is_archived' => false,
+        ]);
+        DB::table('clinic_appointments')->insert([
+            'appointment_reference' => 'CL-ONGOING-1',
+            'appointment_type' => 'pre_registered',
+            'status' => 'waiting_to_arrive',
+            'appointment_date' => now()->addDay()->toDateString(),
+            'window_id' => 1,
+            'user_id' => 10,
+            'pet_id' => 101,
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/api/booking/store', [
+            'booking_date' => now()->addDay()->toDateString(),
+            'window_id' => 1,
+            'number_of_pets' => 1,
+            'pets' => [[
+                'pet_id' => 101,
+                'pet_name' => 'Mochi',
+                'species' => 'cat',
+            ]],
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'ongoing_pre_registration')
+            ->assertJsonPath('ongoing.type', 'clinic');
+
+        $this->assertDatabaseCount('bookings', 0);
+    }
+
     public function test_customer_cannot_pre_register_another_customers_pet(): void
     {
         $this->authenticateAs('customer', 10);

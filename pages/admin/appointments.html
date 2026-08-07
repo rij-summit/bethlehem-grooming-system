@@ -4113,6 +4113,26 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <div
+                  x-show="actionConfirmModal.action === 'cancel'"
+                  class="mt-4 text-left"
+                >
+                  <label
+                    for="bookingCancellationReason"
+                    class="block text-xs font-bold text-slate-600"
+                  >
+                    Reason shared with customer <span class="font-medium text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    id="bookingCancellationReason"
+                    x-model="actionConfirmModal.cancellationReason"
+                    :disabled="actionConfirmModal.busy"
+                    maxlength="500"
+                    rows="3"
+                    placeholder="Add a short cancellation reason"
+                    class="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/15 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  ></textarea>
+                </div>
                 <p
                   x-show="actionConfirmModal.error"
                   class="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
@@ -4297,7 +4317,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=medical-concern-ui-20260724"></script>
+    <script src="../../scripts/api.js?v=booking-cancellation-notification-20260807"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -4314,6 +4334,6 @@
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=stopped-payment-review-ui-20260803"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=stopped-payment-review-ui-20260803"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=booking-cancellation-notification-20260807"></script>
   </body>
 </html>
