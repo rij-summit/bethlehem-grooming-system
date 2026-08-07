@@ -20,6 +20,8 @@ class ClinicReferralInterfaceTest extends TestCase
 
     private string $clientDashboard;
 
+    private string $customStyles;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -31,6 +33,7 @@ class ClinicReferralInterfaceTest extends TestCase
         $this->clientPage = file_get_contents(base_path('pages/client/pet-details.html'));
         $this->clientComponent = file_get_contents(base_path('scripts/components/pet-details.js'));
         $this->clientDashboard = file_get_contents(base_path('scripts/components/client-dashboard.js'));
+        $this->customStyles = file_get_contents(base_path('css/custom.css'));
     }
 
     public function test_central_api_helpers_use_only_the_existing_step_17d_routes(): void
@@ -141,6 +144,26 @@ class ClinicReferralInterfaceTest extends TestCase
         ] as $serverManagedField) {
             $this->assertStringNotContainsString($serverManagedField, $payload);
         }
+    }
+
+    public function test_referral_request_cards_use_consistent_vertical_spacing(): void
+    {
+        $this->assertStringContainsString(
+            'class="admin-clinic-referral-form"',
+            $this->appointmentsPage,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.admin-clinic-referral-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*1rem;[^}]*margin-top:\s*1rem;/s',
+            $this->customStyles,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.admin-clinic-referral-form > \.admin-medical-concern-back\s*\{[^}]*justify-self:\s*start;[^}]*margin-bottom:\s*0;/s',
+            $this->customStyles,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.admin-clinic-referral-form > \.admin-medical-concern-resolution,[^{]+\{[^}]*margin-top:\s*0;[^}]*margin-bottom:\s*0;/s',
+            $this->customStyles,
+        );
     }
 
     public function test_staff_status_includes_required_warnings_and_in_person_consent_is_immutable(): void

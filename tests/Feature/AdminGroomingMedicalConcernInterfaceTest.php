@@ -75,15 +75,23 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
             ),
         );
         $this->assertSame(
-            2,
+            0,
             substr_count(
                 $this->appointmentsPage,
                 '@click="openReportMedicalConcern(booking, pet)"',
             ),
         );
-        $this->assertGreaterThanOrEqual(
-            2,
-            substr_count($this->appointmentsPage, 'Report Medical Concern'),
+        $this->assertStringNotContainsString(
+            'admin-queued-pet-report-concern',
+            $this->appointmentsPage,
+        );
+        $this->assertStringContainsString(
+            '@click="openCreateMedicalConcern()"',
+            $this->appointmentsPage,
+        );
+        $this->assertStringContainsString(
+            'Report Medical Concern',
+            $this->appointmentsPage,
         );
         $this->assertStringContainsString(
             'medicalConcernIndicatorLabel(booking, pet)',
@@ -135,6 +143,61 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         foreach (['Low', 'Moderate', 'Urgent'] as $severity) {
             $this->assertStringContainsString("label: \"{$severity}\"", $this->concernComponent);
         }
+    }
+
+    public function test_concern_modal_uses_the_admin_typography_hierarchy_without_a_shell_outline(): void
+    {
+        foreach ([
+            '/\.admin-medical-concern-dialog\s*\{[^}]*border:\s*0;[^}]*outline:\s*none;/s',
+            '/\.admin-medical-concern-title\s*\{[^}]*font-size:\s*1\.125rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-medical-concern-category\s*\{[^}]*font-size:\s*1rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-medical-concern-meta\s*\{[^}]*font-size:\s*0\.875rem;[^}]*font-weight:\s*500;/s',
+            '/\.admin-medical-concern-kicker\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;/s',
+        ] as $pattern) {
+            $this->assertMatchesRegularExpression($pattern, $this->customStyles);
+        }
+
+        $this->assertStringContainsString(
+            'class="text-lg font-semibold text-[#1f3850]">Concern records</p>',
+            $this->appointmentsPage,
+        );
+        $this->assertStringContainsString(
+            'class="text-sm font-medium text-slate-500"',
+            $this->appointmentsPage,
+        );
+
+        foreach ([
+            '/\.admin-medical-concern-card-summary span,\s*\.admin-medical-concern-detail-grid span\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;[^}]*letter-spacing:\s*0;[^}]*text-transform:\s*none;/s',
+            '/\.admin-medical-concern-text-grid h5,\s*\.admin-medical-concern-resolution h5\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;[^}]*letter-spacing:\s*0;[^}]*text-transform:\s*none;/s',
+        ] as $historyLabelPattern) {
+            $this->assertMatchesRegularExpression(
+                $historyLabelPattern,
+                $this->customStyles,
+            );
+        }
+    }
+
+    public function test_expanded_pet_cards_use_the_admin_typography_hierarchy(): void
+    {
+        foreach ([
+            '/\.admin-queued-pets-title\s*\{[^}]*font-size:\s*1\.125rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-queued-pet-queue\s*\{[^}]*font-size:\s*1\.125rem;[^}]*font-weight:\s*700;/s',
+            '/\.admin-queued-pet-information h5\s*\{[^}]*font-size:\s*1rem;[^}]*font-weight:\s*700;/s',
+            '/\.admin-queued-pet-basic\s*\{[^}]*font-size:\s*0\.875rem;[^}]*font-weight:\s*500;/s',
+            '/\.admin-queued-pet-services\s*\{[^}]*font-size:\s*0\.875rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-queued-pet-notes span\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;[^}]*text-transform:\s*uppercase;/s',
+        ] as $pattern) {
+            $this->assertMatchesRegularExpression($pattern, $this->customStyles);
+        }
+
+        $this->assertSame(
+            2,
+            substr_count($this->appointmentsPage, 'class="admin-queued-pets-title"'),
+        );
+        $this->assertSame(
+            1,
+            substr_count($this->appointmentsPage, 'class="admin-queued-pet-timing"'),
+        );
     }
 
     public function test_create_form_mirrors_validation_and_records_only_advisory_actions(): void
@@ -196,6 +259,62 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
             'resolved_at',
         ] as $managedField) {
             $this->assertStringNotContainsString($managedField, $payloadBuilder);
+        }
+    }
+
+    public function test_report_form_uses_sentence_case_labels_and_custom_accessible_dropdowns(): void
+    {
+        $formMarkup = $this->sourceBetween(
+            $this->appointmentsPage,
+            '<!-- Create and edit concern form -->',
+            '<!-- Send medical concern to customer confirmation -->',
+        );
+
+        foreach ([
+            'id="medical-concern-severity"',
+            'id="medical-concern-recommended-action"',
+            'aria-haspopup="listbox"',
+            'role="listbox"',
+            'role="option"',
+            'admin-medical-concern-select-trigger',
+            'admin-medical-concern-select-options',
+            '@keydown.arrow-down.prevent',
+            '@keydown.escape.stop.prevent',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $formMarkup);
+        }
+
+        foreach ([
+            'Concern category',
+            'Internal staff observation',
+            'Customer-visible message',
+            'Recommended grooming action',
+            'Future customer response requirements',
+            'Internal resolution notes',
+        ] as $label) {
+            $this->assertStringContainsString($label, $formMarkup);
+        }
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/<select[^>]+id="medical-concern-(?:severity|recommended-action)"/s',
+            $formMarkup,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.admin-medical-concern-kicker\s*\{[^}]*letter-spacing:\s*0;[^}]*text-transform:\s*none;/s',
+            $this->customStyles,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\.admin-medical-concern-form-grid > div > label[^}]*text-transform:\s*uppercase/s',
+            $this->customStyles,
+        );
+
+        foreach ([
+            'toggleMedicalConcernSelect(field)',
+            'selectMedicalConcernOption(field, value)',
+            'focusMedicalConcernSelectOption(listbox, last = false)',
+            'moveMedicalConcernSelectFocus(currentOption, offset)',
+        ] as $method) {
+            $this->assertStringContainsString($method, $this->concernComponent);
         }
     }
 

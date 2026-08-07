@@ -363,6 +363,33 @@ class AdminStoppedPaymentReviewInterfaceTest extends TestCase
         );
     }
 
+    public function test_dialog_uses_the_shared_admin_typography_hierarchy(): void
+    {
+        foreach ([
+            '/\.admin-stopped-payment-review-title\s*\{[^}]*font-size:\s*1\.125rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-stopped-payment-review-section-heading h4\s*\{[^}]*font-size:\s*1\.125rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-stopped-payment-review-context strong\s*\{[^}]*font-size:\s*1rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-stopped-payment-review-service-line strong\s*\{[^}]*font-size:\s*1rem;[^}]*font-weight:\s*600;/s',
+            '/\.admin-stopped-payment-review-context\s*\{[^}]*font-size:\s*0\.875rem;[^}]*font-weight:\s*500;/s',
+            '/\.admin-stopped-payment-review-field-help\s*\{[^}]*font-size:\s*0\.875rem;[^}]*font-weight:\s*500;/s',
+            '/\.admin-stopped-payment-review-kicker\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;[^}]*text-transform:\s*uppercase;/s',
+            '/\.admin-stopped-payment-review-decisions legend,\s*\.admin-stopped-payment-review-field label\s*\{[^}]*font-size:\s*0\.75rem;[^}]*font-weight:\s*700;[^}]*text-transform:\s*uppercase;/s',
+        ] as $pattern) {
+            $this->assertMatchesRegularExpression($pattern, $this->customStyles);
+        }
+
+        $paymentReviewStyles = $this->sourceBetween(
+            $this->customStyles,
+            '/* Stopped-grooming payment review */',
+            '@media (max-width: 767px)',
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/font-weight:\s*(?:800|900);/',
+            $paymentReviewStyles,
+        );
+    }
+
     private function sourceBetween(string $source, string $start, string $end): string
     {
         $startPosition = strpos($source, $start);

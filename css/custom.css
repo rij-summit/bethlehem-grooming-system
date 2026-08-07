@@ -2610,6 +2610,20 @@ body.customer-detail-modal-open {
   margin-bottom: 0.9rem;
 }
 
+.admin-queued-pets-title {
+  color: #1f3850;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+}
+
+.admin-queued-pets-support {
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
 .admin-queued-pet-count {
   display: inline-flex;
   min-width: 2rem;
@@ -2619,8 +2633,9 @@ body.customer-detail-modal-open {
   border-radius: 9999px;
   background: #fff8e8;
   color: #9a6b00;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
 }
 
 .admin-in-progress-pet-count {
@@ -2634,6 +2649,8 @@ body.customer-detail-modal-open {
   padding: 1rem;
   color: #64748b;
   font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
   text-align: center;
 }
 
@@ -2659,28 +2676,44 @@ body.customer-detail-modal-open {
 
 .admin-queued-pet-queue {
   color: #315b7e;
-  font-size: 1.35rem;
-  font-weight: 900;
-  letter-spacing: -0.025em;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.75rem;
 }
 
 .admin-queued-pet-information h5 {
   color: #1e293b;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.5rem;
 }
 
 .admin-queued-pet-basic {
   margin-top: 0.15rem;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-queued-pet-services {
   margin-top: 0.3rem;
   color: #315b7e;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.admin-queued-pet-services strong {
+  font-weight: 600;
+}
+
+.admin-queued-pet-timing {
+  margin-top: 0.125rem;
+  color: #315b7e;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-queued-pet-actions {
@@ -2712,8 +2745,9 @@ body.customer-detail-modal-open {
   gap: 0.4rem;
   border-radius: 0.7rem;
   padding: 0.6rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -2797,7 +2831,9 @@ body.customer-detail-modal-open {
 .admin-queued-pet-notes p {
   min-width: 0;
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-queued-pet-notes span,
@@ -2808,8 +2844,9 @@ body.customer-detail-modal-open {
 .admin-queued-pet-notes span {
   margin-bottom: 0.2rem;
   color: #94a3b8;
-  font-size: 0.65rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2818,6 +2855,7 @@ body.customer-detail-modal-open {
   overflow-wrap: anywhere;
   color: #475569;
   font-weight: 600;
+  line-height: 1.25rem;
   white-space: pre-line;
 }
 
@@ -2830,9 +2868,11 @@ body.customer-detail-modal-open {
   border: 1px solid;
   border-radius: 9999px;
   padding: 0.3rem 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
   text-align: left;
+  text-transform: uppercase;
 }
 
 .admin-pet-medical-concern-indicator.is-low {
@@ -2859,8 +2899,7 @@ body.customer-detail-modal-open {
   color: #475569;
 }
 
-.admin-queued-pet-concerns,
-.admin-queued-pet-report-concern {
+.admin-queued-pet-concerns {
   display: inline-flex;
   min-height: 2.5rem;
   align-items: center;
@@ -2868,8 +2907,9 @@ body.customer-detail-modal-open {
   gap: 0.4rem;
   border-radius: 0.7rem;
   padding: 0.6rem 0.85rem;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -2884,17 +2924,6 @@ body.customer-detail-modal-open {
   background: #eef5fb;
 }
 
-.admin-queued-pet-report-concern {
-  border: 1px solid #f59e0b;
-  background: #fff7ed;
-  color: #9a3412;
-}
-
-.admin-queued-pet-report-concern:hover {
-  border-color: #d97706;
-  background: #ffedd5;
-}
-
 .admin-pet-medical-concern-count {
   display: inline-flex;
   min-width: 1.25rem;
@@ -2904,7 +2933,8 @@ body.customer-detail-modal-open {
   border-radius: 9999px;
   background: #315b7e;
   color: #ffffff;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -2930,9 +2960,10 @@ body.customer-detail-modal-open {
   max-height: min(92vh, 58rem);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #d7e3ef;
+  border: 0;
   border-radius: 1.5rem;
   background: #ffffff;
+  outline: none;
   box-shadow: 0 30px 70px rgba(15, 23, 42, 0.3);
 }
 
@@ -2959,16 +2990,17 @@ body.customer-detail-modal-open {
 
 .admin-medical-concern-kicker {
   color: #cfe0ee;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .admin-medical-concern-title {
   margin-top: 0.1rem;
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-medical-concern-context {
@@ -2978,7 +3010,9 @@ body.customer-detail-modal-open {
   gap: 0.4rem;
   margin-top: 0.2rem;
   color: #dbe9f4;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-close {
@@ -3019,7 +3053,8 @@ body.customer-detail-modal-open {
   background: #f0f9ff;
   padding: 0.85rem 1rem;
   color: #075985;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   line-height: 1.5;
 }
 
@@ -3052,8 +3087,8 @@ body.customer-detail-modal-open {
   border: 1px solid transparent;
   border-radius: 0.75rem;
   padding: 0.6rem 0.9rem;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 600;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -3133,6 +3168,28 @@ body.customer-detail-modal-open {
   margin-bottom: 1rem;
 }
 
+.admin-clinic-referral-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.admin-clinic-referral-form > .admin-medical-concern-back {
+  justify-self: start;
+  margin-bottom: 0;
+}
+
+.admin-clinic-referral-form > .admin-medical-concern-resolution,
+.admin-clinic-referral-form > .admin-medical-concern-validation,
+.admin-clinic-referral-form > .admin-medical-concern-requirements,
+.admin-clinic-referral-form > .admin-medical-concern-form-grid,
+.admin-clinic-referral-form > .admin-medical-concern-locked,
+.admin-clinic-referral-form > .admin-medical-concern-terminal-fields,
+.admin-clinic-referral-form > .admin-medical-concern-form-actions {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .admin-medical-concern-state {
   display: flex;
   min-height: 12rem;
@@ -3145,6 +3202,9 @@ body.customer-detail-modal-open {
   background: #f8fafc;
   padding: 2rem;
   color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
   text-align: center;
 }
 
@@ -3203,13 +3263,16 @@ body.customer-detail-modal-open {
   overflow-wrap: anywhere;
   color: #1e293b;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 600;
+  line-height: 1.5rem;
 }
 
 .admin-medical-concern-meta {
   margin-top: 0.35rem;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-badge {
@@ -3218,8 +3281,9 @@ body.customer-detail-modal-open {
   border: 1px solid;
   border-radius: 9999px;
   padding: 0.25rem 0.55rem;
-  font-size: 0.66rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
 }
 
 .admin-medical-concern-badge.is-low,
@@ -3270,8 +3334,9 @@ body.customer-detail-modal-open {
   border-radius: 0.65rem;
   padding: 0.45rem 0.6rem;
   color: #315b7e;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-details-toggle:hover {
@@ -3302,10 +3367,11 @@ body.customer-detail-modal-open {
 .admin-medical-concern-card-summary span,
 .admin-medical-concern-detail-grid span {
   color: #94a3b8;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .admin-medical-concern-card-summary strong,
@@ -3313,8 +3379,9 @@ body.customer-detail-modal-open {
   margin-top: 0.2rem;
   overflow-wrap: anywhere;
   color: #475569;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-details {
@@ -3325,8 +3392,9 @@ body.customer-detail-modal-open {
 .admin-medical-concern-detail-loading {
   margin-bottom: 0.75rem;
   color: #315b7e;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-text-grid,
@@ -3347,17 +3415,19 @@ body.customer-detail-modal-open {
 .admin-medical-concern-text-grid h5,
 .admin-medical-concern-resolution h5 {
   color: #64748b;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .admin-medical-concern-text-grid section > p {
   margin-top: 0.35rem;
   overflow-wrap: anywhere;
   color: #334155;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   line-height: 1.5;
   white-space: pre-line;
 }
@@ -3373,8 +3443,9 @@ body.customer-detail-modal-open {
   background: #fffbeb;
   padding: 0.65rem 0.75rem;
   color: #92400e;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-resolution {
@@ -3390,7 +3461,9 @@ body.customer-detail-modal-open {
 .admin-medical-concern-resolution .admin-medical-concern-text-grid p {
   min-width: 0;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-resolution .admin-medical-concern-text-grid span,
@@ -3421,7 +3494,9 @@ body.customer-detail-modal-open {
   background: #fef2f2;
   padding: 0.85rem 1rem;
   color: #b91c1c;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-validation:focus {
@@ -3444,13 +3519,14 @@ body.customer-detail-modal-open {
   grid-column: 1 / -1;
 }
 
-.admin-medical-concern-form-grid label,
-.admin-medical-concern-terminal-fields label {
+.admin-medical-concern-form-grid > div > label,
+.admin-medical-concern-terminal-fields > label {
   display: block;
   margin-bottom: 0.35rem;
   color: #475569;
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1rem;
 }
 
 .admin-medical-concern-form-grid label > span:not(.is-optional),
@@ -3474,8 +3550,96 @@ body.customer-detail-modal-open {
   background: #ffffff;
   padding: 0.7rem 0.8rem;
   color: #334155;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
   outline: none;
+}
+
+.admin-medical-concern-custom-select {
+  position: relative;
+}
+
+.admin-medical-concern-select-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.7rem 0.8rem;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-medical-concern-select-trigger.is-placeholder {
+  color: #94a3b8;
+}
+
+.admin-medical-concern-select-trigger:focus-visible,
+.admin-medical-concern-select-trigger[aria-expanded="true"] {
+  border-color: #315b7e;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(49, 91, 126, 0.12);
+}
+
+.admin-medical-concern-select-trigger[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.admin-medical-concern-select-trigger:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.admin-medical-concern-select-options {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  left: 0;
+  z-index: 40;
+  max-height: 14rem;
+  overflow-y: auto;
+  border: 1px solid #b8cadb;
+  border-radius: 0.85rem;
+  background: #ffffff;
+  padding: 0.35rem;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+}
+
+.admin-medical-concern-select-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-align: left;
+}
+
+.admin-medical-concern-select-option:hover,
+.admin-medical-concern-select-option:focus-visible,
+.admin-medical-concern-select-option.is-selected {
+  background: #edf5fc;
+  color: #1f3850;
+  outline: none;
+}
+
+.admin-medical-concern-select-option.is-selected {
+  font-weight: 600;
 }
 
 .admin-medical-concern-form-grid textarea,
@@ -3502,7 +3666,9 @@ body.customer-detail-modal-open {
 .admin-medical-concern-help {
   margin-top: 0.3rem;
   color: #64748b;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-help.is-advisory {
@@ -3513,8 +3679,9 @@ body.customer-detail-modal-open {
 .admin-medical-concern-field-error {
   margin-top: 0.3rem;
   color: #dc2626;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
+  line-height: 1rem;
 }
 
 .admin-medical-concern-requirements {
@@ -3528,8 +3695,9 @@ body.customer-detail-modal-open {
 .admin-medical-concern-requirements legend {
   padding: 0 0.35rem;
   color: #475569;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
 }
 
 .admin-medical-concern-requirements label {
@@ -3554,14 +3722,17 @@ body.customer-detail-modal-open {
 
 .admin-medical-concern-requirements strong {
   color: #334155;
-  font-size: 0.78rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
 }
 
 .admin-medical-concern-requirements small {
   margin-top: 0.1rem;
   color: #64748b;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 500;
+  line-height: 1.25rem;
 }
 
 .admin-medical-concern-form-actions {
@@ -3610,14 +3781,16 @@ body.customer-detail-modal-open {
 .admin-medical-concern-terminal-dialog > h3 {
   margin-top: 0.9rem;
   color: #1e293b;
-  font-size: 1.1rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-medical-concern-terminal-dialog > p {
   margin-top: 0.45rem;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   line-height: 1.55;
 }
 
@@ -3657,8 +3830,9 @@ body.customer-detail-modal-open {
   border: 1px solid;
   border-radius: 0.9rem;
   padding: 0.8rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
   box-shadow: 0 15px 35px rgba(15, 23, 42, 0.2);
 }
 
@@ -3686,8 +3860,9 @@ body.customer-detail-modal-open {
   background: #fff7ed;
   padding: 0.6rem 0.85rem;
   color: #9a3412;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -3752,16 +3927,17 @@ body.customer-detail-modal-open {
 
 .admin-stopped-payment-review-kicker {
   color: #ffedd5;
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .admin-stopped-payment-review-title {
   margin-top: 0.1rem;
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-stopped-payment-review-context {
@@ -3771,7 +3947,14 @@ body.customer-detail-modal-open {
   gap: 0.4rem;
   margin-top: 0.2rem;
   color: #ffedd5;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.admin-stopped-payment-review-context strong {
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-close {
@@ -3812,6 +3995,9 @@ body.customer-detail-modal-open {
   border-radius: 1rem;
   padding: 1.25rem;
   color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
   text-align: left;
 }
 
@@ -3826,9 +4012,13 @@ body.customer-detail-modal-open {
   display: block;
 }
 
+.admin-stopped-payment-review-state strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .admin-stopped-payment-review-state p {
   margin-top: 0.2rem;
-  font-size: 0.82rem;
 }
 
 .admin-stopped-payment-review-spinner,
@@ -3860,8 +4050,8 @@ body.customer-detail-modal-open {
   gap: 0.4rem;
   border-radius: 0.75rem;
   padding: 0.65rem 0.95rem;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-retry,
@@ -3915,12 +4105,16 @@ body.customer-detail-modal-open {
 }
 
 .admin-stopped-payment-review-ineligible h4 {
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-stopped-payment-review-ineligible p {
   margin: 0.2rem 0 0.75rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-workflow,
@@ -3939,11 +4133,14 @@ body.customer-detail-modal-open {
   background: #fff7ed;
   padding: 0.8rem 0.9rem;
   color: #9a3412;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-advisory strong {
   display: block;
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-advisory p {
@@ -3979,8 +4176,8 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-confirm-explanation > span {
   display: block;
   color: #64748b;
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3991,7 +4188,9 @@ body.customer-detail-modal-open {
   overflow-wrap: anywhere;
   margin-top: 0.2rem;
   color: #1e293b;
-  font-size: 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
 }
 
 .admin-stopped-payment-review-services {
@@ -4012,13 +4211,17 @@ body.customer-detail-modal-open {
 
 .admin-stopped-payment-review-section-heading h4 {
   color: #1f3850;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-stopped-payment-review-section-heading p {
   margin-top: 0.1rem;
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-subtotal {
@@ -4029,14 +4232,16 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-subtotal span {
   display: block;
   color: #64748b;
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .admin-stopped-payment-review-subtotal strong {
   color: #9a3412;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-service-list {
@@ -4057,20 +4262,26 @@ body.customer-detail-modal-open {
 
 .admin-stopped-payment-review-service-line strong {
   color: #1e293b;
-  font-size: 0.82rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
 }
 
 .admin-stopped-payment-review-service-line div > span {
   display: block;
   margin-top: 0.1rem;
   color: #64748b;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-no-services {
   padding: 1rem;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
   text-align: center;
 }
 
@@ -4081,8 +4292,10 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-decisions legend,
 .admin-stopped-payment-review-field label {
   color: #1f3850;
-  font-size: 0.82rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .admin-stopped-payment-review-decision-grid {
@@ -4122,14 +4335,17 @@ body.customer-detail-modal-open {
 
 .admin-stopped-payment-review-decision strong {
   color: #1e293b;
-  font-size: 0.82rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
 }
 
 .admin-stopped-payment-review-decision small {
   margin-top: 0.15rem;
   color: #64748b;
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-amounts {
@@ -4153,7 +4369,9 @@ body.customer-detail-modal-open {
   min-height: 7rem;
   padding: 0.7rem 0.8rem;
   color: #1e293b;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
   resize: vertical;
 }
 
@@ -4172,7 +4390,8 @@ body.customer-detail-modal-open {
   background: #f8fafc;
   padding: 0 0.75rem;
   color: #475569;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-money-input input {
@@ -4180,6 +4399,8 @@ body.customer-detail-modal-open {
   flex: 1;
   padding: 0.7rem 0.8rem;
   color: #1e293b;
+  font-size: 1rem;
+  font-weight: 600;
   outline: none;
 }
 
@@ -4193,14 +4414,17 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-field-help {
   margin-top: 0.25rem;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-field-error {
   margin-top: 0.3rem;
   color: #b91c1c;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-validation {
@@ -4210,7 +4434,13 @@ body.customer-detail-modal-open {
   background: #fef2f2;
   padding: 0.75rem;
   color: #991b1b;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.admin-stopped-payment-review-validation strong {
+  font-weight: 600;
 }
 
 .admin-stopped-payment-review-validation:focus {
@@ -4253,12 +4483,16 @@ body.customer-detail-modal-open {
 }
 
 .admin-stopped-payment-review-completed-heading h4 {
-  font-weight: 900;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-stopped-payment-review-completed-heading p {
   margin-top: 0.1rem;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-readonly-text,
@@ -4273,7 +4507,8 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-confirm-explanation p {
   margin-top: 0.35rem;
   color: #334155;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   line-height: 1.55;
   white-space: pre-wrap;
 }
@@ -4303,14 +4538,16 @@ body.customer-detail-modal-open {
 .admin-stopped-payment-review-confirm-dialog > h3 {
   margin-top: 0.8rem;
   color: #1e293b;
-  font-size: 1.1rem;
-  font-weight: 900;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
 }
 
 .admin-stopped-payment-review-confirm-dialog > p {
   margin-top: 0.35rem;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   line-height: 1.5;
 }
 
@@ -4326,7 +4563,9 @@ body.customer-detail-modal-open {
   gap: 1rem;
   border-bottom: 1px solid #eef2f7;
   padding-bottom: 0.4rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-confirm-summary dt {
@@ -4335,7 +4574,8 @@ body.customer-detail-modal-open {
 
 .admin-stopped-payment-review-confirm-summary dd {
   color: #1e293b;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -4348,7 +4588,9 @@ body.customer-detail-modal-open {
   margin-top: 0.8rem !important;
   border-radius: 0.75rem;
   padding: 0.7rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .admin-stopped-payment-review-confirm-warning {
@@ -4380,8 +4622,9 @@ body.customer-detail-modal-open {
   border: 1px solid;
   border-radius: 0.9rem;
   padding: 0.8rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
   box-shadow: 0 15px 35px rgba(15, 23, 42, 0.2);
 }
 
@@ -4444,7 +4687,6 @@ body.customer-detail-modal-open {
   .admin-queued-pet-start,
   .admin-queued-pet-print,
   .admin-queued-pet-concerns,
-  .admin-queued-pet-report-concern,
   .admin-queued-pet-payment-review,
   .admin-in-progress-pet-finish,
   .admin-in-progress-pet-queued {

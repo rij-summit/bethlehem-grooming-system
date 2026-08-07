@@ -1071,6 +1071,10 @@
                   class="admin-queued-pets-panel"
                 >
                   <div class="admin-queued-pets-heading">
+                    <div>
+                      <p class="admin-queued-pets-title">Pets in this booking</p>
+                      <p class="admin-queued-pets-support">Queued pets under this owner.</p>
+                    </div>
                     <span class="admin-queued-pet-count" x-text="getQueuedPets(booking).length"></span>
                   </div>
 
@@ -1144,15 +1148,6 @@
                             >
                               <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
                               <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
-                            </button>
-                            <button
-                              x-show="canReportMedicalConcern(booking, pet)"
-                              type="button"
-                              @click="openReportMedicalConcern(booking, pet)"
-                              class="admin-queued-pet-report-concern"
-                            >
-                              <i data-lucide="message-square-warning" class="h-4 w-4" aria-hidden="true"></i>
-                              Report Medical Concern
                             </button>
                             <div
                               class="admin-queued-pet-start-wrap"
@@ -1380,8 +1375,8 @@
                 >
                   <div class="admin-queued-pets-heading">
                     <div>
-                      <p class="font-bold text-[#1f3850]">Pets in this booking</p>
-                      <p class="text-sm text-slate-500">Active and queued pets under this owner.</p>
+                      <p class="admin-queued-pets-title">Pets in this booking</p>
+                      <p class="admin-queued-pets-support">Active and queued pets under this owner.</p>
                     </div>
                     <span class="admin-queued-pet-count admin-in-progress-pet-count" x-text="getInProgressPets(booking).length"></span>
                   </div>
@@ -1433,7 +1428,7 @@
                               </button>
                             </template>
                             <!-- Per-pet elapsed + ETA -->
-                            <p x-show="isPetGroomingInProgress(pet)" class="mt-0.5 text-xs text-[#315b7e] font-medium">
+                            <p x-show="isPetGroomingInProgress(pet)" class="admin-queued-pet-timing">
                               <span x-text="getPetElapsed(pet)"></span>
                               <template x-if="getPetEstDone(booking, pet)">
                                 <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
@@ -1465,15 +1460,6 @@
                             >
                               <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
                               <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
-                            </button>
-                            <button
-                              x-show="canReportMedicalConcern(booking, pet)"
-                              type="button"
-                              @click="openReportMedicalConcern(booking, pet)"
-                              class="admin-queued-pet-report-concern"
-                            >
-                              <i data-lucide="message-square-warning" class="h-4 w-4" aria-hidden="true"></i>
-                              Report Medical Concern
                             </button>
                             <template x-if="isPetGroomingInProgress(pet)">
                               <button
@@ -2335,8 +2321,8 @@
 
                 <div class="admin-medical-concern-toolbar">
                   <div>
-                    <p class="font-bold text-[#1f3850]">Concern records</p>
-                    <p class="text-xs text-slate-500">
+                    <p class="text-lg font-semibold text-[#1f3850]">Concern records</p>
+                    <p class="text-sm font-medium text-slate-500">
                       Active, resolved, and cancelled history for this booking pet only.
                     </p>
                   </div>
@@ -2373,10 +2359,10 @@
                     aria-hidden="true"
                   ></i>
                   <p
-                    class="font-bold"
+                    class="text-base font-semibold"
                     x-text="medicalConcernModal.notFound ? 'Grooming pet record unavailable' : 'Medical concern history could not be loaded'"
                   ></p>
-                  <p class="text-sm" x-text="medicalConcernModal.error"></p>
+                  <p class="text-sm font-medium" x-text="medicalConcernModal.error"></p>
                   <button
                     x-show="!medicalConcernModal.notFound"
                     type="button"
@@ -2393,10 +2379,10 @@
                   class="admin-medical-concern-state"
                 >
                   <i data-lucide="clipboard" class="h-9 w-9 text-slate-400" aria-hidden="true"></i>
-                  <p class="font-bold text-slate-700">
+                  <p class="text-base font-semibold text-slate-700">
                     No medical concerns have been reported for this pet.
                   </p>
-                  <p class="text-sm text-slate-500">
+                  <p class="text-sm font-medium text-slate-500">
                     This message only describes concern records in this system.
                   </p>
                 </div>
@@ -2647,7 +2633,7 @@
                   class="admin-medical-concern-validation"
                   role="alert"
                 >
-                  <p class="font-bold">Please review the medical concern form.</p>
+                  <p class="text-base font-semibold">Please review the medical concern form.</p>
                   <p x-text="medicalConcernFormErrorSummary"></p>
                   <button
                     x-show="medicalConcernModal.duplicateMessage"
@@ -2675,7 +2661,7 @@
                 <div class="admin-medical-concern-form-grid">
                   <div>
                     <label for="medical-concern-category">
-                      Concern Category <span aria-hidden="true">*</span>
+                      Concern category <span aria-hidden="true">*</span>
                     </label>
                     <input
                       id="medical-concern-category"
@@ -2695,25 +2681,72 @@
                     <label for="medical-concern-severity">
                       Severity <span aria-hidden="true">*</span>
                     </label>
-                    <select
-                      id="medical-concern-severity"
-                      required
-                      x-model="medicalConcernForm.severity"
-                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
-                      :aria-invalid="Boolean(medicalConcernFieldError('severity'))"
-                      aria-describedby="medical-concern-severity-error"
+                    <div
+                      class="admin-medical-concern-custom-select"
+                      @click.outside="medicalConcernSelectOpen.severity = false"
+                      @focusout="if (!$el.contains($event.relatedTarget)) medicalConcernSelectOpen.severity = false"
+                      @keydown.escape.stop.prevent="medicalConcernSelectOpen.severity = false; $refs.medicalConcernSeverityTrigger.focus()"
                     >
-                      <option value="">Select severity</option>
-                      <template x-for="option in medicalConcernSeverities" :key="option.value">
-                        <option :value="option.value" x-text="option.label"></option>
-                      </template>
-                    </select>
+                      <button
+                        id="medical-concern-severity"
+                        x-ref="medicalConcernSeverityTrigger"
+                        type="button"
+                        class="admin-medical-concern-select-trigger"
+                        :class="!medicalConcernForm.severity ? 'is-placeholder' : ''"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                        :aria-expanded="String(medicalConcernSelectOpen.severity)"
+                        :aria-invalid="String(Boolean(medicalConcernFieldError('severity')))"
+                        aria-haspopup="listbox"
+                        aria-controls="medical-concern-severity-options"
+                        aria-describedby="medical-concern-severity-error"
+                        aria-required="true"
+                        @click="toggleMedicalConcernSelect('severity')"
+                        @keydown.arrow-down.prevent="openMedicalConcernSelect('severity'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox))"
+                        @keydown.arrow-up.prevent="openMedicalConcernSelect('severity'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox, true))"
+                      >
+                        <span x-text="medicalConcernSelectLabel('severity', 'Select severity')"></span>
+                        <i
+                          data-lucide="chevron-down"
+                          class="h-4 w-4 shrink-0 transition-transform"
+                          :class="medicalConcernSelectOpen.severity ? 'rotate-180' : ''"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <div
+                        id="medical-concern-severity-options"
+                        x-ref="medicalConcernSeverityListbox"
+                        x-show="medicalConcernSelectOpen.severity"
+                        x-transition.origin.top
+                        style="display: none"
+                        class="admin-medical-concern-select-options"
+                        role="listbox"
+                        aria-label="Severity options"
+                      >
+                        <template x-for="option in medicalConcernSeverities" :key="option.value">
+                          <button
+                            type="button"
+                            role="option"
+                            class="admin-medical-concern-select-option"
+                            :class="medicalConcernForm.severity === option.value ? 'is-selected' : ''"
+                            :aria-selected="String(medicalConcernForm.severity === option.value)"
+                            @click="selectMedicalConcernOption('severity', option.value); $nextTick(() => $refs.medicalConcernSeverityTrigger.focus())"
+                            @keydown.arrow-down.prevent="moveMedicalConcernSelectFocus($event.currentTarget, 1)"
+                            @keydown.arrow-up.prevent="moveMedicalConcernSelectFocus($event.currentTarget, -1)"
+                            @keydown.home.prevent="focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox)"
+                            @keydown.end.prevent="focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox, true)"
+                          >
+                            <span x-text="option.label"></span>
+                            <span x-show="medicalConcernForm.severity === option.value" aria-hidden="true">&#10003;</span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
                     <p id="medical-concern-severity-error" x-show="medicalConcernFieldError('severity')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('severity')"></p>
                   </div>
 
                   <div class="is-full">
                     <label for="medical-concern-internal-description">
-                      Internal Staff Observation <span aria-hidden="true">*</span>
+                      Internal staff observation <span aria-hidden="true">*</span>
                     </label>
                     <textarea
                       id="medical-concern-internal-description"
@@ -2732,7 +2765,7 @@
 
                   <div class="is-full">
                     <label for="medical-concern-customer-message">
-                      Customer-Visible Message <span aria-hidden="true">*</span>
+                      Customer-visible message <span aria-hidden="true">*</span>
                     </label>
                     <textarea
                       id="medical-concern-customer-message"
@@ -2752,21 +2785,68 @@
 
                   <div class="is-full">
                     <label for="medical-concern-recommended-action">
-                      Recommended Grooming Action <span aria-hidden="true">*</span>
+                      Recommended grooming action <span aria-hidden="true">*</span>
                     </label>
-                    <select
-                      id="medical-concern-recommended-action"
-                      required
-                      x-model="medicalConcernForm.recommended_grooming_action"
-                      :disabled="!medicalConcernFormModal.recommendedActionEditable"
-                      :aria-invalid="Boolean(medicalConcernFieldError('recommended_grooming_action'))"
-                      aria-describedby="medical-concern-action-help medical-concern-action-error"
+                    <div
+                      class="admin-medical-concern-custom-select"
+                      @click.outside="medicalConcernSelectOpen.recommended_grooming_action = false"
+                      @focusout="if (!$el.contains($event.relatedTarget)) medicalConcernSelectOpen.recommended_grooming_action = false"
+                      @keydown.escape.stop.prevent="medicalConcernSelectOpen.recommended_grooming_action = false; $refs.medicalConcernActionTrigger.focus()"
                     >
-                      <option value="">Select recommended action</option>
-                      <template x-for="option in medicalConcernActions" :key="option.value">
-                        <option :value="option.value" x-text="option.label"></option>
-                      </template>
-                    </select>
+                      <button
+                        id="medical-concern-recommended-action"
+                        x-ref="medicalConcernActionTrigger"
+                        type="button"
+                        class="admin-medical-concern-select-trigger"
+                        :class="!medicalConcernForm.recommended_grooming_action ? 'is-placeholder' : ''"
+                        :disabled="!medicalConcernFormModal.recommendedActionEditable"
+                        :aria-expanded="String(medicalConcernSelectOpen.recommended_grooming_action)"
+                        :aria-invalid="String(Boolean(medicalConcernFieldError('recommended_grooming_action')))"
+                        aria-haspopup="listbox"
+                        aria-controls="medical-concern-action-options"
+                        aria-describedby="medical-concern-action-help medical-concern-action-error"
+                        aria-required="true"
+                        @click="toggleMedicalConcernSelect('recommended_grooming_action')"
+                        @keydown.arrow-down.prevent="openMedicalConcernSelect('recommended_grooming_action'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernActionListbox))"
+                        @keydown.arrow-up.prevent="openMedicalConcernSelect('recommended_grooming_action'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernActionListbox, true))"
+                      >
+                        <span x-text="medicalConcernSelectLabel('recommended_grooming_action', 'Select recommended action')"></span>
+                        <i
+                          data-lucide="chevron-down"
+                          class="h-4 w-4 shrink-0 transition-transform"
+                          :class="medicalConcernSelectOpen.recommended_grooming_action ? 'rotate-180' : ''"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <div
+                        id="medical-concern-action-options"
+                        x-ref="medicalConcernActionListbox"
+                        x-show="medicalConcernSelectOpen.recommended_grooming_action"
+                        x-transition.origin.top
+                        style="display: none"
+                        class="admin-medical-concern-select-options"
+                        role="listbox"
+                        aria-label="Recommended grooming action options"
+                      >
+                        <template x-for="option in medicalConcernActions" :key="option.value">
+                          <button
+                            type="button"
+                            role="option"
+                            class="admin-medical-concern-select-option"
+                            :class="medicalConcernForm.recommended_grooming_action === option.value ? 'is-selected' : ''"
+                            :aria-selected="String(medicalConcernForm.recommended_grooming_action === option.value)"
+                            @click="selectMedicalConcernOption('recommended_grooming_action', option.value); $nextTick(() => $refs.medicalConcernActionTrigger.focus())"
+                            @keydown.arrow-down.prevent="moveMedicalConcernSelectFocus($event.currentTarget, 1)"
+                            @keydown.arrow-up.prevent="moveMedicalConcernSelectFocus($event.currentTarget, -1)"
+                            @keydown.home.prevent="focusMedicalConcernSelectOption($refs.medicalConcernActionListbox)"
+                            @keydown.end.prevent="focusMedicalConcernSelectOption($refs.medicalConcernActionListbox, true)"
+                          >
+                            <span x-text="option.label"></span>
+                            <span x-show="medicalConcernForm.recommended_grooming_action === option.value" aria-hidden="true">&#10003;</span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
                     <p id="medical-concern-action-help" class="admin-medical-concern-help is-advisory">
                       This records the recommended action. It does not yet pause or stop grooming automatically.
                     </p>
@@ -2801,7 +2881,7 @@
 
                   <div x-show="medicalConcernFormModal.mode === 'edit'" class="is-full">
                     <label for="medical-concern-internal-resolution-notes">
-                      Internal Resolution Notes <span class="is-optional">(optional)</span>
+                      Internal resolution notes <span class="is-optional">(optional)</span>
                     </label>
                     <textarea
                       id="medical-concern-internal-resolution-notes"
@@ -3261,6 +3341,7 @@
                     <!-- New request form -->
                     <form
                       x-show="clinicReferralModal.view === 'form'"
+                      class="admin-clinic-referral-form"
                       @submit.prevent="openClinicReferralConfirmation()"
                       novalidate
                     >

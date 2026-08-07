@@ -16,7 +16,7 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringContainsString("selectArchiveType('clinic')", $page);
         $this->assertStringContainsString('View Full Record', $page);
         $this->assertStringContainsString('Full Archived Clinic Record', $page);
-        $this->assertStringContainsString('Visit Date and Time', $page);
+        $this->assertStringContainsString('Visit date and time', $page);
         $this->assertStringContainsString('Patient', $page);
         $this->assertStringContainsString('Owner and Pet Information', $page);
         $this->assertStringContainsString('Appointment Details', $page);
@@ -52,5 +52,30 @@ class AdminClinicArchiveInterfaceTest extends TestCase
             'x-show="detailsClinicRecord?.grooming_referral"',
             $page,
         );
+    }
+
+    public function test_clinic_summary_cards_use_sentence_case_before_opening_the_full_record(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/archive.html'));
+        $start = strpos($page, '<template x-if="archiveType === \'clinic\'">');
+        $end = strpos($page, '</template>', $start);
+
+        $this->assertNotFalse($start);
+        $this->assertNotFalse($end);
+
+        $clinicCard = substr($page, $start, $end - $start);
+
+        $this->assertStringContainsString('View Full Record', $clinicCard);
+        foreach ([
+            'Visit date and time',
+            'Appointment type',
+            'Reason for visit',
+            'Assigned veterinarian',
+            'Payment status',
+        ] as $label) {
+            $this->assertStringContainsString($label, $clinicCard);
+        }
+        $this->assertStringNotContainsString('uppercase', $clinicCard);
+        $this->assertStringNotContainsString('tracking-', $clinicCard);
     }
 }

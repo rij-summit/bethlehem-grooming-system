@@ -88,6 +88,23 @@ class ClinicReferralAcceptanceInterfaceTest extends TestCase
     }
 
     #[Test]
+    public function detail_actions_hide_during_acceptance_confirmation_and_return_on_go_back(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<div\s+x-show="!clinicReferralModal\.confirming"\s+data-clinic-referral-detail-actions[^>]*>.*?Close.*?Accept Referral.*?<\/div>/s',
+            $this->clinicPage,
+        );
+        $this->assertStringContainsString(
+            '@click="clinicReferralModal.confirming = false"',
+            $this->clinicPage,
+        );
+        $this->assertStringContainsString(
+            'this.clinicReferralModal.confirming = true;',
+            $this->referralComponent,
+        );
+    }
+
+    #[Test]
     public function accepted_state_updates_clinic_schedules_and_customer_views_safely(): void
     {
         foreach ([

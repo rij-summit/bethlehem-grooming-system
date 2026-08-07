@@ -73,6 +73,37 @@ function getAppointmentType() {
   return checked?.value || "grooming";
 }
 
+function isClinicWalkInEntry() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("source") === "clinic" || params.get("flow") === "clinic";
+}
+
+function handleWalkInBack(event) {
+  if (!isClinicWalkInEntry()) {
+    return;
+  }
+
+  event.preventDefault();
+  window.location.assign("./clinic.html");
+}
+
+function applyRequestedAppointmentType() {
+  if (!isClinicWalkInEntry()) {
+    return;
+  }
+
+  const clinicType = document.getElementById("typeClinic");
+
+  if (clinicType) {
+    clinicType.checked = true;
+  }
+
+  document.querySelectorAll("[data-walk-in-back-link]").forEach((link) => {
+    link.setAttribute("href", "./clinic.html");
+    link.addEventListener("click", handleWalkInBack);
+  });
+}
+
 function getFormValues() {
   return {
     firstName: normalizeText(elements.firstName.value),
@@ -276,6 +307,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  applyRequestedAppointmentType();
   bindEvents();
   renderValidationErrors(getFormValues(), { showAll: false });
   syncNextButtonState();

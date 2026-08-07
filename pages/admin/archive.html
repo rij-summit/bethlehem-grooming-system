@@ -484,7 +484,7 @@
                         <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                           <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
-                              <p class="text-xs font-bold uppercase tracking-[0.14em] text-[#5c7690]" x-text="displayArchiveValue(booking.appointment_reference)"></p>
+                              <p class="text-xs font-bold text-[#5c7690]" x-text="displayArchiveValue(booking.appointment_reference)"></p>
                               <span
                                 class="inline-flex rounded-full border px-3 py-1 text-xs font-bold"
                                 :class="clinicStatusClass(booking.status)"
@@ -494,29 +494,29 @@
 
                             <div class="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Pet</p>
+                                <p class="text-xs font-bold text-slate-400">Pet</p>
                                 <p class="mt-1 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.pet?.name)"></p>
                                 <p class="mt-1 text-sm font-medium text-slate-500" x-text="[booking.pet?.species, booking.pet?.breed].filter(Boolean).join(' • ') || 'Data is currently unavailable.'"></p>
                               </div>
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Owner</p>
+                                <p class="text-xs font-bold text-slate-400">Owner</p>
                                 <p class="mt-1 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.ownerName)"></p>
                                 <p class="mt-1 text-sm font-medium text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
                               </div>
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Visit Date and Time</p>
+                                <p class="text-xs font-bold text-slate-400">Visit date and time</p>
                                 <p class="mt-1 text-sm font-medium text-slate-600" x-text="formatClinicVisit(booking)"></p>
                               </div>
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Appointment Type</p>
+                                <p class="text-xs font-bold text-slate-400">Appointment type</p>
                                 <p class="mt-1 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.appointment_type_label)"></p>
                               </div>
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Reason for Visit</p>
+                                <p class="text-xs font-bold text-slate-400">Reason for visit</p>
                                 <p class="mt-1 line-clamp-2 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.chief_complaint)"></p>
                               </div>
                               <div>
-                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Veterinarian</p>
+                                <p class="text-xs font-bold text-slate-400">Assigned veterinarian</p>
                                 <p class="mt-1 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.assigned_veterinarian)"></p>
                               </div>
                             </div>
@@ -524,7 +524,7 @@
 
                           <div class="flex shrink-0 flex-col gap-3 sm:flex-row xl:w-52 xl:flex-col">
                             <div class="rounded-2xl bg-[#eef5fb] px-4 py-3">
-                              <p class="text-xs font-bold uppercase tracking-wider text-[#5c7690]">Payment Status</p>
+                              <p class="text-xs font-bold text-[#5c7690]">Payment status</p>
                               <p class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.payment_status_label)"></p>
                             </div>
                             <button

@@ -101,6 +101,10 @@ function adminGroomingConcernState() {
     medicalConcernToastTimer: null,
     medicalConcernSeverities: GROOMING_CONCERN_SEVERITIES,
     medicalConcernActions: GROOMING_CONCERN_ACTIONS,
+    medicalConcernSelectOpen: {
+      severity: false,
+      recommended_grooming_action: false,
+    },
 
     bookingPetIdentifier(pet) {
       return pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id ?? null;
@@ -325,6 +329,7 @@ function adminGroomingConcernState() {
       };
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
+      this.closeMedicalConcernSelects();
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
       this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
       this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
@@ -361,6 +366,7 @@ function adminGroomingConcernState() {
       this.medicalConcernModal.duplicateMessage = "";
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
+      this.closeMedicalConcernSelects();
       this.medicalConcernTerminal = emptyGroomingConcernTerminalDialog();
       this.medicalConcernNotify = emptyGroomingConcernNotifyDialog();
       this.medicalConcernActionDialog = emptyGroomingConcernActionDialog();
@@ -394,6 +400,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernModal.duplicateMessage = "";
+      this.closeMedicalConcernSelects();
       this.medicalConcernModal.view = "form";
       this.refreshIcons?.();
     },
@@ -423,6 +430,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernModal.duplicateMessage = "";
+      this.closeMedicalConcernSelects();
       this.medicalConcernModal.view = "form";
       this.refreshIcons?.();
     },
@@ -433,6 +441,7 @@ function adminGroomingConcernState() {
       this.medicalConcernFormErrors = {};
       this.medicalConcernFormErrorSummary = "";
       this.medicalConcernModal.duplicateMessage = "";
+      this.closeMedicalConcernSelects();
       this.refreshIcons?.();
     },
 
@@ -562,6 +571,7 @@ function adminGroomingConcernState() {
             );
 
         await this.loadMedicalConcerns(booking, pet);
+        this.closeMedicalConcernSelects();
         this.medicalConcernModal.view = "history";
         this.showMedicalConcernToast(
           response.message || (editing
@@ -606,6 +616,83 @@ function adminGroomingConcernState() {
 
     medicalConcernFieldError(field) {
       return this.medicalConcernFormErrors[field] || "";
+    },
+
+    medicalConcernSelectOptions(field) {
+      if (field === "severity") return this.medicalConcernSeverities;
+      if (field === "recommended_grooming_action") return this.medicalConcernActions;
+      return [];
+    },
+
+    medicalConcernSelectLabel(field, placeholder = "Select an option") {
+      const value = String(this.medicalConcernForm[field] || "");
+      return this.medicalConcernSelectOptions(field)
+        .find((option) => option.value === value)?.label || placeholder;
+    },
+
+    medicalConcernSelectDisabled(field) {
+      if (field === "severity") {
+        return !this.medicalConcernFormModal.customerFieldsEditable;
+      }
+      if (field === "recommended_grooming_action") {
+        return !this.medicalConcernFormModal.recommendedActionEditable;
+      }
+      return true;
+    },
+
+    openMedicalConcernSelect(field) {
+      if (this.medicalConcernSelectDisabled(field)) return;
+      this.closeMedicalConcernSelects();
+      this.medicalConcernSelectOpen[field] = true;
+    },
+
+    toggleMedicalConcernSelect(field) {
+      if (this.medicalConcernSelectDisabled(field)) return;
+      const shouldOpen = !this.medicalConcernSelectOpen[field];
+      this.closeMedicalConcernSelects();
+      this.medicalConcernSelectOpen[field] = shouldOpen;
+    },
+
+    closeMedicalConcernSelects() {
+      this.medicalConcernSelectOpen = {
+        severity: false,
+        recommended_grooming_action: false,
+      };
+    },
+
+    selectMedicalConcernOption(field, value) {
+      if (
+        this.medicalConcernSelectDisabled(field)
+        || !this.medicalConcernSelectOptions(field).some((option) => option.value === value)
+      ) {
+        return;
+      }
+
+      this.medicalConcernForm[field] = value;
+      this.closeMedicalConcernSelects();
+
+      if (this.medicalConcernFormErrors[field]) {
+        const remainingErrors = { ...this.medicalConcernFormErrors };
+        delete remainingErrors[field];
+        this.medicalConcernFormErrors = remainingErrors;
+        this.medicalConcernFormErrorSummary = Object.values(remainingErrors)[0] || "";
+      }
+    },
+
+    focusMedicalConcernSelectOption(listbox, last = false) {
+      const options = Array.from(listbox?.querySelectorAll('[role="option"]') || []);
+      const target = last ? options.at(-1) : options[0];
+      target?.focus();
+    },
+
+    moveMedicalConcernSelectFocus(currentOption, offset) {
+      const listbox = currentOption?.closest('[role="listbox"]');
+      const options = Array.from(listbox?.querySelectorAll('[role="option"]') || []);
+      const currentIndex = options.indexOf(currentOption);
+      if (currentIndex < 0 || options.length === 0) return;
+
+      const nextIndex = (currentIndex + offset + options.length) % options.length;
+      options[nextIndex]?.focus();
     },
 
     focusMedicalConcernValidationSummary() {
