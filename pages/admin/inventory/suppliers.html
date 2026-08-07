@@ -9,8 +9,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
-    <div x-data="adminSidebar()" class="min-h-screen flex bg-[#f5f8fb]">
-      <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" @click="sidebarOpen = false"></div>
+    <div x-data="adminSidebar()" x-cloak class="min-h-screen flex bg-[#f5f8fb]">
+      <div x-cloak x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" @click="sidebarOpen = false"></div>
       <aside class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
         <div class="px-6 py-6"><div class="flex items-start gap-4"><div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm"><img src="../../../assets/images/clinic/Bethlehem_Logo.png" alt="logo" class="h-full w-full object-contain" /></div><div class="min-w-0"><h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1><p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p></div></div></div>
         <nav class="px-4 py-6">
@@ -34,7 +34,7 @@
           <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()"><i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span></button>
         </div>
       </aside>
-      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"><div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden"><div class="px-6 py-5"><h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4><p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p><p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p></div><div class="flex gap-3 px-6 py-4"><button type="button" @click="stopModal.open=false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped?'btn-confirm-reopen':'btn-confirm-stop'"><span x-text="stopModal.busy?'Please wait...':stopModal.confirmLabel"></span></button></div></div></div>
+      <div x-cloak x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"><div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden"><div class="px-6 py-5"><h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4><p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p><p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p></div><div class="flex gap-3 px-6 py-4"><button type="button" @click="stopModal.open=false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition" :class="clinicStopped?'btn-confirm-reopen':'btn-confirm-stop'"><span x-text="stopModal.busy?'Please wait...':stopModal.confirmLabel"></span></button></div></div></div>
 
       <!-- Main -->
       <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
@@ -147,7 +147,7 @@
           </div>
 
           <!-- ── Add / Edit Modal ────────────────────────────────────────── -->
-          <div x-show="modal.open" style="display:none" x-transition
+          <div x-cloak x-show="modal.open" style="display:none" x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
             <div class="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden" @click.stop>
               <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
@@ -211,7 +211,7 @@
           </div>
 
           <!-- ── Deactivate Confirm Modal ────────────────────────────────── -->
-          <div x-show="deactivateModal.open" style="display:none" x-transition
+          <div x-cloak x-show="deactivateModal.open" style="display:none" x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
             <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
               <div class="px-6 py-5">

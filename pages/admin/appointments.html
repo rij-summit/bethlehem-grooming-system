@@ -16,6 +16,7 @@
     >
       <!-- Mobile Backdrop -->
       <div
+        x-cloak
         x-show="sidebarOpen"
         x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -217,6 +218,7 @@
 
       <!-- Stop Receiving Confirmation Modal -->
       <div
+        x-cloak
         x-show="stopModal.open"
         x-transition
         class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
@@ -3660,6 +3662,7 @@
 
           <!-- Payment Modal -->
           <div
+            x-cloak
             x-show="paymentModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
@@ -3863,6 +3866,7 @@
 
           <!-- Receipt Modal -->
           <div
+            x-cloak
             x-show="receiptModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
@@ -4078,6 +4082,7 @@
 
           <!-- Shared secondary action confirmation modal -->
           <div
+            x-cloak
             x-show="actionConfirmModal.open"
             x-transition
             style="display:none"
@@ -4138,6 +4143,7 @@
 
           <!-- View Details Modal -->
           <div
+            x-cloak
             x-show="detailsModalOpen"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"

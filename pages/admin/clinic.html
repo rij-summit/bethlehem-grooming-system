@@ -8,10 +8,11 @@
     <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
-    <div x-data="adminSidebar()" class="min-h-screen flex bg-[#f5f8fb]">
+    <div x-data="adminSidebar()" x-cloak class="min-h-screen flex bg-[#f5f8fb]">
 
       <!-- Mobile Backdrop -->
       <div
+        x-cloak
         x-show="sidebarOpen"
         x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -167,7 +168,7 @@
             </div>
 
             <!-- Customer detail modal -->
-            <div x-show="showPanel" style="display:none;z-index:200;background-color:rgba(15,23,42,0.6)"
+            <div x-cloak x-show="showPanel" style="display:none;z-index:200;background-color:rgba(15,23,42,0.6)"
               x-transition class="fixed inset-0 flex items-center justify-center px-4">
               <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
@@ -217,7 +218,7 @@
             </div>
 
             <!-- Add to Queue modal -->
-            <div x-show="queueModal.open" style="display:none;z-index:210;background-color:rgba(15,23,42,0.7)"
+            <div x-cloak x-show="queueModal.open" style="display:none;z-index:210;background-color:rgba(15,23,42,0.7)"
               x-transition class="fixed inset-0 flex items-center justify-center px-4">
               <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
@@ -939,6 +940,7 @@
 
           <!-- Draft create/edit dialog -->
           <div
+            x-cloak
             x-show="formModal.open"
             style="display:none"
             x-transition
@@ -1102,6 +1104,7 @@
 
           <!-- Read-only detail dialog -->
           <div
+            x-cloak
             x-show="detailModal.open"
             style="display:none"
             x-transition
@@ -1189,6 +1192,7 @@
 
           <!-- Void confirmation dialog -->
           <div
+            x-cloak
             x-show="voidModal.open"
             style="display:none"
             x-transition
@@ -1236,6 +1240,7 @@
     <!-- Payment Modal -->
     <div
       x-data="adminClinicPayModal()"
+      x-cloak
       x-show="open"
       x-transition
       class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 px-4"
