@@ -590,28 +590,60 @@
   }
 
   async function loadAppointments() {
+    let data;
+
     try {
-      const data    = await API.getBookingHistory({ historyLimit: 6 });
-      const active  = data.bookings || [];
-      const history = data.history  || [];
-      const historyTotal = Number.isFinite(Number(data.history_total))
-        ? Number(data.history_total)
-        : history.length;
+      data = await API.getBookingHistory({ historyLimit: 6 });
+    } catch (error) {
+      renderDashboardPanelError(appointmentsList, "Failed to load schedule. Please try again.");
+      renderDashboardPanelError(groomingTrackerEl, "Failed to load grooming status. Please try again.");
+      renderDashboardPanelError(groomingHistoryEl, "Failed to load grooming history. Please try again.");
+      renderUpcomingAppointmentsSummary([]);
+      renderPastGroomingSummary([], 0);
+      return;
+    }
 
-      const scheduled = active.filter(isUpcomingAppointment);
-      const atClinic  = active.filter(b =>
-        ["checked_in", "in_progress", "for_payment", "released"].includes(b.status)
-      ).filter(b => b.show_grooming_tracker !== false);
+    const active = Array.isArray(data?.bookings) ? data.bookings : [];
+    const history = Array.isArray(data?.history) ? data.history : [];
+    const historyTotal = Number.isFinite(Number(data?.history_total))
+      ? Number(data.history_total)
+      : history.length;
+    const scheduled = active.filter(isUpcomingAppointment);
+    const atClinic = active.filter(b =>
+      ["checked_in", "in_progress", "for_payment", "released"].includes(b?.status)
+    ).filter(b => b.show_grooming_tracker !== false);
 
+    renderDashboardPanel(appointmentsList, "schedule", () => {
       renderAppointments(scheduled);
       renderUpcomingAppointmentsSummary(scheduled);
+    });
+    renderDashboardPanel(groomingTrackerEl, "grooming status", () => {
       renderGroomingTracker(atClinic);
+    });
+    renderDashboardPanel(groomingHistoryEl, "grooming history", () => {
       renderGroomingHistory(history);
       renderPastGroomingSummary(history, historyTotal);
-    } catch {
-      appointmentsList.innerHTML =
-        '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load schedule.</p></div>';
+    });
+  }
+
+  function renderDashboardPanel(target, label, render) {
+    try {
+      render();
+    } catch (error) {
+      console.error(`Failed to render customer ${label}.`, error);
+      renderDashboardPanelError(target, `Failed to display ${label}. Please refresh.`);
     }
+  }
+
+  function renderDashboardPanelError(target, message) {
+    if (!target) return;
+
+    target.innerHTML = `
+      <div class="text-center py-10" role="alert">
+        <i data-lucide="alert-circle" class="w-9 h-9 mx-auto text-red-300"></i>
+        <p class="mt-3 text-sm text-red-500">${escapeDashboardHtml(message)}</p>
+      </div>`;
+    window.lucide?.createIcons();
   }
 
   // ── Appointments section ───────────────────────────────────────────────────
@@ -965,35 +997,49 @@
   }
 
   function buildHistoryCard(b) {
-    const reviewedPets = (b.payment_summary?.pets || [])
-      .filter((pet) => pet.payment_kind === "stopped_reviewed");
+    const paymentPets = Array.isArray(b?.payment_summary?.pets)
+      ? b.payment_summary.pets
+      : [];
+    const reviewedPets = paymentPets
+      .filter((pet) => pet?.payment_kind === "stopped_reviewed");
     const paymentReviewSummary = reviewedPets.length ? `
       <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
         ${reviewedPets.map((pet) => `
           <div class="rounded-xl bg-amber-50 p-3 text-xs text-slate-700">
-            <p class="font-bold text-amber-900">${escapeHtml(pet.pet_name)} &middot; Payment Review Completed</p>
-            <p class="mt-1">${escapeHtml(pet.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet.final_pet_charge)}</p>
-            <p class="mt-1">${escapeHtml(pet.customer_explanation || "No customer explanation provided.")}</p>
+            <p class="font-bold text-amber-900">${escapeDashboardHtml(pet?.pet_name)} &middot; Payment Review Completed</p>
+            <p class="mt-1">${escapeDashboardHtml(pet?.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet?.final_pet_charge)}</p>
+            <p class="mt-1">${escapeDashboardHtml(pet?.customer_explanation || "No customer explanation provided.")}</p>
           </div>
         `).join("")}
       </div>
     ` : "";
-    const timeLabel  = b.time_window?.window_label ?? "—";
-    const petNames   = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
-    const paidBadge  = b.paid
+    const timeLabel = b?.time_window?.window_label ?? "—";
+    const pets = Array.isArray(b?.pets) ? b.pets : [];
+    const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
+    const paidBadge = b?.paid
       ? `<span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Paid ✓</span>`
       : "";
 
     return `
       <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
         <div class="flex items-start justify-between gap-2 mb-1">
-          <p class="text-sm font-semibold text-slate-700">${b.booking_reference}</p>
+          <p class="text-sm font-semibold text-slate-700">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
           ${paidBadge}
         </div>
-        <p class="text-xs text-slate-400 mb-1">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
-        <p class="text-xs text-slate-500">${petNames}</p>
+        <p class="text-xs text-slate-400 mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
+        <p class="text-xs text-slate-500">${escapeDashboardHtml(petNames)}</p>
         ${paymentReviewSummary}
       </div>`;
+  }
+
+  function escapeDashboardHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    })[character]);
   }
 
   // ── Status config ──────────────────────────────────────────────────────────
