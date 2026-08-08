@@ -3,6 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pet;
+use App\Rules\ValidBreedCoat;
+use App\Rules\ValidPetSize;
+use App\Rules\ValidPetWeight;
+use App\Support\PetWeightSize;
 use Illuminate\Http\Request;
 
 class PetController extends Controller
@@ -54,18 +58,23 @@ class PetController extends Controller
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
             'breed' => 'nullable|string|max:100',
-            'size' => 'nullable|in:small,medium,large,extra_large',
-            'fur_type' => 'nullable|string|max:100',
-            'weight' => 'nullable|numeric|min:0',
+            'gender' => 'nullable|in:male,female',
+            'birthdate' => 'nullable|date',
+            'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'weight' => ['nullable', 'numeric', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data = PetWeightSize::withComputedSize($data);
 
         $pet = Pet::create([
             'user_id' => $request->user()->user_id,
             'pet_name' => $data['pet_name'],
             'species' => $data['species'] ?? 'Dog',
             'breed' => $data['breed'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'birthdate' => $data['birthdate'] ?? null,
             'size' => $data['size'] ?? null,
             'fur_type' => $data['fur_type'] ?? null,
             'weight' => $data['weight'] ?? null,
@@ -97,17 +106,22 @@ class PetController extends Controller
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
             'breed' => 'nullable|string|max:100',
-            'size' => 'nullable|in:small,medium,large,extra_large',
-            'fur_type' => 'nullable|string|max:100',
-            'weight' => 'nullable|numeric|min:0',
+            'gender' => 'nullable|in:male,female',
+            'birthdate' => 'nullable|date',
+            'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'weight' => ['nullable', 'numeric', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data = PetWeightSize::withComputedSize($data);
 
         $pet->update([
             'pet_name' => $data['pet_name'],
             'species' => $data['species'] ?? 'Dog',
             'breed' => $data['breed'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'birthdate' => $data['birthdate'] ?? null,
             'size' => $data['size'] ?? null,
             'fur_type' => $data['fur_type'] ?? null,
             'weight' => $data['weight'] ?? null,

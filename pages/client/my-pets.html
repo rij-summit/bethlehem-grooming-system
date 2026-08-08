@@ -166,21 +166,74 @@
                 required />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Species</label>
-              <select id="petSpecies"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
-                <option value="Dog">Dog</option>
-                <option value="Cat">Cat</option>
-              </select>
+              <label for="petSpecies" class="block text-sm font-medium text-slate-700 mb-1">Species</label>
+              <div id="petSpeciesCombobox" class="relative">
+                <div class="relative">
+                  <input id="petSpecies" name="species" type="text" placeholder="Select species"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    role="combobox" aria-autocomplete="none" aria-controls="petSpeciesOptions"
+                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
+                  <button id="petSpeciesDropdownButton" type="button"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    aria-label="Show species options" aria-controls="petSpeciesOptions" aria-expanded="false">
+                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="petSpeciesOptions"
+                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  role="listbox" aria-label="Species options"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gender + Birthdate -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="petGender" class="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+              <div id="petGenderCombobox" class="relative">
+                <div class="relative">
+                  <input id="petGender" name="gender" type="text" placeholder="Select gender"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    role="combobox" aria-autocomplete="none" aria-controls="petGenderOptions"
+                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
+                  <button id="petGenderDropdownButton" type="button"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    aria-label="Show gender options" aria-controls="petGenderOptions" aria-expanded="false">
+                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="petGenderOptions"
+                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  role="listbox" aria-label="Gender options"></div>
+              </div>
+            </div>
+            <div>
+              <label for="petBirthdate" class="block text-sm font-medium text-slate-700 mb-1">Birthdate</label>
+              <input type="date" id="petBirthdate"
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
             </div>
           </div>
 
           <!-- Breed + Color -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Breed</label>
-              <input type="text" id="petBreed" placeholder="e.g. Shih Tzu"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+              <label for="petBreed" class="block text-sm font-medium text-slate-700 mb-1">Breed</label>
+              <div id="petBreedCombobox" class="relative">
+                <div class="relative">
+                  <input id="petBreed" name="breed" type="text" maxlength="100" placeholder="Select breed"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    role="combobox" aria-autocomplete="list" aria-controls="petBreedOptions"
+                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
+                  <button id="petBreedDropdownButton" type="button"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    aria-label="Show breed options" aria-controls="petBreedOptions" aria-expanded="false">
+                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="petBreedOptions"
+                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  role="listbox" aria-label="Breed options"></div>
+              </div>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">Color</label>
@@ -192,35 +245,51 @@
           <!-- Size + Fur Type -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Size</label>
-              <select id="petSize"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
-                <option value="">— Not specified —</option>
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
-                <option value="extra_large">Extra Large</option>
-              </select>
+              <label for="petSize" class="block text-sm font-medium text-slate-700 mb-1">Size</label>
+              <div id="petSizeCombobox" class="relative">
+                <div class="relative">
+                  <input id="petSize" name="size" type="text" placeholder="Select species first"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
+                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
+                  <button id="petSizeDropdownButton" type="button"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20 disabled:cursor-not-allowed disabled:text-slate-300"
+                    aria-label="Show size options" aria-controls="petSizeOptions" aria-expanded="false" disabled>
+                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="petSizeOptions"
+                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  role="listbox" aria-label="Size options"></div>
+              </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Fur Type</label>
-              <select id="petFurType"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]">
-                <option value="">— Not specified —</option>
-                <option value="short">Short</option>
-                <option value="medium">Medium</option>
-                <option value="long">Long</option>
-                <option value="wire">Wire</option>
-                <option value="curl">Curl</option>
-              </select>
+              <label for="petFurType" class="block text-sm font-medium text-slate-700 mb-1">Fur Type</label>
+              <div id="petFurTypeCombobox" class="relative">
+                <div class="relative">
+                  <input id="petFurType" name="fur_type" type="text" placeholder="Select breed first"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    role="combobox" aria-autocomplete="none" aria-controls="petFurTypeOptions"
+                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
+                  <button id="petFurTypeDropdownButton" type="button"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20 disabled:cursor-not-allowed disabled:text-slate-300"
+                    aria-label="Show fur type options" aria-controls="petFurTypeOptions" aria-expanded="false" disabled>
+                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="petFurTypeOptions"
+                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  role="listbox" aria-label="Fur type options"></div>
+              </div>
             </div>
           </div>
 
           <!-- Weight -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Weight (kg)</label>
-            <input type="number" id="petWeight" placeholder="e.g. 5.5" min="0" step="0.1"
-              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+            <label for="petWeight" class="block text-sm font-medium text-slate-700 mb-1">Weight (kg)</label>
+            <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
+              aria-invalid="false"
+              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20" />
           </div>
 
           <!-- Medical Conditions -->
@@ -243,6 +312,6 @@
     </div>
 
     <script src="../../scripts/api.js"></script>
-    <script src="../../scripts/components/my-pets.js"></script>
+    <script type="module" src="../../scripts/components/my-pets.js"></script>
   </body>
 </html>

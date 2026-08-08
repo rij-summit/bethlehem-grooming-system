@@ -132,6 +132,72 @@ class ClientPetProfileTest extends TestCase
             ->assertJsonPath('message', 'Pet not found.');
     }
 
+    public function test_customer_can_add_gender_birthdate_and_connected_pet_fields(): void
+    {
+        $this->authenticateCustomer(10);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => 'Bruno',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'gender' => 'male',
+            'birthdate' => '2023-05-12',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('pet.gender', 'male')
+            ->assertJsonPath('pet.birthdate', '2023-05-12')
+            ->assertJsonPath('pet.fur_type', 'Smooth Short Coat')
+            ->assertJsonPath('pet.size', 'small');
+
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 10,
+            'pet_name' => 'Bruno',
+            'gender' => 'male',
+            'birthdate' => '2023-05-12',
+            'size' => 'small',
+        ]);
+    }
+
+    public function test_customer_can_edit_gender_birthdate_and_connected_pet_fields(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+            'size' => 'small',
+        ]);
+
+        $this->putJson('/api/pets/101', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'breed' => 'Persian',
+            'gender' => 'female',
+            'birthdate' => '2022-03-14',
+            'fur_type' => 'Long Dense Coat',
+            'weight' => 6,
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.gender', 'female')
+            ->assertJsonPath('pet.birthdate', '2022-03-14')
+            ->assertJsonPath('pet.fur_type', 'Long Dense Coat')
+            ->assertJsonPath('pet.size', 'medium');
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 101,
+            'gender' => 'female',
+            'birthdate' => '2022-03-14',
+            'size' => 'medium',
+        ]);
+    }
+
     public function test_pet_filtered_history_excludes_sibling_pets_and_their_services(): void
     {
         $this->authenticateCustomer(10);

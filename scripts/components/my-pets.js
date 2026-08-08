@@ -1,5 +1,22 @@
+import { normalizePetSize } from "../services/booking-draft-service.js";
+import { createBreedCombobox } from "./breed-combobox.js";
+import { breedCoatCatalogueReady } from "./breed-coat-catalogue.js";
+import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
+import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
+import {
+  getEnteredWeight,
+  getSizeForWeight,
+  getSizeOptions,
+  getWeightFieldValidationMessage,
+  getWeightValidationMessage,
+  initializeWeightField,
+  resetWeightFieldForEntry,
+  showWeightRangeInField,
+  showWeightValidationInField,
+} from "./pet-weight-size.js";
+
 // Connected to pages/client/my-pets.html
-// Depends on: api.js
+// Depends on: api.js and the shared pre-registration pet field components
 
 document.addEventListener("DOMContentLoaded", () => {
   // ── Auth guard ───────────────────────────────────────
@@ -25,8 +42,65 @@ document.addEventListener("DOMContentLoaded", () => {
   const petFormError     = document.getElementById("petFormError");
   const petFormSubmit    = document.getElementById("petFormSubmit");
   const petSpecies       = document.getElementById("petSpecies");
+  const petBreed         = document.getElementById("petBreed");
+  const petGender        = document.getElementById("petGender");
+  const petBirthdate     = document.getElementById("petBirthdate");
   const petSize          = document.getElementById("petSize");
+  const petFurType       = document.getElementById("petFurType");
+  const petWeight        = document.getElementById("petWeight");
   const logoutBtn        = document.getElementById("clientLogoutBtn");
+
+  const petTypeCombobox = createFixedOptionCombobox({
+    root: document.getElementById("petSpeciesCombobox"),
+    input: petSpecies,
+    listbox: document.getElementById("petSpeciesOptions"),
+    toggleButton: document.getElementById("petSpeciesDropdownButton"),
+    placeholder: "Select species",
+    options: [
+      { value: "Dog", label: "Dog" },
+      { value: "Cat", label: "Cat" },
+    ],
+  });
+
+  const genderCombobox = createFixedOptionCombobox({
+    root: document.getElementById("petGenderCombobox"),
+    input: petGender,
+    listbox: document.getElementById("petGenderOptions"),
+    toggleButton: document.getElementById("petGenderDropdownButton"),
+    placeholder: "Select gender",
+    options: [
+      { value: "male", label: "Male" },
+      { value: "female", label: "Female" },
+    ],
+    displaySelectedLabel: true,
+  });
+
+  const breedCombobox = createBreedCombobox({
+    root: document.getElementById("petBreedCombobox"),
+    input: petBreed,
+    listbox: document.getElementById("petBreedOptions"),
+    toggleButton: document.getElementById("petBreedDropdownButton"),
+    getPetType: () => petSpecies.value,
+  });
+
+  const breedCoatCombobox = createBreedCoatCombobox({
+    root: document.getElementById("petFurTypeCombobox"),
+    breedInput: petBreed,
+    petTypeInput: petSpecies,
+    input: petFurType,
+    listbox: document.getElementById("petFurTypeOptions"),
+    toggleButton: document.getElementById("petFurTypeDropdownButton"),
+  });
+
+  const sizeCombobox = createFixedOptionCombobox({
+    root: document.getElementById("petSizeCombobox"),
+    input: petSize,
+    listbox: document.getElementById("petSizeOptions"),
+    toggleButton: document.getElementById("petSizeDropdownButton"),
+    placeholder: "Select size",
+    options: [],
+    displaySelectedLabel: true,
+  });
 
   // ── Icons ─────────────────────────────────────────────
   if (window.lucide) window.lucide.createIcons();
@@ -172,12 +246,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function buildCard(pet) {
     const sizeLabel = { small: "Small", medium: "Medium", large: "Large", extra_large: "Extra Large" };
     const furLabel  = { short: "Short", medium: "Medium", long: "Long", wire: "Wire", curl: "Curl" };
+    const resolvedFurType = furLabel[pet.fur_type] || pet.fur_type;
 
     const rows = [
       ["Species",    pet.species],
       ["Breed",      pet.breed],
       ["Size",       sizeLabel[pet.size]],
-      ["Fur Type",   furLabel[pet.fur_type]],
+      ["Fur Type",   resolvedFurType],
       ["Weight",     pet.weight ? `${pet.weight} kg` : null],
       ["Color",      pet.color],
       ["Medical",    pet.medical_conditions],
@@ -243,28 +318,38 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Modal ─────────────────────────────────────────────
   function openAddModal() {
     petModalTitle.textContent = "Add Pet";
-    petForm.reset();
-    document.getElementById("petId").value = "";
-    updateSizeOptions();
+    resetPetForm();
     hideFormError();
     showModal();
   }
 
-  function openEditModal(id) {
+  async function openEditModal(id) {
     const pet = allPets.find((p) => p.pet_id === id);
     if (!pet) return;
 
     petModalTitle.textContent = "Edit Pet";
-    document.getElementById("petId").value    = pet.pet_id;
-    document.getElementById("petName").value   = pet.pet_name || "";
-    petSpecies.value= pet.species || "Dog";
-    document.getElementById("petBreed").value  = pet.breed || "";
-    document.getElementById("petColor").value  = pet.color || "";
-    petSize.value   = pet.size || "";
-    updateSizeOptions();
-    document.getElementById("petFurType").value= pet.fur_type || "";
-    document.getElementById("petWeight").value = pet.weight || "";
-    document.getElementById("petMedical").value= pet.medical_conditions || "";
+    document.getElementById("petId").value = pet.pet_id;
+    document.getElementById("petName").value = pet.pet_name || "";
+    petTypeCombobox.setValue(normalizeSpecies(pet.species));
+    genderCombobox.setValue(String(pet.gender || "").toLowerCase());
+    petBirthdate.value = pet.birthdate || "";
+    petBreed.value = pet.breed || "";
+    document.getElementById("petColor").value = pet.color || "";
+    document.getElementById("petMedical").value = pet.medical_conditions || "";
+
+    initializeWeightField(petWeight);
+    petWeight.value = pet.weight ?? "";
+    syncWeightAndSize({ clearManualSize: true });
+
+    if (!getSizeForWeight(petSpecies.value, getEnteredWeight(petWeight))) {
+      setStoredSize(pet.size);
+    }
+
+    await breedCoatCatalogueReady;
+    breedCoatCombobox.update();
+    petFurType.value = pet.fur_type || "";
+    breedCoatCombobox.update();
+
     hideFormError();
     showModal();
   }
@@ -282,7 +367,17 @@ document.addEventListener("DOMContentLoaded", () => {
   addPetBtn.addEventListener("click", openAddModal);
   closePetModal.addEventListener("click", closeModal);
   petModal.addEventListener("click", (e) => { if (e.target === petModal) closeModal(); });
-  petSpecies.addEventListener("change", updateSizeOptions);
+  petSpecies.addEventListener("change", () => {
+    if (petWeight.dataset.weightFieldMode === "range") {
+      resetWeightFieldForEntry(petWeight);
+    }
+    syncWeightAndSize({ clearManualSize: true });
+    validateWeightOnCommit();
+  });
+  petWeight.addEventListener("input", () => syncWeightAndSize());
+  petWeight.addEventListener("change", validateWeightOnCommit);
+  petWeight.addEventListener("focus", () => resetWeightFieldForEntry(petWeight));
+  petSize.addEventListener("change", handleManualSizeChange);
 
   // ── Form submit ───────────────────────────────────────
   petForm.addEventListener("submit", async (e) => {
@@ -290,16 +385,32 @@ document.addEventListener("DOMContentLoaded", () => {
     hideFormError();
 
     const id = document.getElementById("petId").value;
+    const weight = getEnteredWeight(petWeight);
     const payload = {
       pet_name:           document.getElementById("petName").value.trim(),
       species:            petSpecies.value,
-      breed:              document.getElementById("petBreed").value.trim() || null,
+      breed:              petBreed.value.trim() || null,
+      gender:             genderCombobox.getValue() || null,
+      birthdate:          petBirthdate.value || null,
       color:              document.getElementById("petColor").value.trim() || null,
-      size:               petSize.value || null,
-      fur_type:           document.getElementById("petFurType").value || null,
-      weight:             document.getElementById("petWeight").value || null,
+      size:               normalizePetSize(sizeCombobox.getValue()) || null,
+      fur_type:           petFurType.value || null,
+      weight:             weight || null,
       medical_conditions: document.getElementById("petMedical").value.trim() || null,
     };
+
+    const validationMessage = validatePetForm(payload);
+    if (validationMessage) {
+      breedCombobox.showValidation();
+      breedCoatCombobox.showValidation();
+      const weightMessage = getWeightFieldValidationMessage(petWeight)
+        || getWeightValidationMessage(payload.species, weight);
+      if (weightMessage) {
+        showWeightValidationInField(petWeight, weightMessage);
+      }
+      showFormError(validationMessage);
+      return;
+    }
 
     petFormSubmit.disabled = true;
     petFormSubmit.textContent = "Saving...";
@@ -358,16 +469,109 @@ document.addEventListener("DOMContentLoaded", () => {
     petFormError.classList.add("hidden");
   }
 
-  function updateSizeOptions() {
-    const isCat = petSpecies.value.toLowerCase() === "cat";
-    petSize.querySelectorAll('option[value="large"], option[value="extra_large"]').forEach((option) => {
-      option.hidden = isCat;
-      option.disabled = isCat;
+  function normalizeSpecies(value) {
+    return String(value || "").trim().toLowerCase() === "cat" ? "Cat" : "Dog";
+  }
+
+  function resetPetForm() {
+    document.getElementById("petId").value = "";
+    document.getElementById("petName").value = "";
+    document.getElementById("petColor").value = "";
+    document.getElementById("petMedical").value = "";
+    petBirthdate.value = "";
+
+    petTypeCombobox.setValue("Dog");
+    genderCombobox.reset();
+    breedCombobox.reset();
+    breedCoatCombobox.reset();
+    initializeWeightField(petWeight);
+    syncWeightAndSize({ clearManualSize: true });
+  }
+
+  function setStoredSize(storedSize) {
+    const normalizedStoredSize = normalizePetSize(storedSize);
+    const matchingOption = getSizeOptions(petSpecies.value).find(
+      ({ value }) => normalizePetSize(value) === normalizedStoredSize,
+    );
+
+    sizeCombobox.setValue(matchingOption?.value || "");
+  }
+
+  function syncWeightAndSize({ clearManualSize = false } = {}) {
+    const rawWeight = getEnteredWeight(petWeight);
+    const options = getSizeOptions(petSpecies.value);
+
+    sizeCombobox.setOptions(options, {
+      preserveValue: !clearManualSize,
     });
 
-    if (isCat && ["large", "extra_large"].includes(petSize.value)) {
-      petSize.value = "";
+    const computedSize = getSizeForWeight(petSpecies.value, rawWeight);
+    if (computedSize) {
+      sizeCombobox.setValue(computedSize);
     }
+
+    sizeCombobox.setDisabled(options.length === 0);
+  }
+
+  function validateWeightOnCommit() {
+    const rawWeight = getEnteredWeight(petWeight);
+
+    if (!rawWeight) {
+      if (petWeight.dataset.weightFieldMode !== "error") {
+        showWeightRangeInField(
+          petWeight,
+          petSpecies.value,
+          sizeCombobox.getValue(),
+        );
+      }
+      return true;
+    }
+
+    const message = getWeightValidationMessage(petSpecies.value, rawWeight);
+    if (message) {
+      showWeightValidationInField(petWeight, message);
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleManualSizeChange() {
+    if (!getEnteredWeight(petWeight)
+      && petWeight.dataset.weightFieldMode !== "error") {
+      showWeightRangeInField(
+        petWeight,
+        petSpecies.value,
+        sizeCombobox.getValue(),
+      );
+    }
+  }
+
+  function validatePetForm(payload) {
+    const breedValidationMessage = breedCombobox.getValidationMessage();
+    if (breedValidationMessage) {
+      return breedValidationMessage;
+    }
+
+    const furTypeValidationMessage = breedCoatCombobox.getValidationMessage();
+    if (furTypeValidationMessage) {
+      return furTypeValidationMessage;
+    }
+
+    const weightValidationMessage = getWeightFieldValidationMessage(petWeight)
+      || getWeightValidationMessage(payload.species, payload.weight);
+    if (weightValidationMessage) {
+      return weightValidationMessage;
+    }
+
+    const allowedSizes = getSizeOptions(payload.species).map(
+      ({ value }) => normalizePetSize(value),
+    );
+    if (payload.size && !allowedSizes.includes(payload.size)) {
+      return `${payload.species} size must be one of: ${allowedSizes.join(", ")}.`;
+    }
+
+    return "";
   }
 
   function escHtml(str) {
