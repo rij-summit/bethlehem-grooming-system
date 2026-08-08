@@ -11,6 +11,7 @@ use App\Models\GroomingClinicReferral;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\DailyPetQueue;
+use App\Services\GroomingBookingWorkflowService;
 use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingPaymentReadinessService;
 use Carbon\Carbon;
@@ -29,6 +30,13 @@ class AdminBookingController extends Controller
         'for_payment',
         'for_pickup',
         'released',
+    ];
+
+    private const ACTIVE_CLINIC_REFERRAL_STATUSES = [
+        GroomingClinicReferral::STATUS_PENDING_CONSENT,
+        GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
+        GroomingClinicReferral::STATUS_ACCEPTED,
+        GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
     ];
 
     private function dailyIntakeCount(string $date): int
@@ -131,9 +139,19 @@ class AdminBookingController extends Controller
         // Removed booking_date filter from active states so cards stay visible
         // regardless of the selected date. Restore ->where('booking_date', $selectedDate)
         // on each query below when re-enabling the date guard for production.
-        $queuedQuery = Booking::where('status', 'checked_in')
-            ->whereDoesntHave('bookingPets', function ($pet) {
-                $pet->whereNotNull('grooming_start_time');
+        $queuedQuery = Booking::where(function (Builder $booking) {
+            $booking->where('status', 'checked_in')
+                ->orWhere(function (Builder $actionOnly) {
+                    $actionOnly->where('status', 'in_progress');
+                    $this->whereOnlyActionableStoppedPaymentReviewRemains($actionOnly);
+                });
+        })
+            ->where(function (Builder $booking) {
+                $booking->whereDoesntHave('bookingPets', function (Builder $pet) {
+                    $pet->whereNotNull('grooming_start_time');
+                })->orWhere(function (Builder $actionOnly) {
+                    $this->whereOnlyActionableStoppedPaymentReviewRemains($actionOnly);
+                });
             });
         $this->retainOwnerCardsWithActiveGroomingPets($queuedQuery);
         $queued = $queuedQuery
@@ -155,6 +173,17 @@ class AdminBookingController extends Controller
                             $pet->whereNull('grooming_end_time');
                         });
                 });
+        })->where(function (Builder $booking) {
+            $booking->whereDoesntHave('bookingPets', function (Builder $pet) {
+                $this->constrainActionableStoppedPaymentReviewPet($pet);
+            })->orWhereHas('bookingPets', function (Builder $pet) {
+                $pet->whereNull('grooming_end_time')
+                    ->whereIn('grooming_state', [
+                        BookingPet::GROOMING_STATE_NOT_STARTED,
+                        BookingPet::GROOMING_STATE_IN_PROGRESS,
+                        BookingPet::GROOMING_STATE_PAUSED,
+                    ]);
+            });
         });
         $this->retainOwnerCardsWithActiveGroomingPets($inProgressQuery);
         $inProgress = $inProgressQuery
@@ -245,16 +274,55 @@ class AdminBookingController extends Controller
         return $query->where(function (Builder $booking) {
             $booking
                 ->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
-                    $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+                    $referral->whereIn('status', self::ACTIVE_CLINIC_REFERRAL_STATUSES);
                 })
                 ->orWhereHas('bookingPets', function (Builder $pet) {
                     $pet->whereNull('grooming_end_time')
                         ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
                         ->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
-                            $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
+                            $referral->whereIn('status', self::ACTIVE_CLINIC_REFERRAL_STATUSES);
                         });
                 });
         });
+    }
+
+    private function whereHasActionableStoppedPaymentReview(Builder $booking): Builder
+    {
+        return $booking->whereHas('bookingPets', function (Builder $pet) {
+            $this->constrainActionableStoppedPaymentReviewPet($pet);
+        });
+    }
+
+    private function whereOnlyActionableStoppedPaymentReviewRemains(Builder $booking): Builder
+    {
+        $this->whereHasActionableStoppedPaymentReview($booking);
+
+        return $booking->whereDoesntHave('bookingPets', function (Builder $pet) {
+            $pet->whereNull('grooming_end_time')
+                ->whereIn('grooming_state', [
+                    BookingPet::GROOMING_STATE_NOT_STARTED,
+                    BookingPet::GROOMING_STATE_IN_PROGRESS,
+                    BookingPet::GROOMING_STATE_PAUSED,
+                ]);
+        });
+    }
+
+    private function constrainActionableStoppedPaymentReviewPet(Builder $pet): Builder
+    {
+        $pet->where('grooming_state', BookingPet::GROOMING_STATE_STOPPED)
+            ->whereNull('grooming_end_time');
+
+        if (Schema::hasTable('grooming_stopped_payment_reviews')) {
+            $pet->whereDoesntHave('groomingStoppedPaymentReview');
+        }
+
+        if (Schema::hasTable('grooming_clinic_referrals')) {
+            $pet->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
+                $referral->whereIn('status', self::ACTIVE_CLINIC_REFERRAL_STATUSES);
+            });
+        }
+
+        return $pet;
     }
 
     // ── CHECK IN ──────────────────────────────────────────
@@ -1121,6 +1189,7 @@ class AdminBookingController extends Controller
             || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - round($paidTotal, 2)) <= 0.01);
         $paymentSummary ??= $this->paymentReadiness()->summarize($booking);
         $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
+        $workflow = app(GroomingBookingWorkflowService::class)->describe($paymentSummary);
 
         return [
             // Fields the card templates read directly
@@ -1165,6 +1234,14 @@ class AdminBookingController extends Controller
             'final_payment_total' => $paymentSummary['final_booking_total'],
             'paymentSummary' => $paymentSummary,
             'payment_summary' => $paymentSummary,
+            'actionRequired' => $workflow['action_required'],
+            'action_required' => $workflow['action_required'],
+            'actionRequiredType' => $workflow['action_required_type'],
+            'action_required_type' => $workflow['action_required_type'],
+            'actionRequiredReason' => $workflow['action_required_reason'],
+            'action_required_reason' => $workflow['action_required_reason'],
+            'actionRequiredPetIds' => $workflow['action_required_pet_ids'],
+            'action_required_pet_ids' => $workflow['action_required_pet_ids'],
             'payment' => $paidPayment ? [
                 'id' => $paidPayment->payment_id ?? $paidPayment->id ?? null,
                 'finalPrice' => (float) $paidPayment->total_amount,
@@ -1182,6 +1259,7 @@ class AdminBookingController extends Controller
                 $pet = $bp->pet;
                 $groomingState = $this->bookingPetGroomingState($bp);
                 $paymentPet = $paymentPetsById->get($bp->booking_pet_id, []);
+                $hasActiveClinicReferral = (bool) ($paymentPet['active_clinic_referral'] ?? false);
                 $hasClinicReferral = (bool) ($paymentPet['has_clinic_referral']
                     ?? $paymentPet['active_clinic_referral']
                     ?? false);
@@ -1223,6 +1301,8 @@ class AdminBookingController extends Controller
                     'grooming_state_label' => $this->groomingStateLabel($groomingState),
                     'hasClinicReferral' => $hasClinicReferral,
                     'has_clinic_referral' => $hasClinicReferral,
+                    'hasActiveClinicReferral' => $hasActiveClinicReferral,
+                    'has_active_clinic_referral' => $hasActiveClinicReferral,
                     'clinicReferralStatus' => $paymentPet['clinic_referral_status'] ?? null,
                     'clinic_referral_status' => $paymentPet['clinic_referral_status'] ?? null,
                     'paymentReviewRequired' => $groomingState === BookingPet::GROOMING_STATE_STOPPED

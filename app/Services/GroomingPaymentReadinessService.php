@@ -114,24 +114,27 @@ class GroomingPaymentReadinessService
             $paymentReady = false;
             $blockedReason = null;
             $finalChargeCents = null;
-            $clinicReferral = $hasReferralFoundation
-                ? $bookingPet->groomingClinicReferrals->first(
+            $clinicReferrals = $hasReferralFoundation
+                ? $bookingPet->groomingClinicReferrals->filter(
                     fn (GroomingClinicReferral $referral) => $referral->status
-                    !== GroomingClinicReferral::STATUS_CANCELLED
-                    && (int) $referral->booking_id === (int) $bookingPet->booking_id
-                    && (int) $referral->pet_id === (int) $bookingPet->pet_id,
+                        !== GroomingClinicReferral::STATUS_CANCELLED
+                        && (int) $referral->booking_id === (int) $bookingPet->booking_id
+                        && (int) $referral->pet_id === (int) $bookingPet->pet_id,
                 )
-                : null;
-            $activeReferral = $clinicReferral && in_array(
-                $clinicReferral->status,
-                [
-                    GroomingClinicReferral::STATUS_PENDING_CONSENT,
-                    GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
-                    GroomingClinicReferral::STATUS_ACCEPTED,
-                    GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
-                ],
-                true,
-            ) ? $clinicReferral : null;
+                : collect();
+            $activeReferral = $clinicReferrals->first(
+                fn (GroomingClinicReferral $referral) => in_array(
+                    $referral->status,
+                    [
+                        GroomingClinicReferral::STATUS_PENDING_CONSENT,
+                        GroomingClinicReferral::STATUS_PENDING_CLINIC_ACCEPTANCE,
+                        GroomingClinicReferral::STATUS_ACCEPTED,
+                        GroomingClinicReferral::STATUS_UNDER_CLINIC_REVIEW,
+                    ],
+                    true,
+                ),
+            );
+            $clinicReferral = $activeReferral ?? $clinicReferrals->last();
 
             if ($activeReferral) {
                 $blockedReason = 'Grooming payment is unavailable while '

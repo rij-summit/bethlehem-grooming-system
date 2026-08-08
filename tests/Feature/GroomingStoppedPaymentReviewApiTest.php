@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BookingPet;
+use App\Models\GroomingClinicReferral;
 use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingStoppedPaymentReview;
 use App\Models\User;
@@ -41,6 +42,7 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
 
         foreach ([
             'grooming_stopped_payment_reviews',
+            'grooming_clinic_referrals',
             'grooming_medical_concern_responses',
             'grooming_medical_concerns',
             'customer_notifications',
@@ -715,19 +717,9 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         )->assertCreated()
             ->assertJsonPath('payment_readiness.payment_ready', true)
             ->assertJsonPath('payment_readiness.final_booking_total', '0.00')
-            ->assertJsonPath('payment_readiness.booking_status', 'for_payment');
-
-        $this->postJson('/api/admin/bookings/201/pay', [
-            'final_price' => '0.00',
-            'amount_paid' => '0.00',
-            'payment_method' => 'cash',
-            'service_prices' => [],
-        ])->assertOk()
-            ->assertJsonPath('zero_total', true)
-            ->assertJsonPath('payment_method', 'others')
-            ->assertJsonPath('amount_paid', '0.00')
-            ->assertJsonPath('change', '0.00')
-            ->assertJsonPath('booking_status', 'released');
+            ->assertJsonPath('payment_readiness.zero_total', true)
+            ->assertJsonPath('payment_readiness.automatically_processed', true)
+            ->assertJsonPath('payment_readiness.booking_status', 'released');
 
         $this->assertDatabaseHas('payments', [
             'booking_id' => 201,
@@ -737,10 +729,162 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             'payment_method' => 'others',
             'payment_status' => 'paid',
         ]);
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 1,
+            'booking_id' => 201,
+            'type' => 'ready_for_pickup',
+        ]);
+
+        $this->postJson(
+            '/api/admin/bookings/201/pets/302/medical-concerns/402/stopped-payment-review',
+            $this->noChargePayload(),
+        )->assertOk()
+            ->assertJsonPath('review.already_reviewed', true)
+            ->assertJsonPath('payment_readiness.already_processed', true)
+            ->assertJsonPath('payment_readiness.booking_status', 'released');
+        $this->assertSame(1, DB::table('payments')->count());
+        $this->assertSame(1, DB::table('customer_notifications')
+            ->where('booking_id', 201)
+            ->where('type', 'ready_for_pickup')
+            ->count());
+
         $this->postJson('/api/admin/bookings/201/picked-up')->assertOk();
         $this->assertSame('archived', DB::table('bookings')->where('booking_id', 201)->value('status'));
         $this->assertSame(BookingPet::GROOMING_STATE_STOPPED, DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_state'));
         $this->assertNull(DB::table('booking_pets')->where('booking_pet_id', 301)->value('grooming_end_time'));
+    }
+
+    public function test_no_charge_keeps_normal_payment_when_another_pet_has_a_positive_charge(): void
+    {
+        $this->authenticateAs('staff');
+
+        $this->postJson($this->storeUri(), $this->noChargePayload())
+            ->assertCreated()
+            ->assertJsonPath('payment_readiness.payment_ready', true)
+            ->assertJsonPath('payment_readiness.final_booking_total', '200.00')
+            ->assertJsonPath('payment_readiness.zero_total', false)
+            ->assertJsonPath('payment_readiness.automatically_processed', false)
+            ->assertJsonPath('payment_readiness.booking_status', 'for_payment');
+
+        $this->assertSame(0, DB::table('payments')->count());
+        $this->assertSame(0, DB::table('customer_notifications')
+            ->where('type', 'ready_for_pickup')
+            ->count());
+    }
+
+    public function test_no_charge_waits_when_another_pet_still_needs_review(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('booking_pets')->where('booking_pet_id', 302)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
+
+        $this->postJson($this->storeUri(), $this->noChargePayload())
+            ->assertCreated()
+            ->assertJsonPath('payment_readiness.payment_ready', false)
+            ->assertJsonPath('payment_readiness.automatically_processed', false)
+            ->assertJsonPath('payment_readiness.booking_status', 'in_progress');
+
+        $this->assertSame(0, DB::table('payments')->count());
+    }
+
+    public function test_no_charge_does_not_auto_process_during_an_active_clinic_referral(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('grooming_medical_concerns')->where('booking_pet_id', 302)->delete();
+        DB::table('booking_services')->where('booking_pet_id', 302)->delete();
+        DB::table('booking_pets')->where('booking_pet_id', 302)->delete();
+        DB::table('grooming_clinic_referrals')->insert([
+            'booking_id' => 201,
+            'booking_pet_id' => 301,
+            'pet_id' => 101,
+            'clinic_appointment_id' => null,
+            'status' => GroomingClinicReferral::STATUS_ACCEPTED,
+        ]);
+
+        $this->postJson($this->storeUri(), $this->noChargePayload())
+            ->assertCreated()
+            ->assertJsonPath('payment_readiness.payment_ready', false)
+            ->assertJsonPath('payment_readiness.automatically_processed', false)
+            ->assertJsonPath('payment_readiness.booking_status', 'in_progress');
+
+        $this->assertSame(0, DB::table('payments')->count());
+    }
+
+    public function test_no_charge_does_not_auto_release_an_unpaid_completed_clinic_visit(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('grooming_medical_concerns')->where('booking_pet_id', 302)->delete();
+        DB::table('booking_services')->where('booking_pet_id', 302)->delete();
+        DB::table('booking_pets')->where('booking_pet_id', 302)->delete();
+        DB::table('clinic_appointments')->insert([
+            'id' => 701,
+            'status' => 'for_payment',
+            'paid' => false,
+        ]);
+        DB::table('grooming_clinic_referrals')->insert([
+            'booking_id' => 201,
+            'booking_pet_id' => 301,
+            'pet_id' => 101,
+            'clinic_appointment_id' => 701,
+            'status' => GroomingClinicReferral::STATUS_COMPLETED,
+        ]);
+
+        $this->postJson($this->storeUri(), $this->noChargePayload())
+            ->assertCreated()
+            ->assertJsonPath('payment_readiness.payment_ready', true)
+            ->assertJsonPath('payment_readiness.final_booking_total', '0.00')
+            ->assertJsonPath('payment_readiness.automatically_processed', false)
+            ->assertJsonPath('payment_readiness.booking_status', 'for_payment')
+            ->assertJsonPath(
+                'payment_readiness.automatic_processing_blocked_reason',
+                'The grooming workflow is complete, but the linked clinic appointment must be paid and completed before pickup.',
+            );
+
+        $this->assertSame(0, DB::table('payments')->count());
+    }
+
+    public function test_zero_payment_failure_rolls_back_the_final_no_charge_review(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('booking_pets')->where('booking_pet_id', 302)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
+            'grooming_end_time' => null,
+        ]);
+        $this->postJson($this->storeUri(), $this->noChargePayload())->assertCreated();
+
+        DB::statement(
+            "CREATE TRIGGER reject_zero_grooming_payment
+             BEFORE INSERT ON payments
+             WHEN NEW.total_amount = 0
+             BEGIN
+                 SELECT RAISE(ABORT, 'simulated zero payment failure');
+             END",
+        );
+
+        try {
+            $this->postJson(
+                '/api/admin/bookings/201/pets/302/medical-concerns/402/stopped-payment-review',
+                $this->noChargePayload(),
+            )->assertServerError();
+        } finally {
+            DB::statement('DROP TRIGGER IF EXISTS reject_zero_grooming_payment');
+        }
+
+        $this->assertSame(1, DB::table('grooming_stopped_payment_reviews')->count());
+        $this->assertDatabaseMissing('grooming_stopped_payment_reviews', [
+            'booking_pet_id' => 302,
+        ]);
+        $this->assertSame(0, DB::table('payments')->count());
+        $this->assertSame(0, DB::table('customer_notifications')
+            ->where('type', 'ready_for_pickup')
+            ->count());
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 201,
+            'status' => 'in_progress',
+            'paid' => false,
+        ]);
     }
 
     public function test_duplicate_normal_payment_is_blocked_and_transaction_details_are_privacy_safe(): void
@@ -975,6 +1119,17 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         });
         Schema::create('clinic_appointments', function (Blueprint $table) {
             $table->id();
+            $table->string('status')->nullable();
+            $table->boolean('paid')->default(false);
+        });
+        Schema::create('grooming_clinic_referrals', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('booking_id');
+            $table->unsignedInteger('booking_pet_id');
+            $table->unsignedInteger('pet_id');
+            $table->unsignedBigInteger('clinic_appointment_id')->nullable();
+            $table->string('status');
+            $table->dateTime('created_at')->nullable();
         });
     }
 

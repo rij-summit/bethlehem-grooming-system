@@ -8,12 +8,12 @@ use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\Payment;
 use App\Services\GroomingPaymentReadinessService;
+use App\Services\GroomingPaymentSettlementService;
 use App\Support\PaymentAmountLimit;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
@@ -104,35 +104,6 @@ class PaymentController extends Controller
         }
     }
 
-    private function createPaymentRecord(
-        Booking $booking,
-        string $finalTotal,
-        string $amountTendered,
-        string $paymentMethod,
-        ?string $notes,
-        ?int $processedBy,
-    ): Payment {
-        $money = $this->paymentReadiness();
-        $attributes = [
-            'booking_id' => $booking->booking_id,
-            'total_amount' => $finalTotal,
-            'amount_tendered' => $amountTendered,
-            'change_amount' => $money->centsToMoney(
-                $money->moneyToCents($amountTendered) - $money->moneyToCents($finalTotal),
-            ),
-            'payment_method' => $paymentMethod,
-            'payment_status' => 'paid',
-            'notes' => $notes,
-            'paid_at' => now(),
-        ];
-
-        if (Schema::hasColumn('payments', 'processed_by')) {
-            $attributes['processed_by'] = $processedBy;
-        }
-
-        return Payment::create($attributes);
-    }
-
     public function store(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
@@ -177,7 +148,7 @@ class PaymentController extends Controller
                     $data,
                     $serverTotal,
                 );
-                $payment = $this->createPaymentRecord(
+                $payment = $this->paymentSettlement()->recordPaidPayment(
                     $booking,
                     $serverTotal,
                     $amountTendered,
@@ -288,7 +259,7 @@ class PaymentController extends Controller
                     $serverTotal,
                     allowZeroTotal: false,
                 );
-                $payment = $this->createPaymentRecord(
+                $payment = $this->paymentSettlement()->recordPaidPayment(
                     $booking,
                     $serverTotal,
                     $amountTendered,
@@ -620,5 +591,10 @@ class PaymentController extends Controller
     private function paymentReadiness(): GroomingPaymentReadinessService
     {
         return app(GroomingPaymentReadinessService::class);
+    }
+
+    private function paymentSettlement(): GroomingPaymentSettlementService
+    {
+        return app(GroomingPaymentSettlementService::class);
     }
 }

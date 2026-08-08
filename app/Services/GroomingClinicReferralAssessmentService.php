@@ -174,7 +174,7 @@ class GroomingClinicReferralAssessmentService
                 return [
                     ...$this->result($appointment, $referral, true),
                     'payment_readiness' => Schema::hasTable('booking_services')
-                        ? app(GroomingPaymentReadinessService::class)->summarize($booking, true)
+                        ? app(GroomingBookingWorkflowService::class)->reconcile($booking, true)
                         : null,
                 ];
             }
@@ -236,16 +236,8 @@ class GroomingClinicReferralAssessmentService
             );
 
             $paymentReadiness = Schema::hasTable('booking_services')
-                ? app(GroomingPaymentReadinessService::class)->summarize($booking, true)
+                ? app(GroomingBookingWorkflowService::class)->reconcile($booking, true)
                 : null;
-            if (
-                ($paymentReadiness['payment_ready'] ?? false)
-                && ! (bool) $booking->paid
-                && ! in_array($booking->status, ['cancelled', 'no_show', 'released', 'archived'], true)
-                && $booking->archived_at === null
-            ) {
-                $booking->forceFill(['status' => 'for_payment'])->save();
-            }
 
             return [
                 ...$this->result($appointment, $referral, false),

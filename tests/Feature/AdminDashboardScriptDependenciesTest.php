@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=booking-cancellation-notification-20260807',
+            'scripts/components/admin-dashboard.js?v=workflow-reconciliation-20260809',
         );
 
         $this->assertNotFalse($dashboardPosition);
@@ -20,7 +20,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         foreach ([
             'scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724',
             'scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804',
-            'scripts/components/admin-stopped-payment-review.js?v=stopped-payment-review-ui-20260803',
+            'scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809',
         ] as $dependency) {
             $dependencyPosition = strpos($page, $dependency);
 

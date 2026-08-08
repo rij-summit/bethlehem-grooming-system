@@ -2525,6 +2525,36 @@ body.customer-detail-modal-open {
 }
 
 /* ----- Queued Owner / Per-Pet Cards ----- */
+.admin-queued-booking-card {
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.admin-queued-booking-card.is-action-required {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  box-shadow: 0 8px 20px rgba(71, 85, 105, 0.12);
+  filter: grayscale(1);
+}
+
+.admin-queued-booking-card.is-action-required .admin-queued-pet-card {
+  border-color: #aeb8c5;
+  background: #e9edf2;
+}
+
+.admin-queued-booking-card.is-action-required .admin-queued-owner-actions,
+.admin-queued-booking-card.is-action-required .admin-queued-pets-panel {
+  border-color: #cbd5e1;
+}
+
+.admin-queued-action-required-message {
+  margin-top: 0.55rem;
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35rem;
+}
+
 .admin-queued-owner-toggle {
   display: flex;
   width: 100%;

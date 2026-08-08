@@ -69,6 +69,57 @@ class ReviewedStoppedPaymentInterfaceTest extends TestCase
         }
     }
 
+    public function test_action_required_booking_stays_in_queued_with_muted_card_styling(): void
+    {
+        $styles = file_get_contents(base_path('css/custom.css'));
+        $queuedSection = $this->sourceBetween(
+            $this->appointments,
+            '<!-- Queued -->',
+            '<!-- In Progress -->',
+        );
+
+        foreach ([
+            'admin-queued-booking-card',
+            'bookingRequiresAction(booking)',
+            "'Action required'",
+            'actionRequiredReason',
+            'openStoppedPaymentReview(booking, pet',
+        ] as $expected) {
+            $this->assertStringContainsString($expected, $queuedSection);
+        }
+
+        $this->assertStringContainsString(
+            'this.setTab?.("to-be-picked-up")',
+            file_get_contents(base_path('scripts/components/admin-stopped-payment-review.js')),
+        );
+
+        $this->assertStringContainsString('.admin-queued-booking-card.is-action-required', $styles);
+        $this->assertStringContainsString('filter: grayscale(1)', $styles);
+        $this->assertStringNotContainsString('uppercase', $this->sourceBetween(
+            $queuedSection,
+            'bookingRequiresAction(booking) ? \'is-action-required\'',
+            '<!-- Queue ETA badge -->',
+        ));
+    }
+
+    public function test_no_charge_confirmation_explains_the_zero_total_shortcut(): void
+    {
+        foreach ([
+            'complete booking total is exactly \\u20B10.00',
+            'a &#8369;0.00 payment will be recorded',
+            'Confirm No charge',
+            'move to To Be Picked Up',
+        ] as $expected) {
+            $this->assertStringContainsString($expected, $this->appointments);
+        }
+
+        $reviewScript = file_get_contents(
+            base_path('scripts/components/admin-stopped-payment-review.js'),
+        );
+        $this->assertStringContainsString('booking_status === "released"', $reviewScript);
+        $this->assertStringContainsString('this.setTab?.("to-be-picked-up")', $reviewScript);
+    }
+
     public function test_receipt_uses_persisted_server_summary_and_excludes_private_review_fields(): void
     {
         $submission = $this->sourceBetween(

@@ -1075,7 +1075,27 @@ function adminDashboard() {
     },
 
     isPetReferredToClinic(pet) {
-      return pet?.hasClinicReferral === true || pet?.has_clinic_referral === true;
+      if (
+        pet?.hasActiveClinicReferral === true
+        || pet?.has_active_clinic_referral === true
+      ) {
+        return true;
+      }
+
+      const referralStatus = String(
+        pet?.clinicReferralStatus ?? pet?.clinic_referral_status ?? "",
+      ).trim().toLowerCase();
+
+      return [
+        "pending_consent",
+        "pending_clinic_acceptance",
+        "accepted",
+        "under_clinic_review",
+      ].includes(referralStatus);
+    },
+
+    bookingRequiresAction(booking) {
+      return booking?.actionRequired === true || booking?.action_required === true;
     },
 
     isPetGroomingInProgress(pet) {

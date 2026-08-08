@@ -9,7 +9,8 @@ use App\Models\GroomingMedicalConcern;
 use App\Models\GroomingStoppedPaymentReview;
 use App\Models\Pet;
 use App\Models\User;
-use App\Services\GroomingPaymentReadinessService;
+use App\Services\GroomingBookingWorkflowService;
+use App\Services\GroomingPaymentSettlementService;
 use App\Services\GroomingServicePriceResolver;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -132,11 +133,17 @@ class GroomingStoppedPaymentReviewController extends Controller
                     'reviewed_by_name' => $this->formatAuthenticatedUserName($reviewer),
                     'reviewed_at' => now(),
                 ]);
-                $paymentReadiness = $this->advanceBookingToPaymentWhenReady($context);
+                $paymentReadiness = $this->advanceBookingAfterReview(
+                    $context,
+                    $validated['decision'],
+                    $reviewer->user_id,
+                );
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Stopped-grooming payment review completed.',
+                    'message' => $paymentReadiness['automatically_processed']
+                        ? 'Payment review completed. No payment was required, and the booking is ready for pickup.'
+                        : 'Stopped-grooming payment review completed.',
                     'review' => $this->formatReview(
                         $context,
                         $serviceContext,
@@ -495,7 +502,11 @@ class GroomingStoppedPaymentReviewController extends Controller
             );
         }
 
-        $paymentReadiness = $this->advanceBookingToPaymentWhenReady($context);
+        $paymentReadiness = $this->advanceBookingAfterReview(
+            $context,
+            $validated['decision'],
+            request()->user()?->user_id,
+        );
 
         return response()->json([
             'success' => true,
@@ -584,28 +595,38 @@ class GroomingStoppedPaymentReviewController extends Controller
         ];
     }
 
-    private function advanceBookingToPaymentWhenReady(BookingPet $context): array
-    {
+    private function advanceBookingAfterReview(
+        BookingPet $context,
+        string $decision,
+        ?int $processedBy,
+    ): array {
         $booking = $context->booking;
-        $summary = app(GroomingPaymentReadinessService::class)->summarize(
+        $summary = app(GroomingBookingWorkflowService::class)->reconcile(
             $booking,
             true,
         );
+        $automaticSettlement = [
+            'automatically_processed' => false,
+            'already_processed' => false,
+            'automatic_processing_blocked_reason' => null,
+            'booking_status' => (string) $booking->status,
+        ];
 
-        if (
-            $summary['payment_ready']
-            && ! (bool) $booking->paid
-            && ! in_array($booking->status, ['cancelled', 'no_show', 'released', 'archived'], true)
-            && $booking->archived_at === null
-        ) {
-            $booking->update(['status' => 'for_payment']);
+        if ($decision === GroomingStoppedPaymentReview::DECISION_NO_CHARGE) {
+            $automaticSettlement = app(GroomingPaymentSettlementService::class)
+                ->settleZeroTotalIfReady($booking, $processedBy, true);
+            $summary = $automaticSettlement['payment_summary'];
         }
 
         return [
             'payment_ready' => $summary['payment_ready'],
             'payment_blocked_reason' => $summary['payment_blocked_reason'],
             'final_booking_total' => $summary['final_booking_total'],
-            'booking_status' => $booking->status,
+            'zero_total' => (bool) ($summary['zero_total'] ?? false),
+            'booking_status' => $automaticSettlement['booking_status'],
+            'automatically_processed' => $automaticSettlement['automatically_processed'],
+            'already_processed' => $automaticSettlement['already_processed'],
+            'automatic_processing_blocked_reason' => $automaticSettlement['automatic_processing_blocked_reason'],
         ];
     }
 

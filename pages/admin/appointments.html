@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=stopped-payment-review-ui-20260803" />
+    <link rel="stylesheet" href="../../css/custom.css?v=workflow-reconciliation-20260809" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -971,7 +971,8 @@
             <!-- Toggleable owner booking card with one actionable card per pet. -->
             <template x-for="booking in queuedList" :key="booking.id">
               <article
-                class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                class="admin-queued-booking-card rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                :class="bookingRequiresAction(booking) ? 'is-action-required' : ''"
               >
                 <button
                   type="button"
@@ -992,9 +993,12 @@
                           x-text="booking.ownerName"
                         ></h4>
                         <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
-                          <i data-lucide="hourglass" class="h-3 w-3"></i>
-                          Waiting
+                        <span
+                          class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                          :class="bookingRequiresAction(booking) ? 'bg-slate-200 text-slate-700' : 'bg-yellow-100 text-yellow-700'"
+                        >
+                          <i :data-lucide="bookingRequiresAction(booking) ? 'circle-alert' : 'hourglass'" class="h-3 w-3"></i>
+                          <span x-text="bookingRequiresAction(booking) ? 'Action required' : 'Waiting'"></span>
                         </span>
                       </div>
                       <p
@@ -1005,8 +1009,13 @@
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
                         <span x-show="booking.dropOffTime" x-text="' \u00b7 Dropped off: ' + booking.dropOffTime"></span>
                       </p>
+                      <p
+                        x-show="bookingRequiresAction(booking)"
+                        class="admin-queued-action-required-message"
+                        x-text="booking.actionRequiredReason ?? booking.action_required_reason ?? 'A stopped-grooming payment review is required.'"
+                      ></p>
                       <!-- Queue ETA badge -->
-                      <template x-if="getBookingETA(booking)">
+                      <template x-if="getBookingETA(booking) && !bookingRequiresAction(booking)">
                         <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#c48a00]">
                           <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
                           Est. ready: ~<span x-text="getBookingETA(booking)"></span>
@@ -2091,9 +2100,9 @@
 
                     <div class="admin-stopped-payment-review-payment-pending" role="note">
                       <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
-                      <p>
-                        Completing this review does not collect payment or create a transaction. It may make the owner booking ready for the normal payment step.
-                      </p>
+                      <p x-text="stoppedPaymentReviewForm.decision === 'no_charge'
+                        ? 'If every pet is ready and the complete booking total is exactly \u20B10.00, the system will record the zero payment and move the booking to To Be Picked Up.'
+                        : 'Completing this review does not collect payment or create a transaction. It may make the owner booking ready for the normal payment step.'"></p>
                     </div>
 
                     <footer class="admin-stopped-payment-review-actions">
@@ -2173,7 +2182,9 @@
 
                   <div class="admin-stopped-payment-review-payment-pending" role="note">
                     <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
-                    <p>Payment review is complete. When every pet is finished or reviewed, this booking will move to For Payment automatically.</p>
+                    <p x-text="stoppedPaymentReviewModal.review?.booking_status === 'released'
+                      ? 'No grooming payment was required. This booking is now under To Be Picked Up.'
+                      : 'Payment review is complete. When every pet is finished or reviewed, this booking will move to For Payment automatically.'"></p>
                   </div>
 
                   <footer class="admin-stopped-payment-review-actions">
@@ -2224,7 +2235,12 @@
               </section>
 
               <p class="admin-stopped-payment-review-confirm-warning">
-                This applies only to the selected pet and does not collect payment. The booking may move to For Payment when every pet is ready.
+                <span x-show="stoppedPaymentReviewForm.decision !== 'no_charge'">
+                  This applies only to the selected pet and does not collect payment. The booking may move to For Payment when every pet is ready.
+                </span>
+                <span x-show="stoppedPaymentReviewForm.decision === 'no_charge'">
+                  This applies only to the selected pet. If the complete booking becomes exactly &#8369;0.00 and every pet and clinic step is ready, a &#8369;0.00 payment will be recorded and the booking will move to To Be Picked Up.
+                </span>
               </p>
               <p x-show="stoppedPaymentReviewConfirmation.error" class="admin-stopped-payment-review-confirm-error" role="alert" x-text="stoppedPaymentReviewConfirmation.error"></p>
 
@@ -2244,7 +2260,9 @@
                   class="admin-stopped-payment-review-primary"
                 >
                   <span x-show="stoppedPaymentReviewConfirmation.busy" class="admin-stopped-payment-review-button-spinner" aria-hidden="true"></span>
-                  <span x-text="stoppedPaymentReviewConfirmation.busy ? 'Saving permanent review...' : 'Confirm and Complete'"></span>
+                  <span x-text="stoppedPaymentReviewConfirmation.busy
+                    ? 'Saving permanent review...'
+                    : (stoppedPaymentReviewForm.decision === 'no_charge' ? 'Confirm No charge' : 'Confirm and Complete')"></span>
                 </button>
               </footer>
             </section>
@@ -4333,7 +4351,7 @@
     <!-- Shared dashboard content script -->
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
-    <script src="../../scripts/components/admin-stopped-payment-review.js?v=stopped-payment-review-ui-20260803"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=booking-cancellation-notification-20260807"></script>
+    <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=workflow-reconciliation-20260809"></script>
   </body>
 </html>

@@ -1016,6 +1016,136 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertFalse($pets[2]['hasClinicReferral']);
     }
 
+    public function test_completed_referral_with_missing_review_returns_as_action_required_queued_card(): void
+    {
+        $this->insertReferralScheduleBooking([
+            BookingPet::GROOMING_STATE_STOPPED,
+        ]);
+        $this->insertClinicReferral(1, 1);
+        DB::table('grooming_clinic_referrals')->where('booking_id', 1)->update([
+            'status' => GroomingClinicReferral::STATUS_COMPLETED,
+        ]);
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+
+        $this->assertSame([1], collect($schedule['queuedList'])->pluck('id')->all());
+        $this->assertSame([], collect($schedule['inProgressList'])->pluck('id')->all());
+        $queued = $schedule['queuedList'][0];
+        $this->assertTrue($queued['actionRequired']);
+        $this->assertSame('stopped_payment_review', $queued['actionRequiredType']);
+        $this->assertSame([1], $queued['actionRequiredPetIds']);
+        $this->assertStringContainsString('Pet 1', $queued['actionRequiredReason']);
+        $this->assertTrue($queued['pets'][0]['paymentReviewRequired']);
+        $this->assertFalse($queued['pets'][0]['hasActiveClinicReferral']);
+        $this->assertSame(
+            GroomingClinicReferral::STATUS_COMPLETED,
+            $queued['pets'][0]['clinicReferralStatus'],
+        );
+    }
+
+    public function test_each_parent_workflow_state_has_an_admin_destination(): void
+    {
+        $states = [
+            1 => ['waiting_to_arrive', BookingPet::GROOMING_STATE_NOT_STARTED, null, null],
+            2 => ['checked_in', BookingPet::GROOMING_STATE_NOT_STARTED, null, null],
+            3 => ['in_progress', BookingPet::GROOMING_STATE_IN_PROGRESS, '2026-06-24 09:00:00', null],
+            4 => ['for_payment', BookingPet::GROOMING_STATE_FINISHED, '2026-06-24 09:00:00', '2026-06-24 10:00:00'],
+            5 => ['released', BookingPet::GROOMING_STATE_FINISHED, '2026-06-24 09:00:00', '2026-06-24 10:00:00'],
+        ];
+
+        foreach ($states as $id => [$status, $petState, $startedAt, $finishedAt]) {
+            DB::table('bookings')->insert([
+                'booking_id' => $id,
+                'booking_reference' => "VISIBLE-{$id}",
+                'booking_date' => '2026-06-24',
+                'number_of_pets' => 1,
+                'status' => $status,
+                'queue_number' => $id,
+                'grooming_started_at' => $startedAt,
+                'grooming_finished_at' => $finishedAt,
+                'paid' => $status === 'released',
+            ]);
+            DB::table('pets')->insert([
+                'pet_id' => $id,
+                'pet_name' => "Visible Pet {$id}",
+                'species' => 'dog',
+            ]);
+            DB::table('booking_pets')->insert([
+                'booking_pet_id' => $id,
+                'booking_id' => $id,
+                'pet_id' => $id,
+                'grooming_start_time' => $startedAt,
+                'grooming_end_time' => $finishedAt,
+                'grooming_state' => $petState,
+            ]);
+        }
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+
+        $this->assertSame([1], collect($schedule['incomingList'])->pluck('id')->all());
+        $this->assertSame([2], collect($schedule['queuedList'])->pluck('id')->all());
+        $this->assertSame([3], collect($schedule['inProgressList'])->pluck('id')->all());
+        $this->assertSame([4], collect($schedule['forPaymentList'])->pluck('id')->all());
+        $this->assertSame([5], collect($schedule['releasedList'])->pluck('id')->all());
+    }
+
+    public function test_daily_reconciliation_reports_action_once_and_repairs_safe_status_drift(): void
+    {
+        $this->insertReferralScheduleBooking([
+            BookingPet::GROOMING_STATE_STOPPED,
+        ]);
+        DB::table('bookings')->where('booking_id', 1)->update([
+            'booking_date' => '2026-06-23',
+            'status' => 'checked_in',
+        ]);
+        $this->insertClinicReferral(1, 1);
+        DB::table('grooming_clinic_referrals')->where('booking_id', 1)->update([
+            'status' => GroomingClinicReferral::STATUS_COMPLETED,
+        ]);
+
+        DB::table('bookings')->insert([
+            'booking_id' => 2,
+            'booking_reference' => 'SAFE-STATUS-DRIFT',
+            'booking_date' => '2026-06-23',
+            'number_of_pets' => 1,
+            'status' => 'checked_in',
+            'queue_number' => 2,
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 2,
+            'pet_name' => 'Finished Pet',
+            'species' => 'dog',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 2,
+            'booking_id' => 2,
+            'pet_id' => 2,
+            'grooming_start_time' => '2026-06-23 09:00:00',
+            'grooming_end_time' => '2026-06-23 10:00:00',
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+        ]);
+
+        $this->artisan('bookings:reconcile-workflows')
+            ->expectsOutput('Checked 2 active grooming booking(s); corrected 1; action required 1.')
+            ->assertSuccessful();
+        $this->artisan('bookings:reconcile-workflows')->assertSuccessful();
+
+        $this->assertSame('checked_in', DB::table('bookings')->where('booking_id', 1)->value('status'));
+        $this->assertSame('for_payment', DB::table('bookings')->where('booking_id', 2)->value('status'));
+        $this->assertSame(1, DB::table('notifications')
+            ->where('booking_id', 1)
+            ->where('type', 'payment_due')
+            ->count());
+        $this->assertStringContainsString(
+            'stopped-grooming payment review',
+            DB::table('notifications')->where('booking_id', 1)->value('message'),
+        );
+    }
+
     private function insertReferralScheduleBooking(array $states): void
     {
         DB::table('bookings')->insert([
