@@ -52,4 +52,110 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             $page,
         );
     }
+
+    public function test_pet_view_details_matches_the_owner_card_typography(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $petModal = $this->sourceBetween(
+            $page,
+            '<!-- Pet Detail Modal -->',
+            '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs',
+        );
+
+        $this->assertStringContainsString(
+            'class="text-xl font-bold text-[#1f3850]"',
+            $petModal,
+        );
+        $this->assertStringContainsString(
+            'class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-5 sm:p-6"',
+            $petModal,
+        );
+        $this->assertStringContainsString(
+            'class="grid gap-6 sm:grid-cols-2"',
+            $petModal,
+        );
+
+        foreach ([
+            'Gender',
+            'Birthdate',
+            'Neutered / spayed',
+            'Neutered date',
+            'Deceased',
+            'Deceased date',
+            'Size',
+            'Fur type',
+            'Weight',
+            'Color',
+            'Medical conditions / special needs',
+        ] as $label) {
+            $this->assertStringContainsString(
+                sprintf('<p class="text-xs font-normal leading-5 text-slate-500">%s</p>', $label),
+                $petModal,
+            );
+        }
+
+        $this->assertGreaterThanOrEqual(
+            9,
+            substr_count($petModal, 'mt-1.5 text-sm font-semibold leading-6'),
+        );
+
+        $this->assertStringNotContainsString('font-bold uppercase', $petModal);
+        $this->assertStringNotContainsString('font-extrabold', $petModal);
+    }
+
+    public function test_admin_pet_edit_reuses_customer_custom_fields_and_connected_behavior(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+        $controller = file_get_contents(base_path('app/Http/Controllers/PetController.php'));
+        $petForm = $this->sourceBetween(
+            $page,
+            '<!-- Edit mode -->',
+            '<!-- Footer -->',
+        );
+
+        foreach ([
+            'adminPetSpeciesCombobox',
+            'adminPetGenderCombobox',
+            'adminPetBreedCombobox',
+            'adminPetSizeCombobox',
+            'adminPetFurTypeCombobox',
+        ] as $combobox) {
+            $this->assertStringContainsString("id=\"{$combobox}\"", $petForm);
+        }
+
+        $this->assertStringNotContainsString('<select', $petForm);
+        $this->assertStringNotContainsString('font-bold uppercase', $petForm);
+
+        foreach ([
+            'import("./breed-combobox.js")',
+            'import("./breed-coat-combobox.js")',
+            'import("./fixed-option-combobox.js")',
+            'import("./pet-weight-size.js")',
+            'tools.createBreedCombobox({',
+            'tools.createBreedCoatCombobox({',
+            'tools.createFixedOptionCombobox({',
+            'tools.getSizeForWeight(',
+            'tools.getWeightValidationMessage(',
+            'tools.showWeightRangeInField(',
+            'tools.normalizePetSize(',
+        ] as $sharedBehavior) {
+            $this->assertStringContainsString($sharedBehavior, $component);
+        }
+
+        foreach (['new ValidPetSize', 'new ValidBreedCoat', 'new ValidPetWeight', 'PetWeightSize::withComputedSize($data)'] as $rule) {
+            $this->assertStringContainsString($rule, $controller);
+        }
+    }
+
+    private function sourceBetween(string $source, string $start, string $end): string
+    {
+        $startPosition = strpos($source, $start);
+        $endPosition = strpos($source, $end, $startPosition ?: 0);
+
+        $this->assertNotFalse($startPosition, "Missing source marker: {$start}");
+        $this->assertNotFalse($endPosition, "Missing source marker: {$end}");
+
+        return substr($source, $startPosition, $endPosition - $startPosition);
+    }
 }

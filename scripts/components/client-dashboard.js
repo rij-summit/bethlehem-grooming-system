@@ -276,6 +276,7 @@
               "grooming_clinic_referral_accepted",
               "grooming_clinic_assessment_started",
               "grooming_clinic_assessment_completed",
+              "pet_information_updated",
             ].includes(
               notification?.type,
             )

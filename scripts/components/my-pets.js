@@ -28,6 +28,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── State ────────────────────────────────────────────
   let allPets = [];
   let showingArchived = false;
+  let editingPet = null;
+  let confirmationResolver = null;
+  let confirmationReturnFocus = null;
+
+  const clinicVerifiedFieldLabels = {
+    breed: "Breed",
+    fur_type: "Fur Type",
+    weight: "Weight",
+    size: "Size",
+  };
 
   // ── DOM refs ─────────────────────────────────────────
   const petsGrid         = document.getElementById("petsGrid");
@@ -49,6 +59,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const petFurType       = document.getElementById("petFurType");
   const petWeight        = document.getElementById("petWeight");
   const logoutBtn        = document.getElementById("clientLogoutBtn");
+  const petConfirmationModal = document.getElementById("petConfirmationModal");
+  const petConfirmationCard = document.getElementById("petConfirmationCard");
+  const petConfirmationTitle = document.getElementById("petConfirmationTitle");
+  const petConfirmationMessage = document.getElementById("petConfirmationMessage");
+  const petConfirmationDetails = document.getElementById("petConfirmationDetails");
+  const cancelPetConfirmation = document.getElementById("cancelPetConfirmation");
+  const confirmPetAction = document.getElementById("confirmPetAction");
+  const editVerifiedIndicators = {
+    breed: document.getElementById("petBreedVerified"),
+    fur_type: document.getElementById("petFurTypeVerified"),
+    weight: document.getElementById("petWeightVerified"),
+    size: document.getElementById("petSizeVerified"),
+  };
 
   const petTypeCombobox = createFixedOptionCombobox({
     root: document.getElementById("petSpeciesCombobox"),
@@ -249,20 +272,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const resolvedFurType = furLabel[pet.fur_type] || pet.fur_type;
 
     const rows = [
-      ["Species",    pet.species],
-      ["Breed",      pet.breed],
-      ["Size",       sizeLabel[pet.size]],
-      ["Fur Type",   resolvedFurType],
-      ["Weight",     pet.weight ? `${pet.weight} kg` : null],
-      ["Color",      pet.color],
-      ["Medical",    pet.medical_conditions],
+      ["Species", pet.species],
+      ["Breed", pet.breed],
+      ["Size", sizeLabel[pet.size]],
+      ["Fur Type", resolvedFurType],
+      ["Weight", pet.weight ? `${pet.weight} kg` : null],
+      ["Color", pet.color],
+      ["Medical", pet.medical_conditions],
     ].filter(([, v]) => v);
 
     const detailsHtml = rows.length
       ? rows.map(([label, val]) => `
           <div class="flex gap-2 text-sm">
             <span class="text-slate-400 shrink-0 w-20">${label}</span>
-            <span class="text-slate-700 font-medium">${escHtml(String(val))}</span>
+            <span class="min-w-0 break-words text-slate-700 font-medium">${escHtml(String(val))}</span>
           </div>`).join("")
       : `<p class="text-sm text-slate-400">No additional details.</p>`;
 
@@ -317,6 +340,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Modal ─────────────────────────────────────────────
   function openAddModal() {
+    editingPet = null;
+    syncEditVerifiedIndicators(null);
     petModalTitle.textContent = "Add Pet";
     resetPetForm();
     hideFormError();
@@ -327,6 +352,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const pet = allPets.find((p) => p.pet_id === id);
     if (!pet) return;
 
+    editingPet = pet;
+    syncEditVerifiedIndicators(pet);
     petModalTitle.textContent = "Edit Pet";
     document.getElementById("petId").value = pet.pet_id;
     document.getElementById("petName").value = pet.pet_name || "";
@@ -362,11 +389,22 @@ document.addEventListener("DOMContentLoaded", () => {
   function closeModal() {
     petModal.classList.add("hidden");
     petModal.classList.remove("flex");
+    editingPet = null;
   }
 
   addPetBtn.addEventListener("click", openAddModal);
   closePetModal.addEventListener("click", closeModal);
   petModal.addEventListener("click", (e) => { if (e.target === petModal) closeModal(); });
+  cancelPetConfirmation.addEventListener("click", () => resolvePetConfirmation(false));
+  confirmPetAction.addEventListener("click", () => resolvePetConfirmation(true));
+  petConfirmationModal.addEventListener("click", (event) => {
+    if (event.target === petConfirmationModal) resolvePetConfirmation(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !petConfirmationModal.classList.contains("hidden")) {
+      resolvePetConfirmation(false);
+    }
+  });
   petSpecies.addEventListener("change", () => {
     if (petWeight.dataset.weightFieldMode === "range") {
       resetWeightFieldForEntry(petWeight);
@@ -412,6 +450,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (id && editingPet) {
+      const changedVerifiedFields = getChangedVerifiedFieldLabels(
+        editingPet,
+        payload,
+      );
+
+      if (changedVerifiedFields.length > 0) {
+        const confirmed = await openPetConfirmation({
+          title: "Change clinic-verified information?",
+          message: "Some of the information you’re changing was verified by Bethlehem Animal Clinic. Are you sure you want to continue?",
+          details: `Clinic-verified details being changed: ${formatFieldList(changedVerifiedFields)}.`,
+          confirmLabel: "Save changes",
+        });
+
+        if (!confirmed) return;
+      }
+    }
+
     petFormSubmit.disabled = true;
     petFormSubmit.textContent = "Saving...";
 
@@ -437,7 +493,12 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleArchive(id) {
     const pet = allPets.find((p) => p.pet_id === id);
     if (!pet) return;
-    if (!confirm(`Archive "${pet.pet_name}"? It will be hidden from the booking form.`)) return;
+    const confirmed = await openPetConfirmation({
+      title: "Archive pet?",
+      message: `Archive ${pet.pet_name}? This pet will be hidden from the booking form.`,
+      confirmLabel: "Archive pet",
+    });
+    if (!confirmed) return;
     try {
       await API.archivePet(id);
       await loadPets();
@@ -449,7 +510,12 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleUnarchive(id) {
     const pet = allPets.find((p) => p.pet_id === id);
     if (!pet) return;
-    if (!confirm(`Restore "${pet.pet_name}"?`)) return;
+    const confirmed = await openPetConfirmation({
+      title: "Restore pet?",
+      message: `Restore ${pet.pet_name} to your active pets?`,
+      confirmLabel: "Restore pet",
+    });
+    if (!confirmed) return;
     try {
       await API.unarchivePet(id);
       await loadPets();
@@ -467,6 +533,86 @@ document.addEventListener("DOMContentLoaded", () => {
   function hideFormError() {
     petFormError.textContent = "";
     petFormError.classList.add("hidden");
+  }
+
+  function openPetConfirmation({ title, message, details = "", confirmLabel }) {
+    confirmationReturnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    petConfirmationTitle.textContent = title;
+    petConfirmationMessage.textContent = message;
+    petConfirmationDetails.textContent = details;
+    petConfirmationDetails.classList.toggle("hidden", !details);
+    confirmPetAction.textContent = confirmLabel;
+    petConfirmationModal.classList.remove("hidden");
+    petConfirmationModal.classList.add("flex");
+
+    window.setTimeout(() => petConfirmationCard.focus(), 0);
+
+    return new Promise((resolve) => {
+      confirmationResolver = resolve;
+    });
+  }
+
+  function resolvePetConfirmation(confirmed) {
+    if (!confirmationResolver) return;
+
+    const resolve = confirmationResolver;
+    const returnFocus = confirmationReturnFocus;
+    confirmationResolver = null;
+    confirmationReturnFocus = null;
+    petConfirmationModal.classList.add("hidden");
+    petConfirmationModal.classList.remove("flex");
+    resolve(confirmed);
+    window.setTimeout(() => returnFocus?.focus(), 0);
+  }
+
+  function isClinicVerified(pet, field) {
+    return Boolean(field)
+      && Array.isArray(pet?.clinic_verified_fields)
+      && pet.clinic_verified_fields.includes(field);
+  }
+
+  function syncEditVerifiedIndicators(pet) {
+    Object.entries(editVerifiedIndicators).forEach(([field, indicator]) => {
+      indicator?.classList.toggle("hidden", !isClinicVerified(pet, field));
+    });
+  }
+
+  function getChangedVerifiedFieldLabels(pet, payload) {
+    return Object.entries(clinicVerifiedFieldLabels)
+      .filter(([field]) => isClinicVerified(pet, field))
+      .filter(([field]) => !petFieldValuesMatch(field, pet[field], payload[field]))
+      .map(([, label]) => label);
+  }
+
+  function petFieldValuesMatch(field, original, updated) {
+    if (field === "weight") {
+      if ((original === null || original === "")
+        && (updated === null || updated === "")) {
+        return true;
+      }
+
+      const originalWeight = Number(original);
+      const updatedWeight = Number(updated);
+
+      return Number.isFinite(originalWeight)
+        && Number.isFinite(updatedWeight)
+        && Math.abs(originalWeight - updatedWeight) < 0.001;
+    }
+
+    const normalize = (value) => value === null || String(value).trim() === ""
+      ? null
+      : String(value).trim();
+
+    return normalize(original) === normalize(updated);
+  }
+
+  function formatFieldList(fields) {
+    if (fields.length <= 1) return fields[0] || "";
+    if (fields.length === 2) return `${fields[0]} and ${fields[1]}`;
+
+    return `${fields.slice(0, -1).join(", ")}, and ${fields.at(-1)}`;
   }
 
   function normalizeSpecies(value) {

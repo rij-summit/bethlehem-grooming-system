@@ -45,6 +45,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const isMissing = (value) => value === null || value === undefined || String(value).trim() === "";
   const displayValue = (value) => isMissing(value) ? "Not provided." : String(value);
   const isTrue = (value) => value === true || value === 1 || value === "1";
+  const isClinicVerified = (pet, field) => Boolean(field)
+    && Array.isArray(pet?.clinic_verified_fields)
+    && pet.clinic_verified_fields.includes(field);
+  const verifiedIndicator = (verified) => verified
+    ? '<span class="inline-flex shrink-0 rounded-full bg-[#eaf4fb] px-2 py-0.5 text-xs font-medium text-[#315b7e]">Verified</span>'
+    : "";
 
   const titleCase = (value) => {
     if (isMissing(value)) return "Not provided.";
@@ -192,22 +198,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const renderOverview = (pet) => {
     const archived = isTrue(pet.is_archived);
     const details = [
-      ["Pet Name", displayValue(pet.pet_name)],
-      ["Species", titleCase(pet.species)],
-      ["Breed", displayValue(pet.breed)],
-      ["Gender", titleCase(pet.gender)],
-      ["Birthdate", formatDate(pet.birthdate)],
-      ["Size", titleCase(pet.size)],
-      ["Weight", formatWeight(pet.weight)],
-      ["Fur Type", titleCase(pet.fur_type)],
-      ["Color", displayValue(pet.color)],
-      ["Neutered / Spayed", formatBoolean(pet.is_neutered)],
-      ["Profile Status", archived ? "Archived" : "Active"],
+      ["Pet Name", displayValue(pet.pet_name), null],
+      ["Species", titleCase(pet.species), null],
+      ["Breed", displayValue(pet.breed), "breed"],
+      ["Gender", titleCase(pet.gender), null],
+      ["Birthdate", formatDate(pet.birthdate), null],
+      ["Size", titleCase(pet.size), "size"],
+      ["Weight", formatWeight(pet.weight), "weight"],
+      ["Fur Type", titleCase(pet.fur_type), "fur_type"],
+      ["Color", displayValue(pet.color), null],
+      ["Neutered / Spayed", formatBoolean(pet.is_neutered), null],
+      ["Profile Status", archived ? "Archived" : "Active", null],
     ];
 
-    overviewGrid.innerHTML = details.map(([label, value]) => `
+    overviewGrid.innerHTML = details.map(([label, value, field]) => `
       <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-        <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">${escapeHtml(label)}</p>
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-xs font-medium text-slate-500">${escapeHtml(label)}</p>
+          ${verifiedIndicator(isClinicVerified(pet, field))}
+        </div>
         <p class="mt-1.5 break-words font-semibold text-slate-700">${escapeHtml(value)}</p>
       </div>
     `).join("");
@@ -269,7 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Booking Reference</p>
+            <p class="text-xs font-medium text-slate-500">Booking Reference</p>
             <h4 class="mt-1 text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(booking.booking_reference))}</h4>
           </div>
           <span class="w-fit rounded-full px-3 py-1 text-xs font-bold ${statusClasses}">${escapeHtml(statusLabel)}</span>
@@ -277,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           ${items.map(([label, value]) => `
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+              <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
               <dd class="mt-1 break-words text-sm font-medium text-slate-700">${escapeHtml(value)}</dd>
             </div>
           `).join("")}
@@ -346,7 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Appointment Reference</p>
+              <p class="text-xs font-medium text-slate-500">Appointment Reference</p>
               <h4 class="mt-1 text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.appointment_reference))}</h4>
               <p class="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                 <i data-lucide="calendar-days" class="h-4 w-4"></i>
@@ -361,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <dl class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             ${summaryItems.map(([label, value]) => `
               <div>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
                 <dd class="mt-1 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(value)}</dd>
               </div>
             `).join("")}
@@ -540,7 +549,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccine</p>
+              <p class="text-xs font-medium text-slate-500">Vaccine</p>
               <h4 class="mt-1 break-words text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.vaccine_name))}</h4>
             </div>
             <span
@@ -558,15 +567,15 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="space-y-5 p-5">
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Administration Date</dt>
+              <dt class="text-xs font-medium text-slate-500">Administration Date</dt>
               <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.administered_date))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Due Date</dt>
+              <dt class="text-xs font-medium text-slate-500">Next Due Date</dt>
               <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Administering Provider</dt>
+              <dt class="text-xs font-medium text-slate-500">Administering Provider</dt>
               <dd class="mt-1 break-words text-sm font-medium text-slate-700">${escapeHtml(displayValue(record.administering_provider))}</dd>
             </div>
           </dl>
@@ -576,7 +585,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 ${optionalDetails.map(([label, value]) => `
                   <div>
-                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                    <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
                     <dd class="mt-1 break-words text-sm text-slate-700">${escapeHtml(value)}</dd>
                   </div>
                 `).join("")}
@@ -715,7 +724,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
-            <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Concern notification</p>
+            <p class="text-xs font-medium text-slate-500">Concern notification</p>
             <p class="mt-1 text-sm text-slate-500">${escapeHtml(formatDateTime(concern.concern_date))}</p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -732,12 +741,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Recommended action</dt>
+            <dt class="text-xs font-medium text-slate-500">Recommended action</dt>
             <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concernActionLabel(concern.recommended_grooming_action, concern.recommended_grooming_action_label))}</dd>
             <p class="mt-1 text-xs text-slate-500">A recommendation only; it does not confirm the action was applied.</p>
           </div>
           <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Customer response</dt>
+            <dt class="text-xs font-medium text-slate-500">Customer response</dt>
             <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concern.customer_response_status_label || titleCase(concern.customer_response_status))}</dd>
           </div>
         </dl>
@@ -795,15 +804,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <h5 class="font-bold text-emerald-900">Response recorded</h5>
           <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Response</dt>
+              <dt class="text-xs font-medium text-emerald-700">Response</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(submitted.decision_label || titleCase(submitted.decision))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Submitted by</dt>
+              <dt class="text-xs font-medium text-emerald-700">Submitted by</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(submitted.responded_by_name))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Submitted at</dt>
+              <dt class="text-xs font-medium text-emerald-700">Submitted at</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(submitted.responded_at))}</dd>
             </div>
           </dl>
@@ -1121,7 +1130,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <header class="border-b border-slate-200 bg-white p-4 sm:p-5">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Medical-concern notification</p>
+              <p class="text-xs font-medium text-slate-500">Medical-concern notification</p>
               <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(concern.pet_name))}</h4>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -1151,7 +1160,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             ${concernDetailFields(concern).map(([label, value]) => `
               <div>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt>
+                <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
                 <dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd>
               </div>
             `).join("")}
@@ -1299,15 +1308,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <h5 class="font-bold text-emerald-900">Permanent response recorded</h5>
           <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Decision</dt>
+              <dt class="text-xs font-medium text-emerald-700">Decision</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(titleCase(referral.consent_decision))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Responding owner</dt>
+              <dt class="text-xs font-medium text-emerald-700">Responding owner</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(referral.consent_responded_by_name))}</dd>
             </div>
             <div>
-              <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Responded at</dt>
+              <dt class="text-xs font-medium text-emerald-700">Responded at</dt>
               <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(referral.consent_responded_at))}</dd>
             </div>
           </dl>
@@ -1393,7 +1402,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <header class="border-b border-slate-200 bg-white p-4 sm:p-5">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Clinic referral request</p>
+              <p class="text-xs font-medium text-slate-500">Clinic referral request</p>
               <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(referral.pet_name))}</h4>
               <p class="mt-1 break-all text-xs text-slate-500">Reference: ${escapeHtml(displayValue(referral.public_id))}</p>
             </div>
@@ -1411,7 +1420,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </section>
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             ${clinicReferralDetailFields(referral).map(([label, value]) => `
-              <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(label)}</dt><dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd></div>
+              <div><dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt><dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd></div>
             `).join("")}
           </dl>
           <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
@@ -1430,9 +1439,9 @@ document.addEventListener("DOMContentLoaded", () => {
           <h4 id="clinicReferralConfirmationTitle" class="text-lg font-bold text-[#2f4b66]">Confirm permanent referral response</h4>
           <p class="mt-2 text-sm leading-6 text-slate-600">Your response cannot be edited, replaced, or deleted after submission.</p>
           <dl class="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Pet</dt><dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(displayValue(referral.pet_name))}</dd></div>
-            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Decision</dt><dd data-clinic-referral-confirm-decision class="mt-1 text-sm font-semibold text-slate-700"></dd></div>
-            <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase tracking-wide text-slate-400">Typed signature name</dt><dd data-clinic-referral-confirm-name class="mt-1 break-words text-sm font-semibold text-slate-700"></dd></div>
+            <div><dt class="text-xs font-medium text-slate-500">Pet</dt><dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(displayValue(referral.pet_name))}</dd></div>
+            <div><dt class="text-xs font-medium text-slate-500">Decision</dt><dd data-clinic-referral-confirm-decision class="mt-1 text-sm font-semibold text-slate-700"></dd></div>
+            <div class="sm:col-span-2"><dt class="text-xs font-medium text-slate-500">Typed signature name</dt><dd data-clinic-referral-confirm-name class="mt-1 break-words text-sm font-semibold text-slate-700"></dd></div>
           </dl>
           <p data-clinic-referral-decline-warning class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">A routine referral may be cancelled. An urgent or emergency safety referral may remain pending clinic acceptance. Declining does not erase the referral and does not automatically resume grooming.</p>
           <p class="mt-3 text-xs leading-5 text-slate-500">Approval covers referral creation, clinic intake transfer, and initial assessment only—not diagnostics, medication, treatment, emergency procedures, added charges, or other services.</p>
@@ -1629,7 +1638,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <article class="rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:p-5">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.12em] text-blue-700">${escapeHtml(clinicReferralNotificationLabel(notification.type))}</p>
+          <p class="text-xs font-medium text-blue-700">${escapeHtml(clinicReferralNotificationLabel(notification.type))}</p>
           <p class="mt-1 text-sm text-blue-800">${escapeHtml(formatDateTime(notification.created_at))}</p>
         </div>
         <span class="w-fit rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-800">${notification.is_read ? "Read" : "Unread"}</span>

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CustomerNotification;
 use App\Models\Pet;
 use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
 use App\Support\PetWeightSize;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PetController extends Controller
 {
@@ -116,7 +118,7 @@ class PetController extends Controller
         ]);
         $data = PetWeightSize::withComputedSize($data);
 
-        $pet->update([
+        $attributes = [
             'pet_name' => $data['pet_name'],
             'species' => $data['species'] ?? 'Dog',
             'breed' => $data['breed'] ?? null,
@@ -127,7 +129,24 @@ class PetController extends Controller
             'weight' => $data['weight'] ?? null,
             'color' => $data['color'] ?? null,
             'medical_conditions' => $data['medical_conditions'] ?? null,
-        ]);
+        ];
+
+        $changedVerifiedFields = array_intersect(
+            $this->changedClinicVerifiableFields($pet, $attributes),
+            $this->clinicVerifiedFields($pet),
+        );
+
+        $pet->fill($attributes);
+
+        if ($changedVerifiedFields !== []) {
+            $remainingVerifiedFields = array_values(array_diff(
+                $this->clinicVerifiedFields($pet),
+                $changedVerifiedFields,
+            ));
+            $pet->clinic_verified_fields = $remainingVerifiedFields ?: null;
+        }
+
+        $pet->save();
 
         return response()->json([
             'success' => true,
@@ -160,14 +179,15 @@ class PetController extends Controller
             'neutered_date' => 'nullable|date',
             'is_deceased' => 'nullable|boolean',
             'deceased_date' => 'nullable|date',
-            'size' => 'nullable|in:small,medium,large,extra_large',
-            'fur_type' => 'nullable|string|max:100',
-            'weight' => 'nullable|numeric|min:0',
+            'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'weight' => ['nullable', 'numeric', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data = PetWeightSize::withComputedSize($data);
 
-        $pet->update([
+        $attributes = [
             'pet_name' => $data['pet_name'],
             'species' => $data['species'] ?? $pet->species,
             'breed' => $data['breed'] ?? null,
@@ -182,12 +202,52 @@ class PetController extends Controller
             'weight' => $data['weight'] ?? null,
             'color' => $data['color'] ?? null,
             'medical_conditions' => $data['medical_conditions'] ?? null,
-        ]);
+        ];
+
+        $changedVerifiedFields = $this->changedClinicVerifiableFields(
+            $pet,
+            $attributes,
+        );
+
+        $updatedPet = DB::transaction(function () use (
+            $pet,
+            $attributes,
+            $changedVerifiedFields,
+        ) {
+            $pet->fill($attributes);
+            $hasInformationChanges = $pet->isDirty();
+
+            if ($changedVerifiedFields !== []) {
+                $pet->clinic_verified_fields = array_values(array_unique([
+                    ...$this->clinicVerifiedFields($pet),
+                    ...$changedVerifiedFields,
+                ]));
+            }
+
+            if (! $hasInformationChanges) {
+                return $pet->fresh();
+            }
+
+            $pet->save();
+
+            if ($pet->user_id) {
+                CustomerNotification::create([
+                    'user_id' => $pet->user_id,
+                    'pet_id' => $pet->pet_id,
+                    'type' => CustomerNotification::TYPE_PET_INFORMATION_UPDATED,
+                    'message' => "Information for {$pet->pet_name} has been updated by Bethlehem Animal Clinic.",
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+            }
+
+            return $pet->fresh();
+        });
 
         return response()->json([
             'success' => true,
             'message' => 'Pet updated successfully.',
-            'pet' => $pet->fresh(),
+            'pet' => $updatedPet,
         ]);
     }
 
@@ -223,5 +283,59 @@ class PetController extends Controller
         $pet->update(['is_archived' => 0]);
 
         return response()->json(['success' => true, 'message' => 'Pet restored.']);
+    }
+
+    private function clinicVerifiedFields(Pet $pet): array
+    {
+        return array_values(array_intersect(
+            Pet::CLINIC_VERIFIABLE_FIELDS,
+            is_array($pet->clinic_verified_fields)
+                ? $pet->clinic_verified_fields
+                : [],
+        ));
+    }
+
+    private function changedClinicVerifiableFields(
+        Pet $pet,
+        array $attributes,
+    ): array {
+        return array_values(array_filter(
+            Pet::CLINIC_VERIFIABLE_FIELDS,
+            function (string $field) use ($pet, $attributes) {
+                if (! array_key_exists($field, $attributes)) {
+                    return false;
+                }
+
+                return ! $this->clinicFieldValuesMatch(
+                    $field,
+                    $pet->getOriginal($field),
+                    $attributes[$field],
+                );
+            },
+        ));
+    }
+
+    private function clinicFieldValuesMatch(
+        string $field,
+        mixed $original,
+        mixed $updated,
+    ): bool {
+        if ($field === 'weight') {
+            if (($original === null || $original === '')
+                && ($updated === null || $updated === '')) {
+                return true;
+            }
+
+            return is_numeric($original)
+                && is_numeric($updated)
+                && abs((float) $original - (float) $updated) < 0.001;
+        }
+
+        $normalize = static fn (mixed $value): ?string => $value === null
+            || trim((string) $value) === ''
+                ? null
+                : trim((string) $value);
+
+        return $normalize($original) === $normalize($updated);
     }
 }

@@ -1,3 +1,28 @@
+const adminCustomerPetFieldModulesReady = Promise.all([
+  import("../services/booking-draft-service.js"),
+  import("./breed-combobox.js"),
+  import("./breed-coat-catalogue.js"),
+  import("./breed-coat-combobox.js"),
+  import("./fixed-option-combobox.js"),
+  import("./pet-weight-size.js"),
+]).then(([
+  bookingDraft,
+  breedCombobox,
+  breedCoatCatalogue,
+  breedCoatCombobox,
+  fixedOptionCombobox,
+  petWeightSize,
+]) => ({
+  ...bookingDraft,
+  ...breedCombobox,
+  ...breedCoatCatalogue,
+  ...breedCoatCombobox,
+  ...fixedOptionCombobox,
+  ...petWeightSize,
+}));
+
+let adminCustomerPetFields = null;
+
 function adminCustomers() {
   return {
     customers:    [],
@@ -43,7 +68,10 @@ function adminCustomers() {
     // ── Init ──────────────────────────────────────────────
 
     async init() {
-      await this.loadCustomers();
+      await Promise.all([
+        this.loadCustomers(),
+        this.initializePetFormFields(),
+      ]);
       const params     = new URLSearchParams(window.location.search);
       const customerId = params.get("customer_id");
       if (customerId) {
@@ -183,7 +211,112 @@ function adminCustomers() {
       this.refreshIcons();
     },
 
-    startEditPet() {
+    async initializePetFormFields() {
+      if (adminCustomerPetFields) return true;
+
+      try {
+        const tools = await adminCustomerPetFieldModulesReady;
+        const elements = {
+          species: document.getElementById("adminPetSpecies"),
+          breed: document.getElementById("adminPetBreed"),
+          gender: document.getElementById("adminPetGender"),
+          size: document.getElementById("adminPetSize"),
+          furType: document.getElementById("adminPetFurType"),
+          weight: document.getElementById("adminPetWeight"),
+        };
+        const controls = {
+          species: tools.createFixedOptionCombobox({
+            root: document.getElementById("adminPetSpeciesCombobox"),
+            input: elements.species,
+            listbox: document.getElementById("adminPetSpeciesOptions"),
+            toggleButton: document.getElementById("adminPetSpeciesDropdownButton"),
+            placeholder: "Select species",
+            options: [
+              { value: "Dog", label: "Dog" },
+              { value: "Cat", label: "Cat" },
+            ],
+          }),
+          gender: tools.createFixedOptionCombobox({
+            root: document.getElementById("adminPetGenderCombobox"),
+            input: elements.gender,
+            listbox: document.getElementById("adminPetGenderOptions"),
+            toggleButton: document.getElementById("adminPetGenderDropdownButton"),
+            placeholder: "Select gender",
+            options: [
+              { value: "male", label: "Male" },
+              { value: "female", label: "Female" },
+            ],
+            displaySelectedLabel: true,
+          }),
+          breed: tools.createBreedCombobox({
+            root: document.getElementById("adminPetBreedCombobox"),
+            input: elements.breed,
+            listbox: document.getElementById("adminPetBreedOptions"),
+            toggleButton: document.getElementById("adminPetBreedDropdownButton"),
+            errorElement: document.getElementById("adminPetBreedError"),
+            getPetType: () => elements.species.value,
+          }),
+          furType: tools.createBreedCoatCombobox({
+            root: document.getElementById("adminPetFurTypeCombobox"),
+            breedInput: elements.breed,
+            petTypeInput: elements.species,
+            input: elements.furType,
+            listbox: document.getElementById("adminPetFurTypeOptions"),
+            toggleButton: document.getElementById("adminPetFurTypeDropdownButton"),
+            errorElement: document.getElementById("adminPetFurTypeError"),
+          }),
+          size: tools.createFixedOptionCombobox({
+            root: document.getElementById("adminPetSizeCombobox"),
+            input: elements.size,
+            listbox: document.getElementById("adminPetSizeOptions"),
+            toggleButton: document.getElementById("adminPetSizeDropdownButton"),
+            placeholder: "Select size",
+            options: [],
+            displaySelectedLabel: true,
+          }),
+        };
+
+        adminCustomerPetFields = { tools, elements, controls };
+        tools.initializeWeightField(elements.weight);
+        controls.size.setDisabled(true);
+
+        elements.species.addEventListener("change", () => {
+          this.petModal.form.species = controls.species.getValue();
+          if (elements.weight.dataset.weightFieldMode === "range") {
+            tools.resetWeightFieldForEntry(elements.weight);
+          }
+          this.syncPetWeightAndSize({ clearManualSize: true });
+          this.validatePetWeightOnCommit();
+        });
+        elements.gender.addEventListener("change", () => {
+          this.petModal.form.gender = controls.gender.getValue();
+        });
+        elements.breed.addEventListener("change", () => {
+          this.petModal.form.breed = elements.breed.value;
+        });
+        elements.furType.addEventListener("change", () => {
+          this.petModal.form.fur_type = elements.furType.value;
+        });
+        elements.weight.addEventListener("input", () => this.syncPetWeightAndSize());
+        elements.weight.addEventListener("change", () => this.validatePetWeightOnCommit());
+        elements.weight.addEventListener("focus", () => {
+          tools.resetWeightFieldForEntry(elements.weight);
+        });
+        elements.size.addEventListener("change", () => this.handleManualPetSizeChange());
+
+        return true;
+      } catch (error) {
+        console.error("Admin pet fields could not be initialized.", error);
+        return false;
+      }
+    },
+
+    async startEditPet() {
+      if (!await this.initializePetFormFields()) {
+        this.petModal.saveError = "Pet editing controls could not be loaded. Please refresh and try again.";
+        return;
+      }
+
       const p = this.petModal.pet;
       this.petModal.form = {
         pet_name:            p.petName           || "",
@@ -201,8 +334,30 @@ function adminCustomers() {
         color:               p.color             || "",
         medical_conditions:  p.medicalConditions || "",
       };
+      const { tools, elements, controls } = adminCustomerPetFields;
+      const species = this.normalizePetSpecies(p.species);
+
+      controls.species.setValue(species);
+      controls.gender.setValue(String(p.gender || "").toLowerCase());
+      controls.breed.reset();
+      controls.furType.reset();
+      elements.breed.value = p.breed || "";
+      tools.initializeWeightField(elements.weight);
+      elements.weight.value = p.weight ?? "";
+      this.syncPetWeightAndSize({ clearManualSize: true });
+
+      if (!tools.getSizeForWeight(species, tools.getEnteredWeight(elements.weight))) {
+        this.setStoredPetSize(p.size);
+      }
+
+      await tools.breedCoatCatalogueReady;
+      controls.furType.update();
+      elements.furType.value = p.furType || "";
+      controls.furType.update();
+
       this.petModal.editing   = true;
       this.petModal.saveError = "";
+      this.refreshIcons();
     },
 
     cancelEditPet() {
@@ -212,29 +367,45 @@ function adminCustomers() {
 
     async saveEditPet() {
       if (this.petModal.saving) return;
-      this.petModal.saving    = true;
       this.petModal.saveError = "";
 
-      try {
-        await API.adminUpdatePet(this.petModal.pet.id, this.petModal.form);
+      const payload = this.buildPetEditPayload();
+      const validationMessage = this.validatePetEditPayload(payload);
+      if (validationMessage) {
+        const { tools, elements, controls } = adminCustomerPetFields;
+        controls.breed.showValidation();
+        controls.furType.showValidation();
+        const weightMessage = tools.getWeightFieldValidationMessage(elements.weight)
+          || tools.getWeightValidationMessage(payload.species, payload.weight);
+        if (weightMessage) {
+          tools.showWeightValidationInField(elements.weight, weightMessage);
+        }
+        this.petModal.saveError = validationMessage;
+        return;
+      }
 
-        const f = this.petModal.form;
+      this.petModal.saving = true;
+
+      try {
+        const response = await API.adminUpdatePet(this.petModal.pet.id, payload);
+
+        const savedPet = response.pet || payload;
         const updated = {
           ...this.petModal.pet,
-          petName:           f.pet_name,
-          species:           f.species,
-          breed:             f.breed,
-          gender:            f.gender,
-          birthdate:         f.birthdate,
-          isNeutered:        f.is_neutered,
-          neuteredDate:      f.neutered_date,
-          isDeceased:        f.is_deceased,
-          deceasedDate:      f.deceased_date,
-          size:              f.size,
-          furType:           f.fur_type,
-          weight:            f.weight,
-          color:             f.color,
-          medicalConditions: f.medical_conditions,
+          petName:           savedPet.pet_name,
+          species:           savedPet.species,
+          breed:             savedPet.breed,
+          gender:            savedPet.gender,
+          birthdate:         savedPet.birthdate,
+          isNeutered:        Boolean(savedPet.is_neutered),
+          neuteredDate:      savedPet.neutered_date,
+          isDeceased:        Boolean(savedPet.is_deceased),
+          deceasedDate:      savedPet.deceased_date,
+          size:              savedPet.size,
+          furType:           savedPet.fur_type,
+          weight:            savedPet.weight,
+          color:             savedPet.color,
+          medicalConditions: savedPet.medical_conditions,
         };
 
         this.petModal.pet     = updated;
@@ -248,9 +419,124 @@ function adminCustomers() {
 
         this.refreshIcons();
       } catch (err) {
-        this.petModal.saveError = err.message || "Failed to save changes.";
+        this.petModal.saveError = err.errors
+          ? Object.values(err.errors).flat()[0]
+          : (err.message || "Failed to save changes.");
       } finally {
         this.petModal.saving = false;
+      }
+    },
+
+    buildPetEditPayload() {
+      const { tools, elements, controls } = adminCustomerPetFields;
+      const form = this.petModal.form;
+      const isNeutered = Boolean(form.is_neutered);
+      const isDeceased = Boolean(form.is_deceased);
+
+      return {
+        pet_name: String(form.pet_name || "").trim(),
+        species: controls.species.getValue() || null,
+        breed: elements.breed.value.trim() || null,
+        gender: controls.gender.getValue() || null,
+        birthdate: form.birthdate || null,
+        is_neutered: isNeutered,
+        neutered_date: isNeutered ? (form.neutered_date || null) : null,
+        is_deceased: isDeceased,
+        deceased_date: isDeceased ? (form.deceased_date || null) : null,
+        size: tools.normalizePetSize(controls.size.getValue()) || null,
+        fur_type: elements.furType.value || null,
+        weight: tools.getEnteredWeight(elements.weight) || null,
+        color: String(form.color || "").trim() || null,
+        medical_conditions: String(form.medical_conditions || "").trim() || null,
+      };
+    },
+
+    validatePetEditPayload(payload) {
+      const { tools, elements, controls } = adminCustomerPetFields;
+      if (!payload.pet_name) return "Pet name is required.";
+
+      const breedValidationMessage = controls.breed.getValidationMessage();
+      if (breedValidationMessage) return breedValidationMessage;
+
+      const furTypeValidationMessage = controls.furType.getValidationMessage();
+      if (furTypeValidationMessage) return furTypeValidationMessage;
+
+      const weightValidationMessage = tools.getWeightFieldValidationMessage(elements.weight)
+        || tools.getWeightValidationMessage(payload.species, payload.weight);
+      if (weightValidationMessage) return weightValidationMessage;
+
+      const allowedSizes = tools.getSizeOptions(payload.species).map(
+        ({ value }) => tools.normalizePetSize(value),
+      );
+      if (payload.size && !allowedSizes.includes(payload.size)) {
+        return `${payload.species} size must be one of: ${allowedSizes.join(", ")}.`;
+      }
+
+      return "";
+    },
+
+    normalizePetSpecies(value) {
+      return String(value || "").trim().toLowerCase() === "cat" ? "Cat" : "Dog";
+    },
+
+    setStoredPetSize(storedSize) {
+      if (!adminCustomerPetFields) return;
+      const { tools, elements, controls } = adminCustomerPetFields;
+      const normalizedStoredSize = tools.normalizePetSize(storedSize);
+      const matchingOption = tools.getSizeOptions(elements.species.value).find(
+        ({ value }) => tools.normalizePetSize(value) === normalizedStoredSize,
+      );
+
+      controls.size.setValue(matchingOption?.value || "");
+    },
+
+    syncPetWeightAndSize({ clearManualSize = false } = {}) {
+      if (!adminCustomerPetFields) return;
+      const { tools, elements, controls } = adminCustomerPetFields;
+      const rawWeight = tools.getEnteredWeight(elements.weight);
+      const options = tools.getSizeOptions(elements.species.value);
+
+      controls.size.setOptions(options, { preserveValue: !clearManualSize });
+      const computedSize = tools.getSizeForWeight(elements.species.value, rawWeight);
+      if (computedSize) controls.size.setValue(computedSize);
+      controls.size.setDisabled(options.length === 0);
+    },
+
+    validatePetWeightOnCommit() {
+      if (!adminCustomerPetFields) return false;
+      const { tools, elements, controls } = adminCustomerPetFields;
+      const rawWeight = tools.getEnteredWeight(elements.weight);
+
+      if (!rawWeight) {
+        if (elements.weight.dataset.weightFieldMode !== "error") {
+          tools.showWeightRangeInField(
+            elements.weight,
+            elements.species.value,
+            controls.size.getValue(),
+          );
+        }
+        return true;
+      }
+
+      const message = tools.getWeightValidationMessage(elements.species.value, rawWeight);
+      if (message) {
+        tools.showWeightValidationInField(elements.weight, message);
+        return false;
+      }
+
+      return true;
+    },
+
+    handleManualPetSizeChange() {
+      if (!adminCustomerPetFields) return;
+      const { tools, elements, controls } = adminCustomerPetFields;
+      if (!tools.getEnteredWeight(elements.weight)
+        && elements.weight.dataset.weightFieldMode !== "error") {
+        tools.showWeightRangeInField(
+          elements.weight,
+          elements.species.value,
+          controls.size.getValue(),
+        );
       }
     },
 

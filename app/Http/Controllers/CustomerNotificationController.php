@@ -16,6 +16,7 @@ class CustomerNotificationController extends Controller
             ->with([
                 'booking.bookingPets.pet',
                 'booking.timeWindow',
+                'pet:pet_id,user_id,pet_name,species',
                 'groomingMedicalConcern:id,public_id,pet_id',
                 'groomingMedicalConcern.pet:pet_id,pet_name,species',
                 'groomingClinicReferral:id,public_id,pet_id',
@@ -37,6 +38,27 @@ class CustomerNotificationController extends Controller
                     ? $n->groomingClinicReferral
                     : null;
                 $referralPet = $referral?->pet;
+                $updatedPet = $n->type === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
+                    && (int) $n->pet?->user_id === (int) $n->user_id
+                        ? $n->pet
+                        : null;
+                $linkedPetId = $referralPet?->pet_id ?? $pet?->pet_id;
+                $linkedPetName = $referralPet?->pet_name ?? $pet?->pet_name;
+                $destination = $referral
+                    ? $this->referralDestination(
+                        $referralPet?->pet_id,
+                        $referral->public_id,
+                    )
+                    : $this->concernDestination(
+                        $pet?->pet_id,
+                        $concern?->public_id,
+                    );
+
+                if (! $destination && $updatedPet) {
+                    $destination = $this->petOverviewDestination(
+                        $updatedPet->pet_id,
+                    );
+                }
 
                 return [
                     'id' => $n->id,
@@ -50,17 +72,9 @@ class CustomerNotificationController extends Controller
                     'booking_id' => $n->booking_id,
                     'concern_public_id' => $concern?->public_id,
                     'referral_public_id' => $referral?->public_id,
-                    'pet_id' => $referralPet?->pet_id ?? $pet?->pet_id,
-                    'pet_name' => $referralPet?->pet_name ?? $pet?->pet_name,
-                    'destination' => $referral
-                        ? $this->referralDestination(
-                            $referralPet?->pet_id,
-                            $referral->public_id,
-                        )
-                        : $this->concernDestination(
-                            $pet?->pet_id,
-                            $concern?->public_id,
-                        ),
+                    'pet_id' => $linkedPetId ?? $updatedPet?->pet_id,
+                    'pet_name' => $linkedPetName ?? $updatedPet?->pet_name,
+                    'destination' => $destination,
                 ];
             });
 
@@ -124,6 +138,16 @@ class CustomerNotificationController extends Controller
     {
         if (
             $notification->type
+            === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
+        ) {
+            return collect([$notification->pet?->pet_name])
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        if (
+            $notification->type
             === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
         ) {
             return collect([$notification->groomingMedicalConcern?->pet?->pet_name])
@@ -157,6 +181,17 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetTypes(CustomerNotification $notification, array $petNames): array
     {
+        if (
+            $notification->type
+            === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
+        ) {
+            return collect([$notification->pet?->species])
+                ->map(fn ($type) => mb_strtolower(trim((string) $type)))
+                ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
+                ->values()
+                ->all();
+        }
+
         if (
             $notification->type
             === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
@@ -308,6 +343,18 @@ class CustomerNotificationController extends Controller
             'pet_id' => $petId,
             'tab' => 'notifications',
             'referral' => $publicId,
+        ]);
+    }
+
+    private function petOverviewDestination(?int $petId): ?string
+    {
+        if (! $petId) {
+            return null;
+        }
+
+        return './pet-details.html?'.http_build_query([
+            'pet_id' => $petId,
+            'tab' => 'overview',
         ]);
     }
 

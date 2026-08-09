@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Pet extends Model
 {
+    public const CLINIC_VERIFIABLE_FIELDS = [
+        'breed',
+        'fur_type',
+        'weight',
+        'size',
+    ];
+
     protected $table = 'pets';
 
     protected $primaryKey = 'pet_id';
@@ -27,8 +34,13 @@ class Pet extends Model
         'color',
         'size',
         'fur_type',
+        'clinic_verified_fields',
         'medical_conditions',
         'is_archived',
+    ];
+
+    protected $casts = [
+        'clinic_verified_fields' => 'array',
     ];
 
     // Pet belongs to a user

@@ -46,7 +46,7 @@
           </div>
 
           <nav class="px-4 py-6 space-y-2">
-            <p class="px-3 mb-2 text-xs tracking-[0.2em] uppercase text-white/70">Menu</p>
+            <p class="px-3 mb-2 text-xs font-medium text-white/70">Menu</p>
 
             <a href="./dashboard.html"
               class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
@@ -217,7 +217,11 @@
           <!-- Breed + Color -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petBreed" class="block text-sm font-medium text-slate-700 mb-1">Breed</label>
+              <label for="petBreed" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+                Breed
+                <span id="petBreedVerified"
+                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+              </label>
               <div id="petBreedCombobox" class="relative">
                 <div class="relative">
                   <input id="petBreed" name="breed" type="text" maxlength="100" placeholder="Select breed"
@@ -245,7 +249,11 @@
           <!-- Size + Fur Type -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petSize" class="block text-sm font-medium text-slate-700 mb-1">Size</label>
+              <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+                Size
+                <span id="petSizeVerified"
+                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+              </label>
               <div id="petSizeCombobox" class="relative">
                 <div class="relative">
                   <input id="petSize" name="size" type="text" placeholder="Select species first"
@@ -264,7 +272,11 @@
               </div>
             </div>
             <div>
-              <label for="petFurType" class="block text-sm font-medium text-slate-700 mb-1">Fur Type</label>
+              <label for="petFurType" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+                Fur Type
+                <span id="petFurTypeVerified"
+                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+              </label>
               <div id="petFurTypeCombobox" class="relative">
                 <div class="relative">
                   <input id="petFurType" name="fur_type" type="text" placeholder="Select breed first"
@@ -286,7 +298,11 @@
 
           <!-- Weight -->
           <div>
-            <label for="petWeight" class="block text-sm font-medium text-slate-700 mb-1">Weight (kg)</label>
+            <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              Weight (kg)
+              <span id="petWeightVerified"
+                class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+            </label>
             <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
               aria-invalid="false"
               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20" />
@@ -311,7 +327,34 @@
       </div>
     </div>
 
+    <div id="petConfirmationModal"
+      class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-900/50 px-4"
+      role="alertdialog" aria-modal="true" aria-labelledby="petConfirmationTitle"
+      aria-describedby="petConfirmationMessage">
+      <div id="petConfirmationCard" tabindex="-1"
+        class="w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+        <div class="border-b border-slate-100 bg-[#f8fbfe] px-6 py-4">
+          <h3 id="petConfirmationTitle" class="text-lg font-semibold text-[#2f4b66]">Confirm action</h3>
+        </div>
+        <div class="px-6 py-5">
+          <p id="petConfirmationMessage" class="text-sm leading-6 text-slate-600"></p>
+          <p id="petConfirmationDetails"
+            class="mt-3 hidden rounded-xl border border-[#d9e6f1] bg-[#f8fbfd] px-4 py-3 text-sm leading-6 text-[#2f4b66]"></p>
+          <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" id="cancelPetConfirmation"
+              class="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="button" id="confirmPetAction"
+              class="min-h-11 rounded-xl bg-[#355c84] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d4f73]">
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="../../scripts/api.js"></script>
-    <script type="module" src="../../scripts/components/my-pets.js"></script>
+    <script type="module" src="../../scripts/components/my-pets.js?v=20260809-edit-verified-indicators"></script>
   </body>
 </html>

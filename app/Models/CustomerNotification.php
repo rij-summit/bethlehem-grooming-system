@@ -18,6 +18,8 @@ class CustomerNotification extends Model
 
     public const TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED = 'grooming_clinic_assessment_completed';
 
+    public const TYPE_PET_INFORMATION_UPDATED = 'pet_information_updated';
+
     protected $table = 'customer_notifications';
 
     public $timestamps = false;
@@ -25,6 +27,7 @@ class CustomerNotification extends Model
     protected $fillable = [
         'user_id',
         'booking_id',
+        'pet_id',
         'grooming_medical_concern_id',
         'grooming_clinic_referral_id',
         'type',
@@ -46,6 +49,11 @@ class CustomerNotification extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function pet()
+    {
+        return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
     }
 
     public function groomingMedicalConcern()
