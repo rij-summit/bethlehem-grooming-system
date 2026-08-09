@@ -108,7 +108,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
         Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
         Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
+        Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
         Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
+        Route::post('/admin/bookings/{id}/revert-start-grooming', [AdminBookingController::class, 'revertStartGrooming']);
         Route::post('/admin/bookings/{id}/pets/{bookingPetId}/start-grooming', [AdminBookingController::class, 'startPetGrooming']);
         Route::post('/admin/bookings/{id}/pets/{bookingPetId}/mark-done', [AdminBookingController::class, 'markPetDone']);
         Route::post('/admin/bookings/{id}/mark-done', [AdminBookingController::class, 'markDone']);

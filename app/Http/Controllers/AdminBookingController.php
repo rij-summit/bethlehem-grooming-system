@@ -377,6 +377,74 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // Undo check-in completely: restore the pre-arrival booking and release all queue fields.
+    public function revertCheckIn($id)
+    {
+        $result = DB::transaction(function () use ($id) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
+
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->status !== 'checked_in') {
+                return ['error' => [
+                    'message' => 'Only a queued booking can be reverted to Incoming.',
+                    'status' => 422,
+                ]];
+            }
+
+            $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->lockForUpdate()
+                ->get();
+            $hasGroomingActivity = $bookingPets->contains(
+                fn (BookingPet $bookingPet) => $bookingPet->grooming_start_time !== null
+                    || $bookingPet->grooming_end_time !== null
+                    || in_array($bookingPet->grooming_state, [
+                        BookingPet::GROOMING_STATE_IN_PROGRESS,
+                        BookingPet::GROOMING_STATE_PAUSED,
+                        BookingPet::GROOMING_STATE_STOPPED,
+                        BookingPet::GROOMING_STATE_FINISHED,
+                    ], true),
+            );
+
+            if ($hasGroomingActivity) {
+                return ['error' => [
+                    'message' => 'Check-in cannot be reverted after grooming activity has started.',
+                    'status' => 422,
+                ]];
+            }
+
+            $booking->update([
+                'status' => 'waiting_to_arrive',
+                'queue_number' => null,
+                'dropped_off_at' => null,
+            ]);
+
+            BookingPet::whereIn('booking_pet_id', $bookingPets->pluck('booking_pet_id'))
+                ->update([
+                    'pet_queue_date' => null,
+                    'pet_queue_number' => null,
+                ]);
+
+            return ['booking_id' => $booking->booking_id];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Check-in reverted. The appointment is Incoming again.',
+            'booking_id' => $result['booking_id'],
+            'status' => 'waiting_to_arrive',
+        ]);
+    }
+
     // ── START GROOMING ────────────────────────────────────
     // checked_in → in_progress
     public function startGrooming($id)
@@ -570,6 +638,87 @@ class AdminBookingController extends Controller
             'all_pets_started' => $result['allPetsStarted'],
             'remaining_pets' => $result['remainingPets'],
             'booking_status' => $result['allPetsStarted'] ? 'in_progress' : 'checked_in',
+        ]);
+    }
+
+    // Undo all grooming starts for an owner card and restore its queued state.
+    public function revertStartGrooming($id)
+    {
+        $result = DB::transaction(function () use ($id) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
+
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
+                return ['error' => [
+                    'message' => 'Only an in-progress booking can be reverted to Queued.',
+                    'status' => 422,
+                ]];
+            }
+
+            $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
+                ->lockForUpdate()
+                ->get();
+            $startedPets = $bookingPets->filter(
+                fn (BookingPet $bookingPet) => $bookingPet->grooming_start_time !== null
+                    || $bookingPet->grooming_state === BookingPet::GROOMING_STATE_IN_PROGRESS,
+            );
+
+            if ($startedPets->isEmpty()) {
+                return ['error' => [
+                    'message' => 'This booking has no grooming start to revert.',
+                    'status' => 422,
+                ]];
+            }
+
+            $hasLaterGroomingActivity = $bookingPets->contains(
+                fn (BookingPet $bookingPet) => $bookingPet->grooming_end_time !== null
+                    || in_array($bookingPet->grooming_state, [
+                        BookingPet::GROOMING_STATE_PAUSED,
+                        BookingPet::GROOMING_STATE_STOPPED,
+                        BookingPet::GROOMING_STATE_FINISHED,
+                    ], true),
+            );
+
+            if ($hasLaterGroomingActivity) {
+                return ['error' => [
+                    'message' => 'Grooming cannot be reverted after a later grooming action has occurred.',
+                    'status' => 422,
+                ]];
+            }
+
+            BookingPet::whereIn('booking_pet_id', $startedPets->pluck('booking_pet_id'))
+                ->update([
+                    'grooming_start_time' => null,
+                    'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+                ]);
+
+            $booking->update([
+                'status' => 'checked_in',
+                'grooming_started_at' => null,
+            ]);
+
+            CustomerNotification::where('booking_id', $booking->booking_id)
+                ->where('type', 'grooming_started')
+                ->delete();
+
+            return ['booking_id' => $booking->booking_id];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grooming start reverted. The appointment is Queued again.',
+            'booking_id' => $result['booking_id'],
+            'status' => 'checked_in',
         ]);
     }
 

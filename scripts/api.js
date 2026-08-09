@@ -620,9 +620,27 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/check-in`, null, getAdminToken());
   }
 
+  async function adminRevertCheckIn(bookingId) {
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/revert-check-in`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function adminStartGrooming(bookingId) {
     // POST /api/admin/bookings/{id}/start-grooming  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/start-grooming`, null, getAdminToken());
+  }
+
+  async function adminRevertStartGrooming(bookingId) {
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/revert-start-grooming`,
+      null,
+      getAdminToken(),
+    );
   }
 
   async function adminStartPetGrooming(bookingId, bookingPetId) {
@@ -1293,7 +1311,9 @@ var API = (() => {
     // Admin bookings
     getAdminBookings,
     adminCheckIn,
+    adminRevertCheckIn,
     adminStartGrooming,
+    adminRevertStartGrooming,
     adminStartPetGrooming,
     adminMarkDone,
     adminMarkPetDone,

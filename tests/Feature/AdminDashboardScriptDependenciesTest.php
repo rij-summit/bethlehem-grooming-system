@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=workflow-reconciliation-20260809',
+            'scripts/components/admin-dashboard.js?v=persisted-revert-20260809',
         );
 
         $this->assertNotFalse($dashboardPosition);
@@ -33,7 +33,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=booking-cancellation-notification-20260807',
+            'scripts/api.js?v=persisted-revert-20260809',
             $page,
         );
     }

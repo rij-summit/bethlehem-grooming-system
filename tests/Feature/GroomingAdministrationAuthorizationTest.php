@@ -33,7 +33,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['GET', 'api/admin/bookings'],
         ['GET', 'api/admin/bookings/archived'],
         ['POST', 'api/admin/bookings/{id}/check-in'],
+        ['POST', 'api/admin/bookings/{id}/revert-check-in'],
         ['POST', 'api/admin/bookings/{id}/start-grooming'],
+        ['POST', 'api/admin/bookings/{id}/revert-start-grooming'],
         ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/start-grooming'],
         ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/mark-done'],
         ['POST', 'api/admin/bookings/{id}/mark-done'],
@@ -278,6 +280,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         return [
             'queue listing' => ['GET', '/api/admin/bookings'],
+            'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
+            'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
             'start grooming' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
             'finish grooming' => ['POST', '/api/admin/bookings/1/pets/1/mark-done'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
@@ -310,7 +314,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'queue and incoming listing' => ['GET', '/api/admin/bookings'],
             'archived grooming listing' => ['GET', '/api/admin/bookings/archived'],
             'check in booking' => ['POST', '/api/admin/bookings/1/check-in'],
+            'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'start whole booking' => ['POST', '/api/admin/bookings/1/start-grooming'],
+            'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
             'start one pet' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
             'finish one pet' => ['POST', '/api/admin/bookings/1/pets/1/mark-done'],
             'finish whole booking' => ['POST', '/api/admin/bookings/1/mark-done'],
@@ -332,6 +338,227 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'grooming transaction listing' => ['GET', '/api/admin/transactions'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
         ];
+    }
+
+    public function test_revert_check_in_restores_admin_and_customer_state_and_allows_check_in_again(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 100,
+            'first_name' => 'Queue',
+            'last_name' => 'Customer',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 100,
+            'booking_reference' => 'REVERT-CHECK-IN-100',
+            'user_id' => 100,
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 2,
+            'status' => 'waiting_to_arrive',
+        ]);
+        DB::table('pets')->insert([
+            ['pet_id' => 100, 'user_id' => 100, 'pet_name' => 'Alpha', 'species' => 'dog'],
+            ['pet_id' => 101, 'user_id' => 100, 'pet_name' => 'Beta', 'species' => 'cat'],
+        ]);
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 100, 'booking_id' => 100, 'pet_id' => 100],
+            ['booking_pet_id' => 101, 'booking_id' => 100, 'pet_id' => 101],
+        ]);
+
+        $this->authenticateAs('admin');
+
+        $this->postJson('/api/admin/bookings/100/check-in')
+            ->assertOk()
+            ->assertJsonPath('queue_number', 1);
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 100,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+        ]);
+        $this->assertNotNull(DB::table('bookings')->where('booking_id', 100)->value('dropped_off_at'));
+        $this->assertSame(
+            [1, 2],
+            DB::table('booking_pets')
+                ->where('booking_id', 100)
+                ->orderBy('booking_pet_id')
+                ->pluck('pet_queue_number')
+                ->map(fn ($number) => (int) $number)
+                ->all(),
+        );
+
+        $this->postJson('/api/admin/bookings/100/revert-check-in')
+            ->assertOk()
+            ->assertJsonPath('status', 'waiting_to_arrive');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 100,
+            'status' => 'waiting_to_arrive',
+            'queue_number' => null,
+            'dropped_off_at' => null,
+        ]);
+        $this->assertSame(0, DB::table('booking_pets')->where('booking_id', 100)->whereNotNull('pet_queue_date')->count());
+        $this->assertSame(0, DB::table('booking_pets')->where('booking_id', 100)->whereNotNull('pet_queue_number')->count());
+
+        $this->getJson('/api/admin/bookings')
+            ->assertOk()
+            ->assertJsonPath('incomingList.0.id', 100)
+            ->assertJsonCount(0, 'queuedList')
+            ->assertJsonPath('capacity.current', 0);
+
+        Sanctum::actingAs(User::query()->findOrFail(100), ['*']);
+
+        $this->getJson('/api/booking/history')
+            ->assertOk()
+            ->assertJsonPath('bookings.0.status', 'waiting_to_arrive')
+            ->assertJsonPath('bookings.0.dropped_off_at', null)
+            ->assertJsonPath('bookings.0.pets.0.grooming_status', 'waiting_to_arrive');
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('queue.active', 0)
+            ->assertJsonPath('queue.queued', 0)
+            ->assertJsonPath('queue.waiting', 1);
+
+        $this->authenticateAs('admin');
+
+        $this->postJson('/api/admin/bookings/100/check-in')
+            ->assertOk()
+            ->assertJsonPath('queue_number', 1);
+        $this->assertSame(2, DB::table('booking_pets')->where('booking_id', 100)->whereNotNull('pet_queue_number')->count());
+    }
+
+    public function test_revert_grooming_start_restores_queue_and_removes_customer_notification(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 110,
+            'first_name' => 'Started',
+            'last_name' => 'Customer',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 110,
+            'booking_reference' => 'REVERT-START-110',
+            'user_id' => 110,
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+            'dropped_off_at' => now(),
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 110,
+            'user_id' => 110,
+            'pet_name' => 'Gamma',
+            'species' => 'dog',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 110,
+            'booking_id' => 110,
+            'pet_id' => 110,
+            'pet_queue_date' => now()->toDateString(),
+            'pet_queue_number' => 1,
+        ]);
+
+        $this->authenticateAs('staff');
+
+        $this->postJson('/api/admin/bookings/110/start-grooming')
+            ->assertOk();
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 110,
+            'status' => 'in_progress',
+        ]);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 110,
+            'grooming_state' => BookingPet::GROOMING_STATE_IN_PROGRESS,
+        ]);
+        $this->assertDatabaseHas('customer_notifications', [
+            'booking_id' => 110,
+            'type' => 'grooming_started',
+        ]);
+
+        $this->postJson('/api/admin/bookings/110/revert-start-grooming')
+            ->assertOk()
+            ->assertJsonPath('status', 'checked_in');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 110,
+            'status' => 'checked_in',
+            'queue_number' => 1,
+            'grooming_started_at' => null,
+        ]);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 110,
+            'pet_queue_number' => 1,
+            'grooming_start_time' => null,
+            'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
+        ]);
+        $this->assertDatabaseMissing('customer_notifications', [
+            'booking_id' => 110,
+            'type' => 'grooming_started',
+        ]);
+
+        $this->getJson('/api/admin/bookings')
+            ->assertOk()
+            ->assertJsonPath('queuedList.0.id', 110)
+            ->assertJsonCount(0, 'inProgressList');
+
+        Sanctum::actingAs(User::query()->findOrFail(110), ['*']);
+
+        $this->getJson('/api/booking/history')
+            ->assertOk()
+            ->assertJsonPath('bookings.0.status', 'checked_in')
+            ->assertJsonPath('bookings.0.grooming_started_at', null)
+            ->assertJsonPath('bookings.0.pets.0.grooming_status', 'checked_in');
+        $this->getJson('/api/booking/grooming-capacity')
+            ->assertOk()
+            ->assertJsonPath('queue.queued', 1)
+            ->assertJsonPath('queue.in_progress', 0);
+
+        $this->authenticateAs('staff');
+
+        $this->postJson('/api/admin/bookings/110/start-grooming')
+            ->assertOk();
+        $this->assertDatabaseCount('customer_notifications', 1);
+    }
+
+    public function test_revert_endpoints_refuse_to_erase_later_grooming_activity(): void
+    {
+        $this->authenticateAs('admin');
+        $this->seedMultiPetBooking();
+
+        $this->postJson('/api/admin/bookings/1/pets/1/start-grooming')->assertOk();
+
+        $this->postJson('/api/admin/bookings/1/revert-check-in')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Check-in cannot be reverted after grooming activity has started.');
+
+        DB::table('booking_pets')->where('booking_pet_id', 1)->update([
+            'grooming_end_time' => now(),
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+        ]);
+
+        $this->postJson('/api/admin/bookings/1/revert-start-grooming')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Grooming cannot be reverted after a later grooming action has occurred.');
+
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 1,
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+        ]);
+    }
+
+    public function test_revert_buttons_use_persisted_api_handlers(): void
+    {
+        $api = file_get_contents(base_path('scripts/api.js'));
+        $dashboard = file_get_contents(base_path('scripts/components/admin-dashboard.js'));
+
+        $this->assertStringContainsString('async function adminRevertCheckIn(bookingId)', $api);
+        $this->assertStringContainsString('async function adminRevertStartGrooming(bookingId)', $api);
+        $this->assertStringContainsString('await API.adminRevertCheckIn(booking.id)', $dashboard);
+        $this->assertStringContainsString('await API.adminRevertStartGrooming(booking.id)', $dashboard);
+        $this->assertStringNotContainsString('revertQueuedBookingFrontendOnly', $dashboard);
+        $this->assertStringNotContainsString('revertInProgressBookingFrontendOnly', $dashboard);
+        $this->assertStringNotContainsString('booking-reverted-ui-only', $dashboard);
     }
 
     public function test_archive_payload_has_constant_query_count_and_keeps_the_page_contract(): void
