@@ -490,6 +490,13 @@ function adminDashboard() {
     ...adminClinicReferralState(),
     ...adminStoppedPaymentReviewState(),
     activeTab: "incoming",
+    dashboardSearchQuery: "",
+    dashboardSearchOpen: false,
+    dashboardSearchLoading: false,
+    dashboardSearchError: "",
+    dashboardSearchCustomers: [],
+    dashboardSearchPets: [],
+    _dashboardSearchRequestId: 0,
     todayCount: 0,
     weekCount: 0,
     revenueToday: 0,
@@ -764,6 +771,71 @@ function adminDashboard() {
         await this.loadClinicStatus();
         await this.loadNoShows();
       }, 60000);
+    },
+
+    get dashboardSearchHasResults() {
+      return this.dashboardSearchCustomers.length > 0
+        || this.dashboardSearchPets.length > 0;
+    },
+
+    openDashboardSearch() {
+      if (this.dashboardSearchQuery.trim()) {
+        this.dashboardSearchOpen = true;
+      }
+    },
+
+    closeDashboardSearch() {
+      this.dashboardSearchOpen = false;
+    },
+
+    async searchDashboard() {
+      const search = this.dashboardSearchQuery.trim();
+      const requestId = ++this._dashboardSearchRequestId;
+
+      if (!search) {
+        this.dashboardSearchOpen = false;
+        this.dashboardSearchLoading = false;
+        this.dashboardSearchError = "";
+        this.dashboardSearchCustomers = [];
+        this.dashboardSearchPets = [];
+        return;
+      }
+
+      this.dashboardSearchOpen = true;
+      this.dashboardSearchLoading = true;
+      this.dashboardSearchError = "";
+
+      try {
+        const data = await API.searchAdminDashboard(search);
+        if (requestId !== this._dashboardSearchRequestId) return;
+
+        this.dashboardSearchCustomers = data.customers || [];
+        this.dashboardSearchPets = data.pets || [];
+        this.$nextTick(() => this.refreshIcons());
+      } catch (error) {
+        if (requestId !== this._dashboardSearchRequestId) return;
+
+        this.dashboardSearchCustomers = [];
+        this.dashboardSearchPets = [];
+        this.dashboardSearchError = error.message || "Search is unavailable. Please try again.";
+      } finally {
+        if (requestId === this._dashboardSearchRequestId) {
+          this.dashboardSearchLoading = false;
+        }
+      }
+    },
+
+    openDashboardCustomer(customer) {
+      const params = new URLSearchParams({ customer_id: String(customer.id) });
+      window.location.href = `./clients.html?${params.toString()}`;
+    },
+
+    openDashboardPet(pet) {
+      const params = new URLSearchParams({
+        customer_id: String(pet.ownerId),
+        pet_id: String(pet.id),
+      });
+      window.location.href = `./clients.html?${params.toString()}`;
     },
 
     // Stops a poll interval after 3 consecutive server errors.

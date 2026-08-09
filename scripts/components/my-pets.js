@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── State ────────────────────────────────────────────
   let allPets = [];
+  let allKnownPets = [];
   let showingArchived = false;
   let editingPet = null;
   let confirmationResolver = null;
@@ -190,10 +191,17 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadPets() {
     renderGrid(null); // loading state
     try {
-      const data = await API.getUserPets({ archived: showingArchived ? 1 : 0 });
-      allPets = data.pets || [];
+      const [activeData, archivedData] = await Promise.all([
+        API.getUserPets({ archived: 0 }),
+        API.getUserPets({ archived: 1 }),
+      ]);
+      const activePets = activeData.pets || [];
+      const archivedPets = archivedData.pets || [];
+      allKnownPets = [...activePets, ...archivedPets];
+      allPets = showingArchived ? archivedPets : activePets;
     } catch {
       allPets = [];
+      allKnownPets = [];
     }
     applyFilter();
   }
@@ -694,6 +702,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function validatePetForm(payload) {
+    const normalizedPetName = normalizePetNameForComparison(payload.pet_name);
+    const duplicatePetName = allKnownPets.some((pet) => (
+      String(pet.pet_id) !== String(editingPet?.pet_id ?? "")
+      && normalizePetNameForComparison(pet.pet_name) === normalizedPetName
+    ));
+
+    if (duplicatePetName) {
+      return "You already have a pet with this name.";
+    }
+
     const breedValidationMessage = breedCombobox.getValidationMessage();
     if (breedValidationMessage) {
       return breedValidationMessage;
@@ -718,6 +736,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     return "";
+  }
+
+  function normalizePetNameForComparison(value) {
+    return String(value ?? "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase();
   }
 
   function escHtml(str) {

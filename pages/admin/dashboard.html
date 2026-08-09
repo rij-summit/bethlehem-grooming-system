@@ -299,19 +299,96 @@
                 <div
                   class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
                 >
-                  <!-- BACKEND: connect this search to customer/pet/booking records -->
-                  <label class="relative block min-w-0 flex-1 sm:min-w-[280px]">
-                    <span
-                      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  <!-- Shared customer and pet search -->
+                  <div
+                    class="relative min-w-0 flex-1 sm:min-w-[280px]"
+                    @click.outside="closeDashboardSearch()"
+                  >
+                    <label class="relative block">
+                      <span
+                        class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      >
+                        <i data-lucide="search" class="h-5 w-5"></i>
+                      </span>
+                      <input
+                        type="search"
+                        x-model="dashboardSearchQuery"
+                        @input.debounce.300ms="searchDashboard()"
+                        @focus="openDashboardSearch()"
+                        @keydown.escape="closeDashboardSearch()"
+                        placeholder="Search customers, pets, or phone..."
+                        aria-label="Search customers, pets, or phone"
+                        style="padding-left:3rem;padding-right:1.5rem"
+                        class="w-full rounded-xl border border-transparent bg-white py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
+                      />
+                    </label>
+
+                    <div
+                      x-cloak
+                      x-show="dashboardSearchOpen"
+                      x-transition
+                      class="absolute left-0 right-0 top-full z-50 mt-2 max-h-[420px] overflow-y-auto rounded-2xl border border-[#d7e3ef] bg-white py-2 shadow-xl"
+                      aria-live="polite"
                     >
-                      <i data-lucide="search" class="h-5 w-5"></i>
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Search customers or pets..."
-                      class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
-                    />
-                  </label>
+                      <div x-show="dashboardSearchLoading" class="flex items-center gap-2 px-4 py-4 text-sm text-slate-500">
+                        <i data-lucide="loader-circle" class="h-4 w-4 animate-spin text-[#315b7e]"></i>
+                        <span>Searching...</span>
+                      </div>
+
+                      <p
+                        x-show="!dashboardSearchLoading && dashboardSearchError"
+                        class="px-4 py-4 text-sm text-red-600"
+                        x-text="dashboardSearchError"
+                      ></p>
+
+                      <p
+                        x-show="!dashboardSearchLoading && !dashboardSearchError && !dashboardSearchHasResults"
+                        class="px-4 py-4 text-sm text-slate-500"
+                      >No customers or pets found.</p>
+
+                      <div x-show="!dashboardSearchLoading && !dashboardSearchError && dashboardSearchHasResults">
+                        <template x-if="dashboardSearchCustomers.length > 0">
+                          <section aria-label="Customer search results">
+                            <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Customers</p>
+                            <template x-for="customer in dashboardSearchCustomers" :key="'customer-' + customer.id">
+                              <button
+                                type="button"
+                                @click="openDashboardCustomer(customer)"
+                                class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                              >
+                                <span class="block text-sm font-semibold text-slate-700" x-text="customer.name"></span>
+                                <span class="mt-1 block text-sm text-slate-500" x-text="formatMobileNumber(customer.phone)"></span>
+                              </button>
+                            </template>
+                          </section>
+                        </template>
+
+                        <template x-if="dashboardSearchPets.length > 0">
+                          <section
+                            aria-label="Pet search results"
+                            :class="dashboardSearchCustomers.length > 0 ? 'mt-2 border-t border-slate-200 pt-2' : ''"
+                          >
+                            <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Pets</p>
+                            <template x-for="pet in dashboardSearchPets" :key="'pet-' + pet.id">
+                              <button
+                                type="button"
+                                @click="openDashboardPet(pet)"
+                                class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                              >
+                                <span class="block text-sm font-semibold text-slate-700" x-text="pet.name"></span>
+                                <span class="mt-1 block text-sm text-slate-500">
+                                  Owner: <span x-text="pet.ownerName"></span>
+                                  <span aria-hidden="true"> &middot; </span>
+                                  <span x-text="pet.species || 'Not provided'"></span>
+                                </span>
+                              </button>
+                            </template>
+                          </section>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- End shared customer and pet search -->
 
                   <button
                     type="button"
@@ -597,7 +674,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=persisted-revert-20260809"></script>
+    <script src="../../scripts/api.js?v=dashboard-search-20260809"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -607,6 +684,6 @@
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=persisted-revert-20260809"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=dashboard-search-20260809"></script>
   </body>
 </html>

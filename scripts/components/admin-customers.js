@@ -26,6 +26,7 @@ let adminCustomerPetFields = null;
 function adminCustomers() {
   return {
     customers:    [],
+    petSearchResults: [],
     totalCount:   0,
     loading:      false,
     errorMessage: "",
@@ -74,15 +75,18 @@ function adminCustomers() {
       ]);
       const params     = new URLSearchParams(window.location.search);
       const customerId = params.get("customer_id");
+      const petId      = params.get("pet_id");
       if (customerId) {
         const customer = this.customers.find(c => String(c.id) === customerId);
         if (customer) {
-          this.openCustomerDetails(customer);
+          await this.openCustomerSearchDestination(customer, petId);
         } else {
           // Not in the current filtered list — fetch directly by ID
           try {
             const data = await API.getCustomerDetails(customerId);
-            if (data.customer) this.openCustomerDetails(data.customer);
+            if (data.customer) {
+              await this.openCustomerSearchDestination(data.customer, petId);
+            }
           } catch { /* silently ignore if not found */ }
         }
       }
@@ -104,12 +108,14 @@ function adminCustomers() {
           tier:   this.tierFilter,
           search: this.searchQuery.trim(),
         });
-        this.customers  = data.customers || [];
-        this.totalCount = data.total ?? this.customers.length;
+        this.customers       = data.customers || [];
+        this.petSearchResults = data.pets || [];
+        this.totalCount      = data.total ?? this.customers.length;
       } catch (err) {
         this.errorMessage = err.message || "Failed to load customers.";
-        this.customers    = [];
-        this.totalCount   = 0;
+        this.customers       = [];
+        this.petSearchResults = [];
+        this.totalCount      = 0;
       } finally {
         this.loading = false;
         this.refreshIcons();
@@ -185,6 +191,7 @@ function adminCustomers() {
       try {
         await apiMap[action]();
         this.confirmModal.open = false;
+        if (this.detailModal.open) this.closeCustomerDetails();
         await this.loadCustomers();
       } catch (err) {
         this.confirmModal.error = err.message || "Action failed. Please try again.";
@@ -209,6 +216,35 @@ function adminCustomers() {
     openPetDetail(pet) {
       this.petModal = { open: true, pet, editing: false, saving: false, saveError: "", form: {} };
       this.refreshIcons();
+    },
+
+    async openCustomerSearchDestination(customer, petId = "") {
+      await this.openCustomerDetails(customer);
+      if (!petId || this.detailModal.error) return;
+
+      const pet = (this.detailModal.customer?.pets || [])
+        .find(candidate => String(candidate.id) === String(petId));
+
+      if (pet) this.openPetDetail(pet);
+    },
+
+    async openPetSearchResult(result) {
+      await this.openCustomerDetails({
+        id:       result.ownerId,
+        fullName: result.ownerName,
+      });
+
+      if (!this.detailModal.open || this.detailModal.error) return;
+
+      const pet = (this.detailModal.customer?.pets || [])
+        .find(candidate => String(candidate.id) === String(result.id));
+
+      if (!pet) {
+        this.detailModal.error = "This pet's details are no longer available.";
+        return;
+      }
+
+      this.openPetDetail(pet);
     },
 
     async initializePetFormFields() {

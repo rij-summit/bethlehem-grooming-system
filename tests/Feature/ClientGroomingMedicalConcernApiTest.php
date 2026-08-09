@@ -446,7 +446,7 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         $this->assertStringContainsString('originatingButton?.focus()', $clientComponent);
         $this->assertStringNotContainsString('`${decisionLabel} the proposed action?', $clientComponent);
         $this->assertStringContainsString(
-            'pet-details.js?v=concern-response-modal-20260809',
+            'pet-details.js?v=pet-verified-alignment-20260809',
             $clientPage,
         );
     }

@@ -870,6 +870,11 @@ var API = (() => {
 
   // ── Customer management (admin only) ─────────────────────────────────────
 
+  async function searchAdminDashboard(search = "") {
+    const params = new URLSearchParams({ q: String(search).trim() });
+    return request("GET", `/admin/dashboard/search?${params.toString()}`, null, getAdminToken());
+  }
+
   async function getCustomers({ status = "active", tier = "", search = "" } = {}) {
     // GET /api/admin/customers  (protected — admin token)
     const params = new URLSearchParams();
@@ -1333,6 +1338,7 @@ var API = (() => {
     createAdminStoppedPaymentReview,
     adminCancelBooking,
     // Admin customers
+    searchAdminDashboard,
     getCustomers,
     getCustomerDetails,
     deactivateCustomer,

@@ -176,6 +176,73 @@ class ClientPetProfileTest extends TestCase
         ]);
     }
 
+    public function test_customer_cannot_add_a_case_insensitive_duplicate_of_an_archived_pet_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'is_archived' => true,
+        ]);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => '  mochi  ',
+            'species' => 'Cat',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pet_name'])
+            ->assertJsonPath('errors.pet_name.0', 'You already have a pet with this name.');
+
+        $this->assertDatabaseCount('pets', 1);
+    }
+
+    public function test_customer_cannot_rename_a_pet_to_a_sibling_pets_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 101, 'user_id' => 10, 'pet_name' => 'Mochi', 'species' => 'Cat'],
+            ['pet_id' => 102, 'user_id' => 10, 'pet_name' => 'Bruno', 'species' => 'Dog'],
+        ]);
+
+        $this->putJson('/api/pets/102', [
+            'pet_name' => 'MOCHI',
+            'species' => 'Dog',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pet_name']);
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 102,
+            'pet_name' => 'Bruno',
+        ]);
+    }
+
+    public function test_different_customers_can_use_the_same_pet_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 202,
+            'user_id' => 20,
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+        ]);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+        ]);
+    }
+
     public function test_customer_can_edit_gender_birthdate_and_connected_pet_fields(): void
     {
         $this->authenticateCustomer(10);

@@ -10,6 +10,7 @@ use App\Rules\ValidPetWeight;
 use App\Support\PetWeightSize;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PetController extends Controller
 {
@@ -68,6 +69,11 @@ class PetController extends Controller
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data['pet_name'] = $this->normalizePetName($data['pet_name']);
+        $this->ensureOwnerPetNameIsUnique(
+            $request->user()->user_id,
+            $data['pet_name'],
+        );
         $data = PetWeightSize::withComputedSize($data);
 
         $pet = Pet::create([
@@ -116,6 +122,12 @@ class PetController extends Controller
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data['pet_name'] = $this->normalizePetName($data['pet_name']);
+        $this->ensureOwnerPetNameIsUnique(
+            $request->user()->user_id,
+            $data['pet_name'],
+            $pet->pet_id,
+        );
         $data = PetWeightSize::withComputedSize($data);
 
         $attributes = [
@@ -185,6 +197,14 @@ class PetController extends Controller
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
+        $data['pet_name'] = $this->normalizePetName($data['pet_name']);
+        if ($pet->user_id) {
+            $this->ensureOwnerPetNameIsUnique(
+                $pet->user_id,
+                $data['pet_name'],
+                $pet->pet_id,
+            );
+        }
         $data = PetWeightSize::withComputedSize($data);
 
         $attributes = [
@@ -249,6 +269,37 @@ class PetController extends Controller
             'message' => 'Pet updated successfully.',
             'pet' => $updatedPet,
         ]);
+    }
+
+    private function normalizePetName(string $name): string
+    {
+        return preg_replace('/\s+/u', ' ', trim($name)) ?: trim($name);
+    }
+
+    private function ensureOwnerPetNameIsUnique(
+        int $ownerId,
+        string $petName,
+        ?int $ignoredPetId = null,
+    ): void {
+        $normalizedName = mb_strtolower($this->normalizePetName($petName));
+        $petNames = Pet::where('user_id', $ownerId)
+            ->when(
+                $ignoredPetId !== null,
+                fn ($query) => $query->where('pet_id', '!=', $ignoredPetId),
+            )
+            ->pluck('pet_name');
+
+        $duplicateExists = $petNames->contains(
+            fn ($existingName) => mb_strtolower(
+                $this->normalizePetName((string) $existingName),
+            ) === $normalizedName,
+        );
+
+        if ($duplicateExists) {
+            throw ValidationException::withMessages([
+                'pet_name' => ['You already have a pet with this name.'],
+            ]);
+        }
     }
 
     // ── ARCHIVE ───────────────────────────────────────────

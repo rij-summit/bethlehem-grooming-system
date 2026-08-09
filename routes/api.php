@@ -87,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/clinic/pre-register', [ClinicWalkinController::class, 'preRegister']);
 
     // Admin — Customer management (staff can view, admin can manage)
+    Route::get('/admin/dashboard/search', [CustomerController::class, 'dashboardSearch']);
     Route::get('/admin/customers', [CustomerController::class, 'index']);
     Route::get('/admin/customers/{id}', [CustomerController::class, 'show']);
     Route::post('/admin/customers/{id}/deactivate', [CustomerController::class, 'deactivate']);

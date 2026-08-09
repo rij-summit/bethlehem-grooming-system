@@ -53,6 +53,104 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         );
     }
 
+    public function test_account_actions_are_below_pets_in_customer_details_modal(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $ownerCard = $this->sourceBetween(
+            $page,
+            '<!-- Customer Cards -->',
+            'x-show="isAdmin && confirmModal.open"',
+        );
+        $detailsModal = $this->sourceBetween(
+            $page,
+            '<!-- Customer Details Modal -->',
+            'x-show="isAdmin && resetModal.open"',
+        );
+
+        $this->assertStringNotContainsString('<!-- Owner actions footer -->', $ownerCard);
+        $this->assertStringNotContainsString('openResetPassword(customer)', $ownerCard);
+        $this->assertStringNotContainsString("confirmAction('deactivate', customer)", $ownerCard);
+
+        $this->assertStringContainsString('<!-- Account actions below the registered pets -->', $detailsModal);
+        $this->assertStringContainsString('<footer x-show="isAdmin" aria-label="Account actions"', $detailsModal);
+        $this->assertStringContainsString(
+            '<h4 class="mb-4 text-lg font-semibold text-[#1f3850]">Account actions</h4>',
+            $detailsModal,
+        );
+        $this->assertStringNotContainsString('divide-y divide-slate-200', $detailsModal);
+
+        foreach ([
+            'Help this customer regain access to their account.',
+            "Temporarily disable this customer's account.",
+            'Move this customer to archived records.',
+        ] as $guide) {
+            $this->assertStringContainsString($guide, $detailsModal);
+        }
+
+        foreach ([
+            'openResetPassword(detailModal.customer)',
+            "confirmAction('deactivate', detailModal.customer)",
+            "confirmAction('archive', detailModal.customer)",
+            "confirmAction('reactivate', detailModal.customer)",
+            "confirmAction('unarchive', detailModal.customer)",
+        ] as $action) {
+            $this->assertStringContainsString($action, $detailsModal);
+        }
+
+        $petsPosition = strpos($detailsModal, '>Registered Pets</h4>');
+        $actionsPosition = strpos($detailsModal, '<!-- Account actions below the registered pets -->');
+
+        $this->assertNotFalse($petsPosition);
+        $this->assertNotFalse($actionsPosition);
+        $this->assertGreaterThan($petsPosition, $actionsPosition);
+
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+
+        $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
+        $this->assertStringContainsString('admin-customers.js?v=dashboard-search-destination-20260809', $page);
+    }
+
+    public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+        $petSearchResults = $this->sourceBetween(
+            $page,
+            '<!-- Pet search results -->',
+            'x-show="isAdmin && confirmModal.open"',
+        );
+
+        foreach ([
+            '>Customers</h3>',
+            '>Pets</h3>',
+            "x-text=\"'(' + customers.length + ')'\"",
+            "x-text=\"'(' + petSearchResults.length + ')'\"",
+            '@click="openPetSearchResult(pet)"',
+            'Owner: <span class="font-medium text-slate-700" x-text="pet.ownerName"></span>',
+            'data-lucide="cat"',
+            'data-lucide="dog"',
+            'x-text="formatMobileNumber(pet.ownerPhone)"',
+            'x-text="formatTextValue(pet.ownerEmail)"',
+            'placeholder="Search customer, pet, or phone..."',
+        ] as $searchUi) {
+            $this->assertStringContainsString($searchUi, $page);
+        }
+
+        foreach ([
+            'petSearchResults: []',
+            'this.petSearchResults = data.pets || [];',
+            'async openPetSearchResult(result)',
+            'await this.openCustomerDetails({',
+            'this.openPetDetail(pet);',
+        ] as $searchBehavior) {
+            $this->assertStringContainsString($searchBehavior, $component);
+        }
+
+        $this->assertStringNotContainsString('>CUSTOMERS</h3>', $page);
+        $this->assertStringNotContainsString('>PETS</h3>', $page);
+        $this->assertSame(1, substr_count($petSearchResults, '&middot;'));
+    }
+
     public function test_pet_view_details_matches_the_owner_card_typography(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));

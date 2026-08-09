@@ -91,6 +91,29 @@ class PetInformationVerificationInterfaceTest extends TestCase
         $this->assertStringNotContainsString('confirm(', $this->myPetsComponent);
     }
 
+    public function test_my_pets_prevents_duplicate_names_across_active_and_archived_pets(): void
+    {
+        $petController = file_get_contents(base_path('app/Http/Controllers/PetController.php'));
+
+        foreach ([
+            'let allKnownPets = [];',
+            'API.getUserPets({ archived: 0 })',
+            'API.getUserPets({ archived: 1 })',
+            'normalizePetNameForComparison(pet.pet_name) === normalizedPetName',
+            'You already have a pet with this name.',
+        ] as $clientValidation) {
+            $this->assertStringContainsString($clientValidation, $this->myPetsComponent);
+        }
+
+        foreach ([
+            'normalizePetName($data[\'pet_name\'])',
+            'ensureOwnerPetNameIsUnique(',
+            "'pet_name' => ['You already have a pet with this name.']",
+        ] as $serverValidation) {
+            $this->assertStringContainsString($serverValidation, $petController);
+        }
+    }
+
     public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
     {
         $petCard = $this->sourceBetween(
@@ -109,7 +132,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'text-[10px]',
             'syncEditVerifiedIndicators(pet);',
             'syncEditVerifiedIndicators(null);',
-            'my-pets.js?v=20260809-edit-verified-indicators',
+            'my-pets.js?v=20260809-unique-pet-names',
         ] as $editIndicator) {
             $this->assertStringContainsString(
                 $editIndicator,
