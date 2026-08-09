@@ -899,18 +899,84 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   };
 
+  const renderConcernConsentConfirmation = (concern) => {
+    if (
+      concern.submitted_response
+      || concern.required_customer_action !== "consent"
+    ) {
+      return "";
+    }
+
+    return `
+      <div
+        data-concern-consent-confirmation
+        class="fixed inset-0 z-[70] hidden items-center justify-center overflow-y-auto bg-slate-900/60 p-4"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="concernConsentConfirmationTitle"
+        aria-describedby="concernConsentConfirmationMessage"
+      >
+        <div
+          data-concern-consent-confirmation-card
+          class="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+          tabindex="-1"
+        >
+          <header class="border-b border-slate-100 bg-[#f8fbfe] px-5 py-4 sm:px-6">
+            <h4 id="concernConsentConfirmationTitle" data-concern-confirm-title class="text-lg font-bold text-[#2f4b66]">
+              Confirm response
+            </h4>
+          </header>
+          <div class="px-5 py-5 sm:px-6">
+            <p id="concernConsentConfirmationMessage" data-concern-confirm-message class="text-sm leading-6 text-slate-600"></p>
+            <div
+              data-concern-confirm-error
+              class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+              role="alert"
+              tabindex="-1"
+            ></div>
+            <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                data-cancel-concern-consent-confirm
+                class="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                data-submit-concern-consent-confirm
+                class="min-h-11 rounded-xl bg-[#355c84] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#2d4f73] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Confirm response
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   const attachConcernResponseActions = (concern) => {
     const errorBox = concernDetail.querySelector("[data-concern-response-error]");
     const responseButtons = Array.from(concernDetail.querySelectorAll(
       "[data-submit-concern-acknowledgment], [data-submit-concern-consent]",
     ));
     const signatureInput = concernDetail.querySelector("[data-concern-signature]");
+    const confirmation = concernDetail.querySelector("[data-concern-consent-confirmation]");
+    const confirmationCard = concernDetail.querySelector("[data-concern-consent-confirmation-card]");
+    const confirmationTitle = concernDetail.querySelector("[data-concern-confirm-title]");
+    const confirmationMessage = concernDetail.querySelector("[data-concern-confirm-message]");
+    const confirmationError = concernDetail.querySelector("[data-concern-confirm-error]");
+    const confirmSubmit = concernDetail.querySelector("[data-submit-concern-consent-confirm]");
+    const cancelConfirm = concernDetail.querySelector("[data-cancel-concern-consent-confirm]");
+    let selectedDecision = "";
+    let originatingButton = null;
 
-    const showError = (message) => {
-      if (!errorBox) return;
-      errorBox.textContent = message;
-      errorBox.classList.remove("hidden");
-      errorBox.focus();
+    const showError = (message, target = errorBox) => {
+      if (!target) return;
+      target.textContent = message;
+      target.classList.remove("hidden");
+      target.focus();
     };
     const setBusy = (busy) => {
       concernResponseSubmitting = busy;
@@ -923,6 +989,37 @@ document.addEventListener("DOMContentLoaded", () => {
         button.textContent = busy ? "Submitting..." : button.dataset.defaultLabel;
       });
       if (signatureInput) signatureInput.disabled = busy;
+      if (cancelConfirm) cancelConfirm.disabled = busy;
+      if (confirmSubmit) {
+        confirmSubmit.disabled = busy;
+        confirmSubmit.textContent = busy
+          ? "Submitting..."
+          : (confirmSubmit.dataset.defaultLabel || "Confirm response");
+      }
+    };
+    const closeConfirmation = ({ restoreFocus = true } = {}) => {
+      if (concernResponseSubmitting) return;
+      confirmation?.classList.add("hidden");
+      confirmation?.classList.remove("flex");
+      document.body.classList.remove("overflow-hidden");
+      confirmationError?.classList.add("hidden");
+      if (restoreFocus) originatingButton?.focus();
+    };
+    const openConfirmation = (decision, button) => {
+      const approval = decision === "approved";
+      selectedDecision = decision;
+      originatingButton = button;
+      confirmationTitle.textContent = approval ? "Confirm approval" : "Confirm decline";
+      confirmationMessage.textContent = approval
+        ? "Approve the proposed action? This decision and typed signature cannot be edited after submission."
+        : "Decline the proposed action? This decision and typed signature cannot be edited after submission.";
+      confirmSubmit.dataset.defaultLabel = approval ? "Confirm approval" : "Confirm decline";
+      confirmSubmit.textContent = confirmSubmit.dataset.defaultLabel;
+      confirmationError?.classList.add("hidden");
+      confirmation?.classList.remove("hidden");
+      confirmation?.classList.add("flex");
+      document.body.classList.add("overflow-hidden");
+      confirmationCard?.focus();
     };
 
     concernDetail
@@ -966,32 +1063,44 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
 
-          const decisionLabel = decision === "approved" ? "Approve" : "Decline";
-          const confirmed = window.confirm(
-            `${decisionLabel} the proposed action? This decision and typed signature cannot be edited after submission.`,
-          );
-          if (!confirmed) return;
-
           errorBox?.classList.add("hidden");
-          setBusy(true);
-          try {
-            const response = await API.submitPetMedicalConcernConsent(
-              petId,
-              concern.public_id,
-              decision,
-              signatureName,
-            );
-            concernLoadState = "idle";
-            await openConcernDetail(concern.public_id, {
-              updateHistory: false,
-              successMessage: response.message,
-            });
-          } catch (error) {
-            setBusy(false);
-            showError(concernResponseError(error));
-          }
+          openConfirmation(decision, button);
         });
       });
+
+    cancelConfirm?.addEventListener("click", () => closeConfirmation());
+    confirmation?.addEventListener("click", (event) => {
+      if (event.target === confirmation) closeConfirmation();
+    });
+    confirmation?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeConfirmation();
+    });
+
+    confirmSubmit?.addEventListener("click", async () => {
+      if (concernResponseSubmitting || !selectedDecision) return;
+      const signatureName = signatureInput?.value.trim() || "";
+
+      confirmationError?.classList.add("hidden");
+      setBusy(true);
+      try {
+        const response = await API.submitPetMedicalConcernConsent(
+          petId,
+          concern.public_id,
+          selectedDecision,
+          signatureName,
+        );
+        concernResponseSubmitting = false;
+        closeConfirmation({ restoreFocus: false });
+        concernLoadState = "idle";
+        await openConcernDetail(concern.public_id, {
+          updateHistory: false,
+          successMessage: response.message,
+        });
+      } catch (error) {
+        setBusy(false);
+        showError(concernResponseError(error), confirmationError);
+      }
+    });
   };
 
   const renderConcernDetail = (concern, successMessage = "") => {
@@ -1076,6 +1185,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </p>
         </div>
       </article>
+      ${renderConcernConsentConfirmation(concern)}
     `;
 
     concernDetail.querySelector("[data-close-concern-detail]")

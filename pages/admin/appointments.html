@@ -863,6 +863,7 @@
                         <button
                           type="button"
                           @click="confirmCancelBooking(booking)"
+                          x-show="!ownerHasActiveMedicalConcern(booking)"
                           class="admin-appointment-action admin-appointment-cancel-action rounded-xl text-base font-semibold transition"
                         >
                           Cancel
@@ -1059,13 +1060,13 @@
                       Reschedule
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerRevert(booking)">
                     <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
                       <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
                       Revert
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerCancel(booking)">
                     <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
                       <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
                       Cancel
@@ -1362,13 +1363,13 @@
                       Reschedule
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerRevert(booking)">
                     <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
                       <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
                       Revert
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerCancel(booking)">
                     <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
                       <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
                       Cancel
@@ -4349,7 +4350,7 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
+    <script src="../../scripts/components/admin-grooming-concerns.js?v=owner-concern-actions-20260809"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
     <script src="../../scripts/components/admin-dashboard.js?v=persisted-revert-20260809"></script>

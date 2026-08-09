@@ -517,6 +517,36 @@ class AdminGroomingMedicalConcernInterfaceTest extends TestCase
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPetPage);
     }
 
+    public function test_owner_card_actions_follow_the_complete_concern_lifecycle(): void
+    {
+        $this->assertSame(
+            2,
+            substr_count($this->appointmentsPage, 'x-if="shouldShowOwnerRevert(booking)"'),
+        );
+        $this->assertSame(
+            2,
+            substr_count($this->appointmentsPage, 'x-if="shouldShowOwnerCancel(booking)"'),
+        );
+        $this->assertStringContainsString(
+            'x-show="!ownerHasActiveMedicalConcern(booking)"',
+            $this->appointmentsPage,
+        );
+
+        foreach ([
+            'ownerMedicalConcernActionState(booking)',
+            'ownerHasActiveMedicalConcern(booking)',
+            'shouldShowOwnerRevert(booking)',
+            'shouldShowOwnerCancel(booking)',
+            'state.loaded === true && !state.loading && !state.error',
+            'this.isActiveMedicalConcern(concern)',
+            '=== "resolved"',
+            'if (concernState.hasActive) return false;',
+            'return concernState.hasResolved || !this.shouldShowOwnerReschedule(booking);',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $this->concernComponent);
+        }
+    }
+
     public function test_concern_component_does_not_call_unrelated_grooming_payment_capacity_or_notification_mutations(): void
     {
         foreach ([

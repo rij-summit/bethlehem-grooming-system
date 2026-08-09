@@ -119,6 +119,7 @@ function adminGroomingConcernState() {
     medicalConcernState(booking, pet) {
       const key = this.medicalConcernCacheKey(booking, pet);
       return this.medicalConcernCache[key] || {
+        loaded: false,
         loading: false,
         error: "",
         notFound: false,
@@ -153,6 +154,58 @@ function adminGroomingConcernState() {
         activeCount: active.length,
         highestSeverity: highest,
       };
+    },
+
+    ownerMedicalConcernActionState(booking) {
+      const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+      const states = pets.map((pet) => this.medicalConcernState(booking, pet));
+      const hasCompleteLiveState = pets.length > 0 && states.every(
+        (state) => state.loaded === true && !state.loading && !state.error,
+      );
+
+      if (hasCompleteLiveState) {
+        const concerns = states.flatMap((state) =>
+          Array.isArray(state.concerns) ? state.concerns : [],
+        );
+
+        return {
+          hasActive: concerns.some((concern) => this.isActiveMedicalConcern(concern)),
+          hasResolved: concerns.some(
+            (concern) => String(concern?.status || "").toLowerCase() === "resolved",
+          ),
+        };
+      }
+
+      return {
+        hasActive: Number(
+          booking?.activeMedicalConcernCount
+            ?? booking?.active_medical_concern_count
+            ?? 0,
+        ) > 0,
+        hasResolved: Number(
+          booking?.resolvedMedicalConcernCount
+            ?? booking?.resolved_medical_concern_count
+            ?? 0,
+        ) > 0,
+      };
+    },
+
+    ownerHasActiveMedicalConcern(booking) {
+      return this.ownerMedicalConcernActionState(booking).hasActive;
+    },
+
+    shouldShowOwnerRevert(booking) {
+      const concernState = this.ownerMedicalConcernActionState(booking);
+      return !this.shouldShowOwnerReschedule(booking)
+        && !concernState.hasActive
+        && !concernState.hasResolved;
+    },
+
+    shouldShowOwnerCancel(booking) {
+      const concernState = this.ownerMedicalConcernActionState(booking);
+      if (concernState.hasActive) return false;
+
+      return concernState.hasResolved || !this.shouldShowOwnerReschedule(booking);
     },
 
     medicalConcernIndicatorLabel(booking, pet) {
@@ -241,6 +294,7 @@ function adminGroomingConcernState() {
           bookingPetId,
         );
         const nextState = {
+          loaded: true,
           loading: false,
           error: "",
           notFound: false,
@@ -267,6 +321,7 @@ function adminGroomingConcernState() {
         const notFound = error.status === 404;
         const nextState = {
           ...previous,
+          loaded: false,
           loading: false,
           error: notFound
             ? "The selected grooming pet record could not be found."

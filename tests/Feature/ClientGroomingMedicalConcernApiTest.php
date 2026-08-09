@@ -416,6 +416,41 @@ class ClientGroomingMedicalConcernApiTest extends TestCase
         $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPage);
     }
 
+    public function test_concern_approval_and_decline_use_the_customer_styled_confirmation_modal(): void
+    {
+        $clientPage = file_get_contents(base_path('pages/client/pet-details.html'));
+        $clientComponent = file_get_contents(base_path('scripts/components/pet-details.js'));
+        $modalStart = strpos($clientComponent, 'const renderConcernConsentConfirmation');
+        $modalEnd = strpos($clientComponent, 'const attachConcernResponseActions', $modalStart ?: 0);
+
+        $this->assertNotFalse($modalStart);
+        $this->assertNotFalse($modalEnd);
+
+        $modal = substr($clientComponent, $modalStart, $modalEnd - $modalStart);
+
+        foreach ([
+            'data-concern-consent-confirmation',
+            'role="alertdialog"',
+            'aria-modal="true"',
+            'Confirm response',
+            'Go back',
+            'rounded-3xl',
+            'bg-[#355c84]',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $modal);
+        }
+
+        $this->assertStringNotContainsString('uppercase', $modal);
+        $this->assertStringContainsString('Confirm approval', $clientComponent);
+        $this->assertStringContainsString('Confirm decline', $clientComponent);
+        $this->assertStringContainsString('originatingButton?.focus()', $clientComponent);
+        $this->assertStringNotContainsString('`${decisionLabel} the proposed action?', $clientComponent);
+        $this->assertStringContainsString(
+            'pet-details.js?v=concern-response-modal-20260809',
+            $clientPage,
+        );
+    }
+
     public function test_response_routes_require_authentication_and_hide_foreign_or_unnotified_records(): void
     {
         $concern = $this->createConcern([

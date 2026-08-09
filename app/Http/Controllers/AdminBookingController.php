@@ -8,6 +8,7 @@ use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\CustomerNotification;
 use App\Models\GroomingClinicReferral;
+use App\Models\GroomingMedicalConcern;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\DailyPetQueue;
@@ -124,11 +125,13 @@ class AdminBookingController extends Controller
         }
 
         // Incoming: dashboard sees only the selected day; appointments can opt in to today + future.
-        $incoming = Booking::whereBetween('booking_date', [
+        $incomingQuery = Booking::whereBetween('booking_date', [
             $rangeStart->toDateString(),
             $rangeEnd->toDateString(),
         ])
-            ->where('status', 'waiting_to_arrive')
+            ->where('status', 'waiting_to_arrive');
+        $this->withOwnerCardMedicalConcernCounts($incomingQuery);
+        $incoming = $incomingQuery
             ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderByRaw('CASE WHEN booking_date = ? THEN 0 ELSE 1 END', [$rangeStart->toDateString()])
             ->orderBy('booking_date', 'asc')
@@ -154,6 +157,7 @@ class AdminBookingController extends Controller
                 });
             });
         $this->retainOwnerCardsWithActiveGroomingPets($queuedQuery);
+        $this->withOwnerCardMedicalConcernCounts($queuedQuery);
         $queued = $queuedQuery
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
@@ -186,6 +190,7 @@ class AdminBookingController extends Controller
             });
         });
         $this->retainOwnerCardsWithActiveGroomingPets($inProgressQuery);
+        $this->withOwnerCardMedicalConcernCounts($inProgressQuery);
         $inProgress = $inProgressQuery
             ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
@@ -1292,6 +1297,26 @@ class AdminBookingController extends Controller
         ]);
     }
 
+    // ── OWNER CARD CONCERN STATE ──────────────────────────
+    private function withOwnerCardMedicalConcernCounts(Builder $query): Builder
+    {
+        if (! Schema::hasTable('grooming_medical_concerns')) {
+            return $query;
+        }
+
+        return $query->withCount([
+            'groomingMedicalConcerns as active_medical_concern_count' => function (Builder $concerns) {
+                $concerns->whereNotIn('status', [
+                    GroomingMedicalConcern::STATUS_RESOLVED,
+                    GroomingMedicalConcern::STATUS_CANCELLED,
+                ]);
+            },
+            'groomingMedicalConcerns as resolved_medical_concern_count' => function (Builder $concerns) {
+                $concerns->where('status', GroomingMedicalConcern::STATUS_RESOLVED);
+            },
+        ]);
+    }
+
     // ── FORMAT BOOKING FOR FRONTEND ───────────────────────
     private function formatBooking(Booking $booking, ?array $paymentSummary = null): array
     {
@@ -1368,6 +1393,10 @@ class AdminBookingController extends Controller
             'clientNotified' => false,
             'paid' => (bool) $booking->paid,
             'status' => $this->mapStatus($booking->status),
+            'activeMedicalConcernCount' => (int) ($booking->active_medical_concern_count ?? 0),
+            'active_medical_concern_count' => (int) ($booking->active_medical_concern_count ?? 0),
+            'resolvedMedicalConcernCount' => (int) ($booking->resolved_medical_concern_count ?? 0),
+            'resolved_medical_concern_count' => (int) ($booking->resolved_medical_concern_count ?? 0),
 
             // Extra fields for the View Details modal
             'bookingReference' => $booking->booking_reference,

@@ -9,6 +9,7 @@ use App\Http\Controllers\PaymentController;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\GroomingClinicReferral;
+use App\Models\GroomingMedicalConcern;
 use App\Models\Pet;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -91,6 +92,15 @@ class AdminDashboardSummaryTest extends TestCase
             $table->string('status', 30);
         });
 
+        Schema::create('grooming_medical_concerns', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('booking_id');
+            $table->unsignedInteger('booking_pet_id');
+            $table->string('status', 30);
+            $table->string('severity', 20)->nullable();
+            $table->string('recommended_grooming_action', 40)->nullable();
+        });
+
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->string('pet_name');
@@ -151,6 +161,7 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
+        Schema::dropIfExists('grooming_medical_concerns');
         Schema::dropIfExists('grooming_clinic_referrals');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
@@ -210,6 +221,101 @@ class AdminDashboardSummaryTest extends TestCase
         $this->assertSame(17, $summary['week']);
         $this->assertSame(1, $summary['noShowWeek']);
         $this->assertSame(33.3, $summary['noShowWeekRate']);
+    }
+
+    public function test_schedule_exposes_owner_card_concern_lifecycle_counts(): void
+    {
+        foreach ([1, 2, 3] as $id) {
+            DB::table('bookings')->insert([
+                'booking_id' => $id,
+                'booking_reference' => "CONCERN-{$id}",
+                'booking_date' => '2026-06-24',
+                'number_of_pets' => 1,
+                'status' => 'checked_in',
+                'queue_number' => $id,
+            ]);
+            DB::table('pets')->insert([
+                'pet_id' => $id,
+                'pet_name' => "Concern Pet {$id}",
+                'species' => 'dog',
+            ]);
+            DB::table('booking_pets')->insert([
+                'booking_pet_id' => $id,
+                'booking_id' => $id,
+                'pet_id' => $id,
+            ]);
+        }
+
+        DB::table('grooming_medical_concerns')->insert([
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_OPEN,
+                'severity' => GroomingMedicalConcern::SEVERITY_LOW,
+                'recommended_grooming_action' => GroomingMedicalConcern::ACTION_CONTINUE_WITH_OBSERVATION,
+            ],
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_AWAITING_CUSTOMER,
+                'severity' => GroomingMedicalConcern::SEVERITY_MODERATE,
+                'recommended_grooming_action' => GroomingMedicalConcern::ACTION_PAUSE_GROOMING,
+            ],
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_REFERRED_TO_CLINIC,
+                'severity' => GroomingMedicalConcern::SEVERITY_URGENT,
+                'recommended_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            ],
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_UNDER_CLINIC_REVIEW,
+                'severity' => GroomingMedicalConcern::SEVERITY_LOW,
+                'recommended_grooming_action' => GroomingMedicalConcern::ACTION_STOP_GROOMING,
+            ],
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_RESOLVED,
+                'severity' => null,
+                'recommended_grooming_action' => null,
+            ],
+            [
+                'booking_id' => 1,
+                'booking_pet_id' => 1,
+                'status' => GroomingMedicalConcern::STATUS_CANCELLED,
+                'severity' => null,
+                'recommended_grooming_action' => null,
+            ],
+            [
+                'booking_id' => 2,
+                'booking_pet_id' => 2,
+                'status' => GroomingMedicalConcern::STATUS_RESOLVED,
+                'severity' => null,
+                'recommended_grooming_action' => null,
+            ],
+            [
+                'booking_id' => 3,
+                'booking_pet_id' => 3,
+                'status' => GroomingMedicalConcern::STATUS_CANCELLED,
+                'severity' => null,
+                'recommended_grooming_action' => null,
+            ],
+        ]);
+
+        $schedule = (new AdminBookingController)->index(
+            Request::create('/api/admin/bookings', 'GET'),
+        )->getData(true);
+        $bookings = collect($schedule['queuedList'])->keyBy('id');
+
+        $this->assertSame(4, $bookings[1]['activeMedicalConcernCount']);
+        $this->assertSame(1, $bookings[1]['resolvedMedicalConcernCount']);
+        $this->assertSame(0, $bookings[2]['activeMedicalConcernCount']);
+        $this->assertSame(1, $bookings[2]['resolvedMedicalConcernCount']);
+        $this->assertSame(0, $bookings[3]['activeMedicalConcernCount']);
+        $this->assertSame(0, $bookings[3]['resolvedMedicalConcernCount']);
     }
 
     public function test_schedule_pet_type_summary_uses_all_pets_with_correct_pluralization(): void
