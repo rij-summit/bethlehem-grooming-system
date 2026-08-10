@@ -23,10 +23,14 @@ class StoreWalkinRequest extends FormRequest
             'mname' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
+            'owner_record_type' => ['nullable', 'in:new,registered,unregistered'],
+            'customer_user_id' => ['nullable', 'integer', 'exists:users,user_id'],
+            'unregistered_customer_id' => ['nullable', 'integer', 'exists:unregistered_customers,id'],
 
             // Pets — at least one required, max 10 (matches frontend limit)
             'pets' => ['required', 'array', 'min:1', 'max:10'],
             'pets.*.pet_name' => ['required', 'string', 'max:100'],
+            'pets.*.pet_id' => ['nullable', 'integer', 'exists:pets,pet_id'],
             'pets.*.species' => ['required', 'string', 'max:100'],
             'pets.*.breed' => ['nullable', 'string', 'max:100'],
             'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],

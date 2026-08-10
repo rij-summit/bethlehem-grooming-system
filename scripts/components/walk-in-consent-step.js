@@ -310,8 +310,12 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
     mname: owner.middleInitial || null,
     email: owner.email || null,
     phone: owner.phone,
+    owner_record_type: owner.ownerRecordType || "new",
+    customer_user_id: owner.customerUserId || null,
+    unregistered_customer_id: owner.unregisteredCustomerId || null,
 
     pets: (reviewPayload.items || []).map((item) => ({
+      pet_id:              item.pet.petId || null,
       pet_name:             item.pet.petName,
       species:              item.pet.petType,
       breed:                item.pet.breed    || null,

@@ -21,6 +21,7 @@ class Pet extends Model
 
     protected $fillable = [
         'user_id',
+        'unregistered_customer_id',
         'pet_name',
         'species',
         'breed',
@@ -47,6 +48,11 @@ class Pet extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function unregisteredCustomer()
+    {
+        return $this->belongsTo(UnregisteredCustomer::class, 'unregistered_customer_id');
     }
 
     public function vaccinationRecords()

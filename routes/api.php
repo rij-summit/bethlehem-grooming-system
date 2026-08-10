@@ -89,6 +89,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin — Customer management (staff can view, admin can manage)
     Route::get('/admin/dashboard/search', [CustomerController::class, 'dashboardSearch']);
     Route::get('/admin/customers', [CustomerController::class, 'index']);
+    Route::post('/admin/customers/unregistered', [CustomerController::class, 'storeUnregistered']);
+    Route::get('/admin/customers/unregistered/{id}', [CustomerController::class, 'showUnregistered']);
+    Route::post('/admin/customers/unregistered/{id}/archive', [CustomerController::class, 'archiveUnregistered']);
+    Route::get('/admin/walk-in/customers', [CustomerController::class, 'walkInSearch']);
+    Route::post('/admin/customer-pets/{ownerType}/{ownerId}', [PetController::class, 'adminStore']);
     Route::get('/admin/customers/{id}', [CustomerController::class, 'show']);
     Route::post('/admin/customers/{id}/deactivate', [CustomerController::class, 'deactivate']);
     Route::post('/admin/customers/{id}/reactivate', [CustomerController::class, 'reactivate']);

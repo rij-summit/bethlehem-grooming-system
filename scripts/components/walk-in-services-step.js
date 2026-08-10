@@ -133,11 +133,16 @@ function refreshElements() {
 
 function normalizePet(pet, index) {
   return {
+    ...pet,
     id: pet?.id || `walk-in-pet-${index + 1}`,
     petName: pet?.petName || "",
     petType: pet?.petType || "",
     breed: pet?.breed || "",
     size: pet?.size || "",
+    petId: pet?.petId || null,
+    weight: pet?.weight ?? "",
+    furType: pet?.furType || "",
+    medicalNotes: pet?.medicalNotes || "",
   };
 }
 

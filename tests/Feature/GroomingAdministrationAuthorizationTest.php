@@ -74,6 +74,21 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->string('phone')->nullable();
             $table->string('role');
             $table->string('password_hash')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->boolean('is_archived')->default(false);
+        });
+
+        Schema::create('unregistered_customers', function (Blueprint $table) {
+            $table->id();
+            $table->string('first_name');
+            $table->string('last_name');
+            $table->string('middle_name')->nullable();
+            $table->string('phone');
+            $table->string('email')->nullable();
+            $table->unsignedInteger('created_by_user_id')->nullable();
+            $table->boolean('is_archived')->default(false);
+            $table->timestamp('archived_at')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('clinic_settings', function (Blueprint $table) {
@@ -122,6 +137,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->boolean('sedation_consent')->default(false);
             $table->boolean('terms_agreed')->default(false);
             $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
             $table->string('appointment_type')->default('grooming');
             $table->text('chief_complaint')->nullable();
             $table->timestamps();
@@ -155,6 +171,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
             $table->string('breed')->nullable();
@@ -258,6 +275,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('walkins');
+        Schema::dropIfExists('unregistered_customers');
         Schema::dropIfExists('time_windows');
         Schema::dropIfExists('clinic_closures');
         Schema::dropIfExists('clinic_settings');
@@ -1002,6 +1020,104 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'staff' => ['staff'],
             'administrator' => ['admin'],
         ];
+    }
+
+    public function test_existing_registered_and_unregistered_owners_keep_pet_ownership_on_walk_in(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 50,
+            'first_name' => 'Active',
+            'last_name' => 'Owner',
+            'email' => 'active-owner@example.test',
+            'phone' => '09170000050',
+            'role' => 'customer',
+            'is_active' => true,
+            'is_archived' => false,
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 50,
+            'user_id' => 50,
+            'pet_name' => 'Buddy',
+            'species' => 'Dog',
+            'size' => 'small',
+        ]);
+
+        $registeredResponse = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Ignored',
+            'lname' => 'Name',
+            'phone' => '09171111111',
+            'owner_record_type' => 'registered',
+            'customer_user_id' => 50,
+            'pets' => [
+                [
+                    'pet_id' => 50,
+                    'pet_name' => 'Buddy',
+                    'species' => 'Dog',
+                    'size' => 'small',
+                    'services' => [['service_slug' => 'basic-grooming']],
+                ],
+                [
+                    'pet_name' => 'Luna',
+                    'species' => 'Dog',
+                    'weight' => 8,
+                    'services' => [['service_slug' => 'basic-grooming']],
+                ],
+            ],
+            'sedation_consent' => false,
+            'terms_agreed' => true,
+        ])->assertCreated()
+            ->assertJsonPath('returning_customer', true)
+            ->assertJsonPath('owner.name', 'Active Owner');
+
+        $registeredBookingId = $registeredResponse->json('booking_id');
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => $registeredBookingId,
+            'user_id' => 50,
+            'booking_type' => 'walk_in',
+        ]);
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 50,
+            'pet_name' => 'Luna',
+        ]);
+
+        DB::table('booking_services')->delete();
+        DB::table('booking_pets')->delete();
+        DB::table('bookings')->delete();
+
+        $unregisteredId = DB::table('unregistered_customers')->insertGetId([
+            'first_name' => 'Unregistered',
+            'last_name' => 'Owner',
+            'phone' => '09170000060',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Ignored',
+            'lname' => 'Again',
+            'phone' => '09172222222',
+            'owner_record_type' => 'unregistered',
+            'unregistered_customer_id' => $unregisteredId,
+            'pets' => [[
+                'pet_name' => 'Milo',
+                'species' => 'Cat',
+                'weight' => 4,
+                'services' => [['service_slug' => 'basic-grooming']],
+            ]],
+            'sedation_consent' => false,
+            'terms_agreed' => true,
+        ])->assertCreated()
+            ->assertJsonPath('owner.name', 'Unregistered Owner');
+
+        $this->assertDatabaseHas('pets', [
+            'unregistered_customer_id' => $unregisteredId,
+            'pet_name' => 'Milo',
+        ]);
+        $this->assertDatabaseHas('walkins', [
+            'unregistered_customer_id' => $unregisteredId,
+        ]);
     }
 
     public function test_admin_cancellation_notifies_the_customer_with_the_optional_or_default_reason(): void

@@ -319,6 +319,8 @@ var API = (() => {
       const error = new Error(data.message || "Something went wrong.");
       error.status = response.status;
       error.errors = data.errors || null;
+      error.code = data.code || null;
+      error.data = data;
       throw error;
     }
 
@@ -534,6 +536,15 @@ var API = (() => {
   async function adminUpdatePet(petId, payload) {
     // PUT /api/admin/pets/{id}  (admin/staff — updates any customer's pet)
     return request("PUT", `/admin/pets/${petId}`, payload, getAdminToken());
+  }
+
+  async function adminAddCustomerPet(ownerType, ownerId, payload) {
+    return request(
+      "POST",
+      `/admin/customer-pets/${encodeURIComponent(ownerType)}/${encodeURIComponent(ownerId)}`,
+      payload,
+      getAdminToken(),
+    );
   }
 
   async function archivePet(petId) {
@@ -888,6 +899,23 @@ var API = (() => {
   async function getCustomerDetails(customerId) {
     // GET /api/admin/customers/{id}  (protected — admin token)
     return request("GET", `/admin/customers/${customerId}`, null, getAdminToken());
+  }
+
+  async function createUnregisteredCustomer(payload) {
+    return request("POST", "/admin/customers/unregistered", payload, getAdminToken());
+  }
+
+  async function getUnregisteredCustomerDetails(customerId) {
+    return request("GET", `/admin/customers/unregistered/${customerId}`, null, getAdminToken());
+  }
+
+  async function archiveUnregisteredCustomer(customerId) {
+    return request("POST", `/admin/customers/unregistered/${customerId}/archive`, null, getAdminToken());
+  }
+
+  async function searchWalkInCustomers(search = "") {
+    const params = new URLSearchParams({ q: String(search).trim() });
+    return request("GET", `/admin/walk-in/customers?${params.toString()}`, null, getAdminToken());
   }
 
   async function deactivateCustomer(customerId) {
@@ -1303,6 +1331,7 @@ var API = (() => {
     addPet,
     updatePet,
     adminUpdatePet,
+    adminAddCustomerPet,
     archivePet,
     unarchivePet,
     // Booking
@@ -1341,6 +1370,9 @@ var API = (() => {
     searchAdminDashboard,
     getCustomers,
     getCustomerDetails,
+    createUnregisteredCustomer,
+    getUnregisteredCustomerDetails,
+    archiveUnregisteredCustomer,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,
@@ -1379,6 +1411,7 @@ var API = (() => {
     getCustomerActivityReport,
     // Walk-in
     submitWalkIn,
+    searchWalkInCustomers,
     submitClinicWalkIn,
     // Clinic queue
     getClinicAppointments,

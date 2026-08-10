@@ -22,8 +22,8 @@
         </a>
 
         <div class="mt-4">
-          <h1 class="text-3xl font-bold text-[#2f4b66]">
-            Enter your Personal Information
+          <h1 id="walkInPageTitle" class="text-3xl font-bold text-[#2f4b66]">
+            Grooming walk-in
           </h1>
         </div>
 
@@ -60,10 +60,37 @@
       <section class="rounded-3xl bg-[#cfe3f6] p-6 shadow-lg md:p-8">
         <div class="mx-auto max-w-5xl">
           <section class="rounded-3xl bg-white/90 p-5 shadow-sm md:p-6">
+            <section id="existingCustomerSection" class="mb-6 rounded-2xl border border-[#c9d9e8] bg-[#f8fbfd] p-5">
+              <div class="flex items-start gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf4fb] text-[#315b7e]">
+                  <i data-lucide="search" class="h-5 w-5"></i>
+                </div>
+                <div>
+                  <h2 class="text-lg font-semibold text-[#2f4b66]">Find an existing customer</h2>
+                  <p class="mt-1 text-sm text-slate-500">Search active and unregistered customers by name, mobile number, or email.</p>
+                </div>
+              </div>
+
+              <label for="existingCustomerSearch" class="mt-4 block text-sm font-medium text-slate-700">Customer search</label>
+              <div class="relative mt-2">
+                <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                <input
+                  id="existingCustomerSearch"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Enter at least 2 characters"
+                  class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                />
+              </div>
+              <p id="existingCustomerSearchStatus" class="mt-3 text-sm text-slate-500" aria-live="polite">Search to select an existing owner.</p>
+              <div id="existingCustomerResults" class="mt-3 grid gap-3"></div>
+            </section>
+
             <div class="mb-6">
-              <h2 class="text-2xl font-bold text-[#2f4b66]">
-                Owner Information
+              <h2 class="text-2xl font-semibold text-[#2f4b66]">
+                New owner information
               </h2>
+              <p id="newOwnerHelp" class="mt-1 text-sm text-slate-500">Use this form when the customer is not in the search results.</p>
             </div>
 
             <!--
@@ -207,7 +234,7 @@
     <script src="../../scripts/api.js"></script>
     <script
       type="module"
-      src="../../scripts/components/walk-in-owner-step.js?v=clinic-origin-navigation-20260807"
+      src="../../scripts/components/walk-in-owner-step.js?v=existing-customer-search-20260810"
     ></script>
   </body>
 </html>

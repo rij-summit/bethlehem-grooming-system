@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\CustomerNotification;
 use App\Models\Pet;
+use App\Models\UnregisteredCustomer;
+use App\Models\User;
 use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
@@ -198,11 +200,12 @@ class PetController extends Controller
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
         $data['pet_name'] = $this->normalizePetName($data['pet_name']);
-        if ($pet->user_id) {
+        if ($pet->user_id || $pet->unregistered_customer_id) {
             $this->ensureOwnerPetNameIsUnique(
                 $pet->user_id,
                 $data['pet_name'],
                 $pet->pet_id,
+                $pet->unregistered_customer_id,
             );
         }
         $data = PetWeightSize::withComputedSize($data);
@@ -271,18 +274,98 @@ class PetController extends Controller
         ]);
     }
 
+    // POST /api/admin/customer-pets/{ownerType}/{ownerId}
+    public function adminStore(Request $request, string $ownerType, $ownerId)
+    {
+        if (! in_array($request->user()?->role, ['admin', 'staff'], true)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        if (! in_array($ownerType, ['registered', 'unregistered'], true)) {
+            return response()->json(['success' => false, 'message' => 'Customer type is invalid.'], 422);
+        }
+
+        $user = $ownerType === 'registered'
+            ? User::where('user_id', $ownerId)->where('role', 'customer')->first()
+            : null;
+        $unregisteredCustomer = $ownerType === 'unregistered'
+            ? UnregisteredCustomer::where('id', $ownerId)->where('is_archived', false)->first()
+            : null;
+
+        if (! $user && ! $unregisteredCustomer) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $data = $request->validate([
+            'pet_name' => 'required|string|max:100',
+            'species' => 'nullable|string|max:50',
+            'breed' => 'nullable|string|max:100',
+            'gender' => 'nullable|in:male,female',
+            'birthdate' => 'nullable|date',
+            'is_neutered' => 'nullable|boolean',
+            'neutered_date' => 'nullable|date',
+            'is_deceased' => 'nullable|boolean',
+            'deceased_date' => 'nullable|date',
+            'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
+            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'color' => 'nullable|string|max:50',
+            'medical_conditions' => 'nullable|string|max:1000',
+        ]);
+        $data['pet_name'] = $this->normalizePetName($data['pet_name']);
+        $this->ensureOwnerPetNameIsUnique(
+            $user?->user_id,
+            $data['pet_name'],
+            null,
+            $unregisteredCustomer?->id,
+        );
+        $data = PetWeightSize::withComputedSize($data);
+
+        $pet = Pet::create([
+            'user_id' => $user?->user_id,
+            'unregistered_customer_id' => $unregisteredCustomer?->id,
+            'pet_name' => $data['pet_name'],
+            'species' => $data['species'] ?? 'Dog',
+            'breed' => $data['breed'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'birthdate' => $data['birthdate'] ?? null,
+            'is_neutered' => $data['is_neutered'] ?? false,
+            'neutered_date' => $data['neutered_date'] ?? null,
+            'is_deceased' => $data['is_deceased'] ?? false,
+            'deceased_date' => $data['deceased_date'] ?? null,
+            'size' => $data['size'] ?? null,
+            'fur_type' => $data['fur_type'] ?? null,
+            'weight' => $data['weight'] ?? null,
+            'color' => $data['color'] ?? null,
+            'medical_conditions' => $data['medical_conditions'] ?? null,
+            'is_archived' => false,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pet added successfully.',
+            'pet' => $pet,
+        ], 201);
+    }
+
     private function normalizePetName(string $name): string
     {
         return preg_replace('/\s+/u', ' ', trim($name)) ?: trim($name);
     }
 
     private function ensureOwnerPetNameIsUnique(
-        int $ownerId,
+        ?int $ownerId,
         string $petName,
         ?int $ignoredPetId = null,
+        ?int $unregisteredCustomerId = null,
     ): void {
         $normalizedName = mb_strtolower($this->normalizePetName($petName));
-        $petNames = Pet::where('user_id', $ownerId)
+        $petNames = Pet::query()
+            ->when(
+                $ownerId !== null,
+                fn ($query) => $query->where('user_id', $ownerId),
+                fn ($query) => $query->where('unregistered_customer_id', $unregisteredCustomerId),
+            )
             ->when(
                 $ignoredPetId !== null,
                 fn ($query) => $query->where('pet_id', '!=', $ignoredPetId),

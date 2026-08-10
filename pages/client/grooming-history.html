@@ -333,6 +333,9 @@
           ? `<span class="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">Paid ✓</span>`
           : `<span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Unpaid</span>`;
 
+        const walkInBadge = b.booking_type === "walk_in"
+          ? `<span class="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700">Walk-in</span>`
+          : "";
         const droppedOff    = b.dropped_off_at     ? `<span class="text-slate-400">Dropped off:</span> ${b.dropped_off_at}` : null;
         const groomingStart = b.grooming_started_at ? `<span class="text-slate-400">Grooming started:</span> ${b.grooming_started_at}` : null;
         const groomingEnd   = b.grooming_finished_at ? `<span class="text-slate-400">Finished:</span> ${b.grooming_finished_at}` : null;
@@ -366,6 +369,7 @@
 
               <!-- Right: badges -->
               <div class="flex sm:flex-col items-center sm:items-end gap-2 shrink-0">
+                ${walkInBadge}
                 ${paidBadge}
                 <span class="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-600">Completed</span>
               </div>

@@ -19,7 +19,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             $page,
         );
         $this->assertStringContainsString(
-            '<h4 class="text-lg font-semibold text-[#1f3850]">Registered Pets</h4>',
+            '<h4 class="text-lg font-semibold text-[#1f3850]">Pets</h4>',
             $page,
         );
         $this->assertStringContainsString(
@@ -36,12 +36,21 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));
 
-        foreach (['First name', 'Last name', 'Phone number', 'Email address', 'Account status', 'Weight', 'Color'] as $label) {
+        foreach (['First name', 'Last name', 'Phone number', 'Email address', 'Weight', 'Color'] as $label) {
             $this->assertStringContainsString(
                 sprintf('<p class="text-xs font-medium text-slate-500">%s</p>', $label),
                 $page,
             );
         }
+
+        $this->assertStringNotContainsString(
+            '<p class="text-xs font-medium text-slate-500">Account status</p>',
+            $page,
+        );
+        $this->assertStringContainsString(
+            'x-text="customerStatusLabel(detailModal.customer)"',
+            $page,
+        );
 
         $this->assertStringNotContainsString(
             '<p class="text-xs font-bold uppercase tracking-widest text-slate-400">First Name</p>',
@@ -59,7 +68,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $ownerCard = $this->sourceBetween(
             $page,
             '<!-- Customer Cards -->',
-            'x-show="isAdmin && confirmModal.open"',
+            'x-show="confirmModal.open"',
         );
         $detailsModal = $this->sourceBetween(
             $page,
@@ -72,7 +81,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertStringNotContainsString("confirmAction('deactivate', customer)", $ownerCard);
 
         $this->assertStringContainsString('<!-- Account actions below the registered pets -->', $detailsModal);
-        $this->assertStringContainsString('<footer x-show="isAdmin" aria-label="Account actions"', $detailsModal);
+        $this->assertStringContainsString('<footer x-show="isAdmin && detailModal.customer?.recordType !== \'unregistered\'" aria-label="Account actions"', $detailsModal);
         $this->assertStringContainsString(
             '<h4 class="mb-4 text-lg font-semibold text-[#1f3850]">Account actions</h4>',
             $detailsModal,
@@ -97,7 +106,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             $this->assertStringContainsString($action, $detailsModal);
         }
 
-        $petsPosition = strpos($detailsModal, '>Registered Pets</h4>');
+        $petsPosition = strpos($detailsModal, '>Pets</h4>');
         $actionsPosition = strpos($detailsModal, '<!-- Account actions below the registered pets -->');
 
         $this->assertNotFalse($petsPosition);
@@ -107,7 +116,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
 
         $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
-        $this->assertStringContainsString('admin-customers.js?v=dashboard-search-destination-20260809', $page);
+        $this->assertStringContainsString('admin-customers.js?v=customer-pet-management-20260810', $page);
     }
 
     public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void
@@ -117,7 +126,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $petSearchResults = $this->sourceBetween(
             $page,
             '<!-- Pet search results -->',
-            'x-show="isAdmin && confirmModal.open"',
+            'x-show="confirmModal.open"',
         );
 
         foreach ([
@@ -161,7 +170,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            'class="text-xl font-bold text-[#1f3850]"',
+            'class="text-xl font-semibold text-[#1f3850]"',
             $petModal,
         );
         $this->assertStringContainsString(
@@ -243,6 +252,68 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
 
         foreach (['new ValidPetSize', 'new ValidBreedCoat', 'new ValidPetWeight', 'PetWeightSize::withComputedSize($data)'] as $rule) {
             $this->assertStringContainsString($rule, $controller);
+        }
+    }
+
+    public function test_unregistered_tab_and_add_customer_use_a_separate_customers_ui(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+        $api = file_get_contents(base_path('scripts/api.js'));
+        $addCustomerModal = $this->sourceBetween(
+            $page,
+            '<!-- Add Customer Modal -->',
+            '<!-- Customer Details Modal -->',
+        );
+
+        foreach ([
+            "@click=\"setStatus('unregistered')\"",
+            "statusFilter === 'unregistered' ? totalCount : '?'",
+            'No unregistered customers yet.',
+            'Customers added without an online account will appear here.',
+            '@click="openAddCustomerModal()"',
+            'customer.recordType === \'unregistered\'',
+            'Unregistered (<span',
+        ] as $unregisteredUi) {
+            $this->assertStringContainsString($unregisteredUi, $page);
+        }
+
+        foreach ([
+            'id="addCustomerFirstName"',
+            'id="addCustomerLastName"',
+            'id="addCustomerMiddleName"',
+            'id="addCustomerPhone"',
+            'id="addCustomerEmail"',
+            '@submit.prevent="submitUnregisteredCustomer()"',
+            'Create a customer record without an online account.',
+        ] as $formUi) {
+            $this->assertStringContainsString($formUi, $addCustomerModal);
+        }
+
+        $this->assertStringNotContainsString('walkInOwnerForm', $addCustomerModal);
+        $this->assertStringNotContainsString('uppercase tracking', $addCustomerModal);
+        $this->assertStringContainsString('async submitUnregisteredCustomer(confirmSimilarName = false)', $component);
+        $this->assertStringContainsString('API.createUnregisteredCustomer(payload)', $component);
+        $this->assertStringContainsString('return "Unregistered";', $component);
+        $this->assertStringContainsString('async function createUnregisteredCustomer(payload)', $api);
+        $this->assertStringContainsString('/admin/customers/unregistered', $api);
+
+        $activePosition = strpos($page, "setStatus('active')");
+        $unregisteredPosition = strpos($page, "setStatus('unregistered')");
+        $inactivePosition = strpos($page, "setStatus('inactive')");
+        $archivePosition = strpos($page, "setStatus('archived')");
+        $this->assertLessThan($unregisteredPosition, $activePosition);
+        $this->assertLessThan($inactivePosition, $unregisteredPosition);
+        $this->assertLessThan($archivePosition, $inactivePosition);
+
+        foreach ([
+            'Similar customer found',
+            'submitUnregisteredCustomer(true)',
+            "confirmAction('archive_unregistered', detailModal.customer)",
+            'openAddPetForCustomer(detailModal.customer)',
+            'API.adminAddCustomerPet(',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $page.$component);
         }
     }
 

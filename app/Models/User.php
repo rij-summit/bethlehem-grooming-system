@@ -44,6 +44,11 @@ class User extends Authenticatable
         return $this->hasMany(VaccinationRecord::class, 'administered_by_user_id', 'user_id');
     }
 
+    public function pets()
+    {
+        return $this->hasMany(Pet::class, 'user_id', 'user_id');
+    }
+
     public function vaccinationsRecorded()
     {
         return $this->hasMany(VaccinationRecord::class, 'recorded_by_user_id', 'user_id');

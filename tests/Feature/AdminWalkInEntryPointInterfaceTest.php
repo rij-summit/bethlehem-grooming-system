@@ -53,7 +53,7 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'walk-in-owner-step.js?v=clinic-origin-navigation-20260807',
+            'walk-in-owner-step.js?v=existing-customer-search-20260810',
             $walkInPage,
         );
         $this->assertStringContainsString(
@@ -84,5 +84,40 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             'walkInBookingUrl: "./walk-in-booking.html"',
             $dashboardComponent,
         );
+    }
+
+    public function test_grooming_walk_in_can_select_existing_owners_and_their_pets(): void
+    {
+        $ownerPage = file_get_contents(base_path('pages/admin/walk-in-booking.html'));
+        $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
+        $petPage = file_get_contents(base_path('pages/admin/walk-in-pet-details.html'));
+        $petStep = file_get_contents(base_path('scripts/components/walk-in-pet-step.js'));
+        $servicesStep = file_get_contents(base_path('scripts/components/walk-in-services-step.js'));
+        $consentStep = file_get_contents(base_path('scripts/components/walk-in-consent-step.js'));
+
+        foreach ([
+            'Find an existing customer',
+            'Search active and unregistered customers',
+            'id="existingCustomerSearch"',
+            'New owner information',
+        ] as $content) {
+            $this->assertStringContainsString($content, $ownerPage);
+        }
+
+        foreach ([
+            'API.searchWalkInCustomers(query)',
+            'ownerRecordType: selectedCustomer?.recordType || "new"',
+            'existingPets: Array.isArray(selectedCustomer?.pets)',
+            'window.location.href = "./walk-in-pet-details.html";',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $ownerStep);
+        }
+
+        $this->assertStringContainsString('id="existingPetsSection"', $petPage);
+        $this->assertStringContainsString("data-select-existing-pet", $petStep);
+        $this->assertStringContainsString('petId: pet.id', $petStep);
+        $this->assertStringContainsString('...pet,', $servicesStep);
+        $this->assertStringContainsString('pet_id:              item.pet.petId || null', $consentStep);
+        $this->assertStringContainsString('owner_record_type: owner.ownerRecordType || "new"', $consentStep);
     }
 }

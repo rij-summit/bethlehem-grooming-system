@@ -30,10 +30,29 @@ function adminCustomers() {
     totalCount:   0,
     loading:      false,
     errorMessage: "",
-    statusFilter: "active",   // active | inactive | archived
+    statusFilter: "active",   // active | inactive | archived | unregistered
     tierFilter:   "",          // new | returning | ""
     searchQuery:  "",
     busyId:       null,
+
+    addCustomerModal: {
+      open:   false,
+      saving: false,
+      error:  "",
+      errors: {},
+      form: {
+        first_name:  "",
+        last_name:   "",
+        middle_name: "",
+        phone:       "",
+        email:       "",
+      },
+    },
+
+    similarNameModal: {
+      open: false,
+      customers: [],
+    },
 
     confirmModal: {
       open:         false,
@@ -61,6 +80,8 @@ function adminCustomers() {
       open:      false,
       pet:       null,
       editing:   false,
+      creating:  false,
+      owner:     null,
       saving:    false,
       saveError: "",
       form:      {},
@@ -126,6 +147,7 @@ function adminCustomers() {
 
     setStatus(status) {
       this.statusFilter = status;
+      if (status === "unregistered") this.tierFilter = "";
       this.loadCustomers();
     },
 
@@ -134,15 +156,118 @@ function adminCustomers() {
       this.loadCustomers();
     },
 
+    // Add unregistered customer
+
+    openAddCustomerModal() {
+      this.addCustomerModal = {
+        open:   true,
+        saving: false,
+        error:  "",
+        errors: {},
+        form: {
+          first_name:  "",
+          last_name:   "",
+          middle_name: "",
+          phone:       "",
+          email:       "",
+        },
+      };
+      this.setCustomerDetailScrollLock(true);
+      this.refreshIcons();
+    },
+
+    closeAddCustomerModal() {
+      if (this.addCustomerModal.saving) return;
+      this.addCustomerModal.open = false;
+      this.addCustomerModal.error = "";
+      this.addCustomerModal.errors = {};
+      this.setCustomerDetailScrollLock(false);
+    },
+
+    clearAddCustomerFieldError(field) {
+      if (!this.addCustomerModal.errors[field]) return;
+      const errors = { ...this.addCustomerModal.errors };
+      delete errors[field];
+      this.addCustomerModal.errors = errors;
+    },
+
+    validateAddCustomerForm() {
+      const form = this.addCustomerModal.form;
+      const errors = {};
+      const phone = this.normalizeCustomerPhone(form.phone);
+      const email = String(form.email || "").trim();
+
+      if (!String(form.first_name || "").trim()) errors.first_name = ["First name is required."];
+      if (!String(form.last_name || "").trim()) errors.last_name = ["Last name is required."];
+      if (!/^09\d{9}$/.test(phone)) errors.phone = ["Phone number must be 11 digits and start with 09."];
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errors.email = ["Enter a valid email address or leave it blank."];
+      }
+
+      this.addCustomerModal.errors = errors;
+      return Object.keys(errors).length === 0;
+    },
+
+    async submitUnregisteredCustomer(confirmSimilarName = false) {
+      if (this.addCustomerModal.saving || !this.validateAddCustomerForm()) return;
+
+      const form = this.addCustomerModal.form;
+      const payload = {
+        first_name: String(form.first_name || "").trim(),
+        last_name: String(form.last_name || "").trim(),
+        middle_name: String(form.middle_name || "").trim().replace(/\.+$/, "").toUpperCase() || null,
+        phone: this.normalizeCustomerPhone(form.phone),
+        email: String(form.email || "").trim() || null,
+        confirm_similar_name: Boolean(confirmSimilarName),
+      };
+
+      this.addCustomerModal.saving = true;
+      this.addCustomerModal.error = "";
+      this.addCustomerModal.errors = {};
+
+      try {
+        await API.createUnregisteredCustomer(payload);
+        this.similarNameModal = { open: false, customers: [] };
+        this.addCustomerModal.open = false;
+        this.statusFilter = "unregistered";
+        this.tierFilter = "";
+        this.searchQuery = "";
+        this.setCustomerDetailScrollLock(false);
+        await this.loadCustomers();
+      } catch (err) {
+        if (err.code === "similar_customer_name") {
+          this.similarNameModal = {
+            open: true,
+            customers: err.data?.similarCustomers || [],
+          };
+          this.addCustomerModal.error = "";
+          this.refreshIcons();
+          return;
+        }
+        this.addCustomerModal.errors = err.errors || {};
+        this.addCustomerModal.error = err.errors
+          ? "Please review the highlighted information."
+          : (err.message || "Failed to add customer. Please try again.");
+      } finally {
+        this.addCustomerModal.saving = false;
+      }
+    },
+
+    closeSimilarNameModal() {
+      if (this.addCustomerModal.saving) return;
+      this.similarNameModal = { open: false, customers: [] };
+    },
+
     // ── Confirm modal ─────────────────────────────────────
 
     confirmAction(action, customer) {
-      if (!this.isAdmin) return;
+      if (!this.isAdmin && action !== "archive_unregistered") return;
 
       const labels = {
         deactivate:  { title: "Deactivate Account",  confirmLabel: "Deactivate",  color: "amber"  },
         reactivate:  { title: "Reactivate Account",  confirmLabel: "Reactivate",  color: "green"  },
         archive:     { title: "Archive Account",     confirmLabel: "Archive",     color: "slate"  },
+        archive_unregistered: { title: "Archive Customer", confirmLabel: "Archive", color: "slate" },
         unarchive:   { title: "Unarchive Account",   confirmLabel: "Unarchive",   color: "green"  },
       };
 
@@ -150,6 +275,7 @@ function adminCustomers() {
         deactivate: `This will block ${customer.fullName} from logging in. You can reactivate their account at any time.`,
         reactivate: `This will restore ${customer.fullName}'s access and allow them to log in again.`,
         archive:    `This will permanently move ${customer.fullName} to the archive. They will not be able to log in.`,
+        archive_unregistered: `This will move ${customer.fullName} and their pet records to the archive.`,
         unarchive:  `This will restore ${customer.fullName}'s account and reactivate their access.`,
       };
 
@@ -173,9 +299,8 @@ function adminCustomers() {
     },
 
     async executeAction() {
-      if (!this.isAdmin) return;
-
       const { action, customer } = this.confirmModal;
+      if (!this.isAdmin && action !== "archive_unregistered") return;
       if (!customer) return;
 
       this.busyId              = customer.id;
@@ -185,6 +310,7 @@ function adminCustomers() {
         deactivate: () => API.deactivateCustomer(customer.id),
         reactivate: () => API.reactivateCustomer(customer.id),
         archive:    () => API.archiveCustomer(customer.id),
+        archive_unregistered: () => API.archiveUnregisteredCustomer(customer.id),
         unarchive:  () => API.unarchiveCustomer(customer.id),
       };
 
@@ -214,7 +340,55 @@ function adminCustomers() {
     },
 
     openPetDetail(pet) {
-      this.petModal = { open: true, pet, editing: false, saving: false, saveError: "", form: {} };
+      this.petModal = { open: true, pet, editing: false, creating: false, owner: null, saving: false, saveError: "", form: {} };
+      this.refreshIcons();
+    },
+
+    async openAddPetForCustomer(customer) {
+      if (!customer || customer.recordType !== "unregistered" || customer.isArchived) return;
+
+      this.petModal = {
+        open: true,
+        pet: null,
+        editing: true,
+        creating: true,
+        owner: customer,
+        saving: false,
+        saveError: "",
+        form: {
+          pet_name: "",
+          species: "",
+          breed: "",
+          gender: "",
+          birthdate: "",
+          is_neutered: false,
+          neutered_date: "",
+          is_deceased: false,
+          deceased_date: "",
+          size: "",
+          fur_type: "",
+          weight: "",
+          color: "",
+          medical_conditions: "",
+        },
+      };
+
+      if (!await this.initializePetFormFields()) {
+        this.petModal.saveError = "Pet controls could not be loaded. Please refresh and try again.";
+        return;
+      }
+
+      const { tools, elements, controls } = adminCustomerPetFields;
+      controls.species.reset();
+      controls.gender.reset();
+      controls.breed.reset();
+      controls.furType.reset();
+      controls.size.reset();
+      controls.size.setDisabled(true);
+      elements.breed.value = "";
+      elements.furType.value = "";
+      tools.initializeWeightField(elements.weight);
+      elements.weight.value = "";
       this.refreshIcons();
     },
 
@@ -397,6 +571,11 @@ function adminCustomers() {
     },
 
     cancelEditPet() {
+      if (this.petModal.creating) {
+        this.petModal.open = false;
+        this.petModal.editing = false;
+        return;
+      }
       this.petModal.editing   = false;
       this.petModal.saveError = "";
     },
@@ -423,11 +602,18 @@ function adminCustomers() {
       this.petModal.saving = true;
 
       try {
-        const response = await API.adminUpdatePet(this.petModal.pet.id, payload);
+        const response = this.petModal.creating
+          ? await API.adminAddCustomerPet(
+              this.petModal.owner.recordType,
+              this.petModal.owner.id,
+              payload,
+            )
+          : await API.adminUpdatePet(this.petModal.pet.id, payload);
 
         const savedPet = response.pet || payload;
         const updated = {
-          ...this.petModal.pet,
+          ...(this.petModal.pet || {}),
+          id:                savedPet.pet_id || this.petModal.pet?.id,
           petName:           savedPet.pet_name,
           species:           savedPet.species,
           breed:             savedPet.breed,
@@ -446,11 +632,19 @@ function adminCustomers() {
 
         this.petModal.pet     = updated;
         this.petModal.editing = false;
+        const wasCreating = this.petModal.creating;
+        this.petModal.creating = false;
 
         // Sync the updated pet back into the customer detail modal list
         if (this.detailModal.customer?.pets) {
           const idx = this.detailModal.customer.pets.findIndex(p => p.id === updated.id);
-          if (idx !== -1) this.detailModal.customer.pets[idx] = updated;
+          if (idx !== -1) {
+            this.detailModal.customer.pets[idx] = updated;
+          } else if (wasCreating) {
+            this.detailModal.customer.pets.unshift(updated);
+            this.detailModal.customer.petCount = this.detailModal.customer.pets.length;
+            this.detailModal.customer.activePetCount = Number(this.detailModal.customer.activePetCount || 0) + 1;
+          }
         }
 
         this.refreshIcons();
@@ -587,7 +781,9 @@ function adminCustomers() {
       this.refreshIcons();
 
       try {
-        const data = await API.getCustomerDetails(customer.id);
+        const data = customer.recordType === "unregistered"
+          ? await API.getUnregisteredCustomerDetails(customer.id)
+          : await API.getCustomerDetails(customer.id);
         this.detailModal.customer = data.customer || this.detailModal.customer;
       } catch (err) {
         this.detailModal.error = err.message || "Failed to load customer details.";
@@ -658,6 +854,15 @@ function adminCustomers() {
       return text;
     },
 
+    normalizeCustomerPhone(value) {
+      const raw = String(value || "").trim();
+      const digits = raw.replace(/\D/g, "");
+
+      if (/^63\d{10}$/.test(digits)) return `0${digits.slice(2)}`;
+      if (/^9\d{9}$/.test(digits)) return `0${digits}`;
+      return digits;
+    },
+
     formatTextValue(value) {
       const text = String(value ?? "").trim();
       return text || "Not provided";
@@ -685,6 +890,7 @@ function adminCustomers() {
 
     customerStatusLabel(customer) {
       if (customer?.isArchived) return "Archived";
+      if (customer?.recordType === "unregistered") return "Unregistered";
       if (customer?.isActive) return "Active";
       return "Inactive";
     },

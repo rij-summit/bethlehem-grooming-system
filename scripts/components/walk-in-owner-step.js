@@ -7,6 +7,10 @@ const elements = {
   email: document.getElementById("ownerEmailAddress"),
   message: document.getElementById("walkInOwnerMessage"),
   nextButton: document.getElementById("walkInOwnerNextBtn"),
+  existingCustomerSection: document.getElementById("existingCustomerSection"),
+  existingCustomerSearch: document.getElementById("existingCustomerSearch"),
+  existingCustomerSearchStatus: document.getElementById("existingCustomerSearchStatus"),
+  existingCustomerResults: document.getElementById("existingCustomerResults"),
   fieldErrors: {
     firstName: document.getElementById("ownerFirstNameError"),
     lastName: document.getElementById("ownerLastNameError"),
@@ -22,6 +26,9 @@ const WALK_IN_FLOW_STORAGE_KEYS = [
   "walkInBookingConfirmation",
 ];
 let hasSubmittedOnce = false;
+let customerSearchTimer = null;
+let customerSearchRequestId = 0;
+let customerSearchResults = [];
 
 /*
   BACKEND TEAMMATE + CLAUDE CODE:
@@ -130,7 +137,7 @@ function clearWalkInContinuationDraft() {
   });
 }
 
-function saveOwnerDraft(values) {
+function saveOwnerDraft(values, selectedCustomer = null) {
   sessionStorage.setItem(
     WALK_IN_OWNER_STORAGE_KEY,
     JSON.stringify({
@@ -138,8 +145,108 @@ function saveOwnerDraft(values) {
       fullName: getOwnerDisplayName(values),
       bookingType: "walk_in",
       appointmentType: getAppointmentType(),
+      ownerRecordType: selectedCustomer?.recordType || "new",
+      customerUserId: selectedCustomer?.recordType === "registered" ? selectedCustomer.id : null,
+      unregisteredCustomerId: selectedCustomer?.recordType === "unregistered" ? selectedCustomer.id : null,
+      existingPets: Array.isArray(selectedCustomer?.pets) ? selectedCustomer.pets : [],
     }),
   );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length === 11
+    ? `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`
+    : String(value || "Not provided");
+}
+
+function renderCustomerSearchResults() {
+  if (!elements.existingCustomerResults) return;
+
+  elements.existingCustomerResults.innerHTML = customerSearchResults.map((customer, index) => `
+    <button
+      type="button"
+      data-customer-result-index="${index}"
+      class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-[#7fa2c9] hover:bg-[#f7fbff] focus:outline-none focus:ring-2 focus:ring-[#315b7e]/20"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="font-semibold text-[#2f4b66]">${escapeHtml(customer.fullName)}</p>
+          <p class="mt-1 text-sm text-slate-500">${escapeHtml(formatPhone(customer.phone))}${customer.email ? ` &middot; ${escapeHtml(customer.email)}` : ""}</p>
+        </div>
+        <span class="rounded-full px-2.5 py-1 text-xs font-medium ${customer.recordType === "unregistered" ? "bg-[#eaf4fb] text-[#315b7e]" : "bg-green-100 text-green-700"}">
+          ${customer.recordType === "unregistered" ? "Unregistered" : "Active"}
+        </span>
+      </div>
+      <p class="mt-2 text-xs text-slate-500">${Array.isArray(customer.pets) ? customer.pets.length : 0} saved pet${customer.pets?.length === 1 ? "" : "s"} &middot; Select customer</p>
+    </button>
+  `).join("");
+}
+
+async function searchExistingCustomers() {
+  const query = normalizeText(elements.existingCustomerSearch?.value);
+  const requestId = ++customerSearchRequestId;
+
+  if (query.length < 2) {
+    customerSearchResults = [];
+    renderCustomerSearchResults();
+    elements.existingCustomerSearchStatus.textContent = "Enter at least 2 characters to search.";
+    return;
+  }
+
+  elements.existingCustomerSearchStatus.textContent = "Searching customers...";
+  try {
+    const data = await API.searchWalkInCustomers(query);
+    if (requestId !== customerSearchRequestId) return;
+    customerSearchResults = data.customers || [];
+    renderCustomerSearchResults();
+    elements.existingCustomerSearchStatus.textContent = customerSearchResults.length
+      ? `${customerSearchResults.length} customer${customerSearchResults.length === 1 ? "" : "s"} found.`
+      : "No active or unregistered customers matched your search.";
+  } catch (error) {
+    if (requestId !== customerSearchRequestId) return;
+    customerSearchResults = [];
+    renderCustomerSearchResults();
+    elements.existingCustomerSearchStatus.textContent = error.message || "Customer search failed. Please try again.";
+  }
+}
+
+function handleExistingCustomerSearchInput() {
+  window.clearTimeout(customerSearchTimer);
+  customerSearchTimer = window.setTimeout(searchExistingCustomers, 300);
+}
+
+function selectExistingCustomer(customer) {
+  if (!customer) return;
+
+  document.getElementById("typeGrooming").checked = true;
+  const values = {
+    firstName: normalizeText(customer.firstName),
+    lastName: normalizeText(customer.lastName),
+    middleInitial: normalizeMiddleInitial(customer.middleName),
+    phone: normalizePhoneNumber(customer.phone),
+    email: normalizeText(customer.email),
+  };
+
+  clearWalkInContinuationDraft();
+  saveOwnerDraft(values, customer);
+  window.location.href = "./walk-in-pet-details.html";
+}
+
+function syncExistingCustomerSearchVisibility() {
+  const showSearch = getAppointmentType() === "grooming";
+  elements.existingCustomerSection?.classList.toggle("hidden", !showSearch);
+  const pageTitle = document.getElementById("walkInPageTitle");
+  if (pageTitle) pageTitle.textContent = showSearch ? "Grooming walk-in" : "Clinic walk-in";
 }
 
 function validateOwner(values) {
@@ -300,6 +407,16 @@ function bindEvents() {
   ].forEach((input) => {
     input.addEventListener("input", handleInput);
   });
+
+  elements.existingCustomerSearch?.addEventListener("input", handleExistingCustomerSearchInput);
+  elements.existingCustomerResults?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-customer-result-index]");
+    if (!button) return;
+    selectExistingCustomer(customerSearchResults[Number(button.dataset.customerResultIndex)]);
+  });
+  document.querySelectorAll('input[name="appointmentType"]').forEach((input) => {
+    input.addEventListener("change", syncExistingCustomerSearchVisibility);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -309,6 +426,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   applyRequestedAppointmentType();
   bindEvents();
+  syncExistingCustomerSearchVisibility();
   renderValidationErrors(getFormValues(), { showAll: false });
   syncNextButtonState();
 

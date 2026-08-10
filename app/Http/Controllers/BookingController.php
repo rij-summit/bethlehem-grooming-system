@@ -564,6 +564,7 @@ class BookingController extends Controller
             return [
                 'booking_id' => $b->booking_id,
                 'booking_reference' => $b->booking_reference,
+                'booking_type' => $b->booking_type,
                 'booking_date' => $b->booking_date,
                 'created_at' => $b->created_at
                     ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()

@@ -1017,6 +1017,9 @@
     const timeLabel = b?.time_window?.window_label ?? "—";
     const pets = Array.isArray(b?.pets) ? b.pets : [];
     const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
+    const walkInBadge = b?.booking_type === "walk_in"
+      ? `<span class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">Walk-in</span>`
+      : "";
     const paidBadge = b?.paid
       ? `<span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Paid ✓</span>`
       : "";
@@ -1025,7 +1028,7 @@
       <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
         <div class="flex items-start justify-between gap-2 mb-1">
           <p class="text-sm font-semibold text-slate-700">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
-          ${paidBadge}
+          <div class="flex flex-wrap justify-end gap-1.5">${walkInBadge}${paidBadge}</div>
         </div>
         <p class="text-xs text-slate-400 mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
         <p class="text-xs text-slate-500">${escapeDashboardHtml(petNames)}</p>
