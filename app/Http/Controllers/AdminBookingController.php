@@ -15,6 +15,7 @@ use App\Services\DailyPetQueue;
 use App\Services\GroomingBookingWorkflowService;
 use App\Services\GroomingClinicReferralAssessmentService;
 use App\Services\GroomingPaymentReadinessService;
+use App\Services\WalkInCustomerRegistrationService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -974,9 +975,11 @@ class AdminBookingController extends Controller
 
     // ── MARK PICKED UP ────────────────────────────────────
     // released → archived + customer notification
-    public function markPickedUp($id)
+    public function markPickedUp(Request $request, $id)
     {
-        $result = DB::transaction(function () use ($id) {
+        $createdByUserId = $request->user()?->user_id;
+
+        $result = DB::transaction(function () use ($id, $createdByUserId) {
             $booking = Booking::query()->whereKey($id)->lockForUpdate()->first();
             if (! $booking) {
                 return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
@@ -1004,6 +1007,10 @@ class AdminBookingController extends Controller
                     'status' => 409,
                 ]];
             }
+
+            app(WalkInCustomerRegistrationService::class)
+                ->registerNewOwnerAtPickup($booking, $createdByUserId);
+            $booking->unsetRelation('user');
 
             $booking->loadMissing(['user', 'bookingPets.pet']);
             $petName = $this->petNames($booking);

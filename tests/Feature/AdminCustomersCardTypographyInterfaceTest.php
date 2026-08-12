@@ -116,7 +116,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
 
         $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
-        $this->assertStringContainsString('admin-customers.js?v=customer-pet-management-20260810', $page);
+        $this->assertStringContainsString('admin-customers.js?v=unregistered-search-navigation-20260812', $page);
     }
 
     public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void

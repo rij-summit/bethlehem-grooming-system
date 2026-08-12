@@ -53,7 +53,7 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'walk-in-owner-step.js?v=existing-customer-search-20260810',
+            'walk-in-owner-step.js?v=owner-validation-20260812',
             $walkInPage,
         );
         $this->assertStringContainsString(
@@ -97,12 +97,18 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
 
         foreach ([
             'Find an existing customer',
-            'Search active and unregistered customers',
+            'Search active and unregistered customers by name, mobile number, or email.',
             'id="existingCustomerSearch"',
+            'placeholder="Enter at least 2 characters"',
             'New owner information',
         ] as $content) {
             $this->assertStringContainsString($content, $ownerPage);
         }
+
+        $this->assertStringNotContainsString(
+            'Use this form when the customer is not in the search results.',
+            $ownerPage,
+        );
 
         foreach ([
             'API.searchWalkInCustomers(query)',
@@ -114,10 +120,34 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
         }
 
         $this->assertStringContainsString('id="existingPetsSection"', $petPage);
-        $this->assertStringContainsString("data-select-existing-pet", $petStep);
+        $this->assertStringContainsString('data-select-existing-pet', $petStep);
         $this->assertStringContainsString('petId: pet.id', $petStep);
         $this->assertStringContainsString('...pet,', $servicesStep);
         $this->assertStringContainsString('pet_id:              item.pet.petId || null', $consentStep);
         $this->assertStringContainsString('owner_record_type: owner.ownerRecordType || "new"', $consentStep);
+    }
+
+    public function test_new_owner_validation_uses_a_bottom_left_similar_name_warning(): void
+    {
+        $ownerPage = file_get_contents(base_path('pages/admin/walk-in-booking.html'));
+        $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
+        $consentStep = file_get_contents(base_path('scripts/components/walk-in-consent-step.js'));
+
+        foreach ([
+            'id="similarOwnerWarning"',
+            'fixed bottom-5 left-5',
+            'Similar customer found',
+            'id="reviewSimilarOwnerBtn"',
+            'id="continueSimilarOwnerBtn"',
+            'Continue anyway',
+            'api.js?v=walk-in-owner-validation-20260812',
+        ] as $content) {
+            $this->assertStringContainsString($content, $ownerPage);
+        }
+
+        $this->assertStringContainsString('API.validateWalkInNewOwner({', $ownerStep);
+        $this->assertStringContainsString('error.code === "similar_customer_name"', $ownerStep);
+        $this->assertStringContainsString('showSimilarOwnerWarning(values', $ownerStep);
+        $this->assertStringContainsString('confirm_similar_name: Boolean(owner.confirmSimilarName)', $consentStep);
     }
 }

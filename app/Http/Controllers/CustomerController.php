@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Pet;
 use App\Models\UnregisteredCustomer;
 use App\Models\User;
+use App\Services\CustomerIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -209,49 +210,16 @@ class CustomerController extends Controller
             ->map(fn (UnregisteredCustomer $customer) => $this->formatUnregisteredCustomer($customer));
     }
 
-    public function storeUnregistered(StoreUnregisteredCustomerRequest $request)
-    {
+    public function storeUnregistered(
+        StoreUnregisteredCustomerRequest $request,
+        CustomerIdentityService $customerIdentity,
+    ) {
         $this->requireAdminOrStaff($request);
         $data = $request->validated();
 
-        $registeredMatch = User::query()
-            ->where('role', 'customer')
-            ->where(function ($query) use ($data) {
-                $query->where('phone', $data['phone']);
+        $this->ensureCustomerContactIsAvailable($customerIdentity, $data);
 
-                if (! empty($data['email'])) {
-                    $query->orWhere('email', $data['email']);
-                }
-            })
-            ->first();
-
-        if ($registeredMatch) {
-            $field = $registeredMatch->phone === $data['phone'] ? 'phone' : 'email';
-
-            throw ValidationException::withMessages([
-                $field => 'A registered customer already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
-            ]);
-        }
-
-        $unregisteredMatch = UnregisteredCustomer::query()
-            ->where(function ($query) use ($data) {
-                $query->where('phone', $data['phone']);
-
-                if (! empty($data['email'])) {
-                    $query->orWhere('email', $data['email']);
-                }
-            })
-            ->first();
-
-        if ($unregisteredMatch) {
-            $field = $unregisteredMatch->phone === $data['phone'] ? 'phone' : 'email';
-
-            throw ValidationException::withMessages([
-                $field => 'An unregistered customer already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
-            ]);
-        }
-
-        $similarCustomers = $this->findCustomersWithSimilarName(
+        $similarCustomers = $customerIdentity->findCustomersWithSimilarName(
             $data['first_name'],
             $data['last_name'],
         );
@@ -355,33 +323,55 @@ class CustomerController extends Controller
         ];
     }
 
-    private function findCustomersWithSimilarName(string $firstName, string $lastName)
-    {
-        $normalizedFirst = mb_strtolower(trim($firstName));
-        $normalizedLast = mb_strtolower(trim($lastName));
+    public function validateWalkInOwner(
+        StoreUnregisteredCustomerRequest $request,
+        CustomerIdentityService $customerIdentity,
+    ) {
+        $this->requireAdminOrStaff($request);
+        $data = $request->validated();
+        $this->ensureCustomerContactIsAvailable($customerIdentity, $data);
 
-        $registered = User::query()
-            ->where('role', 'customer')
-            ->whereRaw('LOWER(first_name) = ?', [$normalizedFirst])
-            ->whereRaw('LOWER(last_name) = ?', [$normalizedLast])
-            ->get()
-            ->map(fn (User $user) => [
-                'fullName' => trim($user->first_name.' '.$user->last_name),
-                'phone' => $user->phone,
-                'status' => $user->is_archived ? 'Archived' : ($user->is_active ? 'Active' : 'Inactive'),
-            ]);
+        $similarCustomers = $customerIdentity->findCustomersWithSimilarName(
+            $data['first_name'],
+            $data['last_name'],
+        );
 
-        $unregistered = UnregisteredCustomer::query()
-            ->whereRaw('LOWER(first_name) = ?', [$normalizedFirst])
-            ->whereRaw('LOWER(last_name) = ?', [$normalizedLast])
-            ->get()
-            ->map(fn (UnregisteredCustomer $customer) => [
-                'fullName' => trim($customer->first_name.' '.$customer->last_name),
-                'phone' => $customer->phone,
-                'status' => $customer->is_archived ? 'Archived' : 'Unregistered',
-            ]);
+        if ($similarCustomers->isNotEmpty() && ! ($data['confirm_similar_name'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'similar_customer_name',
+                'message' => 'A customer with the same first and last name already exists. Do you still want to continue?',
+                'similarCustomers' => $similarCustomers,
+            ], 409);
+        }
 
-        return $registered->concat($unregistered)->values();
+        return response()->json([
+            'success' => true,
+            'message' => 'Owner information is available.',
+        ]);
+    }
+
+    private function ensureCustomerContactIsAvailable(
+        CustomerIdentityService $customerIdentity,
+        array $data,
+    ): void {
+        $conflict = $customerIdentity->findContactConflict(
+            $data['phone'],
+            $data['email'] ?? null,
+        );
+
+        if (! $conflict) {
+            return;
+        }
+
+        $field = $conflict['field'];
+        $customerType = $conflict['recordType'] === 'registered'
+            ? 'A registered customer'
+            : 'An unregistered customer';
+
+        throw ValidationException::withMessages([
+            $field => $customerType.' already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
+        ]);
     }
 
     public function archiveUnregistered(Request $request, $id)
@@ -490,7 +480,7 @@ class CustomerController extends Controller
         }
 
         $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
-        $customers = User::query()
+        $registeredCustomers = User::query()
             ->where('role', 'customer')
             ->where(function ($customerQuery) use ($search, $nameTerms) {
                 $customerQuery->where('phone', 'like', "%{$search}%")
@@ -506,28 +496,79 @@ class CustomerController extends Controller
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->limit(8)
-            ->get(['user_id', 'first_name', 'last_name', 'phone'])
+            ->get(['user_id', 'first_name', 'last_name', 'phone', 'is_active', 'is_archived'])
             ->map(fn (User $user) => [
                 'id' => $user->user_id,
+                'recordType' => 'registered',
                 'name' => trim($user->first_name.' '.$user->last_name),
                 'phone' => $user->phone,
+                'status' => $user->is_archived ? 'Archived' : ($user->is_active ? 'Active' : 'Inactive'),
             ]);
 
+        $unregisteredCustomers = UnregisteredCustomer::query()
+            ->where('is_archived', false)
+            ->where(function ($customerQuery) use ($search, $nameTerms) {
+                $customerQuery->where('phone', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('middle_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(8)
+            ->get(['id', 'first_name', 'last_name', 'middle_name', 'phone'])
+            ->map(fn (UnregisteredCustomer $customer) => [
+                'id' => $customer->id,
+                'recordType' => 'unregistered',
+                'name' => trim($customer->first_name.' '.$customer->last_name),
+                'phone' => $customer->phone,
+                'status' => 'Unregistered',
+            ]);
+
+        $customers = $registeredCustomers
+            ->concat($unregisteredCustomers)
+            ->sortBy([
+                ['name', 'asc'],
+                ['recordType', 'asc'],
+                ['phone', 'asc'],
+            ], SORT_NATURAL | SORT_FLAG_CASE)
+            ->take(8)
+            ->values();
+
         $pets = Pet::query()
-            ->with('user:user_id,first_name,last_name')
+            ->with([
+                'user:user_id,first_name,last_name',
+                'unregisteredCustomer:id,first_name,last_name',
+            ])
             ->where('pet_name', 'like', "%{$search}%")
-            ->whereHas('user', fn ($ownerQuery) => $ownerQuery->where('role', 'customer'))
+            ->where(function ($ownerQuery) {
+                $ownerQuery
+                    ->whereHas('user', fn ($userQuery) => $userQuery->where('role', 'customer'))
+                    ->orWhereHas('unregisteredCustomer', fn ($customerQuery) => $customerQuery->where('is_archived', false));
+            })
             ->orderBy('pet_name')
             ->orderBy('pet_id')
             ->limit(8)
-            ->get(['pet_id', 'user_id', 'pet_name', 'species'])
-            ->map(fn (Pet $pet) => [
-                'id' => $pet->pet_id,
-                'name' => $pet->pet_name,
-                'species' => $pet->species,
-                'ownerId' => $pet->user_id,
-                'ownerName' => trim($pet->user->first_name.' '.$pet->user->last_name),
-            ]);
+            ->get(['pet_id', 'user_id', 'unregistered_customer_id', 'pet_name', 'species'])
+            ->map(function (Pet $pet) {
+                $unregisteredOwner = $pet->unregisteredCustomer;
+                $owner = $unregisteredOwner ?? $pet->user;
+
+                return [
+                    'id' => $pet->pet_id,
+                    'name' => $pet->pet_name,
+                    'species' => $pet->species,
+                    'ownerId' => $unregisteredOwner?->id ?? $pet->user_id,
+                    'ownerName' => trim(($owner?->first_name ?? '').' '.($owner?->last_name ?? '')),
+                    'ownerRecordType' => $unregisteredOwner ? 'unregistered' : 'registered',
+                ];
+            });
 
         return response()->json([
             'success' => true,

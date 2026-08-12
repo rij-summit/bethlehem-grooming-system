@@ -826,7 +826,10 @@ function adminDashboard() {
     },
 
     openDashboardCustomer(customer) {
-      const params = new URLSearchParams({ customer_id: String(customer.id) });
+      const params = new URLSearchParams({
+        customer_id: String(customer.id),
+        record_type: customer.recordType || "registered",
+      });
       window.location.href = `./clients.html?${params.toString()}`;
     },
 
@@ -834,6 +837,7 @@ function adminDashboard() {
       const params = new URLSearchParams({
         customer_id: String(pet.ownerId),
         pet_id: String(pet.id),
+        record_type: pet.ownerRecordType || "registered",
       });
       window.location.href = `./clients.html?${params.toString()}`;
     },

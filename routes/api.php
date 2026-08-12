@@ -93,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/customers/unregistered/{id}', [CustomerController::class, 'showUnregistered']);
     Route::post('/admin/customers/unregistered/{id}/archive', [CustomerController::class, 'archiveUnregistered']);
     Route::get('/admin/walk-in/customers', [CustomerController::class, 'walkInSearch']);
+    Route::post('/admin/walk-in/customers/validate-new-owner', [CustomerController::class, 'validateWalkInOwner']);
     Route::post('/admin/customer-pets/{ownerType}/{ownerId}', [PetController::class, 'adminStore']);
     Route::get('/admin/customers/{id}', [CustomerController::class, 'show']);
     Route::post('/admin/customers/{id}/deactivate', [CustomerController::class, 'deactivate']);

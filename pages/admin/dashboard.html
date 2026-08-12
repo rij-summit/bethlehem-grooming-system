@@ -350,16 +350,25 @@
                         <template x-if="dashboardSearchCustomers.length > 0">
                           <section aria-label="Customer search results">
                             <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Customers</p>
-                            <template x-for="customer in dashboardSearchCustomers" :key="'customer-' + customer.id">
-                              <button
-                                type="button"
-                                @click="openDashboardCustomer(customer)"
-                                class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
-                              >
-                                <span class="block text-sm font-semibold text-slate-700" x-text="customer.name"></span>
-                                <span class="mt-1 block text-sm text-slate-500" x-text="formatMobileNumber(customer.phone)"></span>
-                              </button>
-                            </template>
+                            <div class="divide-y divide-slate-100">
+                              <template x-for="customer in dashboardSearchCustomers" :key="'customer-' + customer.recordType + '-' + customer.id">
+                                <button
+                                  type="button"
+                                  @click="openDashboardCustomer(customer)"
+                                  class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                                >
+                                  <span class="flex items-center justify-between gap-3">
+                                    <span class="text-sm font-semibold text-slate-700" x-text="customer.name"></span>
+                                    <span
+                                      class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
+                                      :class="customer.status === 'Active' ? 'bg-green-100 text-green-700' : customer.status === 'Unregistered' ? 'bg-[#eaf4fb] text-[#315b7e]' : 'bg-slate-100 text-slate-600'"
+                                      x-text="customer.status"
+                                    ></span>
+                                  </span>
+                                  <span class="mt-1 block text-sm text-slate-500" x-text="formatMobileNumber(customer.phone)"></span>
+                                </button>
+                              </template>
+                            </div>
                           </section>
                         </template>
 
@@ -369,20 +378,22 @@
                             :class="dashboardSearchCustomers.length > 0 ? 'mt-2 border-t border-slate-200 pt-2' : ''"
                           >
                             <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Pets</p>
-                            <template x-for="pet in dashboardSearchPets" :key="'pet-' + pet.id">
-                              <button
-                                type="button"
-                                @click="openDashboardPet(pet)"
-                                class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
-                              >
-                                <span class="block text-sm font-semibold text-slate-700" x-text="pet.name"></span>
-                                <span class="mt-1 block text-sm text-slate-500">
-                                  Owner: <span x-text="pet.ownerName"></span>
-                                  <span aria-hidden="true"> &middot; </span>
-                                  <span x-text="pet.species || 'Not provided'"></span>
-                                </span>
-                              </button>
-                            </template>
+                            <div class="divide-y divide-slate-100">
+                              <template x-for="pet in dashboardSearchPets" :key="'pet-' + pet.id">
+                                <button
+                                  type="button"
+                                  @click="openDashboardPet(pet)"
+                                  class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                                >
+                                  <span class="block text-sm font-semibold text-slate-700" x-text="pet.name"></span>
+                                  <span class="mt-1 block text-sm text-slate-500">
+                                    Owner: <span x-text="pet.ownerName"></span>
+                                    <span aria-hidden="true"> &middot; </span>
+                                    <span x-text="pet.species || 'Not provided'"></span>
+                                  </span>
+                                </button>
+                              </template>
+                            </div>
                           </section>
                         </template>
                       </div>
@@ -674,7 +685,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=dashboard-search-20260809"></script>
+    <script src="../../scripts/api.js?v=dashboard-search-unregistered-20260812"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -684,6 +695,6 @@
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=dashboard-search-20260809"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812"></script>
   </body>
 </html>

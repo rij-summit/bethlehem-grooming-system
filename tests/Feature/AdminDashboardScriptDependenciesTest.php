@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=dashboard-search-20260809',
+            'scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812',
         );
 
         $this->assertNotFalse($dashboardPosition);
@@ -33,7 +33,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=dashboard-search-20260809',
+            'scripts/api.js?v=dashboard-search-unregistered-20260812',
             $page,
         );
     }
@@ -53,11 +53,15 @@ class AdminDashboardScriptDependenciesTest extends TestCase
             '>Customers</p>',
             '>Pets</p>',
             'x-text="customer.name"',
+            "'customer-' + customer.recordType + '-' + customer.id",
+            "customer.status === 'Unregistered'",
+            'x-text="customer.status"',
             'x-text="formatMobileNumber(customer.phone)"',
             'x-text="pet.name"',
             'Owner: <span x-text="pet.ownerName"></span>',
             'x-text="pet.species || \'Not provided\'"',
             "dashboardSearchCustomers.length > 0 ? 'mt-2 border-t border-slate-200 pt-2' : ''",
+            'class="divide-y divide-slate-100"',
         ] as $searchUi) {
             $this->assertStringContainsString($searchUi, $page);
             $this->assertStringContainsString($searchUi, $schedulesPage);
@@ -86,6 +90,8 @@ class AdminDashboardScriptDependenciesTest extends TestCase
             'openDashboardPet(pet)',
             'customer_id: String(pet.ownerId)',
             'pet_id: String(pet.id)',
+            'record_type: customer.recordType || "registered"',
+            'record_type: pet.ownerRecordType || "registered"',
         ] as $searchBehavior) {
             $this->assertStringContainsString($searchBehavior, $dashboard);
         }
@@ -95,10 +101,12 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString("Route::get('/admin/dashboard/search'", $routes);
         $this->assertStringContainsString('params.get("pet_id")', $customerComponent);
         $this->assertStringContainsString('openCustomerSearchDestination', $customerComponent);
+        $this->assertStringContainsString('params.get("record_type")', $customerComponent);
+        $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=dashboard-search-20260809', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=dashboard-search-20260809', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?v=dashboard-search-unregistered-20260812', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

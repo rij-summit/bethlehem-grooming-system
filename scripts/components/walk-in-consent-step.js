@@ -313,6 +313,7 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
     owner_record_type: owner.ownerRecordType || "new",
     customer_user_id: owner.customerUserId || null,
     unregistered_customer_id: owner.unregisteredCustomerId || null,
+    confirm_similar_name: Boolean(owner.confirmSimilarName),
 
     pets: (reviewPayload.items || []).map((item) => ({
       pet_id:              item.pet.petId || null,

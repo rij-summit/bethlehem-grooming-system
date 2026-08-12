@@ -7,6 +7,11 @@ const elements = {
   email: document.getElementById("ownerEmailAddress"),
   message: document.getElementById("walkInOwnerMessage"),
   nextButton: document.getElementById("walkInOwnerNextBtn"),
+  nextButtonLabel: document.getElementById("walkInOwnerNextLabel"),
+  similarOwnerWarning: document.getElementById("similarOwnerWarning"),
+  similarOwnerWarningMatches: document.getElementById("similarOwnerWarningMatches"),
+  reviewSimilarOwnerButton: document.getElementById("reviewSimilarOwnerBtn"),
+  continueSimilarOwnerButton: document.getElementById("continueSimilarOwnerBtn"),
   existingCustomerSection: document.getElementById("existingCustomerSection"),
   existingCustomerSearch: document.getElementById("existingCustomerSearch"),
   existingCustomerSearchStatus: document.getElementById("existingCustomerSearchStatus"),
@@ -29,6 +34,8 @@ let hasSubmittedOnce = false;
 let customerSearchTimer = null;
 let customerSearchRequestId = 0;
 let customerSearchResults = [];
+let ownerValidationInProgress = false;
+let pendingSimilarOwnerValues = null;
 
 /*
   BACKEND TEAMMATE + CLAUDE CODE:
@@ -192,6 +199,12 @@ function renderCustomerSearchResults() {
   `).join("");
 }
 
+function setCustomerSearchStatus(message) {
+  if (!elements.existingCustomerSearchStatus) return;
+  elements.existingCustomerSearchStatus.textContent = message;
+  elements.existingCustomerSearchStatus.classList.toggle("hidden", !message);
+}
+
 async function searchExistingCustomers() {
   const query = normalizeText(elements.existingCustomerSearch?.value);
   const requestId = ++customerSearchRequestId;
@@ -199,24 +212,24 @@ async function searchExistingCustomers() {
   if (query.length < 2) {
     customerSearchResults = [];
     renderCustomerSearchResults();
-    elements.existingCustomerSearchStatus.textContent = "Enter at least 2 characters to search.";
+    setCustomerSearchStatus("");
     return;
   }
 
-  elements.existingCustomerSearchStatus.textContent = "Searching customers...";
+  setCustomerSearchStatus("Searching customers...");
   try {
     const data = await API.searchWalkInCustomers(query);
     if (requestId !== customerSearchRequestId) return;
     customerSearchResults = data.customers || [];
     renderCustomerSearchResults();
-    elements.existingCustomerSearchStatus.textContent = customerSearchResults.length
+    setCustomerSearchStatus(customerSearchResults.length
       ? `${customerSearchResults.length} customer${customerSearchResults.length === 1 ? "" : "s"} found.`
-      : "No active or unregistered customers matched your search.";
+      : "No active or unregistered customers matched your search.");
   } catch (error) {
     if (requestId !== customerSearchRequestId) return;
     customerSearchResults = [];
     renderCustomerSearchResults();
-    elements.existingCustomerSearchStatus.textContent = error.message || "Customer search failed. Please try again.";
+    setCustomerSearchStatus(error.message || "Customer search failed. Please try again.");
   }
 }
 
@@ -328,10 +341,42 @@ function renderValidationErrors(values, { showAll = false } = {}) {
   hideMessage();
 }
 
+function hideSimilarOwnerWarning() {
+  pendingSimilarOwnerValues = null;
+  elements.similarOwnerWarning?.classList.add("hidden");
+  if (elements.similarOwnerWarningMatches) {
+    elements.similarOwnerWarningMatches.innerHTML = "";
+  }
+}
+
+function showSimilarOwnerWarning(values, customers = []) {
+  pendingSimilarOwnerValues = values;
+
+  if (elements.similarOwnerWarningMatches) {
+    elements.similarOwnerWarningMatches.innerHTML = customers.slice(0, 3).map((customer) => `
+      <div class="rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2">
+        <p class="text-sm font-medium text-[#2f4b66]">${escapeHtml(customer.fullName || "Similar customer")}</p>
+        <p class="mt-0.5 text-xs text-slate-600">${escapeHtml(formatPhone(customer.phone))} &middot; ${escapeHtml(customer.status || "Customer")}</p>
+      </div>
+    `).join("");
+  }
+
+  elements.similarOwnerWarning?.classList.remove("hidden");
+  elements.continueSimilarOwnerButton?.focus();
+}
+
+function setOwnerValidationInProgress(inProgress) {
+  ownerValidationInProgress = inProgress;
+  if (elements.nextButtonLabel) {
+    elements.nextButtonLabel.textContent = inProgress ? "Checking..." : "Next Step";
+  }
+  syncNextButtonState();
+}
+
 function syncNextButtonState() {
   const values = getFormValues();
   const errors = validateOwner(values);
-  const isReady = Object.keys(errors).length === 0;
+  const isReady = Object.keys(errors).length === 0 && !ownerValidationInProgress;
 
   elements.nextButton.disabled = !isReady;
   elements.nextButton.setAttribute("aria-disabled", String(!isReady));
@@ -342,6 +387,7 @@ function syncNextButtonState() {
 }
 
 function handleInput(event) {
+  hideSimilarOwnerWarning();
   const values = getFormValues();
   const fieldName = event.target?.name;
 
@@ -353,8 +399,67 @@ function handleInput(event) {
   syncNextButtonState();
 }
 
-function handleSubmit(event) {
+function continueToPetStep(values, confirmSimilarName = false) {
+  elements.firstName.value = values.firstName;
+  elements.lastName.value = values.lastName;
+  elements.middleInitial.value = values.middleInitial;
+  elements.phone.value = values.phone;
+  elements.email.value = values.email;
+
+  clearWalkInContinuationDraft();
+  saveOwnerDraft({
+    ...values,
+    confirmSimilarName: Boolean(confirmSimilarName),
+  });
+
+  window.location.href = "./walk-in-pet-details.html";
+}
+
+async function validateNewOwnerAndContinue(values, confirmSimilarName = false) {
+  setOwnerValidationInProgress(true);
+  hideMessage();
+
+  try {
+    await API.validateWalkInNewOwner({
+      first_name: values.firstName,
+      last_name: values.lastName,
+      middle_name: values.middleInitial || null,
+      phone: values.phone,
+      email: values.email || null,
+      confirm_similar_name: Boolean(confirmSimilarName),
+    });
+    hideSimilarOwnerWarning();
+    continueToPetStep(values, confirmSimilarName);
+  } catch (error) {
+    if (error.code === "similar_customer_name") {
+      showSimilarOwnerWarning(values, error.data?.similarCustomers || []);
+      return;
+    }
+
+    const fieldMap = {
+      first_name: "firstName",
+      last_name: "lastName",
+      phone: "phone",
+      email: "email",
+    };
+    Object.entries(error.errors || {}).forEach(([field, messages]) => {
+      const fieldName = fieldMap[field];
+      if (fieldName) setFieldError(fieldName, messages?.[0] || "Check this field.");
+    });
+    showMessage(
+      error.errors
+        ? "Please review the highlighted owner information."
+        : (error.message || "Owner information could not be checked. Please try again."),
+      "error",
+    );
+  } finally {
+    setOwnerValidationInProgress(false);
+  }
+}
+
+async function handleSubmit(event) {
   event.preventDefault();
+  if (ownerValidationInProgress) return;
   hasSubmittedOnce = true;
 
   const values = getFormValues();
@@ -366,16 +471,7 @@ function handleSubmit(event) {
     return;
   }
 
-  elements.firstName.value = values.firstName;
-  elements.lastName.value = values.lastName;
-  elements.middleInitial.value = values.middleInitial;
-  elements.phone.value = values.phone;
-  elements.email.value = values.email;
-
-  clearWalkInContinuationDraft();
-  saveOwnerDraft(values);
-
-  window.location.href = "./walk-in-pet-details.html";
+  await validateNewOwnerAndContinue(values);
 }
 
 function guardAdminAccess() {
@@ -413,6 +509,21 @@ function bindEvents() {
     const button = event.target.closest("[data-customer-result-index]");
     if (!button) return;
     selectExistingCustomer(customerSearchResults[Number(button.dataset.customerResultIndex)]);
+  });
+  elements.reviewSimilarOwnerButton?.addEventListener("click", () => {
+    hideSimilarOwnerWarning();
+    elements.firstName.focus();
+  });
+  elements.continueSimilarOwnerButton?.addEventListener("click", () => {
+    if (!pendingSimilarOwnerValues || ownerValidationInProgress) return;
+    const values = { ...pendingSimilarOwnerValues };
+    validateNewOwnerAndContinue(values, true);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.similarOwnerWarning?.classList.contains("hidden")) {
+      hideSimilarOwnerWarning();
+      elements.firstName.focus();
+    }
   });
   document.querySelectorAll('input[name="appointmentType"]').forEach((input) => {
     input.addEventListener("change", syncExistingCustomerSearchVisibility);

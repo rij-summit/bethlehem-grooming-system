@@ -1120,6 +1120,132 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_successful_new_owner_pickup_creates_an_unregistered_customer_and_assigns_the_pet(): void
+    {
+        $this->authenticateAs('staff');
+
+        $response = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'mname' => 'A',
+            'email' => 'maria.walkin@example.test',
+            'phone' => '09171234567',
+            'owner_record_type' => 'new',
+            'pets' => [[
+                'pet_name' => 'Bantay',
+                'species' => 'dog',
+                'size' => 'small',
+                'services' => [['service_slug' => 'basic-grooming']],
+            ]],
+            'sedation_consent' => false,
+            'terms_agreed' => true,
+        ])->assertCreated();
+
+        $bookingId = $response->json('booking_id');
+        $petId = $response->json('pets.0.pet_id');
+        $walkinId = DB::table('bookings')->where('booking_id', $bookingId)->value('walkin_id');
+        $bookingPetId = DB::table('booking_pets')->where('booking_id', $bookingId)->value('booking_pet_id');
+
+        $this->assertDatabaseCount('unregistered_customers', 0);
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => $petId,
+            'user_id' => null,
+            'unregistered_customer_id' => null,
+        ]);
+
+        DB::table('bookings')->where('booking_id', $bookingId)->update([
+            'status' => 'released',
+            'paid' => true,
+        ]);
+        DB::table('booking_pets')->where('booking_pet_id', $bookingPetId)->update([
+            'grooming_start_time' => now()->subHour(),
+            'grooming_end_time' => now(),
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+        ]);
+
+        $this->postJson("/api/admin/bookings/{$bookingId}/picked-up")
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $customerId = DB::table('unregistered_customers')
+            ->where('phone', '09171234567')
+            ->value('id');
+
+        $this->assertNotNull($customerId);
+        $this->assertDatabaseHas('unregistered_customers', [
+            'id' => $customerId,
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'middle_name' => 'A',
+            'created_by_user_id' => 2,
+        ]);
+        $this->assertDatabaseHas('walkins', [
+            'id' => $walkinId,
+            'unregistered_customer_id' => $customerId,
+        ]);
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => $petId,
+            'unregistered_customer_id' => $customerId,
+        ]);
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => $bookingId,
+            'status' => 'archived',
+        ]);
+    }
+
+    public function test_walk_in_submission_enforces_duplicate_phone_and_similar_name_confirmation(): void
+    {
+        $this->authenticateAs('admin');
+
+        DB::table('users')->insert([
+            'user_id' => 50,
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'email' => 'maria@example.test',
+            'phone' => '09170000050',
+            'role' => 'customer',
+            'is_active' => true,
+            'is_archived' => false,
+        ]);
+
+        $payload = [
+            'fname' => 'Another',
+            'lname' => 'Owner',
+            'phone' => '09170000050',
+            'owner_record_type' => 'new',
+            'pets' => [[
+                'pet_name' => 'Bantay',
+                'species' => 'dog',
+                'size' => 'small',
+                'services' => [['service_slug' => 'basic-grooming']],
+            ]],
+            'sedation_consent' => false,
+            'terms_agreed' => true,
+        ];
+
+        $this->postJson('/api/admin/walk-in', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
+
+        $similarPayload = [
+            ...$payload,
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'phone' => '09170000051',
+        ];
+
+        $this->postJson('/api/admin/walk-in', $similarPayload)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'similar_customer_name');
+
+        $this->postJson('/api/admin/walk-in', [
+            ...$similarPayload,
+            'confirm_similar_name' => true,
+        ])->assertCreated();
+
+        $this->assertDatabaseCount('unregistered_customers', 0);
+    }
+
     public function test_admin_cancellation_notifies_the_customer_with_the_optional_or_default_reason(): void
     {
         $this->authenticateAs('admin');

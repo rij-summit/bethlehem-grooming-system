@@ -90,11 +90,17 @@ function adminCustomers() {
     // ── Init ──────────────────────────────────────────────
 
     async init() {
+      const params = new URLSearchParams(window.location.search);
+      const recordType = params.get("record_type");
+      if (recordType === "unregistered") {
+        this.statusFilter = "unregistered";
+        this.tierFilter = "";
+      }
+
       await Promise.all([
         this.loadCustomers(),
         this.initializePetFormFields(),
       ]);
-      const params     = new URLSearchParams(window.location.search);
       const customerId = params.get("customer_id");
       const petId      = params.get("pet_id");
       if (customerId) {
@@ -104,7 +110,9 @@ function adminCustomers() {
         } else {
           // Not in the current filtered list — fetch directly by ID
           try {
-            const data = await API.getCustomerDetails(customerId);
+            const data = recordType === "unregistered"
+              ? await API.getUnregisteredCustomerDetails(customerId)
+              : await API.getCustomerDetails(customerId);
             if (data.customer) {
               await this.openCustomerSearchDestination(data.customer, petId);
             }

@@ -918,6 +918,15 @@ var API = (() => {
     return request("GET", `/admin/walk-in/customers?${params.toString()}`, null, getAdminToken());
   }
 
+  async function validateWalkInNewOwner(payload) {
+    return request(
+      "POST",
+      "/admin/walk-in/customers/validate-new-owner",
+      payload,
+      getAdminToken(),
+    );
+  }
+
   async function deactivateCustomer(customerId) {
     // POST /api/admin/customers/{id}/deactivate  (protected — admin token)
     return request("POST", `/admin/customers/${customerId}/deactivate`, null, getAdminToken());
@@ -1373,6 +1382,8 @@ var API = (() => {
     createUnregisteredCustomer,
     getUnregisteredCustomerDetails,
     archiveUnregisteredCustomer,
+    searchWalkInCustomers,
+    validateWalkInNewOwner,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,
@@ -1411,7 +1422,6 @@ var API = (() => {
     getCustomerActivityReport,
     // Walk-in
     submitWalkIn,
-    searchWalkInCustomers,
     submitClinicWalkIn,
     // Clinic queue
     getClinicAppointments,

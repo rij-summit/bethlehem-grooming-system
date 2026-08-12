@@ -11,15 +11,18 @@ use App\Models\Service;
 use App\Models\UnregisteredCustomer;
 use App\Models\User;
 use App\Models\Walkin;
+use App\Services\CustomerIdentityService;
 use App\Services\DailyPetQueue;
 use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\ValidationException;
 
 class WalkinController extends Controller
 {
     public function __construct(
         private readonly GroomingServicePriceResolver $servicePrices,
+        private readonly CustomerIdentityService $customerIdentity,
     ) {}
 
     public function store(StoreWalkinRequest $request)
@@ -142,6 +145,10 @@ class WalkinController extends Controller
         $user = null;
         $unregisteredCustomer = null;
 
+        if ($recordType === 'new') {
+            $this->validateNewOwner($data);
+        }
+
         if ($recordType === 'registered') {
             $user = User::query()
                 ->where('user_id', $data['customer_user_id'] ?? null)
@@ -166,13 +173,6 @@ class WalkinController extends Controller
                     'unregistered_customer_id' => ['The selected unregistered customer is no longer available.'],
                 ]);
             }
-        } elseif (! empty($data['email'])) {
-            $user = User::query()
-                ->where('email', $data['email'])
-                ->where('role', 'customer')
-                ->where('is_active', true)
-                ->where('is_archived', false)
-                ->first();
         }
 
         $owner = $user
@@ -200,6 +200,39 @@ class WalkinController extends Controller
                 ]);
 
         return [$user, $unregisteredCustomer, $owner];
+    }
+
+    private function validateNewOwner(array $data): void
+    {
+        $conflict = $this->customerIdentity->findContactConflict(
+            $data['phone'],
+            $data['email'] ?? null,
+        );
+
+        if ($conflict) {
+            $field = $conflict['field'];
+            $customerType = $conflict['recordType'] === 'registered'
+                ? 'A registered customer'
+                : 'An unregistered customer';
+
+            throw ValidationException::withMessages([
+                $field => $customerType.' already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
+            ]);
+        }
+
+        $similarCustomers = $this->customerIdentity->findCustomersWithSimilarName(
+            $data['fname'],
+            $data['lname'],
+        );
+
+        if ($similarCustomers->isNotEmpty() && ! ($data['confirm_similar_name'] ?? false)) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'code' => 'similar_customer_name',
+                'message' => 'A customer with the same first and last name already exists. Do you still want to continue?',
+                'similarCustomers' => $similarCustomers,
+            ], 409));
+        }
     }
 
     private function resolveAllPets(array $pets): array

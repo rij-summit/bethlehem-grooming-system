@@ -234,6 +234,55 @@ class AdminUnregisteredCustomerTest extends TestCase
         ]);
     }
 
+    public function test_walk_in_new_owner_check_rejects_duplicate_contacts_and_returns_similar_names(): void
+    {
+        Sanctum::actingAs(User::query()->findOrFail(2), ['*']);
+
+        $this->postJson('/api/admin/walk-in/customers/validate-new-owner', [
+            'first_name' => 'Another',
+            'last_name' => 'Owner',
+            'phone' => '09170000003',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
+
+        DB::table('unregistered_customers')->insert([
+            'first_name' => 'Guest',
+            'last_name' => 'Owner',
+            'phone' => '09170000004',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/api/admin/walk-in/customers/validate-new-owner', [
+            'first_name' => 'Another',
+            'last_name' => 'Owner',
+            'phone' => '09170000004',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
+
+        $similarPayload = [
+            'first_name' => 'Registered',
+            'last_name' => 'Customer',
+            'phone' => '09170000099',
+        ];
+
+        $this->postJson('/api/admin/walk-in/customers/validate-new-owner', $similarPayload)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'similar_customer_name')
+            ->assertJsonPath('similarCustomers.0.status', 'Active');
+
+        $this->postJson('/api/admin/walk-in/customers/validate-new-owner', [
+            ...$similarPayload,
+            'confirm_similar_name' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseCount('unregistered_customers', 1);
+    }
+
     public function test_unregistered_customer_can_add_a_pet_and_be_archived(): void
     {
         Sanctum::actingAs(User::query()->findOrFail(2), ['*']);
