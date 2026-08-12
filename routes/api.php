@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminClinicController;
 use App\Http\Controllers\AdminGroomingClinicReferralController;
 use App\Http\Controllers\AdminGroomingMedicalConcernController;
+use App\Http\Controllers\AdminPetProfileController;
 use App\Http\Controllers\AdminVaccinationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
@@ -73,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin — Pet management (update any customer's pet)
     Route::put('/admin/pets/{id}', [PetController::class, 'adminUpdate']);
+    Route::get('/admin/pets/{petId}/profile', [AdminPetProfileController::class, 'show']);
 
     // Booking
     Route::post('/booking/store', [BookingController::class, 'store']);

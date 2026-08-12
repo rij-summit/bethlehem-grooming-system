@@ -737,10 +737,10 @@
             x-cloak
             x-show="detailModal.open"
             x-transition
-            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-6 py-6 sm:px-12 md:px-16"
             @click.self="closeCustomerDetails()"
           >
-            <div class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl">
+            <div class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl" style="height:90vh">
               <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
                 <div class="flex min-w-0 items-center gap-4">
                   <div
@@ -1070,12 +1070,11 @@
           x-cloak
           x-show="petModal.open"
           x-transition
-          style="display:none;z-index:300;background-color:rgba(15,23,42,0.7);padding:1.5rem 1rem"
-          class="fixed inset-0 flex items-center justify-center"
+          style="display:none;z-index:300;background-color:rgba(15,23,42,0.7)"
+          class="fixed inset-0 flex items-center justify-center px-6 py-6 sm:px-12 md:px-16"
           @keydown.escape.window="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }"
         >
-          <div class="w-full overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col"
-               style="max-width:42rem;max-height:90vh">
+          <div class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" style="height:90vh">
 
             <!-- Header -->
             <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5" style="flex-shrink:0">
@@ -1122,57 +1121,245 @@
             <!-- Scrollable body -->
             <div class="flex-1 overflow-y-auto px-6 py-5">
 
-              <!-- View mode -->
-              <div x-show="!petModal.editing" class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-5 sm:p-6">
-                <div class="grid gap-6 sm:grid-cols-2">
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Gender</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatLabel(petModal.pet?.gender)"></p>
+              <!-- View mode: mirrors the customer My Pets profile, without Notifications. -->
+              <div x-show="!petModal.editing" class="space-y-5">
+                <section class="overflow-hidden rounded-3xl bg-[#315b7e] text-white shadow-sm">
+                  <div class="flex flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-4">
+                      <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                        <i data-lucide="paw-print" class="h-8 w-8"></i>
+                      </div>
+                      <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="text-2xl font-bold" x-text="formatTextValue(petModal.pet?.petName)"></h3>
+                          <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold" x-text="petModal.pet?.isArchived ? 'Archived' : 'Active'"></span>
+                        </div>
+                        <p class="mt-1 text-white/80">
+                          <span x-text="formatLabel(petModal.pet?.species)"></span>
+                          <span x-show="petModal.pet?.breed"> &middot; </span>
+                          <span x-show="petModal.pet?.breed" x-text="formatTextValue(petModal.pet?.breed)"></span>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
+                      <p class="font-semibold text-white">Shared pet profile</p>
+                      <p class="mt-1">Grooming activity and completed clinic history are connected here.</p>
+                    </div>
                   </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Birthdate</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatDate(petModal.pet?.birthdate)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Neutered / spayed</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6" :class="petModal.pet?.isNeutered ? 'text-green-700' : 'text-slate-500'"
-                      x-text="petModal.pet?.isNeutered ? 'Yes' : 'No'"></p>
-                  </div>
-                  <div x-show="petModal.pet?.isNeutered && petModal.pet?.neuteredDate">
-                    <p class="text-xs font-normal leading-5 text-slate-500">Neutered date</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatDate(petModal.pet?.neuteredDate)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Deceased</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6" :class="petModal.pet?.isDeceased ? 'text-red-700' : 'text-slate-500'"
-                      x-text="petModal.pet?.isDeceased ? 'Yes' : 'No'"></p>
-                  </div>
-                  <div x-show="petModal.pet?.isDeceased && petModal.pet?.deceasedDate">
-                    <p class="text-xs font-normal leading-5 text-slate-500">Deceased date</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatDate(petModal.pet?.deceasedDate)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Size</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatLabel(petModal.pet?.size)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Fur type</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatTextValue(petModal.pet?.furType)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Weight</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatWeight(petModal.pet?.weight)"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-normal leading-5 text-slate-500">Color</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" x-text="formatTextValue(petModal.pet?.color)"></p>
-                  </div>
-                  <div class="sm:col-span-2">
-                    <p class="text-xs font-normal leading-5 text-slate-500">Medical conditions / special needs</p>
-                    <p class="mt-1.5 text-sm font-semibold leading-6 text-slate-700" style="white-space:pre-line"
-                      x-text="formatTextValue(petModal.pet?.medicalConditions)"></p>
+                </section>
+
+                <div class="overflow-x-auto pb-1">
+                  <div class="inline-flex min-w-full gap-1 rounded-2xl border border-[#cfe0ee] bg-white p-1 shadow-sm sm:min-w-0" role="tablist" aria-label="Pet profile sections">
+                    <button type="button" @click="selectPetProfileTab('overview')"
+                      class="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+                      :class="petModal.activeTab === 'overview' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-slate-50'"
+                      role="tab" :aria-selected="petModal.activeTab === 'overview'">
+                      <i data-lucide="paw-print" class="h-4 w-4"></i><span>Overview</span>
+                    </button>
+                    <button type="button" @click="selectPetProfileTab('grooming')"
+                      class="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+                      :class="petModal.activeTab === 'grooming' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-slate-50'"
+                      role="tab" :aria-selected="petModal.activeTab === 'grooming'">
+                      <i data-lucide="scissors" class="h-4 w-4"></i><span>Grooming Records</span>
+                    </button>
+                    <button type="button" @click="selectPetProfileTab('medical')"
+                      class="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+                      :class="petModal.activeTab === 'medical' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-slate-50'"
+                      role="tab" :aria-selected="petModal.activeTab === 'medical'">
+                      <i data-lucide="stethoscope" class="h-4 w-4"></i><span>Medical Records</span>
+                    </button>
+                    <button type="button" @click="selectPetProfileTab('vaccinations')"
+                      class="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+                      :class="petModal.activeTab === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-slate-50'"
+                      role="tab" :aria-selected="petModal.activeTab === 'vaccinations'">
+                      <i data-lucide="syringe" class="h-4 w-4"></i><span>Vaccinations</span>
+                    </button>
                   </div>
                 </div>
+
+                <div x-show="petModal.profileLoading" class="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+                  <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+                  <p class="mt-3 text-sm text-slate-500">Loading pet records...</p>
+                </div>
+
+                <div x-show="!petModal.profileLoading && petModal.profileError" class="rounded-2xl border border-red-100 bg-red-50 px-6 py-6 text-center" role="alert">
+                  <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
+                  <h4 class="mt-3 font-bold text-red-800">Pet records could not be loaded</h4>
+                  <p class="mt-1 text-sm text-red-600" x-text="petModal.profileError"></p>
+                  <button type="button" @click="loadPetProfile()" class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+                    <i data-lucide="refresh-cw" class="h-4 w-4"></i>Retry
+                  </button>
+                </div>
+
+                <section x-show="!petModal.profileLoading && petModal.activeTab === 'overview'" role="tabpanel" class="space-y-5">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-5">
+                      <h3 class="text-xl font-bold text-[#2f4b66]">Basic Information</h3>
+                      <p class="mt-1 text-sm text-slate-500">The profile information currently saved for this pet.</p>
+                    </div>
+                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <template x-for="detail in petOverviewDetails()" :key="detail.label">
+                        <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                          <dt class="text-xs font-medium text-slate-500" x-text="detail.label"></dt>
+                          <dd class="mt-1.5 break-words font-semibold text-slate-700" x-text="detail.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </div>
+
+                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
+                        <i data-lucide="heart-pulse" class="h-5 w-5"></i>
+                      </div>
+                      <div>
+                        <h3 class="text-lg font-bold text-[#2f4b66]">Medical Conditions / Special Needs</h3>
+                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600" x-text="formatTextValue(petModal.pet?.medicalConditions)"></p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section x-show="!petModal.profileLoading && petModal.activeTab === 'grooming'" role="tabpanel">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-5">
+                      <h3 class="text-xl font-bold text-[#2f4b66]">Grooming Records</h3>
+                      <p class="mt-1 text-sm text-slate-500">Only grooming activity connected to this pet is shown.</p>
+                    </div>
+                    <div x-show="petModal.groomingRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                      <i data-lucide="scissors" class="mx-auto h-8 w-8 text-slate-300"></i>
+                      <h4 class="mt-3 font-bold text-slate-700">No grooming records found</h4>
+                      <p class="mt-1 text-sm text-slate-500">This pet does not have grooming activity yet.</p>
+                    </div>
+                    <div x-show="petModal.groomingRecords.length > 0" class="space-y-4">
+                      <template x-for="record in petModal.groomingRecords" :key="record.booking_reference">
+                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p class="text-xs font-medium text-slate-500">Booking Reference</p>
+                              <h4 class="mt-1 text-lg font-bold text-[#2f4b66]" x-text="formatTextValue(record.booking_reference)"></h4>
+                            </div>
+                            <span class="w-fit rounded-full px-3 py-1 text-xs font-bold" :class="groomingStatusClasses(record.status)" x-text="groomingStatusLabel(record.status)"></span>
+                          </div>
+                          <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div><dt class="text-xs font-medium text-slate-500">Grooming Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.booking_date)"></dd></div>
+                            <div><dt class="text-xs font-medium text-slate-500">Arrival Window</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.arrival_window)"></dd></div>
+                            <div><dt class="text-xs font-medium text-slate-500">Grooming Started</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.grooming_started_at)"></dd></div>
+                            <div><dt class="text-xs font-medium text-slate-500">Grooming Finished</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.grooming_finished_at)"></dd></div>
+                            <div><dt class="text-xs font-medium text-slate-500">Selected Services</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="record.services?.length ? record.services.join(', ') : 'Not provided'"></dd></div>
+                            <div><dt class="text-xs font-medium text-slate-500">Payment Status</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.paid ? 'Paid' : 'Unpaid'"></dd></div>
+                          </dl>
+                        </article>
+                      </template>
+                    </div>
+                  </div>
+                </section>
+
+                <section x-show="!petModal.profileLoading && petModal.activeTab === 'medical'" role="tabpanel">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-5 flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="stethoscope" class="h-5 w-5"></i></div>
+                      <div>
+                        <h3 class="text-xl font-bold text-[#2f4b66]">Clinic Medical Records</h3>
+                        <p class="mt-1 text-sm leading-6 text-slate-500">Completed clinic visits for this pet.</p>
+                      </div>
+                    </div>
+                    <div x-show="petModal.medicalRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                      <i data-lucide="stethoscope" class="mx-auto h-8 w-8 text-slate-300"></i>
+                      <h4 class="mt-3 font-bold text-slate-700">No completed medical records</h4>
+                      <p class="mt-1 text-sm text-slate-500">No completed clinic visits are connected to this pet yet.</p>
+                    </div>
+                    <div x-show="petModal.medicalRecords.length > 0" class="space-y-4">
+                      <template x-for="record in petModal.medicalRecords" :key="record.appointment_reference">
+                        <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                          <div class="border-b border-slate-200 bg-white px-5 py-4">
+                            <p class="text-xs font-medium text-slate-500">Appointment Reference</p>
+                            <h4 class="mt-1 text-lg font-bold text-[#2f4b66]" x-text="formatTextValue(record.appointment_reference)"></h4>
+                            <p class="mt-1 text-sm text-slate-500" x-text="formatDate(record.appointment_date)"></p>
+                          </div>
+                          <div class="space-y-5 p-5">
+                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                              <div><dt class="text-xs font-medium text-slate-500">Reason for Visit</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.chief_complaint)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Final Diagnosis</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.diagnosis)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Treatment</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.treatment_given)"></dd></div>
+                            </dl>
+                            <div x-show="record.vitals" class="border-t border-slate-200 pt-4">
+                              <h5 class="text-sm font-bold text-[#2f4b66]">Recorded Vitals</h5>
+                              <dl class="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+                                <div><dt class="text-xs text-slate-500">Weight</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.weight_kg ? record.vitals.weight_kg + ' kg' : 'Not provided'"></dd></div>
+                                <div><dt class="text-xs text-slate-500">Temperature</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.temperature_c ? record.vitals.temperature_c + ' °C' : 'Not provided'"></dd></div>
+                                <div><dt class="text-xs text-slate-500">Heart Rate</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.heart_rate_bpm ? record.vitals.heart_rate_bpm + ' bpm' : 'Not provided'"></dd></div>
+                                <div><dt class="text-xs text-slate-500">Respiratory Rate</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.respiratory_rate_bpm ? record.vitals.respiratory_rate_bpm + ' breaths/min' : 'Not provided'"></dd></div>
+                                <div><dt class="text-xs text-slate-500">Body Condition</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.body_condition_score ? record.vitals.body_condition_score + ' / 9' : 'Not provided'"></dd></div>
+                              </dl>
+                            </div>
+                            <div x-show="record.medications?.length" class="border-t border-slate-200 pt-4">
+                              <h5 class="text-sm font-bold text-[#2f4b66]">Medications</h5>
+                              <div class="mt-3 space-y-3">
+                                <template x-for="(medication, index) in record.medications || []" :key="index">
+                                  <div class="rounded-xl border border-slate-200 bg-white p-4">
+                                    <p class="font-semibold text-slate-700" x-text="formatTextValue(medication.drug_name)"></p>
+                                    <p class="mt-1 text-sm text-slate-500" x-text="[medication.dosage, medication.frequency, medication.duration].filter(Boolean).join(' · ') || 'No dosage details provided'"></p>
+                                    <p x-show="medication.instructions" class="mt-2 text-sm text-slate-600" x-text="medication.instructions"></p>
+                                  </div>
+                                </template>
+                              </div>
+                            </div>
+                            <div x-show="record.follow_up_date || record.follow_up_notes" class="border-t border-slate-200 pt-4">
+                              <h5 class="text-sm font-bold text-[#2f4b66]">Follow-up</h5>
+                              <p class="mt-2 text-sm text-slate-700" x-text="record.follow_up_date ? formatDate(record.follow_up_date) : 'No follow-up date provided'"></p>
+                              <p x-show="record.follow_up_notes" class="mt-1 whitespace-pre-line text-sm text-slate-600" x-text="record.follow_up_notes"></p>
+                            </div>
+                          </div>
+                        </article>
+                      </template>
+                    </div>
+                  </div>
+                </section>
+
+                <section x-show="!petModal.profileLoading && petModal.activeTab === 'vaccinations'" role="tabpanel">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-5 flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="syringe" class="h-5 w-5"></i></div>
+                      <div>
+                        <h3 class="text-xl font-bold text-[#2f4b66]">Vaccination History</h3>
+                        <p class="mt-1 text-sm leading-6 text-slate-500">Published vaccination information recorded by the clinic for this pet.</p>
+                      </div>
+                    </div>
+                    <div x-show="petModal.vaccinations.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                      <i data-lucide="syringe" class="mx-auto h-8 w-8 text-slate-300"></i>
+                      <h4 class="mt-3 font-bold text-slate-700">No published vaccination records</h4>
+                      <p class="mt-1 text-sm text-slate-500">No published vaccination records are available for this pet yet.</p>
+                    </div>
+                    <div x-show="petModal.vaccinations.length > 0" class="space-y-4">
+                      <template x-for="record in petModal.vaccinations" :key="record.vaccine_name + '-' + record.administered_date">
+                        <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                          <div class="border-b border-slate-200 bg-white px-5 py-4">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div><p class="text-xs font-medium text-slate-500">Vaccine</p><h4 class="mt-1 break-words text-lg font-bold text-[#2f4b66]" x-text="formatTextValue(record.vaccine_name)"></h4></div>
+                              <span class="w-fit rounded-full border px-3 py-1 text-xs font-bold" :class="vaccinationStatusClasses(record.due_status)" x-text="vaccinationStatusLabel(record.due_status)"></span>
+                            </div>
+                          </div>
+                          <div class="space-y-5 p-5">
+                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                              <div><dt class="text-xs font-medium text-slate-500">Administration Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Next Due Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Administering Provider</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.administering_provider)"></dd></div>
+                            </dl>
+                            <dl class="grid grid-cols-1 gap-4 border-t border-slate-200 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+                              <div><dt class="text-xs font-medium text-slate-500">Product Name</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.product_name)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Manufacturer</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.manufacturer)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Dose</dt><dd class="mt-1 text-sm text-slate-700" x-text="vaccinationDose(record)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Route</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatLabel(record.route)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Batch Number</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.batch_number)"></dd></div>
+                              <div><dt class="text-xs font-medium text-slate-500">Administration Site</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.administration_site)"></dd></div>
+                            </dl>
+                          </div>
+                        </article>
+                      </template>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <!-- Edit mode -->
@@ -1372,6 +1559,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-sidebar-20260719"></script>
-    <script src="../../scripts/components/admin-customers.js?v=unregistered-search-navigation-20260812"></script>
+    <script src="../../scripts/components/admin-customers.js?v=admin-pet-profile-tabs-20260812"></script>
   </body>
 </html>

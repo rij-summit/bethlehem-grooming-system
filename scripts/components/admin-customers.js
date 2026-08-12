@@ -85,6 +85,12 @@ function adminCustomers() {
       saving:    false,
       saveError: "",
       form:      {},
+      activeTab: "overview",
+      profileLoading: false,
+      profileError: "",
+      groomingRecords: [],
+      medicalRecords: [],
+      vaccinations: [],
     },
 
     // ── Init ──────────────────────────────────────────────
@@ -347,8 +353,55 @@ function adminCustomers() {
       this.resetModal.open = false;
     },
 
-    openPetDetail(pet) {
-      this.petModal = { open: true, pet, editing: false, creating: false, owner: null, saving: false, saveError: "", form: {} };
+    async openPetDetail(pet) {
+      this.petModal = {
+        open: true,
+        pet,
+        editing: false,
+        creating: false,
+        owner: null,
+        saving: false,
+        saveError: "",
+        form: {},
+        activeTab: "overview",
+        profileLoading: true,
+        profileError: "",
+        groomingRecords: [],
+        medicalRecords: [],
+        vaccinations: [],
+      };
+      this.refreshIcons();
+      await this.loadPetProfile();
+    },
+
+    async loadPetProfile() {
+      const petId = this.petModal.pet?.id;
+      if (!petId || this.petModal.creating) return;
+
+      this.petModal.profileLoading = true;
+      this.petModal.profileError = "";
+
+      try {
+        const data = await API.getAdminPetProfile(petId);
+        if (!this.petModal.open || String(this.petModal.pet?.id) !== String(petId)) return;
+
+        this.petModal.groomingRecords = data.grooming_records || [];
+        this.petModal.medicalRecords = data.medical_records || [];
+        this.petModal.vaccinations = data.vaccinations || [];
+      } catch (error) {
+        if (!this.petModal.open || String(this.petModal.pet?.id) !== String(petId)) return;
+        this.petModal.profileError = error.message || "Pet history could not be loaded.";
+      } finally {
+        if (this.petModal.open && String(this.petModal.pet?.id) === String(petId)) {
+          this.petModal.profileLoading = false;
+          this.refreshIcons();
+        }
+      }
+    },
+
+    selectPetProfileTab(tab) {
+      if (!["overview", "grooming", "medical", "vaccinations"].includes(tab)) return;
+      this.petModal.activeTab = tab;
       this.refreshIcons();
     },
 
@@ -363,6 +416,12 @@ function adminCustomers() {
         owner: customer,
         saving: false,
         saveError: "",
+        activeTab: "overview",
+        profileLoading: false,
+        profileError: "",
+        groomingRecords: [],
+        medicalRecords: [],
+        vaccinations: [],
         form: {
           pet_name: "",
           species: "",
@@ -894,6 +953,86 @@ function adminCustomers() {
       if (!Number.isFinite(amount)) return String(value);
 
       return `${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`;
+    },
+
+    formatPetBoolean(value) {
+      if (value === null || value === undefined || value === "") return "Not provided";
+      return value === true || value === 1 || value === "1" ? "Yes" : "No";
+    },
+
+    petOverviewDetails() {
+      const pet = this.petModal.pet || {};
+
+      return [
+        { label: "Pet Name", value: this.formatTextValue(pet.petName) },
+        { label: "Species", value: this.formatLabel(pet.species) },
+        { label: "Breed", value: this.formatTextValue(pet.breed) },
+        { label: "Gender", value: this.formatLabel(pet.gender) },
+        { label: "Birthdate", value: this.formatDate(pet.birthdate) },
+        { label: "Size", value: this.formatLabel(pet.size) },
+        { label: "Weight", value: this.formatWeight(pet.weight) },
+        { label: "Fur Type", value: this.formatLabel(pet.furType) },
+        { label: "Color", value: this.formatTextValue(pet.color) },
+        { label: "Neutered / Spayed", value: this.formatPetBoolean(pet.isNeutered) },
+        { label: "Profile Status", value: pet.isArchived ? "Archived" : "Active" },
+      ];
+    },
+
+    groomingStatusLabel(status) {
+      return ({
+        waiting_to_arrive: "Scheduled",
+        checked_in: "Checked In",
+        in_progress: "Being Groomed",
+        referred_to_clinic: "Referred to Clinic",
+        grooming_finished: "Grooming Finished",
+        paused: "Grooming Paused",
+        stopped: "Grooming Stopped",
+        for_payment: "For Payment",
+        for_pickup: "Ready for Pickup",
+        released: "Released",
+        archived: "Completed",
+        cancelled: "Cancelled",
+        no_show: "No Show",
+      })[status] || this.formatLabel(status);
+    },
+
+    groomingStatusClasses(status) {
+      return ({
+        waiting_to_arrive: "bg-blue-50 text-blue-700",
+        checked_in: "bg-amber-50 text-amber-700",
+        in_progress: "bg-violet-50 text-violet-700",
+        referred_to_clinic: "bg-violet-50 text-violet-700",
+        grooming_finished: "bg-emerald-50 text-emerald-700",
+        paused: "bg-amber-50 text-amber-800",
+        stopped: "bg-red-50 text-red-700",
+        for_payment: "bg-orange-50 text-orange-700",
+        for_pickup: "bg-cyan-50 text-cyan-700",
+        released: "bg-emerald-50 text-emerald-700",
+        archived: "bg-slate-100 text-slate-700",
+        cancelled: "bg-red-50 text-red-700",
+        no_show: "bg-red-50 text-red-700",
+      })[status] || "bg-slate-100 text-slate-700";
+    },
+
+    vaccinationStatusLabel(status) {
+      return ({ current: "Current", due_soon: "Due soon", overdue: "Overdue", unknown: "Unknown" })[status] || "Unknown";
+    },
+
+    vaccinationStatusClasses(status) {
+      return ({
+        current: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        due_soon: "border-amber-200 bg-amber-50 text-amber-800",
+        overdue: "border-red-200 bg-red-50 text-red-700",
+        unknown: "border-slate-200 bg-slate-50 text-slate-600",
+      })[status] || "border-slate-200 bg-slate-50 text-slate-600";
+    },
+
+    vaccinationDose(record) {
+      if (record?.dose_amount === null || record?.dose_amount === undefined || record?.dose_amount === "") {
+        return "Not provided";
+      }
+
+      return `${record.dose_amount}${record.dose_unit ? ` ${record.dose_unit}` : ""}`;
     },
 
     customerStatusLabel(customer) {

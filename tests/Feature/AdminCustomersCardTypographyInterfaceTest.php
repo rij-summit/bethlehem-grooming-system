@@ -116,7 +116,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
 
         $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
-        $this->assertStringContainsString('admin-customers.js?v=unregistered-search-navigation-20260812', $page);
+        $this->assertStringContainsString('admin-customers.js?v=admin-pet-profile-tabs-20260812', $page);
     }
 
     public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void
@@ -160,7 +160,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertSame(1, substr_count($petSearchResults, '&middot;'));
     }
 
-    public function test_pet_view_details_matches_the_owner_card_typography(): void
+    public function test_pet_view_details_matches_the_customer_pet_profile_ui_without_notifications(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));
         $petModal = $this->sourceBetween(
@@ -173,41 +173,49 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             'class="text-xl font-semibold text-[#1f3850]"',
             $petModal,
         );
-        $this->assertStringContainsString(
-            'class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-5 sm:p-6"',
-            $petModal,
-        );
-        $this->assertStringContainsString(
-            'class="grid gap-6 sm:grid-cols-2"',
-            $petModal,
-        );
-
         foreach ([
-            'Gender',
-            'Birthdate',
-            'Neutered / spayed',
-            'Neutered date',
-            'Deceased',
-            'Deceased date',
-            'Size',
-            'Fur type',
-            'Weight',
-            'Color',
-            'Medical conditions / special needs',
-        ] as $label) {
-            $this->assertStringContainsString(
-                sprintf('<p class="text-xs font-normal leading-5 text-slate-500">%s</p>', $label),
-                $petModal,
-            );
+            '<span>Overview</span>',
+            '<span>Grooming Records</span>',
+            '<span>Medical Records</span>',
+            '<span>Vaccinations</span>',
+            '>Basic Information</h3>',
+            '>Clinic Medical Records</h3>',
+            '>Vaccination History</h3>',
+            'petOverviewDetails()',
+            'petModal.groomingRecords',
+            'petModal.medicalRecords',
+            'petModal.vaccinations',
+        ] as $profileUi) {
+            $this->assertStringContainsString($profileUi, $petModal);
         }
 
-        $this->assertGreaterThanOrEqual(
-            9,
-            substr_count($petModal, 'mt-1.5 text-sm font-semibold leading-6'),
+        $this->assertStringContainsString('Shared pet profile', $petModal);
+        $this->assertStringNotContainsString('<span>Notifications</span>', $petModal);
+        $this->assertStringNotContainsString('data-lucide="bell"', $petModal);
+    }
+
+    public function test_owner_and_pet_detail_modals_share_a_wide_bounded_size(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $ownerModal = $this->sourceBetween(
+            $page,
+            '<!-- Customer Details Modal -->',
+            'x-show="isAdmin && resetModal.open"',
+        );
+        $petModal = $this->sourceBetween(
+            $page,
+            '<!-- Pet Detail Modal -->',
+            '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs',
         );
 
-        $this->assertStringNotContainsString('font-bold uppercase', $petModal);
-        $this->assertStringNotContainsString('font-extrabold', $petModal);
+        foreach ([$ownerModal, $petModal] as $modal) {
+            $this->assertStringContainsString('max-w-6xl', $modal);
+            $this->assertStringContainsString('px-6 py-6 sm:px-12 md:px-16', $modal);
+            $this->assertStringContainsString('style="height:90vh"', $modal);
+        }
+
+        $this->assertStringNotContainsString('max-w-5xl', $ownerModal);
+        $this->assertStringNotContainsString('max-width:42rem', $petModal);
     }
 
     public function test_admin_pet_edit_reuses_customer_custom_fields_and_connected_behavior(): void

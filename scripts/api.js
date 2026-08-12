@@ -1215,6 +1215,15 @@ var API = (() => {
     );
   }
 
+  async function getAdminPetProfile(petId) {
+    return request(
+      "GET",
+      `/admin/pets/${encodeURIComponent(petId)}/profile`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function getAdminPetVaccination(petId, vaccinationId) {
     return request(
       "GET",
@@ -1437,7 +1446,8 @@ var API = (() => {
     clinicUploadAttachment,
     clinicDownloadAttachment,
     clinicDeleteAttachment,
-    // Staff vaccination records
+    // Staff pet profile and vaccination records
+    getAdminPetProfile,
     getAdminPetVaccinations,
     getAdminPetVaccination,
     createAdminPetVaccination,
