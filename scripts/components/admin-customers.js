@@ -359,7 +359,7 @@ function adminCustomers() {
         pet,
         editing: false,
         creating: false,
-        owner: null,
+        owner: this.detailModal.customer || null,
         saving: false,
         saveError: "",
         form: {},

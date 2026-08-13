@@ -740,35 +740,36 @@
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-6 py-6 sm:px-12 md:px-16"
             @click.self="closeCustomerDetails()"
           >
-            <div class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl" style="height:90vh">
-              <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
-                <div class="flex min-w-0 items-center gap-4">
-                  <div
-                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-extrabold text-white shadow-sm"
-                    :style="'background-color:' + getAvatarColor(detailModal.customer?.fullName)"
-                    x-text="getInitials(detailModal.customer?.fullName)"
-                  ></div>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-xl font-bold text-[#1f3850]" x-text="detailModal.customer?.fullName || 'Customer Details'"></h3>
-                      <span
-                        x-show="detailModal.customer"
-                        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                        :class="detailModal.customer?.recordType === 'unregistered' ? 'bg-[#eaf4fb] text-[#315b7e]' : detailModal.customer?.isArchived ? 'bg-slate-100 text-slate-500' : detailModal.customer?.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                        x-text="customerStatusLabel(detailModal.customer)"
-                      ></span>
+            <div class="flex max-h-[90vh] w-full max-w-8xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl" style="height:90vh">
+              <div class="overflow-y-auto px-5 py-4 sm:px-6">
+                <!-- Owner profile header -->
+                <section class="sticky top-0 z-20 mb-4 overflow-hidden rounded-3xl bg-[#315b7e] text-white shadow-sm">
+                  <div class="flex items-center justify-between gap-4 px-5 py-4">
+                    <div class="flex min-w-0 items-center gap-4">
+                      <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                        <i data-lucide="user-round" class="h-7 w-7" aria-hidden="true"></i>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="truncate text-2xl font-bold" x-text="detailModal.customer?.fullName || 'Customer Details'"></h3>
+                          <span
+                            x-show="detailModal.customer"
+                            class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white"
+                            x-text="customerStatusLabel(detailModal.customer)"
+                          ></span>
+                        </div>
+                        <p class="mt-1 text-sm text-white/80">Owner profile</p>
+                      </div>
                     </div>
+                    <button type="button"
+                      @click="closeCustomerDetails()"
+                      class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/25 text-white/80 transition hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/60"
+                      aria-label="Close customer details">
+                      <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
+                    </button>
                   </div>
-                </div>
-                <button type="button"
-                  @click="closeCustomerDetails()"
-                  class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                  aria-label="Close customer details">
-                  <i data-lucide="x" class="h-5 w-5"></i>
-                </button>
-              </div>
+                </section>
 
-              <div class="overflow-y-auto px-5 py-5 sm:px-6">
                 <div x-show="detailModal.loading" class="flex justify-center py-16">
                   <div class="flex flex-col items-center gap-3 text-slate-400">
                     <i data-lucide="loader-circle" class="h-10 w-10 animate-spin text-[#315b7e]"></i>
@@ -781,9 +782,9 @@
                   <p class="mt-1" x-text="detailModal.error"></p>
                 </div>
 
-                <div x-show="!detailModal.loading && !detailModal.error && detailModal.customer" class="space-y-5">
+                <div x-show="!detailModal.loading && !detailModal.error && detailModal.customer" class="space-y-4">
                   <section class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4">
-                    <div class="mb-4 flex items-center gap-3">
+                    <div class="mb-3 flex items-center gap-3">
                       <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]">
                         <i data-lucide="user-round" class="h-5 w-5"></i>
                       </div>
@@ -792,40 +793,40 @@
                       </div>
                     </div>
 
-                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">First name</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.firstName)"></p>
                       </div>
-                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Last name</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.lastName)"></p>
                       </div>
-                      <div x-show="detailModal.customer?.recordType !== 'unregistered'" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div x-show="detailModal.customer?.recordType !== 'unregistered'" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Username</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.username)"></p>
                       </div>
-                      <div x-show="detailModal.customer?.recordType === 'unregistered'" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div x-show="detailModal.customer?.recordType === 'unregistered'" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Middle initial</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.middleName)"></p>
                       </div>
-                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Phone number</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatMobileNumber(detailModal.customer?.phone)"></p>
                       </div>
-                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Email address</p>
                         <p class="mt-1 break-words font-semibold text-slate-800" x-text="formatTextValue(detailModal.customer?.email)"></p>
                       </div>
-                      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500" x-text="detailModal.customer?.recordType === 'unregistered' ? 'Added' : 'Joined'"></p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatDate(detailModal.customer?.joinedAt)"></p>
                       </div>
-                      <div x-show="detailModal.customer?.recordType !== 'unregistered'" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div x-show="detailModal.customer?.recordType !== 'unregistered'" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Visits</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="(detailModal.customer?.bookingCount ?? 0) + ' visit' + ((detailModal.customer?.bookingCount ?? 0) !== 1 ? 's' : '')"></p>
                       </div>
-                      <div x-show="detailModal.customer?.isArchived" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div x-show="detailModal.customer?.isArchived" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                         <p class="text-xs font-medium text-slate-500">Archived</p>
                         <p class="mt-1 font-semibold text-slate-800" x-text="formatDate(detailModal.customer?.archivedAt)"></p>
                       </div>
@@ -833,7 +834,7 @@
                   </section>
 
                   <section class="rounded-[24px] border border-[#d9e6f1] bg-white p-4">
-                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]">
                           <i data-lucide="paw-print" class="h-5 w-5"></i>
@@ -864,12 +865,12 @@
                       <p class="mt-3 font-semibold text-[#2f4b66]">No pets added yet.</p>
                     </div>
 
-                    <div x-show="(detailModal.customer?.pets || []).length > 0" class="grid gap-4 lg:grid-cols-2">
+                    <div x-show="(detailModal.customer?.pets || []).length > 0" class="grid gap-3 lg:grid-cols-2">
                       <template x-for="pet in detailModal.customer?.pets || []" :key="pet.id">
                         <article class="overflow-hidden rounded-2xl border border-slate-200 bg-[#f8fbfd]">
                           <!-- Clickable header -->
                           <button type="button" @click="openPetDetail(pet)"
-                            class="flex w-full items-start justify-between gap-3 p-4 text-left transition hover:bg-[#eaf4fb]">
+                            class="flex w-full items-start justify-between gap-3 p-3 text-left transition hover:bg-[#eaf4fb]">
                             <div>
                               <h5 class="text-base font-medium text-[#1f3850]" x-text="formatTextValue(pet.petName)"></h5>
                               <p class="mt-1 text-sm text-slate-500">
@@ -889,7 +890,7 @@
                           </button>
 
                           <!-- Summary (always visible) -->
-                          <div class="grid gap-3 border-t border-slate-100 px-4 pb-4 pt-3 sm:grid-cols-2">
+                          <div class="grid gap-2 border-t border-slate-100 px-3 pb-3 pt-2.5 sm:grid-cols-2">
                             <div>
                               <p class="text-xs font-medium text-slate-500">Weight</p>
                               <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatWeight(pet.weight)"></p>
@@ -899,7 +900,7 @@
                               <p class="mt-1 text-sm font-semibold text-slate-700" x-text="formatTextValue(pet.color)"></p>
                             </div>
                           </div>
-                          <p class="px-4 pb-3 text-xs font-medium text-slate-500" x-text="'Registered ' + formatDate(pet.createdAt)"></p>
+                          <p class="px-3 pb-3 text-xs font-medium text-slate-500" x-text="'Registered ' + formatDate(pet.createdAt)"></p>
                         </article>
                       </template>
                     </div>
@@ -908,11 +909,11 @@
                   <!-- Account actions below the registered pets -->
                   <footer x-show="isAdmin && detailModal.customer?.recordType !== 'unregistered'" aria-label="Account actions"
                     class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4">
-                    <h4 class="mb-4 text-lg font-semibold text-[#1f3850]">Account actions</h4>
+                    <h4 class="mb-3 text-lg font-semibold text-[#1f3850]">Account actions</h4>
 
                     <template x-if="!detailModal.customer?.isArchived && detailModal.customer?.isActive">
                       <div>
-                        <div class="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Reset password</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Help this customer regain access to their account.</p>
@@ -923,7 +924,7 @@
                             Reset Password
                           </button>
                         </div>
-                        <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Deactivate account</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Temporarily disable this customer's account.</p>
@@ -935,7 +936,7 @@
                             Deactivate
                           </button>
                         </div>
-                        <div class="flex flex-col gap-3 py-4 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Archive customer</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Move this customer to archived records.</p>
@@ -952,7 +953,7 @@
 
                     <template x-if="!detailModal.customer?.isArchived && !detailModal.customer?.isActive">
                       <div>
-                        <div class="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Reset password</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Help this customer regain access to their account.</p>
@@ -963,7 +964,7 @@
                             Reset Password
                           </button>
                         </div>
-                        <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Reactivate account</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Restore this customer's access to their account.</p>
@@ -975,7 +976,7 @@
                             Reactivate
                           </button>
                         </div>
-                        <div class="flex flex-col gap-3 py-4 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                        <div class="flex flex-col gap-3 py-3 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
                             <p class="text-sm font-semibold text-slate-700">Archive customer</p>
                             <p class="mt-1 text-sm leading-5 text-slate-500">Move this customer to archived records.</p>
@@ -1013,7 +1014,7 @@
                     aria-label="Account actions"
                     class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4"
                   >
-                    <h4 class="mb-4 text-lg font-semibold text-[#1f3850]">Account actions</h4>
+                    <h4 class="mb-3 text-lg font-semibold text-[#1f3850]">Account actions</h4>
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                       <div>
                         <p class="text-sm font-semibold text-slate-700">Archive customer</p>
@@ -1074,80 +1075,60 @@
           class="fixed inset-0 flex items-center justify-center px-6 py-6 sm:px-12 md:px-16"
           @keydown.escape.window="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }"
         >
-          <div class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" style="height:90vh">
-
-            <!-- Header -->
-            <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5" style="flex-shrink:0">
-              <div class="flex min-w-0 items-center gap-3">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]">
-                  <i data-lucide="paw-print" class="h-5 w-5"></i>
-                </div>
-                <div class="min-w-0">
-                  <h2 class="text-xl font-semibold text-[#1f3850]" x-text="petModal.creating ? 'Add pet' : formatTextValue(petModal.pet?.petName)"></h2>
-                  <p x-show="petModal.creating" class="mt-1 text-sm text-slate-500" x-text="'Add a pet for ' + (petModal.owner?.fullName || 'this customer')"></p>
-                  <p x-show="!petModal.creating" class="mt-1 text-sm text-slate-500">
-                    <span x-text="formatLabel(petModal.pet?.species)"></span>
-                    <span x-show="petModal.pet?.breed"> · </span>
-                    <span x-show="petModal.pet?.breed" x-text="formatTextValue(petModal.pet?.breed)"></span>
-                  </p>
-                </div>
-              </div>
-              <div class="flex items-center" style="gap:0.5rem">
-                <div x-show="!petModal.editing && !petModal.creating">
-                  <button @click="startEditPet()" type="button"
-                    style="background-color:#315b7e;color:#fff;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;white-space:nowrap;border:none;cursor:pointer">
-                    Edit Details
-                  </button>
-                </div>
-                <div x-show="petModal.editing" class="flex items-center" style="gap:0.5rem;display:none">
-                  <button @click="cancelEditPet()" type="button"
-                    style="border:1px solid #e2e8f0;color:#64748b;border-radius:0.75rem;padding:0.5rem 1rem;font-size:0.875rem;font-weight:600;background:#fff;cursor:pointer">
-                    Cancel
-                  </button>
-                </div>
-                <button @click="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }" type="button"
-                  class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                  <i data-lucide="x" class="h-5 w-5"></i>
-                </button>
-              </div>
-            </div>
-
-            <!-- Save error -->
-            <div x-show="petModal.saveError" style="display:none;padding:0.75rem 1.5rem 0">
-              <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:0.75rem;padding:0.75rem 1rem;font-size:0.875rem;color:#b91c1c"
-                x-text="petModal.saveError"></div>
-            </div>
+          <div class="flex max-h-[90vh] w-full max-w-8xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" style="height:90vh">
 
             <!-- Scrollable body -->
-            <div class="flex-1 overflow-y-auto px-6 py-5">
-
-              <!-- View mode: mirrors the customer My Pets profile, without Notifications. -->
-              <div x-show="!petModal.editing" class="space-y-5">
-                <section class="overflow-hidden rounded-3xl bg-[#315b7e] text-white shadow-sm">
-                  <div class="flex flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-4">
-                      <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15">
-                        <i data-lucide="paw-print" class="h-8 w-8"></i>
-                      </div>
-                      <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h3 class="text-2xl font-bold" x-text="formatTextValue(petModal.pet?.petName)"></h3>
-                          <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold" x-text="petModal.pet?.isArchived ? 'Archived' : 'Active'"></span>
-                        </div>
-                        <p class="mt-1 text-white/80">
-                          <span x-text="formatLabel(petModal.pet?.species)"></span>
-                          <span x-show="petModal.pet?.breed"> &middot; </span>
-                          <span x-show="petModal.pet?.breed" x-text="formatTextValue(petModal.pet?.breed)"></span>
-                        </p>
-                      </div>
+            <div class="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+              <!-- Pet profile header -->
+              <section class="sticky top-0 z-20 overflow-hidden rounded-3xl bg-[#315b7e] text-white shadow-sm">
+                <div class="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="flex min-w-0 items-center gap-4">
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                      <i x-show="petModal.creating" data-lucide="paw-print" class="h-7 w-7" aria-hidden="true"></i>
+                      <i x-show="!petModal.creating && normalizePetSpecies(petModal.pet?.species) === 'Dog'" data-lucide="dog" class="h-7 w-7" aria-hidden="true"></i>
+                      <i x-show="!petModal.creating && normalizePetSpecies(petModal.pet?.species) === 'Cat'" data-lucide="cat" class="h-7 w-7" aria-hidden="true"></i>
                     </div>
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white/85">
-                      <p class="font-semibold text-white">Shared pet profile</p>
-                      <p class="mt-1">Grooming activity and completed clinic history are connected here.</p>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="truncate text-2xl font-bold" x-text="petModal.creating ? 'Add pet' : formatTextValue(petModal.pet?.petName)"></h2>
+                        <span x-show="!petModal.creating" class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold" x-text="petModal.pet?.isArchived ? 'Archived' : 'Active'"></span>
+                      </div>
+                      <p x-show="petModal.creating" class="mt-1 text-sm text-white/80" x-text="'Add a pet for ' + (petModal.owner?.fullName || 'this customer')"></p>
+                      <p x-show="!petModal.creating" class="mt-1 text-white/80">
+                        <span class="text-white/70">Owner:</span>
+                        <span class="font-medium text-white" x-text="formatTextValue(petModal.owner?.fullName)"></span>
+                      </p>
                     </div>
                   </div>
-                </section>
 
+                  <div class="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                    <button x-show="!petModal.editing && !petModal.creating" @click="startEditPet()" type="button"
+                      class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/70 bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] shadow-sm transition hover:bg-[#eef5fb] focus:outline-none focus:ring-2 focus:ring-white/70">
+                      <i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>
+                      <span>Edit details</span>
+                    </button>
+                    <button x-show="petModal.editing" @click="cancelEditPet()" :disabled="petModal.saving" type="button"
+                      class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:opacity-60">
+                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
+                      <span>Cancel</span>
+                    </button>
+                    <button @click="if (!petModal.saving) { petModal.open = false; petModal.editing = false; }" :disabled="petModal.saving" type="button"
+                      class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/25 text-white/80 transition hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label="Close pet details">
+                      <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Save error -->
+              <div x-show="petModal.saveError" class="mt-4" style="display:none">
+                <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  x-text="petModal.saveError"></div>
+              </div>
+
+              <!-- View mode: mirrors the customer My Pets profile, without Notifications. -->
+              <div x-show="!petModal.editing" class="mt-4 space-y-4">
                 <div class="overflow-x-auto pb-1">
                   <div class="inline-flex min-w-full gap-1 rounded-2xl border border-[#cfe0ee] bg-white p-1 shadow-sm sm:min-w-0" role="tablist" aria-label="Pet profile sections">
                     <button type="button" @click="selectPetProfileTab('overview')"
@@ -1177,12 +1158,12 @@
                   </div>
                 </div>
 
-                <div x-show="petModal.profileLoading" class="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+                <div x-show="petModal.profileLoading" class="rounded-3xl border border-slate-200 bg-white px-5 py-8 text-center shadow-sm">
                   <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
                   <p class="mt-3 text-sm text-slate-500">Loading pet records...</p>
                 </div>
 
-                <div x-show="!petModal.profileLoading && petModal.profileError" class="rounded-2xl border border-red-100 bg-red-50 px-6 py-6 text-center" role="alert">
+                <div x-show="!petModal.profileLoading && petModal.profileError" class="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-center" role="alert">
                   <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
                   <h4 class="mt-3 font-bold text-red-800">Pet records could not be loaded</h4>
                   <p class="mt-1 text-sm text-red-600" x-text="petModal.profileError"></p>
@@ -1191,15 +1172,15 @@
                   </button>
                 </div>
 
-                <section x-show="!petModal.profileLoading && petModal.activeTab === 'overview'" role="tabpanel" class="space-y-5">
-                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-5">
+                <section x-show="!petModal.profileLoading && petModal.activeTab === 'overview'" role="tabpanel" class="space-y-4">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="mb-4">
                       <h3 class="text-xl font-bold text-[#2f4b66]">Basic Information</h3>
                       <p class="mt-1 text-sm text-slate-500">The profile information currently saved for this pet.</p>
                     </div>
-                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       <template x-for="detail in petOverviewDetails()" :key="detail.label">
-                        <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
                           <dt class="text-xs font-medium text-slate-500" x-text="detail.label"></dt>
                           <dd class="mt-1.5 break-words font-semibold text-slate-700" x-text="detail.value"></dd>
                         </div>
@@ -1207,7 +1188,7 @@
                     </dl>
                   </div>
 
-                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="flex items-start gap-3">
                       <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
                         <i data-lucide="heart-pulse" class="h-5 w-5"></i>
@@ -1221,19 +1202,19 @@
                 </section>
 
                 <section x-show="!petModal.profileLoading && petModal.activeTab === 'grooming'" role="tabpanel">
-                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-5">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="mb-4">
                       <h3 class="text-xl font-bold text-[#2f4b66]">Grooming Records</h3>
                       <p class="mt-1 text-sm text-slate-500">Only grooming activity connected to this pet is shown.</p>
                     </div>
-                    <div x-show="petModal.groomingRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                    <div x-show="petModal.groomingRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-5 py-8 text-center">
                       <i data-lucide="scissors" class="mx-auto h-8 w-8 text-slate-300"></i>
                       <h4 class="mt-3 font-bold text-slate-700">No grooming records found</h4>
                       <p class="mt-1 text-sm text-slate-500">This pet does not have grooming activity yet.</p>
                     </div>
-                    <div x-show="petModal.groomingRecords.length > 0" class="space-y-4">
+                    <div x-show="petModal.groomingRecords.length > 0" class="space-y-3">
                       <template x-for="record in petModal.groomingRecords" :key="record.booking_reference">
-                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p class="text-xs font-medium text-slate-500">Booking Reference</p>
@@ -1241,7 +1222,7 @@
                             </div>
                             <span class="w-fit rounded-full px-3 py-1 text-xs font-bold" :class="groomingStatusClasses(record.status)" x-text="groomingStatusLabel(record.status)"></span>
                           </div>
-                          <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                          <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             <div><dt class="text-xs font-medium text-slate-500">Grooming Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.booking_date)"></dd></div>
                             <div><dt class="text-xs font-medium text-slate-500">Arrival Window</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.arrival_window)"></dd></div>
                             <div><dt class="text-xs font-medium text-slate-500">Grooming Started</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.grooming_started_at)"></dd></div>
@@ -1256,36 +1237,36 @@
                 </section>
 
                 <section x-show="!petModal.profileLoading && petModal.activeTab === 'medical'" role="tabpanel">
-                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-5 flex items-start gap-3">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="mb-4 flex items-start gap-3">
                       <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="stethoscope" class="h-5 w-5"></i></div>
                       <div>
                         <h3 class="text-xl font-bold text-[#2f4b66]">Clinic Medical Records</h3>
                         <p class="mt-1 text-sm leading-6 text-slate-500">Completed clinic visits for this pet.</p>
                       </div>
                     </div>
-                    <div x-show="petModal.medicalRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                    <div x-show="petModal.medicalRecords.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-5 py-8 text-center">
                       <i data-lucide="stethoscope" class="mx-auto h-8 w-8 text-slate-300"></i>
                       <h4 class="mt-3 font-bold text-slate-700">No completed medical records</h4>
                       <p class="mt-1 text-sm text-slate-500">No completed clinic visits are connected to this pet yet.</p>
                     </div>
-                    <div x-show="petModal.medicalRecords.length > 0" class="space-y-4">
+                    <div x-show="petModal.medicalRecords.length > 0" class="space-y-3">
                       <template x-for="record in petModal.medicalRecords" :key="record.appointment_reference">
                         <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                          <div class="border-b border-slate-200 bg-white px-5 py-4">
+                          <div class="border-b border-slate-200 bg-white px-4 py-3">
                             <p class="text-xs font-medium text-slate-500">Appointment Reference</p>
                             <h4 class="mt-1 text-lg font-bold text-[#2f4b66]" x-text="formatTextValue(record.appointment_reference)"></h4>
                             <p class="mt-1 text-sm text-slate-500" x-text="formatDate(record.appointment_date)"></p>
                           </div>
-                          <div class="space-y-5 p-5">
-                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div class="space-y-4 p-4">
+                            <dl class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                               <div><dt class="text-xs font-medium text-slate-500">Reason for Visit</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.chief_complaint)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Final Diagnosis</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.diagnosis)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Treatment</dt><dd class="mt-1 whitespace-pre-line text-sm text-slate-700" x-text="formatTextValue(record.treatment_given)"></dd></div>
                             </dl>
-                            <div x-show="record.vitals" class="border-t border-slate-200 pt-4">
+                            <div x-show="record.vitals" class="border-t border-slate-200 pt-3">
                               <h5 class="text-sm font-bold text-[#2f4b66]">Recorded Vitals</h5>
-                              <dl class="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+                              <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                                 <div><dt class="text-xs text-slate-500">Weight</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.weight_kg ? record.vitals.weight_kg + ' kg' : 'Not provided'"></dd></div>
                                 <div><dt class="text-xs text-slate-500">Temperature</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.temperature_c ? record.vitals.temperature_c + ' °C' : 'Not provided'"></dd></div>
                                 <div><dt class="text-xs text-slate-500">Heart Rate</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.heart_rate_bpm ? record.vitals.heart_rate_bpm + ' bpm' : 'Not provided'"></dd></div>
@@ -1293,11 +1274,11 @@
                                 <div><dt class="text-xs text-slate-500">Body Condition</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="record.vitals?.body_condition_score ? record.vitals.body_condition_score + ' / 9' : 'Not provided'"></dd></div>
                               </dl>
                             </div>
-                            <div x-show="record.medications?.length" class="border-t border-slate-200 pt-4">
+                            <div x-show="record.medications?.length" class="border-t border-slate-200 pt-3">
                               <h5 class="text-sm font-bold text-[#2f4b66]">Medications</h5>
                               <div class="mt-3 space-y-3">
                                 <template x-for="(medication, index) in record.medications || []" :key="index">
-                                  <div class="rounded-xl border border-slate-200 bg-white p-4">
+                                  <div class="rounded-xl border border-slate-200 bg-white p-3">
                                     <p class="font-semibold text-slate-700" x-text="formatTextValue(medication.drug_name)"></p>
                                     <p class="mt-1 text-sm text-slate-500" x-text="[medication.dosage, medication.frequency, medication.duration].filter(Boolean).join(' · ') || 'No dosage details provided'"></p>
                                     <p x-show="medication.instructions" class="mt-2 text-sm text-slate-600" x-text="medication.instructions"></p>
@@ -1305,7 +1286,7 @@
                                 </template>
                               </div>
                             </div>
-                            <div x-show="record.follow_up_date || record.follow_up_notes" class="border-t border-slate-200 pt-4">
+                            <div x-show="record.follow_up_date || record.follow_up_notes" class="border-t border-slate-200 pt-3">
                               <h5 class="text-sm font-bold text-[#2f4b66]">Follow-up</h5>
                               <p class="mt-2 text-sm text-slate-700" x-text="record.follow_up_date ? formatDate(record.follow_up_date) : 'No follow-up date provided'"></p>
                               <p x-show="record.follow_up_notes" class="mt-1 whitespace-pre-line text-sm text-slate-600" x-text="record.follow_up_notes"></p>
@@ -1318,35 +1299,35 @@
                 </section>
 
                 <section x-show="!petModal.profileLoading && petModal.activeTab === 'vaccinations'" role="tabpanel">
-                  <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-5 flex items-start gap-3">
+                  <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="mb-4 flex items-start gap-3">
                       <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="syringe" class="h-5 w-5"></i></div>
                       <div>
                         <h3 class="text-xl font-bold text-[#2f4b66]">Vaccination History</h3>
                         <p class="mt-1 text-sm leading-6 text-slate-500">Published vaccination information recorded by the clinic for this pet.</p>
                       </div>
                     </div>
-                    <div x-show="petModal.vaccinations.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+                    <div x-show="petModal.vaccinations.length === 0" class="rounded-2xl border border-dashed border-slate-200 px-5 py-8 text-center">
                       <i data-lucide="syringe" class="mx-auto h-8 w-8 text-slate-300"></i>
                       <h4 class="mt-3 font-bold text-slate-700">No published vaccination records</h4>
                       <p class="mt-1 text-sm text-slate-500">No published vaccination records are available for this pet yet.</p>
                     </div>
-                    <div x-show="petModal.vaccinations.length > 0" class="space-y-4">
+                    <div x-show="petModal.vaccinations.length > 0" class="space-y-3">
                       <template x-for="record in petModal.vaccinations" :key="record.vaccine_name + '-' + record.administered_date">
                         <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                          <div class="border-b border-slate-200 bg-white px-5 py-4">
+                          <div class="border-b border-slate-200 bg-white px-4 py-3">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div><p class="text-xs font-medium text-slate-500">Vaccine</p><h4 class="mt-1 break-words text-lg font-bold text-[#2f4b66]" x-text="formatTextValue(record.vaccine_name)"></h4></div>
                               <span class="w-fit rounded-full border px-3 py-1 text-xs font-bold" :class="vaccinationStatusClasses(record.due_status)" x-text="vaccinationStatusLabel(record.due_status)"></span>
                             </div>
                           </div>
-                          <div class="space-y-5 p-5">
-                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div class="space-y-4 p-4">
+                            <dl class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                               <div><dt class="text-xs font-medium text-slate-500">Administration Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Next Due Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Administering Provider</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatTextValue(record.administering_provider)"></dd></div>
                             </dl>
-                            <dl class="grid grid-cols-1 gap-4 border-t border-slate-200 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <dl class="grid grid-cols-1 gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2 xl:grid-cols-3">
                               <div><dt class="text-xs font-medium text-slate-500">Product Name</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.product_name)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Manufacturer</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatTextValue(record.manufacturer)"></dd></div>
                               <div><dt class="text-xs font-medium text-slate-500">Dose</dt><dd class="mt-1 text-sm text-slate-700" x-text="vaccinationDose(record)"></dd></div>
@@ -1363,7 +1344,7 @@
               </div>
 
               <!-- Edit mode -->
-              <form id="adminPetEditForm" x-show="petModal.editing" style="display:none" class="space-y-4"
+              <form id="adminPetEditForm" x-show="petModal.editing" style="display:none" class="mt-5 space-y-4"
                 @submit.prevent="saveEditPet()">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>

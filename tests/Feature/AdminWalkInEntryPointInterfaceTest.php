@@ -53,7 +53,7 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'walk-in-owner-step.js?v=owner-validation-20260812',
+            'walk-in-owner-step.js?v=clinic-existing-customers-20260813',
             $walkInPage,
         );
         $this->assertStringContainsString(
@@ -125,6 +125,35 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
         $this->assertStringContainsString('...pet,', $servicesStep);
         $this->assertStringContainsString('pet_id:              item.pet.petId || null', $consentStep);
         $this->assertStringContainsString('owner_record_type: owner.ownerRecordType || "new"', $consentStep);
+    }
+
+    public function test_clinic_walk_in_can_select_existing_owners_and_their_pets(): void
+    {
+        $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
+        $petStep = file_get_contents(base_path('scripts/components/walk-in-pet-step.js'));
+        $clinicConsentStep = file_get_contents(base_path('scripts/components/walk-in-clinic-consent-step.js'));
+
+        $this->assertStringContainsString(
+            'elements.existingCustomerSection?.classList.remove("hidden");',
+            $ownerStep,
+        );
+        $this->assertStringNotContainsString(
+            'document.getElementById("typeGrooming").checked = true;',
+            $ownerStep,
+        );
+        $this->assertStringContainsString(
+            '"./walk-in-booking.html?flow=clinic&source=clinic"',
+            $petStep,
+        );
+
+        foreach ([
+            'owner_record_type: owner.ownerRecordType || "new"',
+            'customer_user_id: owner.customerUserId || null',
+            'unregistered_customer_id: owner.unregisteredCustomerId || null',
+            'pet_id:             state.pet?.petId || null',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $clinicConsentStep);
+        }
     }
 
     public function test_new_owner_validation_uses_a_bottom_left_similar_name_warning(): void

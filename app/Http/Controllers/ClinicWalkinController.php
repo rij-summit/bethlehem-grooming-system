@@ -9,6 +9,7 @@ use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\TimeWindow;
+use App\Models\UnregisteredCustomer;
 use App\Models\User;
 use App\Models\Walkin;
 use App\Services\AvailabilityTimeWindowService;
@@ -18,6 +19,7 @@ use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ClinicWalkinController extends Controller
 {
@@ -270,24 +272,23 @@ class ClinicWalkinController extends Controller
             $data = $request->validated();
             $data = PetWeightSize::withComputedSize($data);
 
-            $user = ! empty($data['email'])
-                ? User::where('email', $data['email'])->first()
-                : null;
+            [$user, $unregisteredCustomer, $owner] = $this->resolveWalkInOwner($data);
 
             $walkin = Walkin::create([
-                'fname' => $data['fname'],
-                'lname' => $data['lname'],
-                'mname' => $data['mname'] ?? null,
-                'email' => $data['email'] ?? null,
-                'phone' => $data['phone'],
+                'fname' => $owner['fname'],
+                'lname' => $owner['lname'],
+                'mname' => $owner['mname'],
+                'email' => $owner['email'],
+                'phone' => $owner['phone'],
                 'sedation_consent' => false,
                 'terms_agreed' => $data['terms_agreed'],
                 'user_id' => $user?->user_id,
+                ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
                 'appointment_type' => 'clinic',
                 'chief_complaint' => $data['chief_complaint'],
             ]);
 
-            $pet = $this->findOrCreatePet($user, $data);
+            $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $data);
 
             $sequence = $clinicSequence->reserve(now()->toDateString(), true);
             $queueNumber = $sequence['queue_number'];
@@ -321,14 +322,76 @@ class ClinicWalkinController extends Controller
                     'phone' => $walkin->phone,
                 ],
                 'pet' => [
+                    'pet_id' => $pet->pet_id,
                     'name' => $pet->pet_name,
                     'species' => $pet->species,
                     'breed' => $pet->breed,
                 ],
                 'chief_complaint' => $walkin->chief_complaint,
-                'returning_customer' => $user !== null,
+                'returning_customer' => $user !== null || $unregisteredCustomer !== null,
             ], 201);
         });
+    }
+
+    private function resolveWalkInOwner(array $data): array
+    {
+        $recordType = $data['owner_record_type'] ?? 'new';
+        $user = null;
+        $unregisteredCustomer = null;
+
+        if ($recordType === 'registered') {
+            $user = User::query()
+                ->where('user_id', $data['customer_user_id'] ?? null)
+                ->where('role', 'customer')
+                ->first();
+
+            if (! $user) {
+                throw ValidationException::withMessages([
+                    'customer_user_id' => ['The selected customer is no longer available.'],
+                ]);
+            }
+        } elseif ($recordType === 'unregistered') {
+            $unregisteredCustomer = UnregisteredCustomer::query()
+                ->where('id', $data['unregistered_customer_id'] ?? null)
+                ->where('is_archived', false)
+                ->first();
+
+            if (! $unregisteredCustomer) {
+                throw ValidationException::withMessages([
+                    'unregistered_customer_id' => ['The selected unregistered customer is no longer available.'],
+                ]);
+            }
+        } elseif (! empty($data['email'])) {
+            // Preserve the existing clinic walk-in behavior for manually entered
+            // owners whose email already belongs to a registered customer.
+            $user = User::query()->where('email', $data['email'])->first();
+        }
+
+        $owner = $user
+            ? [
+                'fname' => $user->first_name,
+                'lname' => $user->last_name,
+                'mname' => null,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ]
+            : ($unregisteredCustomer
+                ? [
+                    'fname' => $unregisteredCustomer->first_name,
+                    'lname' => $unregisteredCustomer->last_name,
+                    'mname' => $unregisteredCustomer->middle_name,
+                    'email' => $unregisteredCustomer->email,
+                    'phone' => $unregisteredCustomer->phone,
+                ]
+                : [
+                    'fname' => $data['fname'],
+                    'lname' => $data['lname'],
+                    'mname' => $data['mname'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'phone' => $data['phone'],
+                ]);
+
+        return [$user, $unregisteredCustomer, $owner];
     }
 
     private function windowHasStarted(string $appointmentDate, TimeWindow $window): bool
@@ -347,27 +410,48 @@ class ClinicWalkinController extends Controller
         return $startsAt->lessThanOrEqualTo(now());
     }
 
-    private function findOrCreatePet(?User $user, array $data): Pet
+    private function findOrCreatePet(
+        ?User $user,
+        ?UnregisteredCustomer $unregisteredCustomer,
+        array $data,
+    ): Pet
     {
-        if ($user) {
-            $existing = Pet::where('user_id', $user->user_id)
+        $hasExistingOwner = $user !== null || $unregisteredCustomer !== null;
+        $ownerPetQuery = Pet::query()
+            ->when(
+                $user !== null,
+                fn ($query) => $query->where('user_id', $user->user_id),
+                fn ($query) => $query->where('unregistered_customer_id', $unregisteredCustomer?->id),
+            )
+            ->where('is_archived', false);
+
+        if (! empty($data['pet_id'])) {
+            $existing = (clone $ownerPetQuery)
+                ->where('pet_id', $data['pet_id'])
+                ->first();
+
+            if (! $hasExistingOwner || ! $existing) {
+                throw ValidationException::withMessages([
+                    'pet_id' => ['The selected pet does not belong to this customer.'],
+                ]);
+            }
+
+            return $this->updateWalkInPetDetails($existing, $data);
+        }
+
+        if ($hasExistingOwner) {
+            $existing = (clone $ownerPetQuery)
                 ->whereRaw('LOWER(pet_name) = ?', [strtolower($data['pet_name'])])
                 ->first();
 
             if ($existing) {
-                $existing->update([
-                    'breed' => $data['breed'] ?? $existing->breed,
-                    'fur_type' => $data['fur_type'] ?? $existing->fur_type,
-                    'weight' => $data['weight'] ?? $existing->weight,
-                    'size' => $data['size'] ?? $existing->size,
-                ]);
-
-                return $existing;
+                return $this->updateWalkInPetDetails($existing, $data);
             }
         }
 
         return Pet::create([
             'user_id' => $user?->user_id,
+            ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
             'pet_name' => $data['pet_name'],
             'species' => $data['species'],
             'breed' => $data['breed'] ?? null,
@@ -377,5 +461,18 @@ class ClinicWalkinController extends Controller
             'medical_conditions' => $data['medical_conditions'] ?? null,
             'is_archived' => false,
         ]);
+    }
+
+    private function updateWalkInPetDetails(Pet $pet, array $data): Pet
+    {
+        $pet->update([
+            'breed' => $data['breed'] ?? $pet->breed,
+            'fur_type' => $data['fur_type'] ?? $pet->fur_type,
+            'weight' => $data['weight'] ?? $pet->weight,
+            'size' => $data['size'] ?? $pet->size,
+            'medical_conditions' => $data['medical_conditions'] ?? $pet->medical_conditions,
+        ]);
+
+        return $pet;
     }
 }

@@ -37,9 +37,23 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('password_hash')->nullable();
         });
 
+        Schema::create('unregistered_customers', function (Blueprint $table) {
+            $table->id();
+            $table->string('first_name');
+            $table->string('last_name');
+            $table->string('middle_name')->nullable();
+            $table->string('phone');
+            $table->string('email')->nullable();
+            $table->unsignedInteger('created_by_user_id')->nullable();
+            $table->boolean('is_archived')->default(false);
+            $table->dateTime('archived_at')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
             $table->string('breed')->nullable();
@@ -65,6 +79,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->boolean('sedation_consent')->default(false);
             $table->boolean('terms_agreed')->default(false);
             $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
             $table->string('appointment_type')->default('grooming');
             $table->text('chief_complaint')->nullable();
             $table->timestamps();
@@ -236,6 +251,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('clinic_appointments');
         Schema::dropIfExists('walkins');
         Schema::dropIfExists('pets');
+        Schema::dropIfExists('unregistered_customers');
         Schema::dropIfExists('users');
 
         parent::tearDown();
@@ -449,6 +465,151 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('status', 'checked_in')
             ->assertJsonPath('pet.name', 'Bantay');
+    }
+
+    public function test_staff_can_create_a_clinic_walk_in_for_a_registered_customer_and_saved_pet(): void
+    {
+        $this->authenticateAs('staff');
+
+        DB::table('users')->insert([
+            'user_id' => 10,
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'email' => 'maria@example.com',
+            'phone' => '09171234567',
+            'role' => 'customer',
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Bantay',
+            'species' => 'Dog',
+            'breed' => 'Aspin',
+            'is_archived' => false,
+        ]);
+
+        $this->postJson('/api/admin/clinic-walk-in', [
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'email' => 'maria@example.com',
+            'phone' => '09171234567',
+            'owner_record_type' => 'registered',
+            'customer_user_id' => 10,
+            'pet_id' => 101,
+            'pet_name' => 'Bantay',
+            'species' => 'Dog',
+            'breed' => 'Aspin',
+            'chief_complaint' => 'Routine consultation',
+            'terms_agreed' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('returning_customer', true)
+            ->assertJsonPath('pet.pet_id', 101);
+
+        $this->assertDatabaseHas('walkins', [
+            'user_id' => 10,
+            'unregistered_customer_id' => null,
+            'appointment_type' => 'clinic',
+        ]);
+        $this->assertDatabaseHas('clinic_appointments', [
+            'user_id' => 10,
+            'pet_id' => 101,
+            'status' => 'checked_in',
+        ]);
+        $this->assertDatabaseCount('pets', 1);
+    }
+
+    public function test_staff_can_create_a_clinic_walk_in_for_an_unregistered_customer_and_saved_pet(): void
+    {
+        $this->authenticateAs('staff');
+
+        $customerId = DB::table('unregistered_customers')->insertGetId([
+            'first_name' => 'Ana',
+            'last_name' => 'Reyes',
+            'phone' => '09181234567',
+            'email' => 'ana@example.com',
+            'is_archived' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 102,
+            'unregistered_customer_id' => $customerId,
+            'pet_name' => 'Mingming',
+            'species' => 'Cat',
+            'breed' => 'Domestic Shorthair',
+            'is_archived' => false,
+        ]);
+
+        $this->postJson('/api/admin/clinic-walk-in', [
+            'fname' => 'Ana',
+            'lname' => 'Reyes',
+            'email' => 'ana@example.com',
+            'phone' => '09181234567',
+            'owner_record_type' => 'unregistered',
+            'unregistered_customer_id' => $customerId,
+            'pet_id' => 102,
+            'pet_name' => 'Mingming',
+            'species' => 'Cat',
+            'breed' => 'Domestic Shorthair',
+            'chief_complaint' => 'Loss of appetite',
+            'terms_agreed' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('returning_customer', true)
+            ->assertJsonPath('pet.pet_id', 102);
+
+        $this->assertDatabaseHas('walkins', [
+            'user_id' => null,
+            'unregistered_customer_id' => $customerId,
+            'appointment_type' => 'clinic',
+        ]);
+        $this->assertDatabaseHas('clinic_appointments', [
+            'user_id' => null,
+            'pet_id' => 102,
+            'status' => 'checked_in',
+        ]);
+        $this->assertDatabaseCount('pets', 1);
+    }
+
+    public function test_staff_can_add_a_new_pet_for_an_existing_clinic_walk_in_customer(): void
+    {
+        $this->authenticateAs('staff');
+
+        DB::table('users')->insert([
+            'user_id' => 11,
+            'first_name' => 'Jose',
+            'last_name' => 'Cruz',
+            'email' => 'jose@example.com',
+            'phone' => '09191234567',
+            'role' => 'customer',
+        ]);
+
+        $this->postJson('/api/admin/clinic-walk-in', [
+            'fname' => 'Jose',
+            'lname' => 'Cruz',
+            'email' => 'jose@example.com',
+            'phone' => '09191234567',
+            'owner_record_type' => 'registered',
+            'customer_user_id' => 11,
+            'pet_name' => 'Brownie',
+            'species' => 'Dog',
+            'chief_complaint' => 'Skin irritation',
+            'terms_agreed' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('returning_customer', true)
+            ->assertJsonPath('pet.name', 'Brownie');
+
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 11,
+            'unregistered_customer_id' => null,
+            'pet_name' => 'Brownie',
+        ]);
+        $this->assertDatabaseHas('clinic_appointments', [
+            'user_id' => 11,
+            'status' => 'checked_in',
+        ]);
     }
 
     public function test_customer_can_pre_register_an_owned_pet_without_reentering_owner_information(): void

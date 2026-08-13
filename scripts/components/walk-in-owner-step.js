@@ -241,7 +241,6 @@ function handleExistingCustomerSearchInput() {
 function selectExistingCustomer(customer) {
   if (!customer) return;
 
-  document.getElementById("typeGrooming").checked = true;
   const values = {
     firstName: normalizeText(customer.firstName),
     lastName: normalizeText(customer.lastName),
@@ -256,10 +255,10 @@ function selectExistingCustomer(customer) {
 }
 
 function syncExistingCustomerSearchVisibility() {
-  const showSearch = getAppointmentType() === "grooming";
-  elements.existingCustomerSection?.classList.toggle("hidden", !showSearch);
+  elements.existingCustomerSection?.classList.remove("hidden");
+  const appointmentType = getAppointmentType();
   const pageTitle = document.getElementById("walkInPageTitle");
-  if (pageTitle) pageTitle.textContent = showSearch ? "Grooming walk-in" : "Clinic walk-in";
+  if (pageTitle) pageTitle.textContent = appointmentType === "clinic" ? "Clinic walk-in" : "Grooming walk-in";
 }
 
 function validateOwner(values) {

@@ -472,7 +472,9 @@ function handleAddPetSubmit(event) {
 }
 
 function handleBack() {
-  window.location.href = "./walk-in-booking.html";
+  window.location.href = getOwnerAppointmentType() === "clinic"
+    ? "./walk-in-booking.html?flow=clinic&source=clinic"
+    : "./walk-in-booking.html";
 }
 
 function getOwnerAppointmentType() {
