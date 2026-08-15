@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
     <title>Sign In | Bethlehem Animal Clinic</title>
+    <!-- Runs before any external script so ?logout=1 always wipes stale tokens,
+         even when the browser serves cached versions of api.js / sign-in.js. -->
+    <script>
+      try {
+        if (new URLSearchParams(window.location.search).get("logout") === "1") {
+          ["admin_token", "customer_token", "user_role"].forEach(function (k) {
+            localStorage.removeItem(k);
+            sessionStorage.removeItem(k);
+          });
+          history.replaceState(null, "", window.location.pathname);
+        }
+      } catch (e) {}
+    </script>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
   </head>
@@ -130,8 +144,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js" defer></script>
+    <script src="../../scripts/api.js?v=email-verification-20260726" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="../../scripts/auth/sign-in.js" defer></script>
+    <script src="../../scripts/auth/sign-in.js?v=signin-feedback-20260728" defer></script>
   </body>
 </html>

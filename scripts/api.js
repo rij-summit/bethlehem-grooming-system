@@ -319,6 +319,9 @@ var API = (() => {
       const error = new Error(data.message || "Something went wrong.");
       error.status = response.status;
       error.errors = data.errors || null;
+      error.emailNotVerified = data.email_not_verified ?? false;
+      error.email = data.email ?? null;
+      error.expired = data.expired ?? false;
       throw error;
     }
 
@@ -380,6 +383,23 @@ var API = (() => {
       setUserRole(role, remember);
     }
     return data;
+  }
+
+  async function verifyEmail(token) {
+    // POST /api/email/verify  { token }
+    // On success stores the customer token and returns the response data.
+    const data = await request("POST", "/email/verify", { token });
+    if (data?.token) {
+      clearBookingDraft();
+      setCustomerToken(data.token, true);
+      setUserRole(data.user?.role ?? "customer", true);
+    }
+    return data;
+  }
+
+  async function resendVerification(email) {
+    // POST /api/email/resend  { email }
+    return request("POST", "/email/resend", { email });
   }
 
   async function logout(role = "customer") {
@@ -1050,5 +1070,8 @@ var API = (() => {
     publishAdminPetVaccination,
     voidAdminPetVaccination,
     getAdminInventoryItems,
+    // Email verification
+    verifyEmail,
+    resendVerification,
   };
 })();

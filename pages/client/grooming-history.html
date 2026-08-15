@@ -200,7 +200,7 @@
       </main>
     </div>
 
-    <script src="../../scripts/api.js"></script>
+    <script src="../../scripts/api.js?v=email-verification-20260726"></script>
     <script>
       lucide.createIcons();
 
@@ -249,7 +249,7 @@
 
       document.getElementById("clientLogoutBtn").addEventListener("click", async () => {
         try { await API.logout("customer"); } finally {
-          window.location.href = "./sign-in.html";
+          window.location.href = "./sign-in.html?logout=1";
         }
       });
 

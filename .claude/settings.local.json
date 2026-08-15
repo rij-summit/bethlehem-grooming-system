@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(php artisan *)"
+      "Bash(php artisan *)",
+      "Bash(php -l app/Models/Walkin.php)",
+      "Bash(php -l app/Http/Requests/StoreWalkinRequest.php)",
+      "Bash(php -l app/Http/Controllers/WalkinController.php)",
+      "Bash(php -l database/migrations/2026_06_28_200718_create_walkins_table.php)",
+      "Bash(php -l database/migrations/2026_07_02_190518_make_pets_user_id_nullable.php)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git fetch *)"
     ]
   }
 }

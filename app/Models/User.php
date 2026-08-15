@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens;
+    use HasApiTokens, Notifiable;
 
     protected $table = 'users';
     protected $primaryKey = 'user_id';
@@ -25,10 +26,19 @@ class User extends Authenticatable
         'is_active',
         'is_archived',
         'archived_at',
+        'email_verified_at',
+        'email_verification_token',
+        'email_verification_expires_at',
     ];
 
     protected $hidden = [
         'password_hash',
+        'email_verification_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at'              => 'datetime',
+        'email_verification_expires_at'  => 'datetime',
     ];
 
     // Tell Sanctum to use password_hash instead of password

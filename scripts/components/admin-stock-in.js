@@ -120,8 +120,7 @@ function adminStockIn() {
     },
 
     get needsExpiry() {
-      return this.selected &&
-        (this.selected.category === "medicine" || this.selected.category === "vaccine");
+      return !!this.selected;
     },
 
     // ── Inline create product ─────────────────────────────────────────────────
@@ -205,8 +204,8 @@ function adminStockIn() {
       if (!this.selected)        { this.entryError = "Select an item first.";       return; }
       const qty = parseFloat(this.qty);
       if (!qty || qty <= 0)      { this.entryError = "Enter a valid quantity.";      return; }
-      if (this.needsExpiry && !this.expiryDate) {
-        this.entryError = "Expiry date is required for medicine and vaccine.";
+      if (!this.expiryDate) {
+        this.entryError = "Expiry date is required.";
         return;
       }
 

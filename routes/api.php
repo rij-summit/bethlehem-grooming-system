@@ -20,11 +20,14 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ChatbotController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\PetMedicalRecordController;
 use App\Http\Controllers\PetVaccinationController;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/sign-in',  [AuthController::class, 'signIn']);
+Route::post('/register',      [AuthController::class, 'register']);
+Route::post('/sign-in',       [AuthController::class, 'signIn']);
+Route::post('/email/verify',  [EmailVerificationController::class, 'verify']);
+Route::post('/email/resend',  [EmailVerificationController::class, 'resend']);
 Route::post('/chatbot', [ChatbotController::class, 'chat',]);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────

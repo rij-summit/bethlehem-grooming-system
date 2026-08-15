@@ -103,7 +103,7 @@
       try {
         await API.logout("customer");
       } finally {
-        window.location.href = "./sign-in.html";
+        window.location.href = "./sign-in.html?logout=1";
       }
     });
   }
