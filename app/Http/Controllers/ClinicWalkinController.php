@@ -416,6 +416,7 @@ class ClinicWalkinController extends Controller
         array $data,
     ): Pet
     {
+        $data['pet_name'] = Pet::normalizeName($data['pet_name']);
         $hasExistingOwner = $user !== null || $unregisteredCustomer !== null;
         $ownerPetQuery = Pet::query()
             ->when(
@@ -455,9 +456,16 @@ class ClinicWalkinController extends Controller
             'pet_name' => $data['pet_name'],
             'species' => $data['species'],
             'breed' => $data['breed'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'birthdate' => $data['birthdate'] ?? null,
+            'is_neutered' => $data['is_neutered'] ?? false,
+            'neutered_date' => ($data['is_neutered'] ?? false)
+                ? ($data['neutered_date'] ?? null)
+                : null,
             'fur_type' => $data['fur_type'] ?? null,
             'weight' => $data['weight'] ?? null,
             'size' => $data['size'] ?? null,
+            'color' => $data['color'] ?? null,
             'medical_conditions' => $data['medical_conditions'] ?? null,
             'is_archived' => false,
         ]);
@@ -467,9 +475,16 @@ class ClinicWalkinController extends Controller
     {
         $pet->update([
             'breed' => $data['breed'] ?? $pet->breed,
+            'gender' => $data['gender'] ?? $pet->gender,
+            'birthdate' => $data['birthdate'] ?? $pet->birthdate,
+            'is_neutered' => $data['is_neutered'] ?? $pet->is_neutered,
+            'neutered_date' => array_key_exists('neutered_date', $data)
+                ? $data['neutered_date']
+                : $pet->neutered_date,
             'fur_type' => $data['fur_type'] ?? $pet->fur_type,
             'weight' => $data['weight'] ?? $pet->weight,
             'size' => $data['size'] ?? $pet->size,
+            'color' => $data['color'] ?? $pet->color,
             'medical_conditions' => $data['medical_conditions'] ?? $pet->medical_conditions,
         ]);
 

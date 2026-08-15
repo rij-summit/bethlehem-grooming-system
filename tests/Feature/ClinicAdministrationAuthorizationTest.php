@@ -60,6 +60,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('gender')->nullable();
             $table->date('birthdate')->nullable();
             $table->boolean('is_neutered')->nullable();
+            $table->date('neutered_date')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->string('color')->nullable();
             $table->string('size')->nullable();
@@ -592,9 +593,32 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'phone' => '09191234567',
             'owner_record_type' => 'registered',
             'customer_user_id' => 11,
-            'pet_name' => 'Brownie',
+            'pet_name' => 'brownie',
             'species' => 'Dog',
             'chief_complaint' => 'Skin irritation',
+            'clinic_quick_entry' => true,
+            'terms_agreed' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['breed']);
+
+        $this->postJson('/api/admin/clinic-walk-in', [
+            'fname' => 'Jose',
+            'lname' => 'Cruz',
+            'email' => 'jose@example.com',
+            'phone' => '09191234567',
+            'owner_record_type' => 'registered',
+            'customer_user_id' => 11,
+            'pet_name' => 'brownie',
+            'species' => 'Dog',
+            'breed' => 'Aspin',
+            'gender' => 'female',
+            'birthdate' => '2021-06-15',
+            'is_neutered' => true,
+            'neutered_date' => '2022-01-10',
+            'color' => 'Brown',
+            'chief_complaint' => 'Skin irritation',
+            'clinic_quick_entry' => true,
             'terms_agreed' => true,
         ])
             ->assertCreated()
@@ -605,6 +629,12 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'user_id' => 11,
             'unregistered_customer_id' => null,
             'pet_name' => 'Brownie',
+            'breed' => 'Aspin',
+            'gender' => 'female',
+            'birthdate' => '2021-06-15',
+            'is_neutered' => true,
+            'neutered_date' => '2022-01-10',
+            'color' => 'Brown',
         ]);
         $this->assertDatabaseHas('clinic_appointments', [
             'user_id' => 11,

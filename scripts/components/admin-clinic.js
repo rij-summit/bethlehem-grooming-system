@@ -1,3 +1,19 @@
+const adminClinicPetFieldModulesReady = Promise.all([
+  import("./breed-combobox.js"),
+  import("./breed-coat-catalogue.js"),
+  import("./breed-coat-combobox.js"),
+  import("./fixed-option-combobox.js"),
+  import("./pet-weight-size.js"),
+]).then(([breedCombobox, breedCoatCatalogue, breedCoatCombobox, fixedOptionCombobox, petWeightSize]) => ({
+  ...breedCombobox,
+  ...breedCoatCatalogue,
+  ...breedCoatCombobox,
+  ...fixedOptionCombobox,
+  ...petWeightSize,
+}));
+
+let adminClinicPetFields = null;
+
 function escapeHtml(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -359,70 +375,399 @@ function adminClinicSearch() {
   return {
     searchQuery: "",
     searchResults: [],
+    petSearchResults: [],
     noResults: false,
     searching: false,
     _timer: null,
+    _searchRequestId: 0,
 
     panelCustomer: null,
     showPanel: false,
 
     queueModal: { open: false, busy: false, error: "" },
-    queueForm: { pet_name: "", species: "", breed: "", weight: "", chief_complaint: "" },
+    queueForm: {},
+
+    async init() {
+      await this.initializeQueuePetFields();
+    },
 
     onSearchInput() {
       const q = this.searchQuery.trim();
-      if (q.length < 2) { this.searchResults = []; this.noResults = false; return; }
+      if (q.length < 2) {
+        clearTimeout(this._timer);
+        this._searchRequestId += 1;
+        this.searchResults = [];
+        this.petSearchResults = [];
+        this.noResults = false;
+        return;
+      }
       clearTimeout(this._timer);
       this._timer = setTimeout(async () => {
+        const requestId = ++this._searchRequestId;
         this.searching = true;
         try {
-          const res = await API.getCustomers({ search: q, status: "active" });
+          const res = await API.searchWalkInCustomers(q);
+          if (requestId !== this._searchRequestId) return;
           this.searchResults = res.customers || [];
-          this.noResults     = this.searchResults.length === 0;
+          this.petSearchResults = res.pets || [];
+          this.noResults = this.searchResults.length === 0
+            && this.petSearchResults.length === 0;
+          this.$nextTick?.(() => this.refreshIcons());
         } catch {
+          if (requestId !== this._searchRequestId) return;
           this.searchResults = [];
+          this.petSearchResults = [];
           this.noResults     = false;
         } finally {
-          this.searching = false;
+          if (requestId === this._searchRequestId) this.searching = false;
         }
       }, 350);
     },
 
     async pickCustomer(c) {
       try {
-        const res = await API.getCustomerDetails(c.id);
-        this.panelCustomer = res.customer;
+        const res = c.recordType === "unregistered"
+          ? await API.getUnregisteredCustomerDetails(c.id)
+          : await API.getCustomerDetails(c.id);
+        this.panelCustomer = {
+          ...(res.customer || c),
+          recordType: c.recordType || res.customer?.recordType || "registered",
+        };
         this.showPanel     = true;
         this.clearSearch();
-        this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        this.$nextTick(() => this.refreshIcons());
+        return this.panelCustomer;
       } catch (err) {
         alert(err.message || "Failed to load customer details.");
+        return null;
       }
     },
 
-    clearSearch() {
-      this.searchQuery   = "";
-      this.searchResults = [];
-      this.noResults     = false;
+    async pickPet(result) {
+      const customer = await this.pickCustomer({
+        id: result.ownerId,
+        recordType: result.ownerRecordType,
+        fullName: result.ownerName,
+      });
+      if (!customer) return;
+
+      const pet = (customer.pets || []).find(
+        candidate => String(candidate.id) === String(result.id),
+      );
+      if (pet) await this.openQueueModal(pet);
     },
 
-    openQueueModal(pet = null) {
+    clearSearch() {
+      clearTimeout(this._timer);
+      this._searchRequestId += 1;
+      this.searchQuery   = "";
+      this.searchResults = [];
+      this.petSearchResults = [];
+      this.noResults     = false;
+      this.searching     = false;
+    },
+
+    normalizePetSpecies(value) {
+      const species = String(value || "").trim().toLowerCase();
+      if (species === "dog") return "Dog";
+      if (species === "cat") return "Cat";
+      return "";
+    },
+
+    capitalizeFirstLetter(value) {
+      const text = String(value || "").trim();
+      return text.replace(/\p{L}/u, letter => letter.toLocaleUpperCase());
+    },
+
+    capitalizeWords(value) {
+      const text = String(value || "").trim();
+      return text.replace(/(^|[\s/-])(\p{L})/gu, (_, separator, letter) => (
+        `${separator}${letter.toLocaleUpperCase()}`
+      ));
+    },
+
+    petResultSummary(pet) {
+      return [
+        this.capitalizeFirstLetter(pet?.petName),
+        this.normalizePetSpecies(pet?.species) || this.capitalizeFirstLetter(pet?.species),
+        this.capitalizeWords(pet?.breed),
+      ].filter(Boolean).join(" · ");
+    },
+
+    refreshIcons() {
+      if (window.lucide) window.lucide.createIcons();
+    },
+
+    async initializeQueuePetFields() {
+      if (adminClinicPetFields) return true;
+
+      try {
+        const tools = await adminClinicPetFieldModulesReady;
+        const elements = {
+          species: document.getElementById("clinicQueuePetSpecies"),
+          breed: document.getElementById("clinicQueuePetBreed"),
+          gender: document.getElementById("clinicQueuePetGender"),
+          size: document.getElementById("clinicQueuePetSize"),
+          furType: document.getElementById("clinicQueuePetFurType"),
+          weight: document.getElementById("clinicQueuePetWeight"),
+        };
+        const controls = {
+          species: tools.createFixedOptionCombobox({
+            root: document.getElementById("clinicQueuePetSpeciesCombobox"),
+            input: elements.species,
+            listbox: document.getElementById("clinicQueuePetSpeciesOptions"),
+            toggleButton: document.getElementById("clinicQueuePetSpeciesDropdownButton"),
+            placeholder: "Select species",
+            options: [
+              { value: "Dog", label: "Dog" },
+              { value: "Cat", label: "Cat" },
+            ],
+          }),
+          gender: tools.createFixedOptionCombobox({
+            root: document.getElementById("clinicQueuePetGenderCombobox"),
+            input: elements.gender,
+            listbox: document.getElementById("clinicQueuePetGenderOptions"),
+            toggleButton: document.getElementById("clinicQueuePetGenderDropdownButton"),
+            placeholder: "Select gender",
+            options: [
+              { value: "male", label: "Male" },
+              { value: "female", label: "Female" },
+            ],
+            displaySelectedLabel: true,
+          }),
+          breed: tools.createBreedCombobox({
+            root: document.getElementById("clinicQueuePetBreedCombobox"),
+            input: elements.breed,
+            listbox: document.getElementById("clinicQueuePetBreedOptions"),
+            toggleButton: document.getElementById("clinicQueuePetBreedDropdownButton"),
+            errorElement: document.getElementById("clinicQueuePetBreedError"),
+            getPetType: () => elements.species.value,
+          }),
+          furType: tools.createBreedCoatCombobox({
+            root: document.getElementById("clinicQueuePetFurTypeCombobox"),
+            breedInput: elements.breed,
+            petTypeInput: elements.species,
+            input: elements.furType,
+            listbox: document.getElementById("clinicQueuePetFurTypeOptions"),
+            toggleButton: document.getElementById("clinicQueuePetFurTypeDropdownButton"),
+            errorElement: document.getElementById("clinicQueuePetFurTypeError"),
+          }),
+          size: tools.createFixedOptionCombobox({
+            root: document.getElementById("clinicQueuePetSizeCombobox"),
+            input: elements.size,
+            listbox: document.getElementById("clinicQueuePetSizeOptions"),
+            toggleButton: document.getElementById("clinicQueuePetSizeDropdownButton"),
+            placeholder: "Select size",
+            options: [],
+            displaySelectedLabel: true,
+          }),
+        };
+
+        adminClinicPetFields = { tools, elements, controls };
+        tools.initializeWeightField(elements.weight);
+        controls.size.setDisabled(true);
+
+        elements.species.addEventListener("change", () => {
+          this.queueForm.species = controls.species.getValue();
+          if (elements.weight.dataset.weightFieldMode === "range") {
+            tools.resetWeightFieldForEntry(elements.weight);
+          }
+          this.syncQueuePetWeightAndSize({ clearManualSize: true });
+          this.validateQueuePetWeightOnCommit();
+        });
+        elements.gender.addEventListener("change", () => {
+          this.queueForm.gender = controls.gender.getValue();
+        });
+        elements.breed.addEventListener("change", () => {
+          this.queueForm.breed = elements.breed.value;
+        });
+        elements.furType.addEventListener("change", () => {
+          this.queueForm.fur_type = elements.furType.value;
+        });
+        elements.weight.addEventListener("input", () => this.syncQueuePetWeightAndSize());
+        elements.weight.addEventListener("change", () => this.validateQueuePetWeightOnCommit());
+        elements.weight.addEventListener("focus", () => tools.resetWeightFieldForEntry(elements.weight));
+        elements.size.addEventListener("change", () => this.handleManualQueuePetSizeChange());
+
+        return true;
+      } catch (error) {
+        console.error("Clinic pet fields could not be initialized.", error);
+        return false;
+      }
+    },
+
+    async openQueueModal(pet = null) {
       this.queueForm = {
+        pet_id:          pet?.id || null,
         pet_name:        pet?.petName || "",
         species:         pet?.species || "",
         breed:           pet?.breed   || "",
-        weight:          pet?.weight  || "",
+        gender:          pet?.gender || "",
+        birthdate:       pet?.birthdate || "",
+        is_neutered:     Boolean(pet?.isNeutered),
+        neutered_date:   pet?.neuteredDate || "",
+        size:            pet?.size || "",
+        fur_type:        pet?.furType || "",
+        weight:          pet?.weight ?? "",
+        color:           pet?.color || "",
+        medical_conditions: pet?.medicalConditions || "",
         chief_complaint: "",
       };
       this.queueModal = { open: true, busy: false, error: "" };
-      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+
+      if (!await this.initializeQueuePetFields()) {
+        this.queueModal.error = "Pet controls could not be loaded. Please refresh and try again.";
+        return;
+      }
+
+      const { tools, elements, controls } = adminClinicPetFields;
+      const species = this.normalizePetSpecies(pet?.species);
+      controls.species.setValue(species);
+      controls.gender.setValue(String(pet?.gender || "").toLowerCase());
+      controls.breed.reset();
+      controls.furType.reset();
+      controls.size.reset();
+      elements.breed.value = pet?.breed || "";
+      tools.initializeWeightField(elements.weight);
+      elements.weight.value = pet?.weight ?? "";
+      this.syncQueuePetWeightAndSize({ clearManualSize: true });
+      if (!tools.getSizeForWeight(species, tools.getEnteredWeight(elements.weight))) {
+        this.setStoredQueuePetSize(pet?.size);
+      }
+      await tools.breedCoatCatalogueReady;
+      controls.furType.update();
+      elements.furType.value = pet?.furType || "";
+      controls.furType.update();
+      this.$nextTick(() => this.refreshIcons());
+    },
+
+    setStoredQueuePetSize(storedSize) {
+      if (!adminClinicPetFields) return;
+      const { tools, elements, controls } = adminClinicPetFields;
+      const normalizedStoredSize = tools.normalizePetSize(storedSize);
+      const matchingOption = tools.getSizeOptions(elements.species.value).find(
+        ({ value }) => tools.normalizePetSize(value) === normalizedStoredSize,
+      );
+      controls.size.setValue(matchingOption?.value || "");
+    },
+
+    syncQueuePetWeightAndSize({ clearManualSize = false } = {}) {
+      if (!adminClinicPetFields) return;
+      const { tools, elements, controls } = adminClinicPetFields;
+      const weight = tools.getEnteredWeight(elements.weight);
+      const options = tools.getSizeOptions(elements.species.value);
+      controls.size.setOptions(options, { preserveValue: !clearManualSize });
+      const computedSize = tools.getSizeForWeight(elements.species.value, weight);
+      if (computedSize) controls.size.setValue(computedSize);
+      controls.size.setDisabled(options.length === 0);
+    },
+
+    validateQueuePetWeightOnCommit() {
+      if (!adminClinicPetFields) return false;
+      const { tools, elements, controls } = adminClinicPetFields;
+      const weight = tools.getEnteredWeight(elements.weight);
+      if (!weight) {
+        if (elements.weight.dataset.weightFieldMode !== "error") {
+          tools.showWeightRangeInField(
+            elements.weight,
+            elements.species.value,
+            controls.size.getValue(),
+          );
+        }
+        return true;
+      }
+      const message = tools.getWeightValidationMessage(elements.species.value, weight);
+      if (message) {
+        tools.showWeightValidationInField(elements.weight, message);
+        return false;
+      }
+      return true;
+    },
+
+    handleManualQueuePetSizeChange() {
+      if (!adminClinicPetFields) return;
+      const { tools, elements, controls } = adminClinicPetFields;
+      if (!tools.getEnteredWeight(elements.weight)
+        && elements.weight.dataset.weightFieldMode !== "error") {
+        tools.showWeightRangeInField(
+          elements.weight,
+          elements.species.value,
+          controls.size.getValue(),
+        );
+      }
+    },
+
+    buildQueuePetPayload() {
+      if (!adminClinicPetFields) return null;
+      const { tools, elements, controls } = adminClinicPetFields;
+      const form = this.queueForm;
+      const isNeutered = Boolean(form.is_neutered);
+      return {
+        pet_id: form.pet_id || null,
+        pet_name: String(form.pet_name || "").trim(),
+        species: controls.species.getValue(),
+        breed: elements.breed.value.trim(),
+        gender: controls.gender.getValue(),
+        birthdate: form.birthdate || null,
+        is_neutered: isNeutered,
+        neutered_date: isNeutered ? (form.neutered_date || null) : null,
+        size: tools.normalizePetSize(controls.size.getValue()) || null,
+        fur_type: elements.furType.value || null,
+        weight: tools.getEnteredWeight(elements.weight) || null,
+        color: String(form.color || "").trim() || null,
+        medical_conditions: String(form.medical_conditions || "").trim() || null,
+        chief_complaint: String(form.chief_complaint || "").trim(),
+      };
+    },
+
+    validateQueuePetPayload(payload) {
+      if (!payload) return "Pet controls could not be loaded. Please refresh and try again.";
+      if (!payload.pet_name) return "Pet name is required.";
+      if (!payload.species) return "Species is required.";
+      if (!payload.breed) return "Breed is required.";
+      if (!payload.chief_complaint) return "Chief complaint is required.";
+
+      if (!payload.pet_id) {
+        const duplicatePet = (this.panelCustomer?.pets || []).some(
+          pet => String(pet.petName || "").trim().toLowerCase() === payload.pet_name.toLowerCase(),
+        );
+        if (duplicatePet) return "This owner already has a pet with this name.";
+      }
+
+      const { tools, elements, controls } = adminClinicPetFields;
+      const breedMessage = controls.breed.getValidationMessage();
+      if (breedMessage) {
+        controls.breed.showValidation();
+        return breedMessage;
+      }
+      const furTypeMessage = controls.furType.getValidationMessage();
+      if (furTypeMessage) {
+        controls.furType.showValidation();
+        return furTypeMessage;
+      }
+      const weightMessage = tools.getWeightFieldValidationMessage(elements.weight)
+        || tools.getWeightValidationMessage(payload.species, payload.weight);
+      if (weightMessage) {
+        tools.showWeightValidationInField(elements.weight, weightMessage);
+        return weightMessage;
+      }
+      const allowedSizes = tools.getSizeOptions(payload.species).map(
+        ({ value }) => tools.normalizePetSize(value),
+      );
+      if (payload.size && !allowedSizes.includes(payload.size)) {
+        return `${payload.species} size must be one of: ${allowedSizes.join(", ")}.`;
+      }
+      return "";
     },
 
     async submitQueue() {
       this.queueModal.error = "";
-      if (!this.queueForm.pet_name.trim())       { this.queueModal.error = "Pet name is required."; return; }
-      if (!this.queueForm.species.trim())         { this.queueModal.error = "Species is required."; return; }
-      if (!this.queueForm.chief_complaint.trim()) { this.queueModal.error = "Chief complaint is required."; return; }
+      const petPayload = this.buildQueuePetPayload();
+      const validationMessage = this.validateQueuePetPayload(petPayload);
+      if (validationMessage) {
+        this.queueModal.error = validationMessage;
+        return;
+      }
 
       const c = this.panelCustomer;
       if (!c) return;
@@ -432,13 +777,14 @@ function adminClinicSearch() {
         await API.submitClinicWalkIn({
           fname:           c.firstName,
           lname:           c.lastName,
+          mname:           c.middleName || undefined,
           email:           c.email  || undefined,
           phone:           c.phone,
-          pet_name:        this.queueForm.pet_name.trim(),
-          species:         this.queueForm.species.trim(),
-          breed:           this.queueForm.breed.trim()  || undefined,
-          weight:          this.queueForm.weight        || undefined,
-          chief_complaint: this.queueForm.chief_complaint.trim(),
+          owner_record_type: c.recordType || "registered",
+          customer_user_id: c.recordType === "registered" ? c.id : undefined,
+          unregistered_customer_id: c.recordType === "unregistered" ? c.id : undefined,
+          ...petPayload,
+          clinic_quick_entry: true,
           terms_agreed:    true,
         });
         this.queueModal.open = false;

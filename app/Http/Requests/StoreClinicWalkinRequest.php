@@ -6,6 +6,7 @@ use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreClinicWalkinRequest extends FormRequest
 {
@@ -58,14 +59,25 @@ class StoreClinicWalkinRequest extends FormRequest
             'pet_id' => ['nullable', 'integer', 'exists:pets,pet_id'],
             'pet_name' => ['required', 'string', 'max:100'],
             'species' => ['required', 'string', 'max:100'],
-            'breed' => ['nullable', 'string', 'max:100'],
+            'breed' => [
+                Rule::requiredIf($this->boolean('clinic_quick_entry') && ! $this->filled('pet_id')),
+                'nullable',
+                'string',
+                'max:100',
+            ],
+            'gender' => ['nullable', 'in:male,female'],
+            'birthdate' => ['nullable', 'date'],
+            'is_neutered' => ['nullable', 'boolean'],
+            'neutered_date' => ['nullable', 'date'],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
             'weight' => ['nullable', 'numeric', new ValidPetWeight],
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
+            'color' => ['nullable', 'string', 'max:50'],
             'medical_conditions' => ['nullable', 'string', 'max:1000'],
 
             // Clinic
             'chief_complaint' => ['required', 'string', 'max:1000'],
+            'clinic_quick_entry' => ['sometimes', 'boolean'],
 
             // Consent
             'terms_agreed' => ['required', 'boolean', 'accepted'],

@@ -268,6 +268,7 @@ class WalkinController extends Controller
         ?UnregisteredCustomer $unregisteredCustomer,
         array $petData,
     ): Pet {
+        $petData['pet_name'] = Pet::normalizeName($petData['pet_name']);
         $ownerPetQuery = Pet::query()
             ->when(
                 $user !== null,

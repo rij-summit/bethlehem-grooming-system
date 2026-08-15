@@ -296,13 +296,14 @@ class AdminUnregisteredCustomerTest extends TestCase
         ]);
 
         $this->postJson("/api/admin/customer-pets/unregistered/{$customerId}", [
-            'pet_name' => 'Mochi',
+            'pet_name' => 'mochi',
             'species' => 'Cat',
             'breed' => 'Persian',
             'weight' => 4,
             'size' => 'small',
         ])->assertCreated()
-            ->assertJsonPath('pet.unregistered_customer_id', $customerId);
+            ->assertJsonPath('pet.unregistered_customer_id', $customerId)
+            ->assertJsonPath('pet.pet_name', 'Mochi');
 
         $this->getJson("/api/admin/customers/unregistered/{$customerId}")
             ->assertOk()
@@ -339,10 +340,20 @@ class AdminUnregisteredCustomerTest extends TestCase
             'updated_at' => now(),
         ]);
         DB::table('pets')->insert([
-            'unregistered_customer_id' => $unregisteredId,
-            'pet_name' => 'Pepper',
-            'species' => 'Dog',
-            'is_archived' => false,
+            [
+                'user_id' => 10,
+                'unregistered_customer_id' => null,
+                'pet_name' => 'Buddy',
+                'species' => 'Dog',
+                'is_archived' => false,
+            ],
+            [
+                'user_id' => null,
+                'unregistered_customer_id' => $unregisteredId,
+                'pet_name' => 'Pepper',
+                'species' => 'Cat',
+                'is_archived' => false,
+            ],
         ]);
 
         $this->getJson('/api/admin/walk-in/customers?q=Walkin')
@@ -351,5 +362,24 @@ class AdminUnregisteredCustomerTest extends TestCase
             ->assertJsonPath('customers.0.status', 'active')
             ->assertJsonPath('customers.1.status', 'unregistered')
             ->assertJsonPath('customers.1.pets.0.petName', 'Pepper');
+
+        $this->getJson('/api/admin/walk-in/customers?q=Pepper')
+            ->assertOk()
+            ->assertJsonCount(0, 'customers')
+            ->assertJsonCount(1, 'pets')
+            ->assertJsonPath('pets.0.petName', 'Pepper')
+            ->assertJsonPath('pets.0.species', 'Cat')
+            ->assertJsonPath('pets.0.ownerId', $unregisteredId)
+            ->assertJsonPath('pets.0.ownerName', 'Walkin Guest')
+            ->assertJsonPath('pets.0.ownerRecordType', 'unregistered')
+            ->assertJsonPath('pets.0.ownerStatus', 'Unregistered');
+
+        $this->getJson('/api/admin/walk-in/customers?q=Buddy')
+            ->assertOk()
+            ->assertJsonCount(1, 'pets')
+            ->assertJsonPath('pets.0.ownerId', 10)
+            ->assertJsonPath('pets.0.ownerName', 'Walkin Active')
+            ->assertJsonPath('pets.0.ownerRecordType', 'registered')
+            ->assertJsonPath('pets.0.ownerStatus', 'Active');
     }
 }

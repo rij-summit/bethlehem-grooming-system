@@ -194,6 +194,23 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertStringNotContainsString('data-lucide="bell"', $petModal);
     }
 
+    public function test_pet_basic_information_omits_duplicate_status_and_shows_neutered_date(): void
+    {
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+        $overviewDetails = $this->sourceBetween(
+            $component,
+            'petOverviewDetails() {',
+            'groomingStatusLabel(status) {',
+        );
+
+        $this->assertStringNotContainsString('Profile Status', $overviewDetails);
+        $this->assertStringContainsString(
+            'this.formatPetNeuteredStatus(pet.isNeutered, pet.neuteredDate)',
+            $overviewDetails,
+        );
+        $this->assertStringContainsString('? `${status} \u00B7 ${this.formatDate(date)}`', $component);
+    }
+
     public function test_owner_and_pet_detail_modals_share_a_wide_bounded_size(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));

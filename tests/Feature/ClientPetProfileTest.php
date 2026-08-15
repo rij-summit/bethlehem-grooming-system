@@ -153,7 +153,7 @@ class ClientPetProfileTest extends TestCase
         $this->authenticateCustomer(10);
 
         $this->postJson('/api/pets', [
-            'pet_name' => 'Bruno',
+            'pet_name' => 'bruno',
             'species' => 'Dog',
             'breed' => 'Beagle',
             'gender' => 'male',
@@ -162,6 +162,7 @@ class ClientPetProfileTest extends TestCase
             'weight' => 8.5,
         ])
             ->assertCreated()
+            ->assertJsonPath('pet.pet_name', 'Bruno')
             ->assertJsonPath('pet.gender', 'male')
             ->assertJsonPath('pet.birthdate', '2023-05-12')
             ->assertJsonPath('pet.fur_type', 'Smooth Short Coat')
@@ -259,7 +260,7 @@ class ClientPetProfileTest extends TestCase
         ]);
 
         $this->putJson('/api/pets/101', [
-            'pet_name' => 'Mochi',
+            'pet_name' => 'mochi',
             'species' => 'Cat',
             'breed' => 'Persian',
             'gender' => 'female',
@@ -268,6 +269,7 @@ class ClientPetProfileTest extends TestCase
             'weight' => 6,
         ])
             ->assertOk()
+            ->assertJsonPath('pet.pet_name', 'Mochi')
             ->assertJsonPath('pet.gender', 'female')
             ->assertJsonPath('pet.birthdate', '2022-03-14')
             ->assertJsonPath('pet.fur_type', 'Long Dense Coat')
@@ -297,7 +299,7 @@ class ClientPetProfileTest extends TestCase
         ]);
 
         $this->putJson('/api/admin/pets/101', [
-            'pet_name' => 'Mochi',
+            'pet_name' => 'mochi',
             'species' => 'Cat',
             'breed' => 'Persian',
             'fur_type' => 'Smooth Short Coat',
@@ -325,6 +327,7 @@ class ClientPetProfileTest extends TestCase
             'neutered_date' => '2023-01-10',
         ])
             ->assertOk()
+            ->assertJsonPath('pet.pet_name', 'Mochi')
             ->assertJsonPath('pet.fur_type', 'Long Dense Coat')
             ->assertJsonPath('pet.size', 'medium')
             ->assertJsonPath('pet.is_neutered', 1)

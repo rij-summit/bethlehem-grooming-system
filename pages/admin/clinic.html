@@ -134,7 +134,7 @@
                   x-model="searchQuery"
                   @input="onSearchInput()"
                   type="text"
-                  placeholder="Search customer by name, phone, or email…"
+                  placeholder="Search customer or pet by name, phone, or email…"
                   class="flex-1 bg-transparent text-sm outline-none"
                   style="color:#1e293b"
                 />
@@ -145,11 +145,11 @@
                 </button>
               </div>
               <!-- Results -->
-              <div x-show="searchResults.length > 0 || noResults" style="display:none"
+              <div x-show="searchResults.length > 0 || petSearchResults.length > 0 || noResults" style="display:none"
                 class="border-t border-slate-100">
                 <div x-show="noResults" style="display:none"
-                  class="px-4 py-3 text-center text-sm text-slate-400">No customers found.</div>
-                <template x-for="c in searchResults" :key="c.id">
+                  class="px-4 py-3 text-center text-sm text-slate-400">No customers or pets found.</div>
+                <template x-for="c in searchResults" :key="'owner-' + c.recordType + '-' + c.id">
                   <button @click="pickCustomer(c)" type="button"
                     class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#eaf4fb]">
                     <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -160,6 +160,25 @@
                       <p class="truncate text-sm font-semibold text-slate-800" x-text="c.fullName"></p>
                       <p class="text-xs text-slate-400"
                         x-text="[c.phone, c.email].filter(Boolean).join(' · ')"></p>
+                    </div>
+                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+                      :class="c.recordType === 'unregistered' ? 'bg-[#eaf4fb] text-[#315b7e]' : 'bg-green-100 text-green-700'"
+                      x-text="c.recordType === 'unregistered' ? 'Unregistered' : 'Active'"></span>
+                    <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-300"></i>
+                  </button>
+                </template>
+                <template x-for="pet in petSearchResults" :key="'pet-' + pet.id">
+                  <button @click="pickPet(pet)" type="button"
+                    class="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-[#eaf4fb]">
+                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white"
+                      style="background-color:#315b7e">
+                      <i x-show="normalizePetSpecies(pet.species) === 'Dog'" data-lucide="dog" class="h-4 w-4"></i>
+                      <i x-show="normalizePetSpecies(pet.species) === 'Cat'" data-lucide="cat" class="h-4 w-4"></i>
+                      <i x-show="!normalizePetSpecies(pet.species)" data-lucide="paw-print" class="h-4 w-4"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-semibold text-slate-800" x-text="petResultSummary(pet)"></p>
+                      <p class="text-xs text-slate-400">Owner: <span x-text="pet.ownerName"></span></p>
                     </div>
                     <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-300"></i>
                   </button>
@@ -183,7 +202,8 @@
                   </button>
                 </div>
                 <div class="max-h-64 overflow-y-auto px-6 py-4">
-                  <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Registered Pets</p>
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400"
+                    x-text="panelCustomer?.recordType === 'unregistered' ? 'Saved Pets' : 'Registered Pets'"></p>
                   <div x-show="!(panelCustomer?.pets || []).filter(p => !p.isArchived).length" style="display:none"
                     class="text-sm text-slate-400">No active pets on record.</div>
                   <div class="space-y-2">
@@ -204,7 +224,7 @@
                   </div>
                 </div>
                 <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
-                  <a :href="'./clients.html?customer_id=' + panelCustomer?.id"
+                  <a :href="'./clients.html?customer_id=' + panelCustomer?.id + '&amp;record_type=' + (panelCustomer?.recordType || 'registered')"
                     class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                     View Profile
                   </a>
@@ -219,8 +239,8 @@
 
             <!-- Add to Queue modal -->
             <div x-cloak x-show="queueModal.open" style="display:none;z-index:210;background-color:rgba(15,23,42,0.7)"
-              x-transition class="fixed inset-0 flex items-center justify-center px-4">
-              <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+              x-transition class="fixed inset-0 flex items-center justify-center px-4 py-4">
+              <div class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
                   <div>
                     <h2 class="text-base font-bold text-[#2f4b66]">Add to Clinic Queue</h2>
@@ -231,44 +251,183 @@
                     <i data-lucide="x" class="h-5 w-5"></i>
                   </button>
                 </div>
-                <div class="space-y-4 px-6 py-5">
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold text-slate-600">Pet Name *</label>
-                    <input x-model="queueForm.pet_name" type="text" placeholder="e.g. Buddy"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                  </div>
-                  <div class="grid grid-cols-2 gap-3">
+                <form @submit.prevent="submitQueue()" class="flex min-h-0 flex-1 flex-col">
+                  <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label for="clinicQueuePetName" class="mb-1 block text-xs font-semibold text-slate-600">
+                          Pet Name <span class="text-red-500">*</span>
+                        </label>
+                        <input id="clinicQueuePetName" x-model="queueForm.pet_name" type="text" maxlength="100" required placeholder="e.g. Buddy"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      </div>
+                      <div>
+                        <label for="clinicQueuePetSpecies" class="mb-1 block text-xs font-semibold text-slate-600">
+                          Species <span class="text-red-500">*</span>
+                        </label>
+                        <div id="clinicQueuePetSpeciesCombobox" class="relative">
+                          <div class="relative">
+                            <input id="clinicQueuePetSpecies" x-model="queueForm.species" name="species" type="text" required readonly
+                              placeholder="Select species" role="combobox" aria-autocomplete="none"
+                              aria-controls="clinicQueuePetSpeciesOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
+                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
+                            <button id="clinicQueuePetSpeciesDropdownButton" type="button" aria-label="Show species options"
+                              aria-controls="clinicQueuePetSpeciesOptions" aria-expanded="false"
+                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
+                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                            </button>
+                          </div>
+                          <div id="clinicQueuePetSpeciesOptions" role="listbox" aria-label="Species options"
+                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label for="clinicQueuePetGender" class="mb-1 block text-xs font-semibold text-slate-600">Gender</label>
+                        <div id="clinicQueuePetGenderCombobox" class="relative">
+                          <div class="relative">
+                            <input id="clinicQueuePetGender" x-model="queueForm.gender" name="gender" type="text" readonly
+                              placeholder="Select gender" role="combobox" aria-autocomplete="none"
+                              aria-controls="clinicQueuePetGenderOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
+                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
+                            <button id="clinicQueuePetGenderDropdownButton" type="button" aria-label="Show gender options"
+                              aria-controls="clinicQueuePetGenderOptions" aria-expanded="false"
+                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
+                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                            </button>
+                          </div>
+                          <div id="clinicQueuePetGenderOptions" role="listbox" aria-label="Gender options"
+                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
+                        </div>
+                      </div>
+                      <div>
+                        <label for="clinicQueuePetBirthdate" class="mb-1 block text-xs font-semibold text-slate-600">Birthdate</label>
+                        <input id="clinicQueuePetBirthdate" x-model="queueForm.birthdate" type="date"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label for="clinicQueuePetBreed" class="mb-1 block text-xs font-semibold text-slate-600">
+                          Breed <span class="text-red-500">*</span>
+                        </label>
+                        <div id="clinicQueuePetBreedCombobox" class="relative">
+                          <div class="relative">
+                            <input id="clinicQueuePetBreed" x-model="queueForm.breed" name="breed" type="text" maxlength="100" required readonly
+                              placeholder="Select breed" role="combobox" aria-autocomplete="list"
+                              aria-controls="clinicQueuePetBreedOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
+                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
+                            <button id="clinicQueuePetBreedDropdownButton" type="button" aria-label="Show breed options"
+                              aria-controls="clinicQueuePetBreedOptions" aria-expanded="false"
+                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
+                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                            </button>
+                          </div>
+                          <div id="clinicQueuePetBreedOptions" role="listbox" aria-label="Breed options"
+                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
+                        </div>
+                        <p id="clinicQueuePetBreedError" class="mt-2 hidden text-xs text-red-600"></p>
+                      </div>
+                      <div>
+                        <label for="clinicQueuePetColor" class="mb-1 block text-xs font-semibold text-slate-600">Color</label>
+                        <input id="clinicQueuePetColor" x-model="queueForm.color" type="text" maxlength="50" placeholder="e.g. White"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label for="clinicQueuePetSize" class="mb-1 block text-xs font-semibold text-slate-600">Size</label>
+                        <div id="clinicQueuePetSizeCombobox" class="relative">
+                          <div class="relative">
+                            <input id="clinicQueuePetSize" x-model="queueForm.size" name="size" type="text" readonly disabled
+                              placeholder="Select species first" role="combobox" aria-autocomplete="none"
+                              aria-controls="clinicQueuePetSizeOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
+                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400" />
+                            <button id="clinicQueuePetSizeDropdownButton" type="button" disabled aria-label="Show size options"
+                              aria-controls="clinicQueuePetSizeOptions" aria-expanded="false"
+                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e] disabled:cursor-not-allowed disabled:text-slate-300">
+                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                            </button>
+                          </div>
+                          <div id="clinicQueuePetSizeOptions" role="listbox" aria-label="Size options"
+                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
+                        </div>
+                      </div>
+                      <div>
+                        <label for="clinicQueuePetFurType" class="mb-1 block text-xs font-semibold text-slate-600">Fur Type</label>
+                        <div id="clinicQueuePetFurTypeCombobox" class="relative">
+                          <div class="relative">
+                            <input id="clinicQueuePetFurType" x-model="queueForm.fur_type" name="fur_type" type="text" readonly disabled
+                              placeholder="Select breed first" role="combobox" aria-autocomplete="none"
+                              aria-controls="clinicQueuePetFurTypeOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
+                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400" />
+                            <button id="clinicQueuePetFurTypeDropdownButton" type="button" disabled aria-label="Show fur type options"
+                              aria-controls="clinicQueuePetFurTypeOptions" aria-expanded="false"
+                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e] disabled:cursor-not-allowed disabled:text-slate-300">
+                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                            </button>
+                          </div>
+                          <div id="clinicQueuePetFurTypeOptions" role="listbox" aria-label="Fur type options"
+                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
+                        </div>
+                        <p id="clinicQueuePetFurTypeError" class="mt-2 hidden text-xs text-red-600"></p>
+                      </div>
+                    </div>
+
                     <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600">Species *</label>
-                      <input x-model="queueForm.species" type="text" placeholder="Dog / Cat"
+                      <label for="clinicQueuePetWeight" class="mb-1 block text-xs font-semibold text-slate-600">Weight (kg)</label>
+                      <input id="clinicQueuePetWeight" x-model="queueForm.weight" name="weight" type="text" inputmode="decimal"
+                        placeholder="e.g. 12" aria-invalid="false"
                         class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                     </div>
-                    <div>
-                      <label class="mb-1 block text-xs font-semibold text-slate-600">Breed</label>
-                      <input x-model="queueForm.breed" type="text" placeholder="optional"
-                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+
+                    <div class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4">
+                      <div class="flex items-center gap-3">
+                        <input id="clinicQueuePetNeutered" x-model="queueForm.is_neutered" type="checkbox"
+                          class="h-4 w-4 cursor-pointer accent-[#315b7e]" />
+                        <label for="clinicQueuePetNeutered" class="cursor-pointer text-sm font-medium text-slate-700">Neutered / spayed</label>
+                      </div>
+                      <div x-show="queueForm.is_neutered" class="mt-3">
+                        <label for="clinicQueuePetNeuteredDate" class="mb-1 block text-xs font-semibold text-slate-600">Neutered / spayed date</label>
+                        <input id="clinicQueuePetNeuteredDate" x-model="queueForm.neutered_date" type="date"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      </div>
                     </div>
+
+                    <div>
+                      <label for="clinicQueuePetMedicalConditions" class="mb-1 block text-xs font-semibold text-slate-600">Medical Conditions / Special Needs</label>
+                      <textarea id="clinicQueuePetMedicalConditions" x-model="queueForm.medical_conditions" rows="3" maxlength="1000"
+                        placeholder="Describe allergies, medical conditions, or special care instructions..."
+                        class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
+                    </div>
+
+                    <div>
+                      <label for="clinicQueueChiefComplaint" class="mb-1 block text-xs font-semibold text-slate-600">
+                        Chief Complaint <span class="text-red-500">*</span>
+                      </label>
+                      <textarea id="clinicQueueChiefComplaint" x-model="queueForm.chief_complaint" rows="3" maxlength="1000" required
+                        placeholder="Reason for visit..."
+                        class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
+                    </div>
+                    <p x-show="queueModal.error" style="display:none;color:#b91c1c"
+                      class="text-xs font-semibold" x-text="queueModal.error"></p>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold text-slate-600">Chief Complaint *</label>
-                    <textarea x-model="queueForm.chief_complaint" rows="2"
-                      placeholder="Reason for visit…"
-                      class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
+                  <div class="flex shrink-0 gap-3 border-t border-slate-100 px-6 py-4">
+                    <button @click="queueModal.open = false" type="button"
+                      class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                      Cancel
+                    </button>
+                    <button :disabled="queueModal.busy" type="submit"
+                      class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
+                      :style="queueModal.busy ? 'background-color:#315b7e;opacity:0.6;cursor:not-allowed' : 'background-color:#315b7e'">
+                      <span x-text="queueModal.busy ? 'Adding...' : 'Add to Queue'"></span>
+                    </button>
                   </div>
-                  <p x-show="queueModal.error" style="display:none;color:#b91c1c"
-                    class="text-xs font-semibold" x-text="queueModal.error"></p>
-                </div>
-                <div class="flex gap-3 px-6 pb-5">
-                  <button @click="queueModal.open = false" type="button"
-                    class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-                    Cancel
-                  </button>
-                  <button @click="submitQueue()" :disabled="queueModal.busy" type="button"
-                    class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
-                    :style="queueModal.busy ? 'background-color:#315b7e;opacity:0.6;cursor:not-allowed' : 'background-color:#315b7e'">
-                    <span x-text="queueModal.busy ? 'Adding…' : 'Add to Queue'"></span>
-                  </button>
-                </div>
+                </form>
               </div>
             </div>
 
@@ -1278,7 +1437,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-sidebar-20260719"></script>
-    <script src="../../scripts/components/admin-clinic.js"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-owner-pet-search-20260815"></script>
     <script src="../../scripts/components/admin-clinic-referral-queue.js?v=clinic-referral-acceptance-20260804"></script>
     <script src="../../scripts/components/admin-vaccinations.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

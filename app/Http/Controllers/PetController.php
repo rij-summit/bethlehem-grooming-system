@@ -350,7 +350,7 @@ class PetController extends Controller
 
     private function normalizePetName(string $name): string
     {
-        return preg_replace('/\s+/u', ' ', trim($name)) ?: trim($name);
+        return Pet::normalizeName($name);
     }
 
     private function ensureOwnerPetNameIsUnique(

@@ -960,6 +960,13 @@ function adminCustomers() {
       return value === true || value === 1 || value === "1" ? "Yes" : "No";
     },
 
+    formatPetNeuteredStatus(value, date) {
+      const status = this.formatPetBoolean(value);
+      return status === "Yes" && date
+        ? `${status} \u00B7 ${this.formatDate(date)}`
+        : status;
+    },
+
     petOverviewDetails() {
       const pet = this.petModal.pet || {};
 
@@ -973,8 +980,7 @@ function adminCustomers() {
         { label: "Weight", value: this.formatWeight(pet.weight) },
         { label: "Fur Type", value: this.formatLabel(pet.furType) },
         { label: "Color", value: this.formatTextValue(pet.color) },
-        { label: "Neutered / Spayed", value: this.formatPetBoolean(pet.isNeutered) },
-        { label: "Profile Status", value: pet.isArchived ? "Archived" : "Active" },
+        { label: "Neutered / Spayed", value: this.formatPetNeuteredStatus(pet.isNeutered, pet.neuteredDate) },
       ];
     },
 

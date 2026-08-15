@@ -398,7 +398,11 @@ class CustomerController extends Controller
         $search = trim($validated['q']);
 
         if (mb_strlen($search) < 2) {
-            return response()->json(['success' => true, 'customers' => []]);
+            return response()->json([
+                'success' => true,
+                'customers' => [],
+                'pets' => [],
+            ]);
         }
 
         $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
@@ -453,12 +457,49 @@ class CustomerController extends Controller
             'pets' => $customer->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values(),
         ]);
 
+        $pets = Pet::query()
+            ->with([
+                'user:user_id,first_name,last_name',
+                'unregisteredCustomer:id,first_name,last_name',
+            ])
+            ->where('is_archived', false)
+            ->where('pet_name', 'like', "%{$search}%")
+            ->where(function ($ownerQuery) {
+                $ownerQuery
+                    ->whereHas('user', function ($userQuery) {
+                        $userQuery
+                            ->where('role', 'customer')
+                            ->where('is_active', true)
+                            ->where('is_archived', false);
+                    })
+                    ->orWhereHas('unregisteredCustomer', function ($customerQuery) {
+                        $customerQuery->where('is_archived', false);
+                    });
+            })
+            ->orderBy('pet_name')
+            ->orderBy('pet_id')
+            ->limit(12)
+            ->get()
+            ->map(function (Pet $pet) {
+                $unregisteredOwner = $pet->unregisteredCustomer;
+                $owner = $unregisteredOwner ?? $pet->user;
+
+                return [
+                    ...$this->formatPet($pet),
+                    'ownerId' => $unregisteredOwner?->id ?? $pet->user_id,
+                    'ownerName' => trim(($owner?->first_name ?? '').' '.($owner?->last_name ?? '')),
+                    'ownerRecordType' => $unregisteredOwner ? 'unregistered' : 'registered',
+                    'ownerStatus' => $unregisteredOwner ? 'Unregistered' : 'Active',
+                ];
+            });
+
         return response()->json([
             'success' => true,
             'customers' => $registered->concat($unregistered)
                 ->sortBy('fullName', SORT_NATURAL | SORT_FLAG_CASE)
                 ->take(12)
                 ->values(),
+            'pets' => $pets,
         ]);
     }
 

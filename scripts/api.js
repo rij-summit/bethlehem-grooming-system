@@ -1115,7 +1115,7 @@ var API = (() => {
 
   async function submitClinicWalkIn(payload) {
     // POST /api/admin/clinic-walk-in  (protected — admin token)
-    // payload: { fname, lname, mname?, email?, phone, pet_name, species, breed?, fur_type?, weight?, medical_conditions?, chief_complaint, terms_agreed }
+    // payload: { owner_record_type, customer_user_id?, unregistered_customer_id?, pet_id?, pet_name, species, breed?, gender?, birthdate?, is_neutered?, neutered_date?, fur_type?, weight?, size?, color?, medical_conditions?, chief_complaint, terms_agreed }
     return request("POST", "/admin/clinic-walk-in", payload, getAdminToken());
   }
 

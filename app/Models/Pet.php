@@ -44,6 +44,23 @@ class Pet extends Model
         'clinic_verified_fields' => 'array',
     ];
 
+    public static function normalizeName(mixed $name): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim((string) $name)) ?: trim((string) $name);
+
+        return preg_replace_callback(
+            '/\p{L}/u',
+            static fn (array $match): string => mb_strtoupper($match[0]),
+            $normalized,
+            1,
+        ) ?? $normalized;
+    }
+
+    public function setPetNameAttribute(mixed $name): void
+    {
+        $this->attributes['pet_name'] = self::normalizeName($name);
+    }
+
     // Pet belongs to a user
     public function user()
     {
