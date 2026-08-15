@@ -1,5 +1,5 @@
 import { initBookingCalendar } from "./booking-calendar.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js";
+import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=20260807-ongoing-access";
 
 /**
  * Booking Flow Controller
@@ -7,13 +7,12 @@ import { initBookingFormAccessGuard } from "../services/booking-form-access-guar
  * Initializes the booking page and controls the overall flow.
  * Step 1 schedule selection is handled by booking-calendar.js.
  *
- * The access guard runs first — if the user already has an active booking
- * within the last 24 hours, they are redirected back to the dashboard
- * before the calendar even loads.
+ * The access guard runs first. If the customer has an ongoing Grooming or
+ * Clinic registration, they are redirected before the calendar loads.
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const blocked = initBookingFormAccessGuard({
+  const blocked = await initBookingFormAccessGuard({
     dashboardPath: "./dashboard.html",
   });
 

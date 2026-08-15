@@ -1,121 +1,74 @@
-const BOOKING_FORM_LOCK_STORAGE_KEY = "bethlehem.bookingFormLock";
-const BOOKING_FORM_LOCK_WINDOW_MS = 24 * 60 * 60 * 1000;
+const ACCESS_MESSAGE_KEY = "bethlehem.preRegistrationAccessMessage";
 
-function readLockFromStorage() {
-  const sessionLock = readJson(sessionStorage.getItem(BOOKING_FORM_LOCK_STORAGE_KEY));
-  if (sessionLock) {
-    return sessionLock;
-  }
-
-  const localLock = readJson(localStorage.getItem(BOOKING_FORM_LOCK_STORAGE_KEY));
-  if (localLock) {
-    try {
-      sessionStorage.setItem(
-        BOOKING_FORM_LOCK_STORAGE_KEY,
-        JSON.stringify(localLock),
-      );
-    } catch (error) {
-      console.error("Failed to mirror booking form lock to sessionStorage:", error);
-    }
-
-    return localLock;
-  }
-
-  return null;
-}
-
-function readJson(rawValue) {
-  if (!rawValue) return null;
-
-  try {
-    const parsedValue = JSON.parse(rawValue);
-    return parsedValue && typeof parsedValue === "object" ? parsedValue : null;
-  } catch (error) {
-    console.error("Failed to parse booking form lock:", error);
-    return null;
-  }
-}
-
-function isLockExpired(lock) {
-  const expiresAt = Date.parse(lock?.expiresAt || "");
-  if (!Number.isFinite(expiresAt)) {
-    return true;
-  }
-
-  return Date.now() > expiresAt;
-}
-
-function isLockForCurrentUser(lock) {
-  // If the lock has no token, treat it as belonging to the current user (legacy)
-  if (!lock.token) return true;
-  const currentToken = localStorage.getItem("customer_token") || "";
-  return lock.token === currentToken;
-}
-
-function shouldBypassGuard() {
+function isRescheduleFlow() {
   const params = new URLSearchParams(window.location.search);
-  return (
-    params.get("reschedule") === "1" ||
-    params.get("allowBooking") === "1"
-  );
+  return params.get("reschedule") === "1";
 }
 
-export function clearBookingFormLock() {
-  try {
-    sessionStorage.removeItem(BOOKING_FORM_LOCK_STORAGE_KEY);
-    localStorage.removeItem(BOOKING_FORM_LOCK_STORAGE_KEY);
-  } catch (error) {
-    console.error("Failed to clear booking form lock:", error);
+export async function getPreRegistrationAccess() {
+  return API.getPreRegistrationAccess();
+}
+
+export function setPreRegistrationLinkAccess(link, allowed, message = "") {
+  if (!link) return;
+
+  link.setAttribute("aria-disabled", String(!allowed));
+  link.classList.toggle("pointer-events-none", !allowed);
+  link.classList.toggle("cursor-not-allowed", !allowed);
+  link.classList.toggle("opacity-60", !allowed);
+
+  if (allowed) {
+    link.removeAttribute("tabindex");
+    link.removeAttribute("title");
+  } else {
+    link.setAttribute("tabindex", "-1");
+    link.setAttribute("title", message);
   }
 }
 
-export function persistBookingFormLock(booking = null) {
-  const now = Date.now();
-  const lock = {
-    reference: booking?.reference || "",
-    lockedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + BOOKING_FORM_LOCK_WINDOW_MS).toISOString(),
-  };
-
-  const serializedLock = JSON.stringify(lock);
-
-  try {
-    sessionStorage.setItem(BOOKING_FORM_LOCK_STORAGE_KEY, serializedLock);
-    localStorage.setItem(BOOKING_FORM_LOCK_STORAGE_KEY, serializedLock);
-  } catch (error) {
-    console.error("Failed to persist booking form lock:", error);
-  }
-}
-
-export function enforceBookingFormAccessGuard(options = {}) {
+export async function enforceBookingFormAccessGuard(options = {}) {
   const dashboardPath = options.dashboardPath || "./dashboard.html";
 
-  if (shouldBypassGuard()) {
-    clearBookingFormLock();
+  if (isRescheduleFlow()) {
     return false;
   }
 
-  const lock = readLockFromStorage();
-  if (!lock) {
+  const access = await getPreRegistrationAccess();
+  if (access.allowed) {
     return false;
   }
 
-  if (isLockExpired(lock) || !isLockForCurrentUser(lock)) {
-    clearBookingFormLock();
-    return false;
+  try {
+    sessionStorage.setItem(ACCESS_MESSAGE_KEY, access.message || "");
+  } catch (error) {
+    console.error("Failed to save the pre-registration access message:", error);
   }
 
   window.location.replace(dashboardPath);
   return true;
 }
 
-export function initBookingFormAccessGuard(options = {}) {
+export async function initBookingFormAccessGuard(options = {}) {
   const dashboardPath = options.dashboardPath || "./dashboard.html";
+  let blockedNow = false;
 
-  const blockedNow = enforceBookingFormAccessGuard({ dashboardPath });
+  try {
+    blockedNow = await enforceBookingFormAccessGuard({ dashboardPath });
+  } catch (error) {
+    console.error("Failed to check pre-registration access:", error);
+    window.location.replace(dashboardPath);
+    blockedNow = true;
+  }
 
-  window.addEventListener("pageshow", () => {
-    enforceBookingFormAccessGuard({ dashboardPath });
+  window.addEventListener("pageshow", async (event) => {
+    if (event.persisted) {
+      try {
+        await enforceBookingFormAccessGuard({ dashboardPath });
+      } catch (error) {
+        console.error("Failed to recheck pre-registration access:", error);
+        window.location.replace(dashboardPath);
+      }
+    }
   });
 
   return blockedNow;

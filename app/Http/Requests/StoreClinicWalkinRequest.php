@@ -14,6 +14,30 @@ class StoreClinicWalkinRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (($this->input('owner_record_type') ?? 'new') !== 'new') {
+            return;
+        }
+
+        $email = strtolower(trim((string) $this->input('email', '')));
+        $phone = preg_replace('/\D+/', '', trim((string) $this->input('phone', ''))) ?? '';
+
+        if (preg_match('/^63\d{10}$/', $phone)) {
+            $phone = '0'.substr($phone, 2);
+        } elseif (preg_match('/^9\d{9}$/', $phone)) {
+            $phone = '0'.$phone;
+        }
+
+        $this->merge([
+            'fname' => $this->normalizeText($this->input('fname')),
+            'lname' => $this->normalizeText($this->input('lname')),
+            'mname' => $this->normalizeText($this->input('mname')) ?: null,
+            'email' => $email !== '' ? $email : null,
+            'phone' => $phone,
+        ]);
+    }
+
     public function rules(): array
     {
         return [
@@ -22,9 +46,16 @@ class StoreClinicWalkinRequest extends FormRequest
             'lname' => ['required', 'string', 'max:100'],
             'mname' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['required', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
+            'phone' => ($this->input('owner_record_type') ?? 'new') === 'new'
+                ? ['required', 'string', 'max:20', 'regex:/^09\d{9}$/']
+                : ['required', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
+            'owner_record_type' => ['nullable', 'in:new,registered,unregistered'],
+            'customer_user_id' => ['nullable', 'integer', 'exists:users,user_id'],
+            'unregistered_customer_id' => ['nullable', 'integer', 'exists:unregistered_customers,id'],
+            'confirm_similar_name' => ['sometimes', 'boolean'],
 
             // Pet — single pet for clinic walk-in
+            'pet_id' => ['nullable', 'integer', 'exists:pets,pet_id'],
             'pet_name' => ['required', 'string', 'max:100'],
             'species' => ['required', 'string', 'max:100'],
             'breed' => ['nullable', 'string', 'max:100'],
@@ -46,7 +77,14 @@ class StoreClinicWalkinRequest extends FormRequest
         return [
             'terms_agreed.accepted' => 'The customer must agree to the terms before registration.',
             'chief_complaint.required' => 'A chief complaint or reason for visit is required.',
-            'phone.regex' => 'Phone number may only contain digits, spaces, +, -, and parentheses.',
+            'phone.regex' => ($this->input('owner_record_type') ?? 'new') === 'new'
+                ? 'Phone number must be 11 digits and start with 09.'
+                : 'Phone number may only contain digits, spaces, +, -, and parentheses.',
         ];
+    }
+
+    private function normalizeText(mixed $value): string
+    {
+        return preg_replace('/\s+/', ' ', trim((string) $value)) ?? '';
     }
 }

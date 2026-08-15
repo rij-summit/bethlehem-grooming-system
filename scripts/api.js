@@ -322,6 +322,8 @@ var API = (() => {
       error.emailNotVerified = data.email_not_verified ?? false;
       error.email = data.email ?? null;
       error.expired = data.expired ?? false;
+      error.code = data.code || null;
+      error.data = data;
       throw error;
     }
 
@@ -470,6 +472,77 @@ var API = (() => {
     return request("GET", `/pets/${petId}/vaccinations`, null, getCustomerToken());
   }
 
+  async function getPetMedicalConcerns(petId) {
+    return request(
+      "GET",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns`,
+      null,
+      getCustomerToken(),
+    );
+  }
+
+  async function getPetMedicalConcern(petId, publicId) {
+    return request(
+      "GET",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}`,
+      null,
+      getCustomerToken(),
+    );
+  }
+
+  async function acknowledgePetMedicalConcern(petId, publicId) {
+    return request(
+      "POST",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/acknowledge`,
+      {},
+      getCustomerToken(),
+    );
+  }
+
+  async function submitPetMedicalConcernConsent(
+    petId,
+    publicId,
+    decision,
+    signatureName,
+  ) {
+    return request(
+      "POST",
+      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/consent`,
+      {
+        decision,
+        signature_name: signatureName,
+      },
+      getCustomerToken(),
+    );
+  }
+
+  function petClinicReferralPath(petId, publicId) {
+    return `/pets/${encodeURIComponent(petId)}/grooming-clinic-referrals/${encodeURIComponent(publicId)}`;
+  }
+
+  async function getPetGroomingClinicReferral(petId, publicId) {
+    return request(
+      "GET",
+      petClinicReferralPath(petId, publicId),
+      null,
+      getCustomerToken(),
+    );
+  }
+
+  async function submitPetGroomingClinicReferralConsent(
+    petId,
+    publicId,
+    decision,
+    signatureName,
+  ) {
+    return request(
+      "POST",
+      `${petClinicReferralPath(petId, publicId)}/consent`,
+      { decision, signature_name: signatureName },
+      getCustomerToken(),
+    );
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -485,6 +558,15 @@ var API = (() => {
     return request("PUT", `/admin/pets/${petId}`, payload, getAdminToken());
   }
 
+  async function adminAddCustomerPet(ownerType, ownerId, payload) {
+    return request(
+      "POST",
+      `/admin/customer-pets/${encodeURIComponent(ownerType)}/${encodeURIComponent(ownerId)}`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
   async function archivePet(petId) {
     // POST /api/pets/{id}/archive  (protected)
     return request("POST", `/pets/${petId}/archive`, null, getCustomerToken());
@@ -498,6 +580,16 @@ var API = (() => {
   async function storeBooking(payload) {
     // POST /api/booking/store  (protected)
     return request("POST", "/booking/store", payload, getCustomerToken());
+  }
+
+  async function getPreRegistrationAccess() {
+    // GET /api/pre-registration/access (protected)
+    return request(
+      "GET",
+      "/pre-registration/access",
+      null,
+      getCustomerToken(),
+    );
   }
 
   async function getBookingHistory({ historyLimit = null, petId = null } = {}) {
@@ -559,9 +651,27 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/check-in`, null, getAdminToken());
   }
 
+  async function adminRevertCheckIn(bookingId) {
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/revert-check-in`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function adminStartGrooming(bookingId) {
     // POST /api/admin/bookings/{id}/start-grooming  (protected — admin token)
     return request("POST", `/admin/bookings/${bookingId}/start-grooming`, null, getAdminToken());
+  }
+
+  async function adminRevertStartGrooming(bookingId) {
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/revert-start-grooming`,
+      null,
+      getAdminToken(),
+    );
   }
 
   async function adminStartPetGrooming(bookingId, bookingPetId) {
@@ -589,9 +699,194 @@ var API = (() => {
     );
   }
 
-  async function adminCancelBooking(bookingId) {
+  function adminBookingPetConcernPath(bookingId, bookingPetId) {
+    return `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/medical-concerns`;
+  }
+
+  async function getAdminBookingPetMedicalConcerns(bookingId, bookingPetId) {
+    return request(
+      "GET",
+      adminBookingPetConcernPath(bookingId, bookingPetId),
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminBookingPetMedicalConcern(bookingId, bookingPetId, payload) {
+    return request(
+      "POST",
+      adminBookingPetConcernPath(bookingId, bookingPetId),
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminBookingPetMedicalConcern(bookingId, bookingPetId, concernId) {
+    return request(
+      "GET",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function updateAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "PATCH",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function cancelAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/cancel`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function resolveAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resolve`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function notifyCustomerAboutAdminBookingPetMedicalConcern(
+    bookingId,
+    bookingPetId,
+    concernId,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/notify-customer`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function applyAdminBookingPetMedicalConcernAction(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload = {},
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/apply-recommended-action`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function resumeAdminBookingPetGrooming(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resume-grooming`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  function adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId) {
+    return `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/clinic-referral`;
+  }
+
+  async function getAdminBookingPetClinicReferral(bookingId, bookingPetId, concernId) {
+    return request(
+      "GET",
+      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminBookingPetClinicReferral(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function recordAdminBookingPetClinicReferralInPersonConsent(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `${adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId)}/in-person-consent`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminStoppedPaymentReview(bookingId, bookingPetId) {
+    return request(
+      "GET",
+      `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/stopped-payment-review`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function createAdminStoppedPaymentReview(
+    bookingId,
+    bookingPetId,
+    concernId,
+    payload,
+  ) {
+    return request(
+      "POST",
+      `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/medical-concerns/${encodeURIComponent(concernId)}/stopped-payment-review`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function adminCancelBooking(bookingId, cancellationReason = "") {
     // POST /api/admin/bookings/{id}/cancel  (protected — admin token)
-    return request("POST", `/admin/bookings/${bookingId}/cancel`, null, getAdminToken());
+    const reason = String(cancellationReason ?? "").trim();
+
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/cancel`,
+      { cancellation_reason: reason || null },
+      getAdminToken(),
+    );
   }
 
   async function getNotifications() {
@@ -606,6 +901,11 @@ var API = (() => {
 
   // ── Customer management (admin only) ─────────────────────────────────────
 
+  async function searchAdminDashboard(search = "") {
+    const params = new URLSearchParams({ q: String(search).trim() });
+    return request("GET", `/admin/dashboard/search?${params.toString()}`, null, getAdminToken());
+  }
+
   async function getCustomers({ status = "active", tier = "", search = "" } = {}) {
     // GET /api/admin/customers  (protected — admin token)
     const params = new URLSearchParams();
@@ -619,6 +919,32 @@ var API = (() => {
   async function getCustomerDetails(customerId) {
     // GET /api/admin/customers/{id}  (protected — admin token)
     return request("GET", `/admin/customers/${customerId}`, null, getAdminToken());
+  }
+
+  async function createUnregisteredCustomer(payload) {
+    return request("POST", "/admin/customers/unregistered", payload, getAdminToken());
+  }
+
+  async function getUnregisteredCustomerDetails(customerId) {
+    return request("GET", `/admin/customers/unregistered/${customerId}`, null, getAdminToken());
+  }
+
+  async function archiveUnregisteredCustomer(customerId) {
+    return request("POST", `/admin/customers/unregistered/${customerId}/archive`, null, getAdminToken());
+  }
+
+  async function searchWalkInCustomers(search = "") {
+    const params = new URLSearchParams({ q: String(search).trim() });
+    return request("GET", `/admin/walk-in/customers?${params.toString()}`, null, getAdminToken());
+  }
+
+  async function validateWalkInNewOwner(payload) {
+    return request(
+      "POST",
+      "/admin/walk-in/customers/validate-new-owner",
+      payload,
+      getAdminToken(),
+    );
   }
 
   async function deactivateCustomer(customerId) {
@@ -653,6 +979,14 @@ var API = (() => {
     if (date)   params.set("date", date);
     const query = params.toString() ? `?${params.toString()}` : "";
     return request("GET", `/admin/bookings/archived${query}`, null, getAdminToken());
+  }
+
+  async function getArchivedClinicAppointments({ search = "", date = "" } = {}) {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (date) params.set("date", date);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/clinic-appointments/archived${query}`, null, getAdminToken());
   }
 
   async function markAllNotificationsRead() {
@@ -809,6 +1143,33 @@ var API = (() => {
     return request("GET", "/admin/clinic-appointments", null, getAdminToken());
   }
 
+  async function getAdminClinicReferrals(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.urgency) params.set("urgency", filters.urgency);
+    if (filters.search) params.set("search", filters.search);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/clinic-referrals${query}`, null, getAdminToken());
+  }
+
+  async function getAdminClinicReferral(publicId) {
+    return request(
+      "GET",
+      `/admin/clinic-referrals/${encodeURIComponent(publicId)}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function acceptAdminClinicReferral(publicId) {
+    return request(
+      "POST",
+      `/admin/clinic-referrals/${encodeURIComponent(publicId)}/accept`,
+      {},
+      getAdminToken(),
+    );
+  }
+
   async function clinicCheckIn(id) {
     return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
   }
@@ -817,8 +1178,8 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/start-consultation`, {}, getAdminToken());
   }
 
-  async function clinicFinishConsultation(id) {
-    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, {}, getAdminToken());
+  async function clinicFinishConsultation(id, payload = {}) {
+    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, payload, getAdminToken());
   }
 
   async function clinicMarkPaid(id, payload) {
@@ -869,6 +1230,15 @@ var API = (() => {
     return request(
       "GET",
       `/admin/pets/${encodeURIComponent(petId)}/vaccinations`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function getAdminPetProfile(petId) {
+    return request(
+      "GET",
+      `/admin/pets/${encodeURIComponent(petId)}/profile`,
       null,
       getAdminToken(),
     );
@@ -990,13 +1360,21 @@ var API = (() => {
     getPet,
     getPetMedicalRecords,
     getPetVaccinations,
+    getPetMedicalConcerns,
+    getPetMedicalConcern,
+    acknowledgePetMedicalConcern,
+    submitPetMedicalConcernConsent,
+    getPetGroomingClinicReferral,
+    submitPetGroomingClinicReferralConsent,
     addPet,
     updatePet,
     adminUpdatePet,
+    adminAddCustomerPet,
     archivePet,
     unarchivePet,
     // Booking
     storeBooking,
+    getPreRegistrationAccess,
     getBookingHistory,
     getGroomingCapacity,
     cancelBooking,
@@ -1005,14 +1383,36 @@ var API = (() => {
     // Admin bookings
     getAdminBookings,
     adminCheckIn,
+    adminRevertCheckIn,
     adminStartGrooming,
+    adminRevertStartGrooming,
     adminStartPetGrooming,
     adminMarkDone,
     adminMarkPetDone,
+    getAdminBookingPetMedicalConcerns,
+    createAdminBookingPetMedicalConcern,
+    getAdminBookingPetMedicalConcern,
+    updateAdminBookingPetMedicalConcern,
+    cancelAdminBookingPetMedicalConcern,
+    resolveAdminBookingPetMedicalConcern,
+    notifyCustomerAboutAdminBookingPetMedicalConcern,
+    applyAdminBookingPetMedicalConcernAction,
+    resumeAdminBookingPetGrooming,
+    getAdminBookingPetClinicReferral,
+    createAdminBookingPetClinicReferral,
+    recordAdminBookingPetClinicReferralInPersonConsent,
+    getAdminStoppedPaymentReview,
+    createAdminStoppedPaymentReview,
     adminCancelBooking,
     // Admin customers
+    searchAdminDashboard,
     getCustomers,
     getCustomerDetails,
+    createUnregisteredCustomer,
+    getUnregisteredCustomerDetails,
+    archiveUnregisteredCustomer,
+    searchWalkInCustomers,
+    validateWalkInNewOwner,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,
@@ -1020,6 +1420,7 @@ var API = (() => {
     // Admin archive
     adminArchiveBooking,
     getArchivedBookings,
+    getArchivedClinicAppointments,
     // Admin notifications
     getNotifications,
     markNotificationRead,
@@ -1053,6 +1454,9 @@ var API = (() => {
     submitClinicWalkIn,
     // Clinic queue
     getClinicAppointments,
+    getAdminClinicReferrals,
+    getAdminClinicReferral,
+    acceptAdminClinicReferral,
     clinicCheckIn,
     clinicStartConsultation,
     clinicFinishConsultation,
@@ -1062,7 +1466,8 @@ var API = (() => {
     clinicUploadAttachment,
     clinicDownloadAttachment,
     clinicDeleteAttachment,
-    // Staff vaccination records
+    // Staff pet profile and vaccination records
+    getAdminPetProfile,
     getAdminPetVaccinations,
     getAdminPetVaccination,
     createAdminPetVaccination,

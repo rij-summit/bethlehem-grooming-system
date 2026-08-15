@@ -239,15 +239,17 @@
       return;
     }
 
-    list.innerHTML = notifications.map((n) => {
+    list.innerHTML = notifications.map((n, index) => {
       const icon = notifIcon(n);
       const message = formatNotificationMessage(n);
       const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
       const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
       const time = formatNotifTime(n.created_at);
       return `
-        <div class="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-slate-50 ${bg}"
-             data-notif-id="${n.id}">
+        <button type="button"
+             class="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${bg}"
+             data-notif-id="${n.id}"
+             data-notif-index="${index}">
           <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}"></span>
           <div class="min-w-0 flex-1">
             <div class="flex items-start gap-2">
@@ -256,15 +258,34 @@
             </div>
             <p class="mt-1 text-xs text-slate-400">${time}</p>
           </div>
-        </div>`;
+        </button>`;
     }).join("");
 
     // Mark single notification as read on click
     list.querySelectorAll("[data-notif-id]").forEach((el) => {
       el.addEventListener("click", async () => {
         const id = el.dataset.notifId;
+        const notification = notifications[Number(el.dataset.notifIndex)];
         try {
           await API.markCustomerNotificationRead(id);
+
+          if (
+            [
+              "grooming_medical_concern",
+              "grooming_clinic_referral_requested",
+              "grooming_clinic_referral_accepted",
+              "grooming_clinic_assessment_started",
+              "grooming_clinic_assessment_completed",
+              "pet_information_updated",
+            ].includes(
+              notification?.type,
+            )
+            && notification.destination
+          ) {
+            window.location.href = notification.destination;
+            return;
+          }
+
           await loadNotifications();
         } catch { /* silent */ }
       });
@@ -280,6 +301,19 @@
 
     if (type === "grooming_finished") {
       return groomingFinishedIcon(notification);
+    }
+
+    if (type === "grooming_medical_concern") {
+      return "!";
+    }
+
+    if ([
+      "grooming_clinic_referral_requested",
+      "grooming_clinic_referral_accepted",
+      "grooming_clinic_assessment_started",
+      "grooming_clinic_assessment_completed",
+    ].includes(type)) {
+      return "+";
     }
 
     const icons = {
@@ -506,6 +540,7 @@
   const rescheduleBookingRef     = document.getElementById("rescheduleBookingRef");
   const rescheduleDate           = document.getElementById("rescheduleDate");
   const rescheduleSlotsContainer = document.getElementById("rescheduleSlotsContainer");
+  const rescheduleAvailabilityIndicator = document.getElementById("rescheduleAvailabilityIndicator");
   const rescheduleMessage        = document.getElementById("rescheduleMessage");
   const submitRescheduleBtn      = document.getElementById("submitRescheduleBtn");
   const cancelModal              = document.getElementById("cancelModal");
@@ -516,23 +551,31 @@
   const cancelMessageEl          = document.getElementById("cancelMessage");
 
   let activeBookingId     = null;
+  let activeRescheduleBooking = null;
   let selectedWindowId    = null;
   let cancelTargetBooking = null;
+  let rescheduleLoadId    = 0;
+  let rescheduleClinicStatus = {
+    stoppedToday: false,
+    blockedDates: [],
+    groomingAvailability: null,
+  };
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
+  const RESCHEDULE_MAX_DAYS_AHEAD = 2;
 
   document.addEventListener("DOMContentLoaded", () => {
-    setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+    setRescheduleDateRange(getRescheduleTodayKey());
     loadDashboardPets();
     loadAppointments();
     loadGroomingCapacity();
 
     Promise.resolve(window.AppClock?.load?.())
       .then(() => {
-        setRescheduleMinDate(window.AppClock?.todayKey?.());
+        setRescheduleDateRange(getRescheduleTodayKey());
       })
       .catch(() => {
-        setRescheduleMinDate(new Date().toISOString().split("T")[0]);
+        setRescheduleDateRange(getRescheduleTodayKey());
       });
   });
 
@@ -548,28 +591,60 @@
   }
 
   async function loadAppointments() {
+    let data;
+
     try {
-      const data    = await API.getBookingHistory({ historyLimit: 6 });
-      const active  = data.bookings || [];
-      const history = data.history  || [];
-      const historyTotal = Number.isFinite(Number(data.history_total))
-        ? Number(data.history_total)
-        : history.length;
+      data = await API.getBookingHistory({ historyLimit: 6 });
+    } catch (error) {
+      renderDashboardPanelError(appointmentsList, "Failed to load schedule. Please try again.");
+      renderDashboardPanelError(groomingTrackerEl, "Failed to load grooming status. Please try again.");
+      renderDashboardPanelError(groomingHistoryEl, "Failed to load grooming history. Please try again.");
+      renderUpcomingAppointmentsSummary([]);
+      renderPastGroomingSummary([], 0);
+      return;
+    }
 
-      const scheduled = active.filter(isUpcomingAppointment);
-      const atClinic  = active.filter(b =>
-        ["checked_in", "in_progress", "for_payment", "released"].includes(b.status)
-      );
+    const active = Array.isArray(data?.bookings) ? data.bookings : [];
+    const history = Array.isArray(data?.history) ? data.history : [];
+    const historyTotal = Number.isFinite(Number(data?.history_total))
+      ? Number(data.history_total)
+      : history.length;
+    const scheduled = active.filter(isUpcomingAppointment);
+    const atClinic = active.filter(b =>
+      ["checked_in", "in_progress", "for_payment", "released"].includes(b?.status)
+    ).filter(b => b.show_grooming_tracker !== false);
 
+    renderDashboardPanel(appointmentsList, "schedule", () => {
       renderAppointments(scheduled);
       renderUpcomingAppointmentsSummary(scheduled);
+    });
+    renderDashboardPanel(groomingTrackerEl, "grooming status", () => {
       renderGroomingTracker(atClinic);
+    });
+    renderDashboardPanel(groomingHistoryEl, "grooming history", () => {
       renderGroomingHistory(history);
       renderPastGroomingSummary(history, historyTotal);
-    } catch {
-      appointmentsList.innerHTML =
-        '<div class="text-center py-10"><p class="text-sm text-red-500">Failed to load schedule.</p></div>';
+    });
+  }
+
+  function renderDashboardPanel(target, label, render) {
+    try {
+      render();
+    } catch (error) {
+      console.error(`Failed to render customer ${label}.`, error);
+      renderDashboardPanelError(target, `Failed to display ${label}. Please refresh.`);
     }
+  }
+
+  function renderDashboardPanelError(target, message) {
+    if (!target) return;
+
+    target.innerHTML = `
+      <div class="text-center py-10" role="alert">
+        <i data-lucide="alert-circle" class="w-9 h-9 mx-auto text-red-300"></i>
+        <p class="mt-3 text-sm text-red-500">${escapeDashboardHtml(message)}</p>
+      </div>`;
+    window.lucide?.createIcons();
   }
 
   // ── Appointments section ───────────────────────────────────────────────────
@@ -583,10 +658,35 @@
     }
   }
 
-  function setRescheduleMinDate(dateKey) {
-    if (rescheduleDate && dateKey) {
-      rescheduleDate.min = dateKey;
-    }
+  function getRescheduleTodayKey() {
+    const appClockDate = window.AppClock?.todayKey?.();
+    if (appClockDate) return appClockDate;
+
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
+  function addDaysToDateKey(dateKey, days) {
+    const [year, month, day] = String(dateKey).split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + days);
+
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  function setRescheduleDateRange(todayKey) {
+    if (!rescheduleDate || !todayKey) return;
+
+    rescheduleDate.min = todayKey;
+    rescheduleDate.max = addDaysToDateKey(todayKey, RESCHEDULE_MAX_DAYS_AHEAD);
   }
 
   function renderMyPetsSummary(pets) {
@@ -669,6 +769,7 @@
     const percent = Math.max(0, Math.min(100, toNumber(capacity.percent ?? ((used / max) * 100))));
     const queued = toNumber(queue.queued);
     const inProgress = toNumber(queue.in_progress);
+    const active = toNumber(queue.active ?? (queued + inProgress));
     const isFull = Boolean(capacity.is_full) || used >= max;
     const isBusy = !isFull && percent >= 80;
 
@@ -687,7 +788,7 @@
       return;
     }
 
-    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(queued);
+    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(active);
     if (groomingQueueSummaryEl) {
       groomingQueueSummaryEl.textContent = `${inProgress} in progress`;
       groomingQueueSummaryEl.className = "text-sm text-[#315b7e] mt-1";
@@ -798,7 +899,9 @@
 
   function buildTrackerCard(b) {
     const timeLabel  = b.time_window?.window_label ?? "—";
-    const petNames   = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
+    const trackerPets = (b.pets || []).filter(p => p.clinic_referred !== true);
+    const petNames   = trackerPets.map(p => p.pet_name).filter(Boolean).join(", ") || "—";
+    const petCount   = trackerPets.length;
     const prePaid    = b.paid
       ? `<span class="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Pre-Paid ✓</span>`
       : "";
@@ -849,7 +952,7 @@
             <p class="text-xs text-slate-400 mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
           </div>
         </div>
-        <p class="text-xs text-slate-500 mb-5">${petNames} &middot; ${b.number_of_pets} pet${b.number_of_pets > 1 ? "s" : ""}</p>
+        <p class="text-xs text-slate-500 mb-5">${petNames} &middot; ${petCount} pet${petCount > 1 ? "s" : ""}</p>
         <div class="relative flex justify-between items-start px-4">
           <!-- background track -->
           <div class="absolute top-[1.0625rem] left-4 right-4 h-1 bg-slate-200 rounded-full"></div>
@@ -895,21 +998,52 @@
   }
 
   function buildHistoryCard(b) {
-    const timeLabel  = b.time_window?.window_label ?? "—";
-    const petNames   = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
-    const paidBadge  = b.paid
+    const paymentPets = Array.isArray(b?.payment_summary?.pets)
+      ? b.payment_summary.pets
+      : [];
+    const reviewedPets = paymentPets
+      .filter((pet) => pet?.payment_kind === "stopped_reviewed");
+    const paymentReviewSummary = reviewedPets.length ? `
+      <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
+        ${reviewedPets.map((pet) => `
+          <div class="rounded-xl bg-amber-50 p-3 text-xs text-slate-700">
+            <p class="font-bold text-amber-900">${escapeDashboardHtml(pet?.pet_name)} &middot; Payment Review Completed</p>
+            <p class="mt-1">${escapeDashboardHtml(pet?.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet?.final_pet_charge)}</p>
+            <p class="mt-1">${escapeDashboardHtml(pet?.customer_explanation || "No customer explanation provided.")}</p>
+          </div>
+        `).join("")}
+      </div>
+    ` : "";
+    const timeLabel = b?.time_window?.window_label ?? "—";
+    const pets = Array.isArray(b?.pets) ? b.pets : [];
+    const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
+    const walkInBadge = b?.booking_type === "walk_in"
+      ? `<span class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">Walk-in</span>`
+      : "";
+    const paidBadge = b?.paid
       ? `<span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Paid ✓</span>`
       : "";
 
     return `
       <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
         <div class="flex items-start justify-between gap-2 mb-1">
-          <p class="text-sm font-semibold text-slate-700">${b.booking_reference}</p>
-          ${paidBadge}
+          <p class="text-sm font-semibold text-slate-700">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
+          <div class="flex flex-wrap justify-end gap-1.5">${walkInBadge}${paidBadge}</div>
         </div>
-        <p class="text-xs text-slate-400 mb-1">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
-        <p class="text-xs text-slate-500">${petNames}</p>
+        <p class="text-xs text-slate-400 mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
+        <p class="text-xs text-slate-500">${escapeDashboardHtml(petNames)}</p>
+        ${paymentReviewSummary}
       </div>`;
+  }
+
+  function escapeDashboardHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    })[character]);
   }
 
   // ── Status config ──────────────────────────────────────────────────────────
@@ -931,21 +1065,54 @@
   // ── Reschedule modal ───────────────────────────────────────────────────────
 
   rescheduleDate.addEventListener("change", async function () {
+    const requestId = ++rescheduleLoadId;
     selectedWindowId = null;
+    hideRescheduleAvailability();
+    hideRescheduleMessage();
     enableSubmitIfReady();
     const date = this.value;
     if (!date) return;
+
+    const dateError = getRescheduleDateError(date);
+    this.setCustomValidity(dateError || "");
+    if (dateError) {
+      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+      showRescheduleMessage("error", dateError);
+      return;
+    }
+
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Loading slots...</p>';
     try {
       const data = await API.getTimeslots(date);
-      renderSlots(data.windows || []);
-    } catch {
+      if (requestId !== rescheduleLoadId) return;
+
+      if (data.cutoff_passed) {
+        const cutoffLabel = data.availability?.pre_registration_cutoff_label || "the configured cutoff time";
+        rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+        showRescheduleMessage("error", `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`);
+        return;
+      }
+
+      renderSlots(data);
+    } catch (error) {
+      if (requestId !== rescheduleLoadId) return;
       rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-red-500">Failed to load slots. Try again.</p>';
     }
   });
 
   submitRescheduleBtn.addEventListener("click", async () => {
     if (!activeBookingId || !selectedWindowId || !rescheduleDate.value) return;
+
+    const dateError = getRescheduleDateError(rescheduleDate.value);
+    if (dateError || isCurrentRescheduleSelection(rescheduleDate.value, selectedWindowId)) {
+      showRescheduleMessage(
+        "error",
+        dateError || "Choose a different date or time slot from the current schedule.",
+      );
+      enableSubmitIfReady();
+      return;
+    }
+
     submitRescheduleBtn.disabled = true;
     submitRescheduleBtn.textContent = "Rescheduling...";
     try {
@@ -967,38 +1134,92 @@
   closeRescheduleModal.addEventListener("click", closeModal);
   rescheduleModal.addEventListener("click", (e) => { if (e.target === rescheduleModal) closeModal(); });
 
-  function openRescheduleModal(booking) {
+  async function openRescheduleModal(booking) {
+    const requestId = ++rescheduleLoadId;
     activeBookingId  = booking.booking_id;
+    activeRescheduleBooking = booking;
     selectedWindowId = null;
     rescheduleBookingRef.textContent =
       `Rescheduling: ${booking.booking_reference} (${booking.reschedule_count ?? 0} of 2 uses)`;
     rescheduleDate.value = "";
+    rescheduleDate.setCustomValidity("");
+    rescheduleDate.disabled = true;
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Select a date to see available slots.</p>';
+    hideRescheduleAvailability();
     hideRescheduleMessage();
     enableSubmitIfReady();
     rescheduleModal.classList.remove("hidden");
     rescheduleModal.classList.add("flex");
+
+    try {
+      await window.AppClock?.load?.();
+      const data = await API.getClinicStatus();
+      if (requestId !== rescheduleLoadId || activeBookingId !== booking.booking_id) return;
+
+      setRescheduleDateRange(getRescheduleTodayKey());
+      rescheduleClinicStatus = {
+        stoppedToday: Boolean(data.stopped_today),
+        blockedDates: Array.isArray(data.blocked_dates) ? data.blocked_dates : [],
+        groomingAvailability: data.availability?.grooming || null,
+      };
+      rescheduleDate.disabled = false;
+    } catch {
+      if (requestId !== rescheduleLoadId || activeBookingId !== booking.booking_id) return;
+
+      showRescheduleMessage("error", "Could not load the current scheduling rules. Close this window and try again.");
+    }
   }
 
   function closeModal() {
+    rescheduleLoadId += 1;
     rescheduleModal.classList.add("hidden");
     rescheduleModal.classList.remove("flex");
     activeBookingId  = null;
+    activeRescheduleBooking = null;
     selectedWindowId = null;
+    rescheduleDate.disabled = false;
+    rescheduleDate.setCustomValidity("");
+    hideRescheduleAvailability();
     submitRescheduleBtn.textContent = "Confirm Reschedule";
   }
 
-  function renderSlots(windows) {
-    const available = windows.filter(w => !w.is_full);
+  function renderSlots(data) {
+    const windows = Array.isArray(data.windows) ? data.windows : [];
+    const selectedDate = rescheduleDate.value;
+    const bookingDate = String(activeRescheduleBooking?.booking_date || "");
+    const sameDate = selectedDate === bookingDate;
+    const petCount = Math.max(1, Number(activeRescheduleBooking?.number_of_pets) || 1);
+    const capacity = Math.max(0, Number(data.capacity) || 0);
+    const totalBooked = Math.max(0, Number(data.total_booked) || 0);
+    const bookedWithoutCurrent = Math.max(
+      0,
+      totalBooked - (sameDate ? petCount : 0),
+    );
+    const remaining = Math.max(0, capacity - bookedWithoutCurrent);
+    const bookingFits = capacity === 0 || bookedWithoutCurrent + petCount <= capacity;
+
+    showRescheduleAvailability(remaining);
+
+    const available = windows.filter((window) =>
+      bookingFits
+      && !window.is_cutoff
+      && !isRescheduleSlotPast(window, selectedDate)
+      && !isCurrentRescheduleSelection(selectedDate, window.window_id, window.window_label)
+    );
+
     if (!available.length) {
-      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">No available slots on this date.</p>';
+      rescheduleSlotsContainer.innerHTML = `<p class="text-sm text-slate-400">${
+        sameDate
+          ? "No other available time slots on this date."
+          : "No available time slots on this date."
+      }</p>`;
       return;
     }
+
     rescheduleSlotsContainer.innerHTML = available.map(w => `
       <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-[#315b7e] has-[:checked]:border-[#315b7e] has-[:checked]:bg-[#eaf4fb]">
         <input type="radio" name="rescheduleSlot" value="${w.window_id}" class="accent-[#315b7e]" />
-        <span class="text-sm text-slate-700">${w.window_label}</span>
-        <span class="ml-auto text-xs text-slate-400">${w.remaining} slot${w.remaining !== 1 ? "s" : ""} left</span>
+        <span class="text-sm text-slate-700">${escapeRescheduleHtml(w.window_label)}</span>
       </label>`).join("");
     rescheduleSlotsContainer.querySelectorAll('input[name="rescheduleSlot"]').forEach(radio => {
       radio.addEventListener("change", () => {
@@ -1009,7 +1230,10 @@
   }
 
   function enableSubmitIfReady() {
-    const ready = !!rescheduleDate.value && !!selectedWindowId;
+    const ready = !!rescheduleDate.value
+      && !!selectedWindowId
+      && !getRescheduleDateError(rescheduleDate.value)
+      && !isCurrentRescheduleSelection(rescheduleDate.value, selectedWindowId);
     submitRescheduleBtn.disabled = !ready;
     submitRescheduleBtn.className = ready
       ? "w-full rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-semibold text-white hover:bg-[#274a67] transition"
@@ -1026,6 +1250,99 @@
   function hideRescheduleMessage() {
     rescheduleMessage.classList.add("hidden");
     rescheduleMessage.textContent = "";
+  }
+
+  function getRescheduleDateError(dateKey) {
+    if (!dateKey) return "";
+
+    const today = rescheduleDate.min || getRescheduleTodayKey();
+    const lastAvailableDate = rescheduleDate.max
+      || addDaysToDateKey(today, RESCHEDULE_MAX_DAYS_AHEAD);
+
+    if (dateKey < today) {
+      return "Past dates are not available for rescheduling.";
+    }
+
+    if (dateKey > lastAvailableDate) {
+      return "Grooming can be pre-registered up to three days in advance.";
+    }
+
+    if (rescheduleClinicStatus.stoppedToday && dateKey === today) {
+      return "The clinic is not accepting grooming pre-registrations today.";
+    }
+
+    const closure = rescheduleClinicStatus.blockedDates.find((block) =>
+      dateKey >= block.start_date && dateKey <= block.end_date
+    );
+    if (closure) {
+      return closure.reason || "The clinic is not accepting grooming pre-registrations on this date.";
+    }
+
+    const cutoff = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_time;
+    if (dateKey === today && cutoff && isRescheduleCutoffPassed(cutoff)) {
+      const cutoffLabel = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_label
+        || "the configured cutoff time";
+      return `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`;
+    }
+
+    return "";
+  }
+
+  function isRescheduleCutoffPassed(cutoff) {
+    const [hours, minutes] = String(cutoff).split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
+
+    const currentMinutes = window.AppClock?.currentMinutes?.();
+    if (!Number.isFinite(currentMinutes)) return false;
+
+    return currentMinutes > (hours * 60 + minutes);
+  }
+
+  function isRescheduleSlotPast(windowData, dateKey) {
+    if (windowData.is_past) return true;
+    if (dateKey !== getRescheduleTodayKey()) return false;
+
+    const [hours, minutes] = String(windowData.start_time || "").split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
+
+    const currentMinutes = window.AppClock?.currentMinutes?.();
+    return Number.isFinite(currentMinutes)
+      && currentMinutes >= (hours * 60 + minutes);
+  }
+
+  function isCurrentRescheduleSelection(dateKey, windowId, windowLabel = null) {
+    if (!activeRescheduleBooking || dateKey !== String(activeRescheduleBooking.booking_date || "")) {
+      return false;
+    }
+
+    const currentWindowId = activeRescheduleBooking.time_window?.window_id;
+    if (currentWindowId !== null && currentWindowId !== undefined) {
+      return Number(currentWindowId) === Number(windowId);
+    }
+
+    return Boolean(windowLabel)
+      && String(activeRescheduleBooking.time_window?.window_label || "") === String(windowLabel);
+  }
+
+  function showRescheduleAvailability(remaining) {
+    rescheduleAvailabilityIndicator.textContent =
+      `${remaining} slot${remaining === 1 ? "" : "s"} left`;
+    rescheduleAvailabilityIndicator.classList.remove("hidden");
+  }
+
+  function hideRescheduleAvailability() {
+    rescheduleAvailabilityIndicator.textContent = "";
+    rescheduleAvailabilityIndicator.classList.add("hidden");
+  }
+
+  function escapeRescheduleHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    })[character]);
   }
 
   function handleCancel(booking) {
@@ -1084,6 +1401,13 @@
     if (!dateStr) return "—";
     const d = new Date(dateStr + "T00:00:00");
     return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+  }
+
+  function formatPaymentPeso(value) {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+    }).format(Number(value || 0));
   }
 
   // Expose for coordination with the notification poller (pickup popup sequencing).

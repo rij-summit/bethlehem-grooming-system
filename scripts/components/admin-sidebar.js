@@ -1,3 +1,38 @@
+// Alpine's x-if creates fresh DOM after Lucide's initial page scan. Observe
+// those insertions so conditional and empty-state icons are always converted.
+(function installDynamicLucideIconObserver() {
+  if (window.__bethlehemDynamicLucideObserver || typeof MutationObserver === "undefined") {
+    return;
+  }
+
+  let refreshQueued = false;
+  const containsPendingIcon = (node) => node?.nodeType === Node.ELEMENT_NODE
+    && (node.matches?.("i[data-lucide]") || node.querySelector?.("i[data-lucide]"));
+
+  const queueIconRefresh = () => {
+    if (refreshQueued) return;
+    refreshQueued = true;
+
+    window.requestAnimationFrame(() => {
+      refreshQueued = false;
+      if (window.lucide && document.querySelector("i[data-lucide]")) {
+        window.lucide.createIcons();
+      }
+    });
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    const hasNewIcon = mutations.some((mutation) =>
+      Array.from(mutation.addedNodes).some(containsPendingIcon),
+    );
+    if (hasNewIcon) queueIconRefresh();
+  });
+
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.__bethlehemDynamicLucideObserver = observer;
+  queueIconRefresh();
+})();
+
 function getAdminSidebarActivePage(pathname = window.location.pathname) {
   const normalizedPath = String(pathname || "")
     .replace(/\\/g, "/")

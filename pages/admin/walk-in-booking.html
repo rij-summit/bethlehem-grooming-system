@@ -14,6 +14,7 @@
       <section class="mb-6">
         <a
           href="./appointments.html"
+          data-walk-in-back-link
           class="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700"
         >
           <span>&larr;</span>
@@ -21,8 +22,8 @@
         </a>
 
         <div class="mt-4">
-          <h1 class="text-3xl font-bold text-[#2f4b66]">
-            Enter your Personal Information
+          <h1 id="walkInPageTitle" class="text-3xl font-bold text-[#2f4b66]">
+            Grooming walk-in
           </h1>
         </div>
 
@@ -59,9 +60,28 @@
       <section class="rounded-3xl bg-[#cfe3f6] p-6 shadow-lg md:p-8">
         <div class="mx-auto max-w-5xl">
           <section class="rounded-3xl bg-white/90 p-5 shadow-sm md:p-6">
+            <section id="existingCustomerSection" class="mb-6 rounded-2xl border border-[#c9d9e8] bg-[#f8fbfd] p-5">
+              <h2 class="text-lg font-semibold text-[#2f4b66]">Find an existing customer</h2>
+              <p class="mt-1 text-sm text-slate-500">Search active and unregistered customers by name, mobile number, or email.</p>
+
+              <div class="relative mt-4">
+                <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                <input
+                  id="existingCustomerSearch"
+                  type="search"
+                  aria-label="Customer search"
+                  autocomplete="off"
+                  placeholder="Enter at least 2 characters"
+                  class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                />
+              </div>
+              <p id="existingCustomerSearchStatus" class="mt-3 hidden text-sm text-slate-500" aria-live="polite"></p>
+              <div id="existingCustomerResults" class="mt-3 grid gap-3"></div>
+            </section>
+
             <div class="mb-6">
-              <h2 class="text-2xl font-bold text-[#2f4b66]">
-                Owner Information
+              <h2 class="text-2xl font-semibold text-[#2f4b66]">
+                New owner information
               </h2>
             </div>
 
@@ -181,6 +201,7 @@
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <a
                   href="./appointments.html"
+                  data-walk-in-back-link
                   class="inline-flex items-center justify-center rounded-2xl border border-[#315b7e] px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]"
                 >
                   Back
@@ -192,7 +213,7 @@
                   disabled
                   class="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-[#315b7e] px-6 py-3 text-sm font-semibold text-white opacity-50 transition hover:bg-[#274864]"
                 >
-                  <span>Next Step</span>
+                  <span id="walkInOwnerNextLabel">Next Step</span>
                   <i data-lucide="arrow-right" class="h-4 w-4"></i>
                 </button>
               </div>
@@ -202,10 +223,49 @@
       </section>
     </main>
 
-    <script src="../../scripts/api.js?v=email-verification-20260726"></script>
+    <aside
+      id="similarOwnerWarning"
+      class="fixed bottom-5 left-5 z-50 hidden w-[calc(100%-2.5rem)] max-w-md rounded-2xl border border-amber-200 bg-white p-5 shadow-xl"
+      role="alert"
+      aria-live="assertive"
+      aria-labelledby="similarOwnerWarningTitle"
+    >
+      <div class="flex items-start gap-3">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+          <i data-lucide="triangle-alert" class="h-5 w-5"></i>
+        </span>
+        <div class="min-w-0 flex-1">
+          <h2 id="similarOwnerWarningTitle" class="text-base font-semibold text-[#2f4b66]">
+            Similar customer found
+          </h2>
+          <p class="mt-1 text-sm leading-6 text-slate-600">
+            A customer with the same first and last name already exists. Review the match before continuing.
+          </p>
+          <div id="similarOwnerWarningMatches" class="mt-3 space-y-2"></div>
+        </div>
+      </div>
+      <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button
+          id="reviewSimilarOwnerBtn"
+          type="button"
+          class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          Review details
+        </button>
+        <button
+          id="continueSimilarOwnerBtn"
+          type="button"
+          class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#274864]"
+        >
+          Continue anyway
+        </button>
+      </div>
+    </aside>
+
+    <script src="../../scripts/api.js?v=walk-in-owner-validation-20260812"></script>
     <script
       type="module"
-      src="../../scripts/components/walk-in-owner-step.js"
+      src="../../scripts/components/walk-in-owner-step.js?v=clinic-existing-customers-20260813"
     ></script>
   </body>
 </html>

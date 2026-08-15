@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\User;
+use App\Http\Requests\StoreUnregisteredCustomerRequest;
 use App\Models\Booking;
 use App\Models\Pet;
+use App\Models\UnregisteredCustomer;
+use App\Models\User;
+use App\Services\CustomerIdentityService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class CustomerController extends Controller
 {
@@ -22,7 +27,7 @@ class CustomerController extends Controller
 
     private function requireAdminOrStaff(Request $request)
     {
-        if (!in_array($request->user()?->role, ['admin', 'staff'], true)) {
+        if (! in_array($request->user()?->role, ['admin', 'staff'], true)) {
             abort(response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Admin or staff access required.',
@@ -32,35 +37,38 @@ class CustomerController extends Controller
 
     // ── LIST CUSTOMERS ────────────────────────────────────
     // GET /api/admin/customers
-    // Query params: status (active|inactive|archived), tier (new|returning), search
+    // Query params: status (active|inactive|archived|unregistered), tier (new|returning), search
     public function index(Request $request)
     {
         $this->requireAdminOrStaff($request);
 
-        $status = $request->query('status', 'active');   // active | inactive | archived
-        $tier   = $request->query('tier',   '');          // new | returning | '' (all)
-        $search = $request->query('search', '');
+        $status = $request->query('status', 'active');   // active | inactive | archived | unregistered
+        $tier = $request->query('tier', '');          // new | returning | '' (all)
+        $search = trim((string) $request->query('search', ''));
+
+        if ($status === 'unregistered') {
+            return $this->unregisteredIndex($search);
+        }
 
         $query = User::where('role', 'customer');
 
-        // Status filter
-        if ($status === 'archived') {
-            $query->where('is_archived', 1);
-        } elseif ($status === 'inactive') {
-            $query->where('is_archived', 0)->where('is_active', 0);
-        } else {
-            // active (default)
-            $query->where('is_archived', 0)->where('is_active', 1);
-        }
+        $this->applyCustomerStatusFilter($query, $status);
 
         // Search
-        if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name',  'like', "%{$search}%")
-                  ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"])
-                  ->orWhere('phone',      'like', "%{$search}%")
-                  ->orWhere('email',      'like', "%{$search}%");
+        if ($search !== '') {
+            $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+
+            $query->where(function ($q) use ($search, $nameTerms) {
+                $q->where('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
             });
         }
 
@@ -84,26 +92,506 @@ class CustomerController extends Controller
             }
 
             return [
-                'id'           => $user->user_id,
-                'firstName'    => $user->first_name,
-                'lastName'     => $user->last_name,
-                'fullName'     => trim($user->first_name . ' ' . $user->last_name),
-                'email'        => $user->email,
-                'phone'        => $user->phone,
-                'isActive'     => (bool) $user->is_active,
-                'isArchived'   => (bool) $user->is_archived,
-                'tier'         => $computedTier,
+                'id' => $user->user_id,
+                'recordType' => 'registered',
+                'firstName' => $user->first_name,
+                'lastName' => $user->last_name,
+                'fullName' => trim($user->first_name.' '.$user->last_name),
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'isActive' => (bool) $user->is_active,
+                'isArchived' => (bool) $user->is_archived,
+                'tier' => $computedTier,
                 'bookingCount' => $bookingCount,
-                'archivedAt'   => $user->archived_at,
-                'joinedAt'     => $user->created_at ?? null,
+                'archivedAt' => $user->archived_at,
+                'joinedAt' => $user->created_at ?? null,
             ];
         })->filter()->values();
 
+        if ($status === 'archived' && Schema::hasTable('unregistered_customers')) {
+            $customers = $customers
+                ->concat($this->queryUnregisteredCustomers($search, true))
+                ->sortBy('fullName', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values();
+        }
+
+        $petMatches = collect();
+
+        if ($search !== '') {
+            $petMatches = Pet::query()
+                ->with('user:user_id,first_name,last_name,phone,email')
+                ->where('pet_name', 'like', "%{$search}%")
+                ->whereHas('user', function ($ownerQuery) use ($status) {
+                    $ownerQuery->where('role', 'customer');
+                    $this->applyCustomerStatusFilter($ownerQuery, $status);
+                })
+                ->orderBy('pet_name')
+                ->orderBy('pet_id')
+                ->get();
+
+            if ($tier !== '') {
+                $ownerTiers = [];
+                $petMatches = $petMatches->filter(function (Pet $pet) use ($tier, &$ownerTiers) {
+                    if (! array_key_exists($pet->user_id, $ownerTiers)) {
+                        $hasPastBooking = Booking::where('user_id', $pet->user_id)
+                            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
+                            ->exists();
+                        $ownerTiers[$pet->user_id] = $hasPastBooking ? 'returning' : 'new';
+                    }
+
+                    return $ownerTiers[$pet->user_id] === $tier;
+                });
+            }
+
+            $petMatches = $petMatches->map(fn (Pet $pet) => [
+                'id' => $pet->pet_id,
+                'petName' => $pet->pet_name,
+                'species' => $pet->species,
+                'breed' => $pet->breed,
+                'isArchived' => (bool) $pet->is_archived,
+                'ownerId' => $pet->user_id,
+                'ownerName' => trim($pet->user->first_name.' '.$pet->user->last_name),
+                'ownerPhone' => $pet->user->phone,
+                'ownerEmail' => $pet->user->email,
+            ])->values();
+        }
+
         return response()->json([
-            'success'   => true,
+            'success' => true,
             'customers' => $customers,
-            'total'     => $customers->count(),
+            'total' => $customers->count(),
+            'pets' => $petMatches,
+            'petTotal' => $petMatches->count(),
         ]);
+    }
+
+    private function unregisteredIndex(string $search)
+    {
+        $customers = $this->queryUnregisteredCustomers($search, false);
+
+        return response()->json([
+            'success' => true,
+            'customers' => $customers,
+            'total' => $customers->count(),
+            'pets' => [],
+            'petTotal' => 0,
+        ]);
+    }
+
+    private function queryUnregisteredCustomers(string $search, bool $archived)
+    {
+        $query = UnregisteredCustomer::query()
+            ->with('pets')
+            ->where('is_archived', $archived);
+
+        if ($search !== '') {
+            $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+
+            $query->where(function ($customerQuery) use ($search, $nameTerms) {
+                $customerQuery
+                    ->where('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('middle_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
+            });
+        }
+
+        return $query
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (UnregisteredCustomer $customer) => $this->formatUnregisteredCustomer($customer));
+    }
+
+    public function storeUnregistered(
+        StoreUnregisteredCustomerRequest $request,
+        CustomerIdentityService $customerIdentity,
+    ) {
+        $this->requireAdminOrStaff($request);
+        $data = $request->validated();
+
+        $this->ensureCustomerContactIsAvailable($customerIdentity, $data);
+
+        $similarCustomers = $customerIdentity->findCustomersWithSimilarName(
+            $data['first_name'],
+            $data['last_name'],
+        );
+
+        if ($similarCustomers->isNotEmpty() && ! ($data['confirm_similar_name'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'similar_customer_name',
+                'message' => 'A customer with the same first and last name already exists. Do you still want to continue?',
+                'similarCustomers' => $similarCustomers,
+            ], 409);
+        }
+
+        unset($data['confirm_similar_name']);
+
+        $customer = UnregisteredCustomer::create([
+            ...$data,
+            'created_by_user_id' => $request->user()->user_id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Unregistered customer added successfully.',
+            'customer' => $this->formatUnregisteredCustomer($customer),
+        ], 201);
+    }
+
+    public function showUnregistered(Request $request, $id)
+    {
+        $this->requireAdminOrStaff($request);
+
+        $customer = UnregisteredCustomer::query()->with('pets')->find($id);
+
+        if (! $customer) {
+            return response()->json(['success' => false, 'message' => 'Unregistered customer not found.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'customer' => $this->formatUnregisteredCustomer($customer),
+        ]);
+    }
+
+    private function formatUnregisteredCustomer(UnregisteredCustomer $customer): array
+    {
+        $middleName = trim((string) $customer->middle_name);
+        $displayMiddleName = $middleName !== '' ? rtrim($middleName, '.').'.' : '';
+        $fullName = trim(implode(' ', array_filter([
+            $customer->first_name,
+            $displayMiddleName,
+            $customer->last_name,
+        ])));
+
+        $pets = $customer->relationLoaded('pets')
+            ? $customer->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values()
+            : collect();
+
+        return [
+            'id' => $customer->id,
+            'recordType' => 'unregistered',
+            'status' => $customer->is_archived ? 'archived' : 'unregistered',
+            'firstName' => $customer->first_name,
+            'lastName' => $customer->last_name,
+            'middleName' => $customer->middle_name,
+            'fullName' => $fullName,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'isActive' => false,
+            'isArchived' => (bool) $customer->is_archived,
+            'tier' => null,
+            'bookingCount' => 0,
+            'petCount' => $pets->count(),
+            'activePetCount' => $pets->where('isArchived', false)->count(),
+            'archivedPetCount' => $pets->where('isArchived', true)->count(),
+            'pets' => $pets,
+            'archivedAt' => $customer->archived_at,
+            'joinedAt' => $customer->created_at,
+        ];
+    }
+
+    private function formatPet(Pet $pet): array
+    {
+        return [
+            'id' => $pet->pet_id,
+            'petName' => $pet->pet_name,
+            'species' => $pet->species,
+            'breed' => $pet->breed,
+            'gender' => $pet->gender,
+            'birthdate' => $pet->birthdate,
+            'isNeutered' => (bool) $pet->is_neutered,
+            'neuteredDate' => $pet->neutered_date,
+            'isDeceased' => (bool) $pet->is_deceased,
+            'deceasedDate' => $pet->deceased_date,
+            'weight' => $pet->weight,
+            'color' => $pet->color,
+            'size' => $pet->size,
+            'furType' => $pet->fur_type,
+            'medicalConditions' => $pet->medical_conditions,
+            'isArchived' => (bool) $pet->is_archived,
+            'createdAt' => $pet->created_at ?? null,
+        ];
+    }
+
+    public function validateWalkInOwner(
+        StoreUnregisteredCustomerRequest $request,
+        CustomerIdentityService $customerIdentity,
+    ) {
+        $this->requireAdminOrStaff($request);
+        $data = $request->validated();
+        $this->ensureCustomerContactIsAvailable($customerIdentity, $data);
+
+        $similarCustomers = $customerIdentity->findCustomersWithSimilarName(
+            $data['first_name'],
+            $data['last_name'],
+        );
+
+        if ($similarCustomers->isNotEmpty() && ! ($data['confirm_similar_name'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'similar_customer_name',
+                'message' => 'A customer with the same first and last name already exists. Do you still want to continue?',
+                'similarCustomers' => $similarCustomers,
+            ], 409);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Owner information is available.',
+        ]);
+    }
+
+    private function ensureCustomerContactIsAvailable(
+        CustomerIdentityService $customerIdentity,
+        array $data,
+    ): void {
+        $conflict = $customerIdentity->findContactConflict(
+            $data['phone'],
+            $data['email'] ?? null,
+        );
+
+        if (! $conflict) {
+            return;
+        }
+
+        $field = $conflict['field'];
+        $customerType = $conflict['recordType'] === 'registered'
+            ? 'A registered customer'
+            : 'An unregistered customer';
+
+        throw ValidationException::withMessages([
+            $field => $customerType.' already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
+        ]);
+    }
+
+    public function archiveUnregistered(Request $request, $id)
+    {
+        $this->requireAdminOrStaff($request);
+
+        $customer = UnregisteredCustomer::query()->find($id);
+        if (! $customer) {
+            return response()->json(['success' => false, 'message' => 'Unregistered customer not found.'], 404);
+        }
+        if ($customer->is_archived) {
+            return response()->json(['success' => false, 'message' => 'Customer is already archived.'], 422);
+        }
+
+        $customer->update(['is_archived' => true, 'archived_at' => now()]);
+
+        return response()->json(['success' => true, 'message' => 'Customer archived.']);
+    }
+
+    public function walkInSearch(Request $request)
+    {
+        $this->requireAdminOrStaff($request);
+        $validated = $request->validate(['q' => ['required', 'string', 'max:100']]);
+        $search = trim($validated['q']);
+
+        if (mb_strlen($search) < 2) {
+            return response()->json(['success' => true, 'customers' => []]);
+        }
+
+        $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+        $applySearch = function ($query) use ($search, $nameTerms) {
+            $query->where(function ($customerQuery) use ($search, $nameTerms) {
+                $customerQuery->where('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
+            });
+        };
+
+        $registeredQuery = User::query()
+            ->with(['pets' => fn ($query) => $query->where('is_archived', false)])
+            ->where('role', 'customer')
+            ->where('is_active', true)
+            ->where('is_archived', false);
+        $applySearch($registeredQuery);
+        $registered = $registeredQuery->limit(10)->get()->map(fn (User $user) => [
+            'id' => $user->user_id,
+            'recordType' => 'registered',
+            'firstName' => $user->first_name,
+            'lastName' => $user->last_name,
+            'middleName' => null,
+            'fullName' => trim($user->first_name.' '.$user->last_name),
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'status' => 'active',
+            'pets' => $user->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values(),
+        ]);
+
+        $unregisteredQuery = UnregisteredCustomer::query()
+            ->with(['pets' => fn ($query) => $query->where('is_archived', false)])
+            ->where('is_archived', false);
+        $applySearch($unregisteredQuery);
+        $unregistered = $unregisteredQuery->limit(10)->get()->map(fn (UnregisteredCustomer $customer) => [
+            'id' => $customer->id,
+            'recordType' => 'unregistered',
+            'firstName' => $customer->first_name,
+            'lastName' => $customer->last_name,
+            'middleName' => $customer->middle_name,
+            'fullName' => trim($customer->first_name.' '.$customer->last_name),
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'status' => 'unregistered',
+            'pets' => $customer->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'customers' => $registered->concat($unregistered)
+                ->sortBy('fullName', SORT_NATURAL | SORT_FLAG_CASE)
+                ->take(12)
+                ->values(),
+        ]);
+    }
+
+    public function dashboardSearch(Request $request)
+    {
+        $this->requireAdminOrStaff($request);
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+        $search = trim((string) ($validated['q'] ?? ''));
+
+        if ($search === '') {
+            return response()->json([
+                'success' => true,
+                'customers' => [],
+                'pets' => [],
+            ]);
+        }
+
+        $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+        $registeredCustomers = User::query()
+            ->where('role', 'customer')
+            ->where(function ($customerQuery) use ($search, $nameTerms) {
+                $customerQuery->where('phone', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(8)
+            ->get(['user_id', 'first_name', 'last_name', 'phone', 'is_active', 'is_archived'])
+            ->map(fn (User $user) => [
+                'id' => $user->user_id,
+                'recordType' => 'registered',
+                'name' => trim($user->first_name.' '.$user->last_name),
+                'phone' => $user->phone,
+                'status' => $user->is_archived ? 'Archived' : ($user->is_active ? 'Active' : 'Inactive'),
+            ]);
+
+        $unregisteredCustomers = UnregisteredCustomer::query()
+            ->where('is_archived', false)
+            ->where(function ($customerQuery) use ($search, $nameTerms) {
+                $customerQuery->where('phone', 'like', "%{$search}%")
+                    ->orWhere(function ($nameQuery) use ($nameTerms) {
+                        foreach ($nameTerms as $term) {
+                            $nameQuery->where(function ($termQuery) use ($term) {
+                                $termQuery->where('first_name', 'like', "%{$term}%")
+                                    ->orWhere('middle_name', 'like', "%{$term}%")
+                                    ->orWhere('last_name', 'like', "%{$term}%");
+                            });
+                        }
+                    });
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(8)
+            ->get(['id', 'first_name', 'last_name', 'middle_name', 'phone'])
+            ->map(fn (UnregisteredCustomer $customer) => [
+                'id' => $customer->id,
+                'recordType' => 'unregistered',
+                'name' => trim($customer->first_name.' '.$customer->last_name),
+                'phone' => $customer->phone,
+                'status' => 'Unregistered',
+            ]);
+
+        $customers = $registeredCustomers
+            ->concat($unregisteredCustomers)
+            ->sortBy([
+                ['name', 'asc'],
+                ['recordType', 'asc'],
+                ['phone', 'asc'],
+            ], SORT_NATURAL | SORT_FLAG_CASE)
+            ->take(8)
+            ->values();
+
+        $pets = Pet::query()
+            ->with([
+                'user:user_id,first_name,last_name',
+                'unregisteredCustomer:id,first_name,last_name',
+            ])
+            ->where('pet_name', 'like', "%{$search}%")
+            ->where(function ($ownerQuery) {
+                $ownerQuery
+                    ->whereHas('user', fn ($userQuery) => $userQuery->where('role', 'customer'))
+                    ->orWhereHas('unregisteredCustomer', fn ($customerQuery) => $customerQuery->where('is_archived', false));
+            })
+            ->orderBy('pet_name')
+            ->orderBy('pet_id')
+            ->limit(8)
+            ->get(['pet_id', 'user_id', 'unregistered_customer_id', 'pet_name', 'species'])
+            ->map(function (Pet $pet) {
+                $unregisteredOwner = $pet->unregisteredCustomer;
+                $owner = $unregisteredOwner ?? $pet->user;
+
+                return [
+                    'id' => $pet->pet_id,
+                    'name' => $pet->pet_name,
+                    'species' => $pet->species,
+                    'ownerId' => $unregisteredOwner?->id ?? $pet->user_id,
+                    'ownerName' => trim(($owner?->first_name ?? '').' '.($owner?->last_name ?? '')),
+                    'ownerRecordType' => $unregisteredOwner ? 'unregistered' : 'registered',
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'customers' => $customers,
+            'pets' => $pets,
+        ]);
+    }
+
+    private function applyCustomerStatusFilter($query, string $status): void
+    {
+        if ($status === 'archived') {
+            $query->where('is_archived', 1);
+
+            return;
+        }
+
+        if ($status === 'inactive') {
+            $query->where('is_archived', 0)->where('is_active', 0);
+
+            return;
+        }
+
+        $query->where('is_archived', 0)->where('is_active', 1);
     }
 
     // ── CUSTOMER DETAILS ──────────────────────────────────
@@ -114,7 +602,7 @@ class CustomerController extends Controller
 
         $user = User::where('user_id', $id)->where('role', 'customer')->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
@@ -131,46 +619,46 @@ class CustomerController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(fn (Pet $pet) => [
-                'id'                => $pet->pet_id,
-                'petName'           => $pet->pet_name,
-                'species'           => $pet->species,
-                'breed'             => $pet->breed,
-                'gender'            => $pet->gender,
-                'birthdate'         => $pet->birthdate,
-                'isNeutered'        => (bool) $pet->is_neutered,
-                'neuteredDate'      => $pet->neutered_date,
-                'isDeceased'        => (bool) $pet->is_deceased,
-                'deceasedDate'      => $pet->deceased_date,
-                'weight'            => $pet->weight,
-                'color'             => $pet->color,
-                'size'              => $pet->size,
-                'furType'           => $pet->fur_type,
+                'id' => $pet->pet_id,
+                'petName' => $pet->pet_name,
+                'species' => $pet->species,
+                'breed' => $pet->breed,
+                'gender' => $pet->gender,
+                'birthdate' => $pet->birthdate,
+                'isNeutered' => (bool) $pet->is_neutered,
+                'neuteredDate' => $pet->neutered_date,
+                'isDeceased' => (bool) $pet->is_deceased,
+                'deceasedDate' => $pet->deceased_date,
+                'weight' => $pet->weight,
+                'color' => $pet->color,
+                'size' => $pet->size,
+                'furType' => $pet->fur_type,
                 'medicalConditions' => $pet->medical_conditions,
-                'isArchived'        => (bool) $pet->is_archived,
-                'createdAt'         => $pet->created_at ?? null,
+                'isArchived' => (bool) $pet->is_archived,
+                'createdAt' => $pet->created_at ?? null,
             ]);
 
         return response()->json([
-            'success'  => true,
+            'success' => true,
             'customer' => [
-                'id'               => $user->user_id,
-                'firstName'        => $user->first_name,
-                'lastName'         => $user->last_name,
-                'fullName'         => trim($user->first_name . ' ' . $user->last_name),
-                'username'         => $user->username,
-                'email'            => $user->email,
-                'phone'            => $user->phone,
-                'isActive'         => (bool) $user->is_active,
-                'isArchived'       => (bool) $user->is_archived,
-                'tier'             => $pastBookingCount > 0 ? 'returning' : 'new',
-                'customerTier'     => $user->customer_tier,
-                'bookingCount'     => $bookingCount,
-                'petCount'         => $pets->count(),
-                'activePetCount'   => $pets->where('isArchived', false)->count(),
+                'id' => $user->user_id,
+                'firstName' => $user->first_name,
+                'lastName' => $user->last_name,
+                'fullName' => trim($user->first_name.' '.$user->last_name),
+                'username' => $user->username,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'isActive' => (bool) $user->is_active,
+                'isArchived' => (bool) $user->is_archived,
+                'tier' => $pastBookingCount > 0 ? 'returning' : 'new',
+                'customerTier' => $user->customer_tier,
+                'bookingCount' => $bookingCount,
+                'petCount' => $pets->count(),
+                'activePetCount' => $pets->where('isArchived', false)->count(),
                 'archivedPetCount' => $pets->where('isArchived', true)->count(),
-                'archivedAt'       => $user->archived_at,
-                'joinedAt'         => $user->created_at ?? null,
-                'pets'             => $pets->values(),
+                'archivedAt' => $user->archived_at,
+                'joinedAt' => $user->created_at ?? null,
+                'pets' => $pets->values(),
             ],
         ]);
     }
@@ -183,11 +671,11 @@ class CustomerController extends Controller
 
         $user = User::where('user_id', $id)->where('role', 'customer')->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json(['success' => false, 'message' => 'Customer is already inactive.'], 422);
         }
 
@@ -207,7 +695,7 @@ class CustomerController extends Controller
 
         $user = User::where('user_id', $id)->where('role', 'customer')->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
@@ -228,7 +716,7 @@ class CustomerController extends Controller
 
         $user = User::where('user_id', $id)->where('role', 'customer')->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
@@ -238,7 +726,7 @@ class CustomerController extends Controller
 
         $user->update([
             'is_archived' => 1,
-            'is_active'   => 0,
+            'is_active' => 0,
             'archived_at' => now(),
         ]);
 
@@ -256,17 +744,17 @@ class CustomerController extends Controller
 
         $user = User::where('user_id', $id)->where('role', 'customer')->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
-        if (!$user->is_archived) {
+        if (! $user->is_archived) {
             return response()->json(['success' => false, 'message' => 'Customer is not archived.'], 422);
         }
 
         $user->update([
             'is_archived' => 0,
-            'is_active'   => 1,
+            'is_active' => 1,
             'archived_at' => null,
         ]);
 

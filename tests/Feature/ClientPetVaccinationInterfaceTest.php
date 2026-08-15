@@ -166,7 +166,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         }
     }
 
-    public function test_notifications_placeholder_and_existing_profile_tabs_remain_present(): void
+    public function test_concern_notifications_and_existing_profile_tabs_remain_present(): void
     {
         foreach ([
             'data-pet-panel="overview"',
@@ -174,7 +174,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             'data-pet-panel="medical"',
             'data-pet-panel="vaccinations"',
             'data-pet-panel="notifications"',
-            'Pet-specific notifications are not available yet',
+            'Medical-Concern Notifications',
         ] as $existingContent) {
             $this->assertStringContainsString($existingContent, $this->clientPage);
         }

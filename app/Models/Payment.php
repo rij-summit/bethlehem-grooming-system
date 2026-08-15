@@ -3,12 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class Payment extends Model
 {
-    protected $table      = 'payments';
+    private ?string $resolvedKeyName = null;
+
+    protected $table = 'payments';
+
     protected $primaryKey = 'payment_id';
-    const UPDATED_AT      = null;
+
+    const UPDATED_AT = null;
 
     protected $fillable = [
         'booking_id',
@@ -24,7 +29,40 @@ class Payment extends Model
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'total_amount' => 'decimal:2',
+        'amount_tendered' => 'decimal:2',
+        'change_amount' => 'decimal:2',
     ];
+
+    /**
+     * The active schema uses payment_id while the fresh-install migration uses
+     * Laravel's conventional id. Resolve that known drift without depending on
+     * either key name in payment workflows.
+     */
+    public function getKeyName()
+    {
+        if ($this->resolvedKeyName !== null) {
+            return $this->resolvedKeyName;
+        }
+
+        // Hydrated models already reveal which schema variant they came from.
+        // Avoid an information-schema query every time Eloquent asks for the
+        // key while matching eager-loaded payments or serializing a response.
+        if (array_key_exists('payment_id', $this->attributes)) {
+            return $this->resolvedKeyName = 'payment_id';
+        }
+
+        if (array_key_exists('id', $this->attributes)) {
+            return $this->resolvedKeyName = 'id';
+        }
+
+        // New/query models have no attributes yet, so inspect once for this
+        // model instance. An instance-local cache remains correct in tests and
+        // deployments that use either supported payments-table definition.
+        return $this->resolvedKeyName = Schema::hasColumn($this->getTable(), 'payment_id')
+            ? 'payment_id'
+            : 'id';
+    }
 
     public function booking()
     {

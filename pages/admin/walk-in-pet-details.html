@@ -51,13 +51,24 @@
             </p>
           </div>
 
+          <section id="existingPetsSection" class="mb-6 hidden rounded-2xl border border-[#b9d1e7] bg-white/85 p-5 shadow-sm">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 class="text-lg font-semibold text-[#2f4b66]">Owner's pets</h3>
+                <p id="existingPetsOwnerText" class="mt-1 text-sm text-slate-500"></p>
+              </div>
+              <span id="existingPetsCount" class="self-start rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-medium text-[#315b7e]"></span>
+            </div>
+            <div id="existingPetCards" class="mt-4 grid gap-3 md:grid-cols-2"></div>
+          </section>
+
           <div class="mb-6 flex flex-col gap-3 sm:flex-row">
             <button
               id="showAddPetBtn"
               type="button"
               class="rounded-2xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274864]"
             >
-              Add Pet
+              Add new pet
             </button>
           </div>
 
@@ -65,7 +76,7 @@
             id="petStepMessage"
             class="mb-6 rounded-2xl border border-dashed border-[#9ebedf] bg-white/80 p-5 text-sm text-slate-500"
           >
-            Add pet details for this walk-in schedule.
+            Select an existing pet or add a new pet for this walk-in schedule.
           </div>
 
           <section
@@ -386,7 +397,7 @@
     <script src="../../scripts/api.js?v=email-verification-20260726"></script>
     <script
       type="module"
-      src="../../scripts/components/walk-in-pet-step.js"
+      src="../../scripts/components/walk-in-pet-step.js?v=existing-owner-pets-20260810"
     ></script>
   </body>
 </html>

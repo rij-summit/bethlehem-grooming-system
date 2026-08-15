@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\BookingService;
-use App\Models\Walkin;
 
 class Booking extends Model
 {
     protected $table = 'bookings';
+
     protected $primaryKey = 'booking_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -33,6 +34,31 @@ class Booking extends Model
         'grooming_finished_at',
         'paid',
     ];
+
+    /**
+     * Keep cancelled pre-registrations out of operational and completed history.
+     * The cancellation markers remain authoritative even if a legacy record's
+     * status was later changed to archived.
+     */
+    public function scopeNeverCancelled(
+        Builder $query,
+        bool $hasCancellationAuditColumns = true,
+    ): Builder
+    {
+        $query->where('status', '!=', 'cancelled');
+
+        if ($hasCancellationAuditColumns) {
+            $query->where(function (Builder $cancellationCount) {
+                $cancellationCount->whereNull('cancel_count')
+                    ->orWhere('cancel_count', 0);
+            })->where(function (Builder $cancellationReason) {
+                $cancellationReason->whereNull('cancellation_reason')
+                    ->orWhere('cancellation_reason', '');
+            });
+        }
+
+        return $query;
+    }
 
     public function user()
     {
@@ -64,5 +90,28 @@ class Booking extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class, 'booking_id', 'booking_id');
+    }
+
+    public function groomingMedicalConcerns()
+    {
+        return $this->hasMany(GroomingMedicalConcern::class, 'booking_id', 'booking_id');
+    }
+
+    public function groomingStoppedPaymentReviews()
+    {
+        return $this->hasMany(
+            GroomingStoppedPaymentReview::class,
+            'booking_id',
+            'booking_id',
+        );
+    }
+
+    public function groomingClinicReferrals()
+    {
+        return $this->hasMany(
+            GroomingClinicReferral::class,
+            'booking_id',
+            'booking_id',
+        );
     }
 }

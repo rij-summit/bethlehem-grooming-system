@@ -486,7 +486,17 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
  */
 function adminDashboard() {
   return {
+    ...adminGroomingConcernState(),
+    ...adminClinicReferralState(),
+    ...adminStoppedPaymentReviewState(),
     activeTab: "incoming",
+    dashboardSearchQuery: "",
+    dashboardSearchOpen: false,
+    dashboardSearchLoading: false,
+    dashboardSearchError: "",
+    dashboardSearchCustomers: [],
+    dashboardSearchPets: [],
+    _dashboardSearchRequestId: 0,
     todayCount: 0,
     weekCount: 0,
     revenueToday: 0,
@@ -504,8 +514,6 @@ function adminDashboard() {
     detailsBooking: null,
     pendingActions: {},
     localCancelledBookingIds: [],
-    localRevertedToIncomingBookings: [],
-    localRevertedToQueuedBookings: [],
     expandedQueuedBookingIds: {},
     expandedInProgressBookingIds: {},
     _pollFailures: {},
@@ -551,6 +559,7 @@ function adminDashboard() {
       busyLabel: "",
       icon: "checkIn",
       variant: "primary",
+      cancellationReason: "",
       busy: false,
       error: "",
     },
@@ -664,10 +673,20 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab("queued");
           },
+          revertQueued: async ({ booking }) => {
+            await API.adminRevertCheckIn(booking.id);
+            await this.loadAdminBookings();
+            this.setTab("incoming");
+          },
           startGrooming: async ({ booking }) => {
             await API.adminStartGrooming(booking.id);
             await this.loadAdminBookings();
             this.setTab("in-progress");
+          },
+          revertInProgress: async ({ booking }) => {
+            await API.adminRevertStartGrooming(booking.id);
+            await this.loadAdminBookings();
+            this.setTab("queued");
           },
           startPetGrooming: async ({ booking }) => {
             const pet = booking?.actionPet;
@@ -715,8 +734,8 @@ function adminDashboard() {
 
             return response;
           },
-          cancel: async ({ booking }) => {
-            await API.adminCancelBooking(booking.id);
+          cancel: async ({ booking, cancellationReason = "" }) => {
+            await API.adminCancelBooking(booking.id, cancellationReason);
             await this.loadAdminBookings();
           },
           archive: async ({ booking }) => {
@@ -752,6 +771,75 @@ function adminDashboard() {
         await this.loadClinicStatus();
         await this.loadNoShows();
       }, 60000);
+    },
+
+    get dashboardSearchHasResults() {
+      return this.dashboardSearchCustomers.length > 0
+        || this.dashboardSearchPets.length > 0;
+    },
+
+    openDashboardSearch() {
+      if (this.dashboardSearchQuery.trim()) {
+        this.dashboardSearchOpen = true;
+      }
+    },
+
+    closeDashboardSearch() {
+      this.dashboardSearchOpen = false;
+    },
+
+    async searchDashboard() {
+      const search = this.dashboardSearchQuery.trim();
+      const requestId = ++this._dashboardSearchRequestId;
+
+      if (!search) {
+        this.dashboardSearchOpen = false;
+        this.dashboardSearchLoading = false;
+        this.dashboardSearchError = "";
+        this.dashboardSearchCustomers = [];
+        this.dashboardSearchPets = [];
+        return;
+      }
+
+      this.dashboardSearchOpen = true;
+      this.dashboardSearchLoading = true;
+      this.dashboardSearchError = "";
+
+      try {
+        const data = await API.searchAdminDashboard(search);
+        if (requestId !== this._dashboardSearchRequestId) return;
+
+        this.dashboardSearchCustomers = data.customers || [];
+        this.dashboardSearchPets = data.pets || [];
+        this.$nextTick(() => this.refreshIcons());
+      } catch (error) {
+        if (requestId !== this._dashboardSearchRequestId) return;
+
+        this.dashboardSearchCustomers = [];
+        this.dashboardSearchPets = [];
+        this.dashboardSearchError = error.message || "Search is unavailable. Please try again.";
+      } finally {
+        if (requestId === this._dashboardSearchRequestId) {
+          this.dashboardSearchLoading = false;
+        }
+      }
+    },
+
+    openDashboardCustomer(customer) {
+      const params = new URLSearchParams({
+        customer_id: String(customer.id),
+        record_type: customer.recordType || "registered",
+      });
+      window.location.href = `./clients.html?${params.toString()}`;
+    },
+
+    openDashboardPet(pet) {
+      const params = new URLSearchParams({
+        customer_id: String(pet.ownerId),
+        pet_id: String(pet.id),
+        record_type: pet.ownerRecordType || "registered",
+      });
+      window.location.href = `./clients.html?${params.toString()}`;
     },
 
     // Stops a poll interval after 3 consecutive server errors.
@@ -922,7 +1010,7 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+      if (this.isPetReferredToClinic(pet) || pet?.isGroomingStarted || this.isGroomerCapacityFull) {
         if (this.isGroomerCapacityFull) {
           this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
         }
@@ -949,6 +1037,10 @@ function adminDashboard() {
     },
 
     isPetGroomingFinished(pet) {
+      if (this.petGroomingState(pet) === "finished") {
+        return true;
+      }
+
       if (pet?.isGroomingFinished === true) {
         return true;
       }
@@ -969,6 +1061,16 @@ function adminDashboard() {
     },
 
     isPetGroomingStarted(pet) {
+      if (this.isPetReferredToClinic(pet)) {
+        return false;
+      }
+
+      if (["in_progress", "paused", "stopped", "finished"].includes(
+        this.petGroomingState(pet),
+      )) {
+        return true;
+      }
+
       if (pet?.isGroomingStarted === true) {
         return true;
       }
@@ -990,9 +1092,7 @@ function adminDashboard() {
 
     hasActiveGroomingPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) =>
-        this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
-      );
+      return pets.some((pet) => this.petGroomingState(pet) === "in_progress");
     },
 
     hasStartedGroomingPets(booking) {
@@ -1011,14 +1111,79 @@ function adminDashboard() {
 
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) => !this.isPetGroomingFinished(pet));
+      return pets.some((pet) =>
+        !this.isPetReferredToClinic(pet) && !this.isPetGroomingFinished(pet),
+      );
     },
 
     getWaitingGroomingPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.filter((pet) =>
-        !this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet),
-      );
+      return pets.filter((pet) => this.petGroomingState(pet) === "not_started");
+    },
+
+    petGroomingState(pet) {
+      if (this.isPetReferredToClinic(pet)) {
+        return "referred_to_clinic";
+      }
+
+      const explicit = String(
+        pet?.groomingState ?? pet?.grooming_state ?? "",
+      ).trim().toLowerCase();
+      if (["not_started", "in_progress", "paused", "stopped", "finished"].includes(explicit)) {
+        return explicit;
+      }
+
+      if (pet?.isGroomingFinished === true) return "finished";
+      if (pet?.isGroomingStarted === true) return "in_progress";
+
+      const finished = pet?.groomingFinishedAtIso
+        ?? pet?.grooming_finished_at
+        ?? pet?.groomingFinishedAt;
+      if (finished) return "finished";
+
+      const started = pet?.groomingStartedAtIso
+        ?? pet?.grooming_start_time
+        ?? pet?.groomingStartedAt;
+      return started ? "in_progress" : "not_started";
+    },
+
+    petGroomingStateLabel(pet) {
+      return {
+        not_started: "Not started",
+        in_progress: "In progress",
+        paused: "Paused",
+        stopped: "Grooming stopped",
+        finished: "Finished",
+        referred_to_clinic: "Referred to clinic",
+      }[this.petGroomingState(pet)] || "Not started";
+    },
+
+    isPetReferredToClinic(pet) {
+      if (
+        pet?.hasActiveClinicReferral === true
+        || pet?.has_active_clinic_referral === true
+      ) {
+        return true;
+      }
+
+      const referralStatus = String(
+        pet?.clinicReferralStatus ?? pet?.clinic_referral_status ?? "",
+      ).trim().toLowerCase();
+
+      return [
+        "pending_consent",
+        "pending_clinic_acceptance",
+        "accepted",
+        "under_clinic_review",
+      ].includes(referralStatus);
+    },
+
+    bookingRequiresAction(booking) {
+      return booking?.actionRequired === true || booking?.action_required === true;
+    },
+
+    isPetGroomingInProgress(pet) {
+      return this.petGroomingState(pet) === "in_progress";
     },
 
     hasEarlierQueuedUnfinishedPets(booking) {
@@ -1159,6 +1324,7 @@ function adminDashboard() {
         busyLabel,
         icon,
         variant,
+        cancellationReason: "",
         busy: false,
         error: "",
       };
@@ -1179,6 +1345,7 @@ function adminDashboard() {
         busyLabel: "",
         icon: "checkIn",
         variant: "primary",
+        cancellationReason: "",
         busy: false,
         error: "",
       };
@@ -1205,11 +1372,14 @@ function adminDashboard() {
         } else if (action === "markPetDone") {
           await this.runBookingAction("markPetDone", booking);
         } else if (action === "cancel") {
-          await this.cancelBooking(booking);
+          await this.cancelBooking(
+            booking,
+            this.actionConfirmModal.cancellationReason,
+          );
         } else if (action === "revertQueued") {
-          this.revertQueuedBookingFrontendOnly(booking);
+          await this.runBookingAction("revertQueued", booking);
         } else if (action === "revertInProgress") {
-          this.revertInProgressBookingFrontendOnly(booking);
+          await this.runBookingAction("revertInProgress", booking);
         }
         this.closeActionConfirmModal(true);
       } catch (error) {
@@ -1224,8 +1394,8 @@ function adminDashboard() {
       await this.runBookingAction("checkIn", booking);
     },
 
-    async cancelBooking(booking) {
-      await this.runBookingAction("cancel", booking);
+    async cancelBooking(booking, cancellationReason = "") {
+      await this.runBookingAction("cancel", booking, { cancellationReason });
     },
 
     // Legacy local-only fallback used only if a custom integration calls it directly.
@@ -1235,67 +1405,9 @@ function adminDashboard() {
       }
 
       this.rememberLocalCancellation(booking.id);
-      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
-        (item) => String(item.id) !== String(booking.id),
-      );
-      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
-        (item) => String(item.id) !== String(booking.id),
-      );
       this.removeBookingFromLists(booking.id);
       this.dispatchDashboardEvent("admin-dashboard:booking-cancelled-ui-only", {
         booking: this.cloneBooking(booking),
-        state: this.getState(),
-      });
-      this.refreshIcons();
-    },
-
-    // Frontend-only revert: moves a queued card back into Incoming in this browser session.
-    // BACKEND: replace this with a real queued -> incoming endpoint/status when this workflow is supported server-side.
-    revertQueuedBookingFrontendOnly(booking) {
-      if (!booking || booking.id === undefined || booking.id === null) {
-        return;
-      }
-
-      const incomingBooking = this.normalizeBooking(
-        {
-          ...booking,
-          status: "incoming",
-        },
-        "incoming",
-      );
-
-      this.rememberLocalRevertToIncoming(incomingBooking);
-      this.removeBookingFromLists(incomingBooking.id);
-      this.incomingList = this.insertBookingSorted(this.incomingList, incomingBooking);
-      this.setTab("incoming");
-      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
-        booking: this.cloneBooking(incomingBooking),
-        state: this.getState(),
-      });
-      this.refreshIcons();
-    },
-
-    // Frontend-only revert: moves an in-progress card back into Queued in this browser session.
-    // BACKEND: replace this with a real in_progress -> queued endpoint/status when this workflow is supported server-side.
-    revertInProgressBookingFrontendOnly(booking) {
-      if (!booking || booking.id === undefined || booking.id === null) {
-        return;
-      }
-
-      const queuedBooking = this.normalizeBooking(
-        {
-          ...booking,
-          status: "queued",
-        },
-        "queued",
-      );
-
-      this.rememberLocalRevertToQueued(queuedBooking);
-      this.removeBookingFromLists(queuedBooking.id);
-      this.queuedList = this.insertBookingSorted(this.queuedList, queuedBooking);
-      this.setTab("queued");
-      this.dispatchDashboardEvent("admin-dashboard:booking-reverted-ui-only", {
-        booking: this.cloneBooking(queuedBooking),
         state: this.getState(),
       });
       this.refreshIcons();
@@ -1367,7 +1479,7 @@ function adminDashboard() {
     },
 
     // Runs a booking action with busy-state protection and backend/event integration.
-    async runBookingAction(actionName, booking) {
+    async runBookingAction(actionName, booking, actionOptions = {}) {
       if (!booking || booking.id === undefined || booking.id === null) {
         console.warn(`Cannot run ${actionName}: missing booking id.`);
         return;
@@ -1399,6 +1511,7 @@ function adminDashboard() {
 
         if (typeof handler === "function") {
           response = await handler({
+            ...actionOptions,
             booking: this.cloneBooking(booking),
             dashboard: this,
             state: this.getState(),
@@ -1601,7 +1714,6 @@ function adminDashboard() {
         this.releasedList = this.filterLocalCancelledBookings(nextPayload.releasedList);
       }
 
-      this.applyLocalRevertedBookings();
       this.refreshIcons();
       this.dispatchDashboardEvent("admin-dashboard:data-applied", {
         state: this.getState(),
@@ -1990,7 +2102,11 @@ function adminDashboard() {
       );
       for (const booking of sortedInProgress) {
         for (const pet of booking.pets ?? []) {
-          if (!this.isPetGroomingStarted(pet) || this.isPetGroomingFinished(pet)) continue;
+          if (
+            this.isPetReferredToClinic(pet) ||
+            !this.isPetGroomingStarted(pet) ||
+            this.isPetGroomingFinished(pet)
+          ) continue;
           const duration = getPetDuration(booking, pet);
           const startIso = pet.groomingStartedAtIso;
           let estDone;
@@ -2172,99 +2288,14 @@ function adminDashboard() {
         : [];
     },
 
-    rememberLocalRevertToIncoming(booking) {
-      const id = String(booking?.id);
-      const nextRevertedBookings = this.localRevertedToIncomingBookings.filter(
-        (item) => String(item.id) !== id,
-      );
-
-      this.localRevertedToIncomingBookings = [
-        ...nextRevertedBookings,
-        this.cloneBooking(booking),
-      ];
-      this.localRevertedToQueuedBookings = this.localRevertedToQueuedBookings.filter(
-        (item) => String(item.id) !== id,
-      );
-    },
-
-    rememberLocalRevertToQueued(booking) {
-      const id = String(booking?.id);
-      const nextRevertedBookings = this.localRevertedToQueuedBookings.filter(
-        (item) => String(item.id) !== id,
-      );
-
-      this.localRevertedToQueuedBookings = [
-        ...nextRevertedBookings,
-        this.cloneBooking(booking),
-      ];
-      this.localRevertedToIncomingBookings = this.localRevertedToIncomingBookings.filter(
-        (item) => String(item.id) !== id,
-      );
-    },
-
-    applyLocalRevertedBookings() {
-      const incomingRevertedBookings = this.localRevertedToIncomingBookings.filter(
-        (booking) => !this.isLocallyCancelled(booking),
-      );
-      const queuedRevertedBookings = this.localRevertedToQueuedBookings.filter(
-        (booking) => !this.isLocallyCancelled(booking),
-      );
-      const revertedBookings = [
-        ...incomingRevertedBookings,
-        ...queuedRevertedBookings,
-      ];
-
-      if (revertedBookings.length === 0) {
-        return;
-      }
-
-      const revertedIds = new Set(
-        revertedBookings.map((booking) => String(booking.id)),
-      );
-
-      this.incomingList = this.incomingList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.queuedList = this.queuedList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.inProgressList = this.inProgressList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.forPickupList = this.forPickupList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.forPaymentList = this.forPaymentList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.releasedList = this.releasedList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-      this.noShowList = this.noShowList.filter(
-        (booking) => !revertedIds.has(String(booking.id)),
-      );
-
-      for (const booking of incomingRevertedBookings) {
-        this.incomingList = this.insertBookingSorted(
-          this.incomingList,
-          this.normalizeBooking(booking, "incoming"),
-        );
-      }
-
-      for (const booking of queuedRevertedBookings) {
-        this.queuedList = this.insertBookingSorted(
-          this.queuedList,
-          this.normalizeBooking(booking, "queued"),
-        );
-      }
-    },
-
     // Maps a frontend action name to the next booking status.
     getNextStatusForAction(actionName, currentStatus) {
       const normalizedCurrentStatus = this.normalizeStatus(currentStatus);
       const actionStatusMap = {
         checkIn: "queued",
+        revertQueued: "incoming",
         startGrooming: "in-progress",
+        revertInProgress: "queued",
         markDone: "for-payment",
         cancel: "cancelled",
         archive: "archived",
@@ -2680,8 +2711,8 @@ function adminDashboard() {
       );
     },
 
-    // Keeps the backend pet records intact while presenting Queued cards as
-    // dogs first, cats second, and any other species afterward.
+    // Hides clinic-referred pets from the active grooming card, then presents
+    // the remaining records as dogs first, cats second, and others afterward.
     getQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
       const speciesRank = (pet) => {
@@ -2695,6 +2726,7 @@ function adminDashboard() {
       };
 
       return pets
+        .filter((pet) => !this.isPetReferredToClinic(pet))
         .map((pet, originalIndex) => ({ pet, originalIndex }))
         .sort((left, right) =>
           speciesRank(left.pet) - speciesRank(right.pet) ||
@@ -3156,6 +3188,12 @@ function adminDashboard() {
 
     // ── Payment ───────────────────────────────────────────────────────────────
 
+    bookingHasPayNowBlockedPet(booking) {
+      return (booking?.pets || []).some((pet) =>
+        ["paused", "stopped"].includes(pet?.groomingState ?? pet?.grooming_state),
+      );
+    },
+
     get paymentTotalDue() {
       return this.paymentModal.petBreakdown.reduce(
         (sum, pet) => sum + this.paymentPetSubtotal(pet),
@@ -3165,7 +3203,7 @@ function adminDashboard() {
 
     get paymentLineCount() {
       return this.paymentModal.petBreakdown.reduce(
-        (count, pet) => count + (Array.isArray(pet.lines) ? pet.lines.length : 0),
+        (count, pet) => count + (pet.isStoppedReviewed ? 0 : (Array.isArray(pet.lines) ? pet.lines.length : 0)),
         0,
       );
     },
@@ -3181,27 +3219,37 @@ function adminDashboard() {
 
     get canSubmitPayment() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
+      const isZeroTotal = !this.paymentModal.isEarlyPayment && this.paymentTotalDue === 0;
 
       return (
         !this.paymentModal.busy &&
-        this.paymentLineCount > 0 &&
-        this.paymentTotalDue > 0 &&
+        this.paymentModal.petBreakdown.length > 0 &&
+        (isZeroTotal || this.paymentTotalDue > 0) &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        this.paymentChange >= 0 &&
-        paid <= this.paymentMaximumAmount
+        (isZeroTotal || this.paymentChange >= 0) &&
+        (isZeroTotal || paid <= this.paymentMaximumAmount)
       );
     },
 
     openPaymentModal(booking, isEarlyPayment = false) {
+      if (!isEarlyPayment && booking?.paymentReady === false) {
+        alert(booking?.paymentBlockedReason || "This booking is not ready for final payment.");
+        return;
+      }
+
+      const petBreakdown = this.buildPaymentBreakdown(booking, { lockFixedPrices: true });
+      const zeroTotal = !isEarlyPayment
+        && petBreakdown.length > 0
+        && petBreakdown.reduce((sum, pet) => sum + this.paymentPetSubtotal(pet), 0) === 0;
       this.paymentModal = {
         open: true,
         booking,
         isEarlyPayment,
         finalPrice: "",
-        petBreakdown: this.buildPaymentBreakdown(booking, { lockFixedPrices: true }),
-        amountPaid: "",
-        paymentMethod: "cash",
+        petBreakdown,
+        amountPaid: zeroTotal ? "0.00" : "",
+        paymentMethod: zeroTotal ? "others" : "cash",
         notes: "",
         busy: false,
         error: "",
@@ -3219,6 +3267,10 @@ function adminDashboard() {
     buildPaymentBreakdown(booking, paymentOptions = {}) {
       const pets = this.normalizePaymentPets(booking);
       const services = this.normalizePaymentServices(booking?.services);
+      const serverSummary = booking?.paymentSummary ?? booking?.payment_summary ?? {};
+      const serverPets = new Map(
+        (serverSummary?.pets || []).map((pet) => [String(pet.booking_pet_id), pet]),
+      );
 
       /*
        * Backend handoff:
@@ -3227,6 +3279,30 @@ function adminDashboard() {
        * preferred so the frontend can show the exact minimum price rule.
        */
       return pets.map((pet, petIndex) => {
+        const serverPet = serverPets.get(String(pet.bookingPetId)) || null;
+        if (serverPet?.payment_kind === "stopped_reviewed") {
+          return {
+            ...pet,
+            isStoppedReviewed: true,
+            groomingState: "stopped",
+            lines: (serverPet.service_breakdown || []).map((line, lineIndex) => ({
+              id: line.booking_service_id ?? `stopped-${petIndex}-${lineIndex}`,
+              bookingServiceId: line.booking_service_id,
+              name: line.label || "Grooming Service",
+              description: line.line_type === "add_on" ? "Saved add-on price" : "Saved original service price",
+              amount: Number(line.price_at_booking || 0).toFixed(2),
+              isFixedPriceLocked: true,
+            })),
+            originalSubtotal: Number(serverPet.review_original_pet_subtotal ?? serverPet.original_pet_subtotal ?? 0),
+            finalReviewedCharge: Number(serverPet.final_pet_charge || 0),
+            adjustment: Number(serverPet.adjustment || 0),
+            reviewDecision: serverPet.review_decision,
+            reviewDecisionLabel: serverPet.review_decision_label,
+            customerExplanation: serverPet.customer_explanation || "",
+            reviewedAt: serverPet.reviewed_at || null,
+          };
+        }
+
         const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
         const inferredSizeKey = inferPaymentSizeFromServices(petServices, pet.petTypeKey);
         const pricedPet = inferredSizeKey
@@ -3242,6 +3318,7 @@ function adminDashboard() {
 
         return {
           ...pricedPet,
+          isStoppedReviewed: false,
           lines,
         };
       });
@@ -3284,6 +3361,7 @@ function adminDashboard() {
           sizeKey,
           sizeLabel: formatPaymentSizeLabel(sizeKey),
           services: Array.isArray(pet?.services) ? pet.services : [],
+          groomingState: pet?.groomingState ?? pet?.grooming_state ?? "not_started",
         };
       });
     },
@@ -3464,6 +3542,10 @@ function adminDashboard() {
     },
 
     paymentPetSubtotal(pet) {
+      if (pet?.isStoppedReviewed) {
+        return Number(pet.finalReviewedCharge || 0);
+      }
+
       return (pet?.lines || []).reduce((sum, line) => {
         const amount = parseFloat(line.amount);
         return Number.isFinite(amount) ? sum + amount : sum;
@@ -3509,12 +3591,13 @@ function adminDashboard() {
 
     hasMissingPaymentPrices() {
       return this.paymentModal.petBreakdown.some((pet) =>
-        (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
+        !pet.isStoppedReviewed && (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
       );
     },
 
     getInvalidPaymentLine() {
       for (const pet of this.paymentModal.petBreakdown) {
+        if (pet.isStoppedReviewed) continue;
         for (const line of pet.lines || []) {
           const amount = parseFloat(line.amount);
           const minimum = parseFloat(line.minAmount) || 0.01;
@@ -3576,6 +3659,7 @@ function adminDashboard() {
       const servicePrices = [];
 
       pets.forEach((pet) => {
+        if (pet?.isStoppedReviewed) return;
         (Array.isArray(pet?.lines) ? pet.lines : []).forEach((line) => {
           const bookingServiceId =
             line?.bookingServiceId ?? line?.booking_service_id ?? null;
@@ -3595,13 +3679,40 @@ function adminDashboard() {
       return servicePrices;
     },
 
+    buildServerPaymentReceiptPets(summary, fallbackPets = []) {
+      if (!Array.isArray(summary?.pets)) {
+        return this.buildPaymentReceiptPets(fallbackPets);
+      }
+
+      return summary.pets.map((pet, index) => ({
+        id: pet.booking_pet_id ?? `receipt-pet-${index + 1}`,
+        name: this.formatReceiptValue(pet.pet_name, `Pet ${index + 1}`),
+        species: this.formatReceiptValue(pet.pet_species),
+        breed: "Not specified",
+        sizeLabel: "Not specified",
+        stoppedReviewed: pet.payment_kind === "stopped_reviewed",
+        groomingStateLabel: pet.grooming_state_label,
+        reviewDecisionLabel: pet.review_decision_label,
+        originalSubtotal: Number(pet.review_original_pet_subtotal ?? pet.original_pet_subtotal ?? 0),
+        adjustment: Number(pet.adjustment || 0),
+        customerExplanation: pet.customer_explanation || "",
+        lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
+          id: line.booking_service_id ?? `${index}-${lineIndex}`,
+          name: this.formatReceiptValue(line.label, "Grooming Service"),
+          price: Number(line.price_at_booking || 0),
+        })),
+        subtotal: Number(pet.final_pet_charge || 0),
+      }));
+    },
+
     async submitPayment() {
       const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
       const fp = Number(this.paymentTotalDue.toFixed(2));
-      const ap = parseFloat(amountPaid);
+      const isZeroTotal = !isEarlyPayment && fp === 0;
+      const ap = isZeroTotal ? 0 : parseFloat(amountPaid);
       const paymentMethod = this.paymentModal.paymentMethod || "cash";
 
-      if (this.paymentLineCount === 0) {
+      if (this.paymentModal.petBreakdown.length === 0) {
         this.paymentModal.error = "No booked services were found for this payment.";
         return;
       }
@@ -3617,15 +3728,15 @@ function adminDashboard() {
         return;
       }
 
-      if (!fp || fp <= 0) {
+      if (isEarlyPayment && (!fp || fp <= 0)) {
         this.paymentModal.error = "Please enter service prices before confirming payment.";
         return;
       }
-      if (!ap || ap < fp) {
+      if (!isZeroTotal && (!ap || ap < fp)) {
         this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
         return;
       }
-      if (ap > this.paymentMaximumAmount) {
+      if (!isZeroTotal && ap > this.paymentMaximumAmount) {
         this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
         return;
       }
@@ -3651,7 +3762,10 @@ function adminDashboard() {
           ? await API.payNow(booking.id, payload)
           : await API.processPayment(booking.id, payload);
 
-        const receiptPets = this.buildPaymentReceiptPets(this.paymentModal.petBreakdown);
+        const receiptPets = this.buildServerPaymentReceiptPets(
+          res?.payment_summary,
+          this.paymentModal.petBreakdown,
+        );
         const receiptPetNames = receiptPets.map((pet) => pet.name).filter(Boolean).join(", ");
         const receiptServiceNames = [
           ...new Set(
@@ -3673,16 +3787,19 @@ function adminDashboard() {
           appointmentDate: this.formatReceiptValue(booking.appointmentDate, "No date selected"),
           appointmentTime: this.formatReceiptValue(booking.appointmentTime, "No time selected"),
           pets:          receiptPets,
-          finalPrice:    fp,
-          amountPaid:    ap,
+          finalPrice:    Number(res.final_price ?? fp),
+          amountPaid:    Number(res.amount_paid ?? ap),
           change:        res.change ?? (ap - fp),
-          paymentMethod: paymentMethod,
+          paymentMethod: res.payment_method_label ?? res.payment_method ?? paymentMethod,
           paidAt:        res.paid_at ?? new Date().toLocaleString("en-PH"),
           isEarlyPayment,
         };
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
         await this.loadAdminBookings();
         await this.loadNotifications();
+        if (!isEarlyPayment && res?.booking_status === "released") {
+          this.setTab("to-be-picked-up");
+        }
         if (isEarlyPayment && res?.all_pets_finished) {
           this.setTab("to-be-picked-up");
         }
@@ -3767,6 +3884,8 @@ function adminDashboard() {
         });
         this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
+        await this.refreshMedicalConcernIndicators();
+        await this.refreshStoppedPaymentReviewStatuses();
       } catch (error) {
         this._stopPollOnFailure("_bookingInterval", "loadAdminBookings", error);
       }
@@ -3859,7 +3978,6 @@ function adminDashboard() {
         this.noShowList = this.filterLocalCancelledBookings(
           (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show")),
         );
-        this.applyLocalRevertedBookings();
       } catch (error) {
         this._stopPollOnFailure("_clinicInterval", "loadNoShows", error);
       }

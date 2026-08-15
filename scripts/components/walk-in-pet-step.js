@@ -31,6 +31,10 @@ const elements = {
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
   selectedPetCards: document.getElementById("selectedPetCards"),
+  existingPetsSection: document.getElementById("existingPetsSection"),
+  existingPetsOwnerText: document.getElementById("existingPetsOwnerText"),
+  existingPetsCount: document.getElementById("existingPetsCount"),
+  existingPetCards: document.getElementById("existingPetCards"),
   backBtn: document.getElementById("backBtn"),
   nextBtn: document.getElementById("nextBtn"),
   fieldErrors: {
@@ -83,6 +87,8 @@ const sizeCombobox = createFixedOptionCombobox({
 
 const state = {
   pets: [],
+  existingPets: [],
+  owner: null,
 };
 let hasSubmittedOnce = false;
 
@@ -176,6 +182,12 @@ function validatePetForm(values) {
 
   if (!values.petName.trim()) {
     errors.petName = "Pet name is required.";
+  } else {
+    const normalizedName = values.petName.trim().toLowerCase();
+    const duplicate = [...state.existingPets, ...state.pets].some((pet) =>
+      String(pet.petName || "").trim().toLowerCase() === normalizedName,
+    );
+    if (duplicate) errors.petName = "This owner already has a pet with this name.";
   }
 
   const breedValidationMessage = breedCombobox.getValidationMessage();
@@ -218,7 +230,75 @@ function createPetObject(formData) {
     furType: formData.furType,
     size: formData.size,
     medicalNotes: formData.medicalNotes,
+    petId: null,
+    isNew: true,
   };
+}
+
+function normalizeExistingPet(pet) {
+  return {
+    id: `saved-pet-${pet.id}`,
+    petId: pet.id,
+    petType: pet.species || "",
+    petName: pet.petName || "",
+    breed: pet.breed || "",
+    weight: pet.weight ?? "",
+    furType: pet.furType || "",
+    size: pet.size || "",
+    medicalNotes: pet.medicalConditions || "",
+    isNew: false,
+  };
+}
+
+function renderExistingPets() {
+  if (!elements.existingPetsSection || !state.owner || state.owner.ownerRecordType === "new") return;
+
+  elements.existingPetsSection.classList.remove("hidden");
+  elements.existingPetsOwnerText.textContent = `Choose a saved pet for ${state.owner.fullName || "this customer"}, or add a new pet below.`;
+  elements.existingPetsCount.textContent = `${state.existingPets.length} saved pet${state.existingPets.length === 1 ? "" : "s"}`;
+
+  if (state.existingPets.length === 0) {
+    elements.existingPetCards.innerHTML = `
+      <div class="md:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm text-slate-500">
+        This customer has no saved pets yet. Add a new pet below.
+      </div>
+    `;
+    return;
+  }
+
+  elements.existingPetCards.innerHTML = state.existingPets.map((pet, index) => {
+    const selected = state.pets.some((selectedPet) => selectedPet.petId === pet.petId);
+    return `
+      <article class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h4 class="font-semibold text-[#2f4b66]">${escapeHtml(pet.petName)}</h4>
+            <p class="mt-1 text-sm text-slate-500">${escapeHtml(pet.petType || "Pet")}${pet.breed ? ` &middot; ${escapeHtml(pet.breed)}` : ""}</p>
+            <p class="mt-1 text-xs text-slate-400">${escapeHtml(pet.size || "Size not provided")}${pet.weight ? ` &middot; ${escapeHtml(pet.weight)} kg` : ""}</p>
+          </div>
+          <button
+            type="button"
+            data-select-existing-pet="${index}"
+            ${selected ? "disabled" : ""}
+            class="rounded-xl px-3 py-2 text-xs font-semibold transition ${selected ? "cursor-not-allowed bg-green-100 text-green-700" : "bg-[#315b7e] text-white hover:bg-[#274864]"}"
+          >${selected ? "Selected" : "Select"}</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function loadExistingOwnerPets() {
+  try {
+    state.owner = JSON.parse(sessionStorage.getItem("walkInOwnerStep") || "null");
+  } catch {
+    state.owner = null;
+  }
+
+  state.existingPets = Array.isArray(state.owner?.existingPets)
+    ? state.owner.existingPets.map(normalizeExistingPet)
+    : [];
+  renderExistingPets();
 }
 
 function buildPetSummaryHtml(pet) {
@@ -286,6 +366,7 @@ function renderSelectedPets() {
   });
 
   bindRemoveButtons();
+  renderExistingPets();
 }
 
 function bindRemoveButtons() {
@@ -391,7 +472,9 @@ function handleAddPetSubmit(event) {
 }
 
 function handleBack() {
-  window.location.href = "./walk-in-booking.html";
+  window.location.href = getOwnerAppointmentType() === "clinic"
+    ? "./walk-in-booking.html?flow=clinic&source=clinic"
+    : "./walk-in-booking.html";
 }
 
 function getOwnerAppointmentType() {
@@ -503,6 +586,15 @@ function bindEvents() {
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);
+  elements.existingPetCards?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-select-existing-pet]");
+    if (!button || button.disabled || state.pets.length >= MAX_PETS_PER_BOOKING) return;
+    const pet = state.existingPets[Number(button.dataset.selectExistingPet)];
+    if (!pet || state.pets.some((selectedPet) => selectedPet.petId === pet.petId)) return;
+    state.pets = [...state.pets, { ...pet }];
+    renderSelectedPets();
+    showMessage(`${pet.petName} was selected for this walk-in schedule.`, "success", true);
+  });
 
   const handlePetInputs = (event) => {
     if (event.target === elements.petType) {
@@ -544,6 +636,7 @@ function initWalkInPetStep() {
   }
 
   bindEvents();
+  loadExistingOwnerPets();
   initializeWeightField(elements.weight);
   syncWeightAndSize();
   renderSelectedPets();

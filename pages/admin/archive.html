@@ -6,6 +6,77 @@
     <title>Archive | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
+    <style>
+      .clinic-record-dialog .record-grid {
+        align-items: start;
+        gap: 1rem;
+      }
+
+      .clinic-record-dialog .record-section {
+        align-self: start;
+        padding: 1rem;
+      }
+
+      .clinic-record-dialog dt,
+      .clinic-record-dialog section .uppercase {
+        color: #64748b !important;
+        font-size: 0.75rem;
+        font-weight: 500 !important;
+        letter-spacing: 0 !important;
+        line-height: 1rem;
+        text-transform: none !important;
+      }
+
+      .clinic-record-dialog dd {
+        color: #334155;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .clinic-record-dialog .record-profile-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .clinic-record-dialog .record-profile {
+        background: transparent;
+        border-radius: 0;
+        padding: 0;
+      }
+
+      .clinic-record-dialog .record-owner {
+        border-top: 1px solid #d7e3ef;
+        padding-top: 1rem;
+      }
+
+      .clinic-record-dialog .record-value-missing {
+        color: #94a3b8 !important;
+        font-weight: 500 !important;
+      }
+
+      .clinic-record-dialog .record-activity-entry {
+        padding: 0.625rem 0.75rem;
+      }
+
+      .clinic-record-dialog .record-activity-marker {
+        height: 2rem;
+        width: 2rem;
+      }
+
+      .clinic-record-dialog .record-summary { order: 1; }
+      .clinic-record-dialog .record-profiles { order: 2; }
+      .clinic-record-dialog .record-appointment { order: 3; }
+      .clinic-record-dialog .record-referral { order: 4; }
+      .clinic-record-dialog .record-reason,
+      .clinic-record-dialog .record-vitals { order: 5; }
+      .clinic-record-dialog .record-assessment,
+      .clinic-record-dialog .record-treatment { order: 6; }
+      .clinic-record-dialog .record-followup,
+      .clinic-record-dialog .record-payment { order: 7; }
+      .clinic-record-dialog .record-activity { order: 8; }
+    </style>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -15,6 +86,7 @@
     >
       <!-- Mobile Backdrop -->
       <div
+        x-cloak
         x-show="sidebarOpen"
         x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -132,7 +204,7 @@
       </aside>
 
       <!-- Stop Receiving Confirmation Modal -->
-      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
+      <div x-cloak x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
         <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
           <div class="px-6 py-5">
             <h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4>
@@ -172,7 +244,7 @@
             <div class="rounded-[24px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-4 lg:px-6 lg:py-4">
               <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                  <h2 class="text-2xl font-extrabold text-[#1f3850] lg:text-3xl">Archive</h2>
+                  <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Archive</h2>
                   <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">
                     BETHLEHEM ANIMAL CLINIC &amp; GROOMING
                   </p>
@@ -253,7 +325,7 @@
               </div>
 
               <!-- Stats row -->
-              <div class="mt-4 flex flex-wrap gap-3">
+              <div class="mt-4 flex flex-wrap items-center gap-3">
                 <div class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="archive" class="h-4 w-4 text-[#315b7e]"></i>
                   <span x-text="filteredCount + ' record' + (filteredCount !== 1 ? 's' : '')"></span>
@@ -261,6 +333,27 @@
                 <div x-show="selectedYear" class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
                   <i data-lucide="calendar-check" class="h-4 w-4 text-[#315b7e]"></i>
                   <span x-text="selectedMonth ? (availableMonths.find(m => m.value === selectedMonth)?.label ?? selectedMonth) + ' ' + selectedYear : selectedYear"></span>
+                </div>
+
+                <div class="ml-auto inline-flex rounded-xl border border-white/70 bg-white/55 p-1 shadow-sm" role="group" aria-label="Archive type">
+                  <button
+                    type="button"
+                    @click="selectArchiveType('grooming')"
+                    :aria-pressed="archiveType === 'grooming'"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition"
+                    :class="archiveType === 'grooming' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#315b7e] hover:bg-white/70'"
+                  >
+                    Grooming
+                  </button>
+                  <button
+                    type="button"
+                    @click="selectArchiveType('clinic')"
+                    :aria-pressed="archiveType === 'clinic'"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition"
+                    :class="archiveType === 'clinic' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#315b7e] hover:bg-white/70'"
+                  >
+                    Clinic
+                  </button>
                 </div>
               </div>
             </div>
@@ -291,8 +384,8 @@
               <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]">
                 <i data-lucide="archive-x" class="h-8 w-8"></i>
               </div>
-              <p class="mt-4 text-lg font-bold text-[#2f4b66]" x-text="hasActiveFilters ? 'No records match your filters.' : 'No archived records yet.'"></p>
-              <p class="mt-2 text-sm text-slate-500" x-text="hasActiveFilters ? 'Try adjusting your search or clearing the filters.' : 'Completed grooming sessions will appear here after they are archived from the dashboard.'"></p>
+              <p class="mt-4 text-lg font-semibold text-[#2f4b66]" x-text="emptyStateTitle"></p>
+              <p class="mt-2 text-sm font-medium text-slate-500" x-text="emptyStateMessage"></p>
             </div>
           </section>
 
@@ -314,6 +407,8 @@
                 <!-- Cards within this date group -->
                 <div class="space-y-4">
                   <template x-for="booking in group.bookings" :key="booking.id">
+                    <div>
+                    <template x-if="archiveType === 'grooming'">
                     <article class="rounded-[24px] border-2 border-slate-200 bg-white px-4 py-5 shadow-sm transition hover:border-[#9bb9d3] sm:px-6">
                       <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
 
@@ -383,6 +478,68 @@
 
                       </div>
                     </article>
+                    </template>
+
+                    <template x-if="archiveType === 'clinic'">
+                      <article class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#9bb9d3] hover:shadow-md sm:p-6">
+                        <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <p class="text-xs font-bold text-[#5c7690]" x-text="displayArchiveValue(booking.appointment_reference)"></p>
+                              <span
+                                class="inline-flex rounded-full border px-3 py-1 text-xs font-bold"
+                                :class="clinicStatusClass(booking.status)"
+                                x-text="displayArchiveValue(booking.final_status_label)"
+                              ></span>
+                            </div>
+
+                            <div class="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Pet</p>
+                                <p class="mt-1 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.pet?.name)"></p>
+                                <p class="mt-1 text-sm font-medium text-slate-500" x-text="[booking.pet?.species, booking.pet?.breed].filter(Boolean).join(' • ') || 'Data is currently unavailable.'"></p>
+                              </div>
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Owner</p>
+                                <p class="mt-1 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.ownerName)"></p>
+                                <p class="mt-1 text-sm font-medium text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
+                              </div>
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Visit date and time</p>
+                                <p class="mt-1 text-sm font-medium text-slate-600" x-text="formatClinicVisit(booking)"></p>
+                              </div>
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Appointment type</p>
+                                <p class="mt-1 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.appointment_type_label)"></p>
+                              </div>
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Reason for visit</p>
+                                <p class="mt-1 line-clamp-2 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.chief_complaint)"></p>
+                              </div>
+                              <div>
+                                <p class="text-xs font-bold text-slate-400">Assigned veterinarian</p>
+                                <p class="mt-1 text-sm font-medium text-slate-600" x-text="displayArchiveValue(booking.assigned_veterinarian)"></p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="flex shrink-0 flex-col gap-3 sm:flex-row xl:w-52 xl:flex-col">
+                            <div class="rounded-2xl bg-[#eef5fb] px-4 py-3">
+                              <p class="text-xs font-bold text-[#5c7690]">Payment status</p>
+                              <p class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.payment_status_label)"></p>
+                            </div>
+                            <button
+                              type="button"
+                              @click="viewClinicRecord(booking)"
+                              class="rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#274c6b]"
+                            >
+                              View Full Record
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    </template>
+                    </div>
                   </template>
                 </div>
               </div>
@@ -392,6 +549,7 @@
 
           <!-- View Details Modal -->
           <div
+            x-cloak
             x-show="detailsModalOpen"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
@@ -513,14 +671,302 @@
             </div>
           </div>
 
+          <!-- Full Archived Clinic Record Modal -->
+          <div
+            x-cloak
+            x-show="clinicDetailsModalOpen"
+            x-transition
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 px-4 py-6"
+            @click.self="closeClinicRecord()"
+            @keydown.escape.window="closeClinicRecord()"
+          >
+            <div class="clinic-record-dialog flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] bg-[#f5f8fb] shadow-2xl">
+              <div class="flex items-start justify-between gap-4 bg-[#315b7e] px-6 py-4">
+                <div>
+                  <p class="text-xs font-bold uppercase tracking-[0.18em] text-white/70">Clinic Archive</p>
+                  <h3 class="mt-1 text-lg font-semibold text-white">Full Archived Clinic Record</h3>
+                  <p class="mt-1 text-sm font-medium text-white/80" x-text="displayArchiveValue(detailsClinicRecord?.appointment_reference)"></p>
+                </div>
+                <button
+                  type="button"
+                  @click="closeClinicRecord()"
+                  class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20"
+                  aria-label="Close full clinic record"
+                >
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </div>
+
+              <div class="overflow-y-auto p-5" x-show="detailsClinicRecord">
+                <div class="record-grid grid xl:grid-cols-12">
+                  <!-- Visit summary -->
+                  <section class="record-summary overflow-hidden rounded-[22px] border border-[#c9d9e8] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex flex-col gap-4 border-b border-[#d7e3ef] bg-gradient-to-r from-[#eef5fb] to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex min-w-0 items-center gap-4">
+                        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#315b7e] text-white shadow-sm">
+                          <i data-lucide="paw-print" class="h-7 w-7"></i>
+                        </div>
+                        <div class="min-w-0">
+                          <p class="text-xs font-bold uppercase tracking-wider text-[#5c7690]">Patient</p>
+                          <h4 class="truncate text-xl font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.pet?.name)"></h4>
+                          <p class="mt-1 text-sm font-medium text-slate-500">
+                            Owner: <span x-text="displayArchiveValue(detailsClinicRecord?.owner?.name)"></span>
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        class="inline-flex w-fit rounded-full border px-4 py-2 text-sm font-semibold"
+                        :class="clinicStatusClass(detailsClinicRecord?.status)"
+                        x-text="displayArchiveValue(detailsClinicRecord?.final_status_label)"
+                      ></span>
+                    </div>
+                    <dl class="grid gap-px bg-[#d7e3ef] sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="bg-white px-4 py-3"><dt>Visit date and time</dt><dd class="mt-1" x-text="formatClinicVisit(detailsClinicRecord)"></dd></div>
+                      <div class="bg-white px-4 py-3"><dt>Appointment type</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.appointment_type_label)"></dd></div>
+                      <div class="bg-white px-4 py-3"><dt>Assigned veterinarian</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.assigned_veterinarian) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.assigned_veterinarian)"></dd></div>
+                      <div class="bg-white px-4 py-3"><dt>Payment status</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.payment_status_label)"></dd></div>
+                    </dl>
+                  </section>
+
+                  <!-- Owner and pet profiles -->
+                  <section class="record-profiles record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="contact" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Owner and Pet Information</h4>
+                    </div>
+                    <div class="record-profile-grid">
+                      <div class="record-profile record-owner order-2">
+                        <p class="text-xs font-bold uppercase tracking-wider text-[#5c7690]">Owner</p>
+                        <p class="mt-2 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.owner?.name)"></p>
+                        <dl class="mt-3 grid gap-3 text-sm font-medium text-slate-600 sm:grid-cols-2">
+                          <div><dt>Customer type</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.owner?.customer_type)"></dd></div>
+                          <div><dt>Contact number</dt><dd class="mt-1" x-text="formatMobileNumber(detailsClinicRecord?.owner?.contact_number)"></dd></div>
+                          <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase text-slate-400">Email</dt><dd class="mt-1 break-words" :class="isArchiveValueMissing(detailsClinicRecord?.owner?.email) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.owner?.email)"></dd></div>
+                        </dl>
+                      </div>
+
+                      <div class="record-profile record-pet order-1">
+                        <p class="text-xs font-bold uppercase tracking-wider text-[#5c7690]">Pet</p>
+                        <p class="mt-2 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.pet?.name)"></p>
+                        <dl class="mt-3 grid gap-3 text-sm font-medium text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                          <div><dt>Species</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.pet?.species)"></dd></div>
+                          <div><dt>Breed</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.pet?.breed)"></dd></div>
+                          <div><dt>Gender</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.gender) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.pet?.gender)"></dd></div>
+                          <div><dt>Birthdate</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.birthdate) && 'record-value-missing'" x-text="formatAppointmentDate(detailsClinicRecord?.pet?.birthdate)"></dd></div>
+                          <div><dt>Weight</dt><dd class="mt-1" x-text="formatClinicWeight(detailsClinicRecord)"></dd></div>
+                          <div><dt>Color and size</dt><dd class="mt-1" :class="!detailsClinicRecord?.pet?.color && !detailsClinicRecord?.pet?.size && 'record-value-missing'" x-text="[detailsClinicRecord?.pet?.color, detailsClinicRecord?.pet?.size].filter(Boolean).join(' • ') || 'Not recorded'"></dd></div>
+                          <div class="sm:col-span-2"><dt>Known allergies</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.known_allergies) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.pet?.known_allergies)"></dd></div>
+                          <div class="sm:col-span-2"><dt>Existing medical conditions</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.pet?.medical_conditions)"></dd></div>
+                          <div class="sm:col-span-2"><dt>Current medications</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.current_medications) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.pet?.current_medications)"></dd></div>
+                        </dl>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Appointment details -->
+                  <section class="record-appointment record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="calendar-days" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Appointment Details</h4>
+                    </div>
+                    <dl class="mt-4 grid gap-4 text-sm font-medium text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
+                      <div><dt>Reference</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.appointment_reference)"></dd></div>
+                      <div><dt>Queue number</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.queue_number)"></dd></div>
+                      <div><dt>Checked in</dt><dd class="mt-1" x-text="formatDateTime(detailsClinicRecord?.checked_in_at)"></dd></div>
+                      <div><dt>Consultation started</dt><dd class="mt-1" x-text="formatDateTime(detailsClinicRecord?.consultation_started_at)"></dd></div>
+                      <div><dt>Consultation finished</dt><dd class="mt-1" x-text="formatDateTime(detailsClinicRecord?.consultation_finished_at)"></dd></div>
+                    </dl>
+                  </section>
+
+                  <!-- Reason for visit -->
+                  <section class="record-reason record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-7">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="message-square-text" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Reason for Visit</h4>
+                    </div>
+                    <p class="mt-4 whitespace-pre-line text-sm font-medium leading-6 text-slate-600" x-text="displayArchiveValue(detailsClinicRecord?.record?.chief_complaint || detailsClinicRecord?.chief_complaint)"></p>
+                  </section>
+
+                  <!-- Vitals -->
+                  <section class="record-vitals record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-5">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="activity" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Vitals</h4>
+                    </div>
+                    <dl x-show="detailsClinicRecord?.vitals || detailsClinicRecord?.pet?.weight" class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-700">
+                      <div><dt>Weight</dt><dd class="mt-1" x-text="formatClinicWeight(detailsClinicRecord)"></dd></div>
+                      <div><dt>Temperature</dt><dd class="mt-1" x-text="detailsClinicRecord?.vitals?.temperature_c != null ? detailsClinicRecord.vitals.temperature_c + ' °C' : 'Not recorded'"></dd></div>
+                      <div><dt>Heart rate</dt><dd class="mt-1" x-text="detailsClinicRecord?.vitals?.heart_rate_bpm != null ? detailsClinicRecord.vitals.heart_rate_bpm + ' bpm' : 'Not recorded'"></dd></div>
+                      <div><dt>Respiratory rate</dt><dd class="mt-1" x-text="detailsClinicRecord?.vitals?.respiratory_rate_bpm != null ? detailsClinicRecord.vitals.respiratory_rate_bpm + ' bpm' : 'Not recorded'"></dd></div>
+                      <div><dt>Body condition score</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.vitals?.body_condition_score)"></dd></div>
+                    </dl>
+                    <p x-show="!detailsClinicRecord?.vitals && !detailsClinicRecord?.pet?.weight" class="mt-3 text-sm font-medium text-slate-500">No vitals recorded.</p>
+                  </section>
+
+                  <!-- Medical assessment -->
+                  <section class="record-assessment record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="stethoscope" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Medical Assessment</h4>
+                    </div>
+                    <dl x-show="detailsClinicRecord?.record?.findings || detailsClinicRecord?.record?.diagnosis || detailsClinicRecord?.record?.vet_notes || (detailsClinicRecord?.record?.attachments || []).length > 0" class="mt-4 grid gap-4 text-sm text-slate-700 lg:grid-cols-2">
+                      <div><dt>Findings</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.record?.findings)"></dd></div>
+                      <div><dt>Diagnosis</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.record?.diagnosis)"></dd></div>
+                      <div class="lg:col-span-2"><dt>Veterinarian notes</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.record?.vet_notes)"></dd></div>
+                      <div class="lg:col-span-2">
+                        <dt>Attachments</dt>
+                        <template x-if="(detailsClinicRecord?.record?.attachments || []).length > 0">
+                          <div class="mt-2 flex flex-wrap gap-2">
+                            <template x-for="attachment in detailsClinicRecord.record.attachments" :key="attachment.id">
+                              <span class="rounded-xl border border-[#d7e3ef] bg-[#f5f8fb] px-3 py-2 text-sm font-medium text-slate-600" x-text="displayArchiveValue(attachment.label || attachment.file_name)"></span>
+                            </template>
+                          </div>
+                        </template>
+                        <p x-show="(detailsClinicRecord?.record?.attachments || []).length === 0" class="mt-1 text-sm font-medium text-slate-500">Not recorded</p>
+                      </div>
+                    </dl>
+                    <p x-show="!detailsClinicRecord?.record?.findings && !detailsClinicRecord?.record?.diagnosis && !detailsClinicRecord?.record?.vet_notes && (detailsClinicRecord?.record?.attachments || []).length === 0" class="mt-3 text-sm font-medium text-slate-500">No medical assessment recorded.</p>
+                  </section>
+
+                  <!-- Treatment and medication -->
+                  <section class="record-treatment record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="pill" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Treatment and Medication</h4>
+                    </div>
+                    <div x-show="detailsClinicRecord?.record?.treatment_given || (detailsClinicRecord?.record?.medications || []).length > 0" class="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div>
+                        <p class="text-xs font-medium text-slate-500">Treatment given</p>
+                        <p class="mt-1 whitespace-pre-line text-sm font-medium text-slate-600" x-text="displayArchiveValue(detailsClinicRecord?.record?.treatment_given)"></p>
+                      </div>
+                      <div>
+                        <p class="text-xs font-medium text-slate-500">Prescribed medication</p>
+                        <template x-if="(detailsClinicRecord?.record?.medications || []).length > 0">
+                          <div class="mt-2 space-y-2">
+                            <template x-for="medication in detailsClinicRecord.record.medications" :key="medication.id">
+                              <div class="rounded-2xl bg-[#eef5fb] p-3">
+                                <p class="text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(medication.drug_name)"></p>
+                                <p class="mt-1 text-sm font-medium text-slate-600" x-text="[medication.dosage, medication.frequency, medication.duration].filter(Boolean).join(' • ') || 'Not recorded'"></p>
+                                <p class="mt-1 text-sm font-medium text-slate-500" x-text="displayArchiveValue(medication.instructions)"></p>
+                              </div>
+                            </template>
+                          </div>
+                        </template>
+                        <p x-show="(detailsClinicRecord?.record?.medications || []).length === 0" class="mt-1 text-sm font-medium text-slate-500">Not recorded</p>
+                      </div>
+                    </div>
+                    <p x-show="!detailsClinicRecord?.record?.treatment_given && (detailsClinicRecord?.record?.medications || []).length === 0" class="mt-3 text-sm font-medium text-slate-500">No treatment or medication recorded.</p>
+                  </section>
+
+                  <!-- Grooming referral context -->
+                  <section x-show="detailsClinicRecord?.grooming_referral" class="record-referral record-section rounded-[22px] border border-[#bad0e3] bg-[#eef5fb] shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#315b7e]"><i data-lucide="scissors" class="h-5 w-5"></i></div>
+                      <div>
+                        <p class="text-xs font-medium text-[#5c7690]">Connected service</p>
+                        <h4 class="text-lg font-semibold text-[#1f3850]">Grooming Referral Information</h4>
+                      </div>
+                    </div>
+                    <dl class="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                      <div><dt>Grooming reference</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.booking_reference)"></dd></div>
+                      <div><dt>Referral status</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.status_label)"></dd></div>
+                      <div><dt>Urgency</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.urgency_label)"></dd></div>
+                      <div><dt>Grooming outcome</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.grooming_outcome_label)"></dd></div>
+                      <div class="lg:col-span-2"><dt>Referral reason</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.referral_reason)"></dd></div>
+                      <div class="lg:col-span-2"><dt>Customer explanation</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.customer_explanation)"></dd></div>
+                      <div><dt>Referred by</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.referred_by_name)"></dd></div>
+                      <div><dt>Referred at</dt><dd class="mt-1" x-text="formatDateTime(detailsClinicRecord?.grooming_referral?.referred_at)"></dd></div>
+                      <div><dt>Consent decision</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.consent_decision)"></dd></div>
+                      <div><dt>Consent signature</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.consent_signature_name)"></dd></div>
+                      <div class="lg:col-span-2"><dt>Internal resolution notes</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.internal_resolution_notes)"></dd></div>
+                      <div class="lg:col-span-2"><dt>Customer resolution summary</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.grooming_referral?.customer_resolution_summary)"></dd></div>
+                    </dl>
+                  </section>
+
+                  <!-- Follow-up and discharge -->
+                  <section class="record-followup record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-7">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="calendar-check-2" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Follow-up and Discharge</h4>
+                    </div>
+                    <dl x-show="detailsClinicRecord?.record?.follow_up_date || detailsClinicRecord?.record?.follow_up_notes" class="mt-4 space-y-3 text-sm text-slate-700">
+                      <div><dt>Follow-up date</dt><dd class="mt-1" x-text="formatAppointmentDate(detailsClinicRecord?.record?.follow_up_date)"></dd></div>
+                      <div><dt>Follow-up instructions</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.record?.follow_up_notes)"></dd></div>
+                      <div><dt>Discharge information</dt><dd class="mt-1">Not recorded</dd></div>
+                    </dl>
+                    <p x-show="!detailsClinicRecord?.record?.follow_up_date && !detailsClinicRecord?.record?.follow_up_notes" class="mt-3 text-sm font-medium text-slate-500">No follow-up or discharge information recorded.</p>
+                  </section>
+
+                  <!-- Payment information -->
+                  <section class="record-payment record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-5">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="credit-card" class="h-5 w-5"></i></div>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Payment Information</h4>
+                    </div>
+                    <dl class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-700">
+                      <div><dt>Payment status</dt><dd class="mt-1" x-text="displayArchiveValue(detailsClinicRecord?.payment_status_label)"></dd></div>
+                      <div><dt>Clinic price</dt><dd class="mt-1" x-text="formatClinicAmount(detailsClinicRecord?.total_amount)"></dd></div>
+                      <div><dt>Payment method</dt><dd class="mt-1">Not recorded</dd></div>
+                      <div><dt>Receipt or transaction</dt><dd class="mt-1">Not recorded</dd></div>
+                    </dl>
+                  </section>
+
+                  <!-- Record activity -->
+                  <section class="record-activity record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="history" class="h-5 w-5"></i></div>
+                      <div>
+                        <h4 class="text-lg font-semibold text-[#1f3850]">Record Activity</h4>
+                        <p class="mt-0.5 text-sm font-medium text-slate-500">Creation, assessment, and update history</p>
+                      </div>
+                    </div>
+                    <div class="relative mt-4">
+                      <div class="absolute bottom-4 left-4 top-4 w-px bg-[#c9d9e8]"></div>
+                      <div class="relative space-y-3">
+                        <div class="flex gap-3">
+                          <div class="record-activity-marker z-10 flex shrink-0 items-center justify-center rounded-full border-4 border-white bg-[#315b7e] text-white"><i data-lucide="file-plus-2" class="h-3.5 w-3.5"></i></div>
+                          <div class="record-activity-entry min-w-0 flex-1 rounded-xl bg-[#f5f8fb]">
+                            <p class="text-xs font-medium text-slate-500">Record created</p>
+                            <p class="mt-0.5 text-sm font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.activity?.created_by_name)"></p>
+                            <p class="mt-0.5 text-xs font-medium text-slate-500" x-text="formatDateTime(detailsClinicRecord?.activity?.record_created_at)"></p>
+                          </div>
+                        </div>
+                        <div class="flex gap-3">
+                          <div class="record-activity-marker z-10 flex shrink-0 items-center justify-center rounded-full border-4 border-white bg-[#315b7e] text-white"><i data-lucide="clipboard-check" class="h-3.5 w-3.5"></i></div>
+                          <div class="record-activity-entry min-w-0 flex-1 rounded-xl bg-[#f5f8fb]">
+                            <p class="text-xs font-medium text-slate-500">Assessment completed</p>
+                            <p class="mt-0.5 text-sm font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.activity?.assessment_completed_by_name)"></p>
+                            <p class="mt-0.5 text-xs font-medium text-slate-500" x-text="formatDateTime(detailsClinicRecord?.activity?.assessment_completed_at)"></p>
+                          </div>
+                        </div>
+                        <div class="flex gap-3">
+                          <div class="record-activity-marker z-10 flex shrink-0 items-center justify-center rounded-full border-4 border-white bg-[#315b7e] text-white"><i data-lucide="file-pen-line" class="h-3.5 w-3.5"></i></div>
+                          <div class="record-activity-entry min-w-0 flex-1 rounded-xl bg-[#f5f8fb]">
+                            <p class="text-xs font-medium text-slate-500">Information updated</p>
+                            <p class="mt-0.5 text-sm font-semibold text-[#1f3850]" x-text="displayArchiveValue(detailsClinicRecord?.activity?.edited_by_name)"></p>
+                            <p class="mt-0.5 text-xs font-medium text-slate-500" x-text="formatDateTime(detailsClinicRecord?.activity?.record_updated_at)"></p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-3 rounded-xl border border-dashed border-[#bfd3e3] px-3 py-2.5">
+                      <p class="text-xs font-medium text-slate-500">Signed corrections or additions</p>
+                      <p class="mt-1 text-sm font-medium text-slate-600" x-text="displayArchiveValue(detailsClinicRecord?.activity?.signed_corrections)"></p>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </main>
       </div>
     </div>
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=email-verification-20260726"></script>
+    <script src="../../scripts/api.js?v=clinic-archive-20260806"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=logout-fix-20260726"></script>
-    <script src="../../scripts/components/admin-archive.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/components/admin-archive.js?v=clinic-archive-20260806"></script>
   </body>
 </html>

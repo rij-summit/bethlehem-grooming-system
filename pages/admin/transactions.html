@@ -15,6 +15,7 @@
     >
       <!-- Mobile Backdrop -->
       <div
+        x-cloak
         x-show="sidebarOpen"
         x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -131,7 +132,7 @@
       </aside>
 
       <!-- Stop Receiving Confirmation Modal -->
-      <div x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
+      <div x-cloak x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
         <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
           <div class="px-6 py-5">
             <h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4>
@@ -339,6 +340,15 @@
                               <span class="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500" x-text="tx.paymentMethod"></span>
                             </template>
                           </p>
+                          <div x-show="tx.paymentSummary?.pets?.length" class="mt-2 flex flex-wrap gap-2">
+                            <template x-for="pet in tx.paymentSummary?.pets || []" :key="pet.booking_pet_id">
+                              <span class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                                <strong x-text="pet.pet_name"></strong>
+                                <span x-text="' · ' + formatPeso(pet.final_pet_charge)"></span>
+                                <span x-show="pet.payment_kind === 'stopped_reviewed'" class="font-semibold text-amber-700" x-text="' · ' + (pet.review_decision_label || 'Reviewed stop')"></span>
+                              </span>
+                            </template>
+                          </div>
                         </div>
 
                         <!-- Right: amounts -->

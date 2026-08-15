@@ -24,12 +24,27 @@ class ClientPetProfileTest extends TestCase
             $table->string('gender')->nullable();
             $table->date('birthdate')->nullable();
             $table->boolean('is_neutered')->nullable();
+            $table->date('neutered_date')->nullable();
+            $table->boolean('is_deceased')->default(false);
+            $table->date('deceased_date')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->string('color')->nullable();
             $table->string('size')->nullable();
             $table->string('fur_type')->nullable();
+            $table->json('clinic_verified_fields')->nullable();
             $table->text('medical_conditions')->nullable();
             $table->boolean('is_archived')->default(false);
+        });
+
+        Schema::create('customer_notifications', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('user_id');
+            $table->unsignedInteger('booking_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
+            $table->string('type');
+            $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('time_windows', function (Blueprint $table) {
@@ -84,6 +99,7 @@ class ClientPetProfileTest extends TestCase
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('time_windows');
+        Schema::dropIfExists('customer_notifications');
         Schema::dropIfExists('pets');
 
         parent::tearDown();
@@ -130,6 +146,275 @@ class ClientPetProfileTest extends TestCase
         $this->getJson('/api/pets/202')
             ->assertNotFound()
             ->assertJsonPath('message', 'Pet not found.');
+    }
+
+    public function test_customer_can_add_gender_birthdate_and_connected_pet_fields(): void
+    {
+        $this->authenticateCustomer(10);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => 'Bruno',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'gender' => 'male',
+            'birthdate' => '2023-05-12',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('pet.gender', 'male')
+            ->assertJsonPath('pet.birthdate', '2023-05-12')
+            ->assertJsonPath('pet.fur_type', 'Smooth Short Coat')
+            ->assertJsonPath('pet.size', 'small');
+
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 10,
+            'pet_name' => 'Bruno',
+            'gender' => 'male',
+            'birthdate' => '2023-05-12',
+            'size' => 'small',
+        ]);
+    }
+
+    public function test_customer_cannot_add_a_case_insensitive_duplicate_of_an_archived_pet_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'is_archived' => true,
+        ]);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => '  mochi  ',
+            'species' => 'Cat',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pet_name'])
+            ->assertJsonPath('errors.pet_name.0', 'You already have a pet with this name.');
+
+        $this->assertDatabaseCount('pets', 1);
+    }
+
+    public function test_customer_cannot_rename_a_pet_to_a_sibling_pets_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            ['pet_id' => 101, 'user_id' => 10, 'pet_name' => 'Mochi', 'species' => 'Cat'],
+            ['pet_id' => 102, 'user_id' => 10, 'pet_name' => 'Bruno', 'species' => 'Dog'],
+        ]);
+
+        $this->putJson('/api/pets/102', [
+            'pet_name' => 'MOCHI',
+            'species' => 'Dog',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pet_name']);
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 102,
+            'pet_name' => 'Bruno',
+        ]);
+    }
+
+    public function test_different_customers_can_use_the_same_pet_name(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 202,
+            'user_id' => 20,
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+        ]);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('pets', [
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+        ]);
+    }
+
+    public function test_customer_can_edit_gender_birthdate_and_connected_pet_fields(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+            'size' => 'small',
+        ]);
+
+        $this->putJson('/api/pets/101', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'breed' => 'Persian',
+            'gender' => 'female',
+            'birthdate' => '2022-03-14',
+            'fur_type' => 'Long Dense Coat',
+            'weight' => 6,
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.gender', 'female')
+            ->assertJsonPath('pet.birthdate', '2022-03-14')
+            ->assertJsonPath('pet.fur_type', 'Long Dense Coat')
+            ->assertJsonPath('pet.size', 'medium');
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 101,
+            'gender' => 'female',
+            'birthdate' => '2022-03-14',
+            'size' => 'medium',
+        ]);
+    }
+
+    public function test_staff_pet_edit_uses_the_customer_connected_field_rules(): void
+    {
+        $this->authenticateUser(20, 'staff');
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+            'size' => 'small',
+        ]);
+
+        $this->putJson('/api/admin/pets/101', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'breed' => 'Persian',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 12,
+            'size' => 'large',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['fur_type', 'weight', 'size']);
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 101,
+            'species' => 'Dog',
+            'size' => 'small',
+        ]);
+
+        $this->putJson('/api/admin/pets/101', [
+            'pet_name' => 'Mochi',
+            'species' => 'Cat',
+            'breed' => 'Persian',
+            'gender' => 'female',
+            'birthdate' => '2022-03-14',
+            'fur_type' => 'Long Dense Coat',
+            'weight' => 6,
+            'is_neutered' => true,
+            'neutered_date' => '2023-01-10',
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.fur_type', 'Long Dense Coat')
+            ->assertJsonPath('pet.size', 'medium')
+            ->assertJsonPath('pet.is_neutered', 1)
+            ->assertJsonPath('pet.clinic_verified_fields', [
+                'breed',
+                'fur_type',
+                'weight',
+                'size',
+            ]);
+
+        $this->assertDatabaseHas('pets', [
+            'pet_id' => 101,
+            'species' => 'Cat',
+            'breed' => 'Persian',
+            'fur_type' => 'Long Dense Coat',
+            'weight' => 6,
+            'size' => 'medium',
+            'is_neutered' => true,
+            'neutered_date' => '2023-01-10',
+        ]);
+
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 10,
+            'pet_id' => 101,
+            'type' => 'pet_information_updated',
+            'message' => 'Information for Mochi has been updated by Bethlehem Animal Clinic.',
+            'is_read' => false,
+        ]);
+
+        $this->authenticateCustomer(10);
+
+        $this->getJson('/api/customer/notifications')
+            ->assertOk()
+            ->assertJsonPath('notifications.0.type', 'pet_information_updated')
+            ->assertJsonPath('notifications.0.pet_id', 101)
+            ->assertJsonPath('notifications.0.pet_name', 'Mochi')
+            ->assertJsonPath(
+                'notifications.0.destination',
+                './pet-details.html?pet_id=101&tab=overview',
+            );
+    }
+
+    public function test_customer_edit_clears_only_changed_clinic_verifications(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'breed' => 'Beagle',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+            'size' => 'small',
+            'clinic_verified_fields' => json_encode([
+                'breed',
+                'fur_type',
+                'weight',
+                'size',
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $this->putJson('/api/pets/101', [
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'breed' => 'Pug',
+            'fur_type' => 'Smooth Short Coat',
+            'weight' => 8.5,
+            'size' => 'small',
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.breed', 'Pug')
+            ->assertJsonPath('pet.clinic_verified_fields', [
+                'fur_type',
+                'weight',
+                'size',
+            ]);
+
+        $this->assertSame(
+            ['fur_type', 'weight', 'size'],
+            json_decode(
+                DB::table('pets')
+                    ->where('pet_id', 101)
+                    ->value('clinic_verified_fields'),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            ),
+        );
     }
 
     public function test_pet_filtered_history_excludes_sibling_pets_and_their_services(): void
@@ -234,12 +519,17 @@ class ClientPetProfileTest extends TestCase
 
     private function authenticateCustomer(int $userId): void
     {
+        $this->authenticateUser($userId, 'customer');
+    }
+
+    private function authenticateUser(int $userId, string $role): void
+    {
         $user = new User;
         $user->forceFill([
             'user_id' => $userId,
             'first_name' => 'Jamie',
             'last_name' => 'Santos',
-            'role' => 'customer',
+            'role' => $role,
         ]);
         $user->exists = true;
 

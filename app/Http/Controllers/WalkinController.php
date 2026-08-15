@@ -8,13 +8,23 @@ use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\Pet;
 use App\Models\Service;
+use App\Models\UnregisteredCustomer;
 use App\Models\User;
 use App\Models\Walkin;
+use App\Services\CustomerIdentityService;
 use App\Services\DailyPetQueue;
+use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\ValidationException;
 
 class WalkinController extends Controller
 {
+    public function __construct(
+        private readonly GroomingServicePriceResolver $servicePrices,
+        private readonly CustomerIdentityService $customerIdentity,
+    ) {}
+
     public function store(StoreWalkinRequest $request)
     {
         $queueDate = now()->toDateString();
@@ -26,10 +36,7 @@ class WalkinController extends Controller
                 $data['pets'],
             );
 
-            // Check if this email belongs to a registered customer
-            $user = ! empty($data['email'])
-                ? User::where('email', $data['email'])->first()
-                : null;
+            [$user, $unregisteredCustomer, $owner] = $this->resolveOwner($data);
 
             // Resolve all services and prices upfront before any DB writes
             $resolvedPets = $this->resolveAllPets($data['pets']);
@@ -40,14 +47,16 @@ class WalkinController extends Controller
 
             // Create the walk-in record (owner info + consent)
             $walkin = Walkin::create([
-                'fname' => $data['fname'],
-                'lname' => $data['lname'],
-                'mname' => $data['mname'] ?? null,
-                'email' => $data['email'] ?? null,
-                'phone' => $data['phone'],
+                'fname' => $owner['fname'],
+                'lname' => $owner['lname'],
+                'mname' => $owner['mname'],
+                'email' => $owner['email'],
+                'phone' => $owner['phone'],
                 'sedation_consent' => $data['sedation_consent'],
                 'terms_agreed' => $data['terms_agreed'],
                 'user_id' => $user?->user_id,
+                ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
+                'appointment_type' => 'grooming',
             ]);
 
             // Scheduled and walk-in owners share the same daily queue.
@@ -75,7 +84,7 @@ class WalkinController extends Controller
             // For each pet: find or create a pet record, then attach services
             $petsResponse = [];
             foreach ($resolvedPets as $item) {
-                $pet = $this->findOrCreatePet($user, $item['petData']);
+                $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $item['petData']);
 
                 $bookingPet = BookingPet::create([
                     'booking_id' => $booking->booking_id,
@@ -94,6 +103,7 @@ class WalkinController extends Controller
 
                 $petsResponse[] = [
                     'booking_pet_id' => $bookingPet->booking_pet_id,
+                    'pet_id' => $pet->pet_id,
                     'pet_name' => $item['petData']['pet_name'],
                     'species' => $item['petData']['species'],
                     'size' => $item['petData']['size'] ?? null,
@@ -124,9 +134,105 @@ class WalkinController extends Controller
                 ],
                 'pets' => $petsResponse,
                 'total_amount' => $totalAmount,
-                'returning_customer' => $user !== null,
+                'returning_customer' => $user !== null || $unregisteredCustomer !== null,
             ], 201);
         });
+    }
+
+    private function resolveOwner(array $data): array
+    {
+        $recordType = $data['owner_record_type'] ?? 'new';
+        $user = null;
+        $unregisteredCustomer = null;
+
+        if ($recordType === 'new') {
+            $this->validateNewOwner($data);
+        }
+
+        if ($recordType === 'registered') {
+            $user = User::query()
+                ->where('user_id', $data['customer_user_id'] ?? null)
+                ->where('role', 'customer')
+                ->where('is_active', true)
+                ->where('is_archived', false)
+                ->first();
+
+            if (! $user) {
+                throw ValidationException::withMessages([
+                    'customer_user_id' => ['The selected active customer is no longer available.'],
+                ]);
+            }
+        } elseif ($recordType === 'unregistered') {
+            $unregisteredCustomer = UnregisteredCustomer::query()
+                ->where('id', $data['unregistered_customer_id'] ?? null)
+                ->where('is_archived', false)
+                ->first();
+
+            if (! $unregisteredCustomer) {
+                throw ValidationException::withMessages([
+                    'unregistered_customer_id' => ['The selected unregistered customer is no longer available.'],
+                ]);
+            }
+        }
+
+        $owner = $user
+            ? [
+                'fname' => $user->first_name,
+                'lname' => $user->last_name,
+                'mname' => null,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ]
+            : ($unregisteredCustomer
+                ? [
+                    'fname' => $unregisteredCustomer->first_name,
+                    'lname' => $unregisteredCustomer->last_name,
+                    'mname' => $unregisteredCustomer->middle_name,
+                    'email' => $unregisteredCustomer->email,
+                    'phone' => $unregisteredCustomer->phone,
+                ]
+                : [
+                    'fname' => $data['fname'],
+                    'lname' => $data['lname'],
+                    'mname' => $data['mname'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'phone' => $data['phone'],
+                ]);
+
+        return [$user, $unregisteredCustomer, $owner];
+    }
+
+    private function validateNewOwner(array $data): void
+    {
+        $conflict = $this->customerIdentity->findContactConflict(
+            $data['phone'],
+            $data['email'] ?? null,
+        );
+
+        if ($conflict) {
+            $field = $conflict['field'];
+            $customerType = $conflict['recordType'] === 'registered'
+                ? 'A registered customer'
+                : 'An unregistered customer';
+
+            throw ValidationException::withMessages([
+                $field => $customerType.' already uses this '.($field === 'phone' ? 'phone number.' : 'email address.'),
+            ]);
+        }
+
+        $similarCustomers = $this->customerIdentity->findCustomersWithSimilarName(
+            $data['fname'],
+            $data['lname'],
+        );
+
+        if ($similarCustomers->isNotEmpty() && ! ($data['confirm_similar_name'] ?? false)) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'code' => 'similar_customer_name',
+                'message' => 'A customer with the same first and last name already exists. Do you still want to continue?',
+                'similarCustomers' => $similarCustomers,
+            ], 409));
+        }
     }
 
     private function resolveAllPets(array $pets): array
@@ -154,36 +260,50 @@ class WalkinController extends Controller
 
     private function resolvePrice(Service $service, ?string $size): float
     {
-        return match ($size) {
-            'small' => (float) ($service->price_small ?? $service->base_price),
-            'medium' => (float) ($service->price_medium ?? $service->base_price),
-            'large', 'extra_large' => (float) ($service->price_large ?? $service->base_price),
-            default => (float) $service->base_price,
-        };
+        return (float) $this->servicePrices->servicePrice($service, $size);
     }
 
-    private function findOrCreatePet(?User $user, array $petData): Pet
-    {
-        // Try to match an existing pet by name for returning customers
-        if ($user) {
-            $existing = Pet::where('user_id', $user->user_id)
+    private function findOrCreatePet(
+        ?User $user,
+        ?UnregisteredCustomer $unregisteredCustomer,
+        array $petData,
+    ): Pet {
+        $ownerPetQuery = Pet::query()
+            ->when(
+                $user !== null,
+                fn ($query) => $query->where('user_id', $user->user_id),
+                fn ($query) => $query->where('unregistered_customer_id', $unregisteredCustomer?->id),
+            )
+            ->where('is_archived', false);
+
+        if (! empty($petData['pet_id'])) {
+            $existing = (clone $ownerPetQuery)
+                ->where('pet_id', $petData['pet_id'])
+                ->first();
+
+            if (! $existing || (! $user && ! $unregisteredCustomer)) {
+                throw ValidationException::withMessages([
+                    'pets' => ['One of the selected pets does not belong to this customer.'],
+                ]);
+            }
+
+            return $this->updateWalkInPetDetails($existing, $petData);
+        }
+
+        // Reuse an existing owner pet when a matching name is submitted.
+        if ($user || $unregisteredCustomer) {
+            $existing = (clone $ownerPetQuery)
                 ->whereRaw('LOWER(pet_name) = ?', [strtolower($petData['pet_name'])])
                 ->first();
 
             if ($existing) {
-                $existing->update([
-                    'breed' => $petData['breed'] ?? $existing->breed,
-                    'fur_type' => $petData['fur_type'] ?? $existing->fur_type,
-                    'weight' => $petData['weight'] ?? $existing->weight,
-                    'size' => $petData['size'] ?? $existing->size,
-                ]);
-
-                return $existing;
+                return $this->updateWalkInPetDetails($existing, $petData);
             }
         }
 
         return Pet::create([
             'user_id' => $user?->user_id,
+            ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
             'pet_name' => $petData['pet_name'],
             'species' => $petData['species'],
             'breed' => $petData['breed'] ?? null,
@@ -193,5 +313,18 @@ class WalkinController extends Controller
             'medical_conditions' => $petData['medical_conditions'] ?? null,
             'is_archived' => false,
         ]);
+    }
+
+    private function updateWalkInPetDetails(Pet $pet, array $petData): Pet
+    {
+        $pet->update([
+            'breed' => $petData['breed'] ?? $pet->breed,
+            'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
+            'weight' => $petData['weight'] ?? $pet->weight,
+            'size' => $petData['size'] ?? $pet->size,
+            'medical_conditions' => $petData['medical_conditions'] ?? $pet->medical_conditions,
+        ]);
+
+        return $pet;
     }
 }

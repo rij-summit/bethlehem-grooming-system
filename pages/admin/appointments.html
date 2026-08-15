@@ -6,7 +6,7 @@
     <title>Admin Schedules | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
+    <link rel="stylesheet" href="../../css/custom.css?v=workflow-reconciliation-20260809" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -16,6 +16,7 @@
     >
       <!-- Mobile Backdrop -->
       <div
+        x-cloak
         x-show="sidebarOpen"
         x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -217,6 +218,7 @@
 
       <!-- Stop Receiving Confirmation Modal -->
       <div
+        x-cloak
         x-show="stopModal.open"
         x-transition
         class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4"
@@ -296,19 +298,107 @@
                 <div
                   class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
                 >
-                  <!-- BACKEND: connect this search to customer/pet/booking records -->
-                  <label class="relative block min-w-0 flex-1 sm:min-w-[280px]">
-                    <span
-                      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  <!-- Shared customer and pet search -->
+                  <div
+                    class="relative min-w-0 flex-1 sm:min-w-[280px]"
+                    @click.outside="closeDashboardSearch()"
+                  >
+                    <label class="relative block">
+                      <span
+                        class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      >
+                        <i data-lucide="search" class="h-5 w-5"></i>
+                      </span>
+                      <input
+                        type="search"
+                        x-model="dashboardSearchQuery"
+                        @input.debounce.300ms="searchDashboard()"
+                        @focus="openDashboardSearch()"
+                        @keydown.escape="closeDashboardSearch()"
+                        placeholder="Search customers, pets, or phone..."
+                        aria-label="Search customers, pets, or phone"
+                        style="padding-left:3rem;padding-right:1.5rem"
+                        class="w-full rounded-xl border border-transparent bg-white py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
+                      />
+                    </label>
+
+                    <div
+                      x-cloak
+                      x-show="dashboardSearchOpen"
+                      x-transition
+                      class="absolute left-0 right-0 top-full z-50 mt-2 max-h-[420px] overflow-y-auto rounded-2xl border border-[#d7e3ef] bg-white py-2 shadow-xl"
+                      aria-live="polite"
                     >
-                      <i data-lucide="search" class="h-5 w-5"></i>
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Search customers or pets..."
-                      class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
-                    />
-                  </label>
+                      <div x-show="dashboardSearchLoading" class="flex items-center gap-2 px-4 py-4 text-sm text-slate-500">
+                        <i data-lucide="loader-circle" class="h-4 w-4 animate-spin text-[#315b7e]"></i>
+                        <span>Searching...</span>
+                      </div>
+
+                      <p
+                        x-show="!dashboardSearchLoading && dashboardSearchError"
+                        class="px-4 py-4 text-sm text-red-600"
+                        x-text="dashboardSearchError"
+                      ></p>
+
+                      <p
+                        x-show="!dashboardSearchLoading && !dashboardSearchError && !dashboardSearchHasResults"
+                        class="px-4 py-4 text-sm text-slate-500"
+                      >No customers or pets found.</p>
+
+                      <div x-show="!dashboardSearchLoading && !dashboardSearchError && dashboardSearchHasResults">
+                        <template x-if="dashboardSearchCustomers.length > 0">
+                          <section aria-label="Customer search results">
+                            <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Customers</p>
+                            <div class="divide-y divide-slate-100">
+                              <template x-for="customer in dashboardSearchCustomers" :key="'customer-' + customer.recordType + '-' + customer.id">
+                                <button
+                                  type="button"
+                                  @click="openDashboardCustomer(customer)"
+                                  class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                                >
+                                  <span class="flex items-center justify-between gap-3">
+                                    <span class="text-sm font-semibold text-slate-700" x-text="customer.name"></span>
+                                    <span
+                                      class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
+                                      :class="customer.status === 'Active' ? 'bg-green-100 text-green-700' : customer.status === 'Unregistered' ? 'bg-[#eaf4fb] text-[#315b7e]' : 'bg-slate-100 text-slate-600'"
+                                      x-text="customer.status"
+                                    ></span>
+                                  </span>
+                                  <span class="mt-1 block text-sm text-slate-500" x-text="formatMobileNumber(customer.phone)"></span>
+                                </button>
+                              </template>
+                            </div>
+                          </section>
+                        </template>
+
+                        <template x-if="dashboardSearchPets.length > 0">
+                          <section
+                            aria-label="Pet search results"
+                            :class="dashboardSearchCustomers.length > 0 ? 'mt-2 border-t border-slate-200 pt-2' : ''"
+                          >
+                            <p class="px-4 pb-1 pt-2 text-sm font-semibold text-[#1f3850]">Pets</p>
+                            <div class="divide-y divide-slate-100">
+                              <template x-for="pet in dashboardSearchPets" :key="'pet-' + pet.id">
+                                <button
+                                  type="button"
+                                  @click="openDashboardPet(pet)"
+                                  class="block w-full px-4 py-3 text-left transition hover:bg-[#f5f8fb] focus:bg-[#f5f8fb] focus:outline-none"
+                                >
+                                  <span class="block text-sm font-semibold text-slate-700" x-text="pet.name"></span>
+                                  <span class="mt-1 block text-sm text-slate-500">
+                                    Owner: <span x-text="pet.ownerName"></span>
+                                    <span aria-hidden="true"> &middot; </span>
+                                    <span x-text="pet.species || 'Not provided'"></span>
+                                  </span>
+                                </button>
+                              </template>
+                            </div>
+                          </section>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- End shared customer and pet search -->
 
                   <!-- Date filter -->
                   <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2">
@@ -861,6 +951,7 @@
                         <button
                           type="button"
                           @click="confirmCancelBooking(booking)"
+                          x-show="!ownerHasActiveMedicalConcern(booking)"
                           class="admin-appointment-action admin-appointment-cancel-action rounded-xl text-base font-semibold transition"
                         >
                           Cancel
@@ -969,7 +1060,8 @@
             <!-- Toggleable owner booking card with one actionable card per pet. -->
             <template x-for="booking in queuedList" :key="booking.id">
               <article
-                class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                class="admin-queued-booking-card rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                :class="bookingRequiresAction(booking) ? 'is-action-required' : ''"
               >
                 <button
                   type="button"
@@ -990,9 +1082,12 @@
                           x-text="booking.ownerName"
                         ></h4>
                         <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
-                          <i data-lucide="hourglass" class="h-3 w-3"></i>
-                          Waiting
+                        <span
+                          class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                          :class="bookingRequiresAction(booking) ? 'bg-slate-200 text-slate-700' : 'bg-yellow-100 text-yellow-700'"
+                        >
+                          <i :data-lucide="bookingRequiresAction(booking) ? 'circle-alert' : 'hourglass'" class="h-3 w-3"></i>
+                          <span x-text="bookingRequiresAction(booking) ? 'Action required' : 'Waiting'"></span>
                         </span>
                       </div>
                       <p
@@ -1003,8 +1098,13 @@
                         <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
                         <span x-show="booking.dropOffTime" x-text="' \u00b7 Dropped off: ' + booking.dropOffTime"></span>
                       </p>
+                      <p
+                        x-show="bookingRequiresAction(booking)"
+                        class="admin-queued-action-required-message"
+                        x-text="booking.actionRequiredReason ?? booking.action_required_reason ?? 'A stopped-grooming payment review is required.'"
+                      ></p>
                       <!-- Queue ETA badge -->
-                      <template x-if="getBookingETA(booking)">
+                      <template x-if="getBookingETA(booking) && !bookingRequiresAction(booking)">
                         <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#c48a00]">
                           <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
                           Est. ready: ~<span x-text="getBookingETA(booking)"></span>
@@ -1024,11 +1124,17 @@
                 </button>
 
                 <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
+                  <template x-if="!booking.paid && !bookingHasPayNowBlockedPet(booking)">
                     <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
                       <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
                       Pay Now
                     </button>
+                  </template>
+                  <template x-if="!booking.paid && bookingHasPayNowBlockedPet(booking)">
+                    <div class="admin-queued-owner-action cursor-not-allowed bg-slate-100 text-slate-500" title="Pay Now is unavailable while a pet is paused or stopped.">
+                      <i data-lucide="shield-alert" class="h-4 w-4" aria-hidden="true"></i>
+                      Pay Now unavailable
+                    </div>
                   </template>
                   <template x-if="booking.paid">
                     <div class="admin-queued-owner-action btn-already-paid">
@@ -1042,13 +1148,13 @@
                       Reschedule
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerRevert(booking)">
                     <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
                       <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
                       Revert
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerCancel(booking)">
                     <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
                       <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
                       Cancel
@@ -1065,7 +1171,11 @@
                   class="admin-queued-pets-panel"
                 >
                   <div class="admin-queued-pets-heading">
-                    <span class="admin-queued-pet-count" x-text="booking.pets?.length || 0"></span>
+                    <div>
+                      <p class="admin-queued-pets-title">Pets in this booking</p>
+                      <p class="admin-queued-pets-support">Queued pets under this owner.</p>
+                    </div>
+                    <span class="admin-queued-pet-count" x-text="getQueuedPets(booking).length"></span>
                   </div>
 
                   <template x-if="!booking.pets || booking.pets.length === 0">
@@ -1088,22 +1198,70 @@
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services">
+                              Grooming state:
+                              <strong x-text="petGroomingStateLabel(pet)"></strong>
+                              <span x-show="petGroomingState(pet) === 'stopped'">
+                                &middot;
+                                <span x-text="stoppedPaymentReviewCardLabel(booking, pet)">Payment review required</span>
+                                <span
+                                  x-show="stoppedPaymentReviewStatus(booking, pet) === 'completed'"
+                                  x-text="' · ' + stoppedPaymentReviewCardDetail(booking, pet)"
+                                ></span>
+                              </span>
+                            </p>
+                            <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
+                              <button
+                                type="button"
+                                @click="openMedicalConcerns(booking, pet)"
+                                class="admin-pet-medical-concern-indicator"
+                                :class="medicalConcernIndicatorClass(booking, pet)"
+                                :aria-label="'Open medical concern history for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                              >
+                                <i data-lucide="triangle-alert" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                <span x-text="medicalConcernIndicatorLabel(booking, pet)"></span>
+                              </button>
+                            </template>
                           </div>
 
                           <div class="admin-queued-pet-actions">
+                            <button
+                              type="button"
+                              @click="openMedicalConcerns(booking, pet)"
+                              class="admin-queued-pet-concerns"
+                            >
+                              <i data-lucide="clipboard-plus" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="medicalConcernState(booking, pet).loading ? 'Loading concerns...' : 'Concerns'"></span>
+                              <span
+                                x-show="medicalConcernSummary(booking, pet).totalCount > 0"
+                                class="admin-pet-medical-concern-count"
+                                x-text="medicalConcernSummary(booking, pet).totalCount"
+                              ></span>
+                            </button>
+                            <button
+                              x-show="isStoppedPaymentReviewPet(pet)"
+                              type="button"
+                              @click="openStoppedPaymentReview(booking, pet, $event.currentTarget)"
+                              :disabled="stoppedPaymentReviewState(booking, pet).loading"
+                              class="admin-queued-pet-payment-review"
+                              :aria-label="stoppedPaymentReviewActionLabel(booking, pet) + ' for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                            >
+                              <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
+                            </button>
                             <div
                               class="admin-queued-pet-start-wrap"
-                              :class="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'is-capacity-disabled' : ''"
-                              :title="isGroomerCapacityFull && !isPetGroomingStarted(pet) ? 'Groomer currently busy' : ''"
+                              :class="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'is-capacity-disabled' : ''"
+                              :title="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'Groomer currently busy' : ''"
                             >
                               <button
                                 type="button"
                                 @click="confirmStartGroomingPet(booking, pet)"
-                                :disabled="isPetGroomingStarted(pet) || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
+                                :disabled="petGroomingState(pet) !== 'not_started' || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
                                 class="admin-queued-pet-start"
-                                :class="isPetGroomingFinished(pet) ? 'is-finished' : (isPetGroomingStarted(pet) || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
+                                :class="petGroomingState(pet) === 'finished' ? 'is-finished' : (petGroomingState(pet) !== 'not_started' || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
                               >
-                                <span x-text="isPetGroomingFinished(pet) ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isPetGroomingStarted(pet) ? (pet.groomingStartedAt ? 'Started ' + pet.groomingStartedAt : 'Grooming Started') : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'))"></span>
+                                <span x-text="petGroomingState(pet) !== 'not_started' ? petGroomingStateLabel(pet) : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
                               </button>
                             </div>
                             <button
@@ -1269,11 +1427,17 @@
                 </button>
 
                 <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
+                  <template x-if="!booking.paid && !bookingHasPayNowBlockedPet(booking)">
                     <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
                       <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
                       Pay Now
                     </button>
+                  </template>
+                  <template x-if="!booking.paid && bookingHasPayNowBlockedPet(booking)">
+                    <div class="admin-queued-owner-action cursor-not-allowed bg-slate-100 text-slate-500" title="Pay Now is unavailable while a pet is paused or stopped.">
+                      <i data-lucide="shield-alert" class="h-4 w-4" aria-hidden="true"></i>
+                      Pay Now unavailable
+                    </div>
                   </template>
                   <template x-if="booking.paid">
                     <div class="admin-queued-owner-action btn-already-paid">
@@ -1287,13 +1451,13 @@
                       Reschedule
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerRevert(booking)">
                     <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
                       <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
                       Revert
                     </button>
                   </template>
-                  <template x-if="!shouldShowOwnerReschedule(booking)">
+                  <template x-if="shouldShowOwnerCancel(booking)">
                     <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
                       <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
                       Cancel
@@ -1311,8 +1475,8 @@
                 >
                   <div class="admin-queued-pets-heading">
                     <div>
-                      <p class="font-bold text-[#1f3850]">Pets in this booking</p>
-                      <p class="text-sm text-slate-500">Active and queued pets under this owner.</p>
+                      <p class="admin-queued-pets-title">Pets in this booking</p>
+                      <p class="admin-queued-pets-support">Active and queued pets under this owner.</p>
                     </div>
                     <span class="admin-queued-pet-count admin-in-progress-pet-count" x-text="getInProgressPets(booking).length"></span>
                   </div>
@@ -1339,8 +1503,32 @@
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services">
+                              Grooming state:
+                              <strong x-text="petGroomingStateLabel(pet)"></strong>
+                              <span x-show="petGroomingState(pet) === 'stopped'">
+                                &middot;
+                                <span x-text="stoppedPaymentReviewCardLabel(booking, pet)">Payment review required</span>
+                                <span
+                                  x-show="stoppedPaymentReviewStatus(booking, pet) === 'completed'"
+                                  x-text="' · ' + stoppedPaymentReviewCardDetail(booking, pet)"
+                                ></span>
+                              </span>
+                            </p>
+                            <template x-if="medicalConcernSummary(booking, pet).totalCount > 0">
+                              <button
+                                type="button"
+                                @click="openMedicalConcerns(booking, pet)"
+                                class="admin-pet-medical-concern-indicator"
+                                :class="medicalConcernIndicatorClass(booking, pet)"
+                                :aria-label="'Open medical concern history for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                              >
+                                <i data-lucide="triangle-alert" class="h-3.5 w-3.5" aria-hidden="true"></i>
+                                <span x-text="medicalConcernIndicatorLabel(booking, pet)"></span>
+                              </button>
+                            </template>
                             <!-- Per-pet elapsed + ETA -->
-                            <p x-show="pet.isGroomingStarted && !pet.isGroomingFinished" class="mt-0.5 text-xs text-[#315b7e] font-medium">
+                            <p x-show="isPetGroomingInProgress(pet)" class="admin-queued-pet-timing">
                               <span x-text="getPetElapsed(pet)"></span>
                               <template x-if="getPetEstDone(booking, pet)">
                                 <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
@@ -1349,18 +1537,42 @@
                           </div>
 
                           <div class="admin-queued-pet-actions">
-                            <template x-if="pet.isGroomingStarted">
+                            <button
+                              type="button"
+                              @click="openMedicalConcerns(booking, pet)"
+                              class="admin-queued-pet-concerns"
+                            >
+                              <i data-lucide="clipboard-plus" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="medicalConcernState(booking, pet).loading ? 'Loading concerns...' : 'Concerns'"></span>
+                              <span
+                                x-show="medicalConcernSummary(booking, pet).totalCount > 0"
+                                class="admin-pet-medical-concern-count"
+                                x-text="medicalConcernSummary(booking, pet).totalCount"
+                              ></span>
+                            </button>
+                            <button
+                              x-show="isStoppedPaymentReviewPet(pet)"
+                              type="button"
+                              @click="openStoppedPaymentReview(booking, pet, $event.currentTarget)"
+                              :disabled="stoppedPaymentReviewState(booking, pet).loading"
+                              class="admin-queued-pet-payment-review"
+                              :aria-label="stoppedPaymentReviewActionLabel(booking, pet) + ' for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'this pet')"
+                            >
+                              <i data-lucide="badge-dollar-sign" class="h-4 w-4" aria-hidden="true"></i>
+                              <span x-text="stoppedPaymentReviewActionLabel(booking, pet)">Review Payment</span>
+                            </button>
+                            <template x-if="isPetGroomingInProgress(pet)">
                               <button
                                 type="button"
                                 @click="confirmMarkPetDone(booking, pet)"
-                                :disabled="pet.isGroomingFinished || isActionBusy('markPetDone', booking.id)"
+                                :disabled="isActionBusy('markPetDone', booking.id)"
                                 class="admin-in-progress-pet-finish"
-                                :class="pet.isGroomingFinished ? 'is-finished' : (isActionBusy('markPetDone', booking.id) ? 'is-disabled' : '')"
+                                :class="isActionBusy('markPetDone', booking.id) ? 'is-disabled' : ''"
                               >
-                                <span x-text="pet.isGroomingFinished ? (pet.groomingFinishedAt ? 'Finished ' + pet.groomingFinishedAt : 'Finished') : (isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finished')"></span>
+                                <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
                               </button>
                             </template>
-                            <template x-if="!pet.isGroomingStarted">
+                            <template x-if="petGroomingState(pet) === 'not_started'">
                               <div
                                 class="admin-queued-pet-start-wrap"
                                 :class="isGroomerCapacityFull ? 'is-capacity-disabled' : ''"
@@ -1491,7 +1703,7 @@
                         @click="releaseBooking(booking)"
                         class="btn-release rounded-xl px-6 py-3 text-base font-semibold transition"
                       >
-                        Release
+                        Move to Pickup
                       </button>
                     </template>
 
@@ -1500,11 +1712,14 @@
                       <button
                         type="button"
                         @click="openPaymentModal(booking, false)"
+                        :disabled="booking.paymentReady === false"
                         class="btn-process-payment rounded-xl px-6 py-3 text-base font-semibold transition"
+                        :class="booking.paymentReady === false ? 'cursor-not-allowed opacity-50' : ''"
                       >
                         Process Payment
                       </button>
                     </template>
+                    <p x-show="!booking.paid && booking.paymentReady === false" class="max-w-xs text-right text-xs text-amber-700" x-text="booking.paymentBlockedReason"></p>
 
                     <button
                       type="button"
@@ -1677,8 +1892,1884 @@
             </template>
           </section>
 
+          <!-- Per-pet stopped-grooming payment review -->
+          <div
+            x-show="stoppedPaymentReviewModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stopped-payment-review-title"
+            @click.self="closeStoppedPaymentReview()"
+            @keydown.escape.window="stoppedPaymentReviewConfirmation.open ? closeStoppedPaymentReviewConfirmation() : closeStoppedPaymentReview()"
+          >
+            <section
+              x-ref="stoppedPaymentReviewDialog"
+              tabindex="-1"
+              class="admin-stopped-payment-review-dialog"
+            >
+              <header class="admin-stopped-payment-review-header">
+                <div class="admin-stopped-payment-review-header-icon" aria-hidden="true">
+                  <i data-lucide="badge-dollar-sign" class="h-6 w-6"></i>
+                </div>
+                <div class="min-w-0">
+                  <p class="admin-stopped-payment-review-kicker">Stopped grooming · selected pet only</p>
+                  <h3 id="stopped-payment-review-title" class="admin-stopped-payment-review-title">
+                    Stopped-Grooming Payment Review
+                  </h3>
+                  <p class="admin-stopped-payment-review-context">
+                    <strong x-text="stoppedPaymentReviewModal.review?.pet_name ?? stoppedPaymentReviewModal.pet?.petName ?? stoppedPaymentReviewModal.pet?.pet_name ?? stoppedPaymentReviewModal.pet?.name ?? 'Selected pet'"></strong>
+                    <span aria-hidden="true">&middot;</span>
+                    <span x-text="stoppedPaymentReviewModal.review?.booking_reference ?? stoppedPaymentReviewModal.booking?.bookingReference ?? 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="closeStoppedPaymentReview()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-close"
+                  aria-label="Close stopped-grooming payment review dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </header>
+
+              <div class="admin-stopped-payment-review-body">
+                <div
+                  x-show="stoppedPaymentReviewModal.loading"
+                  class="admin-stopped-payment-review-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="admin-stopped-payment-review-spinner" aria-hidden="true"></span>
+                  <p>Loading payment review status...</p>
+                </div>
+
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && stoppedPaymentReviewModal.error"
+                  class="admin-stopped-payment-review-state is-error"
+                  role="alert"
+                >
+                  <i data-lucide="circle-alert" class="h-7 w-7" aria-hidden="true"></i>
+                  <div>
+                    <strong x-text="stoppedPaymentReviewModal.notFound ? 'Grooming pet record unavailable' : 'Payment review could not be loaded'"></strong>
+                    <p x-text="stoppedPaymentReviewModal.error"></p>
+                  </div>
+                  <button
+                    x-show="!stoppedPaymentReviewModal.notFound"
+                    type="button"
+                    @click="loadStoppedPaymentReview()"
+                    class="admin-stopped-payment-review-retry"
+                  >
+                    Retry
+                  </button>
+                </div>
+
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.loaded && !stoppedPaymentReviewModal.review"
+                  class="admin-stopped-payment-review-state is-error"
+                  role="alert"
+                >
+                  <i data-lucide="circle-alert" class="h-7 w-7" aria-hidden="true"></i>
+                  <div>
+                    <strong>Payment review data unavailable</strong>
+                    <p>The server did not return a payment review status for this pet.</p>
+                  </div>
+                  <button type="button" @click="loadStoppedPaymentReview()" class="admin-stopped-payment-review-retry">
+                    Retry
+                  </button>
+                </div>
+
+                <!-- Safe ineligible state supplied by the backend -->
+                <section
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'pending' && !stoppedPaymentReviewModal.review?.review_creation_allowed"
+                  class="admin-stopped-payment-review-ineligible"
+                  role="status"
+                >
+                  <div class="admin-stopped-payment-review-ineligible-icon" aria-hidden="true">
+                    <i data-lucide="shield-alert" class="h-6 w-6"></i>
+                  </div>
+                  <div>
+                    <h4>Payment review is not currently available</h4>
+                    <p x-text="stoppedPaymentReviewModal.review?.review_creation_blocked_reason || 'This stopped pet is not eligible for review.'"></p>
+                    <button type="button" @click="loadStoppedPaymentReview()" class="admin-stopped-payment-review-retry">
+                      Retry status
+                    </button>
+                  </div>
+                </section>
+
+                <!-- Eligible pending review -->
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'pending' && stoppedPaymentReviewModal.review?.review_creation_allowed"
+                  class="admin-stopped-payment-review-workflow"
+                >
+                  <div class="admin-stopped-payment-review-advisory" role="note">
+                    <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                    <div>
+                      <strong>This review applies only to this pet.</strong>
+                      <p>
+                        Completing this review may move the owner booking to For Payment when every pet is finished or reviewed. It does not collect payment.
+                      </p>
+                    </div>
+                  </div>
+
+                  <section class="admin-stopped-payment-review-summary" aria-label="Selected pet and Stop Grooming context">
+                    <div>
+                      <span>Booking reference</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.booking_reference || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Pet</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.pet_name || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Species</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.pet_species || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Grooming state</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.grooming_state_label || 'Stopped'"></strong>
+                    </div>
+                    <div>
+                      <span>Stop Grooming concern</span>
+                      <strong x-text="stoppedPaymentReviewModal.review?.concern_public_id || 'Not provided'"></strong>
+                    </div>
+                    <div>
+                      <span>Action applied</span>
+                      <strong x-text="formatStoppedPaymentDateTime(stoppedPaymentReviewModal.review?.applied_stop_grooming_at)"></strong>
+                    </div>
+                  </section>
+
+                  <section class="admin-stopped-payment-review-services" aria-labelledby="stopped-payment-review-services-title">
+                    <div class="admin-stopped-payment-review-section-heading">
+                      <div>
+                        <h4 id="stopped-payment-review-services-title">Saved services and add-ons</h4>
+                        <p>Saved booking prices are used. Invalid legacy zero snapshots use the configured size or service rate without overwriting the saved row.</p>
+                      </div>
+                      <div class="admin-stopped-payment-review-subtotal">
+                        <span>Original pet subtotal</span>
+                        <strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong>
+                      </div>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-service-list">
+                      <template x-for="line in (stoppedPaymentReviewModal.review?.service_breakdown || [])" :key="line.booking_service_id">
+                        <div class="admin-stopped-payment-review-service-line">
+                          <div>
+                            <strong x-text="line.label || 'Unnamed service'"></strong>
+                            <span x-text="(line.line_type === 'add_on' ? 'Add-on' : 'Grooming service') + (line.price_source === 'booking_snapshot' ? '' : ' · Configured rate recovered')"></span>
+                          </div>
+                          <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
+                        </div>
+                      </template>
+                      <p
+                        x-show="(stoppedPaymentReviewModal.review?.service_breakdown || []).length === 0"
+                        class="admin-stopped-payment-review-no-services"
+                      >
+                        No saved booking-service lines were found. The original pet subtotal is ₱0.00.
+                      </p>
+                    </div>
+                  </section>
+
+                  <form @submit.prevent="openStoppedPaymentReviewConfirmation()" novalidate>
+                    <fieldset class="admin-stopped-payment-review-decisions">
+                      <legend>Review decision <span aria-hidden="true">*</span></legend>
+                      <p class="admin-stopped-payment-review-field-help">Choose one permanent decision. No option is selected by default.</p>
+                      <div class="admin-stopped-payment-review-decision-grid">
+                        <template x-for="decision in stoppedPaymentReviewDecisions" :key="decision.value">
+                          <label
+                            class="admin-stopped-payment-review-decision"
+                            :class="stoppedPaymentReviewForm.decision === decision.value ? 'is-selected' : ''"
+                          >
+                            <input
+                              type="radio"
+                              name="stopped-payment-review-decision"
+                              :value="decision.value"
+                              :checked="stoppedPaymentReviewForm.decision === decision.value"
+                              @change="selectStoppedPaymentReviewDecision(decision.value)"
+                              :aria-invalid="Boolean(stoppedPaymentReviewFieldError('decision'))"
+                            />
+                            <span>
+                              <strong x-text="decision.label"></strong>
+                              <small x-text="decision.description"></small>
+                            </span>
+                          </label>
+                        </template>
+                      </div>
+                      <p x-show="stoppedPaymentReviewFieldError('decision')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('decision')"></p>
+                    </fieldset>
+
+                    <div class="admin-stopped-payment-review-amounts">
+                      <div>
+                        <span>Original subtotal</span>
+                        <strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong>
+                      </div>
+                      <div>
+                        <span>Final reviewed charge</span>
+                        <strong x-text="stoppedPaymentReviewFinalChargeDisplay()"></strong>
+                      </div>
+                      <div>
+                        <span>Adjustment</span>
+                        <strong x-text="stoppedPaymentReviewAdjustmentDisplay()"></strong>
+                      </div>
+                    </div>
+
+                    <div x-show="stoppedPaymentReviewForm.decision === 'partial_charge'" class="admin-stopped-payment-review-field">
+                      <label for="stopped-payment-review-final-charge">
+                        Final Charge <span aria-hidden="true">*</span>
+                      </label>
+                      <div class="admin-stopped-payment-review-money-input">
+                        <span aria-hidden="true">₱</span>
+                        <input
+                          id="stopped-payment-review-final-charge"
+                          type="text"
+                          inputmode="decimal"
+                          autocomplete="off"
+                          placeholder="0.00"
+                          x-model="stoppedPaymentReviewForm.final_pet_charge"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('final_pet_charge'))"
+                          aria-describedby="stopped-payment-review-final-charge-help stopped-payment-review-final-charge-error"
+                        />
+                      </div>
+                      <p id="stopped-payment-review-final-charge-help" class="admin-stopped-payment-review-field-help">
+                        Must be greater than zero, less than the original subtotal, and use no more than two decimal places.
+                      </p>
+                      <p id="stopped-payment-review-final-charge-error" x-show="stoppedPaymentReviewFieldError('final_pet_charge')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('final_pet_charge')"></p>
+                    </div>
+
+                    <div
+                      x-show="stoppedPaymentReviewErrorSummary"
+                      x-ref="stoppedPaymentReviewValidationSummary"
+                      tabindex="-1"
+                      class="admin-stopped-payment-review-validation"
+                      role="alert"
+                    >
+                      <strong>Please review the highlighted fields.</strong>
+                      <p x-text="stoppedPaymentReviewErrorSummary"></p>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-text-grid">
+                      <div class="admin-stopped-payment-review-field">
+                        <label for="stopped-payment-review-internal-reason">
+                          Internal staff reason <span aria-hidden="true">*</span>
+                        </label>
+                        <textarea
+                          id="stopped-payment-review-internal-reason"
+                          rows="5"
+                          maxlength="5000"
+                          x-model="stoppedPaymentReviewForm.internal_reason"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('internal_reason'))"
+                          aria-describedby="stopped-payment-review-internal-help stopped-payment-review-internal-error"
+                        ></textarea>
+                        <p id="stopped-payment-review-internal-help" class="admin-stopped-payment-review-field-help">
+                          Visible only to authorized staff. This is not shown to the customer.
+                        </p>
+                        <p id="stopped-payment-review-internal-error" x-show="stoppedPaymentReviewFieldError('internal_reason')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('internal_reason')"></p>
+                      </div>
+
+                      <div class="admin-stopped-payment-review-field">
+                        <label for="stopped-payment-review-customer-explanation">
+                          Customer-friendly explanation <span aria-hidden="true">*</span>
+                        </label>
+                        <textarea
+                          id="stopped-payment-review-customer-explanation"
+                          rows="5"
+                          maxlength="2000"
+                          x-model="stoppedPaymentReviewForm.customer_explanation"
+                          :aria-invalid="Boolean(stoppedPaymentReviewFieldError('customer_explanation'))"
+                          aria-describedby="stopped-payment-review-customer-help stopped-payment-review-customer-error"
+                        ></textarea>
+                        <p id="stopped-payment-review-customer-help" class="admin-stopped-payment-review-field-help">
+                          This may later appear on customer and payment-related summaries. Enter it separately from the internal reason.
+                        </p>
+                        <p id="stopped-payment-review-customer-error" x-show="stoppedPaymentReviewFieldError('customer_explanation')" class="admin-stopped-payment-review-field-error" x-text="stoppedPaymentReviewFieldError('customer_explanation')"></p>
+                      </div>
+                    </div>
+
+                    <div class="admin-stopped-payment-review-payment-pending" role="note">
+                      <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                      <p x-text="stoppedPaymentReviewForm.decision === 'no_charge'
+                        ? 'If every pet is ready and the complete booking total is exactly \u20B10.00, the system will record the zero payment and move the booking to To Be Picked Up.'
+                        : 'Completing this review does not collect payment or create a transaction. It may make the owner booking ready for the normal payment step.'"></p>
+                    </div>
+
+                    <footer class="admin-stopped-payment-review-actions">
+                      <button type="button" @click="closeStoppedPaymentReview()" class="admin-stopped-payment-review-secondary">
+                        Cancel
+                      </button>
+                      <button
+                        x-ref="stoppedPaymentReviewCompleteButton"
+                        type="submit"
+                        class="admin-stopped-payment-review-primary"
+                      >
+                        Review and Confirm
+                      </button>
+                    </footer>
+                  </form>
+                </div>
+
+                <!-- Permanent completed review -->
+                <div
+                  x-show="!stoppedPaymentReviewModal.loading && !stoppedPaymentReviewModal.error && stoppedPaymentReviewModal.review?.review_status === 'completed'"
+                  class="admin-stopped-payment-review-completed"
+                >
+                  <div class="admin-stopped-payment-review-completed-heading">
+                    <div class="admin-stopped-payment-review-completed-icon" aria-hidden="true">
+                      <i data-lucide="badge-check" class="h-7 w-7"></i>
+                    </div>
+                    <div>
+                      <h4>Payment Review Completed</h4>
+                      <p>This is a permanent, immutable record. It cannot be edited or deleted.</p>
+                    </div>
+                  </div>
+
+                  <section class="admin-stopped-payment-review-summary" aria-label="Completed payment review context">
+                    <div><span>Decision</span><strong x-text="stoppedPaymentReviewModal.review?.decision_label || stoppedPaymentReviewDecisionLabel(stoppedPaymentReviewModal.review?.decision)"></strong></div>
+                    <div><span>Original pet subtotal</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></strong></div>
+                    <div><span>Final pet charge</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.final_pet_charge)"></strong></div>
+                    <div><span>Adjustment</span><strong x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.adjustment)"></strong></div>
+                    <div><span>Reviewed by</span><strong x-text="stoppedPaymentReviewModal.review?.reviewed_by_name || 'Not provided'"></strong></div>
+                    <div><span>Reviewed at</span><strong x-text="formatStoppedPaymentDateTime(stoppedPaymentReviewModal.review?.reviewed_at)"></strong></div>
+                    <div><span>Stop Grooming concern</span><strong x-text="stoppedPaymentReviewModal.review?.concern_public_id || 'Not provided'"></strong></div>
+                    <div><span>Grooming state</span><strong x-text="stoppedPaymentReviewModal.review?.grooming_state_label || 'Stopped'"></strong></div>
+                  </section>
+
+                  <section class="admin-stopped-payment-review-services" aria-labelledby="completed-payment-review-services-title">
+                    <div class="admin-stopped-payment-review-section-heading">
+                      <div>
+                        <h4 id="completed-payment-review-services-title">Saved service breakdown</h4>
+                        <p>Only this pet's booking-service lines are included.</p>
+                      </div>
+                    </div>
+                    <div class="admin-stopped-payment-review-service-list">
+                      <template x-for="line in (stoppedPaymentReviewModal.review?.service_breakdown || [])" :key="line.booking_service_id">
+                        <div class="admin-stopped-payment-review-service-line">
+                          <div>
+                            <strong x-text="line.label || 'Unnamed service'"></strong>
+                            <span x-text="(line.line_type === 'add_on' ? 'Add-on' : 'Grooming service') + (line.price_source === 'booking_snapshot' ? '' : ' · Configured rate recovered')"></span>
+                          </div>
+                          <strong x-text="formatStoppedPaymentMoney(line.price_at_booking)"></strong>
+                        </div>
+                      </template>
+                      <p x-show="(stoppedPaymentReviewModal.review?.service_breakdown || []).length === 0" class="admin-stopped-payment-review-no-services">
+                        No saved booking-service lines were recorded for this pet.
+                      </p>
+                    </div>
+                  </section>
+
+                  <div class="admin-stopped-payment-review-text-grid">
+                    <section class="admin-stopped-payment-review-readonly-text">
+                      <span>Internal staff reason</span>
+                      <p x-text="stoppedPaymentReviewModal.review?.internal_reason || 'Not provided'"></p>
+                    </section>
+                    <section class="admin-stopped-payment-review-readonly-text">
+                      <span>Customer-friendly explanation</span>
+                      <p x-text="stoppedPaymentReviewModal.review?.customer_explanation || 'Not provided'"></p>
+                    </section>
+                  </div>
+
+                  <div class="admin-stopped-payment-review-payment-pending" role="note">
+                    <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                    <p x-text="stoppedPaymentReviewModal.review?.booking_status === 'released'
+                      ? 'No grooming payment was required. This booking is now under To Be Picked Up.'
+                      : 'Payment review is complete. When every pet is finished or reviewed, this booking will move to For Payment automatically.'"></p>
+                  </div>
+
+                  <footer class="admin-stopped-payment-review-actions">
+                    <button type="button" @click="closeStoppedPaymentReview()" class="admin-stopped-payment-review-primary">
+                      Close
+                    </button>
+                  </footer>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Permanent review confirmation -->
+          <div
+            x-show="stoppedPaymentReviewConfirmation.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stopped-payment-review-confirm-title"
+            aria-describedby="stopped-payment-review-confirm-description"
+          >
+            <section
+              x-ref="stoppedPaymentReviewConfirmationDialog"
+              tabindex="-1"
+              class="admin-stopped-payment-review-confirm-dialog"
+            >
+              <div class="admin-stopped-payment-review-confirm-icon" aria-hidden="true">
+                <i data-lucide="shield-check" class="h-7 w-7"></i>
+              </div>
+              <h3 id="stopped-payment-review-confirm-title">Complete Permanent Payment Review?</h3>
+              <p id="stopped-payment-review-confirm-description">
+                This completed review will be saved as a permanent record and cannot be edited or deleted.
+              </p>
+
+              <dl class="admin-stopped-payment-review-confirm-summary">
+                <div><dt>Pet</dt><dd x-text="stoppedPaymentReviewModal.review?.pet_name || 'Selected pet'"></dd></div>
+                <div><dt>Original subtotal</dt><dd x-text="formatStoppedPaymentMoney(stoppedPaymentReviewModal.review?.original_pet_subtotal)"></dd></div>
+                <div><dt>Decision</dt><dd x-text="stoppedPaymentReviewDecisionLabel(stoppedPaymentReviewForm.decision)"></dd></div>
+                <div><dt>Final reviewed charge</dt><dd x-text="stoppedPaymentReviewFinalChargeDisplay()"></dd></div>
+                <div><dt>Adjustment</dt><dd x-text="stoppedPaymentReviewAdjustmentDisplay()"></dd></div>
+              </dl>
+
+              <section class="admin-stopped-payment-review-confirm-explanation">
+                <span>Customer-friendly explanation</span>
+                <p x-text="stoppedPaymentReviewForm.customer_explanation"></p>
+              </section>
+
+              <p class="admin-stopped-payment-review-confirm-warning">
+                <span x-show="stoppedPaymentReviewForm.decision !== 'no_charge'">
+                  This applies only to the selected pet and does not collect payment. The booking may move to For Payment when every pet is ready.
+                </span>
+                <span x-show="stoppedPaymentReviewForm.decision === 'no_charge'">
+                  This applies only to the selected pet. If the complete booking becomes exactly &#8369;0.00 and every pet and clinic step is ready, a &#8369;0.00 payment will be recorded and the booking will move to To Be Picked Up.
+                </span>
+              </p>
+              <p x-show="stoppedPaymentReviewConfirmation.error" class="admin-stopped-payment-review-confirm-error" role="alert" x-text="stoppedPaymentReviewConfirmation.error"></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeStoppedPaymentReviewConfirmation()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-secondary"
+                >
+                  Go Back
+                </button>
+                <button
+                  type="button"
+                  @click="submitStoppedPaymentReview()"
+                  :disabled="stoppedPaymentReviewConfirmation.busy"
+                  class="admin-stopped-payment-review-primary"
+                >
+                  <span x-show="stoppedPaymentReviewConfirmation.busy" class="admin-stopped-payment-review-button-spinner" aria-hidden="true"></span>
+                  <span x-text="stoppedPaymentReviewConfirmation.busy
+                    ? 'Saving permanent review...'
+                    : (stoppedPaymentReviewForm.decision === 'no_charge' ? 'Confirm No charge' : 'Confirm and Complete')"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <div
+            x-show="stoppedPaymentReviewToast.show"
+            x-transition.opacity
+            style="display: none"
+            class="admin-stopped-payment-review-toast"
+            :class="stoppedPaymentReviewToast.ok ? 'is-success' : 'is-error'"
+            role="status"
+            aria-live="polite"
+          >
+            <i :data-lucide="stoppedPaymentReviewToast.ok ? 'circle-check' : 'circle-alert'" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+            <span x-text="stoppedPaymentReviewToast.message"></span>
+          </div>
+
+          <!-- Per-pet grooming medical concern history and form -->
+          <div
+            x-show="medicalConcernModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-dialog-title"
+            @click.self="closeMedicalConcerns()"
+            @keydown.escape.window="medicalConcernActionDialog.open ? closeMedicalConcernActionDialog() : (medicalConcernNotify.open ? closeMedicalConcernNotifyDialog() : (medicalConcernTerminal.open ? closeMedicalConcernTerminalDialog() : closeMedicalConcerns()))"
+          >
+            <section
+              x-ref="medicalConcernDialog"
+              tabindex="-1"
+              class="admin-medical-concern-dialog"
+            >
+              <header class="admin-medical-concern-header">
+                <div class="admin-medical-concern-header-icon" aria-hidden="true">
+                  <i data-lucide="message-square-warning" class="h-6 w-6"></i>
+                </div>
+                <div class="min-w-0">
+                  <p class="admin-medical-concern-kicker">Grooming medical attention</p>
+                  <h3
+                    id="medical-concern-dialog-title"
+                    class="admin-medical-concern-title"
+                    x-text="medicalConcernModal.view === 'form' ? (medicalConcernFormModal.mode === 'edit' ? 'Edit Medical Concern' : 'Report Medical Concern') : 'Medical Concern History'"
+                  ></h3>
+                  <p class="admin-medical-concern-context">
+                    <strong x-text="medicalConcernModal.context?.pet_name ?? medicalConcernModal.pet?.petName ?? medicalConcernModal.pet?.pet_name ?? medicalConcernModal.pet?.name ?? 'Selected pet'"></strong>
+                    <span aria-hidden="true">&middot;</span>
+                    <span x-text="medicalConcernModal.context?.booking_reference ?? medicalConcernModal.booking?.bookingReference ?? 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="closeMedicalConcerns()"
+                  :disabled="medicalConcernFormModal.saving || medicalConcernTerminal.busy"
+                  class="admin-medical-concern-close"
+                  aria-label="Close medical concern dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+              </header>
+
+              <!-- Concern history -->
+              <div
+                x-show="medicalConcernModal.view === 'history'"
+                class="admin-medical-concern-body"
+              >
+                <div class="admin-medical-concern-advisory" role="note">
+                  <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>
+                    Recommended grooming actions are advisory only. Reporting a concern does not pause,
+                    stop, finish, or otherwise change grooming automatically.
+                  </p>
+                </div>
+
+                <div class="admin-medical-concern-toolbar">
+                  <div>
+                    <p class="text-lg font-semibold text-[#1f3850]">Concern records</p>
+                    <p class="text-sm font-medium text-slate-500">
+                      Active, resolved, and cancelled history for this booking pet only.
+                    </p>
+                  </div>
+                  <button
+                    x-show="canReportMedicalConcern(medicalConcernModal.booking, medicalConcernModal.pet)"
+                    type="button"
+                    @click="openCreateMedicalConcern()"
+                    :disabled="medicalConcernModal.loading || medicalConcernModal.notFound"
+                    class="admin-medical-concern-primary"
+                  >
+                    <i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>
+                    Report Medical Concern
+                  </button>
+                </div>
+
+                <div
+                  x-show="medicalConcernModal.loading"
+                  class="admin-medical-concern-state"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="admin-medical-concern-spinner" aria-hidden="true"></span>
+                  <p>Loading medical concern history...</p>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && medicalConcernModal.error"
+                  class="admin-medical-concern-state is-error"
+                  role="alert"
+                >
+                  <i
+                    :data-lucide="medicalConcernModal.notFound ? 'file-question' : 'circle-alert'"
+                    class="h-8 w-8"
+                    aria-hidden="true"
+                  ></i>
+                  <p
+                    class="text-base font-semibold"
+                    x-text="medicalConcernModal.notFound ? 'Grooming pet record unavailable' : 'Medical concern history could not be loaded'"
+                  ></p>
+                  <p class="text-sm font-medium" x-text="medicalConcernModal.error"></p>
+                  <button
+                    x-show="!medicalConcernModal.notFound"
+                    type="button"
+                    @click="loadMedicalConcerns()"
+                    class="admin-medical-concern-retry"
+                  >
+                    <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                    Retry
+                  </button>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && !medicalConcernModal.error && medicalConcernModal.concerns.length === 0"
+                  class="admin-medical-concern-state"
+                >
+                  <i data-lucide="clipboard" class="h-9 w-9 text-slate-400" aria-hidden="true"></i>
+                  <p class="text-base font-semibold text-slate-700">
+                    No medical concerns have been reported for this pet.
+                  </p>
+                  <p class="text-sm font-medium text-slate-500">
+                    This message only describes concern records in this system.
+                  </p>
+                </div>
+
+                <div
+                  x-show="!medicalConcernModal.loading && !medicalConcernModal.error && medicalConcernModal.concerns.length > 0"
+                  class="admin-medical-concern-list"
+                >
+                  <template x-for="concern in medicalConcernModal.concerns" :key="concern.id">
+                    <article class="admin-medical-concern-card">
+                      <div class="admin-medical-concern-card-head">
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="admin-medical-concern-category" x-text="concern.category"></h4>
+                            <span
+                              class="admin-medical-concern-badge"
+                              :class="medicalConcernSeverityClass(concern.severity)"
+                              x-text="medicalConcernSeverityLabel(concern.severity) || 'Unknown severity'"
+                            ></span>
+                            <span
+                              class="admin-medical-concern-badge"
+                              :class="medicalConcernStatusClass(concern.status)"
+                              x-text="medicalConcernStatusLabel(concern.status)"
+                            ></span>
+                          </div>
+                          <p class="admin-medical-concern-meta">
+                            Reported <span x-text="formatMedicalConcernDateTime(concern.reported_at)"></span>
+                            by <span x-text="concern.reported_by_name || 'Staff name unavailable'"></span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          @click="toggleMedicalConcernDetails(concern)"
+                          class="admin-medical-concern-details-toggle"
+                          :aria-expanded="Boolean(expandedMedicalConcernIds[String(concern.id)])"
+                        >
+                          <span x-text="expandedMedicalConcernIds[String(concern.id)] ? 'Hide details' : 'View details'"></span>
+                          <i
+                            data-lucide="chevron-down"
+                            class="h-4 w-4 transition-transform"
+                            :class="expandedMedicalConcernIds[String(concern.id)] ? 'rotate-180' : ''"
+                          ></i>
+                        </button>
+                      </div>
+
+                      <div class="admin-medical-concern-card-summary">
+                        <p>
+                          <span>Recommended action</span>
+                          <strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong>
+                        </p>
+                        <p>
+                          <span>Customer response</span>
+                          <strong x-text="medicalConcernResponseLabel(concern.customer_response_status)"></strong>
+                        </p>
+                        <p>
+                          <span>Customer information</span>
+                          <strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked'"></strong>
+                        </p>
+                      </div>
+
+                      <div
+                        x-show="expandedMedicalConcernIds[String(concern.id)]"
+                        x-transition
+                        class="admin-medical-concern-details"
+                      >
+                        <p
+                          x-show="medicalConcernDetailLoadingIds[String(concern.id)]"
+                          class="admin-medical-concern-detail-loading"
+                          role="status"
+                        >
+                          Refreshing complete concern details...
+                        </p>
+
+                        <div class="admin-medical-concern-text-grid">
+                          <section>
+                            <h5>Internal staff observation</h5>
+                            <p x-text="concern.internal_description || 'Not provided'"></p>
+                          </section>
+                          <section>
+                            <h5>Customer-visible message</h5>
+                            <p x-text="concern.customer_message || 'Not provided'"></p>
+                          </section>
+                        </div>
+
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Pet</span><strong x-text="concern.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong></p>
+                          <p><span>Booking reference</span><strong x-text="concern.booking_reference || medicalConcernModal.context?.booking_reference || 'Not provided'"></strong></p>
+                          <p><span>Acknowledgment required</span><strong x-text="medicalConcernYesNo(concern.acknowledgment_required)"></strong></p>
+                          <p><span>Consent required</span><strong x-text="medicalConcernYesNo(concern.consent_required)"></strong></p>
+                          <p><span>Customer response</span><strong x-text="medicalConcernResponseLabel(concern.customer_response_status)"></strong></p>
+                          <p><span>Customer response exists</span><strong x-text="medicalConcernYesNo(concern.has_customer_response)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Response kind</span><strong x-text="medicalConcernDisplayValue(concern.customer_response?.response_kind)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Decision</span><strong x-text="medicalConcernResponseLabel(concern.customer_response?.decision)"></strong></p>
+                          <p x-show="concern.customer_response"><span>Responded by</span><strong x-text="concern.customer_response?.responded_by_name || 'Not provided'"></strong></p>
+                          <p x-show="concern.customer_response"><span>Response time</span><strong x-text="formatMedicalConcernDateTime(concern.customer_response?.responded_at)"></strong></p>
+                          <p><span>Customer notified</span><strong x-text="formatMedicalConcernDateTime(concern.customer_notified_at)"></strong></p>
+                          <p><span>Customer-visible fields</span><strong x-text="concern.customer_visible_fields_editable ? 'Editable' : 'Locked after notification or response'"></strong></p>
+                          <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(concern.recommended_grooming_action)"></strong></p>
+                          <p><span>Current grooming state</span><strong x-text="concern.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                          <p><span>Applied action</span><strong x-text="medicalConcernActionLabel(concern.applied_grooming_action)"></strong></p>
+                          <p x-show="concern.action_applied_at"><span>Applied by</span><strong x-text="concern.action_applied_by_name || 'Staff name unavailable'"></strong></p>
+                          <p x-show="concern.action_applied_at"><span>Applied at</span><strong x-text="formatMedicalConcernDateTime(concern.action_applied_at)"></strong></p>
+                          <p><span>Created</span><strong x-text="formatMedicalConcernDateTime(concern.created_at)"></strong></p>
+                          <p><span>Last updated</span><strong x-text="formatMedicalConcernDateTime(concern.updated_at)"></strong></p>
+                        </div>
+
+                        <div
+                          x-show="concern.recommended_action_blocked_reason && !concern.applied_grooming_action"
+                          class="admin-medical-concern-future-note"
+                          x-text="concern.recommended_action_blocked_reason"
+                        ></div>
+
+                        <div
+                          x-show="concern.acknowledgment_required || concern.consent_required"
+                          class="admin-medical-concern-future-note"
+                          x-text="concern.customer_notified_at
+                            ? (concern.customer_response
+                              ? 'The customer response is permanent. Staff must still apply any operational grooming action separately.'
+                              : 'The customer was notified. Any required acknowledgment or consent remains pending until the customer submits it.')
+                            : 'Send this concern to the customer when the message is ready.'"
+                        >
+                        </div>
+                        <div
+                          x-show="!concern.customer_account_linked && !concern.customer_notified_at"
+                          class="admin-medical-concern-future-note"
+                        >
+                          No linked customer account
+                        </div>
+
+                        <section
+                          x-show="concern.internal_resolution_notes || concern.customer_resolution_summary || concern.resolved_at"
+                          class="admin-medical-concern-resolution"
+                        >
+                          <h5>Resolution information</h5>
+                          <div class="admin-medical-concern-text-grid">
+                            <p><span>Internal notes</span><strong x-text="concern.internal_resolution_notes || 'Not provided'"></strong></p>
+                            <p><span>Customer-safe summary</span><strong x-text="concern.customer_resolution_summary || 'Not provided'"></strong></p>
+                            <p><span>Resolved or cancelled by</span><strong x-text="concern.resolved_by_name || 'Not provided'"></strong></p>
+                            <p><span>Resolved or cancelled at</span><strong x-text="formatMedicalConcernDateTime(concern.resolved_at)"></strong></p>
+                          </div>
+                        </section>
+                      </div>
+
+                      <div
+                        x-show="concern.available_staff_actions?.length > 0 || clinicReferralActionVisible(medicalConcernModal.booking, medicalConcernModal.pet, concern)"
+                        class="admin-medical-concern-card-actions"
+                      >
+                        <button
+                          x-show="clinicReferralActionVisible(medicalConcernModal.booking, medicalConcernModal.pet, concern)"
+                          type="button"
+                          @click="openClinicReferral(medicalConcernModal.booking, medicalConcernModal.pet, concern, $event.currentTarget)"
+                          class="admin-medical-concern-secondary"
+                          :aria-label="clinicReferralActionLabel(medicalConcernModal.booking, medicalConcernModal.pet, concern) + ' for ' + (medicalConcernModal.pet?.name || medicalConcernModal.pet?.petName || 'selected pet')"
+                        >
+                          <i data-lucide="heart-pulse" class="h-4 w-4" aria-hidden="true"></i>
+                          <span x-text="clinicReferralActionLabel(medicalConcernModal.booking, medicalConcernModal.pet, concern)"></span>
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'notify_customer')"
+                          type="button"
+                          @click="openMedicalConcernNotifyDialog(concern)"
+                          class="admin-medical-concern-send"
+                        >
+                          <i data-lucide="send" class="h-4 w-4" aria-hidden="true"></i>
+                          Send to Customer
+                        </button>
+                        <button
+                          x-show="canEditMedicalConcern(concern)"
+                          type="button"
+                          @click="openEditMedicalConcern(concern)"
+                          class="admin-medical-concern-secondary"
+                        >
+                          <i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>
+                          Edit
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'apply_recommended_action')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('apply', concern)"
+                          class="admin-medical-concern-primary"
+                        >
+                          <i data-lucide="play-circle" class="h-4 w-4" aria-hidden="true"></i>
+                          <span x-text="'Apply ' + medicalConcernActionLabel(concern.recommended_grooming_action)"></span>
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'resume_grooming')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('resume', concern)"
+                          class="admin-medical-concern-resolve"
+                        >
+                          <i data-lucide="rotate-cw" class="h-4 w-4" aria-hidden="true"></i>
+                          Resume Grooming
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'stop_for_clinic_transfer')"
+                          type="button"
+                          @click="openMedicalConcernActionDialog('clinic_stop', concern)"
+                          class="admin-medical-concern-cancel"
+                        >
+                          <i data-lucide="octagon-x" class="h-4 w-4" aria-hidden="true"></i>
+                          Stop Grooming for Clinic Transfer
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'resolve')"
+                          type="button"
+                          @click="openMedicalConcernTerminalDialog('resolve', concern)"
+                          class="admin-medical-concern-resolve"
+                        >
+                          <i data-lucide="circle-check" class="h-4 w-4" aria-hidden="true"></i>
+                          Resolve Concern
+                        </button>
+                        <button
+                          x-show="medicalConcernActionAvailable(concern, 'cancel')"
+                          type="button"
+                          @click="openMedicalConcernTerminalDialog('cancel', concern)"
+                          class="admin-medical-concern-cancel"
+                        >
+                          <i data-lucide="ban" class="h-4 w-4" aria-hidden="true"></i>
+                          Cancel Concern
+                        </button>
+                      </div>
+                    </article>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Create and edit concern form -->
+              <form
+                x-show="medicalConcernModal.view === 'form'"
+                class="admin-medical-concern-body"
+                @submit.prevent="saveMedicalConcern()"
+                novalidate
+              >
+                <button
+                  type="button"
+                  @click="returnToMedicalConcernHistory()"
+                  :disabled="medicalConcernFormModal.saving"
+                  class="admin-medical-concern-back"
+                >
+                  <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                  Back to concern history
+                </button>
+
+                <div
+                  x-show="medicalConcernFormErrorSummary"
+                  x-ref="medicalConcernValidationSummary"
+                  tabindex="-1"
+                  class="admin-medical-concern-validation"
+                  role="alert"
+                >
+                  <p class="text-base font-semibold">Please review the medical concern form.</p>
+                  <p x-text="medicalConcernFormErrorSummary"></p>
+                  <button
+                    x-show="medicalConcernModal.duplicateMessage"
+                    type="button"
+                    @click="returnToMedicalConcernHistory()"
+                    class="admin-medical-concern-retry"
+                  >
+                    Open existing concern history
+                  </button>
+                </div>
+
+                <div
+                  x-show="medicalConcernFormModal.mode === 'edit' && !medicalConcernFormModal.customerFieldsEditable"
+                  class="admin-medical-concern-locked"
+                  role="note"
+                >
+                  <i data-lucide="lock-keyhole" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>
+                    Customer-visible information is locked because it was already sent or answered.
+                    Internal staff observation remains editable. Action-audit notes are also locked
+                    after an operational action is applied.
+                  </p>
+                </div>
+
+                <div class="admin-medical-concern-form-grid">
+                  <div>
+                    <label for="medical-concern-category">
+                      Concern category <span aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="medical-concern-category"
+                      type="text"
+                      maxlength="50"
+                      required
+                      x-model="medicalConcernForm.category"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('category'))"
+                      aria-describedby="medical-concern-category-error"
+                      placeholder="e.g. Skin irritation"
+                    />
+                    <p id="medical-concern-category-error" x-show="medicalConcernFieldError('category')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('category')"></p>
+                  </div>
+
+                  <div>
+                    <label for="medical-concern-severity">
+                      Severity <span aria-hidden="true">*</span>
+                    </label>
+                    <div
+                      class="admin-medical-concern-custom-select"
+                      @click.outside="medicalConcernSelectOpen.severity = false"
+                      @focusout="if (!$el.contains($event.relatedTarget)) medicalConcernSelectOpen.severity = false"
+                      @keydown.escape.stop.prevent="medicalConcernSelectOpen.severity = false; $refs.medicalConcernSeverityTrigger.focus()"
+                    >
+                      <button
+                        id="medical-concern-severity"
+                        x-ref="medicalConcernSeverityTrigger"
+                        type="button"
+                        class="admin-medical-concern-select-trigger"
+                        :class="!medicalConcernForm.severity ? 'is-placeholder' : ''"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                        :aria-expanded="String(medicalConcernSelectOpen.severity)"
+                        :aria-invalid="String(Boolean(medicalConcernFieldError('severity')))"
+                        aria-haspopup="listbox"
+                        aria-controls="medical-concern-severity-options"
+                        aria-describedby="medical-concern-severity-error"
+                        aria-required="true"
+                        @click="toggleMedicalConcernSelect('severity')"
+                        @keydown.arrow-down.prevent="openMedicalConcernSelect('severity'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox))"
+                        @keydown.arrow-up.prevent="openMedicalConcernSelect('severity'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox, true))"
+                      >
+                        <span x-text="medicalConcernSelectLabel('severity', 'Select severity')"></span>
+                        <i
+                          data-lucide="chevron-down"
+                          class="h-4 w-4 shrink-0 transition-transform"
+                          :class="medicalConcernSelectOpen.severity ? 'rotate-180' : ''"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <div
+                        id="medical-concern-severity-options"
+                        x-ref="medicalConcernSeverityListbox"
+                        x-show="medicalConcernSelectOpen.severity"
+                        x-transition.origin.top
+                        style="display: none"
+                        class="admin-medical-concern-select-options"
+                        role="listbox"
+                        aria-label="Severity options"
+                      >
+                        <template x-for="option in medicalConcernSeverities" :key="option.value">
+                          <button
+                            type="button"
+                            role="option"
+                            class="admin-medical-concern-select-option"
+                            :class="medicalConcernForm.severity === option.value ? 'is-selected' : ''"
+                            :aria-selected="String(medicalConcernForm.severity === option.value)"
+                            @click="selectMedicalConcernOption('severity', option.value); $nextTick(() => $refs.medicalConcernSeverityTrigger.focus())"
+                            @keydown.arrow-down.prevent="moveMedicalConcernSelectFocus($event.currentTarget, 1)"
+                            @keydown.arrow-up.prevent="moveMedicalConcernSelectFocus($event.currentTarget, -1)"
+                            @keydown.home.prevent="focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox)"
+                            @keydown.end.prevent="focusMedicalConcernSelectOption($refs.medicalConcernSeverityListbox, true)"
+                          >
+                            <span x-text="option.label"></span>
+                            <span x-show="medicalConcernForm.severity === option.value" aria-hidden="true">&#10003;</span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+                    <p id="medical-concern-severity-error" x-show="medicalConcernFieldError('severity')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('severity')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-internal-description">
+                      Internal staff observation <span aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-internal-description"
+                      rows="4"
+                      required
+                      x-model="medicalConcernForm.internal_description"
+                      :aria-invalid="Boolean(medicalConcernFieldError('internal_description'))"
+                      aria-describedby="medical-concern-internal-description-help medical-concern-internal-description-error"
+                      placeholder="Record the complete internal staff observation."
+                    ></textarea>
+                    <p id="medical-concern-internal-description-help" class="admin-medical-concern-help">
+                      Internal staff information. Do not copy this automatically into the customer message.
+                    </p>
+                    <p id="medical-concern-internal-description-error" x-show="medicalConcernFieldError('internal_description')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('internal_description')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-customer-message">
+                      Customer-visible message <span aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-customer-message"
+                      rows="4"
+                      required
+                      x-model="medicalConcernForm.customer_message"
+                      :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('customer_message'))"
+                      aria-describedby="medical-concern-customer-message-help medical-concern-customer-message-error"
+                      placeholder="Enter a separate, clear message suitable for the customer."
+                    ></textarea>
+                    <p id="medical-concern-customer-message-help" class="admin-medical-concern-help">
+                      Customer notification is not sent in this step.
+                    </p>
+                    <p id="medical-concern-customer-message-error" x-show="medicalConcernFieldError('customer_message')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('customer_message')"></p>
+                  </div>
+
+                  <div class="is-full">
+                    <label for="medical-concern-recommended-action">
+                      Recommended grooming action <span aria-hidden="true">*</span>
+                    </label>
+                    <div
+                      class="admin-medical-concern-custom-select"
+                      @click.outside="medicalConcernSelectOpen.recommended_grooming_action = false"
+                      @focusout="if (!$el.contains($event.relatedTarget)) medicalConcernSelectOpen.recommended_grooming_action = false"
+                      @keydown.escape.stop.prevent="medicalConcernSelectOpen.recommended_grooming_action = false; $refs.medicalConcernActionTrigger.focus()"
+                    >
+                      <button
+                        id="medical-concern-recommended-action"
+                        x-ref="medicalConcernActionTrigger"
+                        type="button"
+                        class="admin-medical-concern-select-trigger"
+                        :class="!medicalConcernForm.recommended_grooming_action ? 'is-placeholder' : ''"
+                        :disabled="!medicalConcernFormModal.recommendedActionEditable"
+                        :aria-expanded="String(medicalConcernSelectOpen.recommended_grooming_action)"
+                        :aria-invalid="String(Boolean(medicalConcernFieldError('recommended_grooming_action')))"
+                        aria-haspopup="listbox"
+                        aria-controls="medical-concern-action-options"
+                        aria-describedby="medical-concern-action-help medical-concern-action-error"
+                        aria-required="true"
+                        @click="toggleMedicalConcernSelect('recommended_grooming_action')"
+                        @keydown.arrow-down.prevent="openMedicalConcernSelect('recommended_grooming_action'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernActionListbox))"
+                        @keydown.arrow-up.prevent="openMedicalConcernSelect('recommended_grooming_action'); $nextTick(() => focusMedicalConcernSelectOption($refs.medicalConcernActionListbox, true))"
+                      >
+                        <span x-text="medicalConcernSelectLabel('recommended_grooming_action', 'Select recommended action')"></span>
+                        <i
+                          data-lucide="chevron-down"
+                          class="h-4 w-4 shrink-0 transition-transform"
+                          :class="medicalConcernSelectOpen.recommended_grooming_action ? 'rotate-180' : ''"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <div
+                        id="medical-concern-action-options"
+                        x-ref="medicalConcernActionListbox"
+                        x-show="medicalConcernSelectOpen.recommended_grooming_action"
+                        x-transition.origin.top
+                        style="display: none"
+                        class="admin-medical-concern-select-options"
+                        role="listbox"
+                        aria-label="Recommended grooming action options"
+                      >
+                        <template x-for="option in medicalConcernActions" :key="option.value">
+                          <button
+                            type="button"
+                            role="option"
+                            class="admin-medical-concern-select-option"
+                            :class="medicalConcernForm.recommended_grooming_action === option.value ? 'is-selected' : ''"
+                            :aria-selected="String(medicalConcernForm.recommended_grooming_action === option.value)"
+                            @click="selectMedicalConcernOption('recommended_grooming_action', option.value); $nextTick(() => $refs.medicalConcernActionTrigger.focus())"
+                            @keydown.arrow-down.prevent="moveMedicalConcernSelectFocus($event.currentTarget, 1)"
+                            @keydown.arrow-up.prevent="moveMedicalConcernSelectFocus($event.currentTarget, -1)"
+                            @keydown.home.prevent="focusMedicalConcernSelectOption($refs.medicalConcernActionListbox)"
+                            @keydown.end.prevent="focusMedicalConcernSelectOption($refs.medicalConcernActionListbox, true)"
+                          >
+                            <span x-text="option.label"></span>
+                            <span x-show="medicalConcernForm.recommended_grooming_action === option.value" aria-hidden="true">&#10003;</span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+                    <p id="medical-concern-action-help" class="admin-medical-concern-help is-advisory">
+                      This records the recommended action. It does not yet pause or stop grooming automatically.
+                    </p>
+                    <p id="medical-concern-action-error" x-show="medicalConcernFieldError('recommended_grooming_action')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('recommended_grooming_action')"></p>
+                  </div>
+
+                  <fieldset class="admin-medical-concern-requirements is-full">
+                    <legend>Future customer response requirements</legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        x-model="medicalConcernForm.acknowledgment_required"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      />
+                      <span>
+                        <strong>Require customer acknowledgment</strong>
+                        <small>Recorded now; the response workflow will be added later.</small>
+                      </span>
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        x-model="medicalConcernForm.consent_required"
+                        :disabled="!medicalConcernFormModal.customerFieldsEditable"
+                      />
+                      <span>
+                        <strong>Require customer consent</strong>
+                        <small>Recorded now; no consent request is sent in this step.</small>
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  <div x-show="medicalConcernFormModal.mode === 'edit'" class="is-full">
+                    <label for="medical-concern-internal-resolution-notes">
+                      Internal resolution notes <span class="is-optional">(optional)</span>
+                    </label>
+                    <textarea
+                      id="medical-concern-internal-resolution-notes"
+                      rows="3"
+                      x-model="medicalConcernForm.internal_resolution_notes"
+                      :disabled="!medicalConcernFormModal.internalNotesEditable"
+                      :aria-invalid="Boolean(medicalConcernFieldError('internal_resolution_notes'))"
+                      aria-describedby="medical-concern-internal-resolution-notes-error"
+                    ></textarea>
+                    <p id="medical-concern-internal-resolution-notes-error" x-show="medicalConcernFieldError('internal_resolution_notes')" class="admin-medical-concern-field-error" x-text="medicalConcernFieldError('internal_resolution_notes')"></p>
+                  </div>
+                </div>
+
+                <footer class="admin-medical-concern-form-actions">
+                  <button
+                    type="button"
+                    @click="returnToMedicalConcernHistory()"
+                    :disabled="medicalConcernFormModal.saving"
+                    class="admin-medical-concern-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    :disabled="medicalConcernFormModal.saving"
+                    class="admin-medical-concern-primary"
+                  >
+                    <span x-show="medicalConcernFormModal.saving" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="medicalConcernFormModal.saving ? 'Saving...' : (medicalConcernFormModal.mode === 'edit' ? 'Save Changes' : 'Report Concern')"></span>
+                  </button>
+                </footer>
+              </form>
+            </section>
+          </div>
+
+          <!-- Send medical concern to customer confirmation -->
+          <div
+            x-show="medicalConcernNotify.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-notify-title"
+            aria-describedby="medical-concern-notify-description"
+            @click.self="closeMedicalConcernNotifyDialog()"
+          >
+            <section
+              x-ref="medicalConcernNotifyDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true">
+                <i data-lucide="send" class="h-6 w-6"></i>
+              </div>
+              <h3 id="medical-concern-notify-title">Send to Customer</h3>
+              <p id="medical-concern-notify-description">
+                Review the customer-safe details below. After sending, customer-visible details can no longer be edited normally.
+              </p>
+
+              <div class="admin-medical-concern-detail-grid">
+                <p>
+                  <span>Pet</span>
+                  <strong x-text="medicalConcernNotify.concern?.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong>
+                </p>
+                <p>
+                  <span>Severity</span>
+                  <strong x-text="medicalConcernSeverityLabel(medicalConcernNotify.concern?.severity) || 'Unknown'"></strong>
+                </p>
+                <p>
+                  <span>Recommended action</span>
+                  <strong x-text="medicalConcernActionLabel(medicalConcernNotify.concern?.recommended_grooming_action)"></strong>
+                </p>
+                <p>
+                  <span>Acknowledgment required</span>
+                  <strong x-text="medicalConcernYesNo(medicalConcernNotify.concern?.acknowledgment_required)"></strong>
+                </p>
+                <p>
+                  <span>Consent required</span>
+                  <strong x-text="medicalConcernYesNo(medicalConcernNotify.concern?.consent_required)"></strong>
+                </p>
+              </div>
+
+              <section class="admin-medical-concern-resolution">
+                <h5>Customer-visible message</h5>
+                <p x-text="medicalConcernNotify.concern?.customer_message || 'Not provided'"></p>
+              </section>
+
+              <p
+                x-show="medicalConcernNotify.error"
+                class="admin-medical-concern-terminal-error"
+                role="alert"
+                x-text="medicalConcernNotify.error"
+              ></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernNotifyDialog()"
+                  :disabled="medicalConcernNotify.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Review Again
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernNotification()"
+                  :disabled="medicalConcernNotify.busy"
+                  class="admin-medical-concern-send"
+                >
+                  <span x-show="medicalConcernNotify.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernNotify.busy ? 'Sending...' : 'Send to Customer'"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <!-- Apply or resume per-pet grooming action -->
+          <div
+            x-show="medicalConcernActionDialog.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-action-title"
+            aria-describedby="medical-concern-action-description"
+            @click.self="closeMedicalConcernActionDialog()"
+          >
+            <section
+              x-ref="medicalConcernActionDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true">
+                <i
+                  :data-lucide="medicalConcernActionDialog.type === 'resume' ? 'rotate-cw' : 'play-circle'"
+                  class="h-6 w-6"
+                ></i>
+              </div>
+              <h3
+                id="medical-concern-action-title"
+                x-text="medicalConcernActionDialog.type === 'resume'
+                  ? 'Resume Grooming'
+                  : (medicalConcernActionDialog.type === 'clinic_stop'
+                    ? 'Stop Grooming for Clinic Transfer'
+                    : 'Apply ' + medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action))"
+              ></h3>
+              <p
+                id="medical-concern-action-description"
+                x-text="medicalConcernActionDialog.type === 'resume'
+                  ? 'The pet will return to In progress with its original start time preserved. This concern will be resolved in the same operation.'
+                  : (medicalConcernActionDialog.type === 'clinic_stop'
+                    ? clinicTransferStopEffect()
+                    : medicalConcernOperationalEffect(medicalConcernActionDialog.concern))"
+              ></p>
+
+              <div class="admin-medical-concern-detail-grid">
+                <p><span>Pet</span><strong x-text="medicalConcernActionDialog.concern?.pet_name || medicalConcernModal.context?.pet_name || 'Not provided'"></strong></p>
+                <p><span>Current state</span><strong x-text="medicalConcernActionDialog.concern?.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                <p><span>Recommended action</span><strong x-text="medicalConcernActionLabel(medicalConcernActionDialog.concern?.recommended_grooming_action)"></strong></p>
+                <p><span>Customer requirement</span><strong x-text="medicalConcernDisplayValue(medicalConcernActionDialog.concern?.customer_response_requirement, 'None')"></strong></p>
+                <p><span>Customer response</span><strong x-text="medicalConcernResponseLabel(medicalConcernActionDialog.concern?.customer_response_status)"></strong></p>
+              </div>
+
+              <div
+                x-show="medicalConcernActionDialog.type === 'apply' && medicalConcernActionDialog.concern?.safety_override_required"
+                class="admin-medical-concern-terminal-fields"
+              >
+                <p class="admin-medical-concern-future-note">
+                  Safety override required. This does not create customer consent or change the
+                  customer response, which remains pending or declined.
+                </p>
+                <label for="medical-concern-safety-override">
+                  Safety Override Reason <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-safety-override"
+                  rows="3"
+                  maxlength="1000"
+                  required
+                  x-model="medicalConcernActionDialog.safety_override_reason"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.safety_override_reason)"
+                  aria-describedby="medical-concern-safety-override-error"
+                ></textarea>
+                <p
+                  id="medical-concern-safety-override-error"
+                  x-show="medicalConcernActionDialog.errors.safety_override_reason"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.safety_override_reason"
+                ></p>
+              </div>
+
+              <div
+                x-show="medicalConcernActionDialog.type === 'resume'"
+                class="admin-medical-concern-terminal-fields"
+              >
+                <label for="medical-concern-resume-internal">
+                  Internal Resolution Notes <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-resume-internal"
+                  rows="3"
+                  required
+                  x-model="medicalConcernActionDialog.internal_resolution_notes"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.internal_resolution_notes)"
+                ></textarea>
+                <p
+                  x-show="medicalConcernActionDialog.errors.internal_resolution_notes"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.internal_resolution_notes"
+                ></p>
+
+                <label for="medical-concern-resume-customer">
+                  Customer-Safe Resolution Summary <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-resume-customer"
+                  rows="3"
+                  required
+                  x-model="medicalConcernActionDialog.customer_resolution_summary"
+                  :aria-invalid="Boolean(medicalConcernActionDialog.errors.customer_resolution_summary)"
+                ></textarea>
+                <p
+                  x-show="medicalConcernActionDialog.errors.customer_resolution_summary"
+                  class="admin-medical-concern-field-error"
+                  x-text="medicalConcernActionDialog.errors.customer_resolution_summary"
+                ></p>
+              </div>
+
+              <p
+                x-show="medicalConcernActionDialog.error"
+                class="admin-medical-concern-terminal-error"
+                role="alert"
+                x-text="medicalConcernActionDialog.error"
+              ></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernActionDialog()"
+                  :disabled="medicalConcernActionDialog.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Keep Current State
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernAction()"
+                  :disabled="medicalConcernActionDialog.busy"
+                  class="admin-medical-concern-primary"
+                >
+                  <span x-show="medicalConcernActionDialog.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernActionDialog.busy
+                    ? 'Saving...'
+                    : (medicalConcernActionDialog.type === 'resume'
+                      ? 'Resume Grooming'
+                      : (medicalConcernActionDialog.type === 'clinic_stop' ? 'Stop Grooming Permanently' : 'Apply Action'))"
+                  ></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <!-- Resolve or cancel medical concern confirmation -->
+          <div
+            x-show="medicalConcernTerminal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-terminal-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="medical-concern-terminal-title"
+            aria-describedby="medical-concern-terminal-description"
+            @click.self="closeMedicalConcernTerminalDialog()"
+          >
+            <section
+              x-ref="medicalConcernTerminalDialog"
+              tabindex="-1"
+              class="admin-medical-concern-terminal-dialog"
+            >
+              <div
+                class="admin-medical-concern-terminal-icon"
+                :class="medicalConcernTerminal.type === 'cancel' ? 'is-cancel' : 'is-resolve'"
+                aria-hidden="true"
+              >
+                <i :data-lucide="medicalConcernTerminal.type === 'cancel' ? 'ban' : 'circle-check'" class="h-6 w-6"></i>
+              </div>
+              <h3
+                id="medical-concern-terminal-title"
+                x-text="medicalConcernTerminal.type === 'cancel' ? 'Cancel Medical Concern' : 'Resolve Medical Concern'"
+              ></h3>
+              <p
+                id="medical-concern-terminal-description"
+                x-text="medicalConcernTerminal.type === 'cancel'
+                  ? 'Cancellation preserves the concern history and should only be used for a duplicate or incorrect concern. It does not delete the record.'
+                  : 'Resolution closes the concern while preserving its complete history. It does not finish or otherwise change grooming.'"
+              ></p>
+
+              <div class="admin-medical-concern-terminal-fields">
+                <label for="medical-concern-terminal-internal">
+                  <span x-text="medicalConcernTerminal.type === 'cancel' ? 'Internal Cancellation Reason' : 'Internal Resolution Notes'"></span>
+                  <strong aria-hidden="true">*</strong>
+                </label>
+                <textarea
+                  id="medical-concern-terminal-internal"
+                  rows="3"
+                  required
+                  x-model="medicalConcernTerminal.internal_reason"
+                  :aria-invalid="Boolean(medicalConcernTerminal.errors.internal_reason)"
+                  aria-describedby="medical-concern-terminal-internal-error"
+                ></textarea>
+                <p id="medical-concern-terminal-internal-error" x-show="medicalConcernTerminal.errors.internal_reason" class="admin-medical-concern-field-error" x-text="medicalConcernTerminal.errors.internal_reason"></p>
+
+                <label for="medical-concern-terminal-customer">
+                  <span x-text="medicalConcernTerminal.type === 'cancel' ? 'Customer-Safe Cancellation Summary' : 'Customer-Safe Resolution Summary'"></span>
+                  <strong x-show="medicalConcernTerminal.type === 'resolve'" aria-hidden="true">*</strong>
+                  <small x-show="medicalConcernTerminal.type === 'cancel'">(optional)</small>
+                </label>
+                <textarea
+                  id="medical-concern-terminal-customer"
+                  rows="3"
+                  x-model="medicalConcernTerminal.customer_summary"
+                  :required="medicalConcernTerminal.type === 'resolve'"
+                  :aria-invalid="Boolean(medicalConcernTerminal.errors.customer_summary)"
+                  aria-describedby="medical-concern-terminal-customer-error"
+                ></textarea>
+                <p id="medical-concern-terminal-customer-error" x-show="medicalConcernTerminal.errors.customer_summary" class="admin-medical-concern-field-error" x-text="medicalConcernTerminal.errors.customer_summary"></p>
+              </div>
+
+              <p x-show="medicalConcernTerminal.error" class="admin-medical-concern-terminal-error" role="alert" x-text="medicalConcernTerminal.error"></p>
+
+              <footer>
+                <button
+                  type="button"
+                  @click="closeMedicalConcernTerminalDialog()"
+                  :disabled="medicalConcernTerminal.busy"
+                  class="admin-medical-concern-secondary"
+                >
+                  Keep Concern Open
+                </button>
+                <button
+                  type="button"
+                  @click="submitMedicalConcernTerminal()"
+                  :disabled="medicalConcernTerminal.busy"
+                  :class="medicalConcernTerminal.type === 'cancel' ? 'admin-medical-concern-cancel' : 'admin-medical-concern-resolve'"
+                >
+                  <span x-show="medicalConcernTerminal.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                  <span x-text="medicalConcernTerminal.busy ? 'Saving...' : (medicalConcernTerminal.type === 'cancel' ? 'Cancel Concern' : 'Resolve Concern')"></span>
+                </button>
+              </footer>
+            </section>
+          </div>
+
+          <!-- Medical concern operation feedback -->
+          <div
+            x-show="medicalConcernToast.show"
+            x-transition
+            style="display: none"
+            class="admin-medical-concern-toast"
+            :class="medicalConcernToast.ok ? 'is-success' : 'is-error'"
+            role="status"
+            aria-live="polite"
+          >
+            <i :data-lucide="medicalConcernToast.ok ? 'circle-check' : 'circle-alert'" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+            <span x-text="medicalConcernToast.message"></span>
+          </div>
+
+          <!-- Exact booking-pet and concern scoped clinic-referral dialog -->
+          <div
+            x-show="clinicReferralModal.open"
+            x-transition.opacity
+            style="display: none"
+            class="admin-medical-concern-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clinic-referral-dialog-title"
+            @keydown.escape.window="closeClinicReferral()"
+            @click.self="closeClinicReferral()"
+          >
+            <section
+              x-ref="clinicReferralDialog"
+              class="admin-medical-concern-dialog"
+              tabindex="-1"
+            >
+              <header class="admin-medical-concern-header">
+                <div class="admin-medical-concern-header-icon" aria-hidden="true">
+                  <i data-lucide="heart-pulse" class="h-5 w-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="admin-medical-concern-kicker">Grooming to clinic</p>
+                  <h2 id="clinic-referral-dialog-title" class="admin-medical-concern-title">
+                    Clinic Referral
+                  </h2>
+                  <p class="admin-medical-concern-context">
+                    <strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name || 'Selected pet'"></strong>
+                    <span aria-hidden="true"> · </span>
+                    <span x-text="clinicReferralModal.booking?.reference || clinicReferralModal.booking?.bookingReference || clinicReferralModal.booking?.booking_reference || 'Booking reference unavailable'"></span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="admin-medical-concern-close"
+                  @click="closeClinicReferral()"
+                  aria-label="Close clinic referral dialog"
+                >
+                  <i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i>
+                </button>
+              </header>
+
+              <div class="admin-medical-concern-body">
+                <div class="admin-medical-concern-advisory" role="note">
+                  <i data-lucide="info" class="h-5 w-5 shrink-0" aria-hidden="true"></i>
+                  <p>This creates a clinic referral request. It does not automatically create a clinic appointment or authorize veterinary treatment.</p>
+                </div>
+
+                <div x-show="clinicReferralModal.loading" class="admin-medical-concern-state" role="status" aria-live="polite">
+                  <span class="admin-medical-concern-spinner" aria-hidden="true"></span>
+                  <p>Loading clinic referral status...</p>
+                </div>
+
+                <div x-show="!clinicReferralModal.loading && clinicReferralModal.error" class="admin-medical-concern-state is-error" role="alert">
+                  <i data-lucide="circle-alert" class="h-6 w-6" aria-hidden="true"></i>
+                  <h3 x-text="clinicReferralModal.notFound ? 'Clinic referral context not found' : 'Clinic referral could not be loaded'"></h3>
+                  <p x-text="clinicReferralModal.error"></p>
+                  <button
+                    x-show="!clinicReferralModal.notFound"
+                    type="button"
+                    class="admin-medical-concern-retry"
+                    @click="loadClinicReferralStatus()"
+                  >
+                    <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                    Retry
+                  </button>
+                </div>
+
+                <template x-if="!clinicReferralModal.loading && !clinicReferralModal.error && clinicReferralModal.response">
+                  <div>
+                    <!-- Safe backend ineligibility state -->
+                    <section
+                      x-show="!clinicReferralModal.response.exists && clinicReferralModal.view === 'status'"
+                      class="admin-medical-concern-state"
+                    >
+                      <i data-lucide="shield-alert" class="h-7 w-7" aria-hidden="true"></i>
+                      <h3>Clinic referral is not available</h3>
+                      <p x-text="clinicReferralCreationBlockedReason(clinicReferralModal.booking, clinicReferralModal.pet, clinicReferralModal.concern)"></p>
+                      <button
+                        x-show="clinicReferralEffectiveCanCreate(clinicReferralModal.booking, clinicReferralModal.pet, clinicReferralModal.concern)"
+                        type="button"
+                        class="admin-medical-concern-primary"
+                        @click="startClinicReferralRequest()"
+                      >
+                        Refer to Clinic
+                      </button>
+                    </section>
+
+                    <!-- New request form -->
+                    <form
+                      x-show="clinicReferralModal.view === 'form'"
+                      class="admin-clinic-referral-form"
+                      @submit.prevent="openClinicReferralConfirmation()"
+                      novalidate
+                    >
+                      <button type="button" class="admin-medical-concern-back" @click="clinicReferralModal.view = 'status'">
+                        <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                        Back to status
+                      </button>
+
+                      <section class="admin-medical-concern-resolution">
+                        <h5>Selected pet and concern</h5>
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Pet</span><strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name || 'Not provided'"></strong></p>
+                          <p><span>Type and breed</span><strong x-text="(clinicReferralModal.pet?.petType || clinicReferralModal.pet?.species || 'Not provided') + ' · ' + clinicReferralPetBreed()"></strong></p>
+                          <p><span>Concern reference</span><strong x-text="clinicReferralConcernReference()"></strong></p>
+                          <p><span>Severity</span><strong x-text="medicalConcernSeverityLabel(clinicReferralModal.concern?.severity) || 'Not provided'"></strong></p>
+                          <p><span>Current grooming state</span><strong x-text="clinicReferralModal.response.context?.grooming_state || clinicReferralModal.concern?.booking_pet_grooming_state_label || 'Not provided'"></strong></p>
+                          <p><span>Applied grooming action</span><strong x-text="clinicReferralModal.concern?.applied_grooming_action_label || clinicReferralModal.concern?.applied_grooming_action || 'No applied Pause or Stop action'"></strong></p>
+                        </div>
+                      </section>
+
+                      <div
+                        x-show="clinicReferralFormErrorSummary"
+                        x-ref="clinicReferralValidation"
+                        class="admin-medical-concern-validation"
+                        role="alert"
+                        tabindex="-1"
+                      >
+                        <strong>Check the referral details.</strong>
+                        <span x-text="clinicReferralFormErrorSummary"></span>
+                      </div>
+
+                      <fieldset class="admin-medical-concern-requirements is-full">
+                        <legend>Urgency <span aria-hidden="true">*</span></legend>
+                        <label>
+                          <input x-ref="clinicReferralUrgencyRoutine" type="radio" name="clinic-referral-urgency" value="routine" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Routine</strong><small>Customer consent is required before clinic acceptance.</small></span>
+                        </label>
+                        <label>
+                          <input type="radio" name="clinic-referral-urgency" value="urgent" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Urgent</strong><small>Consent is normally required; documented immediate intake can be requested.</small></span>
+                        </label>
+                        <label>
+                          <input type="radio" name="clinic-referral-urgency" value="emergency" x-model="clinicReferralForm.urgency" />
+                          <span><strong>Emergency</strong><small>A documented intake-before-consent reason is required. This is not treatment consent.</small></span>
+                        </label>
+                        <p x-show="clinicReferralFormErrors.urgency" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.urgency"></p>
+                      </fieldset>
+
+                      <div class="admin-medical-concern-form-grid">
+                        <div class="is-full">
+                          <label for="clinic-referral-internal-reason">Internal referral reason <span aria-hidden="true">*</span></label>
+                          <textarea
+                            id="clinic-referral-internal-reason"
+                            x-model="clinicReferralForm.referral_reason"
+                            maxlength="5000"
+                            rows="5"
+                            aria-describedby="clinic-referral-internal-help clinic-referral-internal-error"
+                          ></textarea>
+                          <p id="clinic-referral-internal-help" class="admin-medical-concern-help">Visible only to authorized staff. <span x-text="(clinicReferralForm.referral_reason || '').length + ' / 5000'"></span></p>
+                          <p id="clinic-referral-internal-error" x-show="clinicReferralFormErrors.referral_reason" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.referral_reason"></p>
+                        </div>
+                        <div class="is-full">
+                          <label for="clinic-referral-customer-explanation">Customer-friendly explanation <span aria-hidden="true">*</span></label>
+                          <textarea
+                            id="clinic-referral-customer-explanation"
+                            x-model="clinicReferralForm.customer_explanation"
+                            maxlength="2000"
+                            rows="5"
+                            aria-describedby="clinic-referral-customer-help clinic-referral-customer-error"
+                          ></textarea>
+                          <p id="clinic-referral-customer-help" class="admin-medical-concern-help is-advisory">The customer will be able to read this explanation. <span x-text="(clinicReferralForm.customer_explanation || '').length + ' / 2000'"></span></p>
+                          <p id="clinic-referral-customer-error" x-show="clinicReferralFormErrors.customer_explanation" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.customer_explanation"></p>
+                        </div>
+                      </div>
+
+                      <label x-show="clinicReferralForm.urgency === 'urgent'" class="admin-medical-concern-locked">
+                        <input type="checkbox" x-model="clinicReferralForm.allow_intake_before_consent" />
+                        <span><strong>Allow clinic intake before customer consent</strong><small>Use only when immediate clinic intake may be necessary.</small></span>
+                      </label>
+
+                      <div x-show="clinicReferralNeedsEmergencyReason()" class="admin-medical-concern-terminal-fields">
+                        <label for="clinic-referral-emergency-reason">Internal intake-before-consent reason <span aria-hidden="true">*</span></label>
+                        <textarea
+                          id="clinic-referral-emergency-reason"
+                          x-model="clinicReferralForm.emergency_without_consent_reason"
+                          maxlength="5000"
+                          rows="4"
+                        ></textarea>
+                        <p class="admin-medical-concern-help">Internal only. It does not create or fabricate customer consent.</p>
+                        <p x-show="clinicReferralFormErrors.emergency_without_consent_reason" class="admin-medical-concern-field-error" x-text="clinicReferralFormErrors.emergency_without_consent_reason"></p>
+                      </div>
+
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="closeClinicReferral()">Cancel</button>
+                        <button x-ref="clinicReferralSubmitButton" type="submit" class="admin-medical-concern-primary">Review Referral Request</button>
+                      </footer>
+                    </form>
+
+                    <!-- Permanent staff referral status -->
+                    <div x-show="clinicReferralModal.response.exists && clinicReferralModal.view === 'status'">
+                      <div class="admin-medical-concern-toolbar">
+                        <div>
+                          <p class="admin-medical-concern-kicker">Referral reference</p>
+                          <strong x-text="clinicReferralModal.response.referral?.public_id"></strong>
+                        </div>
+                        <button type="button" class="admin-medical-concern-retry" @click="loadClinicReferralStatus()">
+                          <i data-lucide="refresh-cw" class="h-4 w-4" aria-hidden="true"></i>
+                          Refresh status
+                        </button>
+                      </div>
+
+                      <div
+                        x-show="!clinicReferralModal.response.referral?.exact_pause_or_stop_applied"
+                        class="admin-medical-concern-state is-error"
+                        role="alert"
+                      >
+                        <i data-lucide="triangle-alert" class="h-6 w-6" aria-hidden="true"></i>
+                        <h3>Clinic acceptance is currently blocked</h3>
+                        <p>Apply Pause Grooming or Stop Grooming to this exact concern first.</p>
+                      </div>
+
+                      <div
+                        x-show="clinicReferralModal.response.referral?.financial_correction_review_required"
+                        class="admin-medical-concern-locked"
+                        role="note"
+                      >
+                        <i data-lucide="badge-dollar-sign" class="h-5 w-5" aria-hidden="true"></i>
+                        <span><strong>Paid-booking review warning</strong><small>This booking was already paid. If the pet’s grooming charge changes, an administrator correction or refund workflow will be required.</small></span>
+                      </div>
+
+                      <div
+                        x-show="['accepted', 'under_clinic_review'].includes(clinicReferralModal.response.referral?.status)"
+                        class="admin-medical-concern-locked"
+                        role="status"
+                      >
+                        <i data-lucide="shield-alert" class="h-5 w-5" aria-hidden="true"></i>
+                        <span>
+                          <strong x-text="clinicReferralModal.response.referral?.grooming_state === 'stopped' ? 'Grooming session stopped — pet transferred to clinic care.' : 'Stop Grooming must be applied before consultation.'"></strong>
+                          <small>This pet cannot return to grooming during this visit after clinic transfer.</small>
+                        </span>
+                      </div>
+
+                      <div
+                        x-show="clinicReferralModal.response.referral?.status === 'completed'"
+                        class="admin-medical-concern-locked"
+                        role="status"
+                      >
+                        <i data-lucide="badge-check" class="h-5 w-5" aria-hidden="true"></i>
+                        <span><strong>Clinic assessment completed — grooming will not resume during this visit.</strong><small>Grooming Session Stopped</small></span>
+                      </div>
+
+                      <section class="admin-medical-concern-resolution">
+                        <h5>Referral status</h5>
+                        <div class="admin-medical-concern-detail-grid">
+                          <p><span>Status</span><strong x-text="clinicReferralStatusLabel(clinicReferralModal.response.referral)"></strong></p>
+                          <p><span>Urgency</span><strong x-text="clinicReferralUrgencyLabel(clinicReferralModal.response.referral?.urgency)"></strong></p>
+                          <p><span>Pet</span><strong x-text="clinicReferralModal.response.referral?.pet_name"></strong></p>
+                          <p><span>Booking</span><strong x-text="clinicReferralModal.response.referral?.booking_reference"></strong></p>
+                          <p><span>Concern</span><strong x-text="clinicReferralModal.response.referral?.concern_public_id"></strong></p>
+                          <p><span>Referred by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.referred_by_name)"></strong></p>
+                          <p><span>Referral time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.referred_at)"></strong></p>
+                          <p><span>Customer notified</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.customer_notified_at)"></strong></p>
+                          <p><span>Consent</span><strong x-text="clinicReferralConsentLabel(clinicReferralModal.response.referral)"></strong></p>
+                          <p><span>Response channel</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_response_channel_label, 'Not yet recorded')"></strong></p>
+                          <p><span>Responding owner or decision-maker</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_responded_by_name, 'Not yet recorded')"></strong></p>
+                          <p><span>Captured by staff</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.consent_captured_by_name, 'Not applicable')"></strong></p>
+                          <p><span>Response time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.consent_responded_at)"></strong></p>
+                          <p><span>Pause or Stop applied</span><strong x-text="clinicReferralModal.response.referral?.exact_pause_or_stop_applied ? 'Yes' : 'No'"></strong></p>
+                          <p><span>Clinic acceptance eligible</span><strong x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_eligible ? 'Yes' : 'No'"></strong></p>
+                          <p><span>Clinic appointment</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_reference, 'Not created')"></strong></p>
+                          <p><span>Clinic appointment status</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_status_label, 'Not created')"></strong></p>
+                          <p><span>Clinic queue number</span><strong x-text="clinicReferralModal.response.referral?.clinic_queue_number ? '#' + clinicReferralModal.response.referral.clinic_queue_number : 'Not assigned'"></strong></p>
+                          <p><span>Clinic date</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.clinic_appointment_date, 'Not created')"></strong></p>
+                          <p><span>Accepted by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.accepted_by_name, 'Not accepted')"></strong></p>
+                          <p><span>Accepted time</span><strong x-text="clinicReferralFormatDateTime(clinicReferralModal.response.referral?.accepted_at)"></strong></p>
+                          <p><span>Assessment start</span><strong x-text="clinicReferralModal.response.referral?.assessment_started ? clinicReferralFormatDateTime(clinicReferralModal.response.referral?.clinic_review_started_at) : 'Not started'"></strong></p>
+                          <p><span>Assessment completion</span><strong x-text="clinicReferralModal.response.referral?.assessment_completed ? clinicReferralFormatDateTime(clinicReferralModal.response.referral?.resolved_at) : 'Not completed'"></strong></p>
+                          <p><span>Completed by</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.resolved_by_name, 'Not completed')"></strong></p>
+                          <p><span>Grooming outcome</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_outcome_label, 'Pending clinic transfer')"></strong></p>
+                          <p><span>Stopped-payment review</span><strong class="capitalize" x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.stopped_payment_review_status, 'Pending')"></strong></p>
+                          <p><span>Grooming payment</span><strong x-text="clinicReferralModal.response.referral?.grooming_payment_ready ? 'Ready' : clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_payment_blocked_reason, 'Not ready')"></strong></p>
+                          <p><span>Physical pickup</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.physical_pickup_blocked_reason, 'No referral block')"></strong></p>
+                          <p><span>Grooming clearance</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.grooming_clearance_status_label)"></strong></p>
+                        </div>
+                      </section>
+
+                      <div class="admin-medical-concern-text-grid">
+                        <p><span>Internal referral reason</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.referral_reason)"></strong></p>
+                        <p><span>Customer-friendly explanation</span><strong x-text="clinicReferralDisplayValue(clinicReferralModal.response.referral?.customer_explanation)"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.customer_cancellation_summary"><span>Customer-safe cancellation summary</span><strong x-text="clinicReferralModal.response.referral?.customer_cancellation_summary"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.customer_resolution_summary"><span>Customer-safe resolution summary</span><strong x-text="clinicReferralModal.response.referral?.customer_resolution_summary"></strong></p>
+                        <p x-show="clinicReferralModal.response.referral?.internal_resolution_notes"><span>Internal assessment resolution notes</span><strong x-text="clinicReferralModal.response.referral?.internal_resolution_notes"></strong></p>
+                      </div>
+
+                      <p x-show="!clinicReferralModal.response.referral?.future_clinic_acceptance_eligible" class="admin-medical-concern-future-note" x-text="clinicReferralModal.response.referral?.future_clinic_acceptance_blocked_reason"></p>
+
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="closeClinicReferral()">Close</button>
+                        <button
+                          x-show="canRecordClinicReferralInPersonConsent(clinicReferralModal.response.referral)"
+                          type="button"
+                          class="admin-medical-concern-primary"
+                          @click="openClinicReferralInPersonConsent()"
+                        >
+                          Record In-Person Consent
+                        </button>
+                      </footer>
+                    </div>
+
+                    <!-- Unregistered-owner consent capture -->
+                    <form x-show="clinicReferralModal.view === 'in_person'" @submit.prevent="confirmClinicReferralInPersonConsent()" novalidate>
+                      <button type="button" class="admin-medical-concern-back" @click="clinicReferralModal.view = 'status'">
+                        <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
+                        Back to referral status
+                      </button>
+                      <div class="admin-medical-concern-advisory" role="note">
+                        <i data-lucide="user-check" class="h-5 w-5" aria-hidden="true"></i>
+                        <p>You are recording the owner or decision-maker’s response. You are not responding on their behalf.</p>
+                      </div>
+                      <div x-show="clinicReferralInPerson.error" class="admin-medical-concern-validation" role="alert" x-text="clinicReferralInPerson.error"></div>
+                      <div class="admin-medical-concern-form-grid">
+                        <div class="is-full">
+                          <label for="clinic-referral-in-person-decision">Decision <span aria-hidden="true">*</span></label>
+                          <select id="clinic-referral-in-person-decision" x-ref="clinicReferralInPersonDecision" x-model="clinicReferralInPerson.decision">
+                            <option value="">Select a decision</option>
+                            <option value="approved">Approved</option>
+                            <option value="declined">Declined</option>
+                          </select>
+                          <p x-show="clinicReferralInPerson.errors.decision" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.decision"></p>
+                        </div>
+                        <div>
+                          <label for="clinic-referral-decision-maker">Decision-maker name <span aria-hidden="true">*</span></label>
+                          <input id="clinic-referral-decision-maker" type="text" maxlength="200" x-model="clinicReferralInPerson.decision_maker_name" autocomplete="name" />
+                          <p x-show="clinicReferralInPerson.errors.decision_maker_name" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.decision_maker_name"></p>
+                        </div>
+                        <div>
+                          <label for="clinic-referral-in-person-signature">Typed or captured signature name <span aria-hidden="true">*</span></label>
+                          <input id="clinic-referral-in-person-signature" type="text" maxlength="200" x-model="clinicReferralInPerson.signature_name" autocomplete="off" />
+                          <p x-show="clinicReferralInPerson.errors.signature_name" class="admin-medical-concern-field-error" x-text="clinicReferralInPerson.errors.signature_name"></p>
+                        </div>
+                      </div>
+                      <footer class="admin-medical-concern-form-actions">
+                        <button type="button" class="admin-medical-concern-secondary" @click="clinicReferralModal.view = 'status'">Cancel</button>
+                        <button type="submit" class="admin-medical-concern-primary">Review Permanent Response</button>
+                      </footer>
+                    </form>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <!-- Staff request confirmation -->
+            <div
+              x-show="clinicReferralConfirmation.open"
+              style="display: none"
+              class="admin-medical-concern-terminal-overlay"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="clinic-referral-confirm-title"
+            >
+              <section x-ref="clinicReferralConfirmationDialog" class="admin-medical-concern-terminal-dialog" tabindex="-1">
+                <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true"><i data-lucide="heart-pulse" class="h-6 w-6"></i></div>
+                <h3 id="clinic-referral-confirm-title">Confirm Clinic Referral</h3>
+                <p>This permanent request cannot be edited normally after creation.</p>
+                <div class="admin-medical-concern-detail-grid">
+                  <p><span>Pet</span><strong x-text="clinicReferralModal.pet?.name || clinicReferralModal.pet?.petName || clinicReferralModal.pet?.pet_name"></strong></p>
+                  <p><span>Concern</span><strong x-text="clinicReferralConcernReference()"></strong></p>
+                  <p><span>Urgency</span><strong x-text="clinicReferralUrgencyLabel(clinicReferralForm.urgency)"></strong></p>
+                  <p><span>Consent path</span><strong x-text="clinicReferralConsentSummary()"></strong></p>
+                </div>
+                <section class="admin-medical-concern-resolution">
+                  <h5>Customer-friendly explanation</h5>
+                  <p x-text="clinicReferralForm.customer_explanation"></p>
+                </section>
+                <p class="admin-medical-concern-future-note">No clinic appointment is created. Grooming is not automatically paused or stopped. Veterinary treatment is not automatically authorized.</p>
+                <p x-show="clinicReferralConfirmation.error" class="admin-medical-concern-terminal-error" role="alert" x-text="clinicReferralConfirmation.error"></p>
+                <footer class="admin-medical-concern-form-actions">
+                  <button type="button" class="admin-medical-concern-secondary" :disabled="clinicReferralConfirmation.busy" @click="closeClinicReferralConfirmation()">Back</button>
+                  <button type="button" class="admin-medical-concern-primary" :disabled="clinicReferralConfirmation.busy" @click="submitClinicReferral()">
+                    <span x-show="clinicReferralConfirmation.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="clinicReferralConfirmation.busy ? 'Creating...' : 'Create Referral Request'"></span>
+                  </button>
+                </footer>
+              </section>
+            </div>
+
+            <!-- In-person permanent response confirmation -->
+            <div
+              x-show="clinicReferralInPerson.confirming"
+              style="display: none"
+              class="admin-medical-concern-terminal-overlay"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="clinic-referral-in-person-confirm-title"
+            >
+              <section x-ref="clinicReferralInPersonConfirm" class="admin-medical-concern-terminal-dialog" tabindex="-1">
+                <div class="admin-medical-concern-terminal-icon is-notify" aria-hidden="true"><i data-lucide="user-check" class="h-6 w-6"></i></div>
+                <h3 id="clinic-referral-in-person-confirm-title">Confirm In-Person Consent</h3>
+                <p>This response is permanent and cannot be edited, replaced, or deleted.</p>
+                <div class="admin-medical-concern-detail-grid">
+                  <p><span>Pet</span><strong x-text="clinicReferralModal.response?.referral?.pet_name"></strong></p>
+                  <p><span>Decision</span><strong x-text="clinicReferralInPerson.decision === 'approved' ? 'Approved' : 'Declined'"></strong></p>
+                  <p><span>Decision-maker</span><strong x-text="clinicReferralInPerson.decision_maker_name"></strong></p>
+                </div>
+                <p x-show="clinicReferralInPerson.error" class="admin-medical-concern-terminal-error" role="alert" x-text="clinicReferralInPerson.error"></p>
+                <footer class="admin-medical-concern-form-actions">
+                  <button type="button" class="admin-medical-concern-secondary" :disabled="clinicReferralInPerson.busy" @click="clinicReferralInPerson.confirming = false">Back</button>
+                  <button type="button" class="admin-medical-concern-primary" :disabled="clinicReferralInPerson.busy" @click="submitClinicReferralInPersonConsent()">
+                    <span x-show="clinicReferralInPerson.busy" class="admin-medical-concern-button-spinner" aria-hidden="true"></span>
+                    <span x-text="clinicReferralInPerson.busy ? 'Recording...' : 'Record Permanent Response'"></span>
+                  </button>
+                </footer>
+              </section>
+            </div>
+          </div>
+
           <!-- Payment Modal -->
           <div
+            x-cloak
             x-show="paymentModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
@@ -1728,13 +3819,27 @@
                             </div>
                           </div>
 
-                          <label class="payment-size-select">
+                          <label x-show="!pet.isStoppedReviewed" class="payment-size-select">
                             <select x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
                               <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
                                 <option :value="option.value" :selected="option.value === pet.sizeKey" x-text="option.label"></option>
                               </template>
                             </select>
                           </label>
+                          <span x-show="pet.isStoppedReviewed" class="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">Grooming stopped</span>
+                        </div>
+
+                        <div x-show="pet.isStoppedReviewed" class="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <strong class="text-amber-900">Payment review completed</strong>
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-amber-800" x-text="pet.reviewDecisionLabel"></span>
+                          </div>
+                          <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div><dt class="text-xs font-semibold text-slate-500">Original subtotal</dt><dd class="font-bold" x-text="formatPeso(pet.originalSubtotal)"></dd></div>
+                            <div><dt class="text-xs font-semibold text-slate-500">Adjustment</dt><dd class="font-bold" x-text="formatPeso(pet.adjustment)"></dd></div>
+                            <div><dt class="text-xs font-semibold text-slate-500">Reviewed charge</dt><dd class="font-bold text-[#16a34a]" x-text="formatPeso(pet.finalReviewedCharge)"></dd></div>
+                          </dl>
+                          <p class="mt-3"><span class="font-semibold">Customer explanation:</span> <span x-text="pet.customerExplanation || 'Not provided'"></span></p>
                         </div>
 
                         <template x-if="pet.lines.length === 0">
@@ -1747,10 +3852,10 @@
                               <div class="payment-service-copy">
                                 <p class="payment-service-name" x-text="line.name"></p>
                                 <p class="payment-service-description" x-text="line.description"></p>
-                                <p class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
+                                <p x-show="!pet.isStoppedReviewed" class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
                               </div>
 
-                              <label class="payment-price-input">
+                              <label x-show="!pet.isStoppedReviewed" class="payment-price-input">
                                 <span>&#8369;</span>
                                 <input
                                   type="number"
@@ -1766,12 +3871,13 @@
                                   @blur="enforcePaymentMinimum(pet, line)"
                                 />
                               </label>
+                              <strong x-show="pet.isStoppedReviewed" class="text-sm text-slate-700" x-text="formatPeso(line.amount)"></strong>
                             </div>
                           </template>
                         </div>
 
                         <div class="payment-pet-subtotal">
-                          <span x-text="'Subtotal - ' + (pet.name || ('Pet ' + (petIndex + 1)))"></span>
+                          <span x-text="(pet.isStoppedReviewed ? 'Reviewed charge - ' : 'Subtotal - ') + (pet.name || ('Pet ' + (petIndex + 1)))"></span>
                           <strong x-text="formatPeso(paymentPetSubtotal(pet))"></strong>
                         </div>
                       </article>
@@ -1784,7 +3890,7 @@
                   <strong x-text="formatPeso(paymentTotalDue)"></strong>
                 </div>
 
-                <div>
+                <div x-show="paymentTotalDue > 0">
                   <label class="mb-1 block text-xs font-semibold text-slate-500">Amount Paid (&#8369;)</label>
                   <input
                     type="number"
@@ -1799,6 +3905,11 @@
                   />
                 </div>
 
+                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <p class="font-bold">No payment required</p>
+                  <p class="mt-1">This ₱0.00 completion will be recorded without cash tender or change.</p>
+                </div>
+
                 <div class="rounded-xl border px-4 py-3"
                   :class="paymentChange >= 0 ? 'border-[#86efac] bg-[#f0fdf4]' : 'border-red-200 bg-red-50'">
                   <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Change</p>
@@ -1807,7 +3918,7 @@
                     x-text="paymentChange >= 0 ? formatPeso(paymentChange) : '-'"></p>
                 </div>
 
-                <div>
+                <div x-show="paymentTotalDue > 0">
                   <label class="mb-1 block text-xs font-semibold text-slate-500">Payment Method</label>
                   <select
                     x-model="paymentModal.paymentMethod"
@@ -1819,6 +3930,10 @@
                     <option value="card">Card</option>
                     <option value="others">Others</option>
                   </select>
+                </div>
+                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-semibold text-slate-500">Completion method</p>
+                  <p class="mt-1 text-sm font-bold text-slate-700">No payment required</p>
                 </div>
 
                 <div>
@@ -1858,6 +3973,7 @@
 
           <!-- Receipt Modal -->
           <div
+            x-cloak
             x-show="receiptModal.open"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
@@ -1869,7 +3985,7 @@
                   <i data-lucide="check-circle-2" class="h-7 w-7"></i>
                 </div>
                 <div class="min-w-0">
-                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Booking archived'"></p>
+                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Ready for pickup'"></p>
                   <h4 class="receipt-success-title">Payment Successful</h4>
                   <p class="receipt-success-ref">
                     Ref: <span x-text="receiptModal.bookingReference"></span>
@@ -1958,12 +4074,13 @@
                         <h5 class="text-lg font-semibold text-[#2f4b66]">Service Information</h5>
                       </div>
 
-                      <!-- Frontend-only: prices shown here are the admin-entered amounts from the payment form. -->
+                      <!-- Persisted server payment data, including immutable stopped-pet reviews. -->
                       <div class="space-y-3">
                         <template x-for="pet in receiptModal.pets" :key="'services-' + pet.id">
                           <article class="receipt-inner-card">
                             <div class="mb-3">
                               <p class="font-semibold text-[#2f4b66]" x-text="pet.name"></p>
+                              <span x-show="pet.stoppedReviewed" class="mt-2 inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">Grooming stopped</span>
                             </div>
 
                             <div class="space-y-2">
@@ -1980,8 +4097,16 @@
                             </div>
 
                             <div class="receipt-service-subtotal">
-                              <span>Subtotal</span>
+                              <span x-text="pet.stoppedReviewed ? 'Final reviewed charge' : 'Subtotal'"></span>
                               <strong x-text="formatPeso(pet.subtotal)"></strong>
+                            </div>
+                            <div x-show="pet.stoppedReviewed" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+                              <p class="font-bold text-amber-900" x-text="'Payment Review Completed · ' + (pet.reviewDecisionLabel || 'Reviewed')"></p>
+                              <div class="mt-2 grid grid-cols-2 gap-2">
+                                <p>Original: <strong x-text="formatPeso(pet.originalSubtotal)"></strong></p>
+                                <p>Adjustment: <strong x-text="formatPeso(pet.adjustment)"></strong></p>
+                              </div>
+                              <p class="mt-2" x-text="pet.customerExplanation || 'No customer explanation provided.'"></p>
                             </div>
                           </article>
                         </template>
@@ -2064,6 +4189,7 @@
 
           <!-- Shared secondary action confirmation modal -->
           <div
+            x-cloak
             x-show="actionConfirmModal.open"
             x-transition
             style="display:none"
@@ -2094,6 +4220,26 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <div
+                  x-show="actionConfirmModal.action === 'cancel'"
+                  class="mt-4 text-left"
+                >
+                  <label
+                    for="bookingCancellationReason"
+                    class="block text-xs font-bold text-slate-600"
+                  >
+                    Reason shared with customer <span class="font-medium text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    id="bookingCancellationReason"
+                    x-model="actionConfirmModal.cancellationReason"
+                    :disabled="actionConfirmModal.busy"
+                    maxlength="500"
+                    rows="3"
+                    placeholder="Add a short cancellation reason"
+                    class="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/15 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  ></textarea>
+                </div>
                 <p
                   x-show="actionConfirmModal.error"
                   class="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600"
@@ -2124,6 +4270,7 @@
 
           <!-- View Details Modal -->
           <div
+            x-cloak
             x-show="detailsModalOpen"
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
@@ -2277,7 +4424,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=email-verification-20260726"></script>
+    <script src="../../scripts/api.js?v=dashboard-search-unregistered-20260812"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -2291,6 +4438,9 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=queue-progress-20260709"></script>
+    <script src="../../scripts/components/admin-grooming-concerns.js?v=owner-concern-actions-20260809"></script>
+    <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
+    <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812"></script>
   </body>
 </html>

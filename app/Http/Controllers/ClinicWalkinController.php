@@ -9,21 +9,24 @@ use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\TimeWindow;
+use App\Models\UnregisteredCustomer;
 use App\Models\User;
 use App\Models\Walkin;
 use App\Services\AvailabilityTimeWindowService;
+use App\Services\ClinicAppointmentSequence;
+use App\Services\CustomerPreRegistrationAccessService;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ClinicWalkinController extends Controller
 {
     public function timeslots(
         Request $request,
         AvailabilityTimeWindowService $timeWindows,
-    )
-    {
+    ) {
         $today = now()->toDateString();
         $lastAvailableDate = now()->addDays(2)->toDateString();
         $data = $request->validate([
@@ -94,11 +97,30 @@ class ClinicWalkinController extends Controller
         ]);
     }
 
-    public function preRegister(StoreClinicPreRegistrationRequest $request)
-    {
-        return DB::transaction(function () use ($request) {
+    public function preRegister(
+        StoreClinicPreRegistrationRequest $request,
+        ClinicAppointmentSequence $clinicSequence,
+        CustomerPreRegistrationAccessService $preRegistrationAccess,
+    ) {
+        return DB::transaction(function () use (
+            $request,
+            $clinicSequence,
+            $preRegistrationAccess,
+        ) {
             $data = $request->validated();
             $user = $request->user();
+            User::query()->whereKey($user->user_id)->lockForUpdate()->first();
+
+            $access = $preRegistrationAccess->forUser((int) $user->user_id);
+            if (! $access['allowed']) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'ongoing_pre_registration',
+                    'message' => $access['message'],
+                    'ongoing' => $access['ongoing'],
+                ], 409);
+            }
+
             $appointmentDate = $data['appointment_date'];
             $settings = ClinicSetting::current();
 
@@ -191,7 +213,8 @@ class ClinicWalkinController extends Controller
                 ], 422);
             }
 
-            $reference = $this->nextAppointmentReference($appointmentDate);
+            $sequence = $clinicSequence->reserve($appointmentDate, false);
+            $reference = $sequence['appointment_reference'];
 
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
@@ -241,37 +264,35 @@ class ClinicWalkinController extends Controller
         });
     }
 
-    public function store(StoreClinicWalkinRequest $request)
-    {
-        return DB::transaction(function () use ($request) {
+    public function store(
+        StoreClinicWalkinRequest $request,
+        ClinicAppointmentSequence $clinicSequence,
+    ) {
+        return DB::transaction(function () use ($request, $clinicSequence) {
             $data = $request->validated();
             $data = PetWeightSize::withComputedSize($data);
 
-            $user = ! empty($data['email'])
-                ? User::where('email', $data['email'])->first()
-                : null;
+            [$user, $unregisteredCustomer, $owner] = $this->resolveWalkInOwner($data);
 
             $walkin = Walkin::create([
-                'fname' => $data['fname'],
-                'lname' => $data['lname'],
-                'mname' => $data['mname'] ?? null,
-                'email' => $data['email'] ?? null,
-                'phone' => $data['phone'],
+                'fname' => $owner['fname'],
+                'lname' => $owner['lname'],
+                'mname' => $owner['mname'],
+                'email' => $owner['email'],
+                'phone' => $owner['phone'],
                 'sedation_consent' => false,
                 'terms_agreed' => $data['terms_agreed'],
                 'user_id' => $user?->user_id,
+                ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
                 'appointment_type' => 'clinic',
                 'chief_complaint' => $data['chief_complaint'],
             ]);
 
-            $pet = $this->findOrCreatePet($user, $data);
+            $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $data);
 
-            // Atomically assign today's clinic queue number.
-            $queueNumber = ((int) ClinicAppointment::where('appointment_date', now()->toDateString())
-                ->lockForUpdate()
-                ->max('queue_number')) + 1;
-
-            $reference = $this->nextAppointmentReference(now()->toDateString());
+            $sequence = $clinicSequence->reserve(now()->toDateString(), true);
+            $queueNumber = $sequence['queue_number'];
+            $reference = $sequence['appointment_reference'];
 
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
@@ -301,30 +322,76 @@ class ClinicWalkinController extends Controller
                     'phone' => $walkin->phone,
                 ],
                 'pet' => [
+                    'pet_id' => $pet->pet_id,
                     'name' => $pet->pet_name,
                     'species' => $pet->species,
                     'breed' => $pet->breed,
                 ],
                 'chief_complaint' => $walkin->chief_complaint,
-                'returning_customer' => $user !== null,
+                'returning_customer' => $user !== null || $unregisteredCustomer !== null,
             ], 201);
         });
     }
 
-    private function nextAppointmentReference(string $appointmentDate): string
+    private function resolveWalkInOwner(array $data): array
     {
-        $date = Carbon::parse($appointmentDate);
-        $prefix = 'CL-'.$date->format('Ymd').'-';
-        $lastReference = ClinicAppointment::query()
-            ->where('appointment_reference', 'like', $prefix.'%')
-            ->lockForUpdate()
-            ->orderByDesc('appointment_reference')
-            ->value('appointment_reference');
-        $nextNumber = $lastReference
-            ? ((int) substr($lastReference, strlen($prefix))) + 1
-            : 1;
+        $recordType = $data['owner_record_type'] ?? 'new';
+        $user = null;
+        $unregisteredCustomer = null;
 
-        return $prefix.str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
+        if ($recordType === 'registered') {
+            $user = User::query()
+                ->where('user_id', $data['customer_user_id'] ?? null)
+                ->where('role', 'customer')
+                ->first();
+
+            if (! $user) {
+                throw ValidationException::withMessages([
+                    'customer_user_id' => ['The selected customer is no longer available.'],
+                ]);
+            }
+        } elseif ($recordType === 'unregistered') {
+            $unregisteredCustomer = UnregisteredCustomer::query()
+                ->where('id', $data['unregistered_customer_id'] ?? null)
+                ->where('is_archived', false)
+                ->first();
+
+            if (! $unregisteredCustomer) {
+                throw ValidationException::withMessages([
+                    'unregistered_customer_id' => ['The selected unregistered customer is no longer available.'],
+                ]);
+            }
+        } elseif (! empty($data['email'])) {
+            // Preserve the existing clinic walk-in behavior for manually entered
+            // owners whose email already belongs to a registered customer.
+            $user = User::query()->where('email', $data['email'])->first();
+        }
+
+        $owner = $user
+            ? [
+                'fname' => $user->first_name,
+                'lname' => $user->last_name,
+                'mname' => null,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ]
+            : ($unregisteredCustomer
+                ? [
+                    'fname' => $unregisteredCustomer->first_name,
+                    'lname' => $unregisteredCustomer->last_name,
+                    'mname' => $unregisteredCustomer->middle_name,
+                    'email' => $unregisteredCustomer->email,
+                    'phone' => $unregisteredCustomer->phone,
+                ]
+                : [
+                    'fname' => $data['fname'],
+                    'lname' => $data['lname'],
+                    'mname' => $data['mname'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'phone' => $data['phone'],
+                ]);
+
+        return [$user, $unregisteredCustomer, $owner];
     }
 
     private function windowHasStarted(string $appointmentDate, TimeWindow $window): bool
@@ -343,27 +410,48 @@ class ClinicWalkinController extends Controller
         return $startsAt->lessThanOrEqualTo(now());
     }
 
-    private function findOrCreatePet(?User $user, array $data): Pet
+    private function findOrCreatePet(
+        ?User $user,
+        ?UnregisteredCustomer $unregisteredCustomer,
+        array $data,
+    ): Pet
     {
-        if ($user) {
-            $existing = Pet::where('user_id', $user->user_id)
+        $hasExistingOwner = $user !== null || $unregisteredCustomer !== null;
+        $ownerPetQuery = Pet::query()
+            ->when(
+                $user !== null,
+                fn ($query) => $query->where('user_id', $user->user_id),
+                fn ($query) => $query->where('unregistered_customer_id', $unregisteredCustomer?->id),
+            )
+            ->where('is_archived', false);
+
+        if (! empty($data['pet_id'])) {
+            $existing = (clone $ownerPetQuery)
+                ->where('pet_id', $data['pet_id'])
+                ->first();
+
+            if (! $hasExistingOwner || ! $existing) {
+                throw ValidationException::withMessages([
+                    'pet_id' => ['The selected pet does not belong to this customer.'],
+                ]);
+            }
+
+            return $this->updateWalkInPetDetails($existing, $data);
+        }
+
+        if ($hasExistingOwner) {
+            $existing = (clone $ownerPetQuery)
                 ->whereRaw('LOWER(pet_name) = ?', [strtolower($data['pet_name'])])
                 ->first();
 
             if ($existing) {
-                $existing->update([
-                    'breed' => $data['breed'] ?? $existing->breed,
-                    'fur_type' => $data['fur_type'] ?? $existing->fur_type,
-                    'weight' => $data['weight'] ?? $existing->weight,
-                    'size' => $data['size'] ?? $existing->size,
-                ]);
-
-                return $existing;
+                return $this->updateWalkInPetDetails($existing, $data);
             }
         }
 
         return Pet::create([
             'user_id' => $user?->user_id,
+            ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
             'pet_name' => $data['pet_name'],
             'species' => $data['species'],
             'breed' => $data['breed'] ?? null,
@@ -373,5 +461,18 @@ class ClinicWalkinController extends Controller
             'medical_conditions' => $data['medical_conditions'] ?? null,
             'is_archived' => false,
         ]);
+    }
+
+    private function updateWalkInPetDetails(Pet $pet, array $data): Pet
+    {
+        $pet->update([
+            'breed' => $data['breed'] ?? $pet->breed,
+            'fur_type' => $data['fur_type'] ?? $pet->fur_type,
+            'weight' => $data['weight'] ?? $pet->weight,
+            'size' => $data['size'] ?? $pet->size,
+            'medical_conditions' => $data['medical_conditions'] ?? $pet->medical_conditions,
+        ]);
+
+        return $pet;
     }
 }

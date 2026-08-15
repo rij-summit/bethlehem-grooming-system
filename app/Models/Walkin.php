@@ -17,18 +17,24 @@ class Walkin extends Model
         'sedation_consent',
         'terms_agreed',
         'user_id',
+        'unregistered_customer_id',
         'appointment_type',
         'chief_complaint',
     ];
 
     protected $casts = [
         'sedation_consent' => 'boolean',
-        'terms_agreed'     => 'boolean',
+        'terms_agreed' => 'boolean',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function unregisteredCustomer()
+    {
+        return $this->belongsTo(UnregisteredCustomer::class, 'unregistered_customer_id');
     }
 
     public function booking()
