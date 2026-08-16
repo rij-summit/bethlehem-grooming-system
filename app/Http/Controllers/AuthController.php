@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\EmailVerificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Validation\ValidationException;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -26,7 +26,7 @@ class AuthController extends Controller
             'first_name'    => $request->first_name,
             'last_name'     => $request->last_name,
             'username'      => $request->username ?: null,
-            'email'         => $request->email ?: null,
+            'email'         => $request->email,
             'phone'         => $request->phone ?: null,
             'password_hash' => Hash::make($request->password),
             'role'          => 'customer',
@@ -34,20 +34,13 @@ class AuthController extends Controller
             'is_active'     => 1,
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        EmailVerificationController::sendVerificationEmail($user);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Account created successfully',
-            'token'   => $token,
-            'user'    => [
-                'user_id'    => $user->user_id,
-                'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email'      => $user->email,
-                'phone'      => $user->phone,
-                'role'       => $user->role,
-            ]
+            'success'               => true,
+            'message'               => 'Account created. Please check your email to verify your account.',
+            'requires_verification' => true,
+            'email'                 => $user->email,
         ], 201);
     }
 
@@ -81,7 +74,7 @@ class AuthController extends Controller
 
         $user = User::where($field, $identifier)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password_hash)) {
+        if (! $user || ! Hash::check($request->password, $user->password_hash)) {
             RateLimiter::hit($throttleKey, 60);
             return response()->json([
                 'success' => false,
@@ -89,17 +82,27 @@ class AuthController extends Controller
             ], 401);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your account has been disabled. Please contact the clinic.',
             ], 403);
         }
 
+        // Block unverified customers (admins/staff skip this check)
+        if (! in_array($user->role, ['admin', 'staff']) && ! $user->email_verified_at) {
+            return response()->json([
+                'success'            => false,
+                'message'            => 'Please verify your email address before signing in. Check your inbox for the verification link.',
+                'email_not_verified' => true,
+                'email'              => $user->email,
+            ], 403);
+        }
+
         RateLimiter::clear($throttleKey);
         $user->tokens()->delete();
         $tokenName = in_array($user->role, ['admin', 'staff']) ? 'admin_token' : 'auth_token';
-        $token = $user->createToken($tokenName)->plainTextToken;
+        $token     = $user->createToken($tokenName)->plainTextToken;
 
         return response()->json([
             'success' => true,

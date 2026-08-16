@@ -144,8 +144,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Logout ────────────────────────────────────────────
   logoutBtn?.addEventListener("click", async () => {
-    await API.logout("customer");
-    window.location.href = "./sign-in.html";
+    try {
+      await API.logout("customer");
+    } finally {
+      window.location.href = "./sign-in.html?logout=1";
+    }
   });
 
   // ── Sidebar toggle (mobile) ───────────────────────────

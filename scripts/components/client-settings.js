@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) window.lucide.createIcons();
 
   if (!API.getCustomerToken()) {
-    window.location.href = "../sign-in/sign_in.html";
+    window.location.href = "./sign-in.html";
     return;
   }
 
@@ -144,7 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
       serverUser = user || {};
       applyUserToAccount(serverUser);
     } catch {
-      window.location.href = "../../pages/sign-in/sign_in.html";
+      window.location.href = "./sign-in.html";
     }
   }
 
@@ -251,7 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await API.logout("customer");
     } finally {
-      window.location.href = "../sign-in/sign_in.html";
+      window.location.href = "./sign-in.html?logout=1";
     }
   }
 

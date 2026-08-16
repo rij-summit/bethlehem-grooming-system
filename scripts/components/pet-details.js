@@ -1820,8 +1820,11 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   document.getElementById("clientLogoutBtn")?.addEventListener("click", async () => {
-    await API.logout("customer");
-    window.location.href = "./sign-in.html";
+    try {
+      await API.logout("customer");
+    } finally {
+      window.location.href = "./sign-in.html?logout=1";
+    }
   });
 
   setupSidebar();

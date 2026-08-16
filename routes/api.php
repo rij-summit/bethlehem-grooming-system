@@ -17,6 +17,7 @@ use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\GroomingClinicReferralController;
 use App\Http\Controllers\GroomingStoppedPaymentReviewController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PetController;
@@ -29,9 +30,11 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WalkinController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/sign-in', [AuthController::class, 'signIn']);
-Route::post('/chatbot', [ChatbotController::class, 'chat']);
+Route::post('/register',      [AuthController::class, 'register']);
+Route::post('/sign-in',       [AuthController::class, 'signIn']);
+Route::post('/email/verify',  [EmailVerificationController::class, 'verify']);
+Route::post('/email/resend',  [EmailVerificationController::class, 'resend']);
+Route::post('/chatbot',       [ChatbotController::class, 'chat']);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots', [BookingController::class,   'getTimeslots']);

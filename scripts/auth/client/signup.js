@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setBusyState(true);
 
     try {
-      await API.register({
+      const data = await API.register({
         first_name:            firstName,
         last_name:             lastName,
         username:              username || null,
@@ -122,6 +122,12 @@ document.addEventListener("DOMContentLoaded", () => {
         password,
         password_confirmation: confirmPassword,
       });
+
+      if (data?.requires_verification) {
+        sessionStorage.setItem("pendingVerificationEmail", data.email ?? email);
+        window.location.href = "./verify-email.html";
+        return;
+      }
 
       window.location.href = "./dashboard.html";
     } catch (error) {
