@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\LoginEmailChallenge;
 use App\Models\PendingCustomerRegistration;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -38,4 +39,13 @@ Schedule::call(function (): void {
 })
     ->name('pending-customer-registrations:prune')
     ->daily()
+    ->withoutOverlapping();
+
+Schedule::call(function (): void {
+    LoginEmailChallenge::query()
+        ->where('expires_at', '<', now())
+        ->delete();
+})
+    ->name('login-email-challenges:prune')
+    ->hourly()
     ->withoutOverlapping();

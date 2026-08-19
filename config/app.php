@@ -62,6 +62,8 @@ return [
 
     'email_verification_ttl_hours' => (int) env('EMAIL_VERIFICATION_TTL_HOURS', 24),
 
+    'login_confirmation_ttl_minutes' => (int) env('LOGIN_CONFIRMATION_TTL_MINUTES', 15),
+
     'pending_registration_retention_days' => (int) env('PENDING_REGISTRATION_RETENTION_DAYS', 7),
 
     'privileged_seed_accounts' => [

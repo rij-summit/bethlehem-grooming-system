@@ -92,16 +92,31 @@ function createBrowser({
   };
 }
 
-async function testExclusiveRememberMeStorage() {
+async function testLoginCodeHonorsRememberMeStorage() {
+  const requests = [];
   const browser = createBrowser({
     local: { customer_token: "obsolete-local-token", user_role: "customer" },
-    fetchImpl: async () => jsonResponse(200, {
-      token: "new-session-token",
-      user: { role: "customer" },
-    }),
+    session: {
+      pending_login_poll_token: "login-poll-token",
+      pending_login_confirmation_email: "customer@example.com",
+    },
+    fetchImpl: async (url, options) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      if (url.endsWith("/email/login/complete")) {
+        return jsonResponse(200, { success: true });
+      }
+
+      return jsonResponse(200, {
+        approved: true,
+        session_established: true,
+        token: "new-session-token",
+        remember_me: false,
+        user: { role: "customer" },
+      });
+    },
   });
 
-  await browser.API.signIn("customer@example.com", "password", false);
+  await browser.API.confirmLoginCode("012345");
 
   assert.equal(browser.API.getBaseUrl(), "http://127.0.0.1:8000/api");
   assert.equal(browser.localStorage.getItem("customer_token"), null);
@@ -109,6 +124,51 @@ async function testExclusiveRememberMeStorage() {
   assert.equal(browser.sessionStorage.getItem("customer_token"), "new-session-token");
   assert.equal(browser.sessionStorage.getItem("user_role"), "customer");
   assert.equal(browser.API.getCustomerToken(), "new-session-token");
+  assert.deepEqual(requests, [
+    {
+      url: "http://127.0.0.1:8000/api/email/login/confirm",
+      body: { poll_token: "login-poll-token", code: "012345" },
+    },
+    {
+      url: "http://127.0.0.1:8000/api/email/login/complete",
+      body: { poll_token: "login-poll-token" },
+    },
+  ]);
+}
+
+async function testCustomerPasswordStepDoesNotCreateBrowserSession() {
+  let submittedRequest = null;
+  const browser = createBrowser({
+    fetchImpl: async (url, options) => {
+      submittedRequest = { url, body: JSON.parse(options.body) };
+      return jsonResponse(202, {
+        success: true,
+        requires_login_confirmation: true,
+        login_poll_token: "pending-poll-token",
+        email: "customer@example.com",
+      });
+    },
+  });
+
+  const response = await browser.API.signIn(
+    "customer@example.com",
+    "password",
+    false,
+  );
+
+  assert.equal(response.requires_login_confirmation, true);
+  assert.equal(submittedRequest.url, "http://127.0.0.1:8000/api/sign-in");
+  assert.equal(submittedRequest.body.remember, false);
+  assert.equal(browser.API.getCustomerToken(), null);
+  assert.equal(browser.API.getUserRole(), null);
+  assert.equal(
+    browser.sessionStorage.getItem("pending_login_poll_token"),
+    "pending-poll-token",
+  );
+  assert.equal(
+    browser.API.getPendingLoginConfirmationEmail(),
+    "customer@example.com",
+  );
 }
 
 async function testTemporaryServerFailureDoesNotRedirect() {
@@ -254,25 +314,36 @@ function testBackForwardCacheGuard() {
   assert.equal(browser.replacements.at(-1), "/pages/client/sign-in.html");
 }
 
-function verificationPageEvents({ search, hash }) {
+function verificationPageHarness({ search, hash, pendingLogin = false }) {
   const source = fs.readFileSync(
     path.join(projectRoot, "scripts/auth/client/verify-email.js"),
     "utf8",
   );
   const events = [];
   const elements = new Map();
+  const elementListeners = new Map();
   let onReady = null;
 
   function element(id) {
     if (!elements.has(id)) {
+      const classes = new Set();
       elements.set(id, {
         id,
-        classList: { add() {}, remove() {} },
-        addEventListener() {},
+        classList: {
+          add(name) { classes.add(name); },
+          remove(name) { classes.delete(name); },
+          contains(name) { return classes.has(name); },
+        },
+        addEventListener(name, handler) {
+          elementListeners.set(`${id}:${name}`, handler);
+        },
         className: "",
-        disabled: false,
+        disabled: id === "loginCodeSubmit",
         textContent: "",
         value: "",
+        focus() {
+          events.push({ type: "focus", id });
+        },
       });
     }
     return elements.get(id);
@@ -284,7 +355,9 @@ function verificationPageEvents({ search, hash }) {
     href: `https://clinic.example${pathname}${search}${hash}`,
     pathname,
     search,
-    replace() {},
+    replace(target) {
+      events.push({ type: "redirect", target });
+    },
   };
   const context = {
     API: {
@@ -292,6 +365,12 @@ function verificationPageEvents({ search, hash }) {
         events.push({ type: "verify", token });
         return new Promise(() => {});
       },
+      async confirmLoginCode(code) {
+        events.push({ type: "confirm-login-code", code });
+        return { token: "customer-token", user: { role: "customer" } };
+      },
+      hasPendingLoginConfirmation: () => pendingLogin,
+      getPendingLoginConfirmationEmail: () => "customer@example.com",
       resendVerification: async () => ({}),
     },
     URL,
@@ -309,7 +388,7 @@ function verificationPageEvents({ search, hash }) {
       },
     },
     sessionStorage: new MemoryStorage(),
-    setTimeout() {},
+    setTimeout(callback) { callback(); },
     window: { location },
   };
 
@@ -319,27 +398,62 @@ function verificationPageEvents({ search, hash }) {
   });
   assert.equal(typeof onReady, "function");
   onReady();
-  return events;
+  return {
+    elements,
+    events,
+    async dispatch(id, name) {
+      const handler = elementListeners.get(`${id}:${name}`);
+      assert.equal(typeof handler, "function", `Missing ${name} handler for ${id}`);
+      return handler({ preventDefault() {} });
+    },
+  };
 }
 
 function testVerificationCredentialsAreScrubbedBeforeUse() {
-  const fragmentEvents = verificationPageEvents({
+  const fragmentEvents = verificationPageHarness({
     search: "?token=legacy-token&campaign=welcome",
     hash: "#token=fragment-token",
   });
-  assert.deepEqual(fragmentEvents, [
+  assert.deepEqual(fragmentEvents.events, [
     { type: "scrub", target: "/pages/client/verify-email.html?campaign=welcome" },
     { type: "verify", token: "fragment-token" },
   ]);
 
-  const legacyEvents = verificationPageEvents({
+  const legacyEvents = verificationPageHarness({
     search: "?token=legacy-token",
     hash: "",
   });
-  assert.deepEqual(legacyEvents, [
+  assert.deepEqual(legacyEvents.events, [
     { type: "scrub", target: "/pages/client/verify-email.html" },
     { type: "verify", token: "legacy-token" },
   ]);
+}
+
+async function testLoginCodeIsEnteredOnTheOriginalTab() {
+  const page = verificationPageHarness({
+    search: "?mode=login",
+    hash: "",
+    pendingLogin: true,
+  });
+  const input = page.elements.get("loginCode");
+  const submit = page.elements.get("loginCodeSubmit");
+
+  assert.equal(page.elements.get("loginCodeEmail").textContent, "customer@example.com");
+  assert.equal(page.elements.get("stateLoginCode").classList.contains("hidden"), false);
+  assert.equal(submit.disabled, true);
+
+  input.value = "01a2345";
+  await page.dispatch("loginCode", "input");
+  assert.equal(input.value, "012345");
+  assert.equal(submit.disabled, false);
+
+  await page.dispatch("loginCodeForm", "submit");
+  assert.ok(page.events.some((event) => (
+    event.type === "confirm-login-code" && event.code === "012345"
+  )));
+  assert.ok(page.events.some((event) => (
+    event.type === "redirect" && event.target === "./dashboard.html"
+  )));
 }
 
 function testStaticAuthContracts() {
@@ -356,19 +470,31 @@ function testStaticAuthContracts() {
     "utf8",
   );
   const webRoutes = fs.readFileSync(path.join(projectRoot, "routes/web.php"), "utf8");
+  const verifyHtml = fs.readFileSync(
+    path.join(projectRoot, "pages/client/verify-email.html"),
+    "utf8",
+  );
 
   assert.doesNotMatch(signIn, /Auto-redirect already-authenticated users/);
   assert.doesNotMatch(signIn, /API\.(?:getUserRole|getAdminToken|getCustomerToken)/);
   assert.match(verify, /new URLSearchParams\(window\.location\.hash\.slice\(1\)\)/);
-  assert.match(verify, /fragmentParams\.get\("token"\) \|\| queryParams\.get\("token"\)/);
+  assert.match(verify, /fragmentParams\.get\("token"\)/);
   assert.match(verify, /searchParams\.delete\("token"\)/);
   assert.match(verify, /cleanUrl\.hash = ""/);
   assert.ok(
-    verify.indexOf('history.replaceState(') < verify.indexOf('await API.verifyEmail(token)'),
-    "Verification credentials must be scrubbed before the API request",
+    verify.indexOf('history.replaceState(') < verify.indexOf('await API.verifyEmail(verificationToken)'),
+    "Authentication credentials must be scrubbed before the API request",
   );
-  assert.match(verify, /sign-in\.html\?verified=1/);
-  assert.doesNotMatch(verify, /dashboard\.html/);
+  assert.doesNotMatch(verify, /login_token|approveLogin|pollLoginConfirmation/);
+  assert.match(verify, /await API\.confirmLoginCode\(code\)/);
+  assert.match(verify, /await API\.verifyEmail\(verificationToken\)/);
+  assert.match(verify, /dashboard\.html/);
+  assert.doesNotMatch(verifyHtml, /Bethlehem_Logo-256\.png/);
+  assert.match(verifyHtml, /id="loginCode"/);
+  assert.match(verifyHtml, /inputmode="numeric"/);
+  assert.match(verifyHtml, /autocomplete="one-time-code"/);
+  assert.match(verifyHtml, /maxlength="6"/);
+  assert.match(signIn, /window\.location\.replace\("\.\/verify-email\.html\?mode=login"\)/);
   assert.match(signup, /email_delivery_queued === false/);
   assert.match(signup, /pendingVerificationDeliveryFailed/);
   assert.match(webRoutes, /no-store, private, max-age=0, must-revalidate/);
@@ -402,7 +528,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }
@@ -411,7 +537,8 @@ function testStaticAuthContracts() {
 }
 
 (async () => {
-  await testExclusiveRememberMeStorage();
+  await testLoginCodeHonorsRememberMeStorage();
+  await testCustomerPasswordStepDoesNotCreateBrowserSession();
   await testTemporaryServerFailureDoesNotRedirect();
   await testReal401ClearsAndUsesNestedSafePath();
   await testStale401CannotClearANewerLogin();
@@ -420,6 +547,7 @@ function testStaticAuthContracts() {
   testTokenReplacementRemovalEventCannotClearFreshLogin();
   testBackForwardCacheGuard();
   testVerificationCredentialsAreScrubbedBeforeUse();
+  await testLoginCodeIsEnteredOnTheOriginalTab();
   testStaticAuthContracts();
   console.log("frontend auth/session regression checks passed");
 })().catch((error) => {

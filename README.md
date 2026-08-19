@@ -2,16 +2,20 @@
 
 ## Email verification setup
 
-Registration verification is a one-time email ownership check. It does not send
-an OTP on every sign-in. After verification, the customer signs in with their
-password normally.
+Registration verification is a one-time email ownership check. Following a
+successful signup verification link creates the customer's first signed-in
+session. Later customer sign-ins confirm the password first, then send a
+separate six-digit email code that must be entered in the original browser tab.
+The code is bound to that tab's private login challenge, and a successful entry
+creates the session and continues to the dashboard. Admin and staff sign-ins
+continue to use their existing password flow.
 
-For local development, `MAIL_MAILER=log` writes the verification message and
-link to `storage/logs/laravel.log`; it does not deliver to an inbox. To test real
+For local development, `MAIL_MAILER=log` writes the verification link or login
+code to `storage/logs/laravel.log`; it does not deliver to an inbox. To test real
 delivery, configure a mail provider (or a local SMTP catcher) in `.env`, set
 `FRONTEND_URL` to the browser-facing application root, and use a valid sender.
 
-Queued verification mail also requires a running worker:
+Queued signup-verification and login-confirmation mail require a running worker:
 
 ```powershell
 php artisan queue:work

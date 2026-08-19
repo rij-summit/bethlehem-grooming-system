@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PendingCustomerRegistration;
 use App\Models\User;
+use App\Services\LoginEmailChallengeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -92,7 +93,7 @@ class AuthController extends Controller
     }
 
     // ── UNIFIED SIGN-IN ───────────────────────────────────
-    public function signIn(Request $request)
+    public function signIn(Request $request, LoginEmailChallengeService $loginChallenges)
     {
         $request->merge([
             'identifier' => trim((string) $request->input('identifier')),
@@ -100,6 +101,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'identifier' => 'required|string',
             'password' => 'required|string',
+            'remember' => 'sometimes|boolean',
         ]);
 
         $identifier = $data['identifier'];
@@ -184,8 +186,50 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($user->role === 'customer') {
+            $confirmationThrottleKey = 'login-confirmation:'
+                .hash('sha256', $user->user_id.'|'.$request->ip());
+
+            if (RateLimiter::tooManyAttempts($confirmationThrottleKey, 3)) {
+                $seconds = RateLimiter::availableIn($confirmationThrottleKey);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Too many login confirmation emails requested. Try again in {$seconds} seconds.",
+                    'retry_after' => $seconds,
+                ], 429)->header('Retry-After', (string) $seconds);
+            }
+
+            try {
+                $pollToken = $loginChallenges->send(
+                    $user,
+                    (bool) ($data['remember'] ?? true),
+                );
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your credentials were confirmed, but the login confirmation email could not be queued. Please try again.',
+                ], 503);
+            }
+
+            RateLimiter::hit($confirmationThrottleKey, 600);
+            RateLimiter::clear($throttleKey);
+
+            return response()->json([
+                'success' => true,
+                'code' => 'login_confirmation_required',
+                'message' => 'Enter the code sent to your email to complete sign-in.',
+                'requires_login_confirmation' => true,
+                'email_delivery_queued' => true,
+                'login_poll_token' => $pollToken,
+                'email' => $user->email,
+            ], 202);
+        }
+
         RateLimiter::clear($throttleKey);
-        $tokenName = in_array($user->role, ['admin', 'staff']) ? 'admin_token' : 'auth_token';
+        $tokenName = 'admin_token';
         $token = $user->createToken($tokenName)->plainTextToken;
 
         return response()->json([

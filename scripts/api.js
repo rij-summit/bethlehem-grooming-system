@@ -53,6 +53,8 @@ var API = (() => {
   const CUSTOMER_TOKEN_KEY = "customer_token";
   const ADMIN_TOKEN_KEY    = "admin_token";
   const USER_ROLE_KEY      = "user_role";
+  const LOGIN_POLL_TOKEN_KEY = "pending_login_poll_token";
+  const LOGIN_CONFIRMATION_EMAIL_KEY = "pending_login_confirmation_email";
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
   const ADMIN_ONLY_PAGE_NAMES = ["reports.html", "settings.html", "services.html"];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
@@ -153,6 +155,35 @@ var API = (() => {
       safeStorageRemove(localStorage, key);
       safeStorageRemove(sessionStorage, key);
     });
+    clearPendingLoginConfirmation();
+  }
+
+  function clearPendingLoginConfirmation() {
+    safeStorageRemove(sessionStorage, LOGIN_POLL_TOKEN_KEY);
+    safeStorageRemove(sessionStorage, LOGIN_CONFIRMATION_EMAIL_KEY);
+  }
+
+  function storePendingLoginConfirmation(pollToken, email = "") {
+    if (!pollToken) {
+      throw new Error("The server did not return a valid login confirmation.");
+    }
+
+    clearAuthStorage();
+    try {
+      sessionStorage.setItem(LOGIN_POLL_TOKEN_KEY, pollToken);
+      sessionStorage.setItem(LOGIN_CONFIRMATION_EMAIL_KEY, email);
+    } catch (error) {
+      clearPendingLoginConfirmation();
+      throw error;
+    }
+  }
+
+  function hasPendingLoginConfirmation() {
+    return !!safeStorageGet(sessionStorage, LOGIN_POLL_TOKEN_KEY);
+  }
+
+  function getPendingLoginConfirmationEmail() {
+    return safeStorageGet(sessionStorage, LOGIN_CONFIRMATION_EMAIL_KEY) || "";
   }
 
   function setAuthSession(token, role, remember = true) {
@@ -534,8 +565,8 @@ var API = (() => {
   async function register(payload) {
     // POST /api/register
     // payload: { first_name, last_name, username?, email, phone, password, password_confirmation }
-    // Registration never establishes a browser session. A customer must
-    // verify their address and then explicitly sign in.
+    // Registration establishes a browser session only after the customer
+    // follows the verification link sent to their email address.
     return request("POST", "/register", payload);
   }
 
@@ -546,7 +577,17 @@ var API = (() => {
     // the session dies when the tab closes.
     const normalized = normalizePhoneLikeIdentifier(identifier);
     const resolvedIdentifier = normalized || identifier;
-    const data = await request("POST", "/sign-in", { identifier: resolvedIdentifier, password });
+    const data = await request("POST", "/sign-in", {
+      identifier: resolvedIdentifier,
+      password,
+      remember,
+    });
+
+    if (data?.requires_login_confirmation) {
+      storePendingLoginConfirmation(data?.login_poll_token, data?.email);
+      return data;
+    }
+
     const role = data?.user?.role;
     if (role === "customer") clearBookingDraft();
     setAuthSession(data?.token, role, isAdminRole(role) ? true : remember);
@@ -555,14 +596,61 @@ var API = (() => {
 
   async function verifyEmail(token) {
     // POST /api/email/verify  { token }
-    // Verification activates the account but deliberately does not establish
-    // a browser session. The customer signs in explicitly afterward.
-    return request("POST", "/email/verify", { token });
+    // Successful customer signup verification also establishes the first
+    // authenticated browser session.
+    const data = await request("POST", "/email/verify", { token });
+    if (data?.token && data?.user?.role === "customer") {
+      clearBookingDraft();
+      setAuthSession(data.token, "customer", true);
+    }
+    return data;
   }
 
   async function resendVerification(email) {
     // POST /api/email/resend  { email }
     return request("POST", "/email/resend", { email });
+  }
+
+  async function confirmLoginCode(code) {
+    const pollToken = safeStorageGet(sessionStorage, LOGIN_POLL_TOKEN_KEY);
+    if (!pollToken) {
+      throw new Error("This browser no longer has a pending sign-in. Please sign in again.");
+    }
+
+    try {
+      const data = await request("POST", "/email/login/confirm", {
+        poll_token: pollToken,
+        code,
+      });
+
+      if (!data?.token || data?.user?.role !== "customer") {
+        throw new Error("The server returned an invalid customer session.");
+      }
+
+      clearBookingDraft();
+      setAuthSession(data?.token, "customer", data?.remember_me !== false);
+
+      // Acknowledge only after the browser has stored the session. Failure is
+      // non-fatal: the approved challenge remains retryable until it expires.
+      try {
+        await request(
+          "POST",
+          "/email/login/complete",
+          { poll_token: pollToken },
+          data.token,
+          { suppressAuthRedirect: true },
+        );
+      } catch {
+        // The authenticated session is already safely stored.
+      }
+
+      return data;
+    } catch (error) {
+      if (error?.expired || error?.status === 403 || error?.status === 429) {
+        clearPendingLoginConfirmation();
+      }
+      throw error;
+    }
   }
 
   async function logout(role = null) {
@@ -1680,5 +1768,9 @@ var API = (() => {
     // Email verification
     verifyEmail,
     resendVerification,
+    confirmLoginCode,
+    hasPendingLoginConfirmation,
+    getPendingLoginConfirmationEmail,
+    clearPendingLoginConfirmation,
   };
 })();

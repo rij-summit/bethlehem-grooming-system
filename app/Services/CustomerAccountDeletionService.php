@@ -61,6 +61,7 @@ class CustomerAccountDeletionService
             DB::table('users')->where('user_id', $customer->user_id)->update($updates);
 
             $this->deletePendingRegistration($originalEmail, $originalPhone);
+            $this->deleteWhere('login_email_challenges', ['user_id' => $customer->user_id]);
             $this->deletePersonalAccess($customer);
             $this->deleteWhere('sessions', ['user_id' => $customer->user_id]);
 

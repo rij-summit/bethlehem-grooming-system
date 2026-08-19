@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\LoginEmailChallenge;
 use App\Models\PendingCustomerRegistration;
 use App\Models\User;
+use App\Notifications\ConfirmLoginNotification;
 use App\Notifications\VerifyEmailNotification;
 use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Database\Schema\Blueprint;
@@ -49,6 +51,17 @@ class EmailVerificationTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('login_email_challenges', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('user_id')->unique();
+            $table->string('token_hash', 64)->unique();
+            $table->string('poll_token_hash', 64)->nullable()->unique();
+            $table->boolean('remember_me')->default(true);
+            $table->timestamp('expires_at')->index();
+            $table->timestamp('approved_at')->nullable()->index();
+            $table->timestamps();
+        });
+
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
             $table->string('tokenable_type');
@@ -66,6 +79,7 @@ class EmailVerificationTest extends TestCase
     protected function tearDown(): void
     {
         Schema::dropIfExists('personal_access_tokens');
+        Schema::dropIfExists('login_email_challenges');
         Schema::dropIfExists('pending_customer_registrations');
         Schema::dropIfExists('users');
 
@@ -106,7 +120,7 @@ class EmailVerificationTest extends TestCase
         );
     }
 
-    public function test_verification_creates_the_customer_account_and_removes_pending_registration(): void
+    public function test_verification_creates_the_customer_account_and_logs_it_in(): void
     {
         Notification::fake();
 
@@ -117,16 +131,18 @@ class EmailVerificationTest extends TestCase
         $this->postJson('/api/email/verify', ['token' => $plainToken])
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonMissingPath('token');
+            ->assertJsonPath('user.email', 'new.customer@example.test')
+            ->assertJsonPath('user.role', 'customer')
+            ->assertJsonStructure(['token']);
 
         $this->assertDatabaseCount('pending_customer_registrations', 0);
         $user = User::where('email', 'new.customer@example.test')->firstOrFail();
         $this->assertNotNull($user->email_verified_at);
         $this->assertTrue(Hash::check('strong-password', $user->password_hash));
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
-    public function test_verification_marks_an_active_customer_verified_without_logging_them_in(): void
+    public function test_verification_marks_an_active_customer_verified_and_logs_them_in(): void
     {
         $plainToken = str_repeat('a', 64);
         $user = User::factory()->unverified()->create([
@@ -137,14 +153,14 @@ class EmailVerificationTest extends TestCase
         $this->postJson('/api/email/verify', ['token' => $plainToken])
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonMissingPath('token')
-            ->assertJsonMissingPath('user');
+            ->assertJsonPath('user.user_id', $user->user_id)
+            ->assertJsonStructure(['token']);
 
         $user->refresh();
         $this->assertNotNull($user->email_verified_at);
         $this->assertNull($user->email_verification_token);
         $this->assertNull($user->email_verification_expires_at);
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
     public function test_registration_remains_recoverable_when_notification_queueing_fails(): void
@@ -271,11 +287,355 @@ class EmailVerificationTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    public function test_verified_customer_login_requires_and_consumes_an_email_challenge(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->create([
+            'email' => 'login-confirmation@example.test',
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => $user->email,
+            'password' => 'strong-password',
+            'remember' => false,
+        ]);
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('code', 'login_confirmation_required')
+            ->assertJsonPath('requires_login_confirmation', true)
+            ->assertJsonPath('email_delivery_queued', true)
+            ->assertJsonStructure(['login_poll_token'])
+            ->assertJsonMissingPath('token')
+            ->assertJsonMissingPath('user');
+
+        $code = $this->loginCodeSentTo($user);
+        $plainPollToken = $response->json('login_poll_token');
+        $this->assertIsString($plainPollToken);
+        $this->assertSame(64, strlen($plainPollToken));
+        $challenge = LoginEmailChallenge::where('user_id', $user->user_id)->firstOrFail();
+        $this->assertSame(
+            hash_hmac('sha256', $code, $plainPollToken),
+            $challenge->token_hash,
+        );
+        $this->assertNotSame($code, $challenge->token_hash);
+        $this->assertSame(hash('sha256', $plainPollToken), $challenge->poll_token_hash);
+        $this->assertNotSame($plainPollToken, $challenge->poll_token_hash);
+        $this->assertFalse($challenge->remember_me);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        $firstSessionResponse = $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ]);
+        $firstSessionResponse
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('approved', true)
+            ->assertJsonPath('session_established', true)
+            ->assertJsonPath('remember_me', false)
+            ->assertJsonPath('user.user_id', $user->user_id)
+            ->assertJsonPath('user.role', 'customer')
+            ->assertJsonStructure(['token']);
+
+        $this->assertNotNull($challenge->fresh()->approved_at);
+        $this->assertDatabaseCount('login_email_challenges', 1);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+
+        // A dropped first response remains recoverable until the browser
+        // acknowledges that it safely stored the returned session.
+        $secondSessionResponse = $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ]);
+        $secondSessionResponse
+            ->assertOk()
+            ->assertJsonPath('approved', true)
+            ->assertJsonStructure(['token']);
+        $this->assertDatabaseCount('login_email_challenges', 1);
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+
+        $this->withToken($secondSessionResponse->json('token'))
+            ->postJson('/api/email/login/complete', [
+                'poll_token' => $plainPollToken,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseCount('login_email_challenges', 0);
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonMissingPath('token');
+    }
+
+    public function test_login_confirmation_email_is_distinct_from_signup_verification(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create([
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $this->postJson('/api/sign-in', [
+            'identifier' => $user->email,
+            'password' => 'strong-password',
+        ])->assertAccepted();
+
+        Notification::assertSentTo(
+            $user,
+            ConfirmLoginNotification::class,
+            function (ConfirmLoginNotification $notification) use ($user): bool {
+                $message = $notification->toMail($user);
+
+                $this->assertSame(
+                    'Your Sign-In Code - Bethlehem Animal Clinic',
+                    $message->subject,
+                );
+                $this->assertNull($message->actionText);
+                $this->assertNull($message->actionUrl);
+                $this->assertMatchesRegularExpression('/^\d{6}$/', $notification->code);
+                $this->assertStringContainsString(
+                    "**{$notification->code}**",
+                    implode(' ', $message->introLines),
+                );
+                $this->assertMatchesRegularExpression(
+                    '/<strong\b[^>]*>'.preg_quote($notification->code, '/').'<\/strong>/',
+                    (string) $message->render(),
+                );
+                $this->assertStringNotContainsString(
+                    'verify your email address',
+                    strtolower(implode(' ', $message->introLines)),
+                );
+
+                return true;
+            },
+        );
+    }
+
+    public function test_incorrect_login_code_keeps_the_challenge_available(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create([
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => $user->email,
+            'password' => 'strong-password',
+        ])->assertAccepted();
+
+        $correctCode = $this->loginCodeSentTo($user);
+        $incorrectCode = $correctCode === '000000' ? '000001' : '000000';
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $response->json('login_poll_token'),
+            'code' => $incorrectCode,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'login_code_invalid')
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseHas('login_email_challenges', [
+            'user_id' => $user->user_id,
+            'approved_at' => null,
+        ]);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_login_code_is_bound_to_the_original_browser_token(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create([
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $this->postJson('/api/sign-in', [
+            'identifier' => $user->email,
+            'password' => 'strong-password',
+        ])->assertAccepted();
+        $code = $this->loginCodeSentTo($user);
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => str_repeat('x', 64),
+            'code' => $code,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'login_code_invalid')
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseHas('login_email_challenges', [
+            'user_id' => $user->user_id,
+            'approved_at' => null,
+        ]);
+    }
+
+    public function test_login_code_preserves_leading_zeroes(): void
+    {
+        $code = '012345';
+        $plainPollToken = str_repeat('p', 64);
+        $user = User::factory()->create();
+        LoginEmailChallenge::create([
+            'user_id' => $user->user_id,
+            'token_hash' => hash_hmac('sha256', $code, $plainPollToken),
+            'poll_token_hash' => hash('sha256', $plainPollToken),
+            'remember_me' => true,
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ])
+            ->assertOk()
+            ->assertJsonPath('session_established', true)
+            ->assertJsonStructure(['token']);
+    }
+
+    public function test_login_code_is_locked_after_five_incorrect_attempts(): void
+    {
+        $plainPollToken = str_repeat('l', 64);
+        $user = User::factory()->create();
+        LoginEmailChallenge::create([
+            'user_id' => $user->user_id,
+            'token_hash' => hash_hmac('sha256', '123456', $plainPollToken),
+            'poll_token_hash' => hash('sha256', $plainPollToken),
+            'remember_me' => true,
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        foreach (range(1, 4) as $attempt) {
+            $this->postJson('/api/email/login/confirm', [
+                'poll_token' => $plainPollToken,
+                'code' => '000000',
+            ])->assertStatus(422);
+        }
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => '000000',
+        ])
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'login_code_locked')
+            ->assertJsonMissingPath('token');
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => '123456',
+        ])->assertStatus(429);
+
+        $this->assertDatabaseHas('login_email_challenges', [
+            'user_id' => $user->user_id,
+            'approved_at' => null,
+        ]);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_expired_login_confirmation_cannot_create_a_session(): void
+    {
+        $code = '123456';
+        $plainPollToken = str_repeat('e', 64);
+        $user = User::factory()->create();
+        LoginEmailChallenge::create([
+            'user_id' => $user->user_id,
+            'token_hash' => hash_hmac('sha256', $code, $plainPollToken),
+            'poll_token_hash' => hash('sha256', $plainPollToken),
+            'remember_me' => true,
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('expired', true)
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseCount('login_email_challenges', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_disabled_customer_cannot_consume_a_login_confirmation(): void
+    {
+        $code = '654321';
+        $plainPollToken = str_repeat('f', 64);
+        $user = User::factory()->create(['is_active' => false]);
+        LoginEmailChallenge::create([
+            'user_id' => $user->user_id,
+            'token_hash' => hash_hmac('sha256', $code, $plainPollToken),
+            'poll_token_hash' => hash('sha256', $plainPollToken),
+            'remember_me' => true,
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $plainPollToken,
+            'code' => $code,
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'account_disabled')
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseCount('login_email_challenges', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_failed_login_confirmation_queueing_does_not_leave_a_challenge(): void
+    {
+        $user = User::factory()->create([
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+        $this->mock(Dispatcher::class, function ($mock) {
+            $mock->shouldReceive('send')
+                ->once()
+                ->andThrow(new \RuntimeException('Queue unavailable'));
+        });
+
+        $this->postJson('/api/sign-in', [
+            'identifier' => $user->email,
+            'password' => 'strong-password',
+        ])
+            ->assertStatus(503)
+            ->assertJsonPath('success', false)
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseCount('login_email_challenges', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_privileged_login_still_completes_after_password_confirmation(): void
+    {
+        Notification::fake();
+        $staff = User::factory()->create([
+            'role' => 'staff',
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $this->postJson('/api/sign-in', [
+            'identifier' => $staff->email,
+            'password' => 'strong-password',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.role', 'staff')
+            ->assertJsonStructure(['token'])
+            ->assertJsonMissingPath('requires_login_confirmation');
+
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('login_email_challenges', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
     public function test_sign_in_keeps_other_sessions_and_logout_revokes_only_current_token(): void
     {
         $user = User::factory()->create([
             'email' => 'sessions@example.test',
             'password_hash' => Hash::make('strong-password'),
+            'role' => 'admin',
         ]);
 
         $firstToken = $this->postJson('/api/sign-in', [
@@ -316,6 +676,7 @@ class EmailVerificationTest extends TestCase
 
     public function test_sign_in_accepts_the_documented_plus_63_phone_format(): void
     {
+        Notification::fake();
         $user = User::factory()->create([
             'phone' => '09171234567',
             'password_hash' => Hash::make('strong-password'),
@@ -325,12 +686,18 @@ class EmailVerificationTest extends TestCase
             'identifier' => '+63'.substr($user->phone, 1),
             'password' => 'strong-password',
         ])
-            ->assertOk()
-            ->assertJsonPath('user.user_id', $user->user_id);
+            ->assertAccepted()
+            ->assertJsonPath('code', 'login_confirmation_required')
+            ->assertJsonMissingPath('token');
+
+        $this->assertDatabaseHas('login_email_challenges', [
+            'user_id' => $user->user_id,
+        ]);
     }
 
     public function test_sign_in_throttling_cannot_globally_lock_out_an_identifier(): void
     {
+        Notification::fake();
         $user = User::factory()->create([
             'password_hash' => Hash::make('strong-password'),
         ]);
@@ -355,7 +722,8 @@ class EmailVerificationTest extends TestCase
                 'identifier' => $user->email,
                 'password' => 'strong-password',
             ])
-            ->assertOk();
+            ->assertAccepted()
+            ->assertJsonPath('requires_login_confirmation', true);
     }
 
     public function test_resend_is_generic_and_rotates_to_a_hashed_token_for_active_users(): void
@@ -477,5 +845,25 @@ class EmailVerificationTest extends TestCase
         $this->assertArrayHasKey('token', $fragment);
 
         return $fragment['token'];
+    }
+
+    private function loginCodeSentTo(User $user): string
+    {
+        $code = null;
+
+        Notification::assertSentTo(
+            $user,
+            ConfirmLoginNotification::class,
+            function (ConfirmLoginNotification $notification) use (&$code) {
+                $code = $notification->code;
+
+                return true;
+            },
+        );
+
+        $this->assertIsString($code);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $code);
+
+        return $code;
     }
 }

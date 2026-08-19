@@ -14,10 +14,11 @@ use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\GroomingClinicReferralController;
 use App\Http\Controllers\GroomingStoppedPaymentReviewController;
 use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\EmailVerificationController;
+use App\Http\Controllers\LoginEmailChallengeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PetController;
@@ -30,11 +31,13 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WalkinController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register',      [AuthController::class, 'register'])->middleware('throttle:5,1');
-Route::post('/sign-in',       [AuthController::class, 'signIn']);
-Route::post('/email/verify',  [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
-Route::post('/email/resend',  [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
-Route::post('/chatbot',       [ChatbotController::class, 'chat']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/sign-in', [AuthController::class, 'signIn']);
+Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
+Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
+Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])
+    ->middleware('throttle:10,1');
+Route::post('/chatbot', [ChatbotController::class, 'chat']);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots', [BookingController::class,   'getTimeslots']);
@@ -57,6 +60,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/email/login/complete', [LoginEmailChallengeController::class, 'complete']);
     Route::get('/me', [AuthController::class, 'me']);
 
     // Pets

@@ -2866,6 +2866,10 @@ video {
   letter-spacing: 0.1em;
 }
 
+.tracking-\[0\.35em\] {
+  letter-spacing: 0.35em;
+}
+
 .text-\[\#0e7490\] {
   --tw-text-opacity: 1;
   color: rgb(14 116 144 / var(--tw-text-opacity, 1));

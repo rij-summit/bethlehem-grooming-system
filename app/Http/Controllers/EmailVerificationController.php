@@ -60,7 +60,7 @@ class EmailVerificationController extends Controller
                     ], 422);
                 }
 
-                User::create([
+                $user = User::create([
                     'first_name' => $pendingRegistration->first_name,
                     'last_name' => $pendingRegistration->last_name,
                     'username' => $pendingRegistration->username,
@@ -75,9 +75,13 @@ class EmailVerificationController extends Controller
                 ]);
                 $pendingRegistration->delete();
 
+                $token = $user->createToken('auth_token')->plainTextToken;
+
                 return response()->json([
                     'success' => true,
-                    'message' => 'Email verified and account registered successfully. You can now sign in.',
+                    'message' => 'Email verified and account registered successfully.',
+                    'token' => $token,
+                    'user' => self::customerPayload($user),
                 ]);
             }
 
@@ -122,12 +126,17 @@ class EmailVerificationController extends Controller
                 'email_verification_expires_at' => null,
             ]);
 
-            // Verification proves email ownership; password authentication
-            // remains a separate, explicit step.
-            return response()->json([
+            $response = [
                 'success' => true,
-                'message' => 'Email verified successfully. You can now sign in.',
-            ]);
+                'message' => 'Email verified successfully.',
+            ];
+
+            if ($user->role === 'customer') {
+                $response['token'] = $user->createToken('auth_token')->plainTextToken;
+                $response['user'] = self::customerPayload($user);
+            }
+
+            return response()->json($response);
         });
     }
 
@@ -224,7 +233,7 @@ class EmailVerificationController extends Controller
         }
     }
 
-    private static function assertMailCanBeDelivered(): void
+    public static function assertMailCanBeDelivered(): void
     {
         if (app()->environment(['local', 'testing'])) {
             return;
@@ -247,5 +256,17 @@ class EmailVerificationController extends Controller
                 'Deployed email verification requires a deliverable mailer, HTTPS FRONTEND_URL, and verified sender.',
             );
         }
+    }
+
+    private static function customerPayload(User $user): array
+    {
+        return [
+            'user_id' => $user->user_id,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'role' => $user->role,
+        ];
     }
 }

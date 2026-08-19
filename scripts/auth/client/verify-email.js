@@ -1,7 +1,5 @@
 // Connected to pages/client/verify-email.html
-// Handles two scenarios:
-//   1. #token=... (or legacy ?token=...) → auto-verify, then require an explicit sign-in
-//   2. No token           → show "check your email" pending state with resend form
+// Handles signup verification, login confirmation, and the signup pending state.
 
 document.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) window.lucide.createIcons();
@@ -9,33 +7,48 @@ document.addEventListener("DOMContentLoaded", () => {
   const stateVerifying = document.getElementById("stateVerifying");
   const stateSuccess   = document.getElementById("stateSuccess");
   const statePending   = document.getElementById("statePending");
+  const stateLoginCode = document.getElementById("stateLoginCode");
   const stateError     = document.getElementById("stateError");
   const resendSection  = document.getElementById("resendSection");
+  const successTitle   = document.getElementById("successTitle");
+  const successMessage = document.getElementById("successMessage");
+  const errorTitle     = document.getElementById("errorTitle");
   const errorMessage   = document.getElementById("errorMessage");
   const pendingEmail   = document.getElementById("pendingEmail");
   const pendingLead    = document.getElementById("pendingLead");
   const pendingAction  = document.getElementById("pendingAction");
+  const loginCodeEmail = document.getElementById("loginCodeEmail");
+  const loginCodeForm  = document.getElementById("loginCodeForm");
+  const loginCodeInput = document.getElementById("loginCode");
+  const loginCodeSubmit = document.getElementById("loginCodeSubmit");
+  const loginCodeMessage = document.getElementById("loginCodeMessage");
   const resendEmail    = document.getElementById("resendEmail");
   const resendForm     = document.getElementById("resendForm");
   const resendSubmit   = document.getElementById("resendSubmit");
   const resendMessage  = document.getElementById("resendMessage");
 
   function showState(name) {
-    [stateVerifying, stateSuccess, statePending, stateError].forEach(el => el.classList.add("hidden"));
-    const el = { verifying: stateVerifying, success: stateSuccess, pending: statePending, error: stateError }[name];
-    if (el) el.classList.remove("hidden");
+    [stateVerifying, stateSuccess, statePending, stateLoginCode, stateError]
+      .forEach((element) => element.classList.add("hidden"));
+    const element = {
+      verifying: stateVerifying,
+      success: stateSuccess,
+      pending: statePending,
+      loginCode: stateLoginCode,
+      error: stateError,
+    }[name];
+    if (element) element.classList.remove("hidden");
     if (window.lucide) window.lucide.createIcons();
   }
 
   const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
   const queryParams = new URLSearchParams(window.location.search);
-  // New verification links keep credentials in the fragment so they are not
-  // sent in the initial HTTP request. Query tokens remain supported for links
-  // generated before that change.
-  const token = fragmentParams.get("token") || queryParams.get("token");
+  const verificationToken = fragmentParams.get("token")
+    || queryParams.get("token");
+  const loginCodeMode = queryParams.get("mode") === "login";
 
-  if (token) {
-    // Verification tokens are credentials. Remove them from the address bar
+  if (verificationToken) {
+    // Authentication links are credentials. Remove them from the address bar
     // and browser history before making any network request.
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("token");
@@ -47,33 +60,41 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  // ── Scenario 1: token in URL → auto-verify ───────────────────────────────
-
-  if (token) {
+  if (verificationToken) {
     showState("verifying");
 
     (async () => {
       try {
-        await API.verifyEmail(token);
-
+        await API.verifyEmail(verificationToken);
         showState("success");
         setTimeout(() => {
-          window.location.replace("./sign-in.html?verified=1");
-        }, 2000);
-      } catch (err) {
+          window.location.replace("./dashboard.html");
+        }, 1500);
+      } catch (error) {
         showState("error");
-        if (err.expired) {
+        if (error.expired) {
           errorMessage.textContent = "This verification link has expired. Enter your email below to get a new one.";
-          if (err.email) resendEmail.value = err.email;
+          if (error.email) resendEmail.value = error.email;
         } else {
-          errorMessage.textContent = err.message || "The verification link is invalid or has already been used.";
+          errorMessage.textContent = error.message
+            || "The verification link is invalid or has already been used.";
         }
         resendSection.classList.remove("hidden");
       }
     })();
+  } else if (loginCodeMode) {
+    document.title = "Confirm Sign-In | Bethlehem Animal Clinic";
 
-  // ── Scenario 2: no token → show pending / check-email state ──────────────
-
+    if (!API.hasPendingLoginConfirmation()) {
+      errorTitle.textContent = "Sign-In Request Unavailable";
+      errorMessage.textContent = "This browser no longer has a pending sign-in. Please return to sign in and try again.";
+      showState("error");
+    } else {
+      const email = API.getPendingLoginConfirmationEmail();
+      loginCodeEmail.textContent = email || "your registered email";
+      showState("loginCode");
+      loginCodeInput.focus();
+    }
   } else {
     const savedEmail = sessionStorage.getItem("pendingVerificationEmail");
     const deliveryFailed = sessionStorage.getItem("pendingVerificationDeliveryFailed") === "1";
@@ -98,10 +119,45 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ── Resend form ───────────────────────────────────────────────────────────
+  loginCodeInput.addEventListener("input", () => {
+    loginCodeInput.value = loginCodeInput.value.replace(/\D/g, "").slice(0, 6);
+    loginCodeSubmit.disabled = loginCodeInput.value.length !== 6;
+    clearLoginCodeMessage();
+  });
 
-  resendForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  loginCodeForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearLoginCodeMessage();
+
+    const code = loginCodeInput.value;
+    if (!/^\d{6}$/.test(code)) return;
+
+    setLoginCodeBusy(true);
+
+    try {
+      await API.confirmLoginCode(code);
+      successTitle.textContent = "Sign-In Confirmed!";
+      successMessage.textContent = "Redirecting you to your account…";
+      showState("success");
+      setTimeout(() => {
+        window.location.replace("./dashboard.html");
+      }, 750);
+    } catch (error) {
+      if (error.expired || error.status === 403 || error.status === 429) {
+        errorTitle.textContent = "Sign-In Confirmation Failed";
+        errorMessage.textContent = error.message
+          || "This sign-in request is no longer available. Please sign in again.";
+        showState("error");
+      } else {
+        showLoginCodeMessage(error.message || "Unable to confirm sign-in. Please try again.");
+      }
+    } finally {
+      setLoginCodeBusy(false);
+    }
+  });
+
+  resendForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
     clearResendMessage();
 
     const email = resendEmail.value.trim();
@@ -112,11 +168,11 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await API.resendVerification(email);
       showResendMessage("success", "Verification email sent! Check your inbox (and spam folder).");
-    } catch (err) {
-      if (err.status === 429) {
-        showResendMessage("error", err.message || "Too many requests. Please wait before trying again.");
+    } catch (error) {
+      if (error.status === 429) {
+        showResendMessage("error", error.message || "Too many requests. Please wait before trying again.");
       } else {
-        showResendMessage("error", err.message || "Failed to resend. Please try again.");
+        showResendMessage("error", error.message || "Failed to resend. Please try again.");
       }
     } finally {
       setResendBusy(false);
@@ -129,10 +185,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if (label) label.textContent = busy ? "Sending…" : "Resend Verification Email";
   }
 
+  function setLoginCodeBusy(busy) {
+    loginCodeInput.disabled = busy;
+    loginCodeSubmit.disabled = busy || loginCodeInput.value.length !== 6;
+    const label = document.getElementById("loginCodeBtnLabel");
+    if (label) label.textContent = busy ? "Confirming…" : "Confirm Sign-In";
+  }
+
+  function showLoginCodeMessage(text) {
+    loginCodeMessage.className = "mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+    loginCodeMessage.textContent = text;
+    loginCodeMessage.classList.remove("hidden");
+  }
+
+  function clearLoginCodeMessage() {
+    loginCodeMessage.className = "mt-3 hidden rounded-2xl border px-4 py-3 text-sm";
+    loginCodeMessage.textContent = "";
+  }
+
   function showResendMessage(type, text) {
     const styles = {
       success: "border-green-200 bg-green-50 text-green-700",
-      error:   "border-red-200 bg-red-50 text-red-700",
+      error: "border-red-200 bg-red-50 text-red-700",
     };
     resendMessage.className = `mt-3 rounded-2xl border px-4 py-3 text-sm ${styles[type] || styles.error}`;
     resendMessage.textContent = text;
