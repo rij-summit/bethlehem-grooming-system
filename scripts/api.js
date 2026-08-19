@@ -1106,6 +1106,15 @@ var API = (() => {
     return request("POST", `/admin/customers/unregistered/${customerId}/archive`, null, getAdminToken());
   }
 
+  async function deleteUnregisteredCustomer(customerId, confirmationName) {
+    return request(
+      "DELETE",
+      `/admin/customers/unregistered/${customerId}`,
+      { confirmation_name: confirmationName },
+      getAdminToken(),
+    );
+  }
+
   async function searchWalkInCustomers(search = "") {
     const params = new URLSearchParams({ q: String(search).trim() });
     return request("GET", `/admin/walk-in/customers?${params.toString()}`, null, getAdminToken());
@@ -1138,6 +1147,15 @@ var API = (() => {
   async function unarchiveCustomer(customerId) {
     // POST /api/admin/customers/{id}/unarchive  (protected — admin token)
     return request("POST", `/admin/customers/${customerId}/unarchive`, null, getAdminToken());
+  }
+
+  async function deleteCustomer(customerId, confirmationName) {
+    return request(
+      "DELETE",
+      `/admin/customers/${customerId}`,
+      { confirmation_name: confirmationName },
+      getAdminToken(),
+    );
   }
 
   async function adminArchiveBooking(bookingId) {
@@ -1593,12 +1611,14 @@ var API = (() => {
     createUnregisteredCustomer,
     getUnregisteredCustomerDetails,
     archiveUnregisteredCustomer,
+    deleteUnregisteredCustomer,
     searchWalkInCustomers,
     validateWalkInNewOwner,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,
     unarchiveCustomer,
+    deleteCustomer,
     // Admin archive
     adminArchiveBooking,
     getArchivedBookings,

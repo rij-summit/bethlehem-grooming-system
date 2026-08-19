@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Pet;
 use App\Models\UnregisteredCustomer;
 use App\Models\User;
+use App\Services\CustomerAccountDeletionService;
 use App\Services\CustomerIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -181,6 +182,7 @@ class CustomerController extends Controller
     private function queryUnregisteredCustomers(string $search, bool $archived)
     {
         $query = UnregisteredCustomer::query()
+            ->availableCustomer()
             ->with('pets')
             ->where('is_archived', $archived);
 
@@ -251,7 +253,7 @@ class CustomerController extends Controller
     {
         $this->requireAdminOrStaff($request);
 
-        $customer = UnregisteredCustomer::query()->with('pets')->find($id);
+        $customer = UnregisteredCustomer::query()->availableCustomer()->with('pets')->find($id);
 
         if (! $customer) {
             return response()->json(['success' => false, 'message' => 'Unregistered customer not found.'], 404);
@@ -265,13 +267,7 @@ class CustomerController extends Controller
 
     private function formatUnregisteredCustomer(UnregisteredCustomer $customer): array
     {
-        $middleName = trim((string) $customer->middle_name);
-        $displayMiddleName = $middleName !== '' ? rtrim($middleName, '.').'.' : '';
-        $fullName = trim(implode(' ', array_filter([
-            $customer->first_name,
-            $displayMiddleName,
-            $customer->last_name,
-        ])));
+        $fullName = $this->unregisteredCustomerFullName($customer);
 
         $pets = $customer->relationLoaded('pets')
             ? $customer->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values()
@@ -298,6 +294,18 @@ class CustomerController extends Controller
             'archivedAt' => $customer->archived_at,
             'joinedAt' => $customer->created_at,
         ];
+    }
+
+    private function unregisteredCustomerFullName(UnregisteredCustomer $customer): string
+    {
+        $middleName = trim((string) $customer->middle_name);
+        $displayMiddleName = $middleName !== '' ? rtrim($middleName, '.').'.' : '';
+
+        return trim(implode(' ', array_filter([
+            $customer->first_name,
+            $displayMiddleName,
+            $customer->last_name,
+        ])));
     }
 
     private function formatPet(Pet $pet): array
@@ -378,7 +386,7 @@ class CustomerController extends Controller
     {
         $this->requireAdminOrStaff($request);
 
-        $customer = UnregisteredCustomer::query()->find($id);
+        $customer = UnregisteredCustomer::query()->availableCustomer()->find($id);
         if (! $customer) {
             return response()->json(['success' => false, 'message' => 'Unregistered customer not found.'], 404);
         }
@@ -441,6 +449,7 @@ class CustomerController extends Controller
         ]);
 
         $unregisteredQuery = UnregisteredCustomer::query()
+            ->availableCustomer()
             ->with(['pets' => fn ($query) => $query->where('is_archived', false)])
             ->where('is_archived', false);
         $applySearch($unregisteredQuery);
@@ -473,7 +482,7 @@ class CustomerController extends Controller
                             ->where('is_archived', false);
                     })
                     ->orWhereHas('unregisteredCustomer', function ($customerQuery) {
-                        $customerQuery->where('is_archived', false);
+                        $customerQuery->availableCustomer()->where('is_archived', false);
                     });
             })
             ->orderBy('pet_name')
@@ -547,6 +556,7 @@ class CustomerController extends Controller
             ]);
 
         $unregisteredCustomers = UnregisteredCustomer::query()
+            ->availableCustomer()
             ->where('is_archived', false)
             ->where(function ($customerQuery) use ($search, $nameTerms) {
                 $customerQuery->where('phone', 'like', "%{$search}%")
@@ -591,7 +601,9 @@ class CustomerController extends Controller
             ->where(function ($ownerQuery) {
                 $ownerQuery
                     ->whereHas('user', fn ($userQuery) => $userQuery->registeredCustomer())
-                    ->orWhereHas('unregisteredCustomer', fn ($customerQuery) => $customerQuery->where('is_archived', false));
+                    ->orWhereHas('unregisteredCustomer', fn ($customerQuery) => $customerQuery
+                        ->availableCustomer()
+                        ->where('is_archived', false));
             })
             ->orderBy('pet_name')
             ->orderBy('pet_id')
@@ -800,5 +812,69 @@ class CustomerController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Customer account unarchived and reactivated.']);
+    }
+
+    // DELETE /api/admin/customers/{id}
+    public function destroy(
+        Request $request,
+        CustomerAccountDeletionService $deletionService,
+        $id,
+    ) {
+        $this->requireAdminOrStaff($request);
+
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+        }
+
+        $fullName = trim($user->first_name.' '.$user->last_name);
+        $this->validateDeletionConfirmation($request, $fullName);
+        $deletionService->deleteRegisteredCustomer($user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Customer account deleted. Historical owner, pet, grooming, and clinic records were retained.',
+        ]);
+    }
+
+    // DELETE /api/admin/customers/unregistered/{id}
+    public function destroyUnregistered(
+        Request $request,
+        CustomerAccountDeletionService $deletionService,
+        $id,
+    ) {
+        $this->requireAdminOrStaff($request);
+
+        $customer = UnregisteredCustomer::query()->availableCustomer()->find($id);
+        if (! $customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unregistered customer not found.',
+            ], 404);
+        }
+
+        $this->validateDeletionConfirmation(
+            $request,
+            $this->unregisteredCustomerFullName($customer),
+        );
+        $deletionService->deleteUnregisteredCustomer($customer);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Customer account deleted. Historical owner, pet, grooming, and clinic records were retained.',
+        ]);
+    }
+
+    private function validateDeletionConfirmation(Request $request, string $fullName): void
+    {
+        $validated = $request->validate([
+            'confirmation_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        if (! hash_equals($fullName, $validated['confirmation_name'])) {
+            throw ValidationException::withMessages([
+                'confirmation_name' => 'The name must exactly match '.$fullName.'.',
+            ]);
+        }
     }
 }

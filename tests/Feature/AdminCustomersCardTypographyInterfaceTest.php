@@ -15,7 +15,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             $page,
         );
         $this->assertStringContainsString(
-            '<h3 class="text-xl font-bold text-[#1f3850]" x-text="detailModal.customer?.fullName || \'Customer Details\'"></h3>',
+            '<h3 class="truncate text-2xl font-bold" x-text="detailModal.customer?.fullName || \'Customer Details\'"></h3>',
             $page,
         );
         $this->assertStringContainsString(
@@ -81,9 +81,9 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertStringNotContainsString("confirmAction('deactivate', customer)", $ownerCard);
 
         $this->assertStringContainsString('<!-- Account actions below the registered pets -->', $detailsModal);
-        $this->assertStringContainsString('<footer x-show="isAdmin && detailModal.customer?.recordType !== \'unregistered\'" aria-label="Account actions"', $detailsModal);
+        $this->assertStringContainsString('<footer x-show="detailModal.customer?.recordType !== \'unregistered\'" aria-label="Account actions"', $detailsModal);
         $this->assertStringContainsString(
-            '<h4 class="mb-4 text-lg font-semibold text-[#1f3850]">Account actions</h4>',
+            '<h4 class="mb-3 text-lg font-semibold text-[#1f3850]">Account actions</h4>',
             $detailsModal,
         );
         $this->assertStringNotContainsString('divide-y divide-slate-200', $detailsModal);
@@ -102,6 +102,8 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             "confirmAction('archive', detailModal.customer)",
             "confirmAction('reactivate', detailModal.customer)",
             "confirmAction('unarchive', detailModal.customer)",
+            "confirmAction('delete', detailModal.customer)",
+            "confirmAction('delete_unregistered', detailModal.customer)",
         ] as $action) {
             $this->assertStringContainsString($action, $detailsModal);
         }
@@ -113,10 +115,70 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertNotFalse($actionsPosition);
         $this->assertGreaterThan($petsPosition, $actionsPosition);
 
+        $registeredActions = $this->sourceBetween(
+            $detailsModal,
+            '<!-- Account actions below the registered pets -->',
+            'x-show="detailModal.customer?.recordType === \'unregistered\'"',
+        );
+        $archivePosition = strpos($registeredActions, "confirmAction('archive', detailModal.customer)");
+        $deactivatePosition = strpos($registeredActions, "confirmAction('deactivate', detailModal.customer)");
+        $resetPosition = strpos($registeredActions, 'openResetPassword(detailModal.customer)');
+        $deletePosition = strpos($registeredActions, "confirmAction('delete', detailModal.customer)");
+
+        foreach ([$archivePosition, $deactivatePosition, $resetPosition, $deletePosition] as $position) {
+            $this->assertNotFalse($position);
+        }
+        $this->assertLessThan($deactivatePosition, $archivePosition);
+        $this->assertLessThan($resetPosition, $deactivatePosition);
+        $this->assertLessThan($deletePosition, $resetPosition);
+        $this->assertStringContainsString('btn-delete-account', $registeredActions);
+
+        $styles = file_get_contents(base_path('css/custom.css'));
+        $this->assertStringContainsString('.btn-deactivate       { border-color: #f2c46d;', $styles);
+        $this->assertStringContainsString('.btn-delete-account {', $styles);
+        $this->assertStringContainsString('background-color: #b91c1c;', $styles);
+        $this->assertStringContainsString('font-weight: 700;', $styles);
+
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
 
         $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
-        $this->assertStringContainsString('admin-customers.js?v=admin-pet-profile-tabs-20260812', $page);
+        $this->assertStringContainsString('admin-customers.js?v=customer-account-delete-20260819', $page);
+    }
+
+    public function test_delete_account_requires_the_owner_full_name_before_submission(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
+        $api = file_get_contents(base_path('scripts/api.js'));
+        $confirmationModal = $this->sourceBetween(
+            $page,
+            'x-show="confirmModal.open"',
+            '<!-- Add Customer Modal -->',
+        );
+
+        foreach ([
+            'x-model="confirmModal.typedName"',
+            ':disabled="busyId !== null || !deleteConfirmationMatches"',
+            "['delete', 'delete_unregistered'].includes(confirmModal.action)",
+        ] as $confirmationControl) {
+            $this->assertStringContainsString($confirmationControl, $confirmationModal);
+        }
+
+        foreach ([
+            'get deleteConfirmationMatches()',
+            'confirmLabel: "Delete Account"',
+            '=== String(this.confirmModal.customer?.fullName || "")',
+            'API.deleteCustomer(customer.id, this.confirmModal.typedName)',
+            'API.deleteUnregisteredCustomer(customer.id, this.confirmModal.typedName)',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $component);
+        }
+
+        $this->assertStringContainsString('async function deleteCustomer(customerId, confirmationName)', $api);
+        $this->assertStringContainsString('async function deleteUnregisteredCustomer(customerId, confirmationName)', $api);
+        $this->assertStringContainsString('{ confirmation_name: confirmationName }', $api);
+        $this->assertStringContainsString('api.js?v=customer-account-delete-20260819', $page);
+        $this->assertStringNotContainsString('deleteCustomerConfirmationHelp', $confirmationModal);
     }
 
     public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void
@@ -170,7 +232,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            'class="text-xl font-semibold text-[#1f3850]"',
+            'class="truncate text-2xl font-bold"',
             $petModal,
         );
         foreach ([
@@ -189,7 +251,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             $this->assertStringContainsString($profileUi, $petModal);
         }
 
-        $this->assertStringContainsString('Shared pet profile', $petModal);
+        $this->assertStringContainsString('mirrors the customer My Pets profile', $petModal);
         $this->assertStringNotContainsString('<span>Notifications</span>', $petModal);
         $this->assertStringNotContainsString('data-lucide="bell"', $petModal);
     }
@@ -226,7 +288,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         );
 
         foreach ([$ownerModal, $petModal] as $modal) {
-            $this->assertStringContainsString('max-w-6xl', $modal);
+            $this->assertStringContainsString('max-w-8xl', $modal);
             $this->assertStringContainsString('px-6 py-6 sm:px-12 md:px-16', $modal);
             $this->assertStringContainsString('style="height:90vh"', $modal);
         }

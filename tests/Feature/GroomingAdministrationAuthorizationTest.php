@@ -76,6 +76,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->string('password_hash')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('is_archived')->default(false);
+            $table->timestamp('account_deleted_at')->nullable();
         });
 
         Schema::create('unregistered_customers', function (Blueprint $table) {
@@ -88,6 +89,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('created_by_user_id')->nullable();
             $table->boolean('is_archived')->default(false);
             $table->timestamp('archived_at')->nullable();
+            $table->timestamp('account_deleted_at')->nullable();
             $table->timestamps();
         });
 
@@ -590,11 +592,20 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'phone' => '09171234567',
             'role' => 'customer',
         ]);
+        DB::table('unregistered_customers')->insert([
+            'id' => 30,
+            'first_name' => 'Taylor',
+            'last_name' => 'Reyes',
+            'phone' => 'd123456789012345678',
+            'is_archived' => true,
+            'account_deleted_at' => now(),
+        ]);
         DB::table('walkins')->insert([
             'id' => 20,
             'fname' => 'Taylor',
             'lname' => 'Reyes',
             'phone' => '09981234567',
+            'unregistered_customer_id' => 30,
         ]);
         DB::table('time_windows')->insert([
             'window_id' => 1,
@@ -697,6 +708,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                     'queueNumber',
                     'ownerName',
                     'contactNumber',
+                    'ownerAccountDeleted',
+                    'owner_account_deleted',
                     'petName',
                     'petType',
                     'breed',
@@ -827,7 +840,11 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('total', 12)
             ->assertJsonPath('archived.0.id', 12)
             ->assertJsonPath('archived.0.ownerName', 'Taylor Reyes')
-            ->assertJsonPath('archived.0.contactNumber', '09981234567')
+            ->assertJsonPath('archived.0.contactNumber', '—')
+            ->assertJsonPath('archived.0.ownerAccountDeleted', true)
+            ->assertJsonPath('archived.1.ownerName', 'Jamie Santos')
+            ->assertJsonPath('archived.1.contactNumber', '09171234567')
+            ->assertJsonPath('archived.1.ownerAccountDeleted', false)
             ->assertJsonPath('archived.0.bookingReference', 'ARCHIVE-12')
             ->assertJsonPath('archived.0.petName', 'Pet 12')
             ->assertJsonPath('archived.0.petType', 'Dog')

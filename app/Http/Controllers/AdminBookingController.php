@@ -133,7 +133,7 @@ class AdminBookingController extends Controller
             ->where('status', 'waiting_to_arrive');
         $this->withOwnerCardMedicalConcernCounts($incomingQuery);
         $incoming = $incomingQuery
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderByRaw('CASE WHEN booking_date = ? THEN 0 ELSE 1 END', [$rangeStart->toDateString()])
             ->orderBy('booking_date', 'asc')
             ->get()
@@ -160,7 +160,7 @@ class AdminBookingController extends Controller
         $this->retainOwnerCardsWithActiveGroomingPets($queuedQuery);
         $this->withOwnerCardMedicalConcernCounts($queuedQuery);
         $queued = $queuedQuery
-            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
@@ -193,7 +193,7 @@ class AdminBookingController extends Controller
         $this->retainOwnerCardsWithActiveGroomingPets($inProgressQuery);
         $this->withOwnerCardMedicalConcernCounts($inProgressQuery);
         $inProgress = $inProgressQuery
-            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(function ($booking) {
@@ -206,13 +206,13 @@ class AdminBookingController extends Controller
             });
 
         $forPayment = Booking::where('status', 'for_payment')
-            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
-            ->with(['user', 'walkin', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
@@ -1185,7 +1185,7 @@ class AdminBookingController extends Controller
 
         $noShows = Booking::where('booking_date', $today)
             ->where('status', 'no_show')
-            ->with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
@@ -1268,7 +1268,7 @@ class AdminBookingController extends Controller
             ->neverCancelled()
             ->with([
                 'user',
-                'walkin',
+                'walkin.unregisteredCustomer',
                 'timeWindow',
                 'bookingPets.pet',
                 'bookingServices.service',
@@ -1371,6 +1371,7 @@ class AdminBookingController extends Controller
         $paymentSummary ??= $this->paymentReadiness()->summarize($booking);
         $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
         $workflow = app(GroomingBookingWorkflowService::class)->describe($paymentSummary);
+        $ownerAccountDeleted = $this->ownerAccountDeleted($booking);
 
         return [
             // Fields the card templates read directly
@@ -1379,7 +1380,11 @@ class AdminBookingController extends Controller
             'ownerName' => $user
                 ? trim(($user->first_name ?? '').' '.($user->last_name ?? ''))
                 : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : '—'),
-            'contactNumber' => $user?->phone ?? $walkin?->phone ?? '—',
+            'contactNumber' => $ownerAccountDeleted
+                ? '—'
+                : ($user?->phone ?? $walkin?->phone ?? '—'),
+            'ownerAccountDeleted' => $ownerAccountDeleted,
+            'owner_account_deleted' => $ownerAccountDeleted,
             'petName' => $petName,
             'petType' => $petType,
             'breed' => $breed,
@@ -1597,8 +1602,19 @@ class AdminBookingController extends Controller
         $formatted['archivedAt'] = $booking->archived_at
             ? Carbon::parse($booking->archived_at)->format('M j, Y g:i A')
             : '—';
-
         return $formatted;
+    }
+
+    private function ownerAccountDeleted(Booking $booking): bool
+    {
+        $userAttributes = $booking->user?->getAttributes() ?? [];
+        if (($userAttributes['account_deleted_at'] ?? null) !== null) {
+            return true;
+        }
+
+        $unregisteredAttributes = $booking->walkin?->unregisteredCustomer?->getAttributes() ?? [];
+
+        return ($unregisteredAttributes['account_deleted_at'] ?? null) !== null;
     }
 
     private function canUseSettledArchivePaymentSummary(Booking $booking): bool

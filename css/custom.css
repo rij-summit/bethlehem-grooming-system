@@ -796,22 +796,30 @@ body.customer-detail-modal-open {
 .badge-new       { background-color: #e0f2fe; color: #0369a1; }
 
 /* ----- Customer Account Status Actions ----- */
-.btn-deactivate       { border-color: #EF4444; color: #EF4444; }
-.btn-deactivate:hover { background-color: #fef2f2; }
+.btn-deactivate       { border-color: #f2c46d; color: #a16207; background-color: #ffffff; }
+.btn-deactivate:hover { background-color: #fffbeb; }
+.btn-delete-account {
+  border-color: #991b1b;
+  background-color: #b91c1c;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(153, 27, 27, 0.2);
+}
+.btn-delete-account:hover { background-color: #991b1b; }
 .btn-reactivate       { background-color: #2563eb; color: #ffffff; }
 .btn-reactivate:hover { background-color: #1d4ed8; }
 
 /* ----- Confirmation Modal Icons ----- */
-.icon-bg-warn    { background-color: #fee2e2; }
+.icon-bg-warn    { background-color: #fef3c7; }
 .icon-bg-reactivate { background-color: #dbeafe; }
 .icon-bg-success { background-color: #dcfce7; }
-.icon-warn       { color: #EF4444; }
+.icon-warn       { color: #b45309; }
 .icon-reactivate { color: #2563eb; }
 .icon-success    { color: #16a34a; }
 
 /* ----- Confirmation Modal Buttons ----- */
-.btn-confirm-deactivate       { background-color: #EF4444; color: #ffffff; }
-.btn-confirm-deactivate:hover { background-color: #dc2626; }
+.btn-confirm-deactivate       { background-color: #b45309; color: #ffffff; }
+.btn-confirm-deactivate:hover { background-color: #92400e; }
 .btn-confirm-reactivate       { background-color: #2563eb; color: #ffffff; }
 .btn-confirm-reactivate:hover { background-color: #1d4ed8; }
 .btn-confirm-archive          { background-color: #64748b; color: #ffffff; }

@@ -85,6 +85,9 @@ function buildClinicCard(appt) {
     ? `<span class="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-600">Walk-in</span>`
     : `<span class="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-600">Pre-reg</span>`;
   const statusBadge = `<span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_BADGE[appt.status] || ''}">${STATUS_LABEL[appt.status] || appt.status}</span>`;
+  const deletedAccountBadge = appt.status === "completed" && appt.ownerAccountDeleted
+    ? `<span class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Account deleted</span>`
+    : "";
   const queueLabel = appt.queue_number
     ? `<span class="text-xs font-bold text-[#315b7e]">#${appt.queue_number}</span>`
     : `<span class="text-[10px] font-semibold text-slate-400">Queue at check-in</span>`;
@@ -127,6 +130,7 @@ function buildClinicCard(appt) {
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-base font-bold text-[#2f4b66]">${escapeHtml(appt.ownerName)}</span>
           ${typeBadge}
+          ${deletedAccountBadge}
         </div>
         <p class="mt-0.5 text-xs text-slate-400">${escapeHtml(appt.appointment_reference)}</p>
         ${timeLabel}

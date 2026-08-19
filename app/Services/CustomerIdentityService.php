@@ -29,6 +29,7 @@ class CustomerIdentityService
         }
 
         $unregisteredMatch = UnregisteredCustomer::query()
+            ->availableCustomer()
             ->where(function ($query) use ($phone, $email) {
                 $query->where('phone', $phone);
 
@@ -62,6 +63,7 @@ class CustomerIdentityService
         }
 
         return UnregisteredCustomer::query()
+            ->availableCustomer()
             ->where('phone', $phone)
             ->where('is_archived', false)
             ->first();
@@ -84,6 +86,7 @@ class CustomerIdentityService
             ]);
 
         $unregistered = UnregisteredCustomer::query()
+            ->availableCustomer()
             ->whereRaw('LOWER(first_name) = ?', [$normalizedFirst])
             ->whereRaw('LOWER(last_name) = ?', [$normalizedLast])
             ->get()

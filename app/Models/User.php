@@ -31,6 +31,7 @@ class User extends Authenticatable
         'is_active',
         'is_archived',
         'archived_at',
+        'account_deleted_at',
         'email_verified_at',
         'email_verification_token',
         'email_verification_expires_at',
@@ -46,6 +47,7 @@ class User extends Authenticatable
         'email_verification_expires_at' => 'datetime',
         'is_active' => 'boolean',
         'is_archived' => 'boolean',
+        'account_deleted_at' => 'datetime',
     ];
 
     // Tell Sanctum to use password_hash instead of password
@@ -64,6 +66,10 @@ class User extends Authenticatable
 
         if (Schema::hasColumn($this->getTable(), 'email_verified_at')) {
             $query->whereNotNull('email_verified_at');
+        }
+
+        if (Schema::hasColumn($this->getTable(), 'account_deleted_at')) {
+            $query->whereNull('account_deleted_at');
         }
 
         return $query;

@@ -422,6 +422,10 @@
                           <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                               <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
+                              <span x-show="booking.ownerAccountDeleted" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                <i data-lucide="user-x" class="h-3 w-3"></i>
+                                Account deleted
+                              </span>
                               <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
                                 <i data-lucide="archive" class="h-3 w-3"></i>
                                 Archived
@@ -501,7 +505,13 @@
                               </div>
                               <div>
                                 <p class="text-xs font-bold text-slate-400">Owner</p>
-                                <p class="mt-1 text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.ownerName)"></p>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                  <p class="text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(booking.ownerName)"></p>
+                                  <span x-show="booking.ownerAccountDeleted" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                                    <i data-lucide="user-x" class="h-3 w-3"></i>
+                                    Account deleted
+                                  </span>
+                                </div>
                                 <p class="mt-1 text-sm font-medium text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
                               </div>
                               <div>
@@ -580,7 +590,13 @@
                 <!-- Owner -->
                 <div>
                   <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Owner</p>
-                  <p class="font-semibold text-slate-800" x-text="detailsBooking?.ownerName ?? '—'"></p>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-semibold text-slate-800" x-text="detailsBooking?.ownerName ?? '—'"></p>
+                    <span x-show="detailsBooking?.ownerAccountDeleted" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                      <i data-lucide="user-x" class="h-3 w-3"></i>
+                      Account deleted
+                    </span>
+                  </div>
                   <p class="text-sm text-slate-500" x-text="formatMobileNumber(detailsBooking?.contactNumber)"></p>
                 </div>
 
@@ -712,6 +728,10 @@
                           <p class="mt-1 text-sm font-medium text-slate-500">
                             Owner: <span x-text="displayArchiveValue(detailsClinicRecord?.owner?.name)"></span>
                           </p>
+                          <span x-show="detailsClinicRecord?.ownerAccountDeleted" class="mt-2 inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                            <i data-lucide="user-x" class="h-3 w-3"></i>
+                            Account deleted
+                          </span>
                         </div>
                       </div>
                       <span

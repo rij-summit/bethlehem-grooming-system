@@ -42,6 +42,8 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringContainsString('Data is currently unavailable.', $script);
         $this->assertStringContainsString('API.getArchivedClinicAppointments', $script);
         $this->assertStringContainsString('/admin/clinic-appointments/archived', $api);
+        $this->assertStringContainsString('detailsClinicRecord?.ownerAccountDeleted', $page);
+        $this->assertStringContainsString('Account deleted', $page);
     }
 
     public function test_grooming_referral_section_is_conditionally_shown(): void

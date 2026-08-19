@@ -164,6 +164,7 @@ class WalkinController extends Controller
             }
         } elseif ($recordType === 'unregistered') {
             $unregisteredCustomer = UnregisteredCustomer::query()
+                ->availableCustomer()
                 ->where('id', $data['unregistered_customer_id'] ?? null)
                 ->where('is_archived', false)
                 ->first();

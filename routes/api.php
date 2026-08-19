@@ -97,6 +97,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::post('/admin/customers/unregistered', [CustomerController::class, 'storeUnregistered']);
     Route::get('/admin/customers/unregistered/{id}', [CustomerController::class, 'showUnregistered']);
     Route::post('/admin/customers/unregistered/{id}/archive', [CustomerController::class, 'archiveUnregistered']);
+    Route::delete('/admin/customers/unregistered/{id}', [CustomerController::class, 'destroyUnregistered']);
     Route::get('/admin/walk-in/customers', [CustomerController::class, 'walkInSearch']);
     Route::post('/admin/walk-in/customers/validate-new-owner', [CustomerController::class, 'validateWalkInOwner']);
     Route::post('/admin/customer-pets/{ownerType}/{ownerId}', [PetController::class, 'adminStore']);
@@ -105,6 +106,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::post('/admin/customers/{id}/reactivate', [CustomerController::class, 'reactivate']);
     Route::post('/admin/customers/{id}/archive', [CustomerController::class, 'archive']);
     Route::post('/admin/customers/{id}/unarchive', [CustomerController::class, 'unarchive']);
+    Route::delete('/admin/customers/{id}', [CustomerController::class, 'destroy']);
 
     // Customer — Notifications
     Route::get('/customer/notifications', [CustomerNotificationController::class, 'index']);

@@ -760,7 +760,13 @@
     >
       <div class="w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <h2 id="patient-record-title" class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 id="patient-record-title" class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
+            <span x-show="currentAppt?.status === 'completed' && currentAppt?.ownerAccountDeleted" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+              <i data-lucide="user-x" class="h-3 w-3"></i>
+              Account deleted
+            </span>
+          </div>
           <button type="button" @click="closeModal()" aria-label="Close patient record" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <i data-lucide="x" class="h-5 w-5"></i>
           </button>
@@ -1437,7 +1443,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=auth-session-20260816"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=auth-session-20260816"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=customer-account-delete-20260819"></script>
     <script src="../../scripts/components/admin-clinic-referral-queue.js?v=clinic-referral-acceptance-20260804"></script>
     <script src="../../scripts/components/admin-vaccinations.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

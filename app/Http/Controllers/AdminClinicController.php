@@ -481,8 +481,11 @@ class AdminClinicController extends Controller
             ? trim(($user->first_name ?? '').' '.($user->last_name ?? ''))
             : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : '—');
 
-        $contactNumber = $user?->phone ?? $walkin?->phone ?? '—';
-        $ownerEmail = $user?->email ?? $walkin?->email;
+        $ownerAccountDeleted = $this->ownerAccountDeleted($a);
+        $contactNumber = $ownerAccountDeleted
+            ? '—'
+            : ($user?->phone ?? $walkin?->phone ?? '—');
+        $ownerEmail = $ownerAccountDeleted ? null : ($user?->email ?? $walkin?->email);
         $appointmentTypeLabel = $referral
             ? 'Grooming referral'
             : match ($a->appointment_type) {
@@ -520,12 +523,15 @@ class AdminClinicController extends Controller
             'assigned_veterinarian' => null,
             'ownerName' => $ownerName,
             'contactNumber' => $contactNumber,
+            'ownerAccountDeleted' => $ownerAccountDeleted,
+            'owner_account_deleted' => $ownerAccountDeleted,
             'isWalkin' => $walkin !== null,
             'owner' => [
                 'name' => $ownerName,
                 'contact_number' => $contactNumber,
                 'email' => $ownerEmail,
                 'customer_type' => $walkin ? 'Walk-in customer' : 'Registered customer',
+                'account_deleted' => $ownerAccountDeleted,
             ],
             'pet' => $pet ? [
                 'id' => $pet->pet_id,
@@ -603,6 +609,11 @@ class AdminClinicController extends Controller
             'pet',
         ];
 
+        if (Schema::hasTable('unregistered_customers')
+            && Schema::hasColumn('walkins', 'unregistered_customer_id')) {
+            $relations[] = 'walkin.unregisteredCustomer';
+        }
+
         if (Schema::hasTable('time_windows')) {
             $relations[] = 'timeWindow';
         }
@@ -636,6 +647,18 @@ class AdminClinicController extends Controller
         }
 
         return $relations;
+    }
+
+    private function ownerAccountDeleted(ClinicAppointment $appointment): bool
+    {
+        $userAttributes = $appointment->user?->getAttributes() ?? [];
+        if (($userAttributes['account_deleted_at'] ?? null) !== null) {
+            return true;
+        }
+
+        $unregisteredAttributes = $appointment->walkin?->unregisteredCustomer?->getAttributes() ?? [];
+
+        return ($unregisteredAttributes['account_deleted_at'] ?? null) !== null;
     }
 
     private function groomingStateLabel(?string $state): string

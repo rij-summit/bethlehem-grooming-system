@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class UnregisteredCustomer extends Model
 {
@@ -15,12 +17,23 @@ class UnregisteredCustomer extends Model
         'created_by_user_id',
         'is_archived',
         'archived_at',
+        'account_deleted_at',
     ];
 
     protected $casts = [
         'is_archived' => 'boolean',
         'archived_at' => 'datetime',
+        'account_deleted_at' => 'datetime',
     ];
+
+    public function scopeAvailableCustomer(Builder $query): Builder
+    {
+        if (Schema::hasColumn($this->getTable(), 'account_deleted_at')) {
+            $query->whereNull('account_deleted_at');
+        }
+
+        return $query;
+    }
 
     public function createdBy()
     {

@@ -35,6 +35,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('phone')->nullable();
             $table->string('role');
             $table->string('password_hash')->nullable();
+            $table->timestamp('account_deleted_at')->nullable();
         });
 
         Schema::create('unregistered_customers', function (Blueprint $table) {
@@ -47,6 +48,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('created_by_user_id')->nullable();
             $table->boolean('is_archived')->default(false);
             $table->dateTime('archived_at')->nullable();
+            $table->timestamp('account_deleted_at')->nullable();
             $table->timestamps();
         });
 
@@ -370,6 +372,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'email' => 'maria@example.test',
             'phone' => '09171234567',
             'role' => 'customer',
+            'account_deleted_at' => now(),
         ]);
         DB::table('pets')->insert([
             'pet_id' => 101,
@@ -434,6 +437,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.final_status_label', 'Completed')
             ->assertJsonPath('archived.0.payment_status_label', 'Paid')
             ->assertJsonPath('archived.0.owner.name', 'Maria Santos')
+            ->assertJsonPath('archived.0.owner.account_deleted', true)
+            ->assertJsonPath('archived.0.ownerAccountDeleted', true)
+            ->assertJsonPath('archived.0.contactNumber', '—')
+            ->assertJsonPath('archived.0.owner.email', null)
             ->assertJsonPath('archived.0.pet.name', 'Mochi')
             ->assertJsonPath('archived.0.pet.medical_conditions', 'Asthma')
             ->assertJsonPath('archived.0.record.diagnosis', 'Mild irritation')

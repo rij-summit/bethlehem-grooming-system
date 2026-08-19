@@ -402,7 +402,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }

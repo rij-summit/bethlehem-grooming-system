@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Customer Records | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
+    <link rel="stylesheet" href="../../css/custom.css?v=customer-account-delete-20260819" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -262,10 +262,10 @@
             <div class="mt-3">
               <div class="rounded-2xl border border-[#d9e6f1] bg-white/80 p-3 text-sm text-slate-600">
                 <template x-if="!isAdmin && statusFilter !== 'unregistered'">
-                  <p>Customer records are read-only for staff. Select a customer profile to view account and pet details.</p>
+                  <p>Staff can view owner and pet details. Account deletion requires typing the owner's exact full name.</p>
                 </template>
                 <template x-if="!isAdmin && statusFilter === 'unregistered'">
-                  <p>Select a customer to view their information, add pets, or move the record to the archive.</p>
+                  <p>Select a customer to view their information, add pets, archive the record, or delete its account after exact-name confirmation.</p>
                 </template>
                 <template x-if="isAdmin && statusFilter === 'active'">
                   <p>You can <strong>Deactivate</strong> to temporarily block their access or <strong>Archive</strong> to permanently remove them from the active list.</p>
@@ -487,7 +487,8 @@
                     'icon-bg-warn':    confirmModal.action === 'deactivate',
                     'icon-bg-reactivate': confirmModal.action === 'reactivate',
                     'icon-bg-success': confirmModal.action === 'unarchive',
-                    'bg-slate-100':    ['archive', 'archive_unregistered'].includes(confirmModal.action)
+                    'bg-slate-100':    ['archive', 'archive_unregistered'].includes(confirmModal.action),
+                    'bg-red-100':      ['delete', 'delete_unregistered'].includes(confirmModal.action)
                   }">
                   <svg x-show="confirmModal.action === 'deactivate'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -506,10 +507,32 @@
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <path d="m9 11 3 3L22 4"></path>
                   </svg>
+                  <svg x-show="['delete', 'delete_unregistered'].includes(confirmModal.action)" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M8 6V4h8v2"></path>
+                    <path d="M19 6l-1 14H6L5 6"></path>
+                    <path d="M10 11v5"></path>
+                    <path d="M14 11v5"></path>
+                  </svg>
                 </div>
                 <h3 class="text-lg font-bold text-[#2f4b66]" x-text="confirmModal.title"></h3>
               </div>
               <p class="text-sm text-slate-600" x-text="confirmModal.message"></p>
+              <div x-show="['delete', 'delete_unregistered'].includes(confirmModal.action)" class="mt-5">
+                <label for="deleteCustomerConfirmationName" class="block text-sm font-semibold text-slate-700">
+                  Type <span class="font-bold text-red-700" x-text="confirmModal.customer?.fullName || ''"></span> to confirm
+                </label>
+                <input
+                  id="deleteCustomerConfirmationName"
+                  x-model="confirmModal.typedName"
+                  @keydown.enter.prevent="if (deleteConfirmationMatches) executeAction()"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                  :placeholder="confirmModal.customer?.fullName || ''"
+                />
+              </div>
               <p x-show="confirmModal.error" class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" x-text="confirmModal.error"></p>
               <div class="mt-6 flex justify-end gap-3">
                 <button type="button" @click="closeConfirm()"
@@ -517,13 +540,14 @@
                   Cancel
                 </button>
                 <button type="button" @click="executeAction()"
-                  :disabled="busyId !== null"
-                  class="rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50"
+                  :disabled="busyId !== null || !deleteConfirmationMatches"
+                  class="rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
                   :class="{
                     'btn-confirm-deactivate': confirmModal.action === 'deactivate',
                     'btn-confirm-reactivate': confirmModal.action === 'reactivate',
                     'btn-confirm-reopen':     confirmModal.action === 'unarchive',
-                    'btn-confirm-archive':    ['archive', 'archive_unregistered'].includes(confirmModal.action)
+                    'btn-confirm-archive':    ['archive', 'archive_unregistered'].includes(confirmModal.action),
+                    'btn-delete-account': ['delete', 'delete_unregistered'].includes(confirmModal.action)
                   }"
                   x-text="busyId !== null ? 'Please wait...' : confirmModal.confirmLabel">
                 </button>
@@ -907,21 +931,23 @@
                   </section>
 
                   <!-- Account actions below the registered pets -->
-                  <footer x-show="isAdmin && detailModal.customer?.recordType !== 'unregistered'" aria-label="Account actions"
+                  <footer x-show="detailModal.customer?.recordType !== 'unregistered'" aria-label="Account actions"
                     class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4">
                     <h4 class="mb-3 text-lg font-semibold text-[#1f3850]">Account actions</h4>
 
+                    <div x-show="isAdmin">
                     <template x-if="!detailModal.customer?.isArchived && detailModal.customer?.isActive">
                       <div>
                         <div class="flex flex-col gap-3 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
-                            <p class="text-sm font-semibold text-slate-700">Reset password</p>
-                            <p class="mt-1 text-sm leading-5 text-slate-500">Help this customer regain access to their account.</p>
+                            <p class="text-sm font-semibold text-slate-700">Archive customer</p>
+                            <p class="mt-1 text-sm leading-5 text-slate-500">Move this customer to archived records.</p>
                           </div>
                           <button type="button"
-                            @click="openResetPassword(detailModal.customer)"
-                            class="w-full shrink-0 rounded-xl border border-[#315b7e] px-4 py-2 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb] sm:w-auto">
-                            Reset Password
+                            @click="confirmAction('archive', detailModal.customer)"
+                            :disabled="busyId === detailModal.customer?.id"
+                            class="w-full shrink-0 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50 sm:w-auto">
+                            Archive
                           </button>
                         </div>
                         <div class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
@@ -938,14 +964,13 @@
                         </div>
                         <div class="flex flex-col gap-3 py-3 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                           <div>
-                            <p class="text-sm font-semibold text-slate-700">Archive customer</p>
-                            <p class="mt-1 text-sm leading-5 text-slate-500">Move this customer to archived records.</p>
+                            <p class="text-sm font-semibold text-slate-700">Reset password</p>
+                            <p class="mt-1 text-sm leading-5 text-slate-500">Help this customer regain access to their account.</p>
                           </div>
                           <button type="button"
-                            @click="confirmAction('archive', detailModal.customer)"
-                            :disabled="busyId === detailModal.customer?.id"
-                            class="w-full shrink-0 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50 sm:w-auto">
-                            Archive
+                            @click="openResetPassword(detailModal.customer)"
+                            class="w-full shrink-0 rounded-xl border border-[#315b7e] px-4 py-2 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb] sm:w-auto">
+                            Reset Password
                           </button>
                         </div>
                       </div>
@@ -1007,15 +1032,30 @@
                         </div>
                       </div>
                     </template>
+                    </div>
+
+                    <div class="flex flex-col gap-3 border-red-200 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+                      :class="isAdmin ? 'mt-3 border-t' : ''">
+                      <div>
+                        <p class="text-sm font-semibold text-red-700">Delete account</p>
+                        <p class="mt-1 text-sm leading-5 text-slate-500">Remove account access and reusable contact details while retaining historical owner, pet, grooming, and clinic records.</p>
+                      </div>
+                      <button type="button"
+                        @click="confirmAction('delete', detailModal.customer)"
+                        :disabled="busyId === detailModal.customer?.id"
+                        class="btn-delete-account w-full shrink-0 rounded-xl border px-4 py-2 text-sm font-bold transition disabled:opacity-50 sm:w-auto">
+                        Delete Account
+                      </button>
+                    </div>
                   </footer>
 
                   <footer
-                    x-show="detailModal.customer?.recordType === 'unregistered' && !detailModal.customer?.isArchived"
+                    x-show="detailModal.customer?.recordType === 'unregistered'"
                     aria-label="Account actions"
                     class="rounded-[24px] border border-[#d9e6f1] bg-[#f8fbfd] p-4"
                   >
                     <h4 class="mb-3 text-lg font-semibold text-[#1f3850]">Account actions</h4>
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                    <div x-show="!detailModal.customer?.isArchived" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                       <div>
                         <p class="text-sm font-semibold text-slate-700">Archive customer</p>
                         <p class="mt-1 text-sm leading-5 text-slate-500">Move this customer and their pet records to the archive.</p>
@@ -1025,6 +1065,19 @@
                         :disabled="busyId === detailModal.customer?.id"
                         class="w-full shrink-0 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 sm:w-auto">
                         Archive
+                      </button>
+                    </div>
+                    <div class="flex flex-col gap-3 border-red-200 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+                      :class="!detailModal.customer?.isArchived ? 'mt-3 border-t' : ''">
+                      <div>
+                        <p class="text-sm font-semibold text-red-700">Delete account</p>
+                        <p class="mt-1 text-sm leading-5 text-slate-500">Remove reusable contact details while retaining historical owner, pet, grooming, and clinic records.</p>
+                      </div>
+                      <button type="button"
+                        @click="confirmAction('delete_unregistered', detailModal.customer)"
+                        :disabled="busyId === detailModal.customer?.id"
+                        class="btn-delete-account w-full shrink-0 rounded-xl border px-4 py-2 text-sm font-bold transition disabled:opacity-50 sm:w-auto">
+                        Delete Account
                       </button>
                     </div>
                   </footer>
@@ -1538,8 +1591,8 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=auth-session-20260816"></script>
+    <script src="../../scripts/api.js?v=customer-account-delete-20260819"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
-    <script src="../../scripts/components/admin-customers.js?v=admin-pet-profile-tabs-20260812"></script>
+    <script src="../../scripts/components/admin-customers.js?v=customer-account-delete-20260819"></script>
   </body>
 </html>
