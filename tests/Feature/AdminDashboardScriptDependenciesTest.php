@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812',
+            'scripts/components/admin-dashboard.js?v=auth-session-20260816',
         );
 
         $this->assertNotFalse($dashboardPosition);
@@ -33,7 +33,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=dashboard-search-unregistered-20260812',
+            'scripts/api.js?v=auth-session-20260816',
             $page,
         );
     }
@@ -105,8 +105,8 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=dashboard-search-unregistered-20260812', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=dashboard-search-unregistered-20260812', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?v=auth-session-20260816', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=auth-session-20260816', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

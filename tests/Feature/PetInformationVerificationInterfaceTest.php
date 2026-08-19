@@ -132,7 +132,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'text-[10px]',
             'syncEditVerifiedIndicators(pet);',
             'syncEditVerifiedIndicators(null);',
-            'my-pets.js?v=20260809-unique-pet-names',
+            'my-pets.js?v=auth-session-20260816',
         ] as $editIndicator) {
             $this->assertStringContainsString(
                 $editIndicator,
@@ -165,11 +165,11 @@ class PetInformationVerificationInterfaceTest extends TestCase
             $this->clientDashboard,
         );
         $this->assertStringContainsString(
-            'client-dashboard.js?v=20260809-pet-notification-routing',
+            'client-dashboard.js?v=auth-session-20260816',
             $this->clientDashboardPage,
         );
         $this->assertStringContainsString(
-            'pet-details.js?v=pet-verified-alignment-20260809',
+            'pet-details.js?v=auth-session-20260816',
             $this->petProfilePage,
         );
     }

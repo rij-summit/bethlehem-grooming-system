@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
     <title>Verify Your Email | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
@@ -36,7 +37,7 @@
               <i data-lucide="circle-check-big" class="h-8 w-8" style="color:#16a34a"></i>
             </div>
             <h2 class="text-2xl font-bold text-slate-800">Email Verified!</h2>
-            <p class="mt-2 text-sm text-slate-500">Your account is now active. Redirecting you to the dashboard…</p>
+            <p class="mt-2 text-sm text-slate-500">Your account is now active. Redirecting you to sign in…</p>
           </div>
 
           <!-- ── Pending state (no token in URL — shown after registration redirect) ── -->
@@ -46,9 +47,9 @@
             </div>
             <h2 class="text-2xl font-bold text-slate-800">Check Your Email</h2>
             <p class="mt-3 text-sm text-slate-500 leading-relaxed">
-              We've sent a verification link to
+              <span id="pendingLead">We've sent a verification link to</span>
               <span id="pendingEmail" class="font-semibold text-slate-700"></span>.
-              Click the link in that email to activate your account.
+              <span id="pendingAction">Click the link in that email to activate your account.</span>
             </p>
             <p class="mt-2 text-xs text-slate-400">The link expires in 24 hours. Check your spam folder if you don't see it.</p>
           </div>
@@ -96,8 +97,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=email-verification-20260726" defer></script>
+    <script src="../../scripts/api.js?v=auth-session-20260816" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="../../scripts/auth/client/verify-email.js?v=email-verification-20260726" defer></script>
+    <script src="../../scripts/auth/client/verify-email.js?v=pending-registration-20260818" defer></script>
   </body>
 </html>

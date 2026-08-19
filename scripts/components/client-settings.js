@@ -4,8 +4,8 @@
 document.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) window.lucide.createIcons();
 
-  if (!API.getCustomerToken()) {
-    window.location.href = "./sign-in.html";
+  if (!API.hasAuthenticatedSession("customer")) {
+    API.redirectToSignIn();
     return;
   }
 
@@ -143,8 +143,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const { user } = await API.getMe("customer");
       serverUser = user || {};
       applyUserToAccount(serverUser);
-    } catch {
-      window.location.href = "./sign-in.html";
+    } catch (error) {
+      if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {
+        API.redirectToSignIn();
+        return;
+      }
+
+      showStatus("Unable to load your account right now. Please try again.", "error");
     }
   }
 
@@ -251,7 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await API.logout("customer");
     } finally {
-      window.location.href = "./sign-in.html?logout=1";
+      API.redirectToSignIn({ replace: true });
     }
   }
 

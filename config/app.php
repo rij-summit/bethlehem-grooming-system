@@ -55,6 +55,29 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | The browser-facing origin used in links sent by email. Keep this
+    | separate from APP_URL when the API and static pages use different hosts.
+    */
+    'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+
+    'email_verification_ttl_hours' => (int) env('EMAIL_VERIFICATION_TTL_HOURS', 24),
+
+    'pending_registration_retention_days' => (int) env('PENDING_REGISTRATION_RETENTION_DAYS', 7),
+
+    'privileged_seed_accounts' => [
+        'admin' => [
+            'email' => env('ADMIN_SEED_EMAIL'),
+            'phone' => env('ADMIN_SEED_PHONE'),
+            'password' => env('ADMIN_SEED_PASSWORD'),
+        ],
+        'staff' => [
+            'email' => env('STAFF_SEED_EMAIL'),
+            'phone' => env('STAFF_SEED_PHONE'),
+            'password' => env('STAFF_SEED_PASSWORD'),
+        ],
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

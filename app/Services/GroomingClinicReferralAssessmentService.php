@@ -418,7 +418,7 @@ class GroomingClinicReferralAssessmentService
 
         $ownerExists = User::query()
             ->whereKey($referral->owner_user_id_at_referral)
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->exists();
         if (! $ownerExists) {
             return;

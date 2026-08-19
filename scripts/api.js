@@ -45,12 +45,30 @@ var API = (() => {
 
   const BASE_URL = resolveBaseUrl();
 
+  function getBaseUrl() {
+    return BASE_URL;
+  }
+
   // ── Token keys ────────────────────────────────────────────────────────────
   const CUSTOMER_TOKEN_KEY = "customer_token";
   const ADMIN_TOKEN_KEY    = "admin_token";
   const USER_ROLE_KEY      = "user_role";
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
   const ADMIN_ONLY_PAGE_NAMES = ["reports.html", "settings.html", "services.html"];
+  const PUBLIC_CLIENT_PAGE_NAMES = new Set([
+    "sign-in.html",
+    "signup.html",
+    "verify-email.html",
+  ]);
+  const INVALID_SESSION_CODES = new Set([
+    "account_disabled",
+    "email_not_verified",
+  ]);
+  const AUTH_STORAGE_KEYS = [
+    CUSTOMER_TOKEN_KEY,
+    ADMIN_TOKEN_KEY,
+    USER_ROLE_KEY,
+  ];
 
   // ── Booking session keys to wipe on customer logout / login ──────────────
   const BOOKING_SESSION_KEYS = [
@@ -73,56 +91,148 @@ var API = (() => {
   ];
 
   function clearBookingDraft() {
-    BOOKING_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
-    BOOKING_LOCAL_KEYS.forEach((k) => localStorage.removeItem(k));
+    BOOKING_SESSION_KEYS.forEach((key) => safeStorageRemove(sessionStorage, key));
+    BOOKING_LOCAL_KEYS.forEach((key) => safeStorageRemove(localStorage, key));
   }
 
   // ── Token helpers ─────────────────────────────────────────────────────────
 
+  function isAdminRole(role) {
+    return role === "admin" || role === "staff";
+  }
+
+  function safeStorageGet(storage, key) {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function safeStorageRemove(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+  }
+
+  function rawCustomerToken() {
+    return safeStorageGet(localStorage, CUSTOMER_TOKEN_KEY)
+      || safeStorageGet(sessionStorage, CUSTOMER_TOKEN_KEY);
+  }
+
+  function rawAdminToken() {
+    return safeStorageGet(localStorage, ADMIN_TOKEN_KEY)
+      || safeStorageGet(sessionStorage, ADMIN_TOKEN_KEY);
+  }
+
+  function readAuthSessionFrom(storage, persistent) {
+    const role = safeStorageGet(storage, USER_ROLE_KEY);
+    const tokenKey = isAdminRole(role) ? ADMIN_TOKEN_KEY : CUSTOMER_TOKEN_KEY;
+    const token = role === "customer" || isAdminRole(role)
+      ? safeStorageGet(storage, tokenKey)
+      : null;
+
+    return token ? { token, role, tokenKey, persistent } : null;
+  }
+
+  function getAuthSession() {
+    const persistent = readAuthSessionFrom(localStorage, true);
+    const temporary = readAuthSessionFrom(sessionStorage, false);
+
+    // Mixed persistent/temporary sessions are ambiguous legacy state. Treat
+    // them as signed out instead of guessing and sending an obsolete token.
+    if (persistent && temporary) return null;
+
+    return persistent || temporary;
+  }
+
+  function clearAuthStorage() {
+    AUTH_STORAGE_KEYS.forEach((key) => {
+      safeStorageRemove(localStorage, key);
+      safeStorageRemove(sessionStorage, key);
+    });
+  }
+
+  function setAuthSession(token, role, remember = true) {
+    if (!token || (role !== "customer" && !isAdminRole(role))) {
+      throw new Error("The server returned an invalid authentication session.");
+    }
+
+    const persistent = isAdminRole(role) || remember;
+    const storage = persistent ? localStorage : sessionStorage;
+    const tokenKey = isAdminRole(role) ? ADMIN_TOKEN_KEY : CUSTOMER_TOKEN_KEY;
+
+    // A browser has one current Bethlehem session. Clear every old token/role
+    // first so localStorage can never shadow a newer sessionStorage login.
+    clearAuthStorage();
+
+    try {
+      storage.setItem(tokenKey, token);
+      storage.setItem(USER_ROLE_KEY, role);
+    } catch (error) {
+      // Do not leave a half-written token without its matching role.
+      clearAuthStorage();
+      throw error;
+    }
+  }
+
   function getCustomerToken() {
-    return localStorage.getItem(CUSTOMER_TOKEN_KEY) || sessionStorage.getItem(CUSTOMER_TOKEN_KEY);
+    const session = getAuthSession();
+    return session?.role === "customer" ? session.token : null;
   }
 
   function setCustomerToken(token, remember = true) {
-    if (remember) {
-      localStorage.setItem(CUSTOMER_TOKEN_KEY, token);
-    } else {
-      sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
-    }
+    setAuthSession(token, "customer", remember);
   }
 
   function clearCustomerToken() {
-    localStorage.removeItem(CUSTOMER_TOKEN_KEY);
-    sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
-  }
+    const role = getUserRole();
+    safeStorageRemove(localStorage, CUSTOMER_TOKEN_KEY);
+    safeStorageRemove(sessionStorage, CUSTOMER_TOKEN_KEY);
 
-  function getUserRole() {
-    return localStorage.getItem(USER_ROLE_KEY) || sessionStorage.getItem(USER_ROLE_KEY);
-  }
-
-  function setUserRole(role, remember = true) {
-    if (remember) {
-      localStorage.setItem(USER_ROLE_KEY, role);
-    } else {
-      sessionStorage.setItem(USER_ROLE_KEY, role);
+    if (role === "customer") {
+      clearUserRole();
     }
   }
 
+  function getUserRole() {
+    return getAuthSession()?.role ?? null;
+  }
+
+  function setUserRole(role, remember = true) {
+    const token = isAdminRole(role) ? rawAdminToken() : rawCustomerToken();
+    if (token) {
+      setAuthSession(token, role, remember);
+      return;
+    }
+
+    clearUserRole();
+  }
+
   function clearUserRole() {
-    localStorage.removeItem(USER_ROLE_KEY);
-    sessionStorage.removeItem(USER_ROLE_KEY);
+    safeStorageRemove(localStorage, USER_ROLE_KEY);
+    safeStorageRemove(sessionStorage, USER_ROLE_KEY);
   }
 
   function getAdminToken() {
-    return localStorage.getItem(ADMIN_TOKEN_KEY);
+    const session = getAuthSession();
+    return isAdminRole(session?.role) ? session.token : null;
   }
 
   function setAdminToken(token) {
-    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    setAuthSession(token, "admin", true);
   }
 
   function clearAdminToken() {
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    const role = getUserRole();
+    safeStorageRemove(localStorage, ADMIN_TOKEN_KEY);
+    safeStorageRemove(sessionStorage, ADMIN_TOKEN_KEY);
+
+    if (isAdminRole(role)) {
+      clearUserRole();
+    }
   }
 
   function isAdminPage() {
@@ -133,15 +243,44 @@ var API = (() => {
     return window.location.pathname.replace(/\\/g, "/").includes("/pages/client/sign-in.html");
   }
 
-  function signInPath() {
-    const parts = window.location.pathname.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (parts.length <= 1) return "./pages/client/sign-in.html";
-    return "../".repeat(parts.length - 1) + "pages/client/sign-in.html";
+  function isProtectedClientPage() {
+    const path = window.location.pathname.replace(/\\/g, "/");
+    if (!path.includes("/pages/client/")) return false;
+    return !PUBLIC_CLIENT_PAGE_NAMES.has(currentPageName());
   }
 
-  function redirectToSignIn() {
+  function appBasePath(pathname = window.location.pathname) {
+    const path = String(pathname || "/").replace(/\\/g, "/");
+    const markerIndex = path.toLowerCase().indexOf("/pages/");
+
+    if (markerIndex >= 0) {
+      return path.slice(0, markerIndex).replace(/\/$/, "");
+    }
+
+    const directory = path.endsWith("/")
+      ? path.replace(/\/$/, "")
+      : path.slice(0, path.lastIndexOf("/"));
+
+    return directory === "/" ? "" : directory;
+  }
+
+  function appPath(relativePath) {
+    const suffix = String(relativePath || "").replace(/^\/+/, "");
+    return `${appBasePath()}/${suffix}`.replace(/\/{2,}/g, "/");
+  }
+
+  function signInPath() {
+    return appPath("pages/client/sign-in.html");
+  }
+
+  function redirectToSignIn({ replace = true } = {}) {
     if (!isSignInPage()) {
-      window.location.href = signInPath();
+      const target = signInPath();
+      if (replace && typeof window.location.replace === "function") {
+        window.location.replace(target);
+      } else {
+        window.location.href = target;
+      }
     }
   }
 
@@ -156,8 +295,16 @@ var API = (() => {
 
   function redirectToAdminDashboard() {
     if (currentPageName() !== "dashboard.html") {
-      window.location.replace("./dashboard.html");
+      window.location.replace(appPath("pages/admin/dashboard.html"));
     }
+  }
+
+  function hasAuthenticatedSession(scope = "any") {
+    const session = getAuthSession();
+    if (!session) return false;
+    if (scope === "customer") return session.role === "customer";
+    if (scope === "admin") return isAdminRole(session.role);
+    return true;
   }
 
   function enforceAdminPageAccess() {
@@ -177,26 +324,41 @@ var API = (() => {
     return true;
   }
 
-  function notifyLogout(role) {
+  function enforceProtectedPageAccess() {
+    if (isAdminPage()) return enforceAdminPageAccess();
+
+    if (isProtectedClientPage() && !hasAuthenticatedSession("customer")) {
+      redirectToSignIn();
+      return false;
+    }
+
+    return true;
+  }
+
+  function notifyLogout(role, reason = "logout") {
     try {
       localStorage.setItem(
         AUTH_LOGOUT_EVENT_KEY,
-        JSON.stringify({ role, at: Date.now() })
+        JSON.stringify({ role, reason, at: Date.now() })
       );
     } catch {
       // Non-fatal: removing the token still syncs logout in supported browsers.
     }
   }
 
+  function invalidateSession(role = null, reason = "expired") {
+    const resolvedRole = getAuthSession()?.role ?? role ?? "customer";
+    clearAuthStorage();
+    if (resolvedRole === "customer") clearBookingDraft();
+    notifyLogout(resolvedRole, reason);
+    redirectToSignIn();
+  }
+
   function handleCrossTabLogout(role) {
-    if (role !== "admin" && role !== "staff") return;
+    clearAuthStorage();
+    if (role === "customer") clearBookingDraft();
 
-    clearAdminToken();
-    if (getUserRole() === "admin" || getUserRole() === "staff" || isAdminPage()) {
-      clearUserRole();
-    }
-
-    if (isAdminPage()) {
+    if (isAdminPage() || isProtectedClientPage()) {
       redirectToSignIn();
     }
   }
@@ -204,11 +366,6 @@ var API = (() => {
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
       if (event.storageArea !== localStorage) return;
-
-      if (event.key === ADMIN_TOKEN_KEY && event.oldValue && !event.newValue) {
-        handleCrossTabLogout("admin");
-        return;
-      }
 
       if (event.key !== AUTH_LOGOUT_EVENT_KEY || !event.newValue) return;
 
@@ -220,7 +377,12 @@ var API = (() => {
       }
     });
 
-    enforceAdminPageAccess();
+    enforceProtectedPageAccess();
+    window.addEventListener("pageshow", () => {
+      // A logout page navigation can leave a protected dashboard in the
+      // browser back-forward cache. Re-check storage whenever it is restored.
+      enforceProtectedPageAccess();
+    });
   }
 
   // ── Core request function ─────────────────────────────────────────────────
@@ -283,24 +445,29 @@ var API = (() => {
       ? null
       : await response.json().catch(() => ({}));
 
-    if (response.status === 401) {
-      if (token) {
-        // Only redirect when an authenticated request loses its session.
-        // Public endpoints (sign-in, register) return 401 on bad credentials
-        // and must fall through so the caller can surface the error message.
-        if (token === getAdminToken()) {
-          clearAdminToken();
-        } else if (token === getCustomerToken()) {
-          clearCustomerToken();
-          clearBookingDraft();
-        }
-        clearUserRole();
-        const depth = window.location.pathname.split("/").filter(Boolean).length;
-        window.location.href = depth >= 2
-          ? "../client/sign-in.html"
-          : "./pages/client/sign-in.html";
-        throw new Error("Your session has expired. Please sign in again.");
-      }
+    // A response for an older in-flight request must never erase a newer
+    // login that replaced its bearer token while the request was pending.
+    const currentSession = getAuthSession();
+    const responseBelongsToCurrentSession = !!token
+      && currentSession?.token === token;
+    const invalidAccountSession = response.status === 403
+      && responseBelongsToCurrentSession
+      && INVALID_SESSION_CODES.has(data.code);
+    const lostAuthenticatedSession = response.status === 401
+      && responseBelongsToCurrentSession;
+
+    if (
+      (lostAuthenticatedSession || invalidAccountSession)
+      && !requestOptions.suppressAuthRedirect
+    ) {
+      // Public sign-in/register failures have no bearer token and therefore
+      // fall through for their forms to render. Only a real authenticated
+      // session failure clears state and navigates away.
+      const failedRole = token === rawAdminToken() ? "admin" : "customer";
+      invalidateSession(
+        failedRole,
+        invalidAccountSession ? data.code : "expired",
+      );
     }
 
     if (response.status === 429) {
@@ -312,7 +479,12 @@ var API = (() => {
     }
 
     if (!response.ok) {
-      if (response.status === 403 && token === getAdminToken() && isAdminOnlyPage()) {
+      if (
+        response.status === 403
+        && !invalidAccountSession
+        && token === getAdminToken()
+        && isAdminOnlyPage()
+      ) {
         redirectToAdminDashboard();
       }
 
@@ -352,19 +524,19 @@ var API = (() => {
     return data;
   }
 
+  function isAuthenticationError(error) {
+    return error?.status === 401
+      || (error?.status === 403 && INVALID_SESSION_CODES.has(error?.code));
+  }
+
   // ── Auth API calls ────────────────────────────────────────────────────────
 
   async function register(payload) {
     // POST /api/register
     // payload: { first_name, last_name, username?, email, phone, password, password_confirmation }
-    // Saves the returned token so the caller can redirect straight to the dashboard.
-    const data = await request("POST", "/register", payload);
-    if (data?.token) {
-      clearBookingDraft();
-      setCustomerToken(data.token, true);
-      setUserRole(data.user?.role ?? "customer", true);
-    }
-    return data;
+    // Registration never establishes a browser session. A customer must
+    // verify their address and then explicitly sign in.
+    return request("POST", "/register", payload);
   }
 
   async function signIn(identifier, password, remember = true) {
@@ -376,27 +548,16 @@ var API = (() => {
     const resolvedIdentifier = normalized || identifier;
     const data = await request("POST", "/sign-in", { identifier: resolvedIdentifier, password });
     const role = data?.user?.role;
-    if (role === "admin" || role === "staff") {
-      setAdminToken(data.token);
-      setUserRole(role, true); // admin session always persists
-    } else {
-      clearBookingDraft();
-      setCustomerToken(data.token, remember);
-      setUserRole(role, remember);
-    }
+    if (role === "customer") clearBookingDraft();
+    setAuthSession(data?.token, role, isAdminRole(role) ? true : remember);
     return data;
   }
 
   async function verifyEmail(token) {
     // POST /api/email/verify  { token }
-    // On success stores the customer token and returns the response data.
-    const data = await request("POST", "/email/verify", { token });
-    if (data?.token) {
-      clearBookingDraft();
-      setCustomerToken(data.token, true);
-      setUserRole(data.user?.role ?? "customer", true);
-    }
-    return data;
+    // Verification activates the account but deliberately does not establish
+    // a browser session. The customer signs in explicitly afterward.
+    return request("POST", "/email/verify", { token });
   }
 
   async function resendVerification(email) {
@@ -404,30 +565,42 @@ var API = (() => {
     return request("POST", "/email/resend", { email });
   }
 
-  async function logout(role = "customer") {
+  async function logout(role = null) {
     // POST /api/logout  (protected — sends the correct token in the header)
-    // Token is always cleared locally even if the API call fails.
-    const token =
-      role === "admin" ? getAdminToken() : getCustomerToken();
+    // Capture the current bearer token, then clear the browser before waiting
+    // for the network. Logout remains immediate even if the server is down.
+    const currentSession = getAuthSession();
+    const resolvedRole = currentSession?.role ?? role ?? "customer";
+    const token = currentSession?.token
+      ?? (isAdminRole(role) ? rawAdminToken() : rawCustomerToken());
+
+    clearAuthStorage();
+    if (resolvedRole === "customer") clearBookingDraft();
+    notifyLogout(resolvedRole, "logout");
+
+    if (!token) return { success: true, local_only: true };
 
     try {
-      await request("POST", "/logout", null, token);
-    } finally {
-      clearUserRole();
-      if (role === "admin") {
-        clearAdminToken();
-        notifyLogout(role);
-      } else {
-        clearCustomerToken();
-        clearBookingDraft();
+      return await request(
+        "POST",
+        "/logout",
+        null,
+        token,
+        { suppressAuthRedirect: true },
+      );
+    } catch (error) {
+      // A missing/expired server session is already equivalent to logout.
+      if (error?.status === 401) {
+        return { success: true, local_only: true };
       }
+      throw error;
     }
   }
 
   async function getMe(role = "customer") {
     // GET /api/me  (protected)
     const token =
-      role === "admin" ? getAdminToken() : getCustomerToken();
+      isAdminRole(role) ? getAdminToken() : getCustomerToken();
     return request("GET", "/me", null, token);
   }
 
@@ -1332,6 +1505,8 @@ var API = (() => {
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
+    // Resolved endpoint (shared by standalone browser services).
+    getBaseUrl,
     // Token access (used by other scripts that need to attach the token)
     getCustomerToken,
     setCustomerToken,
@@ -1343,7 +1518,14 @@ var API = (() => {
     getUserRole,
     setUserRole,
     clearUserRole,
+    clearAuthState: clearAuthStorage,
+    hasAuthenticatedSession,
+    isAuthenticationError,
+    invalidateSession,
+    redirectToSignIn,
+    signInPath,
     enforceAdminPageAccess,
+    enforceProtectedPageAccess,
     isAdminOnlyPage,
     // Auth
     register,

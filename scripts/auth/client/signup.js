@@ -125,11 +125,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data?.requires_verification) {
         sessionStorage.setItem("pendingVerificationEmail", data.email ?? email);
-        window.location.href = "./verify-email.html";
+        if (data.email_delivery_queued === false) {
+          sessionStorage.setItem("pendingVerificationDeliveryFailed", "1");
+        } else {
+          sessionStorage.removeItem("pendingVerificationDeliveryFailed");
+        }
+        window.location.replace("./verify-email.html");
         return;
       }
 
-      window.location.href = "./dashboard.html";
+      // Registration never implies authentication, including when talking to
+      // an older backend response that omits requires_verification.
+      window.location.replace("./sign-in.html?registered=1");
     } catch (error) {
       if (error.errors) {
         const firstError = Object.values(error.errors)[0];
@@ -144,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function setBusyState(isBusy) {
     submitButton.disabled = isBusy;
     const label = document.getElementById("signupBtnLabel");
-    if (label) label.textContent = isBusy ? "Creating Account..." : "Create Account";
+    if (label) label.textContent = isBusy ? "Submitting Registration..." : "Create Account";
   }
 
   function clearMessage() {

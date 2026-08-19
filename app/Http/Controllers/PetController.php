@@ -286,7 +286,7 @@ class PetController extends Controller
         }
 
         $user = $ownerType === 'registered'
-            ? User::where('user_id', $ownerId)->where('role', 'customer')->first()
+            ? User::registeredCustomer()->where('user_id', $ownerId)->first()
             : null;
         $unregisteredCustomer = $ownerType === 'unregistered'
             ? UnregisteredCustomer::where('id', $ownerId)->where('is_archived', false)->first()

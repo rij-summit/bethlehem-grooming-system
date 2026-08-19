@@ -500,7 +500,7 @@ class AdminGroomingMedicalConcernController extends Controller
 
             $customer = User::query()
                 ->whereKey($context->pet->user_id)
-                ->where('role', 'customer')
+                ->registeredCustomer()
                 ->lockForUpdate()
                 ->first();
 

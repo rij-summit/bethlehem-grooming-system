@@ -30,10 +30,10 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WalkinController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register',      [AuthController::class, 'register']);
+Route::post('/register',      [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in',       [AuthController::class, 'signIn']);
-Route::post('/email/verify',  [EmailVerificationController::class, 'verify']);
-Route::post('/email/resend',  [EmailVerificationController::class, 'resend']);
+Route::post('/email/verify',  [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
+Route::post('/email/resend',  [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
 Route::post('/chatbot',       [ChatbotController::class, 'chat']);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
@@ -53,7 +53,7 @@ Route::get('/system/clock', function () {
 });
 
 // ── PROTECTED ROUTES (token required) ────────────────
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -188,39 +188,42 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void', [AdminVaccinationController::class, 'void']);
     });
 
-    // Admin — Inventory: Products
-    Route::get('/inventory/items', [InventoryController::class, 'index']);
-    Route::post('/inventory/items', [InventoryController::class, 'store']);
-    Route::get('/inventory/items/{id}', [InventoryController::class, 'show']);
-    Route::put('/inventory/items/{id}', [InventoryController::class, 'update']);
-    Route::post('/inventory/items/{id}/deactivate', [InventoryController::class, 'deactivate']);
-    Route::post('/inventory/items/{id}/reactivate', [InventoryController::class, 'reactivate']);
+    // Inventory, suppliers, and POS expose stock and financial data only to staff/admin roles.
+    Route::middleware('role:admin,staff')->group(function () {
+        // Admin — Inventory: Products
+        Route::get('/inventory/items', [InventoryController::class, 'index']);
+        Route::post('/inventory/items', [InventoryController::class, 'store']);
+        Route::get('/inventory/items/{id}', [InventoryController::class, 'show']);
+        Route::put('/inventory/items/{id}', [InventoryController::class, 'update']);
+        Route::post('/inventory/items/{id}/deactivate', [InventoryController::class, 'deactivate']);
+        Route::post('/inventory/items/{id}/reactivate', [InventoryController::class, 'reactivate']);
 
-    // Admin — Inventory: Barcode & search
-    Route::get('/inventory/search', [InventoryController::class, 'search']);
-    Route::get('/inventory/barcode/{barcode}', [InventoryController::class, 'findByBarcode']);
+        // Admin — Inventory: Barcode & search
+        Route::get('/inventory/search', [InventoryController::class, 'search']);
+        Route::get('/inventory/barcode/{barcode}', [InventoryController::class, 'findByBarcode']);
 
-    // Admin — Inventory: Stock movements
-    Route::post('/inventory/stock-in', [InventoryController::class, 'stockIn']);
-    Route::post('/inventory/stock-out', [InventoryController::class, 'stockOut']);
+        // Admin — Inventory: Stock movements
+        Route::post('/inventory/stock-in', [InventoryController::class, 'stockIn']);
+        Route::post('/inventory/stock-out', [InventoryController::class, 'stockOut']);
 
-    // Admin — Inventory: History & alerts
-    Route::get('/inventory/transactions', [InventoryController::class, 'transactions']);
-    Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock']);
-    Route::get('/inventory/alerts/expiry', [InventoryController::class, 'expiryAlerts']);
-    Route::get('/inventory/alerts/badge', [InventoryController::class, 'alertBadge']);
-    Route::get('/inventory/summary', [InventoryController::class, 'summary']);
+        // Admin — Inventory: History & alerts
+        Route::get('/inventory/transactions', [InventoryController::class, 'transactions']);
+        Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock']);
+        Route::get('/inventory/alerts/expiry', [InventoryController::class, 'expiryAlerts']);
+        Route::get('/inventory/alerts/badge', [InventoryController::class, 'alertBadge']);
+        Route::get('/inventory/summary', [InventoryController::class, 'summary']);
 
-    // Admin — Suppliers
-    Route::get('/inventory/suppliers', [SupplierController::class, 'index']);
-    Route::post('/inventory/suppliers', [SupplierController::class, 'store']);
-    Route::put('/inventory/suppliers/{id}', [SupplierController::class, 'update']);
-    Route::post('/inventory/suppliers/{id}/deactivate', [SupplierController::class, 'deactivate']);
+        // Admin — Suppliers
+        Route::get('/inventory/suppliers', [SupplierController::class, 'index']);
+        Route::post('/inventory/suppliers', [SupplierController::class, 'store']);
+        Route::put('/inventory/suppliers/{id}', [SupplierController::class, 'update']);
+        Route::post('/inventory/suppliers/{id}/deactivate', [SupplierController::class, 'deactivate']);
 
-    // Admin — POS
-    Route::post('/pos/transactions', [PosController::class, 'processSale']);
-    Route::get('/pos/transactions', [PosController::class, 'getTransactions']);
-    Route::get('/pos/transactions/{posId}', [PosController::class, 'getReceipt']);
+        // Admin — POS
+        Route::post('/pos/transactions', [PosController::class, 'processSale']);
+        Route::get('/pos/transactions', [PosController::class, 'getTransactions']);
+        Route::get('/pos/transactions/{posId}', [PosController::class, 'getReceipt']);
+    });
 
     // Administrator-only clinic availability and settings actions.
     Route::middleware('role:admin')->group(function () {

@@ -342,7 +342,7 @@ class ClinicWalkinController extends Controller
         if ($recordType === 'registered') {
             $user = User::query()
                 ->where('user_id', $data['customer_user_id'] ?? null)
-                ->where('role', 'customer')
+                ->registeredCustomer()
                 ->first();
 
             if (! $user) {
@@ -364,7 +364,7 @@ class ClinicWalkinController extends Controller
         } elseif (! empty($data['email'])) {
             // Preserve the existing clinic walk-in behavior for manually entered
             // owners whose email already belongs to a registered customer.
-            $user = User::query()->where('email', $data['email'])->first();
+            $user = User::registeredCustomer()->where('email', $data['email'])->first();
         }
 
         $owner = $user
@@ -414,8 +414,7 @@ class ClinicWalkinController extends Controller
         ?User $user,
         ?UnregisteredCustomer $unregisteredCustomer,
         array $data,
-    ): Pet
-    {
+    ): Pet {
         $data['pet_name'] = Pet::normalizeName($data['pet_name']);
         $hasExistingOwner = $user !== null || $unregisteredCustomer !== null;
         $ownerPetQuery = Pet::query()

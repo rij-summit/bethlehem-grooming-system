@@ -152,7 +152,7 @@ class WalkinController extends Controller
         if ($recordType === 'registered') {
             $user = User::query()
                 ->where('user_id', $data['customer_user_id'] ?? null)
-                ->where('role', 'customer')
+                ->registeredCustomer()
                 ->where('is_active', true)
                 ->where('is_archived', false)
                 ->first();

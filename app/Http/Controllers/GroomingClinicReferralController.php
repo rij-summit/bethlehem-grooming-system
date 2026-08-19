@@ -664,7 +664,7 @@ class GroomingClinicReferralController extends Controller
         $owner = $userId
             ? User::query()
                 ->whereKey($userId)
-                ->where('role', 'customer')
+                ->registeredCustomer()
                 ->lockForUpdate()
                 ->first()
             : null;

@@ -1,6 +1,6 @@
 // Connected to pages/client/verify-email.html
 // Handles two scenarios:
-//   1. ?token=... in URL  → auto-verify, then redirect to dashboard
+//   1. #token=... (or legacy ?token=...) → auto-verify, then require an explicit sign-in
 //   2. No token           → show "check your email" pending state with resend form
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const resendSection  = document.getElementById("resendSection");
   const errorMessage   = document.getElementById("errorMessage");
   const pendingEmail   = document.getElementById("pendingEmail");
+  const pendingLead    = document.getElementById("pendingLead");
+  const pendingAction  = document.getElementById("pendingAction");
   const resendEmail    = document.getElementById("resendEmail");
   const resendForm     = document.getElementById("resendForm");
   const resendSubmit   = document.getElementById("resendSubmit");
@@ -25,8 +27,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  const params = new URLSearchParams(window.location.search);
-  const token  = params.get("token");
+  const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+  const queryParams = new URLSearchParams(window.location.search);
+  // New verification links keep credentials in the fragment so they are not
+  // sent in the initial HTTP request. Query tokens remain supported for links
+  // generated before that change.
+  const token = fragmentParams.get("token") || queryParams.get("token");
+
+  if (token) {
+    // Verification tokens are credentials. Remove them from the address bar
+    // and browser history before making any network request.
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("token");
+    cleanUrl.hash = "";
+    history.replaceState(
+      null,
+      "",
+      `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
+    );
+  }
 
   // ── Scenario 1: token in URL → auto-verify ───────────────────────────────
 
@@ -35,10 +54,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     (async () => {
       try {
-        await API.verifyEmail(token); // stores token internally
+        await API.verifyEmail(token);
 
         showState("success");
-        setTimeout(() => { window.location.href = "./dashboard.html"; }, 2000);
+        setTimeout(() => {
+          window.location.replace("./sign-in.html?verified=1");
+        }, 2000);
       } catch (err) {
         showState("error");
         if (err.expired) {
@@ -55,6 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   } else {
     const savedEmail = sessionStorage.getItem("pendingVerificationEmail");
+    const deliveryFailed = sessionStorage.getItem("pendingVerificationDeliveryFailed") === "1";
     showState("pending");
     if (savedEmail) {
       pendingEmail.textContent = savedEmail;
@@ -64,6 +86,16 @@ document.addEventListener("DOMContentLoaded", () => {
       pendingEmail.textContent = "your registered email";
     }
     resendSection.classList.remove("hidden");
+    sessionStorage.removeItem("pendingVerificationDeliveryFailed");
+
+    if (deliveryFailed) {
+      pendingLead.textContent = "Your registration was saved, but we could not send the first verification email to";
+      pendingAction.textContent = "Use the resend form below to try again.";
+      showResendMessage(
+        "error",
+        "The first verification email was not sent. Please select Resend Verification Email.",
+      );
+    }
   }
 
   // ── Resend form ───────────────────────────────────────────────────────────

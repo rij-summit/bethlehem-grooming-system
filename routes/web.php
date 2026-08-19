@@ -4,11 +4,15 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return response()->file(base_path('index.html'));
+    return response()->file(base_path('index.html'), [
+        'Cache-Control' => 'no-store, private, max-age=0, must-revalidate',
+    ]);
 });
 
 Route::get('/index.html', function () {
-    return response()->file(base_path('index.html'));
+    return response()->file(base_path('index.html'), [
+        'Cache-Control' => 'no-store, private, max-age=0, must-revalidate',
+    ]);
 });
 
 Route::get('/{directory}/{path}', function (string $directory, string $path) {
@@ -30,9 +34,14 @@ Route::get('/{directory}/{path}', function (string $directory, string $path) {
         'webp' => 'image/webp',
     ];
     $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    $cacheControl = match (true) {
+        $extension === 'html' => 'no-store, private, max-age=0, must-revalidate',
+        $directory === 'scripts' => 'no-cache, public, must-revalidate',
+        default => 'public, max-age=3600',
+    };
 
     return response()->file($file, [
-        'Cache-Control' => $directory === 'pages' ? 'no-cache' : 'public, max-age=3600',
+        'Cache-Control' => $cacheControl,
         'Content-Type' => $contentTypes[$extension] ?? File::mimeType($file),
     ]);
 })->where('directory', 'assets|css|pages|scripts')->where('path', '.*');

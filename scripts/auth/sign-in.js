@@ -11,13 +11,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // was cached and skipped clearUserRole() / clearAdminToken().
   if (new URLSearchParams(window.location.search).get("logout") === "1") {
     try {
-      ["admin_token", "customer_token", "user_role"].forEach((k) => {
-        localStorage.removeItem(k);
-        sessionStorage.removeItem(k);
-      });
+      if (typeof API?.clearAuthState === "function") {
+        API.clearAuthState();
+      } else {
+        ["admin_token", "customer_token", "user_role"].forEach((k) => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
+      }
     } catch { /* storage unavailable */ }
-    // Remove the query string so a manual refresh doesn't re-trigger the wipe.
-    history.replaceState(null, "", window.location.pathname);
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("logout");
+    history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }
 
   const signInForm              = document.getElementById("sharedSignInForm");
@@ -104,21 +109,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Auto-redirect already-authenticated users.  Runs AFTER the submit listener
-  // is registered so a stale cached api.js that throws here can never leave the
-  // form without a handler.
-  try {
-    const savedRole = API.getUserRole?.() ?? null;
-    if ((savedRole === "admin" || savedRole === "staff") && API.getAdminToken()) {
-      window.location.href = "../admin/dashboard.html";
-      return;
-    }
-    if (savedRole === "customer" && API.getCustomerToken()) {
-      window.location.href = "./dashboard.html";
-      return;
-    }
-  } catch {
-    // Stale cached api.js without getUserRole — form is already set up above.
+  // Email verification activates the account but does not log it in. Always
+  // keep this form usable, even when stale browser storage contains a token.
+  if (new URLSearchParams(window.location.search).get("verified") === "1") {
+    showMessage("success", "Email verified successfully. Please sign in to continue.");
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("verified");
+    history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+  } else if (new URLSearchParams(window.location.search).get("registered") === "1") {
+    showMessage("success", "Account created successfully. Please sign in to continue.");
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("registered");
+    history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }
 
   function startCountdown(seconds) {

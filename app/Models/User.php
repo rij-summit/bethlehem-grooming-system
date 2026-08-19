@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $table = 'users';
 
@@ -39,14 +42,31 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'email_verified_at'              => 'datetime',
-        'email_verification_expires_at'  => 'datetime',
+        'email_verified_at' => 'datetime',
+        'email_verification_expires_at' => 'datetime',
+        'is_active' => 'boolean',
+        'is_archived' => 'boolean',
     ];
 
     // Tell Sanctum to use password_hash instead of password
     public function getAuthPassword()
     {
         return $this->password_hash;
+    }
+
+    /**
+     * Customer accounts are operational only after email ownership is proven.
+     * The schema check keeps focused tests with reduced user tables compatible.
+     */
+    public function scopeRegisteredCustomer(Builder $query): Builder
+    {
+        $query->where('role', 'customer');
+
+        if (Schema::hasColumn($this->getTable(), 'email_verified_at')) {
+            $query->whereNotNull('email_verified_at');
+        }
+
+        return $query;
     }
 
     public function vaccinationsAdministered()

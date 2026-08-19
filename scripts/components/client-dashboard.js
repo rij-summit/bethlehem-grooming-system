@@ -91,9 +91,14 @@
         profileInitials.textContent =
           ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "--";
       }
-    } catch {
-      // Authentication section: token is missing or expired, so return to login.
-      window.location.href = "./sign-in.html";
+    } catch (error) {
+      if (API.isAuthenticationError?.(error) || !API.hasAuthenticatedSession?.("customer")) {
+        API.redirectToSignIn?.();
+        return;
+      }
+
+      // A temporary API outage must not bounce between dashboard and sign-in.
+      console.error("Unable to load the customer profile.", error);
     }
   })();
 
@@ -103,7 +108,7 @@
       try {
         await API.logout("customer");
       } finally {
-        window.location.href = "./sign-in.html?logout=1";
+        API.redirectToSignIn({ replace: true });
       }
     });
   }

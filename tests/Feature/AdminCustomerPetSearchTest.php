@@ -21,6 +21,7 @@ class AdminCustomerPetSearchTest extends TestCase
             $table->string('last_name');
             $table->string('username')->nullable();
             $table->string('email')->nullable();
+            $table->timestamp('email_verified_at')->nullable();
             $table->string('phone')->nullable();
             $table->string('password_hash')->nullable();
             $table->string('role')->default('customer');
@@ -54,6 +55,7 @@ class AdminCustomerPetSearchTest extends TestCase
                 'email' => 'staff@example.test',
                 'phone' => null,
                 'role' => 'staff',
+                'email_verified_at' => now(),
             ],
             [
                 'user_id' => 10,
@@ -62,6 +64,7 @@ class AdminCustomerPetSearchTest extends TestCase
                 'email' => 'andrew@example.test',
                 'phone' => '09171234567',
                 'role' => 'customer',
+                'email_verified_at' => now(),
             ],
             [
                 'user_id' => 20,
@@ -70,6 +73,7 @@ class AdminCustomerPetSearchTest extends TestCase
                 'email' => 'juan@example.test',
                 'phone' => '09179876543',
                 'role' => 'customer',
+                'email_verified_at' => now(),
             ],
             [
                 'user_id' => 30,
@@ -78,6 +82,16 @@ class AdminCustomerPetSearchTest extends TestCase
                 'email' => 'max@example.test',
                 'phone' => null,
                 'role' => 'customer',
+                'email_verified_at' => now(),
+            ],
+            [
+                'user_id' => 40,
+                'first_name' => 'Pending',
+                'last_name' => 'Signup',
+                'email' => 'pending@example.test',
+                'phone' => '09170000000',
+                'role' => 'customer',
+                'email_verified_at' => null,
             ],
         ]);
 
@@ -102,6 +116,13 @@ class AdminCustomerPetSearchTest extends TestCase
                 'pet_name' => 'Buddy',
                 'species' => 'Dog',
                 'breed' => 'Beagle',
+            ],
+            [
+                'pet_id' => 104,
+                'user_id' => 40,
+                'pet_name' => 'Ghost',
+                'species' => 'Dog',
+                'breed' => 'Mixed',
             ],
         ]);
 
@@ -147,5 +168,20 @@ class AdminCustomerPetSearchTest extends TestCase
             ->assertOk()
             ->assertJsonPath('petTotal', 0)
             ->assertJsonCount(0, 'pets');
+    }
+
+    public function test_unverified_legacy_customer_is_hidden_from_admin_customer_operations(): void
+    {
+        $this->getJson('/api/admin/customers?status=active&search=Pending')
+            ->assertOk()
+            ->assertJsonCount(0, 'customers');
+
+        $this->getJson('/api/admin/customers?status=active&search=Ghost')
+            ->assertOk()
+            ->assertJsonCount(0, 'pets');
+
+        $this->getJson('/api/admin/customers/40')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Customer not found.');
     }
 }

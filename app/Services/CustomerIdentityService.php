@@ -11,7 +11,7 @@ class CustomerIdentityService
     public function findContactConflict(string $phone, ?string $email = null): ?array
     {
         $registeredMatch = User::query()
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->where(function ($query) use ($phone, $email) {
                 $query->where('phone', $phone);
 
@@ -51,7 +51,7 @@ class CustomerIdentityService
     public function findCurrentOwnerByPhone(string $phone): User|UnregisteredCustomer|null
     {
         $registered = User::query()
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->where('phone', $phone)
             ->where('is_active', true)
             ->where('is_archived', false)
@@ -73,7 +73,7 @@ class CustomerIdentityService
         $normalizedLast = mb_strtolower(trim($lastName));
 
         $registered = User::query()
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->whereRaw('LOWER(first_name) = ?', [$normalizedFirst])
             ->whereRaw('LOWER(last_name) = ?', [$normalizedLast])
             ->get()

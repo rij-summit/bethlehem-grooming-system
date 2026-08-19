@@ -191,9 +191,7 @@ function adminSidebar() {
       try {
         await API.logout("admin");
       } finally {
-        const parts = window.location.pathname.replace(/\\/g, "/").split("/").filter(Boolean);
-        const ups = parts.length > 1 ? "../".repeat(parts.length - 1) : "./";
-        window.location.href = ups + "pages/client/sign-in.html?logout=1";
+        API.redirectToSignIn({ replace: true });
       }
     },
 

@@ -50,7 +50,7 @@ class CustomerController extends Controller
             return $this->unregisteredIndex($search);
         }
 
-        $query = User::where('role', 'customer');
+        $query = User::registeredCustomer();
 
         $this->applyCustomerStatusFilter($query, $status);
 
@@ -122,7 +122,7 @@ class CustomerController extends Controller
                 ->with('user:user_id,first_name,last_name,phone,email')
                 ->where('pet_name', 'like', "%{$search}%")
                 ->whereHas('user', function ($ownerQuery) use ($status) {
-                    $ownerQuery->where('role', 'customer');
+                    $ownerQuery->registeredCustomer();
                     $this->applyCustomerStatusFilter($ownerQuery, $status);
                 })
                 ->orderBy('pet_name')
@@ -423,7 +423,7 @@ class CustomerController extends Controller
 
         $registeredQuery = User::query()
             ->with(['pets' => fn ($query) => $query->where('is_archived', false)])
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->where('is_active', true)
             ->where('is_archived', false);
         $applySearch($registeredQuery);
@@ -468,7 +468,7 @@ class CustomerController extends Controller
                 $ownerQuery
                     ->whereHas('user', function ($userQuery) {
                         $userQuery
-                            ->where('role', 'customer')
+                            ->registeredCustomer()
                             ->where('is_active', true)
                             ->where('is_archived', false);
                     })
@@ -522,7 +522,7 @@ class CustomerController extends Controller
 
         $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
         $registeredCustomers = User::query()
-            ->where('role', 'customer')
+            ->registeredCustomer()
             ->where(function ($customerQuery) use ($search, $nameTerms) {
                 $customerQuery->where('phone', 'like', "%{$search}%")
                     ->orWhere(function ($nameQuery) use ($nameTerms) {
@@ -590,7 +590,7 @@ class CustomerController extends Controller
             ->where('pet_name', 'like', "%{$search}%")
             ->where(function ($ownerQuery) {
                 $ownerQuery
-                    ->whereHas('user', fn ($userQuery) => $userQuery->where('role', 'customer'))
+                    ->whereHas('user', fn ($userQuery) => $userQuery->registeredCustomer())
                     ->orWhereHas('unregisteredCustomer', fn ($customerQuery) => $customerQuery->where('is_archived', false));
             })
             ->orderBy('pet_name')
@@ -641,7 +641,7 @@ class CustomerController extends Controller
     {
         $this->requireAdminOrStaff($request);
 
-        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
@@ -710,7 +710,7 @@ class CustomerController extends Controller
     {
         $this->requireAdmin($request);
 
-        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
@@ -734,7 +734,7 @@ class CustomerController extends Controller
     {
         $this->requireAdmin($request);
 
-        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
@@ -755,7 +755,7 @@ class CustomerController extends Controller
     {
         $this->requireAdmin($request);
 
-        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
@@ -783,7 +783,7 @@ class CustomerController extends Controller
     {
         $this->requireAdmin($request);
 
-        $user = User::where('user_id', $id)->where('role', 'customer')->first();
+        $user = User::registeredCustomer()->where('user_id', $id)->first();
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);

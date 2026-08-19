@@ -2,66 +2,123 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\EmailVerificationController;
+use App\Models\PendingCustomerRegistration;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
-use App\Models\User;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Throwable;
 
 class AuthController extends Controller
 {
     // ── REGISTER ──────────────────────────────────────────
     public function register(Request $request)
     {
-        $request->validate([
+        PendingCustomerRegistration::query()
+            ->where('updated_at', '<', now()->subDays(max(
+                1,
+                (int) config('app.pending_registration_retention_days', 7),
+            )))
+            ->delete();
+
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+            'username' => filled($request->input('username'))
+                ? trim((string) $request->input('username'))
+                : null,
+        ]);
+
+        $data = $request->validate([
             'first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
-            'last_name'  => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
-            'username'   => 'nullable|string|max:50|unique:users,username',
-            'phone'      => ['required', 'string', 'regex:/^09\d{9}$/', 'unique:users,phone'],
-            'email'      => 'required|email|unique:users,email',
-            'password'   => 'required|string|min:8|max:100|confirmed',
+            'last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
+            'username' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('users', 'username'),
+                Rule::unique('pending_customer_registrations', 'username'),
+            ],
+            'phone' => [
+                'required',
+                'string',
+                'regex:/^09\d{9}$/',
+                Rule::unique('users', 'phone'),
+                Rule::unique('pending_customer_registrations', 'phone'),
+            ],
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users', 'email'),
+                Rule::unique('pending_customer_registrations', 'email'),
+            ],
+            'password' => 'required|string|min:8|max:100|confirmed',
         ]);
 
-        $user = User::create([
-            'first_name'    => $request->first_name,
-            'last_name'     => $request->last_name,
-            'username'      => $request->username ?: null,
-            'email'         => $request->email,
-            'phone'         => $request->phone ?: null,
-            'password_hash' => Hash::make($request->password),
-            'role'          => 'customer',
-            'customer_tier' => 'new',
-            'is_active'     => 1,
-        ]);
+        $pendingRegistration = DB::transaction(fn () => PendingCustomerRegistration::create([
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'username' => $data['username'] ?: null,
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'password_hash' => Hash::make($data['password']),
+        ]));
 
-        EmailVerificationController::sendVerificationEmail($user);
+        try {
+            EmailVerificationController::sendVerificationEmail($pendingRegistration);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // The pending registration remains recoverable through resend;
+            // callers must not retry registration and hit duplicate fields.
+            return response()->json([
+                'success' => true,
+                'message' => 'Registration saved, but the verification email could not be queued. Please use Resend verification email.',
+                'requires_verification' => true,
+                'email_delivery_queued' => false,
+                'email' => $pendingRegistration->email,
+            ], 201);
+        }
 
         return response()->json([
-            'success'               => true,
-            'message'               => 'Account created. Please check your email to verify your account.',
+            'success' => true,
+            'message' => 'Please check your email to complete account registration.',
             'requires_verification' => true,
-            'email'                 => $user->email,
+            'email_delivery_queued' => true,
+            'email' => $pendingRegistration->email,
         ], 201);
     }
 
     // ── UNIFIED SIGN-IN ───────────────────────────────────
     public function signIn(Request $request)
     {
-        $request->validate([
+        $request->merge([
+            'identifier' => trim((string) $request->input('identifier')),
+        ]);
+        $data = $request->validate([
             'identifier' => 'required|string',
-            'password'   => 'required|string',
+            'password' => 'required|string',
         ]);
 
-        $identifier  = $request->identifier;
-        $throttleKey = 'sign-in:' . strtolower($identifier);
+        $identifier = $data['identifier'];
+        $normalizedIdentifier = Str::lower($identifier);
+        $throttleKey = 'sign-in:'.hash('sha256', $normalizedIdentifier.'|'.$request->ip());
+        $ipThrottleKey = 'sign-in-ip:'.hash('sha256', (string) $request->ip());
 
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)
+            || RateLimiter::tooManyAttempts($ipThrottleKey, 25)) {
+            $seconds = max(
+                RateLimiter::availableIn($throttleKey),
+                RateLimiter::availableIn($ipThrottleKey),
+            );
+
             return response()->json([
-                'success'     => false,
-                'message'     => "Too many sign-in attempts. Try again in {$seconds} seconds.",
+                'success' => false,
+                'message' => "Too many sign-in attempts. Try again in {$seconds} seconds.",
                 'retry_after' => $seconds,
-            ], 429);
+            ], 429)->header('Retry-After', (string) $seconds);
         }
 
         if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
@@ -72,19 +129,46 @@ class AuthController extends Controller
             $field = 'username';
         }
 
-        $user = User::where($field, $identifier)->first();
+        $lookupIdentifier = match (true) {
+            $field === 'email' => $normalizedIdentifier,
+            $field === 'phone' && str_starts_with($identifier, '+63') => '0'.substr($identifier, 3),
+            default => $identifier,
+        };
+        $user = User::where($field, $lookupIdentifier)->first();
+        $pendingRegistration = $user
+            ? null
+            : PendingCustomerRegistration::where($field, $lookupIdentifier)->first();
+        $passwordHash = $user?->password_hash
+            ?? $pendingRegistration?->password_hash
+            ?? '$2y$12$phAn9O3fw5n4sHb8YADptOZicYefzNF1mfQlOwFAKzEQ533R6y4iq';
+        $passwordMatches = Hash::check($data['password'], $passwordHash);
 
-        if (! $user || ! Hash::check($request->password, $user->password_hash)) {
+        if ((! $user && ! $pendingRegistration) || ! $passwordMatches) {
             RateLimiter::hit($throttleKey, 60);
+            RateLimiter::hit($ipThrottleKey, 60);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials.',
             ], 401);
         }
 
-        if (! $user->is_active) {
+        if ($pendingRegistration) {
+            RateLimiter::clear($throttleKey);
+
             return response()->json([
                 'success' => false,
+                'code' => 'email_not_verified',
+                'message' => 'Please verify your email address to finish registering your account.',
+                'email_not_verified' => true,
+                'email' => $pendingRegistration->email,
+            ], 403);
+        }
+
+        if (! $user->is_active || $user->is_archived) {
+            return response()->json([
+                'success' => false,
+                'code' => 'account_disabled',
                 'message' => 'Your account has been disabled. Please contact the clinic.',
             ], 403);
         }
@@ -92,37 +176,40 @@ class AuthController extends Controller
         // Block unverified customers (admins/staff skip this check)
         if (! in_array($user->role, ['admin', 'staff']) && ! $user->email_verified_at) {
             return response()->json([
-                'success'            => false,
-                'message'            => 'Please verify your email address before signing in. Check your inbox for the verification link.',
+                'success' => false,
+                'code' => 'email_not_verified',
+                'message' => 'Please verify your email address before signing in. Check your inbox for the verification link.',
                 'email_not_verified' => true,
-                'email'              => $user->email,
+                'email' => $user->email,
             ], 403);
         }
 
         RateLimiter::clear($throttleKey);
-        $user->tokens()->delete();
         $tokenName = in_array($user->role, ['admin', 'staff']) ? 'admin_token' : 'auth_token';
-        $token     = $user->createToken($tokenName)->plainTextToken;
+        $token = $user->createToken($tokenName)->plainTextToken;
 
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
-            'token'   => $token,
-            'user'    => [
-                'user_id'    => $user->user_id,
+            'token' => $token,
+            'user' => [
+                'user_id' => $user->user_id,
                 'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email'      => $user->email,
-                'phone'      => $user->phone,
-                'role'       => $user->role,
-            ]
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+            ],
         ], 200);
     }
 
     // ── LOGOUT ────────────────────────────────────────────
     public function logout(Request $request)
     {
-        $request->user()->tokens()->delete();
+        $accessToken = $request->user()->currentAccessToken();
+        if ($accessToken && method_exists($accessToken, 'delete')) {
+            $accessToken->delete();
+        }
 
         return response()->json([
             'success' => true,
@@ -134,15 +221,16 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
+
         return response()->json([
             'success' => true,
-            'user'    => [
-                'user_id'    => $user->user_id,
+            'user' => [
+                'user_id' => $user->user_id,
                 'first_name' => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email'      => $user->email,
-                'phone'      => $user->phone,
-                'role'       => $user->role,
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
             ],
         ], 200);
     }

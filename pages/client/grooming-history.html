@@ -205,7 +205,7 @@
       </main>
     </div>
 
-    <script src="../../scripts/api.js?v=email-verification-20260726"></script>
+    <script src="../../scripts/api.js?v=auth-session-20260816"></script>
     <script>
       lucide.createIcons();
 
@@ -247,14 +247,18 @@
             `${firstName} ${lastName}`.trim() || "Customer";
           document.getElementById("clientProfileInitials").textContent =
             ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "--";
-        } catch {
-          window.location.href = "./sign-in.html";
+        } catch (error) {
+          if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {
+            API.redirectToSignIn();
+          } else {
+            console.error("Unable to load the customer profile.", error);
+          }
         }
       })();
 
       document.getElementById("clientLogoutBtn").addEventListener("click", async () => {
         try { await API.logout("customer"); } finally {
-          window.location.href = "./sign-in.html?logout=1";
+          API.redirectToSignIn({ replace: true });
         }
       });
 

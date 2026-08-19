@@ -2,8 +2,8 @@
 // Depends on: api.js
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (!API.getCustomerToken()) {
-    window.location.href = "./sign-in.html";
+  if (!API.hasAuthenticatedSession("customer")) {
+    API.redirectToSignIn();
     return;
   }
 
@@ -1823,7 +1823,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await API.logout("customer");
     } finally {
-      window.location.href = "./sign-in.html?logout=1";
+      API.redirectToSignIn({ replace: true });
     }
   });
 

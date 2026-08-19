@@ -169,7 +169,7 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             'id="reviewSimilarOwnerBtn"',
             'id="continueSimilarOwnerBtn"',
             'Continue anyway',
-            'api.js?v=walk-in-owner-validation-20260812',
+            'api.js?v=auth-session-20260816',
         ] as $content) {
             $this->assertStringContainsString($content, $ownerPage);
         }

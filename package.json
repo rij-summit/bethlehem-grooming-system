@@ -5,7 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "test": "node tests/customer-dashboard-history-regression.cjs"
+        "test": "node tests/customer-dashboard-history-regression.cjs && node tests/frontend-auth-session-regression.cjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

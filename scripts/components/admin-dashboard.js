@@ -643,8 +643,8 @@ function adminDashboard() {
       if (this._initialized) return;
       this._initialized = true;
 
-      if (!localStorage.getItem("admin_token")) {
-        window.location.href = "../../pages/client/sign-in.html";
+      if (!API.hasAuthenticatedSession("admin")) {
+        API.redirectToSignIn();
         return;
       }
 

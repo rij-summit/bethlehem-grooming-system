@@ -1,0 +1,428 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const projectRoot = path.resolve(__dirname, "..");
+const apiSource = fs.readFileSync(path.join(projectRoot, "scripts/api.js"), "utf8");
+
+class MemoryStorage {
+  constructor(seed = {}) {
+    this.values = new Map(Object.entries(seed));
+  }
+
+  getItem(key) {
+    return this.values.has(key) ? this.values.get(key) : null;
+  }
+
+  setItem(key, value) {
+    this.values.set(key, String(value));
+  }
+
+  removeItem(key) {
+    this.values.delete(key);
+  }
+}
+
+function jsonResponse(status, data) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => data,
+    headers: { get: () => null },
+  };
+}
+
+function createBrowser({
+  pathname = "/pages/client/sign-in.html",
+  local = {},
+  session = {},
+  fetchImpl = async () => jsonResponse(200, {}),
+} = {}) {
+  const localStorage = new MemoryStorage(local);
+  const sessionStorage = new MemoryStorage(session);
+  const listeners = new Map();
+  const replacements = [];
+  const location = {
+    protocol: "http:",
+    hostname: "127.0.0.1",
+    port: "8000",
+    origin: "http://127.0.0.1:8000",
+    pathname,
+    href: "",
+    replace(target) {
+      replacements.push(target);
+      this.href = target;
+    },
+  };
+  const window = {
+    location,
+    addEventListener(name, handler) {
+      const handlers = listeners.get(name) || [];
+      handlers.push(handler);
+      listeners.set(name, handlers);
+    },
+  };
+  const context = {
+    AbortController,
+    FormData: class FormData {},
+    URLSearchParams,
+    clearTimeout,
+    console,
+    document: { querySelector: () => null },
+    fetch: (...args) => fetchImpl(...args),
+    localStorage,
+    sessionStorage,
+    setTimeout,
+    window,
+  };
+
+  vm.createContext(context);
+  vm.runInContext(apiSource, context, { filename: "scripts/api.js" });
+
+  return {
+    API: context.API,
+    localStorage,
+    sessionStorage,
+    location,
+    replacements,
+    dispatch(name, event = {}) {
+      for (const handler of listeners.get(name) || []) handler(event);
+    },
+  };
+}
+
+async function testExclusiveRememberMeStorage() {
+  const browser = createBrowser({
+    local: { customer_token: "obsolete-local-token", user_role: "customer" },
+    fetchImpl: async () => jsonResponse(200, {
+      token: "new-session-token",
+      user: { role: "customer" },
+    }),
+  });
+
+  await browser.API.signIn("customer@example.com", "password", false);
+
+  assert.equal(browser.API.getBaseUrl(), "http://127.0.0.1:8000/api");
+  assert.equal(browser.localStorage.getItem("customer_token"), null);
+  assert.equal(browser.localStorage.getItem("user_role"), null);
+  assert.equal(browser.sessionStorage.getItem("customer_token"), "new-session-token");
+  assert.equal(browser.sessionStorage.getItem("user_role"), "customer");
+  assert.equal(browser.API.getCustomerToken(), "new-session-token");
+}
+
+async function testTemporaryServerFailureDoesNotRedirect() {
+  const browser = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    local: { customer_token: "valid-looking-token", user_role: "customer" },
+    fetchImpl: async () => jsonResponse(500, { message: "Temporary failure" }),
+  });
+
+  await assert.rejects(() => browser.API.getMe("customer"), /Temporary failure/);
+  assert.deepEqual(browser.replacements, []);
+  assert.equal(browser.API.getCustomerToken(), "valid-looking-token");
+}
+
+async function testReal401ClearsAndUsesNestedSafePath() {
+  const browser = createBrowser({
+    pathname: "/bethlehem/pages/admin/inventory/pos.html",
+    local: { admin_token: "expired-admin-token", user_role: "admin" },
+    fetchImpl: async () => jsonResponse(401, { message: "Unauthenticated." }),
+  });
+
+  await assert.rejects(() => browser.API.getAdminInventoryItems(), /Unauthenticated/);
+  assert.equal(browser.API.getUserRole(), null);
+  assert.equal(browser.localStorage.getItem("admin_token"), null);
+  assert.equal(
+    browser.replacements.at(-1),
+    "/bethlehem/pages/client/sign-in.html",
+  );
+}
+
+async function testStale401CannotClearANewerLogin() {
+  let resolveRequest;
+  const browser = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    local: { customer_token: "old-token", user_role: "customer" },
+    fetchImpl: () => new Promise((resolve) => {
+      resolveRequest = resolve;
+    }),
+  });
+
+  const oldRequest = browser.API.getMe("customer");
+  browser.API.setCustomerToken("new-token", true);
+  resolveRequest(jsonResponse(401, { message: "Old token expired" }));
+
+  await assert.rejects(() => oldRequest, /Old token expired/);
+  assert.equal(browser.API.getCustomerToken(), "new-token");
+  assert.deepEqual(browser.replacements, []);
+}
+
+async function testOnlyExplicit403AuthCodesInvalidateSession() {
+  const generalForbidden = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    local: { customer_token: "customer-token", user_role: "customer" },
+    fetchImpl: async () => jsonResponse(403, { message: "Forbidden", code: "forbidden" }),
+  });
+
+  await assert.rejects(() => generalForbidden.API.getMe("customer"), /Forbidden/);
+  assert.equal(generalForbidden.API.getCustomerToken(), "customer-token");
+  assert.deepEqual(generalForbidden.replacements, []);
+
+  const disabled = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    local: { customer_token: "disabled-token", user_role: "customer" },
+    fetchImpl: async () => jsonResponse(403, {
+      message: "Account disabled",
+      code: "account_disabled",
+    }),
+  });
+
+  await assert.rejects(() => disabled.API.getMe("customer"), /Account disabled/);
+  assert.equal(disabled.API.getCustomerToken(), null);
+  assert.equal(disabled.replacements.at(-1), "/pages/client/sign-in.html");
+}
+
+async function testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs() {
+  let stateAtRequest = null;
+  let browser;
+  browser = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    session: { customer_token: "session-token", user_role: "customer" },
+    fetchImpl: async () => {
+      stateAtRequest = {
+        token: browser.sessionStorage.getItem("customer_token"),
+        role: browser.sessionStorage.getItem("user_role"),
+      };
+      return jsonResponse(200, { success: true });
+    },
+  });
+
+  await browser.API.logout("customer");
+  assert.deepEqual(stateAtRequest, { token: null, role: null });
+
+  const otherTab = createBrowser({
+    pathname: "/pages/client/settings.html",
+    session: { customer_token: "other-tab-token", user_role: "customer" },
+  });
+  otherTab.dispatch("storage", {
+    storageArea: otherTab.localStorage,
+    key: "bethlehem.auth.logout",
+    newValue: JSON.stringify({ role: "customer", reason: "logout" }),
+  });
+  assert.equal(otherTab.API.getCustomerToken(), null);
+  assert.equal(otherTab.replacements.at(-1), "/pages/client/sign-in.html");
+
+  const adminTab = createBrowser({
+    pathname: "/pages/admin/dashboard.html",
+    local: { admin_token: "admin-token", user_role: "staff" },
+  });
+  adminTab.dispatch("storage", {
+    storageArea: adminTab.localStorage,
+    key: "bethlehem.auth.logout",
+    newValue: JSON.stringify({ role: "admin", reason: "logout" }),
+  });
+  assert.equal(adminTab.API.getAdminToken(), null);
+  assert.equal(adminTab.replacements.at(-1), "/pages/client/sign-in.html");
+}
+
+function testTokenReplacementRemovalEventCannotClearFreshLogin() {
+  const browser = createBrowser({
+    pathname: "/pages/client/dashboard.html",
+    local: { customer_token: "fresh-token", user_role: "customer" },
+  });
+
+  browser.dispatch("storage", {
+    storageArea: browser.localStorage,
+    key: "customer_token",
+    oldValue: "old-token",
+    newValue: null,
+  });
+
+  assert.equal(browser.API.getCustomerToken(), "fresh-token");
+  assert.deepEqual(browser.replacements, []);
+}
+
+function testBackForwardCacheGuard() {
+  const browser = createBrowser({
+    pathname: "/pages/admin/dashboard.html",
+    local: { admin_token: "admin-token", user_role: "admin" },
+  });
+
+  browser.API.clearAuthState();
+  browser.dispatch("pageshow", { persisted: true });
+  assert.equal(browser.replacements.at(-1), "/pages/client/sign-in.html");
+}
+
+function verificationPageEvents({ search, hash }) {
+  const source = fs.readFileSync(
+    path.join(projectRoot, "scripts/auth/client/verify-email.js"),
+    "utf8",
+  );
+  const events = [];
+  const elements = new Map();
+  let onReady = null;
+
+  function element(id) {
+    if (!elements.has(id)) {
+      elements.set(id, {
+        id,
+        classList: { add() {}, remove() {} },
+        addEventListener() {},
+        className: "",
+        disabled: false,
+        textContent: "",
+        value: "",
+      });
+    }
+    return elements.get(id);
+  }
+
+  const pathname = "/pages/client/verify-email.html";
+  const location = {
+    hash,
+    href: `https://clinic.example${pathname}${search}${hash}`,
+    pathname,
+    search,
+    replace() {},
+  };
+  const context = {
+    API: {
+      verifyEmail(token) {
+        events.push({ type: "verify", token });
+        return new Promise(() => {});
+      },
+      resendVerification: async () => ({}),
+    },
+    URL,
+    URLSearchParams,
+    console,
+    document: {
+      addEventListener(name, handler) {
+        if (name === "DOMContentLoaded") onReady = handler;
+      },
+      getElementById: element,
+    },
+    history: {
+      replaceState(_state, _title, target) {
+        events.push({ type: "scrub", target });
+      },
+    },
+    sessionStorage: new MemoryStorage(),
+    setTimeout() {},
+    window: { location },
+  };
+
+  vm.createContext(context);
+  vm.runInContext(source, context, {
+    filename: "scripts/auth/client/verify-email.js",
+  });
+  assert.equal(typeof onReady, "function");
+  onReady();
+  return events;
+}
+
+function testVerificationCredentialsAreScrubbedBeforeUse() {
+  const fragmentEvents = verificationPageEvents({
+    search: "?token=legacy-token&campaign=welcome",
+    hash: "#token=fragment-token",
+  });
+  assert.deepEqual(fragmentEvents, [
+    { type: "scrub", target: "/pages/client/verify-email.html?campaign=welcome" },
+    { type: "verify", token: "fragment-token" },
+  ]);
+
+  const legacyEvents = verificationPageEvents({
+    search: "?token=legacy-token",
+    hash: "",
+  });
+  assert.deepEqual(legacyEvents, [
+    { type: "scrub", target: "/pages/client/verify-email.html" },
+    { type: "verify", token: "legacy-token" },
+  ]);
+}
+
+function testStaticAuthContracts() {
+  const signIn = fs.readFileSync(
+    path.join(projectRoot, "scripts/auth/sign-in.js"),
+    "utf8",
+  );
+  const verify = fs.readFileSync(
+    path.join(projectRoot, "scripts/auth/client/verify-email.js"),
+    "utf8",
+  );
+  const signup = fs.readFileSync(
+    path.join(projectRoot, "scripts/auth/client/signup.js"),
+    "utf8",
+  );
+  const webRoutes = fs.readFileSync(path.join(projectRoot, "routes/web.php"), "utf8");
+
+  assert.doesNotMatch(signIn, /Auto-redirect already-authenticated users/);
+  assert.doesNotMatch(signIn, /API\.(?:getUserRole|getAdminToken|getCustomerToken)/);
+  assert.match(verify, /new URLSearchParams\(window\.location\.hash\.slice\(1\)\)/);
+  assert.match(verify, /fragmentParams\.get\("token"\) \|\| queryParams\.get\("token"\)/);
+  assert.match(verify, /searchParams\.delete\("token"\)/);
+  assert.match(verify, /cleanUrl\.hash = ""/);
+  assert.ok(
+    verify.indexOf('history.replaceState(') < verify.indexOf('await API.verifyEmail(token)'),
+    "Verification credentials must be scrubbed before the API request",
+  );
+  assert.match(verify, /sign-in\.html\?verified=1/);
+  assert.doesNotMatch(verify, /dashboard\.html/);
+  assert.match(signup, /email_delivery_queued === false/);
+  assert.match(signup, /pendingVerificationDeliveryFailed/);
+  assert.match(webRoutes, /no-store, private, max-age=0, must-revalidate/);
+  assert.match(webRoutes, /no-cache, public, must-revalidate/);
+
+  const htmlFiles = [
+    path.join(projectRoot, "index.html"),
+    ...fs.readdirSync(path.join(projectRoot, "pages"), { recursive: true })
+      .filter((file) => file.endsWith(".html"))
+      .map((file) => path.join(projectRoot, "pages", file)),
+  ];
+  const authAssets = [
+    "scripts/api.js",
+    "scripts/auth/sign-in.js",
+    "scripts/auth/client/signup.js",
+    "scripts/auth/client/verify-email.js",
+    "scripts/components/admin-sidebar.js",
+    "scripts/components/admin-dashboard.js",
+    "scripts/components/admin-clinic.js",
+    "scripts/components/client-dashboard.js",
+    "scripts/components/client-settings.js",
+    "scripts/components/my-pets.js",
+    "scripts/components/pet-details.js",
+  ];
+
+  for (const htmlFile of htmlFiles) {
+    const html = fs.readFileSync(htmlFile, "utf8");
+    for (const tag of html.matchAll(/<script[^>]+src="([^"]+)"[^>]*>/g)) {
+      const source = tag[1].replace(/\\/g, "/");
+      const matchedAsset = authAssets.find((asset) => source.includes(asset));
+      if (matchedAsset) {
+        assert.match(
+          source,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818)(?:$|&)/,
+          `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
+        );
+      }
+    }
+  }
+}
+
+(async () => {
+  await testExclusiveRememberMeStorage();
+  await testTemporaryServerFailureDoesNotRedirect();
+  await testReal401ClearsAndUsesNestedSafePath();
+  await testStale401CannotClearANewerLogin();
+  await testOnlyExplicit403AuthCodesInvalidateSession();
+  await testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs();
+  testTokenReplacementRemovalEventCannotClearFreshLogin();
+  testBackForwardCacheGuard();
+  testVerificationCredentialsAreScrubbedBeforeUse();
+  testStaticAuthContracts();
+  console.log("frontend auth/session regression checks passed");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

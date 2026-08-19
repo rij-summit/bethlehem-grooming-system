@@ -193,7 +193,7 @@ function adminClinic() {
       const token = API.getAdminToken?.();
       const role  = API.getUserRole?.();
       if (!token || (role !== "admin" && role !== "staff")) {
-        window.location.href = "../client/sign-in.html";
+        API.redirectToSignIn?.();
       }
     },
 
