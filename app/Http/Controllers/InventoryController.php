@@ -4,12 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Services\InventoryBatchBalanceService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
+    private const MAX_MONEY = 999999.99;
+
+    private const MAX_QUANTITY = 99999999.99;
+
+    public function __construct(private readonly InventoryBatchBalanceService $batchBalances)
+    {
+    }
+
     // ── Auth guard ─────────────────────────────────────────────────────────────
 
     private function requireAuth(): \App\Models\User
@@ -23,8 +34,11 @@ class InventoryController extends Controller
 
     // ── Formatters ─────────────────────────────────────────────────────────────
 
-    private function formatItem(InventoryItem $item): array
+    private function formatItem(InventoryItem $item, ?array $balance = null): array
     {
+        $balance ??= $this->batchBalances->forItem((int) $item->item_id);
+        $physicalQuantity = (float) $item->quantity_on_hand;
+
         return [
             'item_id'          => $item->item_id,
             'item_name'        => $item->item_name,
@@ -32,16 +46,73 @@ class InventoryController extends Controller
             'category'         => $item->category,
             'unit'             => $item->unit,
             'description'      => $item->description,
-            'expiry_date'      => $item->expiry_date?->format('Y-m-d'),
             'unit_cost'        => $item->unit_cost,
             'selling_price'    => $item->selling_price,
             'quantity_on_hand' => $item->quantity_on_hand,
+            'unexpired_quantity' => $balance['unexpired_quantity'],
+            'expired_quantity' => $balance['expired_quantity'],
+            'expiry_unknown_quantity' => $balance['unknown_expiry_quantity'],
+            'historically_unsafe_quantity' => $balance['historically_unsafe_stock_out_quantity'],
+            'untracked_quantity' => round(max(
+                0,
+                $physicalQuantity - (float) $balance['tracked_remaining_quantity'],
+            ), 2),
             'reorder_level'    => $item->reorder_level,
             'low_stock'        => $item->low_stock,
             'is_active'        => $item->is_active,
             'created_at'       => $item->created_at,
             'updated_at'       => $item->updated_at,
         ];
+    }
+
+    private function formatItems(iterable $items): Collection
+    {
+        $items = collect($items);
+        $balances = $this->batchBalances->forItems($items->pluck('item_id'));
+
+        return $items->map(fn (InventoryItem $item) => $this->formatItem(
+            $item,
+            $balances[(int) $item->item_id] ?? $this->batchBalances->emptyBalance(),
+        ));
+    }
+
+    private function currentExpiryAlerts(): Collection
+    {
+        $today = now()->startOfDay();
+        $cutoff = $today->copy()->addDays(30)->toDateString();
+        $items = InventoryItem::where('is_active', 1)
+            ->where('quantity_on_hand', '>', 0)
+            ->get();
+        $balances = $this->batchBalances->forItems($items->pluck('item_id'));
+
+        return $items->map(function (InventoryItem $item) use ($balances, $today, $cutoff) {
+            $balance = $balances[(int) $item->item_id] ?? $this->batchBalances->emptyBalance();
+            $expiringBatches = collect($balance['batches'])
+                ->filter(fn (array $batch) => $batch['remaining_quantity'] > 0
+                    && $batch['expiry_date'] !== null
+                    && $batch['expiry_date'] <= $cutoff)
+                ->sortBy(fn (array $batch) => [
+                    $batch['expiry_date'],
+                    $batch['transaction_id'],
+                ])
+                ->values();
+
+            if ($expiringBatches->isEmpty()) {
+                return null;
+            }
+
+            $earliest = $expiringBatches->first();
+            $expiryDate = CarbonImmutable::parse($earliest['expiry_date']);
+
+            return [
+                ...$this->formatItem($item, $balance),
+                'earliest_expiry' => $earliest['expiry_date'],
+                'is_expired' => $earliest['is_expired'],
+                'days_until_expiry' => (int) $today->diffInDays($expiryDate, false),
+                'expiring_quantity' => round((float) $expiringBatches->sum('remaining_quantity'), 2),
+                'expiring_batches' => $expiringBatches->all(),
+            ];
+        })->filter()->values();
     }
 
     private function formatTransaction(InventoryTransaction $t): array
@@ -104,7 +175,7 @@ class InventoryController extends Controller
         $paginator = $query->orderBy('item_name')->paginate(20, ['*'], 'page', $page);
 
         return response()->json([
-            'data'      => collect($paginator->items())->map(fn ($i) => $this->formatItem($i)),
+            'data'      => $this->formatItems($paginator->items()),
             'total'     => $paginator->total(),
             'page'      => $page,
             'last_page' => $paginator->lastPage(),
@@ -121,10 +192,9 @@ class InventoryController extends Controller
             'category'      => 'required|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
             'unit'          => 'required|string|max:50',
             'description'   => 'nullable|string|max:255',
-            'expiry_date'   => 'required|date',
-            'unit_cost'     => 'nullable|numeric|min:0',
-            'selling_price' => 'nullable|numeric|min:0',
-            'reorder_level' => 'nullable|numeric|min:0',
+            'unit_cost'     => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
+            'selling_price' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
+            'reorder_level' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_QUANTITY,
         ]);
 
         $item = InventoryItem::create([
@@ -159,10 +229,9 @@ class InventoryController extends Controller
             'category'      => 'sometimes|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
             'unit'          => 'sometimes|string|max:50',
             'description'   => 'nullable|string|max:255',
-            'expiry_date'   => 'required|date',
-            'unit_cost'     => 'nullable|numeric|min:0',
-            'selling_price' => 'nullable|numeric|min:0',
-            'reorder_level' => 'nullable|numeric|min:0',
+            'unit_cost'     => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
+            'selling_price' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
+            'reorder_level' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_QUANTITY,
         ]);
 
         // Prevent accidentally overwriting stock quantity via edit form
@@ -235,7 +304,7 @@ class InventoryController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $items->map(fn ($i) => $this->formatItem($i)),
+            'data' => $this->formatItems($items),
         ]);
     }
 
@@ -248,11 +317,11 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'items'                => 'required|array|min:1',
             'items.*.item_id'      => 'required|integer|exists:inventory_items,item_id',
-            'items.*.quantity'     => 'required|numeric|min:0.01',
+            'items.*.quantity'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_QUANTITY,
             'items.*.reason'       => 'required|in:purchase,return,adjustment',
-            'items.*.unit_cost'    => 'nullable|numeric|min:0',
+            'items.*.unit_cost'    => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
             'items.*.batch_number' => 'nullable|string|max:100',
-            'items.*.expiry_date'  => 'required|date',
+            'items.*.expiry_date'  => 'required|date|after_or_equal:today',
             'items.*.notes'        => 'nullable|string|max:500',
             'supplier_id'          => 'nullable|integer|exists:suppliers,supplier_id',
         ]);
@@ -260,11 +329,21 @@ class InventoryController extends Controller
         $results = [];
 
         DB::transaction(function () use ($validated, $user, &$results) {
-            foreach ($validated['items'] as $entry) {
+            // A stable item order prevents opposing multi-item requests from
+            // taking row locks in reverse order.
+            $entries = collect($validated['items'])
+                ->sortBy(fn (array $entry) => (int) $entry['item_id'])
+                ->values();
+
+            foreach ($entries as $entry) {
                 $item = InventoryItem::where('item_id', $entry['item_id'])
                                      ->where('is_active', 1)
                                      ->lockForUpdate()
                                      ->firstOrFail();
+
+                if ((float) $item->quantity_on_hand + (float) $entry['quantity'] > self::MAX_QUANTITY) {
+                    abort(422, "Stock-in would exceed the maximum supported quantity for \"{$item->item_name}\".");
+                }
 
                 $item->increment('quantity_on_hand', $entry['quantity']);
 
@@ -287,6 +366,8 @@ class InventoryController extends Controller
                     'item_name'        => $item->item_name,
                     'quantity_added'   => $entry['quantity'],
                     'quantity_on_hand' => $item->quantity_on_hand,
+                    'unexpired_quantity' => $this->batchBalances
+                        ->forItem((int) $item->item_id)['unexpired_quantity'],
                     'transaction_id'   => $tx->transaction_id,
                 ];
             }
@@ -302,9 +383,9 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'items'                  => 'required|array|min:1',
             'items.*.item_id'        => 'required|integer|exists:inventory_items,item_id',
-            'items.*.quantity'       => 'required|numeric|min:0.01',
+            'items.*.quantity'       => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_QUANTITY,
             'items.*.reason'         => 'required|in:used,sold,expired,damaged,adjustment',
-            'items.*.selling_price'  => 'nullable|numeric|min:0',
+            'items.*.selling_price'  => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
             'items.*.notes'          => 'nullable|string|max:500',
             'items.*.reference_type' => 'nullable|in:manual,appointment,pos',
             'items.*.reference_id'   => 'nullable|integer',
@@ -313,7 +394,27 @@ class InventoryController extends Controller
         $results = [];
 
         DB::transaction(function () use ($validated, $user, &$results) {
-            foreach ($validated['items'] as $entry) {
+            // Process constrained expiry pools before unrestricted write-offs,
+            // and lock item rows in a deterministic order. This makes a valid
+            // mixed request independent of its client-side row order.
+            $reasonPriority = fn (string $reason): int => match ($reason) {
+                'expired' => 0,
+                'sold', 'used' => 1,
+                default => 2,
+            };
+            $entries = collect($validated['items'])
+                ->sort(function (array $left, array $right) use ($reasonPriority): int {
+                    return [
+                        (int) $left['item_id'],
+                        $reasonPriority($left['reason']),
+                    ] <=> [
+                        (int) $right['item_id'],
+                        $reasonPriority($right['reason']),
+                    ];
+                })
+                ->values();
+
+            foreach ($entries as $entry) {
                 $item = InventoryItem::where('item_id', $entry['item_id'])
                                      ->where('is_active', 1)
                                      ->lockForUpdate()
@@ -321,6 +422,16 @@ class InventoryController extends Controller
 
                 if ((float) $item->quantity_on_hand < (float) $entry['quantity']) {
                     abort(422, "Insufficient stock for \"{$item->item_name}\". Available: {$item->quantity_on_hand} {$item->unit}.");
+                }
+
+                $balance = $this->batchBalances->forItem((int) $item->item_id);
+                if (in_array($entry['reason'], ['sold', 'used'], true)
+                    && (float) $balance['unexpired_quantity'] + 0.00001 < (float) $entry['quantity']) {
+                    abort(422, "Insufficient unexpired stock for \"{$item->item_name}\". Unexpired available: {$balance['unexpired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
+                }
+                if ($entry['reason'] === 'expired'
+                    && (float) $balance['expired_quantity'] + 0.00001 < (float) $entry['quantity']) {
+                    abort(422, "Insufficient expired stock for \"{$item->item_name}\". Expired available: {$balance['expired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
                 }
 
                 $item->decrement('quantity_on_hand', $entry['quantity']);
@@ -343,6 +454,8 @@ class InventoryController extends Controller
                     'unit'             => $item->unit,
                     'quantity_removed' => $entry['quantity'],
                     'quantity_on_hand' => $item->quantity_on_hand,
+                    'unexpired_quantity' => $this->batchBalances
+                        ->forItem((int) $item->item_id)['unexpired_quantity'],
                     'transaction_id'   => $tx->transaction_id,
                 ];
             }
@@ -403,7 +516,7 @@ class InventoryController extends Controller
             ->get();
 
         return response()->json([
-            'data'  => $items->map(fn ($i) => $this->formatItem($i)),
+            'data'  => $this->formatItems($items),
             'count' => $items->count(),
         ]);
     }
@@ -412,25 +525,7 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $cutoff = now()->addDays(30)->toDateString();
-
-        $items = InventoryItem::where('is_active', 1)
-            ->where('quantity_on_hand', '>', 0)
-            ->whereHas('batches', fn ($q) => $q->where('expiry_date', '<=', $cutoff))
-            ->with(['batches' => fn ($q) => $q->where('expiry_date', '<=', $cutoff)->orderBy('expiry_date')])
-            ->get();
-
-        $data = $items->map(function ($item) {
-            $earliest = $item->batches->first();
-            return [
-                ...$this->formatItem($item),
-                'earliest_expiry'   => $earliest?->expiry_date?->format('Y-m-d'),
-                'is_expired'        => $earliest?->expiry_date?->isPast() ?? false,
-                'days_until_expiry' => $earliest?->expiry_date
-                    ? (int) now()->diffInDays($earliest->expiry_date, false)
-                    : null,
-            ];
-        });
+        $data = $this->currentExpiryAlerts();
 
         return response()->json([
             'data'  => $data,
@@ -446,11 +541,7 @@ class InventoryController extends Controller
             ->whereRaw('reorder_level > 0 AND quantity_on_hand <= reorder_level')
             ->count();
 
-        $cutoff      = now()->addDays(30)->toDateString();
-        $expiryCount = InventoryItem::where('is_active', 1)
-            ->where('quantity_on_hand', '>', 0)
-            ->whereHas('batches', fn ($q) => $q->where('expiry_date', '<=', $cutoff))
-            ->count();
+        $expiryCount = $this->currentExpiryAlerts()->count();
 
         return response()->json([
             'low_stock_count'    => $lowStockCount,
@@ -470,11 +561,7 @@ class InventoryController extends Controller
             ->whereRaw('reorder_level > 0 AND quantity_on_hand <= reorder_level')
             ->count();
 
-        $cutoff      = now()->addDays(30)->toDateString();
-        $expiryCount = InventoryItem::where('is_active', 1)
-            ->where('quantity_on_hand', '>', 0)
-            ->whereHas('batches', fn ($q) => $q->where('expiry_date', '<=', $cutoff))
-            ->count();
+        $expiryCount = $this->currentExpiryAlerts()->count();
 
         $recentTransactions = InventoryTransaction::with(['item', 'supplier', 'performedBy'])
             ->orderBy('created_at', 'desc')

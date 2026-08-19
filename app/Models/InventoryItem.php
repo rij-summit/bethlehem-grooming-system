@@ -15,7 +15,6 @@ class InventoryItem extends Model
         'category',
         'unit',
         'description',
-        'expiry_date',
         'unit_cost',
         'selling_price',
         'quantity_on_hand',
@@ -29,7 +28,6 @@ class InventoryItem extends Model
         'quantity_on_hand' => 'decimal:2',
         'reorder_level'    => 'decimal:2',
         'is_active'        => 'boolean',
-        'expiry_date'      => 'date',
     ];
 
     // ── Computed attributes ────────────────────────────────────────────────────

@@ -44,16 +44,23 @@ function adminPos() {
     },
 
     addToCart(item) {
+      const available = parseFloat(item.unexpired_quantity ?? 0);
+      if (available <= 0) {
+        this.error = `No unexpired stock is available for ${item.item_name}.`;
+        return;
+      }
+
       const existing = this.cart.find(c => c.item_id === item.item_id);
       if (existing) {
-        existing.quantity = Math.min(existing.quantity + 1, parseFloat(item.quantity_on_hand));
+        existing.stock = available;
+        existing.quantity = Math.min(existing.quantity + 1, available);
         existing.subtotal = parseFloat((existing.quantity * existing.price).toFixed(2));
       } else {
         this.cart.push({
           item_id:   item.item_id,
           item_name: item.item_name,
           unit:      item.unit,
-          stock:     parseFloat(item.quantity_on_hand),
+          stock:     available,
           quantity:  1,
           price:     parseFloat(item.selling_price ?? 0),
           subtotal:  parseFloat(item.selling_price ?? 0),
@@ -102,7 +109,7 @@ function adminPos() {
       for (const line of this.cart) {
         const qty = parseFloat(line.quantity) || 0;
         if (qty <= 0) { this.error = `Invalid quantity for ${line.item_name}.`; return; }
-        if (qty > line.stock) { this.error = `Insufficient stock for ${line.item_name}. Available: ${line.stock} ${line.unit}.`; return; }
+        if (qty > line.stock) { this.error = `Insufficient unexpired stock for ${line.item_name}. Available: ${line.stock} ${line.unit}.`; return; }
       }
 
       this.submitting = true;

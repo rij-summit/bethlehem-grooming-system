@@ -311,7 +311,7 @@
                         <label class="mb-1 block text-xs font-semibold text-slate-600">
                           Expiry Date <span style="color:#ef4444" class="font-bold">*</span>
                         </label>
-                        <input x-model="expiryDate" type="date"
+                        <input x-model="expiryDate" type="date" :min="today"
                           class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                       </div>
                     </div>
@@ -458,10 +458,10 @@
         </main>
       </div>
     </div>
-    <script src="../../../scripts/api.js?v=email-verification-20260726"></script>
-    <script src="../../../scripts/services/inventory-service.js"></script>
-    <script src="../../../scripts/components/admin-sidebar.js?v=logout-fix-20260726"></script>
-    <script src="../../../scripts/components/admin-stock-in.js"></script>
+    <script src="../../../scripts/api.js?v=auth-session-20260816"></script>
+    <script src="../../../scripts/services/inventory-service.js?v=inventory-security-20260816"></script>
+    <script src="../../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
+    <script src="../../../scripts/components/admin-stock-in.js?v=batch-expiry-20260816"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

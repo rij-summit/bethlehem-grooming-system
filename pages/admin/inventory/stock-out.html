@@ -119,7 +119,8 @@
                           <p class="text-xs capitalize text-slate-400" x-text="item.category?.replace('_',' ')"></p>
                         </div>
                         <span class="ml-3 shrink-0 text-xs text-slate-500">
-                          <span x-text="item.quantity_on_hand"></span> <span x-text="item.unit"></span>
+                          <span x-text="item.quantity_on_hand"></span> <span x-text="item.unit"></span> physical
+                          · <span x-text="item.unexpired_quantity ?? 0"></span> unexpired
                         </span>
                       </button>
                     </template>
@@ -136,7 +137,7 @@
                     <div class="flex-1 min-w-0">
                       <p class="truncate font-semibold text-[#1f3850]" x-text="selected?.item_name"></p>
                       <p class="text-xs text-slate-500">
-                        Available: <span class="font-semibold text-slate-700" x-text="selected?.quantity_on_hand"></span>
+                        Available for reason: <span class="font-semibold text-slate-700" x-text="availableForReason()"></span>
                         <span x-text="selected?.unit"></span>
                       </p>
                     </div>
@@ -274,10 +275,10 @@
         </main>
       </div>
     </div>
-    <script src="../../../scripts/api.js?v=email-verification-20260726"></script>
-    <script src="../../../scripts/services/inventory-service.js"></script>
-    <script src="../../../scripts/components/admin-sidebar.js?v=logout-fix-20260726"></script>
-    <script src="../../../scripts/components/admin-stock-out.js"></script>
+    <script src="../../../scripts/api.js?v=auth-session-20260816"></script>
+    <script src="../../../scripts/services/inventory-service.js?v=inventory-security-20260816"></script>
+    <script src="../../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
+    <script src="../../../scripts/components/admin-stock-out.js?v=fefo-expiry-20260816"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

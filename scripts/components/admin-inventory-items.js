@@ -19,7 +19,7 @@ function adminInventoryItems() {
     form: {
       item_id: null,
       item_name: "", barcode: "", category: "",
-      unit: "", description: "", expiry_date: "",
+      unit: "", description: "",
       unit_cost: "", selling_price: "", reorder_level: "",
     },
 
@@ -86,7 +86,7 @@ function adminInventoryItems() {
     openAdd() {
       this.form = {
         item_id: null, item_name: "", barcode: "", category: "",
-        unit: "", description: "", expiry_date: "", unit_cost: "", selling_price: "", reorder_level: "",
+        unit: "", description: "", unit_cost: "", selling_price: "", reorder_level: "",
       };
       this.modal = { open: true, busy: false, error: "" };
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -100,7 +100,6 @@ function adminInventoryItems() {
         category:      item.category,
         unit:          item.unit,
         description:   item.description ?? "",
-        expiry_date:   item.expiry_date ?? "",
         unit_cost:     item.unit_cost ?? "",
         selling_price: item.selling_price ?? "",
         reorder_level: item.reorder_level ?? "",
@@ -114,7 +113,6 @@ function adminInventoryItems() {
       if (!this.form.item_name.trim()) { this.modal.error = "Item name is required."; return; }
       if (!this.form.category)          { this.modal.error = "Category is required."; return; }
       if (!this.form.unit.trim())        { this.modal.error = "Unit is required."; return; }
-      if (!this.form.expiry_date)        { this.modal.error = "Expiry date is required."; return; }
 
       this.modal.busy = true;
       try {
@@ -124,7 +122,6 @@ function adminInventoryItems() {
           category:      this.form.category,
           unit:          this.form.unit.trim(),
           description:   this.form.description.trim() || null,
-          expiry_date:   this.form.expiry_date,
           unit_cost:     this.form.unit_cost !== "" ? parseFloat(this.form.unit_cost) : 0,
           selling_price: this.form.selling_price !== "" ? parseFloat(this.form.selling_price) : null,
           reorder_level: this.form.reorder_level !== "" ? parseFloat(this.form.reorder_level) : 0,

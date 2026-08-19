@@ -22,6 +22,11 @@ function adminStockIn() {
     reason: "purchase",
     batchNumber: "",
     expiryDate: "",
+    today: (() => {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      return now.toISOString().slice(0, 10);
+    })(),
     notes: "",
     entryError: "",
 
@@ -206,6 +211,10 @@ function adminStockIn() {
       if (!qty || qty <= 0)      { this.entryError = "Enter a valid quantity.";      return; }
       if (!this.expiryDate) {
         this.entryError = "Expiry date is required.";
+        return;
+      }
+      if (this.expiryDate < this.today) {
+        this.entryError = "Expiry date cannot be in the past.";
         return;
       }
 

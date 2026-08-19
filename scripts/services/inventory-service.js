@@ -2,26 +2,38 @@
 // Loaded as a plain <script> before Alpine. Exposes global InventoryAPI.
 
 var InventoryAPI = (() => {
-  const BASE_URL  = "http://127.0.0.1:8000/api";
   const TOKEN_KEY = "admin_token";
 
+  function getBaseUrl() {
+    const sharedBase = typeof API !== "undefined" && typeof API.getBaseUrl === "function"
+      ? API.getBaseUrl()
+      : "/api";
+
+    return String(sharedBase || "/api").replace(/\/+$/, "");
+  }
+
   function getToken() {
+    if (typeof API !== "undefined" && typeof API.getAdminToken === "function") {
+      return API.getAdminToken();
+    }
+
     return localStorage.getItem(TOKEN_KEY);
   }
 
   async function request(method, endpoint, body = null) {
+    const token = getToken();
     const headers = {
       "Content-Type": "application/json",
       Accept: "application/json",
-      Authorization: `Bearer ${getToken()}`,
     };
+    if (token) headers.Authorization = `Bearer ${token}`;
 
     const options = { method, headers };
     if (body !== null) options.body = JSON.stringify(body);
 
     let response;
     try {
-      response = await fetch(`${BASE_URL}${endpoint}`, options);
+      response = await fetch(`${getBaseUrl()}${endpoint}`, options);
     } catch {
       const err = new Error("Unable to reach the server. Check your connection.");
       err.status = 0;
@@ -31,9 +43,24 @@ var InventoryAPI = (() => {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      const code = data.code || null;
+      const responseBelongsToCurrentSession = !!token
+        && typeof API !== "undefined"
+        && typeof API.getAdminToken === "function"
+        && API.getAdminToken() === token;
+      const shouldInvalidateSession = responseBelongsToCurrentSession && (
+        response.status === 401 ||
+        (response.status === 403 && ["account_disabled", "email_not_verified"].includes(code))
+      );
+
+      if (shouldInvalidateSession && typeof API !== "undefined" && typeof API.invalidateSession === "function") {
+        API.invalidateSession("admin", code || "expired");
+      }
+
       const err = new Error(data.message || "Something went wrong.");
       err.status  = response.status;
       err.errors  = data.errors || null;
+      err.code    = code;
       throw err;
     }
 

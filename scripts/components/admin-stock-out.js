@@ -77,6 +77,17 @@ function adminStockOut() {
       this.entryError   = "";
     },
 
+    availableForReason(item = this.selected, reason = this.reason) {
+      if (!item) return 0;
+      if (["sold", "used"].includes(reason)) {
+        return parseFloat(item.unexpired_quantity ?? 0);
+      }
+      if (reason === "expired") {
+        return parseFloat(item.expired_quantity ?? 0);
+      }
+      return parseFloat(item.quantity_on_hand ?? 0);
+    },
+
     // ── Add to pending ────────────────────────────────────────────────────────
 
     addToPending() {
@@ -86,21 +97,40 @@ function adminStockOut() {
       const qty = parseFloat(this.qty);
       if (!qty || qty <= 0) { this.entryError = "Enter a valid quantity."; return; }
 
-      if (qty > parseFloat(this.selected.quantity_on_hand)) {
-        this.entryError = `Only ${this.selected.quantity_on_hand} ${this.selected.unit} available.`;
+      const available = this.availableForReason();
+      const availabilityLabel = ["sold", "used"].includes(this.reason)
+        ? "unexpired"
+        : (this.reason === "expired" ? "expired" : "physical");
+      if (qty > available) {
+        this.entryError = `Only ${available} ${this.selected.unit} ${availabilityLabel} stock available.`;
         return;
       }
 
-      const existing = this.pending.find(p => p.item_id === this.selected.item_id);
+      const pendingForItem = this.pending.filter(p => p.item_id === this.selected.item_id);
+      const pendingPhysical = pendingForItem.reduce((sum, p) => sum + p.quantity, 0);
+      const physicalAvailable = parseFloat(this.selected.quantity_on_hand ?? 0);
+      if (pendingPhysical + qty > physicalAvailable) {
+        this.entryError = `Total would exceed physical stock (${physicalAvailable} ${this.selected.unit}).`;
+        return;
+      }
+
+      const sameAvailabilityGroup = this.reason === "expired"
+        ? ["expired"]
+        : (["sold", "used"].includes(this.reason) ? ["sold", "used"] : []);
+      const pendingForAvailability = pendingForItem
+        .filter(p => sameAvailabilityGroup.includes(p.reason))
+        .reduce((sum, p) => sum + p.quantity, 0);
+      if (sameAvailabilityGroup.length && pendingForAvailability + qty > available) {
+        this.entryError = `Total would exceed available ${availabilityLabel} stock (${available} ${this.selected.unit}).`;
+        return;
+      }
+
+      const existing = this.pending.find(p =>
+        p.item_id === this.selected.item_id && p.reason === this.reason
+      );
       if (existing) {
         const newQty = Math.round((existing.quantity + qty) * 100) / 100;
-        if (newQty > parseFloat(this.selected.quantity_on_hand)) {
-          this.entryError = `Total would exceed available stock (${this.selected.quantity_on_hand} ${this.selected.unit}).`;
-          return;
-        }
         existing.quantity      = newQty;
-        // Update reason, price, and notes from the latest entry
-        existing.reason        = this.reason;
         if (this.sellingPrice !== "") existing.selling_price = parseFloat(this.sellingPrice);
         if (this.notes.trim())        existing.notes         = this.notes.trim();
       } else {
