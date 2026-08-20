@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminGroomingMedicalConcernController;
+use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\WalkinController;
@@ -32,6 +33,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['PATCH', 'api/admin/notifications/{id}/read'],
         ['GET', 'api/admin/bookings'],
         ['GET', 'api/admin/bookings/archived'],
+        ['PATCH', 'api/admin/clinic/settings/groomers-on-duty'],
         ['POST', 'api/admin/bookings/{id}/check-in'],
         ['POST', 'api/admin/bookings/{id}/revert-check-in'],
         ['POST', 'api/admin/bookings/{id}/start-grooming'],
@@ -1589,23 +1591,23 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('queue.in_progress', 1);
     }
 
-    public function test_groomer_capacity_setting_remains_admin_only(): void
+    public function test_staff_and_admin_can_change_the_groomer_capacity_setting(): void
     {
         $this->authenticateAs('staff');
 
         $this->patchJson('/api/admin/clinic/settings/groomers-on-duty', [
             'groomers_on_duty' => 3,
         ])
-            ->assertForbidden()
-            ->assertExactJson(self::FORBIDDEN_RESPONSE);
+            ->assertOk()
+            ->assertJsonPath('groomers_on_duty', 3);
 
         $this->authenticateAs('admin');
 
         $this->patchJson('/api/admin/clinic/settings/groomers-on-duty', [
-            'groomers_on_duty' => 3,
+            'groomers_on_duty' => 4,
         ])
             ->assertOk()
-            ->assertJsonPath('groomers_on_duty', 3);
+            ->assertJsonPath('groomers_on_duty', 4);
     }
 
     public function test_every_grooming_administration_route_has_authentication_and_role_middleware(): void
@@ -1631,12 +1633,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             WalkinController::class,
         ];
         $controllerRoutes = $routes->filter(
-            fn (RoutingRoute $route) => collect($controllerClasses)->contains(
-                fn (string $controller) => str_starts_with(
-                    $route->getActionName(),
-                    $controller.'@',
+            fn (RoutingRoute $route) => $route->getActionName()
+                === ClinicSettingController::class.'@updateGroomersOnDuty'
+                || collect($controllerClasses)->contains(
+                    fn (string $controller) => str_starts_with(
+                        $route->getActionName(),
+                        $controller.'@',
+                    ),
                 ),
-            ),
         );
 
         $this->assertCount(count(self::GROOMING_ADMIN_ROUTES), $controllerRoutes);

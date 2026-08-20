@@ -125,6 +125,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
         Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
         Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
+        Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
         Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
         Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
         Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
@@ -231,7 +232,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/pos/transactions/{posId}', [PosController::class, 'getReceipt']);
     });
 
-    // Administrator-only clinic availability and settings actions.
+    // Administrator-only clinic availability and closure actions.
     Route::middleware('role:admin')->group(function () {
         Route::post('/admin/clinic/stop-today', [ClinicClosureController::class, 'stopToday']);
         Route::post('/admin/clinic/reopen-today', [ClinicClosureController::class, 'reopenToday']);
@@ -240,6 +241,5 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::delete('/admin/clinic/blocked-dates/{id}', [ClinicClosureController::class, 'removeBlockedDate']);
         Route::get('/admin/clinic/settings/availability', [ClinicSettingController::class, 'availability']);
         Route::patch('/admin/clinic/settings/availability', [ClinicSettingController::class, 'updateAvailability']);
-        Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
     });
 });

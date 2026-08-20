@@ -1630,7 +1630,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['DELETE', 'api/admin/clinic/blocked-dates/{id}', 'role:admin'],
             ['GET', 'api/admin/clinic/settings/availability', 'role:admin'],
             ['PATCH', 'api/admin/clinic/settings/availability', 'role:admin'],
-            ['PATCH', 'api/admin/clinic/settings/groomers-on-duty', 'role:admin'],
+            ['PATCH', 'api/admin/clinic/settings/groomers-on-duty', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-referrals', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-referrals/{publicId}', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-referrals/{publicId}/accept', 'role:admin,staff'],
