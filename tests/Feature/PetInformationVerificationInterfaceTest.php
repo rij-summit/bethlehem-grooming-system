@@ -114,6 +114,25 @@ class PetInformationVerificationInterfaceTest extends TestCase
         }
     }
 
+    public function test_my_pet_profile_cards_use_species_specific_icons(): void
+    {
+        $petCard = $this->sourceBetween(
+            $this->myPetsComponent,
+            'function buildCard(pet)',
+            'function openAddModal()',
+        );
+
+        foreach ([
+            'const speciesIcon = getPetSpeciesIcon(pet.species);',
+            'data-lucide="${speciesIcon}"',
+            'if (normalizedSpecies === "dog") return "dog";',
+            'if (normalizedSpecies === "cat") return "cat";',
+            'return "paw-print";',
+        ] as $speciesIconBehavior) {
+            $this->assertStringContainsString($speciesIconBehavior, $petCard);
+        }
+    }
+
     public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
     {
         $petCard = $this->sourceBetween(

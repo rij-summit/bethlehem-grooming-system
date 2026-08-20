@@ -11,6 +11,7 @@ use App\Models\GroomingClinicReferral;
 use App\Models\GroomingMedicalConcern;
 use App\Models\Notification;
 use App\Models\Payment;
+use App\Notifications\GroomingFinishedNotification;
 use App\Services\DailyPetQueue;
 use App\Services\GroomingBookingWorkflowService;
 use App\Services\GroomingClinicReferralAssessmentService;
@@ -798,6 +799,11 @@ class AdminBookingController extends Controller
             ]);
 
             return [
+                'booking' => $booking,
+                'petNames' => $petsToFinish
+                    ->map(fn (BookingPet $bookingPet) => $bookingPet->pet()->value('pet_name') ?: 'Pet')
+                    ->values()
+                    ->all(),
                 'completion' => $this->completeGroomingBooking(
                     $booking,
                     $finishedAt,
@@ -811,6 +817,8 @@ class AdminBookingController extends Controller
                 'message' => $result['error']['message'],
             ], $result['error']['status']);
         }
+
+        $this->notifyOwnerGroomingFinished($result['booking'], $result['petNames']);
 
         return response()->json([
             'success' => true,
@@ -903,6 +911,11 @@ class AdminBookingController extends Controller
             ], $result['error']['status']);
         }
 
+        $this->notifyOwnerGroomingFinished(
+            $result['booking'],
+            [$result['petName']],
+        );
+
         $allPetsFinished = $result['allPetsPaymentReady'];
         $remainingPets = $result['remainingPets'];
         $remainingLabel = $remainingPets === 1 ? 'pet remains' : 'pets remain';
@@ -971,6 +984,23 @@ class AdminBookingController extends Controller
             'status' => 'for_payment',
             'message' => 'Grooming done. Customer notified for pickup and payment.',
         ];
+    }
+
+    /**
+     * Queue the separate grooming-completion email without changing the
+     * customer's existing dashboard notification.
+     *
+     * @param  array<int, string>  $petNames
+     */
+    private function notifyOwnerGroomingFinished(Booking $booking, array $petNames): void
+    {
+        $booking->loadMissing('user');
+
+        if (! $booking->user || ! filled($booking->user->email)) {
+            return;
+        }
+
+        $booking->user->notify(new GroomingFinishedNotification($petNames));
     }
 
     // ── MARK PICKED UP ────────────────────────────────────

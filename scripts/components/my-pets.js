@@ -281,6 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const sizeLabel = { small: "Small", medium: "Medium", large: "Large", extra_large: "Extra Large" };
     const furLabel  = { short: "Short", medium: "Medium", long: "Long", wire: "Wire", curl: "Curl" };
     const resolvedFurType = furLabel[pet.fur_type] || pet.fur_type;
+    const speciesIcon = getPetSpeciesIcon(pet.species);
 
     const rows = [
       ["Species", pet.species],
@@ -327,7 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-center gap-3">
             <div class="h-12 w-12 rounded-2xl bg-[#dbe8f5] flex items-center justify-center shrink-0">
-              <i data-lucide="paw-print" class="w-5 h-5 text-[#355c84]"></i>
+              <i data-lucide="${speciesIcon}" class="w-5 h-5 text-[#355c84]" aria-hidden="true"></i>
             </div>
             <div>
               <p class="font-bold text-[#2f4b66] text-base leading-tight">${escHtml(pet.pet_name)}</p>
@@ -350,6 +351,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── Modal ─────────────────────────────────────────────
+  function getPetSpeciesIcon(species) {
+    const normalizedSpecies = String(species || "").trim().toLowerCase();
+
+    if (normalizedSpecies === "dog") return "dog";
+    if (normalizedSpecies === "cat") return "cat";
+
+    return "paw-print";
+  }
+
   function openAddModal() {
     editingPet = null;
     syncEditVerifiedIndicators(null);
