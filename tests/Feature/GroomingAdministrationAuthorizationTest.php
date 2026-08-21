@@ -1025,9 +1025,22 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('status', 'checked_in')
             ->assertJsonPath('pets.0.pet_name', 'Bantay');
 
+        DB::table('users')->insert([
+            'user_id' => 100,
+            'first_name' => 'Gerald',
+            'last_name' => 'Senining',
+            'role' => 'customer',
+        ]);
+        DB::table('bookings')->where('booking_id', 1)->update(['user_id' => 100]);
+
         $this->getJson('/api/admin/notifications')
             ->assertOk()
-            ->assertJsonPath('notifications.0.type', 'payment_due');
+            ->assertJsonPath('notifications.0.type', 'payment_confirmed')
+            ->assertJsonPath(
+                'notifications.0.message',
+                'Payment received from Gerald Senining for booking MULTI-PET-SECURITY.',
+            )
+            ->assertJsonFragment(['type' => 'payment_due']);
         $this->getJson('/api/admin/transactions')
             ->assertOk()
             ->assertJsonPath('transactions.0.bookingId', 1);
@@ -1337,10 +1350,22 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'is_read' => false,
         ]);
         $this->assertDatabaseCount('customer_notifications', 2);
+        $this->assertDatabaseHas('notifications', [
+            'booking_id' => 50,
+            'type' => 'cancelled',
+            'is_read' => false,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'booking_id' => 51,
+            'type' => 'cancelled',
+            'is_read' => false,
+        ]);
+        $this->assertDatabaseCount('notifications', 2);
 
         $this->postJson('/api/admin/bookings/50/cancel')
             ->assertUnprocessable();
         $this->assertDatabaseCount('customer_notifications', 2);
+        $this->assertDatabaseCount('notifications', 2);
 
         Sanctum::actingAs(User::query()->findOrFail(50), ['*']);
 

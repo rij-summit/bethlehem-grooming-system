@@ -1,0 +1,294 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\NotificationController;
+use Carbon\Carbon;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class AdminNotificationCenterTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Carbon::setTestNow('2026-08-21 12:30:00');
+
+        Schema::create('users', function (Blueprint $table): void {
+            $table->increments('user_id');
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+        });
+
+        Schema::create('walkins', function (Blueprint $table): void {
+            $table->id();
+            $table->string('fname')->nullable();
+            $table->string('lname')->nullable();
+        });
+
+        Schema::create('time_windows', function (Blueprint $table): void {
+            $table->increments('window_id');
+            $table->string('window_label')->nullable();
+            $table->time('start_time')->nullable();
+            $table->time('end_time')->nullable();
+        });
+
+        Schema::create('pets', function (Blueprint $table): void {
+            $table->increments('pet_id');
+            $table->string('pet_name');
+        });
+
+        Schema::create('bookings', function (Blueprint $table): void {
+            $table->increments('booking_id');
+            $table->string('booking_reference');
+            $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->unsignedInteger('window_id')->nullable();
+            $table->date('booking_date')->nullable();
+            $table->text('cancellation_reason')->nullable();
+        });
+
+        Schema::create('booking_pets', function (Blueprint $table): void {
+            $table->increments('booking_pet_id');
+            $table->unsignedInteger('booking_id');
+            $table->unsignedInteger('pet_id')->nullable();
+        });
+
+        Schema::create('clinic_appointments', function (Blueprint $table): void {
+            $table->id();
+            $table->string('appointment_reference');
+            $table->string('status')->default('checked_in');
+            $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
+            $table->unsignedInteger('window_id')->nullable();
+            $table->date('appointment_date')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->increments('notification_id');
+            $table->string('type', 50);
+            $table->unsignedInteger('booking_id')->nullable();
+            $table->unsignedBigInteger('clinic_appointment_id')->nullable();
+            $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->dateTime('created_at')->nullable();
+        });
+
+        DB::table('users')->insert([
+            'user_id' => 1,
+            'first_name' => 'Gerald',
+            'last_name' => 'Senining',
+        ]);
+        DB::table('time_windows')->insert([
+            'window_id' => 1,
+            'window_label' => '1',
+            'start_time' => '08:00:00',
+            'end_time' => '09:00:00',
+        ]);
+        DB::table('pets')->insert(['pet_id' => 1, 'pet_name' => 'Mochi']);
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'BAC-20260821-0001',
+            'user_id' => 1,
+            'window_id' => 1,
+            'booking_date' => '2026-08-21',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 1,
+            'booking_id' => 1,
+            'pet_id' => 1,
+        ]);
+        DB::table('clinic_appointments')->insert([
+            'id' => 1,
+            'appointment_reference' => 'CLN-20260821-0001',
+            'status' => 'checked_in',
+            'user_id' => 1,
+            'pet_id' => 1,
+            'window_id' => 1,
+            'appointment_date' => '2026-08-21',
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        Schema::dropIfExists('notifications');
+        Schema::dropIfExists('clinic_appointments');
+        Schema::dropIfExists('booking_pets');
+        Schema::dropIfExists('bookings');
+        Schema::dropIfExists('pets');
+        Schema::dropIfExists('time_windows');
+        Schema::dropIfExists('walkins');
+        Schema::dropIfExists('users');
+
+        parent::tearDown();
+    }
+
+    public function test_category_and_unread_filters_return_only_matching_notifications(): void
+    {
+        $this->insertNotification('cancelled', false, bookingId: 1);
+        $this->insertNotification('clinic_cancelled', true, clinicAppointmentId: 1);
+        $this->insertNotification('clinic_booked', false, clinicAppointmentId: 1);
+        $this->insertNotification('payment_due', false, bookingId: 1);
+
+        $cancellations = $this->notificationPayload([
+            'mode' => 'full',
+            'status' => 'unread',
+            'category' => 'cancellations',
+        ]);
+
+        $this->assertCount(1, $cancellations['notifications']);
+        $this->assertSame('cancelled', $cancellations['notifications'][0]['type']);
+        $this->assertSame('cancellations', $cancellations['notifications'][0]['category']);
+
+        $clinic = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'clinic',
+        ]);
+
+        $this->assertCount(1, $clinic['notifications']);
+        $this->assertSame('clinic_booked', $clinic['notifications'][0]['type']);
+
+        $payments = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'payments',
+        ]);
+
+        $this->assertCount(1, $payments['notifications']);
+        $this->assertSame('payment_due', $payments['notifications'][0]['type']);
+        $this->assertSame(3, $payments['unread_count']);
+    }
+
+    public function test_full_view_paginates_and_returns_structured_emphasis_parts(): void
+    {
+        $this->insertNotification('payment_due', false, bookingId: 1);
+        $this->insertNotification('payment_confirmed', false, bookingId: 1);
+
+        for ($index = 1; $index <= 11; $index++) {
+            $this->insertNotification(
+                'booked',
+                $index % 2 === 0,
+                bookingId: 1,
+                createdAt: now()->subMinutes($index),
+            );
+        }
+
+        $firstPage = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'grooming',
+            'per_page' => 10,
+            'page' => 1,
+        ]);
+        $secondPage = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'grooming',
+            'per_page' => 10,
+            'page' => 2,
+        ]);
+        $payments = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'payments',
+        ]);
+
+        $this->assertCount(10, $firstPage['notifications']);
+        $this->assertTrue($firstPage['pagination']['has_more']);
+        $this->assertSame(11, $firstPage['pagination']['total']);
+        $this->assertCount(1, $secondPage['notifications']);
+        $this->assertFalse($secondPage['pagination']['has_more']);
+        $this->assertSame(
+            'New pre-registration BAC-20260821-0001 by Gerald Senining on Aug 21 at 8:00 AM - 9:00 AM.',
+            $firstPage['notifications'][0]['message'],
+        );
+        $this->assertSame('calendar-days', $firstPage['notifications'][0]['icon']);
+
+        $payment = collect($payments['notifications'])->firstWhere('type', 'payment_due');
+        $received = collect($payments['notifications'])->firstWhere('type', 'payment_confirmed');
+
+        $this->assertSame('Grooming done', $payment['title']);
+        $this->assertSame(
+            'Grooming done for Gerald Senining. Pet is ready - please collect payment.',
+            $payment['message'],
+        );
+        $this->assertNull($payment['context']);
+        $this->assertSame('circle-check', $payment['icon']);
+        $this->assertTrue(collect($payment['message_parts'])->contains(
+            fn (array $part) => $part['text'] === 'Gerald Senining'
+                && $part['emphasized'] === true,
+        ));
+
+        $this->assertSame(
+            'Payment received from Gerald Senining for booking BAC-20260821-0001.',
+            $received['message'],
+        );
+        $this->assertSame('credit-card', $received['icon']);
+        $this->assertTrue(collect($received['message_parts'])->contains(
+            fn (array $part) => $part['text'] === 'Gerald Senining'
+                && $part['emphasized'] === true,
+        ));
+        $this->assertTrue(collect($received['message_parts'])->contains(
+            fn (array $part) => $part['text'] === 'BAC-20260821-0001'
+                && $part['emphasized'] === true,
+        ));
+    }
+
+    public function test_staff_clinic_cancellation_creates_a_cancellation_notification(): void
+    {
+        $response = (new AdminClinicController)->cancel(
+            Request::create('/api/admin/clinic-appointments/1/cancel', 'POST'),
+            1,
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertDatabaseHas('clinic_appointments', [
+            'id' => 1,
+            'status' => 'cancelled',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'clinic_cancelled',
+            'booking_id' => null,
+            'clinic_appointment_id' => 1,
+            'is_read' => false,
+        ]);
+
+        $cancellations = $this->notificationPayload([
+            'mode' => 'full',
+            'category' => 'cancellations',
+        ]);
+
+        $this->assertCount(1, $cancellations['notifications']);
+        $this->assertSame('Clinic appointment cancelled', $cancellations['notifications'][0]['title']);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function notificationPayload(array $filters): array
+    {
+        $request = Request::create('/api/admin/notifications', 'GET', $filters);
+
+        return (new NotificationController)->index($request)->getData(true);
+    }
+
+    private function insertNotification(
+        string $type,
+        bool $isRead,
+        ?int $bookingId = null,
+        ?int $clinicAppointmentId = null,
+        ?Carbon $createdAt = null,
+    ): void {
+        DB::table('notifications')->insert([
+            'type' => $type,
+            'booking_id' => $bookingId,
+            'clinic_appointment_id' => $clinicAppointmentId,
+            'message' => "Stored {$type} notification.",
+            'is_read' => $isRead,
+            'created_at' => ($createdAt ?? now())->toDateTimeString(),
+        ]);
+    }
+}

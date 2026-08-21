@@ -33,7 +33,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=auth-session-20260816',
+            'scripts/api.js?v=admin-notifications-20260821',
             $page,
         );
     }
@@ -105,7 +105,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=auth-session-20260816', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?v=admin-notifications-20260821', $schedulesPage);
         $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=auth-session-20260816', $schedulesPage);
     }
 

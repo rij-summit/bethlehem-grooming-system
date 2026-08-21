@@ -8,6 +8,7 @@ use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
 use App\Models\GroomingClinicReferral;
+use App\Models\Notification;
 use App\Services\ClinicAppointmentSequence;
 use App\Services\GroomingClinicReferralAssessmentService;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -210,6 +211,14 @@ class AdminClinicController extends Controller
 
         $appointment = $result['appointment']->fresh($this->appointmentRelations());
 
+        if (! $result['already_synchronized'] && $appointment->status === 'for_payment') {
+            Notification::createForClinic(
+                $appointment,
+                Notification::TYPE_CLINIC_PAYMENT_DUE,
+                "Clinic visit {$appointment->appointment_reference} is ready for payment.",
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => $result['already_synchronized']
@@ -231,30 +240,62 @@ class AdminClinicController extends Controller
             'payment_method' => ['required', 'in:cash,gcash,maya,card'],
         ]);
 
-        $appt = ClinicAppointment::findOrFail($id);
+        $appt = DB::transaction(function () use ($id, $request) {
+            $appointment = ClinicAppointment::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($appt->status !== 'for_payment') {
+            if ($appointment->status !== 'for_payment') {
+                return null;
+            }
+
+            $appointment->update([
+                'status' => 'completed',
+                'total_amount' => $request->total_amount,
+                'paid' => true,
+            ]);
+            Notification::createForClinic(
+                $appointment,
+                Notification::TYPE_CLINIC_PAYMENT_CONFIRMED,
+                "Payment received for clinic appointment {$appointment->appointment_reference}.",
+            );
+
+            return $appointment;
+        });
+
+        if (! $appt) {
             return response()->json(['success' => false, 'message' => 'Appointment is not For Payment.'], 422);
         }
-
-        $appt->update([
-            'status' => 'completed',
-            'total_amount' => $request->total_amount,
-            'paid' => true,
-        ]);
 
         return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
     }
 
     public function cancel(Request $request, int $id)
     {
-        $appt = ClinicAppointment::findOrFail($id);
+        $appt = DB::transaction(function () use ($id) {
+            $appointment = ClinicAppointment::query()
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (in_array($appt->status, ['completed', 'cancelled'])) {
+            if (in_array($appointment->status, ['completed', 'cancelled'], true)) {
+                return null;
+            }
+
+            $appointment->update(['status' => 'cancelled']);
+            Notification::createForClinic(
+                $appointment,
+                Notification::TYPE_CLINIC_CANCELLED,
+                "Clinic appointment {$appointment->appointment_reference} was cancelled by clinic staff.",
+            );
+
+            return $appointment;
+        });
+
+        if (! $appt) {
             return response()->json(['success' => false, 'message' => 'Cannot cancel a completed or already-cancelled appointment.'], 422);
         }
-
-        $appt->update(['status' => 'cancelled']);
 
         return response()->json(['success' => true]);
     }

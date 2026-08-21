@@ -50,6 +50,7 @@ function getAdminSidebarActivePage(pathname = window.location.pathname) {
     "dashboard.html": "dashboard",
     "clients.html": "customers",
     "appointments.html": "appointments",
+    "notifications.html": "appointments",
     "clinic.html": "clinic",
     "archive.html": "archive",
     "transactions.html": "transactions",

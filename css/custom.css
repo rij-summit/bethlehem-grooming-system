@@ -3594,10 +3594,12 @@ body.customer-detail-modal-open {
   outline: none;
 }
 
+.admin-custom-select,
 .admin-medical-concern-custom-select {
   position: relative;
 }
 
+.admin-custom-select-trigger,
 .admin-medical-concern-select-trigger {
   display: flex;
   width: 100%;
@@ -3617,10 +3619,13 @@ body.customer-detail-modal-open {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.admin-custom-select-trigger.is-placeholder,
 .admin-medical-concern-select-trigger.is-placeholder {
   color: #94a3b8;
 }
 
+.admin-custom-select-trigger:focus-visible,
+.admin-custom-select-trigger[aria-expanded="true"],
 .admin-medical-concern-select-trigger:focus-visible,
 .admin-medical-concern-select-trigger[aria-expanded="true"] {
   border-color: #315b7e;
@@ -3628,16 +3633,19 @@ body.customer-detail-modal-open {
   box-shadow: 0 0 0 3px rgba(49, 91, 126, 0.12);
 }
 
+.admin-custom-select-trigger[aria-invalid="true"],
 .admin-medical-concern-select-trigger[aria-invalid="true"] {
   border-color: #dc2626;
 }
 
+.admin-custom-select-trigger:disabled,
 .admin-medical-concern-select-trigger:disabled {
   cursor: not-allowed;
   background: #f1f5f9;
   color: #64748b;
 }
 
+.admin-custom-select-options,
 .admin-medical-concern-select-options {
   position: absolute;
   top: calc(100% + 0.4rem);
@@ -3653,6 +3661,7 @@ body.customer-detail-modal-open {
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
 }
 
+.admin-custom-select-option,
 .admin-medical-concern-select-option {
   display: flex;
   width: 100%;
@@ -3668,6 +3677,9 @@ body.customer-detail-modal-open {
   text-align: left;
 }
 
+.admin-custom-select-option:hover,
+.admin-custom-select-option:focus-visible,
+.admin-custom-select-option.is-selected,
 .admin-medical-concern-select-option:hover,
 .admin-medical-concern-select-option:focus-visible,
 .admin-medical-concern-select-option.is-selected {
@@ -3676,6 +3688,7 @@ body.customer-detail-modal-open {
   outline: none;
 }
 
+.admin-custom-select-option.is-selected,
 .admin-medical-concern-select-option.is-selected {
   font-weight: 600;
 }

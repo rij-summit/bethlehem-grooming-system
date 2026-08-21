@@ -1150,9 +1150,18 @@ var API = (() => {
     );
   }
 
-  async function getNotifications() {
+  async function getNotifications(filters = {}) {
     // GET /api/admin/notifications  (protected — admin token)
-    return request("GET", "/admin/notifications", null, getAdminToken());
+    const params = new URLSearchParams();
+
+    if (filters.status) params.set("status", filters.status);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.mode) params.set("mode", filters.mode);
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.per_page) params.set("per_page", String(filters.per_page));
+
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return request("GET", `/admin/notifications${query}`, null, getAdminToken());
   }
 
   async function markNotificationRead(notificationId) {

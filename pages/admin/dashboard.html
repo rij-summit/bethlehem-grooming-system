@@ -476,21 +476,30 @@
                         <!-- Today group -->
                         <template x-if="groupedNotifications().today.length > 0">
                           <div>
-                            <p class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Today</p>
+                            <p class="px-4 py-2 text-[10px] font-bold text-slate-400">Today</p>
                             <template x-for="notif in groupedNotifications().today" :key="notif.notification_id">
                               <div
                                 class="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-slate-50"
                                 :class="notif.is_read ? 'bg-white' : 'bg-[#eaf4fb]'"
                                 @click="handleMarkOneRead(notif)"
                               >
-                                <span
-                                  class="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                                  :class="notif.is_read ? 'bg-transparent' : 'bg-[#315b7e]'"
-                                ></span>
-                                <div class="min-w-0">
-                                  <p class="text-sm text-slate-700" x-text="notif.message"></p>
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]" aria-hidden="true">
+                                  <i :data-lucide="notif.icon || 'bell'" class="h-4 w-4"></i>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                  <p class="text-sm text-slate-700">
+                                    <template x-for="(part, partIndex) in notif.message_parts" :key="partIndex">
+                                      <span :class="part.emphasized ? 'font-semibold' : ''" x-text="part.text"></span>
+                                    </template>
+                                  </p>
+                                  <p x-show="notif.context_parts && notif.context_parts.length" class="mt-1 text-xs text-slate-400">
+                                    <template x-for="(part, partIndex) in notif.context_parts" :key="partIndex">
+                                      <span :class="part.emphasized ? 'font-semibold' : ''" x-text="part.text"></span>
+                                    </template>
+                                  </p>
                                   <p class="mt-1 text-xs text-slate-400" x-text="formatNotificationTime(notif.created_at)"></p>
                                 </div>
+                                <span class="mt-2 h-2 w-2 shrink-0 rounded-full" :class="notif.is_read ? 'bg-transparent' : 'bg-[#315b7e]'" aria-hidden="true"></span>
                               </div>
                             </template>
                           </div>
@@ -499,21 +508,30 @@
                         <!-- Earlier group -->
                         <template x-if="groupedNotifications().earlier.length > 0">
                           <div>
-                            <p class="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Earlier</p>
+                            <p class="px-4 py-2 text-[10px] font-bold text-slate-400">Earlier</p>
                             <template x-for="notif in groupedNotifications().earlier" :key="notif.notification_id">
                               <div
                                 class="flex cursor-pointer items-start gap-3 px-4 py-3 transition hover:bg-slate-50"
                                 :class="notif.is_read ? 'bg-white' : 'bg-[#eaf4fb]'"
                                 @click="handleMarkOneRead(notif)"
                               >
-                                <span
-                                  class="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                                  :class="notif.is_read ? 'bg-transparent' : 'bg-[#315b7e]'"
-                                ></span>
-                                <div class="min-w-0">
-                                  <p class="text-sm text-slate-700" x-text="notif.message"></p>
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]" aria-hidden="true">
+                                  <i :data-lucide="notif.icon || 'bell'" class="h-4 w-4"></i>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                  <p class="text-sm text-slate-700">
+                                    <template x-for="(part, partIndex) in notif.message_parts" :key="partIndex">
+                                      <span :class="part.emphasized ? 'font-semibold' : ''" x-text="part.text"></span>
+                                    </template>
+                                  </p>
+                                  <p x-show="notif.context_parts && notif.context_parts.length" class="mt-1 text-xs text-slate-400">
+                                    <template x-for="(part, partIndex) in notif.context_parts" :key="partIndex">
+                                      <span :class="part.emphasized ? 'font-semibold' : ''" x-text="part.text"></span>
+                                    </template>
+                                  </p>
                                   <p class="mt-1 text-xs text-slate-400" x-text="formatNotificationTime(notif.created_at)"></p>
                                 </div>
+                                <span class="mt-2 h-2 w-2 shrink-0 rounded-full" :class="notif.is_read ? 'bg-transparent' : 'bg-[#315b7e]'" aria-hidden="true"></span>
                               </div>
                             </template>
                           </div>
@@ -685,7 +703,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=auth-session-20260816"></script>
+    <script src="../../scripts/api.js?v=admin-notifications-20260821"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->

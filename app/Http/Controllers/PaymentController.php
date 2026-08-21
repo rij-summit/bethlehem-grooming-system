@@ -6,6 +6,7 @@ use App\Exceptions\PaymentLimitExceededException;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingPaymentSettlementService;
@@ -164,6 +165,14 @@ class PaymentController extends Controller
                     'archived_at' => null,
                 ]);
 
+                Notification::create([
+                    'type' => 'payment_confirmed',
+                    'booking_id' => $booking->booking_id,
+                    'message' => "Payment received for booking {$booking->booking_reference}.",
+                    'is_read' => false,
+                    'created_at' => $payment->paid_at ?? now(),
+                ]);
+
                 return compact('booking', 'payment', 'summary');
             });
         } catch (UniqueConstraintViolationException) {
@@ -281,6 +290,14 @@ class PaymentController extends Controller
                 }
 
                 $booking->update($updates);
+
+                Notification::create([
+                    'type' => 'payment_confirmed',
+                    'booking_id' => $booking->booking_id,
+                    'message' => "Payment received for booking {$booking->booking_reference}.",
+                    'is_read' => false,
+                    'created_at' => $payment->paid_at ?? now(),
+                ]);
 
                 return compact('booking', 'payment', 'allPetsFinished', 'remainingPets');
             });

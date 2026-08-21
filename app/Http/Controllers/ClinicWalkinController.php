@@ -7,6 +7,7 @@ use App\Http\Requests\StoreClinicWalkinRequest;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
+use App\Models\Notification;
 use App\Models\Pet;
 use App\Models\TimeWindow;
 use App\Models\UnregisteredCustomer;
@@ -232,6 +233,13 @@ class ClinicWalkinController extends Controller
                 'checked_in_at' => null,
             ]);
 
+            $ownerName = trim(($user->first_name ?? '').' '.($user->last_name ?? ''));
+            Notification::createForClinic(
+                $appointment,
+                Notification::TYPE_CLINIC_BOOKED,
+                "Clinic pre-registration {$reference} was submitted by {$ownerName} for {$pet->pet_name}.",
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Clinic visit pre-registration submitted successfully.',
@@ -308,6 +316,13 @@ class ClinicWalkinController extends Controller
                 'paid' => false,
                 'checked_in_at' => now(),
             ]);
+
+            $ownerName = trim("{$walkin->fname} {$walkin->lname}");
+            Notification::createForClinic(
+                $appointment,
+                Notification::TYPE_CLINIC_WALK_IN,
+                "Clinic walk-in {$reference} was registered for {$ownerName} and {$pet->pet_name}.",
+            );
 
             return response()->json([
                 'success' => true,

@@ -1134,6 +1134,14 @@ class AdminBookingController extends Controller
                 $customerNotified = true;
             }
 
+            Notification::create([
+                'type' => 'cancelled',
+                'booking_id' => $booking->booking_id,
+                'message' => "Pre-registration {$booking->booking_reference} was cancelled by clinic staff.",
+                'is_read' => false,
+                'created_at' => now(),
+            ]);
+
             return ['customer_notified' => $customerNotified];
         });
 
