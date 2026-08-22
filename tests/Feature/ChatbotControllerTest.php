@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -275,6 +276,90 @@ class ChatbotControllerTest extends TestCase
             ->assertJson([
                 'reply' => 'Bethlehem Animal Clinic is **open** from **8:00 AM to 5:00 PM**. Please ask staff for exact service details.',
             ]);
+    }
+
+    public function test_gpt_oss_requests_use_a_safe_reasoning_budget(): void
+    {
+        config()->set('services.groq.key', 'fake-groq-key');
+        config()->set('services.groq.model', 'openai/gpt-oss-20b');
+        config()->set('services.groq.reasoning_effort', 'low');
+        config()->set('services.groq.include_reasoning', false);
+        config()->set('services.groq.max_completion_tokens', 1024);
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'finish_reason' => 'stop',
+                        'message' => [
+                            'content' => 'Please ask clinic staff about sedation for your pet.',
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->postJson('/api/chatbot', [
+            'message' => 'What grooming services do you offer for dogs?',
+        ])->assertOk();
+
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+
+            return ($payload['model'] ?? null) === 'openai/gpt-oss-20b'
+                && ($payload['reasoning_effort'] ?? null) === 'low'
+                && ($payload['include_reasoning'] ?? null) === false
+                && ($payload['max_completion_tokens'] ?? null) === 1024;
+        });
+    }
+
+    public function test_empty_gpt_oss_responses_log_only_safe_diagnostics(): void
+    {
+        config()->set('services.groq.key', 'fake-groq-key');
+        config()->set('services.groq.model', 'openai/gpt-oss-20b');
+        Log::spy();
+
+        Http::fake([
+            'https://api.groq.com/openai/v1/chat/completions' => Http::response([
+                'model' => 'openai/gpt-oss-20b',
+                'choices' => [
+                    [
+                        'finish_reason' => 'length',
+                        'message' => [
+                            'content' => '',
+                            'reasoning' => 'Private reasoning must not be logged.',
+                        ],
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 900,
+                    'completion_tokens' => 300,
+                    'total_tokens' => 1200,
+                ],
+            ]),
+        ]);
+
+        $this->postJson('/api/chatbot', [
+            'message' => 'What grooming services do you offer for dogs?',
+        ])
+            ->assertStatus(502)
+            ->assertJson([
+                'message' => 'The AI service returned an invalid response.',
+            ]);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return $message === 'Groq returned an empty response.'
+                    && $context === [
+                        'model' => 'openai/gpt-oss-20b',
+                        'finish_reason' => 'length',
+                        'prompt_tokens' => 900,
+                        'completion_tokens' => 300,
+                        'total_tokens' => 1200,
+                        'has_reasoning' => true,
+                    ];
+            });
     }
 
     public function test_clinic_related_questions_send_the_stricter_chatbot_prompt_to_groq(): void

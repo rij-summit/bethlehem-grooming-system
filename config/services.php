@@ -38,9 +38,26 @@ return [
     'groq' => [
         'key' => env('GROQ_API_KEY'),
 
+        'base_url' => env(
+            'GROQ_BASE_URL',
+            'https://api.groq.com/openai/v1'
+        ),
+
         'model' => env(
             'GROQ_MODEL',
-            'llama-3.1-8b-instant'
+            'openai/gpt-oss-20b'
+        ),
+
+        'reasoning_effort' => env('GROQ_REASONING_EFFORT', 'low'),
+
+        'include_reasoning' => filter_var(
+            env('GROQ_INCLUDE_REASONING', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+
+        'max_completion_tokens' => (int) env(
+            'GROQ_MAX_COMPLETION_TOKENS',
+            1024
         ),
     ],
 

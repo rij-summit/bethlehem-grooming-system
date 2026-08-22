@@ -157,6 +157,10 @@ class ChatbotController extends Controller
          */
         $apiKey = config('services.groq.key');
         $model = config('services.groq.model');
+        $groqBaseUrl = rtrim(
+            (string) config('services.groq.base_url'),
+            '/'
+        );
 
         /*
          * Stop the request if the API key is missing.
@@ -175,7 +179,7 @@ class ChatbotController extends Controller
                 ->acceptJson()
                 ->timeout(30)
                 ->post(
-                    'https://api.groq.com/openai/v1/chat/completions',
+                    $groqBaseUrl . '/chat/completions',
                     [
                         'model' => $model,
 
@@ -260,7 +264,28 @@ class ChatbotController extends Controller
 
                         'temperature' => 0.2,
 
-                        'max_completion_tokens' => 300,
+                        'max_completion_tokens' => (int) config(
+                            'services.groq.max_completion_tokens',
+                            1024
+                        ),
+
+                        ...(
+                            str_starts_with(
+                                (string) $model,
+                                'openai/gpt-oss-'
+                            )
+                                ? [
+                                    'reasoning_effort' => config(
+                                        'services.groq.reasoning_effort',
+                                        'low'
+                                    ),
+                                    'include_reasoning' => (bool) config(
+                                        'services.groq.include_reasoning',
+                                        false
+                                    ),
+                                ]
+                                : []
+                        ),
                     ]
                 );
 
@@ -301,7 +326,26 @@ class ChatbotController extends Controller
              * Make sure Groq returned a valid answer.
              */
             if (!is_string($reply) || blank($reply)) {
-                Log::warning('Groq returned an empty response.');
+                Log::warning('Groq returned an empty response.', [
+                    'model' => $response->json('model'),
+                    'finish_reason' => $response->json(
+                        'choices.0.finish_reason'
+                    ),
+                    'prompt_tokens' => $response->json(
+                        'usage.prompt_tokens'
+                    ),
+                    'completion_tokens' => $response->json(
+                        'usage.completion_tokens'
+                    ),
+                    'total_tokens' => $response->json(
+                        'usage.total_tokens'
+                    ),
+                    'has_reasoning' => filled(
+                        $response->json(
+                            'choices.0.message.reasoning'
+                        )
+                    ),
+                ]);
 
                 return response()->json([
                     'message' => implode(' ', [
