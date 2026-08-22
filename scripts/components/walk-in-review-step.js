@@ -9,7 +9,7 @@ import {
   formatAmountRange,
   formatPriceOption,
   getPackageById,
-} from "../services/grooming-service.js";
+} from "../services/grooming-service.js?v=plus-price-notice-20260822";
 import { renderWalkInConsentStep } from "./walk-in-consent-step.js";
 
 const state = {
@@ -72,7 +72,7 @@ function getReviewMainMarkup() {
 
         <div
           id="reviewNotice"
-          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+          class="mb-6 hidden rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
         >
           The price is finalized at the clinic.
         </div>
@@ -206,8 +206,12 @@ function renderEmptyState(message) {
 }
 
 function renderReviewNotice() {
+  const hasPlusPrice = state.reviewPayload.notices.includes(
+    "The price is finalized at the clinic.",
+  );
+
   elements.reviewNotice.className =
-    "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
+    `${hasPlusPrice ? "mb-6" : "hidden"} rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600`;
   elements.reviewNotice.textContent = "The price is finalized at the clinic.";
 }
 

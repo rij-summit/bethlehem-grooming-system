@@ -675,17 +675,23 @@ export function buildBookingReviewPayload(bookingDraft, petSelections) {
   );
   const notices = [];
 
-  const needsClinicPriceConfirmation = items.some((item) =>
+  const hasDisplayedPlusPrice = items.some((item) =>
     item.pricing.lineItems.some(
-      (lineItem) =>
-        lineItem.pricing.missingSize ||
-        lineItem.pricing.unmatchedSize ||
-        lineItem.pricing.hasClinicConfirmedAdjustment ||
-        lineItem.pricing.selectedPriceOption?.pricingType === "range",
+      (lineItem) => {
+        const selectedPriceOption = lineItem.pricing.selectedPriceOption;
+
+        if (selectedPriceOption) {
+          return selectedPriceOption.pricingType === "plus";
+        }
+
+        return lineItem.pricing.availablePriceOptions.some(
+          (priceOption) => priceOption.pricingType === "plus",
+        );
+      },
     ),
   );
 
-  if (needsClinicPriceConfirmation) {
+  if (hasDisplayedPlusPrice) {
     notices.push("The price is finalized at the clinic.");
   }
 

@@ -8,6 +8,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const consentDateInput = document.getElementById("consentDate");
   const submitBookingButton = document.getElementById("submitBookingButton");
   const consentStatusMessage = document.getElementById("consentStatusMessage");
+  const sedationWarningModal = document.getElementById("sedationWarningModal");
+  const sedationWarningBackButton = document.getElementById(
+    "sedationWarningBackButton",
+  );
+  const sedationWarningUnderstandButton = document.getElementById(
+    "sedationWarningUnderstandButton",
+  );
+  let sedationWarningAcknowledged = false;
   /*
     BACKEND NOTE:
     This page currently uses sessionStorage as a temporary front-end placeholder
@@ -26,14 +34,28 @@ document.addEventListener("DOMContentLoaded", () => {
   validateConsentForm();
 
   mainConsentCheckbox.addEventListener("change", handleFormStateChange);
-  sedationConsentCheckbox.addEventListener("change", handleFormStateChange);
+  sedationConsentCheckbox.addEventListener("change", () => {
+    sedationWarningAcknowledged = false;
+    handleFormStateChange();
+  });
   digitalSignatureInput.addEventListener("input", handleFormStateChange);
+  sedationWarningBackButton.addEventListener("click", closeSedationWarning);
+  sedationWarningUnderstandButton.addEventListener("click", () => {
+    sedationWarningAcknowledged = true;
+    closeSedationWarning();
+    form.requestSubmit();
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     if (!isFormValid()) {
       validateConsentForm();
+      return;
+    }
+
+    if (!sedationConsentCheckbox.checked && !sedationWarningAcknowledged) {
+      openSedationWarning();
       return;
     }
 
@@ -211,6 +233,20 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(`Failed to parse sessionStorage key: ${key}`, error);
       return null;
     }
+  }
+
+  function openSedationWarning() {
+    sedationWarningModal.classList.remove("hidden");
+    sedationWarningModal.classList.add("flex");
+    document.body.classList.add("overflow-hidden");
+    sedationWarningUnderstandButton.focus();
+  }
+
+  function closeSedationWarning() {
+    sedationWarningModal.classList.add("hidden");
+    sedationWarningModal.classList.remove("flex");
+    document.body.classList.remove("overflow-hidden");
+    submitBookingButton.focus();
   }
 
   // ── Inline error banner (replaces alert for non-duplicate errors) ────────

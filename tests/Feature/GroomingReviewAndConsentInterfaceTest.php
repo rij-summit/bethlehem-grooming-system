@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class GroomingReviewAndConsentInterfaceTest extends TestCase
 {
-    public function test_review_pages_use_one_concise_clinic_price_notice(): void
+    public function test_review_pages_only_show_the_clinic_price_notice_for_plus_prices(): void
     {
         $customerPage = file_get_contents(base_path('pages/client/booking-review.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking-review.html'));
@@ -17,6 +17,22 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
         foreach ([$customerPage, $walkInPage, $customerReview, $walkInReview, $pricing] as $source) {
             $this->assertStringContainsString('The price is finalized at the clinic.', $source);
         }
+
+        foreach ([$customerPage, $walkInPage] as $page) {
+            $this->assertMatchesRegularExpression(
+                '/id="reviewNotice"\s+class="[^"]*hidden/',
+                $page,
+            );
+        }
+
+        foreach ([$customerReview, $walkInReview] as $review) {
+            $this->assertStringContainsString('state.reviewPayload.notices.includes(', $review);
+            $this->assertStringContainsString('${hasPlusPrice ? "mb-6" : "hidden"}', $review);
+        }
+
+        $this->assertStringContainsString('const hasDisplayedPlusPrice = items.some', $pricing);
+        $this->assertStringContainsString('priceOption.pricingType === "plus"', $pricing);
+        $this->assertStringNotContainsString('needsClinicPriceConfirmation', $pricing);
 
         foreach ([
             'This booking contains estimated pricing details.',
