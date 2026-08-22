@@ -202,11 +202,12 @@ class NotificationController extends Controller
         $reference = $booking?->booking_reference;
         $owner = $this->bookingOwnerName($booking);
         $schedule = $this->bookingSchedule($booking);
-        $message = $reference
-            ? 'New pre-registration '.$reference
+        $message = $fallback !== ''
+            ? $this->normalizeStoredScheduleMessage($fallback)
+            : ($reference ? 'New pre-registration '.$reference
                 .($owner ? " by {$owner}" : '')
                 .($schedule ? " on {$schedule}" : '').'.'
-            : $fallback;
+                : $fallback);
 
         return $this->content(
             'New pre-registration',
@@ -221,11 +222,12 @@ class NotificationController extends Controller
         $reference = $booking?->booking_reference;
         $owner = $this->bookingOwnerName($booking);
         $schedule = $this->bookingSchedule($booking);
-        $message = $reference
-            ? 'Pre-registration '.$reference.' was rescheduled'
+        $message = $fallback !== ''
+            ? $this->normalizeStoredScheduleMessage($fallback)
+            : ($reference ? 'Pre-registration '.$reference.' was rescheduled'
                 .($owner ? " by {$owner}" : '')
                 .($schedule ? " to {$schedule}" : '').'.'
-            : $fallback;
+                : $fallback);
 
         return $this->content(
             'Grooming pre-registration rescheduled',
@@ -534,5 +536,20 @@ class NotificationController extends Controller
     private function normalizeStoredMessage(?string $message): string
     {
         return trim((string) preg_replace('/\s+/', ' ', (string) $message));
+    }
+
+    private function normalizeStoredScheduleMessage(string $message): string
+    {
+        $message = preg_replace_callback(
+            '/\b\d{4}-\d{2}-\d{2}\b/',
+            fn (array $matches) => $this->notificationDateLabel($matches[0]),
+            $message,
+        ) ?? $message;
+
+        return preg_replace(
+            '/\bNew Pre-registration\b/i',
+            'New pre-registration',
+            $message,
+        ) ?? $message;
     }
 }

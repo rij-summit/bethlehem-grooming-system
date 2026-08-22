@@ -214,6 +214,15 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->dateTime('created_at')->nullable();
         });
 
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->increments('notification_id');
+            $table->string('type', 50);
+            $table->unsignedInteger('booking_id')->nullable();
+            $table->text('message');
+            $table->boolean('is_read')->default(false);
+            $table->dateTime('created_at')->nullable();
+        });
+
         Schema::create('booking_pets', function (Blueprint $table) {
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
@@ -243,6 +252,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('services');
         Schema::dropIfExists('booking_pets');
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('time_windows');
         Schema::dropIfExists('clinic_settings');
@@ -1236,6 +1246,74 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'booking_date' => $bookingDate,
             'window_id' => 1,
             'reschedule_count' => 0,
+        ]);
+    }
+
+    public function test_customer_reschedule_notification_includes_previous_and_new_schedules(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-22 08:00:00'));
+        $this->authenticateAs('customer', 10);
+        $bookingDate = now()->toDateString();
+
+        DB::table('clinic_settings')->insert([
+            'id' => 1,
+            'groomers_on_duty' => 2,
+            'clinic_open_time' => '08:00:00',
+            'clinic_close_time' => '23:00:00',
+            'clinic_prereg_cutoff_time' => '23:00:00',
+            'grooming_open_time' => '08:00:00',
+            'grooming_close_time' => '23:00:00',
+            'grooming_prereg_cutoff_time' => '23:00:00',
+        ]);
+        DB::table('time_windows')->insert([
+            [
+                'window_id' => 2,
+                'window_label' => '2',
+                'start_time' => '14:00:00',
+                'end_time' => '15:00:00',
+                'max_slots' => 4,
+                'is_active' => true,
+            ],
+            [
+                'window_id' => 3,
+                'window_label' => '3',
+                'start_time' => '22:00:00',
+                'end_time' => '23:00:00',
+                'max_slots' => 4,
+                'is_active' => true,
+            ],
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'BAC-20260822-0001',
+            'user_id' => 10,
+            'window_id' => 2,
+            'booking_date' => $bookingDate,
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+            'reschedule_count' => 0,
+            'cancel_count' => 0,
+        ]);
+
+        $this->postJson('/api/booking/reschedule', [
+            'booking_id' => 1,
+            'new_date' => $bookingDate,
+            'new_window_id' => 3,
+        ])
+            ->assertOk()
+            ->assertJsonPath('booking.window', '10:00 PM - 11:00 PM');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 1,
+            'booking_date' => $bookingDate,
+            'window_id' => 3,
+            'reschedule_count' => 1,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'booking_id' => 1,
+            'type' => 'rescheduled',
+            'message' => 'Pre-registration BAC-20260822-0001 was rescheduled by Customer User from Aug 22 at 2:00 PM - 3:00 PM to Aug 22 at 10:00 PM - 11:00 PM.',
+            'is_read' => false,
         ]);
     }
 

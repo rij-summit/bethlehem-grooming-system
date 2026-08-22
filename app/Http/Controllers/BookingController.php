@@ -324,10 +324,12 @@ class BookingController extends Controller
             }
 
             // ── Create notification for admin ─────────────────
+            $schedule = $this->notificationScheduleLabel($date, $window);
+
             Notification::create([
                 'type' => 'booked',
                 'booking_id' => $booking->booking_id,
-                'message' => "New Pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$date} at {$window->window_label}.",
+                'message' => "New pre-registration {$reference} by {$user->first_name} {$user->last_name} on {$schedule}.",
                 'is_read' => 0,
                 'created_at' => now(),
             ]);
@@ -914,6 +916,12 @@ class BookingController extends Controller
             ], 422);
         }
 
+        $previousSchedule = $this->notificationScheduleLabel(
+            (string) $booking->booking_date,
+            TimeWindow::query()->find($booking->window_id),
+        );
+        $newSchedule = $this->notificationScheduleLabel($newDate, $newWindow);
+
         $booking->update([
             'booking_date' => $newDate,
             'window_id' => $request->new_window_id,
@@ -924,7 +932,7 @@ class BookingController extends Controller
         Notification::create([
             'type' => 'rescheduled',
             'booking_id' => $booking->booking_id,
-            'message' => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} to {$newDate} at {$newWindow->displayLabel()}.",
+            'message' => "Pre-registration {$booking->booking_reference} was rescheduled by {$user->first_name} {$user->last_name} from {$previousSchedule} to {$newSchedule}.",
             'is_read' => 0,
             'created_at' => now(),
         ]);
@@ -955,5 +963,16 @@ class BookingController extends Controller
         );
 
         return $startsAt->lessThanOrEqualTo(now());
+    }
+
+    private function notificationScheduleLabel(string $date, ?TimeWindow $window): string
+    {
+        $scheduleDate = Carbon::parse($date);
+        $dateLabel = $scheduleDate->year === now()->year
+            ? $scheduleDate->format('M j')
+            : $scheduleDate->format('M j, Y');
+        $windowLabel = $window?->displayLabel();
+
+        return $windowLabel ? "{$dateLabel} at {$windowLabel}" : $dateLabel;
     }
 }

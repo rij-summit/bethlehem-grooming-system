@@ -239,6 +239,53 @@ class AdminNotificationCenterTest extends TestCase
         ));
     }
 
+    public function test_grooming_schedule_notifications_keep_their_event_time_snapshots(): void
+    {
+        DB::table('time_windows')->insert([
+            'window_id' => 2,
+            'window_label' => '2',
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+        ]);
+        DB::table('bookings')->where('booking_id', 1)->update(['window_id' => 2]);
+
+        $originalMessage = 'New Pre-registration BAC-20260821-0001 by Gerald Senining on 2026-08-21 at 8:00 AM - 9:00 AM.';
+        $rescheduledMessage = 'Pre-registration BAC-20260821-0001 was rescheduled by Gerald Senining from Aug 21 at 8:00 AM - 9:00 AM to Aug 21 at 10:00 AM - 11:00 AM.';
+
+        $this->insertNotification(
+            'booked',
+            false,
+            bookingId: 1,
+            createdAt: now()->subMinute(),
+            message: $originalMessage,
+        );
+        $this->insertNotification(
+            'rescheduled',
+            false,
+            bookingId: 1,
+            message: $rescheduledMessage,
+        );
+
+        $notifications = $this->notificationPayload(['mode' => 'full'])['notifications'];
+        $booked = collect($notifications)->firstWhere('type', 'booked');
+        $rescheduled = collect($notifications)->firstWhere('type', 'rescheduled');
+
+        $this->assertSame(
+            'New pre-registration BAC-20260821-0001 by Gerald Senining on Aug 21 at 8:00 AM - 9:00 AM.',
+            $booked['message'],
+        );
+        $this->assertStringNotContainsString('10:00 AM', $booked['message']);
+        $this->assertSame($rescheduledMessage, $rescheduled['message']);
+        $this->assertStringContainsString(
+            'from Aug 21 at 8:00 AM - 9:00 AM',
+            $rescheduled['message'],
+        );
+        $this->assertStringContainsString(
+            'to Aug 21 at 10:00 AM - 11:00 AM',
+            $rescheduled['message'],
+        );
+    }
+
     public function test_staff_clinic_cancellation_creates_a_cancellation_notification(): void
     {
         $response = (new AdminClinicController)->cancel(
@@ -281,12 +328,16 @@ class AdminNotificationCenterTest extends TestCase
         ?int $bookingId = null,
         ?int $clinicAppointmentId = null,
         ?Carbon $createdAt = null,
+        ?string $message = null,
     ): void {
         DB::table('notifications')->insert([
             'type' => $type,
             'booking_id' => $bookingId,
             'clinic_appointment_id' => $clinicAppointmentId,
-            'message' => "Stored {$type} notification.",
+            'message' => $message ?? match ($type) {
+                'booked' => 'New pre-registration BAC-20260821-0001 by Gerald Senining on Aug 21 at 8:00 AM - 9:00 AM.',
+                default => "Stored {$type} notification.",
+            },
             'is_read' => $isRead,
             'created_at' => ($createdAt ?? now())->toDateTimeString(),
         ]);
