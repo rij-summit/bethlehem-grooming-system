@@ -16,10 +16,11 @@ import {
 } from "./pet-weight-size.js";
 
 const MAX_PETS_PER_BOOKING = 10;
+const WALK_IN_PET_STORAGE_KEY = "walkInPetStep";
 
 const elements = {
   showAddPetBtn: document.getElementById("showAddPetBtn"),
-  petStepMessage: document.getElementById("petStepMessage"),
+  petStepError: document.getElementById("petStepError"),
   addPetSection: document.getElementById("addPetSection"),
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
@@ -44,7 +45,7 @@ const elements = {
   },
 };
 
-createFixedOptionCombobox({
+const petTypeCombobox = createFixedOptionCombobox({
   root: document.getElementById("petTypeCombobox"),
   input: elements.petType,
   listbox: document.getElementById("petTypeOptions"),
@@ -125,40 +126,14 @@ function createPetId() {
   return `walk-in-pet-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-let messageTimeoutId = null;
-
-function clearMessageTimeout() {
-  if (messageTimeoutId) {
-    window.clearTimeout(messageTimeoutId);
-    messageTimeoutId = null;
-  }
+function showStepError(message) {
+  elements.petStepError.textContent = message;
+  elements.petStepError.classList.remove("hidden");
 }
 
-function showMessage(message, variant = "default", autoHide = false) {
-  const styleMap = {
-    default: "border-[#9ebedf] bg-white/80 text-slate-500",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-700",
-    error: "border-red-200 bg-red-50 text-red-700",
-  };
-
-  clearMessageTimeout();
-  elements.petStepMessage.className = `mb-6 rounded-2xl border p-5 text-sm ${
-    styleMap[variant] || styleMap.default
-  }`;
-  elements.petStepMessage.textContent = message;
-
-  if (autoHide) {
-    messageTimeoutId = window.setTimeout(() => {
-      hideMessage();
-    }, 3200);
-  }
-}
-
-function hideMessage() {
-  clearMessageTimeout();
-  elements.petStepMessage.className = "mb-6 hidden rounded-2xl border p-5 text-sm";
-  elements.petStepMessage.textContent = "";
+function clearStepError() {
+  elements.petStepError.textContent = "";
+  elements.petStepError.classList.add("hidden");
 }
 
 function getFormValues(form) {
@@ -171,6 +146,51 @@ function getFormValues(form) {
     size: sizeCombobox.getValue(),
     medicalNotes: normalizeText(form.medicalNotes.value),
   };
+}
+
+function readPetStepDraft() {
+  try {
+    return JSON.parse(sessionStorage.getItem(WALK_IN_PET_STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function savePetStepDraft() {
+  sessionStorage.setItem(
+    WALK_IN_PET_STORAGE_KEY,
+    JSON.stringify({
+      pets: state.pets,
+      newPetForm: getFormValues(elements.addPetForm),
+    }),
+  );
+}
+
+function restorePetStepDraft() {
+  const draft = readPetStepDraft();
+  const values = draft?.newPetForm || {};
+
+  state.pets = Array.isArray(draft?.pets) ? draft.pets : [];
+  petTypeCombobox.setValue(values.petType || "");
+  elements.petName.value = values.petName || "";
+  elements.breed.value = values.breed || "";
+
+  if (values.weight) {
+    resetWeightFieldForEntry(elements.weight);
+    elements.weight.value = values.weight;
+  }
+
+  breedCoatCombobox.update();
+  if (values.furType && !elements.furType.disabled) {
+    elements.furType.value = values.furType;
+  }
+
+  syncWeightAndSize({ clearManualSize: true });
+  if (values.size) {
+    sizeCombobox.setValue(values.size);
+  }
+
+  elements.medicalNotes.value = values.medicalNotes || "";
 }
 
 function validatePetForm(values) {
@@ -367,6 +387,7 @@ function renderSelectedPets() {
 
   bindRemoveButtons();
   renderExistingPets();
+  savePetStepDraft();
 }
 
 function bindRemoveButtons() {
@@ -375,18 +396,10 @@ function bindRemoveButtons() {
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
       const petId = button.dataset.removePetId;
-      const petToRemove = state.pets.find((pet) => pet.id === petId);
 
       state.pets = state.pets.filter((pet) => pet.id !== petId);
       renderSelectedPets();
-
-      if (petToRemove) {
-        showMessage(
-          `${petToRemove.petName} was removed from this walk-in schedule.`,
-          "warning",
-          true,
-        );
-      }
+      clearStepError();
     });
   });
 }
@@ -428,16 +441,16 @@ function renderValidationErrors(values, { showAll = false } = {}) {
   }
 
   if (showAll || (hasSubmittedOnce && errors.limit)) {
-    showMessage(errors.limit || "Please put valid inputs.", "error");
+    showStepError(errors.limit || "Please put valid inputs.");
     return;
   }
 
   if (showAll) {
-    showMessage("Please put valid inputs.", "error");
+    showStepError("Please put valid inputs.");
     return;
   }
 
-  hideMessage();
+  clearStepError();
 }
 
 function resetAddPetForm() {
@@ -446,6 +459,7 @@ function resetAddPetForm() {
   sizeCombobox.reset();
   initializeWeightField(elements.weight);
   syncWeightAndSize({ clearManualSize: true });
+  savePetStepDraft();
 }
 
 function handleAddPetSubmit(event) {
@@ -468,7 +482,7 @@ function handleAddPetSubmit(event) {
 
   resetAddPetForm();
   renderSelectedPets();
-  showMessage(`${newPet.petName} was added to this walk-in schedule.`, "success", true);
+  clearStepError();
 }
 
 function handleBack() {
@@ -488,7 +502,7 @@ function getOwnerAppointmentType() {
 
 function handleNext() {
   if (state.pets.length === 0) {
-    showMessage("Please add at least one pet before continuing.", "error");
+    showStepError("Please add at least one pet before continuing.");
     return;
   }
 
@@ -496,14 +510,18 @@ function handleNext() {
 
   if (appointmentType === "clinic") {
     if (state.pets.length > 1) {
-      showMessage("Clinic walk-in supports one pet per visit. Please remove extra pets.", "error");
+      showStepError("Clinic walk-in supports one pet per visit. Please remove extra pets.");
       return;
     }
+    clearStepError();
+    savePetStepDraft();
     window.history.pushState(null, "", "./walk-in-clinic-complaint.html");
     renderWalkInClinicComplaintStep({ pet: state.pets[0] });
     return;
   }
 
+  clearStepError();
+  savePetStepDraft();
   window.history.pushState(null, "", "./walk-in-grooming-services.html");
   renderWalkInServicesStep({ pets: state.pets });
 }
@@ -584,6 +602,8 @@ function bindEvents() {
     elements.addPetSection.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
+  elements.addPetForm.addEventListener("input", savePetStepDraft);
+  elements.addPetForm.addEventListener("change", savePetStepDraft);
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);
   elements.existingPetCards?.addEventListener("click", (event) => {
@@ -593,7 +613,7 @@ function bindEvents() {
     if (!pet || state.pets.some((selectedPet) => selectedPet.petId === pet.petId)) return;
     state.pets = [...state.pets, { ...pet }];
     renderSelectedPets();
-    showMessage(`${pet.petName} was selected for this walk-in schedule.`, "success", true);
+    clearStepError();
   });
 
   const handlePetInputs = (event) => {
@@ -639,6 +659,7 @@ function initWalkInPetStep() {
   loadExistingOwnerPets();
   initializeWeightField(elements.weight);
   syncWeightAndSize();
+  restorePetStepDraft();
   renderSelectedPets();
 
   if (window.lucide) {

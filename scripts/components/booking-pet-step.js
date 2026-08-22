@@ -93,10 +93,6 @@ function removePetFromBooking(petId) {
   return removeStoredPet(petId, SELECTED_PETS_STORAGE_KEY);
 }
 
-function flowLabel() {
-  return IS_CLINIC_VISIT ? "clinic visit" : "booking";
-}
-
 const elements = {
   bookingScheduleSummary: document.getElementById("bookingScheduleSummary"),
   backLink: document.getElementById("petStepBackLink"),
@@ -106,7 +102,7 @@ const elements = {
   selectedPetsTitle: document.getElementById("selectedPetsTitle"),
   showExistingPetBtn: document.getElementById("showExistingPetBtn"),
   showAddPetBtn: document.getElementById("showAddPetBtn"),
-  petStepMessage: document.getElementById("petStepMessage"),
+  petStepError: document.getElementById("petStepError"),
 
   existingPetSection: document.getElementById("existingPetSection"),
   existingPetEmptyState: document.getElementById("existingPetEmptyState"),
@@ -116,10 +112,12 @@ const elements = {
   addPetSection: document.getElementById("addPetSection"),
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
+  petName: document.getElementById("petName"),
   breed: document.getElementById("breed"),
   weight: document.getElementById("weight"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
+  medicalNotes: document.getElementById("medicalNotes"),
   sizeError: document.getElementById("sizeError"),
   savePetBtn: document.getElementById("savePetBtn"),
 
@@ -132,7 +130,7 @@ const elements = {
   nextBtn: document.getElementById("nextBtn"),
 };
 
-createFixedOptionCombobox({
+const petTypeCombobox = createFixedOptionCombobox({
   root: document.getElementById("petTypeCombobox"),
   input: elements.petType,
   listbox: document.getElementById("petTypeOptions"),
@@ -174,6 +172,7 @@ const sizeCombobox = createFixedOptionCombobox({
 });
 
 const BOOKING_STEP_TWO_KEY = "bookingStep2";
+let activePetSection = "";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -203,17 +202,14 @@ function renderScheduleSummary() {
   );
 }
 
-function showMessage(message, variant = "default") {
-  const styleMap = {
-    default: "border-[#9ebedf] bg-white/80 text-slate-500",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-700",
-    error: "border-red-200 bg-red-50 text-red-700",
-  };
+function showStepError(message) {
+  elements.petStepError.textContent = message;
+  elements.petStepError.classList.remove("hidden");
+}
 
-  elements.petStepMessage.className = `mb-6 rounded-2xl border p-5 text-sm ${styleMap[variant]}`;
-
-  elements.petStepMessage.textContent = message;
+function clearStepError() {
+  elements.petStepError.textContent = "";
+  elements.petStepError.classList.add("hidden");
 }
 
 function buildStepTwoDraft() {
@@ -238,6 +234,8 @@ function buildStepTwoDraft() {
     petType: firstPet?.petType || "",
     petName: firstPet?.petName || "",
     petBreed: firstPet?.breed || "",
+    newPetForm: getFormValues(elements.addPetForm),
+    activePetSection,
   };
 }
 
@@ -245,6 +243,8 @@ function saveStepTwoDraft() {
   if (IS_CLINIC_VISIT) {
     return updateClinicVisitDraft({
       pet: getBookingPets()[0] || null,
+      newPetForm: getFormValues(elements.addPetForm),
+      activePetSection,
     });
   }
 
@@ -260,13 +260,17 @@ function hideSections() {
 
 function showExistingPetSection() {
   hideSections();
+  activePetSection = "existing";
   elements.existingPetSection.classList.remove("hidden");
   renderExistingPets();
+  saveStepTwoDraft();
 }
 
 function showAddPetSection() {
   hideSections();
+  activePetSection = "add";
   elements.addPetSection.classList.remove("hidden");
+  saveStepTwoDraft();
 }
 
 function formatWeightLabel(weight) {
@@ -313,18 +317,10 @@ function renderExistingPets() {
 
   if (savedPets.length === 0) {
     elements.existingPetEmptyState.classList.remove("hidden");
-    showMessage(
-      "You do not have any saved pets yet. Please add a new pet first.",
-      "warning",
-    );
     return;
   }
 
   elements.existingPetEmptyState.classList.add("hidden");
-  showMessage(
-    "Select an existing pet from your saved pet list or add a new one.",
-    "default",
-  );
 
   savedPets.forEach((pet) => {
     const isSelected = bookingPets.some(
@@ -389,7 +385,7 @@ function bindExistingPetButtons() {
       const selectedPet = savedPets.find((pet) => pet.id === petId);
 
       if (!selectedPet) {
-        showMessage("Selected pet could not be found.", "error");
+        showStepError("Selected pet could not be found.");
         return;
       }
 
@@ -397,12 +393,9 @@ function bindExistingPetButtons() {
         addPetToBooking(selectedPet);
         renderExistingPets();
         renderSelectedPets();
-        showMessage(
-          `${selectedPet.petName} was selected for this ${flowLabel()}.`,
-          "success",
-        );
+        clearStepError();
       } catch (error) {
-        showMessage(error.message, "error");
+        showStepError(error.message);
       }
     });
   });
@@ -414,16 +407,12 @@ function handleSelectAllExistingPets() {
   const remainingSlots = MAX_PETS_PER_BOOKING - bookingPets.length;
 
   if (savedPets.length === 0) {
-    showMessage("You do not have any saved pets to select yet.", "warning");
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
 
   if (remainingSlots <= 0) {
-    showMessage(
-      `Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`,
-      "error",
-    );
+    showStepError(`Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`);
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
@@ -435,10 +424,6 @@ function handleSelectAllExistingPets() {
   const petsToAdd = unselectedSavedPets.slice(0, remainingSlots);
 
   if (petsToAdd.length === 0) {
-    showMessage(
-      `All available pets are already selected for this ${flowLabel()}.`,
-      "default",
-    );
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
@@ -447,19 +432,9 @@ function handleSelectAllExistingPets() {
     petsToAdd.forEach((pet) => addPetToBooking(pet));
     renderExistingPets();
     renderSelectedPets();
-
-    const plural = petsToAdd.length === 1 ? "pet was" : "pets were";
-    const limitNote =
-      petsToAdd.length < unselectedSavedPets.length
-        ? ` The booking limit is ${MAX_PETS_PER_BOOKING} pets.`
-        : "";
-
-    showMessage(
-      `${petsToAdd.length} ${plural} added to this ${flowLabel()}.${limitNote}`,
-      "success",
-    );
+    clearStepError();
   } catch (error) {
-    showMessage(error.message, "error");
+    showStepError(error.message);
   }
 }
 
@@ -521,7 +496,6 @@ function handleRemoveAllSelectedPets() {
   const bookingPets = getBookingPets();
 
   if (bookingPets.length === 0) {
-    showMessage("No selected pets to remove.", "default");
     elements.removeAllSelectedPetsBtn.disabled = true;
     return;
   }
@@ -529,7 +503,7 @@ function handleRemoveAllSelectedPets() {
   saveBookingPets([]);
   renderExistingPets();
   renderSelectedPets();
-  showMessage(`All selected pets were removed from this ${flowLabel()}.`, "warning");
+  clearStepError();
 }
 
 function bindRemoveButtons() {
@@ -538,19 +512,11 @@ function bindRemoveButtons() {
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
       const petId = button.dataset.removePetId;
-      const currentPets = getBookingPets();
-      const petToRemove = currentPets.find((pet) => pet.id === petId);
 
       removePetFromBooking(petId);
       renderExistingPets();
       renderSelectedPets();
-
-      if (petToRemove) {
-        showMessage(
-          `${petToRemove.petName} was removed from this ${flowLabel()}.`,
-          "warning",
-        );
-      }
+      clearStepError();
     });
   });
 }
@@ -565,6 +531,57 @@ function getFormValues(form) {
     size: sizeCombobox.getValue(),
     medicalNotes: form.medicalNotes.value,
   };
+}
+
+function readStepTwoDraft() {
+  if (IS_CLINIC_VISIT) {
+    return readClinicVisitDraft();
+  }
+
+  try {
+    return JSON.parse(sessionStorage.getItem(BOOKING_STEP_TWO_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function hasEnteredPetFormValues(values = {}) {
+  return Object.values(values).some((value) => String(value || "").trim());
+}
+
+function restoreAddPetFormDraft() {
+  const draft = readStepTwoDraft();
+  const values = draft?.newPetForm || {};
+
+  petTypeCombobox.setValue(values.petType || "");
+  elements.petName.value = values.petName || "";
+  elements.breed.value = values.breed || "";
+
+  if (values.weight) {
+    resetWeightFieldForEntry(elements.weight);
+    elements.weight.value = values.weight;
+  }
+
+  breedCoatCombobox.update();
+  if (values.furType && !elements.furType.disabled) {
+    elements.furType.value = values.furType;
+  }
+
+  syncWeightAndSize({ clearManualSize: true });
+  if (values.size) {
+    sizeCombobox.setValue(values.size);
+  }
+
+  elements.medicalNotes.value = values.medicalNotes || "";
+  activePetSection = draft?.activePetSection || "";
+
+  if (activePetSection === "existing") {
+    elements.existingPetSection.classList.remove("hidden");
+    renderExistingPets();
+  } else if (activePetSection === "add" || hasEnteredPetFormValues(values)) {
+    activePetSection = "add";
+    elements.addPetSection.classList.remove("hidden");
+  }
 }
 
 function validatePetForm(values) {
@@ -611,6 +628,7 @@ function resetAddPetForm() {
   initializeWeightField(elements.weight);
   syncWeightAndSize({ clearManualSize: true });
   setFieldError(elements.size, elements.sizeError, "");
+  saveStepTwoDraft();
 }
 
 async function handleAddPetSubmit(event) {
@@ -627,7 +645,7 @@ async function handleAddPetSubmit(event) {
     if (weightMessage) {
       showWeightValidationInField(elements.weight, weightMessage);
     }
-    showMessage(validationMessage, "error");
+    showStepError(validationMessage);
     return;
   }
 
@@ -659,12 +677,9 @@ async function handleAddPetSubmit(event) {
     resetAddPetForm();
     renderExistingPets();
     renderSelectedPets();
-    showMessage(
-      `${newPet.petName} was added, saved to your pet list, and selected.`,
-      "success",
-    );
+    clearStepError();
   } catch (error) {
-    showMessage(error.message, "error");
+    showStepError(error.message);
   } finally {
     elements.savePetBtn.disabled = false;
     elements.savePetBtn.textContent = IS_CLINIC_VISIT
@@ -688,31 +703,25 @@ function handleNext() {
     !bookingSchedule?.time ||
     (IS_CLINIC_VISIT && !bookingSchedule?.window_id)
   ) {
-    showMessage(
+    showStepError(
       IS_CLINIC_VISIT
         ? "Please go back to Step 1 and select a valid clinic visit date and time before continuing."
         : "Please go back to Step 1 and select a valid date and time before continuing.",
-      "error",
     );
     return;
   }
 
   if (bookingPets.length === 0) {
-    showMessage(
-      "Please select or add at least one pet before continuing.",
-      "error",
-    );
+    showStepError("Please select or add at least one pet before continuing.");
     return;
   }
 
   if (IS_CLINIC_VISIT && bookingPets.length !== 1) {
-    showMessage(
-      "Please select exactly one pet for the clinic visit.",
-      "error",
-    );
+    showStepError("Please select exactly one pet for the clinic visit.");
     return;
   }
 
+  clearStepError();
   saveStepTwoDraft();
   window.location.href = IS_CLINIC_VISIT
     ? "./clinic-visit-reason.html"
@@ -797,6 +806,8 @@ function bindEvents() {
     handleRemoveAllSelectedPets,
   );
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
+  elements.addPetForm.addEventListener("input", saveStepTwoDraft);
+  elements.addPetForm.addEventListener("change", saveStepTwoDraft);
   elements.backBtn.addEventListener("click", handleBack);
   elements.nextBtn.addEventListener("click", handleNext);
 
@@ -824,23 +835,14 @@ async function initStepState() {
     saveBookingPets([]);
   }
 
+  restoreAddPetFormDraft();
   renderSelectedPets();
 
   // Sync pets from the backend into localStorage before rendering the list
-  showMessage("Loading your saved pets...", "default");
   await loadPetsFromApi();
 
-  const savedPets = getSavedPets();
-  if (savedPets.length > 0) {
-    showMessage(
-      "You have saved pets available. You can select an existing pet or add a new one.",
-      "default",
-    );
-  } else {
-    showMessage(
-      "No saved pets found yet. Please add a new pet to continue.",
-      "warning",
-    );
+  if (activePetSection === "existing") {
+    renderExistingPets();
   }
 }
 

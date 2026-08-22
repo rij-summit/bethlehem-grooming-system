@@ -26,6 +26,7 @@ const elements = {
 
 const WALK_IN_OWNER_STORAGE_KEY = "walkInOwnerStep";
 const WALK_IN_FLOW_STORAGE_KEYS = [
+  "walkInPetStep",
   "walkInConsentStep",
   "walkInReviewStep",
   "walkInBookingConfirmation",
