@@ -237,22 +237,22 @@
                   <button type="button" @click="setStatus('active')"
                     class="rounded-xl px-3 py-2.5 text-sm font-bold transition lg:rounded-full"
                     :class="statusFilter === 'active' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
-                    Active (<span x-text="statusFilter === 'active' ? totalCount : '?'"></span>)
+                    Active
                   </button>
                   <button type="button" @click="setStatus('unregistered')"
                     class="rounded-xl px-3 py-2.5 text-sm font-bold transition lg:rounded-full"
                     :class="statusFilter === 'unregistered' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
-                    Unregistered (<span x-text="statusFilter === 'unregistered' ? totalCount : '?'"></span>)
+                    Unregistered
                   </button>
                   <button type="button" @click="setStatus('inactive')"
                     class="rounded-xl px-3 py-2.5 text-sm font-bold transition lg:rounded-full"
                     :class="statusFilter === 'inactive' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
-                    Inactive (<span x-text="statusFilter === 'inactive' ? totalCount : '?'"></span>)
+                    Inactive
                   </button>
                   <button type="button" @click="setStatus('archived')"
                     class="rounded-xl px-3 py-2.5 text-sm font-bold transition lg:rounded-full"
                     :class="statusFilter === 'archived' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'">
-                    Archive (<span x-text="statusFilter === 'archived' ? totalCount : '?'"></span>)
+                    Archive
                   </button>
                 </div>
               </div>
@@ -268,7 +268,7 @@
                   <p>Select a customer to view their information, add pets, archive the record, or delete its account after exact-name confirmation.</p>
                 </template>
                 <template x-if="isAdmin && statusFilter === 'active'">
-                  <p>You can <strong>Deactivate</strong> to temporarily block their access or <strong>Archive</strong> to permanently remove them from the active list.</p>
+                  <p><strong>Active customers</strong> have an <strong>online account</strong> and access to the <strong>Customer Dashboard</strong>.</p>
                 </template>
                 <template x-if="isAdmin && statusFilter === 'inactive'">
                   <p>Use <strong>Reactivate</strong> to restore their access, or <strong>Archive</strong> to move them to permanent records.</p>

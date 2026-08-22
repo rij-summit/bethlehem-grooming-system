@@ -268,7 +268,7 @@ function adminCustomers() {
         }
         this.addCustomerModal.errors = err.errors || {};
         this.addCustomerModal.error = err.errors
-          ? "Please review the highlighted information."
+          ? ""
           : (err.message || "Failed to add customer. Please try again.");
       } finally {
         this.addCustomerModal.saving = false;

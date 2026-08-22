@@ -342,6 +342,39 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         }
     }
 
+    public function test_customer_status_tabs_do_not_repeat_the_header_count(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+        $statusTabs = $this->sourceBetween(
+            $page,
+            '<!-- Status Tabs -->',
+            '<!-- Tab description -->',
+        );
+
+        foreach (['Active', 'Unregistered', 'Inactive', 'Archive'] as $label) {
+            $this->assertMatchesRegularExpression(
+                '/>\s*'.preg_quote($label, '/').'\s*<\/button>/',
+                $statusTabs,
+            );
+        }
+
+        $this->assertStringNotContainsString('totalCount', $statusTabs);
+    }
+
+    public function test_active_customer_helper_explains_online_account_access(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+
+        $this->assertStringContainsString(
+            '<strong>Active customers</strong> have an <strong>online account</strong> and access to the <strong>Customer Dashboard</strong>.',
+            $page,
+        );
+        $this->assertStringNotContainsString(
+            'You can <strong>Deactivate</strong> to temporarily block their access',
+            $page,
+        );
+    }
+
     public function test_unregistered_tab_and_add_customer_use_a_separate_customers_ui(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));
@@ -355,12 +388,10 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
 
         foreach ([
             "@click=\"setStatus('unregistered')\"",
-            "statusFilter === 'unregistered' ? totalCount : '?'",
             'No unregistered customers yet.',
             'Customers added without an online account will appear here.',
             '@click="openAddCustomerModal()"',
             'customer.recordType === \'unregistered\'',
-            'Unregistered (<span',
         ] as $unregisteredUi) {
             $this->assertStringContainsString($unregisteredUi, $page);
         }
@@ -384,6 +415,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertStringContainsString('return "Unregistered";', $component);
         $this->assertStringContainsString('async function createUnregisteredCustomer(payload)', $api);
         $this->assertStringContainsString('/admin/customers/unregistered', $api);
+        $this->assertStringNotContainsString('Please review the highlighted information.', $component);
 
         $activePosition = strpos($page, "setStatus('active')");
         $unregisteredPosition = strpos($page, "setStatus('unregistered')");
