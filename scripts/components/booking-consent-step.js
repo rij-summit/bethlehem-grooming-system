@@ -4,7 +4,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const sedationConsentCheckbox = document.getElementById(
     "sedationConsentCheckbox",
   );
-  const sedationConsentHelp = document.getElementById("sedationConsentHelp");
   const digitalSignatureInput = document.getElementById("digitalSignature");
   const consentDateInput = document.getElementById("consentDate");
   const submitBookingButton = document.getElementById("submitBookingButton");
@@ -141,11 +140,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function validateConsentForm() {
-    sedationConsentHelp?.classList.toggle(
-      "hidden",
-      sedationConsentCheckbox.checked,
-    );
-
     const valid = isFormValid();
 
     if (valid) {

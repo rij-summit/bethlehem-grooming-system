@@ -440,13 +440,11 @@ function renderTimeSlots() {
     button.type = "button";
     const availabilityLabel = slot.is_full
       ? `<span class="block text-xs mt-0.5 font-semibold text-red-500">Full</span>`
-      : slot.is_past
-        ? `<span class="block text-xs mt-0.5 font-semibold text-slate-400">Time passed</span>`
-        : slot.is_cutoff
-          ? `<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>`
-          : slot.recommended
-            ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>`
-            : "";
+      : slot.is_cutoff
+        ? `<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>`
+        : slot.recommended
+          ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>`
+          : "";
 
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>

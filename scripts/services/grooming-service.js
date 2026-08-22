@@ -675,40 +675,18 @@ export function buildBookingReviewPayload(bookingDraft, petSelections) {
   );
   const notices = [];
 
-  if (
-    items.some((item) =>
-      item.pricing.lineItems.some(
-        (lineItem) => lineItem.pricing.missingSize || lineItem.pricing.unmatchedSize,
-      ),
-    )
-  ) {
-    notices.push(
-      "Estimate only: one or more pets do not have a matching saved size yet, so the clinic will confirm the final applicable rate.",
-    );
-  }
+  const needsClinicPriceConfirmation = items.some((item) =>
+    item.pricing.lineItems.some(
+      (lineItem) =>
+        lineItem.pricing.missingSize ||
+        lineItem.pricing.unmatchedSize ||
+        lineItem.pricing.hasClinicConfirmedAdjustment ||
+        lineItem.pricing.selectedPriceOption?.pricingType === "range",
+    ),
+  );
 
-  if (
-    items.some((item) =>
-      item.pricing.lineItems.some(
-        (lineItem) => lineItem.pricing.hasClinicConfirmedAdjustment,
-      ),
-    )
-  ) {
-    notices.push(
-      "Prices with a + are minimum clinic rates. Final pricing depends on the pet's coat, condition, or in-clinic assessment.",
-    );
-  }
-
-  if (
-    items.some((item) =>
-      item.pricing.lineItems.some(
-        (lineItem) => lineItem.pricing.selectedPriceOption?.pricingType === "range",
-      ),
-    )
-  ) {
-    notices.push(
-      "Some a la carte services use a price range. The final amount depends on the service condition confirmed at the clinic.",
-    );
+  if (needsClinicPriceConfirmation) {
+    notices.push("The price is finalized at the clinic.");
   }
 
   return {

@@ -2,6 +2,7 @@ import {
   escapeHtml,
   formatPetSizeLabel,
   formatPetTypeLabel,
+  normalizePetSize,
 } from "../services/booking-draft-service.js";
 import {
   buildBookingReviewPayload,
@@ -60,28 +61,21 @@ function getReviewMainMarkup() {
           <h2 class="text-2xl font-bold text-[#2f4b66]">Schedule Review</h2>
         </div>
 
-        <div class="mb-6 grid gap-4 md:grid-cols-2">
+        <div class="mb-6">
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Schedule Type
+              Schedule Summary
             </p>
             <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
-          </div>
-
-          <div class="rounded-2xl border border-slate-200 bg-white p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Pet Summary
-            </p>
-            <p id="petReviewText" class="mt-2 text-sm text-slate-600">
-              No pet selected yet.
-            </p>
           </div>
         </div>
 
         <div
           id="reviewNotice"
-          class="hidden"
-        ></div>
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          The price is finalized at the clinic.
+        </div>
 
         <div id="reviewSelections" class="space-y-6"></div>
 
@@ -132,7 +126,6 @@ function getReviewMainMarkup() {
 
 function refreshElements() {
   elements = {
-    petReviewText: document.getElementById("petReviewText"),
     reviewNotice: document.getElementById("reviewNotice"),
     reviewSelections: document.getElementById("reviewSelections"),
     totalPriceHeading: document.getElementById("totalPriceHeading"),
@@ -212,23 +205,10 @@ function renderEmptyState(message) {
   elements.confirmBookingBtn.classList.add("opacity-50", "cursor-not-allowed");
 }
 
-function renderSummary() {
-  const petSummary = state.bookingDraft.pets
-    .map(
-      (pet) =>
-        `${pet.petName || "Unnamed Pet"} (${formatPetTypeLabel(pet.petType)})`,
-    )
-    .join(" | ");
-
-  elements.petReviewText.textContent =
-    state.bookingDraft.pets.length > 1
-      ? `${state.bookingDraft.pets.length} pets selected: ${petSummary}`
-      : petSummary;
-}
-
 function renderReviewNotice() {
-  elements.reviewNotice.innerHTML = "";
-  elements.reviewNotice.className = "hidden";
+  elements.reviewNotice.className =
+    "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
+  elements.reviewNotice.textContent = "The price is finalized at the clinic.";
 }
 
 function renderReviewSelections() {
@@ -318,37 +298,43 @@ function renderPackageReview(selectedPackage, item) {
     return "";
   }
 
-  const pricingNote = getPackagePricingNote(packageLineItem);
-  const pricingNoteMarkup = pricingNote
-    ? `<p class="mt-3 text-sm text-slate-500">${escapeHtml(pricingNote)}</p>`
-    : "";
+  const visiblePriceOptions = getVisiblePackagePriceOptions(
+    selectedPackage,
+    item.pet.size,
+  );
 
   return `
     <div class="rounded-2xl border border-slate-200 bg-white p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
         Selected Package
       </p>
-      <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <h4 class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
-          selectedPackage.name,
-        )}</h4>
-        <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-bold text-[#315b7e]">
-          ${escapeHtml(packageLineItem.pricing.displayPrice)}
-        </span>
-      </div>
+      <h4 class="mt-2 text-lg font-semibold text-[#2f4b66]">${escapeHtml(
+        selectedPackage.name,
+      )}</h4>
       <div class="service-card__pricing">
         <span class="service-card__pricing-label">Size &amp; Price</span>
         <div class="service-card__price-grid">
-          ${selectedPackage.priceOptions
+          ${visiblePriceOptions
             .map((priceOption) =>
               renderReviewPricePill(priceOption, packageLineItem.pricing.selectedPriceOption),
             )
             .join("")}
         </div>
       </div>
-      ${pricingNoteMarkup}
     </div>
   `;
+}
+
+function getVisiblePackagePriceOptions(selectedPackage, petSize) {
+  const normalizedSize = normalizePetSize(petSize);
+
+  if (!normalizedSize) {
+    return selectedPackage.priceOptions;
+  }
+
+  return selectedPackage.priceOptions.filter(
+    (priceOption) => priceOption.sizeKey === normalizedSize,
+  );
 }
 
 function renderReviewPricePill(priceOption, selectedPriceOption) {
@@ -393,25 +379,6 @@ function renderAlaCarteReview(alaCarteLineItems) {
   `;
 }
 
-function getPackagePricingNote(packageLineItem) {
-  if (packageLineItem.pricing.selectedPriceOption) {
-    if (packageLineItem.pricing.selectedPriceOption.pricingType === "plus") {
-      return "Final rate will still be confirmed at the clinic.";
-    }
-    return "";
-  }
-
-  if (packageLineItem.pricing.missingSize) {
-    return "This pet does not have a saved size yet, so the package total is shown as an estimate.";
-  }
-
-  if (packageLineItem.pricing.unmatchedSize) {
-    return "The clinic will confirm the applicable rate for this pet size.";
-  }
-
-  return "The clinic will confirm the final applicable package rate during review.";
-}
-
 function renderTotalPricing() {
   /*
     BACKEND TEAMMATE + CLAUDE CODE:
@@ -424,13 +391,6 @@ function renderTotalPricing() {
     ? "Estimated Total"
     : "Total Price";
   elements.totalPriceText.textContent = formatAmountRange(totalPricing);
-
-  if (state.reviewPayload.isEstimate) {
-    elements.totalPriceSubtext.classList.remove("hidden");
-    elements.totalPriceSubtext.textContent =
-      "This total includes at least one estimate because of a missing pet size, a price range, or a clinic-confirmed + rate.";
-    return;
-  }
 
   elements.totalPriceSubtext.textContent = "";
   elements.totalPriceSubtext.classList.add("hidden");
@@ -481,7 +441,6 @@ export function renderWalkInReviewStep(options = {}) {
     return;
   }
 
-  renderSummary();
   renderReviewNotice();
   renderReviewSelections();
   renderTotalPricing();

@@ -4,6 +4,7 @@ import {
   formatPetSizeLabel,
   formatPetTypeLabel,
   getBookingDraft,
+  normalizePetSize,
   readSessionJson,
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
@@ -33,7 +34,6 @@ const LEGACY_REVIEW_STORAGE_KEY = "bookingReview";
 
 const elements = {
   scheduleReviewText: document.getElementById("scheduleReviewText"),
-  petReviewText: document.getElementById("petReviewText"),
   reviewNotice: document.getElementById("reviewNotice"),
   reviewSelections: document.getElementById("reviewSelections"),
   totalPriceHeading: document.getElementById("totalPriceHeading"),
@@ -106,38 +106,6 @@ function renderSummary() {
       state.bookingDraft.bookingTime,
     ) ||
     "No schedule selected yet.";
-
-  const petSummaries = formatGroupedPetSummaries(state.bookingDraft.pets);
-
-  elements.petReviewText.replaceChildren(
-    ...petSummaries.map((summary) => {
-      const line = document.createElement("span");
-      line.className = "block";
-      line.textContent = summary;
-      return line;
-    }),
-  );
-}
-
-function formatGroupedPetSummaries(pets) {
-  const groups = new Map();
-
-  pets.forEach((pet) => {
-    const type = String(pet.petType || "").trim().toLowerCase();
-    const groupKey = type || "unknown";
-    const group = groups.get(groupKey) || [];
-
-    group.push(pet.petName || "Unnamed Pet");
-    groups.set(groupKey, group);
-  });
-
-  return [...groups.entries()].map(([type, names]) => {
-    const typeLabel =
-      type === "unknown" ? "pet" : formatPetTypeLabel(type).toLowerCase();
-    const pluralizedType = names.length === 1 ? typeLabel : `${typeLabel}s`;
-
-    return `${names.length} ${pluralizedType}: ${names.join(" · ")}`;
-  });
 }
 
 function renderReviewNotice() {
@@ -147,30 +115,7 @@ function renderReviewNotice() {
 
   elements.reviewNotice.className =
     "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
-  elements.reviewNotice.innerHTML = "";
-
-  const headline = document.createElement("p");
-  headline.className = "font-semibold";
-  headline.textContent = state.reviewPayload.isEstimate
-    ? "This booking contains estimated pricing details."
-    : "All selected pets are ready for final confirmation.";
-
-  elements.reviewNotice.appendChild(headline);
-
-  const lines = state.reviewPayload.notices.length
-    ? state.reviewPayload.notices
-    : ["Each pet is matched to its selected service and pricing summary below."];
-
-  const list = document.createElement("div");
-  list.className = "mt-2 space-y-1";
-
-  lines.forEach((lineText) => {
-    const line = document.createElement("p");
-    line.textContent = lineText;
-    list.appendChild(line);
-  });
-
-  elements.reviewNotice.appendChild(list);
+  elements.reviewNotice.textContent = "The price is finalized at the clinic.";
 }
 
 function renderReviewSelections() {
@@ -262,10 +207,10 @@ function renderPackageReview(selectedPackage, item) {
     return "";
   }
 
-  const pricingNote = getPackagePricingNote(item, packageLineItem);
-  const pricingNoteMarkup = pricingNote
-    ? `<p class="mt-3 text-sm text-slate-500">${escapeHtml(pricingNote)}</p>`
-    : "";
+  const visiblePriceOptions = getVisiblePackagePriceOptions(
+    selectedPackage,
+    item.pet.size,
+  );
 
   return `
     <div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -278,16 +223,27 @@ function renderPackageReview(selectedPackage, item) {
       <div class="service-card__pricing">
         <span class="service-card__pricing-label">Size &amp; Price</span>
         <div class="service-card__price-grid">
-          ${selectedPackage.priceOptions
+          ${visiblePriceOptions
             .map((priceOption) =>
               renderReviewPricePill(priceOption, packageLineItem.pricing.selectedPriceOption),
             )
             .join("")}
         </div>
       </div>
-      ${pricingNoteMarkup}
     </div>
   `;
+}
+
+function getVisiblePackagePriceOptions(selectedPackage, petSize) {
+  const normalizedSize = normalizePetSize(petSize);
+
+  if (!normalizedSize) {
+    return selectedPackage.priceOptions;
+  }
+
+  return selectedPackage.priceOptions.filter(
+    (priceOption) => priceOption.sizeKey === normalizedSize,
+  );
 }
 
 function renderReviewPricePill(priceOption, selectedPriceOption) {
@@ -330,22 +286,6 @@ function renderAlaCarteReview(alaCarteLineItems) {
       </div>
     </div>
   `;
-}
-
-function getPackagePricingNote(item, packageLineItem) {
-  if (packageLineItem.pricing.selectedPriceOption) {
-    return "";
-  }
-
-  if (packageLineItem.pricing.missingSize) {
-    return "This pet does not have a saved size yet, so the package total is shown as an estimate.";
-  }
-
-  if (packageLineItem.pricing.unmatchedSize) {
-    return "The clinic will confirm the applicable rate for this pet size.";
-  }
-
-  return "The clinic will confirm the final applicable package rate during review.";
 }
 
 function renderTotalPricing() {

@@ -6,16 +6,17 @@ use Tests\TestCase;
 
 class BookingSedationConsentInterfaceTest extends TestCase
 {
-    public function test_customer_unchecked_sedation_consent_has_concise_in_person_guidance(): void
+    public function test_customer_sedation_consent_omits_the_optional_helper_text(): void
     {
         $page = file_get_contents(base_path('pages/client/booking-consent.html'));
         $component = file_get_contents(base_path('scripts/components/booking-consent-step.js'));
 
-        $this->assertStringContainsString(
+        $this->assertStringNotContainsString(
             'Staff can explain sedation and record your consent in person if you agree.',
             $page,
         );
-        $this->assertStringContainsString('id="sedationConsentHelp"', $page);
+        $this->assertStringNotContainsString('id="sedationConsentHelp"', $page);
+        $this->assertStringNotContainsString('sedationConsentHelp', $component);
         $this->assertStringContainsString(
             'sedation_consent: sedationConsentCheckbox.checked',
             $component,
