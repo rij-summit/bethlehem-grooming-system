@@ -512,6 +512,11 @@ function adminDashboard() {
     notifTab: "all",
     detailsModalOpen: false,
     detailsBooking: null,
+    sedationConsentCapture: {
+      confirmed: false,
+      busy: false,
+      error: "",
+    },
     pendingActions: {},
     localCancelledBookingIds: [],
     expandedQueuedBookingIds: {},
@@ -750,6 +755,11 @@ function adminDashboard() {
           },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
+            this.sedationConsentCapture = {
+              confirmed: false,
+              busy: false,
+              error: "",
+            };
             this.detailsModalOpen = true;
             this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
           },
@@ -3899,6 +3909,57 @@ function adminDashboard() {
     closeDetailsModal() {
       this.detailsModalOpen = false;
       this.detailsBooking   = null;
+      this.sedationConsentCapture = {
+        confirmed: false,
+        busy: false,
+        error: "",
+      };
+    },
+
+    sedationConsentStatusLabel(booking = this.detailsBooking) {
+      if (!booking?.sedationConsent) return "Not provided";
+      if (booking.sedationConsentSource === "customer_online") return "Agreed online";
+      if (["staff_in_person", "staff_walk_in"].includes(booking.sedationConsentSource)) {
+        return "Agreed in person";
+      }
+
+      return "Agreed";
+    },
+
+    async recordDetailsSedationConsent() {
+      const bookingId = this.detailsBooking?.id;
+      if (!bookingId || this.sedationConsentCapture.busy) return;
+
+      if (!this.sedationConsentCapture.confirmed) {
+        this.sedationConsentCapture.error =
+          "Confirm that the customer understands and agrees.";
+        return;
+      }
+
+      this.sedationConsentCapture.busy = true;
+      this.sedationConsentCapture.error = "";
+
+      try {
+        const response = await API.adminRecordSedationConsent(bookingId);
+        this.detailsBooking = {
+          ...this.detailsBooking,
+          sedationConsent: true,
+          sedation_consent: true,
+          sedationConsentSource: response.sedation_consent?.source || "staff_in_person",
+          sedationConsentRecordedAt: response.sedation_consent?.recorded_at || null,
+          canRecordSedationConsent: false,
+        };
+        this.sedationConsentCapture = {
+          confirmed: false,
+          busy: false,
+          error: "",
+        };
+        await this.loadAdminBookings();
+      } catch (error) {
+        this.sedationConsentCapture.busy = false;
+        this.sedationConsentCapture.error =
+          error.message || "Failed to record sedation consent.";
+      }
     },
 
     // ── Notifications ─────────────────────────────────────────────────────────

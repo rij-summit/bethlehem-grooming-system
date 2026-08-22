@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const sedationConsentCheckbox = document.getElementById(
     "sedationConsentCheckbox",
   );
+  const sedationConsentHelp = document.getElementById("sedationConsentHelp");
   const digitalSignatureInput = document.getElementById("digitalSignature");
   const consentDateInput = document.getElementById("consentDate");
   const submitBookingButton = document.getElementById("submitBookingButton");
@@ -95,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
         window_id: schedule.window_id,
         number_of_pets: bookingPets.length,
         special_notes: null,
+        sedation_consent: sedationConsentCheckbox.checked,
         pets: petsPayload,
       });
 
@@ -139,6 +141,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function validateConsentForm() {
+    sedationConsentHelp?.classList.toggle(
+      "hidden",
+      sedationConsentCheckbox.checked,
+    );
+
     const valid = isFormValid();
 
     if (valid) {

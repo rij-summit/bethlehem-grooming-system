@@ -119,6 +119,7 @@ class BookingController extends Controller
             'window_id' => 'required|exists:time_windows,window_id',
             'number_of_pets' => 'required|integer|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'special_notes' => 'nullable|string',
+            'sedation_consent' => 'sometimes|boolean',
             'pets' => 'required|array|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'pets.*.pet_id' => 'nullable|integer|exists:pets,pet_id',
             'pets.*.pet_name' => 'required|string|max:100',
@@ -163,6 +164,7 @@ class BookingController extends Controller
 
             $date = $request->booking_date;
             $petCount = (int) $request->number_of_pets;
+            $sedationConsent = $request->boolean('sedation_consent');
             $settings = ClinicSetting::current();
 
             if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $date)) {
@@ -241,6 +243,9 @@ class BookingController extends Controller
                 'booking_type' => 'online',
                 'status' => 'waiting_to_arrive',
                 'special_notes' => $request->special_notes,
+                'sedation_consent' => $sedationConsent,
+                'sedation_consent_source' => $sedationConsent ? 'customer_online' : null,
+                'sedation_consent_recorded_at' => $sedationConsent ? now() : null,
                 'total_amount' => 0,
             ]);
 

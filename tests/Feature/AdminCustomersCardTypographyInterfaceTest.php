@@ -375,6 +375,20 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         );
     }
 
+    public function test_unregistered_customer_helper_explains_lack_of_online_access(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/clients.html'));
+
+        $this->assertStringContainsString(
+            '<strong>Unregistered customers</strong> are records without an <strong>online account</strong> or access to the <strong>Customer Dashboard</strong>.',
+            $page,
+        );
+        $this->assertStringNotContainsString(
+            'These customers were added without creating an online account. Use <strong>Add Customer</strong>',
+            $page,
+        );
+    }
+
     public function test_unregistered_tab_and_add_customer_use_a_separate_customers_ui(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));

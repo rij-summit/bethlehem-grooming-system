@@ -105,8 +105,8 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=admin-notifications-20260821', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=auth-session-20260816', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?v=sedation-consent-20260822', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=sedation-consent-20260822', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

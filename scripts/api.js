@@ -912,6 +912,15 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/check-in`, null, getAdminToken());
   }
 
+  async function adminRecordSedationConsent(bookingId) {
+    return request(
+      "POST",
+      `/admin/bookings/${bookingId}/sedation-consent`,
+      { customer_understood_and_agreed: true },
+      getAdminToken(),
+    );
+  }
+
   async function adminRevertCheckIn(bookingId) {
     return request(
       "POST",
@@ -1680,6 +1689,7 @@ var API = (() => {
     // Admin bookings
     getAdminBookings,
     adminCheckIn,
+    adminRecordSedationConsent,
     adminRevertCheckIn,
     adminStartGrooming,
     adminRevertStartGrooming,

@@ -4327,6 +4327,40 @@
                   </p>
                 </div>
 
+                <!-- Sedation Consent -->
+                <div>
+                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Sedation Consent</p>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span
+                      class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold"
+                      :class="detailsBooking?.sedationConsent ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'"
+                      x-text="sedationConsentStatusLabel(detailsBooking)"
+                    ></span>
+
+                    <template x-if="!detailsBooking?.sedationConsent && detailsBooking?.canRecordSedationConsent">
+                      <form class="mt-3 space-y-3 border-t border-slate-200 pt-3" @submit.prevent="recordDetailsSedationConsent()">
+                        <p class="text-sm text-slate-600">Explain sedation before recording the customer's agreement.</p>
+                        <label class="flex items-start gap-3 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            x-model="sedationConsentCapture.confirmed"
+                            @change="sedationConsentCapture.error = ''"
+                            class="mt-0.5 h-4 w-4 shrink-0 accent-[#315b7e]"
+                          />
+                          <span>Customer understands and agrees to sedation.</span>
+                        </label>
+                        <p x-show="sedationConsentCapture.error" class="text-sm text-red-600" x-text="sedationConsentCapture.error"></p>
+                        <button
+                          type="submit"
+                          :disabled="!sedationConsentCapture.confirmed || sedationConsentCapture.busy"
+                          class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                          x-text="sedationConsentCapture.busy ? 'Recording...' : 'Record consent'"
+                        ></button>
+                      </form>
+                    </template>
+                  </div>
+                </div>
+
                 <!-- Pets -->
                 <div>
                   <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">
@@ -4442,7 +4476,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=admin-notifications-20260821"></script>
+    <script src="../../scripts/api.js?v=sedation-consent-20260822"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
@@ -4459,6 +4493,6 @@
     <script src="../../scripts/components/admin-grooming-concerns.js?v=owner-concern-actions-20260809"></script>
     <script src="../../scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804"></script>
     <script src="../../scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=auth-session-20260816"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=sedation-consent-20260822"></script>
   </body>
 </html>

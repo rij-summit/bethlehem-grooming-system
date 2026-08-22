@@ -127,6 +127,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
         Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
         Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
+        Route::post('/admin/bookings/{id}/sedation-consent', [AdminBookingController::class, 'recordSedationConsent']);
         Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
         Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
         Route::post('/admin/bookings/{id}/revert-start-grooming', [AdminBookingController::class, 'revertStartGrooming']);

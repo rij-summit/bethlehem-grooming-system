@@ -33,6 +33,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['PATCH', 'api/admin/notifications/{id}/read'],
         ['GET', 'api/admin/bookings'],
         ['GET', 'api/admin/bookings/archived'],
+        ['POST', 'api/admin/bookings/{id}/sedation-consent'],
         ['PATCH', 'api/admin/clinic/settings/groomers-on-duty'],
         ['POST', 'api/admin/bookings/{id}/check-in'],
         ['POST', 'api/admin/bookings/{id}/revert-check-in'],
@@ -159,6 +160,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->string('status');
             $table->integer('queue_number')->nullable();
             $table->text('special_notes')->nullable();
+            $table->boolean('sedation_consent')->default(false);
+            $table->string('sedation_consent_source', 30)->nullable();
+            $table->unsignedInteger('sedation_consent_recorded_by')->nullable();
+            $table->dateTime('sedation_consent_recorded_at')->nullable();
             $table->text('cancellation_reason')->nullable();
             $table->decimal('total_amount', 8, 2)->default(0);
             $table->unsignedTinyInteger('reschedule_count')->default(0);
@@ -302,6 +307,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         return [
             'queue listing' => ['GET', '/api/admin/bookings'],
+            'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
             'start grooming' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
@@ -336,6 +342,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'queue and incoming listing' => ['GET', '/api/admin/bookings'],
             'archived grooming listing' => ['GET', '/api/admin/bookings/archived'],
             'check in booking' => ['POST', '/api/admin/bookings/1/check-in'],
+            'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'start whole booking' => ['POST', '/api/admin/bookings/1/start-grooming'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
@@ -360,6 +367,116 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'grooming transaction listing' => ['GET', '/api/admin/transactions'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
         ];
+    }
+
+    #[DataProvider('customerSedationConsentCases')]
+    public function test_customer_grooming_pre_registration_saves_optional_sedation_consent(
+        bool $accepted,
+        ?string $expectedSource,
+        bool $expectsRecordedAt,
+    ): void {
+        $this->authenticateAs('customer');
+        DB::table('time_windows')->insert([
+            'window_id' => 1,
+            'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00',
+            'end_time' => '12:00:00',
+            'max_slots' => 4,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(),
+            'window_id' => 1,
+            'number_of_pets' => 1,
+            'sedation_consent' => $accepted,
+            'pets' => [[
+                'pet_name' => 'Mochi',
+                'species' => 'cat',
+            ]],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => $response->json('booking.booking_id'),
+            'sedation_consent' => $accepted,
+            'sedation_consent_source' => $expectedSource,
+            'sedation_consent_recorded_by' => null,
+        ]);
+        $recordedAt = DB::table('bookings')->value('sedation_consent_recorded_at');
+        if ($expectsRecordedAt) {
+            $this->assertNotNull($recordedAt);
+        } else {
+            $this->assertNull($recordedAt);
+        }
+    }
+
+    public static function customerSedationConsentCases(): array
+    {
+        return [
+            'unchecked' => [false, null, false],
+            'checked' => [true, 'customer_online', true],
+        ];
+    }
+
+    public function test_staff_can_record_in_person_sedation_consent_before_grooming(): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'SEDATION-CONSENT-1',
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 1,
+            'booking_type' => 'online',
+            'status' => 'waiting_to_arrive',
+            'sedation_consent' => false,
+        ]);
+        $this->authenticateAs('staff');
+
+        $this->getJson('/api/admin/bookings')
+            ->assertOk()
+            ->assertJsonPath('incomingList.0.sedationConsent', false)
+            ->assertJsonPath('incomingList.0.canRecordSedationConsent', true);
+
+        $this->postJson('/api/admin/bookings/1/sedation-consent', [
+            'customer_understood_and_agreed' => false,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('customer_understood_and_agreed');
+
+        $this->postJson('/api/admin/bookings/1/sedation-consent', [
+            'customer_understood_and_agreed' => true,
+        ])->assertOk()
+            ->assertJsonPath('sedation_consent.accepted', true)
+            ->assertJsonPath('sedation_consent.source', 'staff_in_person');
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 1,
+            'sedation_consent' => true,
+            'sedation_consent_source' => 'staff_in_person',
+            'sedation_consent_recorded_by' => 2,
+        ]);
+        $this->assertNotNull(DB::table('bookings')->value('sedation_consent_recorded_at'));
+
+        DB::table('bookings')->insert([
+            'booking_id' => 2,
+            'booking_reference' => 'SEDATION-CONSENT-STARTED',
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 1,
+            'booking_type' => 'online',
+            'status' => 'in_progress',
+            'sedation_consent' => false,
+        ]);
+
+        $this->postJson('/api/admin/bookings/2/sedation-consent', [
+            'customer_understood_and_agreed' => true,
+        ])->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Sedation consent can only be recorded before grooming starts.',
+            );
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 2,
+            'sedation_consent' => false,
+            'sedation_consent_source' => null,
+        ]);
     }
 
     public function test_revert_check_in_restores_admin_and_customer_state_and_allows_check_in_again(): void

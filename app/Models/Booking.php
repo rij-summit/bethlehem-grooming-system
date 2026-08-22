@@ -24,6 +24,10 @@ class Booking extends Model
         'status',
         'queue_number',
         'special_notes',
+        'sedation_consent',
+        'sedation_consent_source',
+        'sedation_consent_recorded_by',
+        'sedation_consent_recorded_at',
         'cancellation_reason',
         'total_amount',
         'reschedule_count',
@@ -33,6 +37,11 @@ class Booking extends Model
         'grooming_started_at',
         'grooming_finished_at',
         'paid',
+    ];
+
+    protected $casts = [
+        'sedation_consent' => 'boolean',
+        'sedation_consent_recorded_at' => 'datetime',
     ];
 
     /**

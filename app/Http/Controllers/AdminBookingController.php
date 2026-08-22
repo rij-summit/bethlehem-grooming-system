@@ -332,6 +332,71 @@ class AdminBookingController extends Controller
         return $pet;
     }
 
+    // Records optional in-person consent only after staff confirms the customer agreed.
+    public function recordSedationConsent(Request $request, $id)
+    {
+        $request->validate([
+            'customer_understood_and_agreed' => ['required', 'accepted'],
+        ]);
+
+        $recordedBy = (int) $request->user()->user_id;
+        $result = DB::transaction(function () use ($id, $recordedBy) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->first();
+
+            if (! $booking) {
+                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+            }
+
+            if ($booking->walkin_id !== null) {
+                return ['error' => [
+                    'message' => 'Use the walk-in consent record for this booking.',
+                    'status' => 422,
+                ]];
+            }
+
+            if ((bool) $booking->sedation_consent) {
+                return ['booking' => $booking, 'already_recorded' => true];
+            }
+
+            if (! in_array($booking->status, ['waiting_to_arrive', 'checked_in'], true)) {
+                return ['error' => [
+                    'message' => 'Sedation consent can only be recorded before grooming starts.',
+                    'status' => 422,
+                ]];
+            }
+
+            $booking->update([
+                'sedation_consent' => true,
+                'sedation_consent_source' => 'staff_in_person',
+                'sedation_consent_recorded_by' => $recordedBy,
+                'sedation_consent_recorded_at' => now(),
+            ]);
+
+            return ['booking' => $booking, 'already_recorded' => false];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']['message'],
+            ], $result['error']['status']);
+        }
+
+        $booking = $result['booking'];
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['already_recorded']
+                ? 'Sedation consent was already recorded.'
+                : 'Sedation consent recorded.',
+            'sedation_consent' => [
+                'accepted' => true,
+                'source' => $booking->sedation_consent_source,
+                'recorded_at' => $booking->sedation_consent_recorded_at?->toIso8601String(),
+            ],
+        ]);
+    }
+
     // ── CHECK IN ──────────────────────────────────────────
     // waiting_to_arrive → checked_in, assigns queue number
     public function checkIn($id)
@@ -1423,6 +1488,24 @@ class AdminBookingController extends Controller
                 : ($user?->phone ?? $walkin?->phone ?? '—'),
             'ownerAccountDeleted' => $ownerAccountDeleted,
             'owner_account_deleted' => $ownerAccountDeleted,
+            'sedationConsent' => $walkin
+                ? (bool) $walkin->sedation_consent
+                : (bool) $booking->sedation_consent,
+            'sedation_consent' => $walkin
+                ? (bool) $walkin->sedation_consent
+                : (bool) $booking->sedation_consent,
+            'sedationConsentSource' => $walkin
+                ? ((bool) $walkin->sedation_consent ? 'staff_walk_in' : null)
+                : $booking->sedation_consent_source,
+            'sedation_consent_source' => $walkin
+                ? ((bool) $walkin->sedation_consent ? 'staff_walk_in' : null)
+                : $booking->sedation_consent_source,
+            'sedationConsentRecordedAt' => $walkin
+                ? ($walkin->sedation_consent ? $walkin->created_at?->toIso8601String() : null)
+                : $booking->sedation_consent_recorded_at?->toIso8601String(),
+            'canRecordSedationConsent' => ! $walkin
+                && ! (bool) $booking->sedation_consent
+                && in_array($booking->status, ['waiting_to_arrive', 'checked_in'], true),
             'petName' => $petName,
             'petType' => $petType,
             'breed' => $breed,
