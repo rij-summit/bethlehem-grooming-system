@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminClinicController;
+use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminGroomingClinicReferralController;
 use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\AdminPetProfileController;
@@ -242,6 +243,16 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Administrator-only clinic availability and closure actions.
     Route::middleware('role:admin')->group(function () {
+        Route::get('/admin/security/accounts', [AdminSecurityController::class, 'accounts']);
+        Route::post('/admin/security/account/credential-change', [AdminSecurityController::class, 'requestOwnChange'])
+            ->middleware('throttle:3,10');
+        Route::post('/admin/security/staff/{staff}/credential-change', [AdminSecurityController::class, 'requestStaffChange'])
+            ->middleware('throttle:3,10');
+        Route::post('/admin/security/credential-changes/{change}/confirm', [AdminSecurityController::class, 'confirm'])
+            ->middleware('throttle:10,1');
+        Route::post('/admin/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
+            ->middleware('throttle:3,10');
+
         Route::post('/admin/clinic/stop-today', [ClinicClosureController::class, 'stopToday']);
         Route::post('/admin/clinic/reopen-today', [ClinicClosureController::class, 'reopenToday']);
         Route::get('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'blockedDates']);
