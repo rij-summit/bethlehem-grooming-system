@@ -135,12 +135,16 @@ document.addEventListener("DOMContentLoaded", () => {
     setLoginCodeBusy(true);
 
     try {
-      await API.confirmLoginCode(code);
+      const response = await API.confirmLoginCode(code);
       successTitle.textContent = "Sign-In Confirmed!";
       successMessage.textContent = "Redirecting you to your account…";
       showState("success");
       setTimeout(() => {
-        window.location.replace("./dashboard.html");
+        window.location.replace(
+          response?.user?.role === "admin"
+            ? "../admin/dashboard.html"
+            : "./dashboard.html",
+        );
       }, 750);
     } catch (error) {
       if (error.expired || error.status === 403 || error.status === 429) {

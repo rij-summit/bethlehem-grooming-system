@@ -186,7 +186,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if ($user->role === 'customer') {
+        if (in_array($user->role, ['customer', 'admin'], true)) {
             $confirmationThrottleKey = 'login-confirmation:'
                 .hash('sha256', $user->user_id.'|'.$request->ip());
 
@@ -240,6 +240,7 @@ class AuthController extends Controller
                 'user_id' => $user->user_id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
+                'username' => $user->username,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,
@@ -272,6 +273,7 @@ class AuthController extends Controller
                 'user_id' => $user->user_id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
+                'username' => $user->username,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,

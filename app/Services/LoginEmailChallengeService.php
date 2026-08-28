@@ -30,8 +30,12 @@ class LoginEmailChallengeService
                 ->lockForUpdate()
                 ->findOrFail($user->getKey());
 
-            if ($lockedUser->role !== 'customer'
-                || ! $lockedUser->email_verified_at
+            $eligibleRole = in_array($lockedUser->role, ['customer', 'admin'], true);
+            $customerEmailIsVerified = $lockedUser->role !== 'customer'
+                || $lockedUser->email_verified_at;
+
+            if (! $eligibleRole
+                || ! $customerEmailIsVerified
                 || ! $lockedUser->is_active
                 || $lockedUser->is_archived) {
                 throw new \RuntimeException('This account is not eligible for login confirmation.');

@@ -64,10 +64,16 @@ return [
 
     'login_confirmation_ttl_minutes' => (int) env('LOGIN_CONFIRMATION_TTL_MINUTES', 15),
 
+    'privileged_credential_change_code_ttl_minutes' => (int) env(
+        'PRIVILEGED_CREDENTIAL_CHANGE_CODE_TTL_MINUTES',
+        10,
+    ),
+
     'pending_registration_retention_days' => (int) env('PENDING_REGISTRATION_RETENTION_DAYS', 7),
 
     'privileged_seed_accounts' => [
         'admin' => [
+            'username' => env('ADMIN_SEED_USERNAME', 'Admin'),
             'email' => env('ADMIN_SEED_EMAIL'),
             'phone' => env('ADMIN_SEED_PHONE'),
             'password' => env('ADMIN_SEED_PASSWORD'),

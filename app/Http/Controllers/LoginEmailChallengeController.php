@@ -45,7 +45,7 @@ class LoginEmailChallengeController extends Controller
                 return $expiredResponse;
             }
 
-            $user = $this->usableCustomer($challenge);
+            $user = $this->usableUser($challenge);
             if (! $user) {
                 $challenge->delete();
                 RateLimiter::clear($attemptKey);
@@ -101,15 +101,15 @@ class LoginEmailChallengeController extends Controller
         ]);
     }
 
-    private function usableCustomer(LoginEmailChallenge $challenge): ?User
+    private function usableUser(LoginEmailChallenge $challenge): ?User
     {
         $user = User::query()
             ->lockForUpdate()
             ->find($challenge->user_id);
 
         if (! $user
-            || $user->role !== 'customer'
-            || ! $user->email_verified_at
+            || ! in_array($user->role, ['customer', 'admin'], true)
+            || ($user->role === 'customer' && ! $user->email_verified_at)
             || ! $user->is_active
             || $user->is_archived) {
             return null;
@@ -164,7 +164,8 @@ class LoginEmailChallengeController extends Controller
 
     private function authenticatedResponse(User $user, bool $rememberMe)
     {
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $tokenName = $user->role === 'admin' ? 'admin_token' : 'auth_token';
+        $token = $user->createToken($tokenName)->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -177,6 +178,7 @@ class LoginEmailChallengeController extends Controller
                 'user_id' => $user->user_id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
+                'username' => $user->username,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,

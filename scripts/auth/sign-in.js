@@ -128,6 +128,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("registered");
     history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+  } else if (new URLSearchParams(window.location.search).get("password_reset") === "1") {
+    showMessage("success", "Password reset successfully. Please sign in.");
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("password_reset");
+    history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }
 
   function startCountdown(seconds) {

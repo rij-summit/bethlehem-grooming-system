@@ -21,6 +21,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginEmailChallengeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PetController;
 use App\Http\Controllers\PetGroomingMedicalConcernController;
 use App\Http\Controllers\PetMedicalRecordController;
@@ -33,6 +34,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in', [AuthController::class, 'signIn']);
+Route::post('/password/forgot', [PasswordResetController::class, 'requestLink'])
+    ->middleware('throttle:3,10');
+Route::post('/password/reset/verify', [PasswordResetController::class, 'verifyLink'])
+    ->middleware('throttle:10,1');
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])
+    ->middleware('throttle:10,1');
 Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
 Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
 Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])

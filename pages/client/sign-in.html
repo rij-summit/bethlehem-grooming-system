@@ -107,10 +107,7 @@
                 <span>Remember me</span>
               </label>
 
-              <!-- TODO: "Forgot password?" has no password reset flow yet (href="#").
-                   Needs a dedicated reset page and a backend endpoint:
-                   POST /api/password/forgot → sends reset link to the user's email. -->
-              <a href="#" class="text-[#315b7e] transition hover:text-[#274a66]">
+              <a href="./forgot-password.html" class="text-[#315b7e] transition hover:text-[#274a66]">
                 Forgot password?
               </a>
             </div>
@@ -150,8 +147,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=login-code-20260819" defer></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="../../scripts/auth/sign-in.js?v=login-code-20260819" defer></script>
+    <script src="../../scripts/auth/sign-in.js?v=password-reset-20260828" defer></script>
   </body>
 </html>

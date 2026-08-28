@@ -177,7 +177,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $this->assertStringContainsString('async function deleteCustomer(customerId, confirmationName)', $api);
         $this->assertStringContainsString('async function deleteUnregisteredCustomer(customerId, confirmationName)', $api);
         $this->assertStringContainsString('{ confirmation_name: confirmationName }', $api);
-        $this->assertStringContainsString('api.js?v=customer-account-delete-20260819', $page);
+        $this->assertStringContainsString('api.js?v=session-inactivity-20260828', $page);
         $this->assertStringNotContainsString('deleteCustomerConfirmationHelp', $confirmationModal);
     }
 

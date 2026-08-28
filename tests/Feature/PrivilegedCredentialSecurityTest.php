@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Database\Seeders\AdminSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -87,6 +88,36 @@ class PrivilegedCredentialSecurityTest extends TestCase
         $this->assertStringNotContainsString('staff123', $seeders);
         $this->assertStringContainsString('ADMIN_SEED_PASSWORD', file_get_contents(base_path('.env.example')));
         $this->assertStringContainsString('STAFF_SEED_PASSWORD', file_get_contents(base_path('.env.example')));
+    }
+
+    public function test_admin_seeder_assigns_username_and_updates_email_without_creating_a_duplicate(): void
+    {
+        config()->set('app.privileged_seed_accounts.admin', [
+            'username' => 'Admin',
+            'email' => 'old-admin@example.test',
+            'phone' => '09170000103',
+            'password' => 'StrongAdmin!234',
+        ]);
+
+        $this->seed(AdminSeeder::class);
+
+        config()->set('app.privileged_seed_accounts.admin.email', 'new-admin@example.test');
+        $this->seed(AdminSeeder::class);
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', [
+            'username' => 'Admin',
+            'email' => 'new-admin@example.test',
+            'role' => 'admin',
+        ]);
+        $this->assertDatabaseMissing('users', [
+            'email' => 'old-admin@example.test',
+        ]);
+
+        $this->assertSame(
+            'Admin',
+            User::query()->where('email', 'new-admin@example.test')->value('username'),
+        );
     }
 
     private function createUser(string $role, string $email, string $phone): User

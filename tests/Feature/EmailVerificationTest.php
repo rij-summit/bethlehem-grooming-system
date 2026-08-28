@@ -608,7 +608,7 @@ class EmailVerificationTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
-    public function test_privileged_login_still_completes_after_password_confirmation(): void
+    public function test_staff_login_still_completes_after_password_confirmation(): void
     {
         Notification::fake();
         $staff = User::factory()->create([
@@ -630,12 +630,48 @@ class EmailVerificationTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
+    public function test_admin_username_login_requires_a_code_sent_to_the_admin_email(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->create([
+            'username' => 'Admin',
+            'email' => 'bethlehem.admin.test@gmail.com',
+            'role' => 'admin',
+            'password_hash' => Hash::make('strong-password'),
+        ]);
+
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => 'Admin',
+            'password' => 'strong-password',
+        ]);
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('requires_login_confirmation', true)
+            ->assertJsonPath('email', 'bethlehem.admin.test@gmail.com')
+            ->assertJsonMissingPath('token');
+
+        $code = $this->loginCodeSentTo($admin);
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $response->json('login_poll_token'),
+            'code' => $code,
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.role', 'admin')
+            ->assertJsonPath('user.username', 'Admin')
+            ->assertJsonStructure(['token']);
+
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $admin->user_id,
+            'name' => 'admin_token',
+        ]);
+    }
+
     public function test_sign_in_keeps_other_sessions_and_logout_revokes_only_current_token(): void
     {
         $user = User::factory()->create([
             'email' => 'sessions@example.test',
             'password_hash' => Hash::make('strong-password'),
-            'role' => 'admin',
+            'role' => 'staff',
         ]);
 
         $firstToken = $this->postJson('/api/sign-in', [

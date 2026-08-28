@@ -56,11 +56,21 @@ var API = (() => {
   const LOGIN_POLL_TOKEN_KEY = "pending_login_poll_token";
   const LOGIN_CONFIRMATION_EMAIL_KEY = "pending_login_confirmation_email";
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
+  const AUTH_LAST_ACTIVITY_KEY = "bethlehem.auth.last_activity";
+  const INACTIVITY_WARNING_ID = "bethlehem-session-inactivity-warning";
+  const ACTIVITY_WRITE_THROTTLE_MS = 1000;
+  const SESSION_INACTIVITY_POLICIES = Object.freeze({
+    admin: Object.freeze({ timeoutMs: 15 * 60 * 1000, warningMs: 14 * 60 * 1000 }),
+    staff: Object.freeze({ timeoutMs: 15 * 60 * 1000, warningMs: 14 * 60 * 1000 }),
+    customer: Object.freeze({ timeoutMs: 30 * 60 * 1000, warningMs: 29 * 60 * 1000 }),
+  });
   const ADMIN_ONLY_PAGE_NAMES = ["reports.html", "settings.html", "services.html"];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
     "sign-in.html",
     "signup.html",
     "verify-email.html",
+    "forgot-password.html",
+    "reset-password.html",
   ]);
   const INVALID_SESSION_CODES = new Set([
     "account_disabled",
@@ -70,7 +80,13 @@ var API = (() => {
     CUSTOMER_TOKEN_KEY,
     ADMIN_TOKEN_KEY,
     USER_ROLE_KEY,
+    AUTH_LAST_ACTIVITY_KEY,
   ];
+
+  let inactivityTimerId = null;
+  let inactivityManagerInstalled = false;
+  let inactivityLogoutStarted = false;
+  let lastActivityWriteAt = 0;
 
   // ── Booking session keys to wipe on customer logout / login ──────────────
   const BOOKING_SESSION_KEYS = [
@@ -156,6 +172,7 @@ var API = (() => {
       safeStorageRemove(sessionStorage, key);
     });
     clearPendingLoginConfirmation();
+    pauseInactivityTracking();
   }
 
   function clearPendingLoginConfirmation() {
@@ -207,6 +224,13 @@ var API = (() => {
       clearAuthStorage();
       throw error;
     }
+
+    inactivityLogoutStarted = false;
+    const session = getAuthSession();
+    const timestamp = Date.now();
+    writeSessionActivity(session, timestamp);
+    lastActivityWriteAt = timestamp;
+    if (inactivityManagerInstalled) evaluateSessionInactivity(timestamp);
   }
 
   function getCustomerToken() {
@@ -394,9 +418,224 @@ var API = (() => {
     }
   }
 
+  function getSessionInactivityPolicy(role = getUserRole()) {
+    return SESSION_INACTIVITY_POLICIES[role] || null;
+  }
+
+  function activitySessionId(session) {
+    if (!session?.token || !session?.role) return "";
+
+    const tokenId = String(session.token).split("|", 1)[0];
+    return `${session.role}:${tokenId}`;
+  }
+
+  function readSessionActivity(session) {
+    const expectedSessionId = activitySessionId(session);
+    if (!expectedSessionId) return null;
+
+    const stored = safeStorageGet(localStorage, AUTH_LAST_ACTIVITY_KEY)
+      || safeStorageGet(sessionStorage, AUTH_LAST_ACTIVITY_KEY);
+    if (!stored) return null;
+
+    try {
+      const activity = JSON.parse(stored);
+      const timestamp = Number(activity?.at);
+      return activity?.session === expectedSessionId && Number.isFinite(timestamp)
+        ? timestamp
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeSessionActivity(session, timestamp) {
+    const sessionId = activitySessionId(session);
+    if (!sessionId) return;
+
+    const value = JSON.stringify({ session: sessionId, at: timestamp });
+    try {
+      localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, value);
+    } catch {
+      try {
+        sessionStorage.setItem(AUTH_LAST_ACTIVITY_KEY, value);
+      } catch {
+        // The in-memory timer still protects this tab when storage is unavailable.
+      }
+    }
+  }
+
+  function isManagedProtectedSession(session = getAuthSession()) {
+    if (!session || !getSessionInactivityPolicy(session.role)) return false;
+    if (isAdminPage()) return isAdminRole(session.role);
+    return isProtectedClientPage() && session.role === "customer";
+  }
+
+  function inactivityWarningElement() {
+    if (typeof document === "undefined") return null;
+    return document.getElementById?.(INACTIVITY_WARNING_ID) || null;
+  }
+
+  function ensureInactivityWarningElement() {
+    const existing = inactivityWarningElement();
+    if (existing) return existing;
+    if (
+      typeof document === "undefined"
+      || typeof document.createElement !== "function"
+      || !document.body
+    ) {
+      return null;
+    }
+
+    const toast = document.createElement("div");
+    toast.id = INACTIVITY_WARNING_ID;
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.textContent = "Your session will expire soon due to inactivity.";
+    toast.style.cssText = [
+      "position: fixed",
+      "right: 1rem",
+      "bottom: 1rem",
+      "z-index: 10001",
+      "display: none",
+      "max-width: min(24rem, calc(100vw - 2rem))",
+      "border: 1px solid #f59e0b",
+      "border-radius: 0.875rem",
+      "background: #fff7ed",
+      "padding: 0.875rem 1rem",
+      "color: #9a3412",
+      "font-size: 0.875rem",
+      "font-weight: 700",
+      "line-height: 1.4",
+      "box-shadow: 0 16px 35px rgba(15, 23, 42, 0.22)",
+    ].join(";");
+    document.body.appendChild(toast);
+    return toast;
+  }
+
+  function showInactivityWarning() {
+    const toast = ensureInactivityWarningElement();
+    if (toast) toast.style.display = "block";
+  }
+
+  function hideInactivityWarning() {
+    const toast = inactivityWarningElement();
+    if (toast) toast.style.display = "none";
+  }
+
+  function pauseInactivityTracking() {
+    if (inactivityTimerId !== null) {
+      clearTimeout(inactivityTimerId);
+      inactivityTimerId = null;
+    }
+    hideInactivityWarning();
+  }
+
+  function scheduleInactivityCheck(delayMs) {
+    if (inactivityTimerId !== null) clearTimeout(inactivityTimerId);
+    inactivityTimerId = setTimeout(
+      () => evaluateSessionInactivity(),
+      Math.max(0, Math.ceil(delayMs)),
+    );
+  }
+
+  function expireSessionForInactivity(session) {
+    if (inactivityLogoutStarted) return;
+    inactivityLogoutStarted = true;
+    pauseInactivityTracking();
+
+    // logout() clears browser state synchronously and starts a keepalive
+    // revocation request before navigation, so the abandoned token is unusable.
+    void logout(session.role, { reason: "inactivity", keepalive: true }).catch(() => {});
+    redirectToSignIn({ replace: true });
+  }
+
+  function evaluateSessionInactivity(timestamp = Date.now()) {
+    const session = getAuthSession();
+    if (!isManagedProtectedSession(session)) {
+      pauseInactivityTracking();
+      return { state: "inactive", idleMs: 0 };
+    }
+
+    const policy = getSessionInactivityPolicy(session.role);
+    let lastActivityAt = readSessionActivity(session);
+    if (lastActivityAt === null) {
+      lastActivityAt = timestamp;
+      writeSessionActivity(session, lastActivityAt);
+      lastActivityWriteAt = lastActivityAt;
+    }
+
+    const idleMs = Math.max(0, timestamp - lastActivityAt);
+    if (idleMs >= policy.timeoutMs) {
+      expireSessionForInactivity(session);
+      return { state: "expired", idleMs };
+    }
+
+    if (idleMs >= policy.warningMs) {
+      showInactivityWarning();
+      scheduleInactivityCheck(policy.timeoutMs - idleMs);
+      return { state: "warning", idleMs };
+    }
+
+    hideInactivityWarning();
+    scheduleInactivityCheck(policy.warningMs - idleMs);
+    return { state: "active", idleMs };
+  }
+
+  function recordSessionActivity(force = false) {
+    const session = getAuthSession();
+    if (!isManagedProtectedSession(session) || inactivityLogoutStarted) return;
+
+    const timestamp = Date.now();
+    if (!force && timestamp - lastActivityWriteAt < ACTIVITY_WRITE_THROTTLE_MS) {
+      return;
+    }
+
+    lastActivityWriteAt = timestamp;
+    writeSessionActivity(session, timestamp);
+    hideInactivityWarning();
+    const policy = getSessionInactivityPolicy(session.role);
+    scheduleInactivityCheck(policy.warningMs);
+  }
+
+  function startSessionInactivityManager() {
+    const session = getAuthSession();
+    if (!isManagedProtectedSession(session)) return false;
+    if (
+      typeof document === "undefined"
+      || typeof document.addEventListener !== "function"
+      || typeof document.createElement !== "function"
+    ) {
+      return false;
+    }
+
+    inactivityLogoutStarted = false;
+
+    if (!inactivityManagerInstalled) {
+      const onActivity = () => recordSessionActivity(false);
+      document.addEventListener("pointerdown", onActivity, { passive: true });
+      document.addEventListener("mousemove", onActivity, { passive: true });
+      document.addEventListener("keydown", onActivity);
+      document.addEventListener("touchstart", onActivity, { passive: true });
+      document.addEventListener("scroll", onActivity, { passive: true, capture: true });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") evaluateSessionInactivity();
+      });
+      window.addEventListener("focus", () => evaluateSessionInactivity());
+      inactivityManagerInstalled = true;
+    }
+
+    evaluateSessionInactivity();
+    return true;
+  }
+
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
       if (event.storageArea !== localStorage) return;
+
+      if (event.key === AUTH_LAST_ACTIVITY_KEY && event.newValue) {
+        evaluateSessionInactivity();
+        return;
+      }
 
       if (event.key !== AUTH_LOGOUT_EVENT_KEY || !event.newValue) return;
 
@@ -408,11 +647,11 @@ var API = (() => {
       }
     });
 
-    enforceProtectedPageAccess();
+    if (enforceProtectedPageAccess()) startSessionInactivityManager();
     window.addEventListener("pageshow", () => {
       // A logout page navigation can leave a protected dashboard in the
       // browser back-forward cache. Re-check storage whenever it is restored.
-      enforceProtectedPageAccess();
+      if (enforceProtectedPageAccess()) startSessionInactivityManager();
     });
   }
 
@@ -453,6 +692,9 @@ var API = (() => {
 
     if (controller) {
       options.signal = controller.signal;
+    }
+    if (requestOptions.keepalive) {
+      options.keepalive = true;
     }
 
     try {
@@ -594,6 +836,22 @@ var API = (() => {
     return data;
   }
 
+  async function requestPasswordReset(email) {
+    return request("POST", "/password/forgot", { email });
+  }
+
+  async function verifyPasswordResetToken(token) {
+    return request("POST", "/password/reset/verify", { token });
+  }
+
+  async function resetPassword(token, password, passwordConfirmation) {
+    return request("POST", "/password/reset", {
+      token,
+      password,
+      password_confirmation: passwordConfirmation,
+    });
+  }
+
   async function verifyEmail(token) {
     // POST /api/email/verify  { token }
     // Successful customer signup verification also establishes the first
@@ -623,12 +881,17 @@ var API = (() => {
         code,
       });
 
-      if (!data?.token || data?.user?.role !== "customer") {
-        throw new Error("The server returned an invalid customer session.");
+      const role = data?.user?.role;
+      if (!data?.token || (role !== "customer" && role !== "admin")) {
+        throw new Error("The server returned an invalid session.");
       }
 
-      clearBookingDraft();
-      setAuthSession(data?.token, "customer", data?.remember_me !== false);
+      if (role === "customer") clearBookingDraft();
+      setAuthSession(
+        data.token,
+        role,
+        role === "admin" ? true : data?.remember_me !== false,
+      );
 
       // Acknowledge only after the browser has stored the session. Failure is
       // non-fatal: the approved challenge remains retryable until it expires.
@@ -653,7 +916,7 @@ var API = (() => {
     }
   }
 
-  async function logout(role = null) {
+  async function logout(role = null, logoutOptions = {}) {
     // POST /api/logout  (protected — sends the correct token in the header)
     // Capture the current bearer token, then clear the browser before waiting
     // for the network. Logout remains immediate even if the server is down.
@@ -664,7 +927,7 @@ var API = (() => {
 
     clearAuthStorage();
     if (resolvedRole === "customer") clearBookingDraft();
-    notifyLogout(resolvedRole, "logout");
+    notifyLogout(resolvedRole, logoutOptions.reason || "logout");
 
     if (!token) return { success: true, local_only: true };
 
@@ -674,7 +937,10 @@ var API = (() => {
         "/logout",
         null,
         token,
-        { suppressAuthRedirect: true },
+        {
+          suppressAuthRedirect: true,
+          keepalive: logoutOptions.keepalive === true,
+        },
       );
     } catch (error) {
       // A missing/expired server session is already equivalent to logout.
@@ -1334,6 +1600,46 @@ var API = (() => {
     );
   }
 
+  async function getAdminSecurityAccounts() {
+    return request("GET", "/admin/security/accounts", null, getAdminToken());
+  }
+
+  async function requestAdminCredentialChange(payload) {
+    return request(
+      "POST",
+      "/admin/security/account/credential-change",
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function requestStaffCredentialChange(staffId, payload) {
+    return request(
+      "POST",
+      `/admin/security/staff/${encodeURIComponent(staffId)}/credential-change`,
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function confirmSecurityCredentialChange(changeId, code) {
+    return request(
+      "POST",
+      `/admin/security/credential-changes/${encodeURIComponent(changeId)}/confirm`,
+      { code },
+      getAdminToken(),
+    );
+  }
+
+  async function resendSecurityCredentialChangeCode(changeId) {
+    return request(
+      "POST",
+      `/admin/security/credential-changes/${encodeURIComponent(changeId)}/resend`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function getBlockedDates() {
     // GET /api/admin/clinic/blocked-dates  (protected — admin token)
     return request("GET", "/admin/clinic/blocked-dates", null, getAdminToken());
@@ -1648,12 +1954,19 @@ var API = (() => {
     invalidateSession,
     redirectToSignIn,
     signInPath,
+    getSessionInactivityPolicy,
+    recordSessionActivity,
+    evaluateSessionInactivity,
+    startSessionInactivityManager,
     enforceAdminPageAccess,
     enforceProtectedPageAccess,
     isAdminOnlyPage,
     // Auth
     register,
     signIn,
+    requestPasswordReset,
+    verifyPasswordResetToken,
+    resetPassword,
     logout,
     getMe,
     getSystemClock,
@@ -1741,6 +2054,11 @@ var API = (() => {
     adminUpdateGroomersOnDuty,
     getAvailabilitySettings,
     adminUpdateAvailability,
+    getAdminSecurityAccounts,
+    requestAdminCredentialChange,
+    requestStaffCredentialChange,
+    confirmSecurityCredentialChange,
+    resendSecurityCredentialChangeCode,
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,

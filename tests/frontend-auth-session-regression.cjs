@@ -509,6 +509,8 @@ function testStaticAuthContracts() {
   const authAssets = [
     "scripts/api.js",
     "scripts/auth/sign-in.js",
+    "scripts/auth/forgot-password.js",
+    "scripts/auth/reset-password.js",
     "scripts/auth/client/signup.js",
     "scripts/auth/client/verify-email.js",
     "scripts/components/admin-sidebar.js",
@@ -528,7 +530,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|session-inactivity-20260828)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }

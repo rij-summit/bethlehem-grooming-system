@@ -215,7 +215,7 @@ class InventorySecurityRegressionTest extends TestCase
             $page = file_get_contents(base_path("pages/admin/inventory/{$pageName}"));
 
             $this->assertStringContainsString(
-                'scripts/api.js?v=auth-session-20260816',
+                'scripts/api.js?v=session-inactivity-20260828',
                 $page,
                 "{$pageName} must load the compatible shared API client.",
             );
@@ -238,7 +238,7 @@ class InventorySecurityRegressionTest extends TestCase
         $stockOutPage = file_get_contents(base_path('pages/admin/inventory/stock-out.html'));
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
-        $this->assertStringContainsString('scripts/api.js?v=auth-session-20260816', $inventoryLandingPage);
+        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryLandingPage);
         $this->assertStringContainsString('admin-sidebar.js?v=auth-session-20260816', $inventoryLandingPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=batch-expiry-20260816', $itemsPage);
         $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
