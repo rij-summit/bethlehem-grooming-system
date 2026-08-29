@@ -27,6 +27,7 @@ class User extends Authenticatable
         'phone',
         'password_hash',
         'role',
+        'staff_type',
         'customer_tier',
         'is_active',
         'is_archived',

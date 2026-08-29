@@ -141,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showState("success");
       setTimeout(() => {
         window.location.replace(
-          response?.user?.role === "admin"
+          ["admin", "staff"].includes(response?.user?.role)
             ? "../admin/dashboard.html"
             : "./dashboard.html",
         );

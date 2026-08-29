@@ -18,8 +18,18 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         foreach ([
             '>Admin account</h3>',
             '>Staff accounts</h3>',
+            '>Add staff account</span>',
             '>Username</span>',
             '>Change credentials</span>',
+            "staff.active ? 'Deactivate' : 'Reactivate'",
+            "chooseStaffType('clinic')",
+            "chooseStaffType('grooming')",
+            'x-model="addStaffModal.username" required',
+            'x-model="addStaffModal.email" required',
+            'x-model="addStaffModal.password" required',
+            'x-model="addStaffModal.confirmation" required',
+            '>6-digit email verification code</legend>',
+            '@submit.prevent="confirmNewStaffAccount()"',
             'Update Changes',
             'x-for="staff in filteredStaffAccounts"',
             "staffAccounts.length === 0 ? 'No staff accounts yet' : 'No staff accounts in this category'",
@@ -35,15 +45,13 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('Admin Account Change Password', $security);
         $this->assertStringNotContainsString('Staff Account Change Password', $security);
-        $this->assertStringNotContainsString('Add staff account', $security);
-        $this->assertStringNotContainsString('Deactivate</span>', $security);
         $this->assertStringNotContainsString('Use at least 12 characters', $security);
         $this->assertStringNotContainsString('type="search"', $security);
         $this->assertStringNotContainsString('staffSearch', $security);
-        $this->assertSame(5, substr_count($security, 'data-lucide="eye-closed"'));
-        $this->assertSame(5, substr_count($security, 'data-lucide="eye"'));
+        $this->assertSame(7, substr_count($security, 'data-lucide="eye-closed"'));
+        $this->assertSame(7, substr_count($security, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=security-code-20260828',
+            'admin-settings.js?v=staff-username-20260830',
             $page,
         );
     }
@@ -74,6 +82,10 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'API.getAdminSecurityAccounts()',
             'API.requestAdminCredentialChange({',
             'API.requestStaffCredentialChange(staff.id, {',
+            'API.requestStaffAccount({',
+            'API.confirmStaffAccountEmail(',
+            'API.resendStaffAccountEmailCode(',
+            'API.updateStaffAccountStatus(staff.id, targetActive)',
             'API.confirmSecurityCredentialChange(',
             'API.resendSecurityCredentialChangeCode(',
             'openSecurityVerification(response)',

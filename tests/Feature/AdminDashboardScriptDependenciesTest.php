@@ -38,6 +38,28 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         );
     }
 
+    public function test_staff_dashboard_uses_the_authenticated_staff_display_name(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/dashboard.html'));
+        $sidebar = file_get_contents(base_path('scripts/components/admin-sidebar.js'));
+
+        $this->assertStringContainsString(
+            'API.getUserRole() === \'staff\' ? `${staffDisplayName} Dashboard` : \'Admin Dashboard\'',
+            $page,
+        );
+        $this->assertStringContainsString(
+            "x-text=\"isAdmin ? 'Admin' : staffDisplayName\"",
+            $page,
+        );
+        $this->assertStringContainsString(
+            'scripts/components/admin-sidebar.js?v=staff-identity-20260830',
+            $page,
+        );
+        $this->assertStringContainsString('async loadLoggedInIdentity()', $sidebar);
+        $this->assertStringContainsString('await API.getMe("staff")', $sidebar);
+        $this->assertStringContainsString('this.staffDisplayName = fullName', $sidebar);
+    }
+
     public function test_dashboard_search_groups_minimal_customer_and_pet_results_and_links_to_details(): void
     {
         $page = file_get_contents(base_path('pages/admin/dashboard.html'));

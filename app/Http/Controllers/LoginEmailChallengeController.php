@@ -108,7 +108,7 @@ class LoginEmailChallengeController extends Controller
             ->find($challenge->user_id);
 
         if (! $user
-            || ! in_array($user->role, ['customer', 'admin'], true)
+            || ! in_array($user->role, ['customer', 'admin', 'staff'], true)
             || ($user->role === 'customer' && ! $user->email_verified_at)
             || ! $user->is_active
             || $user->is_archived) {
@@ -164,7 +164,9 @@ class LoginEmailChallengeController extends Controller
 
     private function authenticatedResponse(User $user, bool $rememberMe)
     {
-        $tokenName = $user->role === 'admin' ? 'admin_token' : 'auth_token';
+        $tokenName = in_array($user->role, ['admin', 'staff'], true)
+            ? 'admin_token'
+            : 'auth_token';
         $token = $user->createToken($tokenName)->plainTextToken;
 
         return response()->json([

@@ -30,10 +30,11 @@ global.API = {
       },
       staff: [{
         user_id: 2,
-        first_name: "Staff",
-        last_name: "Bethlehem",
-        username: null,
-        email: "staff@placeholder.test",
+        first_name: "Grooming",
+        last_name: "Staff",
+        username: "groomingstaff",
+        email: "bethlehem.staff.test@gmail.com",
+        staff_type: "grooming",
         is_active: true,
         is_archived: false,
       }],
@@ -71,6 +72,32 @@ global.API = {
       confirmation_email: "b**************@gmail.com",
     };
   },
+  async requestStaffAccount(payload) {
+    calls.push(["add-staff", payload]);
+    return {
+      pending_staff_id: 21,
+      purpose: "Verify Clinic Staff email",
+      staff_label: "Clinic Staff",
+      confirmation_email: "c**********@example.test",
+    };
+  },
+  async confirmStaffAccountEmail(pendingStaffId, code) {
+    calls.push(["confirm-staff", pendingStaffId, code]);
+    return { message: "Clinic Staff account created." };
+  },
+  async resendStaffAccountEmailCode(pendingStaffId) {
+    calls.push(["resend-staff", pendingStaffId]);
+    return {
+      message: "A new email verification code was sent.",
+      confirmation_email: "c**********@example.test",
+    };
+  },
+  async updateStaffAccountStatus(staffId, active) {
+    calls.push(["staff-status", staffId, active]);
+    return {
+      message: active ? "Staff account reactivated." : "Staff account deactivated.",
+    };
+  },
   clearAuthState() {},
   redirectToSignIn() {},
 };
@@ -86,8 +113,9 @@ vm.runInThisContext(componentSource, {
   await settings.loadSecurityAccounts();
   assert.equal(settings.adminAccount.username, "Admin");
   assert.equal(settings.staffAccounts.length, 1);
-  assert.equal(settings.staffAccounts[0].username, "");
-  assert.equal(settings.staffAccounts[0].email, "staff@placeholder.test");
+  assert.equal(settings.staffAccounts[0].username, "groomingstaff");
+  assert.equal(settings.staffAccounts[0].email, "bethlehem.staff.test@gmail.com");
+  assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Staff");
 
   settings.adminPassword.current = "CurrentAdmin!234";
   settings.adminPassword.username = "ClinicAdmin";
@@ -120,6 +148,44 @@ vm.runInThisContext(componentSource, {
   assert.deepEqual(calls[2], ["confirm", 12, "123456"]);
   assert.equal(settings.securityVerification.open, false);
   assert.equal(settings.staffNotice, "Staff username and password change confirmed.");
+
+  settings.openAddStaffAccount();
+  settings.chooseStaffType("clinic");
+  settings.addStaffModal.username = "clinicstaff";
+  settings.addStaffModal.email = "clinic.staff@example.test";
+  settings.addStaffModal.password = "ClinicStaff!234";
+  settings.addStaffModal.confirmation = "ClinicStaff!234";
+  await settings.requestNewStaffAccount();
+  assert.equal(settings.addStaffModal.step, "verify");
+  assert.equal(settings.addStaffModal.purpose, "Verify Clinic Staff email");
+  assert.deepEqual(calls.find((call) => call[0] === "add-staff"), [
+    "add-staff",
+    {
+      staff_type: "clinic",
+      username: "clinicstaff",
+      email: "clinic.staff@example.test",
+      password: "ClinicStaff!234",
+      password_confirmation: "ClinicStaff!234",
+    },
+  ]);
+
+  settings.addStaffModal.digits = ["6", "5", "4", "3", "2", "1"];
+  await settings.confirmNewStaffAccount();
+  assert.deepEqual(
+    calls.find((call) => call[0] === "confirm-staff"),
+    ["confirm-staff", 21, "654321"],
+  );
+  assert.equal(settings.addStaffModal.open, false);
+  assert.equal(settings.staffNotice, "Clinic Staff account created.");
+
+  settings.openStaffStatusModal(settings.staffAccounts[0]);
+  await settings.updateStaffStatus();
+  assert.deepEqual(
+    calls.find((call) => call[0] === "staff-status"),
+    ["staff-status", 2, false],
+  );
+  assert.equal(settings.staffStatusModal.open, false);
+  assert.equal(settings.staffNotice, "Staff account deactivated.");
 
   console.log("Admin security settings regression tests passed.");
 })().catch((error) => {

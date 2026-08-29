@@ -79,7 +79,8 @@ return [
             'password' => env('ADMIN_SEED_PASSWORD'),
         ],
         'staff' => [
-            'email' => env('STAFF_SEED_EMAIL'),
+            'username' => env('STAFF_SEED_USERNAME', 'groomingstaff'),
+            'email' => env('STAFF_SEED_EMAIL', 'bethlehem.staff.test@gmail.com'),
             'phone' => env('STAFF_SEED_PHONE'),
             'password' => env('STAFF_SEED_PASSWORD'),
         ],

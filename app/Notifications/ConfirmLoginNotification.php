@@ -32,11 +32,15 @@ class ConfirmLoginNotification extends Notification implements ShouldBeEncrypted
     public function toMail(object $notifiable): MailMessage
     {
         $expiryMinutes = max(1, (int) config('app.login_confirmation_ttl_minutes', 15));
+        $accountLabel = $notifiable->role === 'staff' ? 'staff account' : 'account';
+        $subject = $notifiable->role === 'staff'
+            ? 'Staff Sign-In Code - Bethlehem Animal Clinic'
+            : 'Your Sign-In Code - Bethlehem Animal Clinic';
 
         return (new MailMessage)
-            ->subject('Your Sign-In Code - Bethlehem Animal Clinic')
+            ->subject($subject)
             ->greeting("Hi {$notifiable->first_name}!")
-            ->line('We received a request to sign in to your Bethlehem Animal Clinic account.')
+            ->line("We received a request to sign in to your Bethlehem Animal Clinic {$accountLabel}.")
             ->line('Your six-digit sign-in code is:')
             ->line("**{$this->code}**")
             ->line("This code expires in {$expiryMinutes} minutes.")

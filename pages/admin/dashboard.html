@@ -181,15 +181,15 @@
           <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
             <div
               class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white"
-              x-text="isAdmin ? 'AD' : 'ST'"
+              x-text="isAdmin ? 'AD' : staffInitials"
             >
               AD
             </div>
 
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
-              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
-              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
+              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : staffDisplayName">Admin</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Staff Account'">Clinic Manager</p>
             </div>
           </div>
 
@@ -285,7 +285,7 @@
                 <div>
                   <h2
                     class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl"
-                    x-text="API.getUserRole() === 'staff' ? 'Staff Dashboard' : 'Admin Dashboard'"
+                    x-text="API.getUserRole() === 'staff' ? `${staffDisplayName} Dashboard` : 'Admin Dashboard'"
                   >
                     Admin Dashboard
                   </h2>
@@ -707,7 +707,7 @@
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
-    <script src="../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=staff-identity-20260830"></script>
 
     <!-- Shared dashboard content scripts -->
     <script src="../../scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724"></script>

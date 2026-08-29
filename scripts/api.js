@@ -882,7 +882,7 @@ var API = (() => {
       });
 
       const role = data?.user?.role;
-      if (!data?.token || (role !== "customer" && role !== "admin")) {
+      if (!data?.token || !["customer", "admin", "staff"].includes(role)) {
         throw new Error("The server returned an invalid session.");
       }
 
@@ -890,7 +890,7 @@ var API = (() => {
       setAuthSession(
         data.token,
         role,
-        role === "admin" ? true : data?.remember_me !== false,
+        isAdminRole(role) ? true : data?.remember_me !== false,
       );
 
       // Acknowledge only after the browser has stored the session. Failure is
@@ -1622,6 +1622,42 @@ var API = (() => {
     );
   }
 
+  async function requestStaffAccount(payload) {
+    return request(
+      "POST",
+      "/admin/security/staff-accounts",
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function confirmStaffAccountEmail(pendingStaffId, code) {
+    return request(
+      "POST",
+      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/confirm`,
+      { code },
+      getAdminToken(),
+    );
+  }
+
+  async function resendStaffAccountEmailCode(pendingStaffId) {
+    return request(
+      "POST",
+      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/resend`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function updateStaffAccountStatus(staffId, active) {
+    return request(
+      "PATCH",
+      `/admin/security/staff/${encodeURIComponent(staffId)}/status`,
+      { active },
+      getAdminToken(),
+    );
+  }
+
   async function confirmSecurityCredentialChange(changeId, code) {
     return request(
       "POST",
@@ -2057,6 +2093,10 @@ var API = (() => {
     getAdminSecurityAccounts,
     requestAdminCredentialChange,
     requestStaffCredentialChange,
+    requestStaffAccount,
+    confirmStaffAccountEmail,
+    resendStaffAccountEmailCode,
+    updateStaffAccountStatus,
     confirmSecurityCredentialChange,
     resendSecurityCredentialChangeCode,
     getBlockedDates,

@@ -30,7 +30,7 @@ class LoginEmailChallengeService
                 ->lockForUpdate()
                 ->findOrFail($user->getKey());
 
-            $eligibleRole = in_array($lockedUser->role, ['customer', 'admin'], true);
+            $eligibleRole = in_array($lockedUser->role, ['customer', 'admin', 'staff'], true);
             $customerEmailIsVerified = $lockedUser->role !== 'customer'
                 || $lockedUser->email_verified_at;
 

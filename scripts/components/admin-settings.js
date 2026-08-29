@@ -58,6 +58,33 @@ function adminSettings() {
       submitting: false,
       error: "",
     },
+    addStaffModal: {
+      open: false,
+      step: "role",
+      staffType: "",
+      username: "",
+      email: "",
+      password: "",
+      confirmation: "",
+      showPassword: false,
+      showConfirmation: false,
+      pendingStaffId: null,
+      purpose: "",
+      staffLabel: "",
+      confirmationEmail: "",
+      digits: ["", "", "", "", "", ""],
+      submitting: false,
+      resending: false,
+      error: "",
+      notice: "",
+    },
+    staffStatusModal: {
+      open: false,
+      staff: null,
+      targetActive: false,
+      busy: false,
+      error: "",
+    },
     securityVerification: {
       open: false,
       changeId: null,
@@ -99,6 +126,10 @@ function adminSettings() {
 
     get securityCodeComplete() {
       return this.securityVerification.digits.every((digit) => /^\d$/.test(digit));
+    },
+
+    get staffEmailCodeComplete() {
+      return this.addStaffModal.digits.every((digit) => /^\d$/.test(digit));
     },
 
     async init() {
@@ -163,6 +194,12 @@ function adminSettings() {
             initials: `${staff.first_name?.charAt(0) || "S"}${staff.last_name?.charAt(0) || ""}`.toUpperCase(),
             username: staff.username || "",
             email: staff.email || "",
+            staffType: staff.staff_type || "",
+            roleLabel: staff.staff_type === "clinic"
+              ? "Clinic Staff"
+              : staff.staff_type === "grooming"
+                ? "Grooming Staff"
+                : "Staff",
             active: Boolean(staff.is_active) && !Boolean(staff.is_archived),
           };
         });
@@ -364,8 +401,237 @@ function adminSettings() {
       }
     },
 
+    emptyAddStaffModal(open = false) {
+      return {
+        open,
+        step: "role",
+        staffType: "",
+        username: "",
+        email: "",
+        password: "",
+        confirmation: "",
+        showPassword: false,
+        showConfirmation: false,
+        pendingStaffId: null,
+        purpose: "",
+        staffLabel: "",
+        confirmationEmail: "",
+        digits: ["", "", "", "", "", ""],
+        submitting: false,
+        resending: false,
+        error: "",
+        notice: "",
+      };
+    },
+
+    openAddStaffAccount() {
+      this.staffNotice = "";
+      this.addStaffModal = this.emptyAddStaffModal(true);
+      this.refreshSecurityIcons();
+    },
+
+    closeAddStaffAccount() {
+      if (this.addStaffModal.submitting) return;
+      this.addStaffModal = this.emptyAddStaffModal(false);
+    },
+
+    chooseStaffType(staffType) {
+      if (!["clinic", "grooming"].includes(staffType)) return;
+      this.addStaffModal.staffType = staffType;
+      this.addStaffModal.step = "details";
+      this.addStaffModal.error = "";
+      this.refreshSecurityIcons();
+      this.$nextTick(() => document.getElementById("newStaffUsername")?.focus());
+    },
+
+    returnToStaffType() {
+      if (this.addStaffModal.submitting) return;
+      this.addStaffModal.step = "role";
+      this.addStaffModal.error = "";
+      this.addStaffModal.notice = "";
+      this.refreshSecurityIcons();
+    },
+
+    async requestNewStaffAccount() {
+      this.addStaffModal.error = "";
+      this.addStaffModal.notice = "";
+
+      const username = this.addStaffModal.username.trim();
+      if (!/^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(username)) {
+        this.addStaffModal.error = "Enter a valid username.";
+        return;
+      }
+
+      const email = this.addStaffModal.email.trim().toLowerCase();
+      if (!email) {
+        this.addStaffModal.error = "Enter the staff email address.";
+        return;
+      }
+
+      const validationError = this.passwordValidationError(
+        this.addStaffModal.password,
+        this.addStaffModal.confirmation,
+      );
+      if (validationError) {
+        this.addStaffModal.error = validationError;
+        return;
+      }
+
+      this.addStaffModal.submitting = true;
+      try {
+        const response = await API.requestStaffAccount({
+          staff_type: this.addStaffModal.staffType,
+          username,
+          email,
+          password: this.addStaffModal.password,
+          password_confirmation: this.addStaffModal.confirmation,
+        });
+        this.addStaffModal.pendingStaffId = response.pending_staff_id;
+        this.addStaffModal.purpose = response.purpose;
+        this.addStaffModal.staffLabel = response.staff_label;
+        this.addStaffModal.confirmationEmail = response.confirmation_email;
+        this.addStaffModal.password = "";
+        this.addStaffModal.confirmation = "";
+        this.addStaffModal.digits = ["", "", "", "", "", ""];
+        this.addStaffModal.step = "verify";
+        this.refreshSecurityIcons();
+        this.$nextTick(() => document.getElementById("staffEmailCodeDigit0")?.focus());
+      } catch (error) {
+        this.addStaffModal.error = this.firstApiError(error);
+      } finally {
+        this.addStaffModal.submitting = false;
+      }
+    },
+
+    focusStaffEmailCodeDigit(index) {
+      this.$nextTick(() => document.getElementById(`staffEmailCodeDigit${index}`)?.focus());
+    },
+
+    applyStaffEmailCode(value, startIndex = 0) {
+      const digits = String(value || "").replace(/\D/g, "").slice(0, 6 - startIndex);
+      if (!digits) return;
+
+      [...digits].forEach((digit, offset) => {
+        this.addStaffModal.digits[startIndex + offset] = digit;
+      });
+      this.focusStaffEmailCodeDigit(Math.min(5, startIndex + digits.length));
+    },
+
+    handleStaffEmailCodeInput(index, event) {
+      const digits = String(event.target.value || "").replace(/\D/g, "");
+      if (digits.length > 1) {
+        this.applyStaffEmailCode(digits, index);
+        return;
+      }
+
+      const digit = digits.slice(-1);
+      this.addStaffModal.digits[index] = digit;
+      event.target.value = digit;
+      if (digit && index < 5) this.focusStaffEmailCodeDigit(index + 1);
+    },
+
+    handleStaffEmailCodeBackspace(index) {
+      if (this.addStaffModal.digits[index] || index === 0) return;
+      this.addStaffModal.digits[index - 1] = "";
+      this.focusStaffEmailCodeDigit(index - 1);
+    },
+
+    pasteStaffEmailCode(event) {
+      this.addStaffModal.digits = ["", "", "", "", "", ""];
+      this.applyStaffEmailCode(event.clipboardData?.getData("text") || "");
+    },
+
+    clearStaffEmailCode() {
+      this.addStaffModal.digits = ["", "", "", "", "", ""];
+      this.focusStaffEmailCodeDigit(0);
+    },
+
+    async confirmNewStaffAccount() {
+      if (!this.staffEmailCodeComplete || !this.addStaffModal.pendingStaffId) return;
+
+      this.addStaffModal.error = "";
+      this.addStaffModal.notice = "";
+      this.addStaffModal.submitting = true;
+      try {
+        const response = await API.confirmStaffAccountEmail(
+          this.addStaffModal.pendingStaffId,
+          this.addStaffModal.digits.join(""),
+        );
+        this.addStaffModal = this.emptyAddStaffModal(false);
+        this.staffNotice = response.message;
+        await this.loadSecurityAccounts();
+      } catch (error) {
+        this.addStaffModal.error = this.firstApiError(error);
+        this.clearStaffEmailCode();
+      } finally {
+        this.addStaffModal.submitting = false;
+      }
+    },
+
+    async resendNewStaffAccountCode() {
+      if (!this.addStaffModal.pendingStaffId || this.addStaffModal.resending) return;
+
+      this.addStaffModal.error = "";
+      this.addStaffModal.notice = "";
+      this.addStaffModal.resending = true;
+      try {
+        const response = await API.resendStaffAccountEmailCode(
+          this.addStaffModal.pendingStaffId,
+        );
+        this.addStaffModal.confirmationEmail = response.confirmation_email;
+        this.addStaffModal.notice = response.message;
+        this.clearStaffEmailCode();
+      } catch (error) {
+        this.addStaffModal.error = this.firstApiError(error);
+      } finally {
+        this.addStaffModal.resending = false;
+      }
+    },
+
+    openStaffStatusModal(staff) {
+      this.staffStatusModal = {
+        open: true,
+        staff,
+        targetActive: !staff.active,
+        busy: false,
+        error: "",
+      };
+      this.refreshSecurityIcons();
+    },
+
+    closeStaffStatusModal() {
+      if (this.staffStatusModal.busy) return;
+      this.staffStatusModal = {
+        open: false,
+        staff: null,
+        targetActive: false,
+        busy: false,
+        error: "",
+      };
+    },
+
+    async updateStaffStatus() {
+      const { staff, targetActive } = this.staffStatusModal;
+      if (!staff) return;
+
+      this.staffStatusModal.error = "";
+      this.staffStatusModal.busy = true;
+      try {
+        const response = await API.updateStaffAccountStatus(staff.id, targetActive);
+        this.staffStatusModal.busy = false;
+        this.closeStaffStatusModal();
+        this.staffNotice = response.message;
+        await this.loadSecurityAccounts();
+      } catch (error) {
+        this.staffStatusModal.error = this.firstApiError(error);
+        this.staffStatusModal.busy = false;
+      }
+    },
+
     closeSecurityModals() {
       if (this.resetStaffModal.open) this.closeResetStaffModal();
+      if (this.addStaffModal.open) this.closeAddStaffAccount();
+      if (this.staffStatusModal.open) this.closeStaffStatusModal();
       if (this.securityVerification.open) this.closeSecurityVerification();
     },
 

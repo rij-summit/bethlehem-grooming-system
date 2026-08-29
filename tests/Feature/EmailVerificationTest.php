@@ -608,26 +608,62 @@ class EmailVerificationTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
-    public function test_staff_login_still_completes_after_password_confirmation(): void
+    public function test_staff_username_login_requires_a_code_sent_to_the_staff_email(): void
     {
         Notification::fake();
         $staff = User::factory()->create([
+            'first_name' => 'Grooming',
+            'last_name' => 'Staff',
+            'username' => 'groomingstaff',
+            'email' => 'bethlehem.staff.test@gmail.com',
             'role' => 'staff',
             'password_hash' => Hash::make('strong-password'),
         ]);
 
-        $this->postJson('/api/sign-in', [
-            'identifier' => $staff->email,
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => 'groomingstaff',
             'password' => 'strong-password',
+        ]);
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('requires_login_confirmation', true)
+            ->assertJsonPath('email', 'bethlehem.staff.test@gmail.com')
+            ->assertJsonMissingPath('token');
+
+        $code = $this->loginCodeSentTo($staff);
+        Notification::assertSentTo(
+            $staff,
+            ConfirmLoginNotification::class,
+            function (ConfirmLoginNotification $notification) use ($staff): bool {
+                $message = $notification->toMail($staff);
+
+                $this->assertSame(
+                    'Staff Sign-In Code - Bethlehem Animal Clinic',
+                    $message->subject,
+                );
+                $this->assertStringContainsString(
+                    'staff account',
+                    strtolower(implode(' ', $message->introLines)),
+                );
+
+                return true;
+            },
+        );
+
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $response->json('login_poll_token'),
+            'code' => $code,
         ])
             ->assertOk()
             ->assertJsonPath('user.role', 'staff')
-            ->assertJsonStructure(['token'])
-            ->assertJsonMissingPath('requires_login_confirmation');
+            ->assertJsonPath('user.username', 'groomingstaff')
+            ->assertJsonStructure(['token']);
 
-        Notification::assertNothingSent();
-        $this->assertDatabaseCount('login_email_challenges', 0);
         $this->assertDatabaseCount('personal_access_tokens', 1);
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $staff->user_id,
+            'name' => 'admin_token',
+        ]);
     }
 
     public function test_admin_username_login_requires_a_code_sent_to_the_admin_email(): void
@@ -668,20 +704,33 @@ class EmailVerificationTest extends TestCase
 
     public function test_sign_in_keeps_other_sessions_and_logout_revokes_only_current_token(): void
     {
+        Notification::fake();
         $user = User::factory()->create([
             'email' => 'sessions@example.test',
             'password_hash' => Hash::make('strong-password'),
             'role' => 'staff',
         ]);
 
-        $firstToken = $this->postJson('/api/sign-in', [
+        $firstLogin = $this->postJson('/api/sign-in', [
             'identifier' => $user->email,
             'password' => 'strong-password',
+        ])->assertAccepted();
+        $firstToken = $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $firstLogin->json('login_poll_token'),
+            'code' => $this->loginCodeSentTo($user),
         ])->assertOk()->json('token');
+        $this->withToken($firstToken)->postJson('/api/email/login/complete', [
+            'poll_token' => $firstLogin->json('login_poll_token'),
+        ])->assertOk();
 
-        $secondToken = $this->postJson('/api/sign-in', [
+        Notification::fake();
+        $secondLogin = $this->postJson('/api/sign-in', [
             'identifier' => $user->email,
             'password' => 'strong-password',
+        ])->assertAccepted();
+        $secondToken = $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $secondLogin->json('login_poll_token'),
+            'code' => $this->loginCodeSentTo($user),
         ])->assertOk()->json('token');
 
         $this->assertDatabaseCount('personal_access_tokens', 2);

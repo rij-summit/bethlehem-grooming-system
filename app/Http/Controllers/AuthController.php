@@ -186,7 +186,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if (in_array($user->role, ['customer', 'admin'], true)) {
+        if (in_array($user->role, ['customer', 'admin', 'staff'], true)) {
             $confirmationThrottleKey = 'login-confirmation:'
                 .hash('sha256', $user->user_id.'|'.$request->ip());
 

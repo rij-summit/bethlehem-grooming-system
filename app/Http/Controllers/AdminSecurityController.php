@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LoginEmailChallenge;
+use App\Models\PendingStaffAccount;
 use App\Models\PrivilegedCredentialChange;
 use App\Models\User;
+use App\Services\PendingStaffAccountService;
 use App\Services\PrivilegedCredentialChangeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -70,6 +75,180 @@ class AdminSecurityController extends Controller
             $staff,
             $data,
         );
+    }
+
+    public function requestStaffAccount(
+        Request $request,
+        PendingStaffAccountService $staffAccounts,
+    ) {
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+            'username' => trim((string) $request->input('username')),
+        ]);
+        $data = $request->validate([
+            'staff_type' => ['required', Rule::in(['clinic', 'grooming'])],
+            'username' => [
+                'required',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/^[A-Za-z][A-Za-z0-9._-]{2,49}$/',
+            ],
+            'email' => ['required', 'email', 'max:150'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(12)->mixedCase()->numbers()->symbols(),
+            ],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        try {
+            $result = $staffAccounts->request(
+                $request->user(),
+                $data['staff_type'],
+                $data['username'],
+                $data['email'],
+                $data['password'],
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The staff email verification code could not be queued. Please try again.',
+            ], 503);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'A six-digit email verification code was sent.',
+        ] + $result, 202);
+    }
+
+    public function confirmStaffAccount(
+        Request $request,
+        PendingStaffAccount $pendingStaff,
+        PendingStaffAccountService $staffAccounts,
+    ) {
+        $data = $request->validate([
+            'code' => ['required', 'string', 'regex:/^\d{6}$/'],
+        ]);
+        $result = $staffAccounts->confirm($request->user(), $pendingStaff, $data['code']);
+
+        if ($result['status'] === 'expired') {
+            return response()->json([
+                'success' => false,
+                'expired' => true,
+                'message' => 'This email verification code has expired. Start again.',
+            ], 422);
+        }
+        if ($result['status'] === 'invalid_code') {
+            return response()->json([
+                'success' => false,
+                'message' => 'The email verification code is incorrect.',
+                'attempts_remaining' => $result['attempts_remaining'],
+            ], 422);
+        }
+        if ($result['status'] === 'locked') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many incorrect attempts. Start again.',
+                'attempts_remaining' => 0,
+            ], 422);
+        }
+        if ($result['status'] === 'email_unavailable') {
+            return response()->json([
+                'success' => false,
+                'message' => 'That email address is no longer available.',
+            ], 422);
+        }
+        if ($result['status'] === 'username_unavailable') {
+            return response()->json([
+                'success' => false,
+                'message' => 'That username is no longer available.',
+            ], 422);
+        }
+        if ($result['status'] !== 'created') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This staff email verification is invalid or no longer available.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$result['staff_label']} account created.",
+            'staff' => $this->accountPayload($result['staff']),
+        ], 201);
+    }
+
+    public function resendStaffAccountCode(
+        Request $request,
+        PendingStaffAccount $pendingStaff,
+        PendingStaffAccountService $staffAccounts,
+    ) {
+        try {
+            $result = $staffAccounts->resend($request->user(), $pendingStaff);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The staff email verification code could not be queued. Please try again.',
+            ], 503);
+        }
+
+        if ($result['status'] === 'cooldown') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please wait before requesting another code.',
+                'retry_after' => $result['retry_after'],
+            ], 429);
+        }
+        if ($result['status'] !== 'resent') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This staff email verification is no longer available.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'A new email verification code was sent.',
+        ] + $result);
+    }
+
+    public function updateStaffStatus(Request $request, User $staff)
+    {
+        if ($staff->role !== 'staff' || $staff->is_archived) {
+            abort(404);
+        }
+
+        $data = $request->validate(['active' => ['required', 'boolean']]);
+        $active = (bool) $data['active'];
+        $staff->is_active = $active;
+        $staff->save();
+
+        if (! $active) {
+            $staff->tokens()->delete();
+            LoginEmailChallenge::query()->where('user_id', $staff->user_id)->delete();
+            PrivilegedCredentialChange::query()
+                ->where('target_user_id', $staff->user_id)
+                ->whereNull('confirmed_at')
+                ->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $active
+                ? 'Staff account reactivated.'
+                : 'Staff account deactivated.',
+            'staff' => $this->accountPayload($staff->fresh()),
+        ]);
     }
 
     public function confirm(
@@ -248,6 +427,7 @@ class AdminSecurityController extends Controller
             'username' => $user->username,
             'email' => $user->email,
             'role' => $user->role,
+            'staff_type' => $user->staff_type,
             'is_active' => (bool) $user->is_active,
             'is_archived' => (bool) $user->is_archived,
         ];

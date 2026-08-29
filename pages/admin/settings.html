@@ -854,6 +854,14 @@
                         <p class="mt-1 text-sm text-slate-500">Username and password</p>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      @click="openAddStaffAccount()"
+                      class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]"
+                    >
+                      <i data-lucide="user-round-plus" class="h-4 w-4"></i>
+                      <span>Add staff account</span>
+                    </button>
                   </div>
 
                   <div class="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -908,6 +916,7 @@
                               :class="staff.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'"
                               x-text="staff.active ? 'Active' : 'Inactive'"
                             ></span>
+                            <span class="rounded-full bg-[#eef5fb] px-2.5 py-1 text-xs font-semibold text-[#315b7e]" x-text="staff.roleLabel"></span>
                           </div>
                           <p class="mt-1 truncate text-sm text-slate-500">
                             <span x-text="staff.username || 'No username'"></span>
@@ -919,12 +928,22 @@
 
                       <div class="flex flex-col gap-2 sm:flex-row lg:shrink-0">
                         <button
+                          x-show="staff.active"
                           type="button"
                           @click="openResetStaffPassword(staff)"
                           class="inline-flex items-center justify-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-[#eef5fb]"
                         >
                           <i data-lucide="user-round-cog" class="h-4 w-4"></i>
                           <span>Change credentials</span>
+                        </button>
+                        <button
+                          type="button"
+                          @click="openStaffStatusModal(staff)"
+                          class="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition"
+                          :class="staff.active ? 'border-red-200 bg-white text-red-600 hover:bg-red-50' : 'border-[#c9d9e8] bg-white text-[#315b7e] hover:bg-[#eef5fb]'"
+                        >
+                          <i :data-lucide="staff.active ? 'user-round-x' : 'user-round-check'" class="h-4 w-4"></i>
+                          <span x-text="staff.active ? 'Deactivate' : 'Reactivate'"></span>
                         </button>
                       </div>
                     </article>
@@ -943,6 +962,205 @@
               </section>
 
               <p x-show="staffNotice" x-text="staffNotice" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status"></p>
+
+              <!-- Add staff account modal -->
+              <template x-teleport="body">
+                <div
+                  x-cloak
+                  x-show="addStaffModal.open"
+                  x-transition.opacity
+                  class="fixed inset-0 flex items-center justify-center overflow-y-auto px-4 py-6"
+                  style="z-index: 10000; background-color: rgba(15, 23, 42, 0.65)"
+                  @click.self="closeAddStaffAccount()"
+                >
+                  <div
+                    class="w-full max-w-lg overflow-hidden rounded-[24px] bg-white shadow-2xl"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="addStaffAccountTitle"
+                  >
+                    <div x-show="addStaffModal.step !== 'verify'" class="flex items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-5 sm:px-6">
+                      <div>
+                        <h3 id="addStaffAccountTitle" class="text-xl font-bold text-[#1f3850]">Add staff account</h3>
+                        <p class="mt-1 text-sm font-semibold text-slate-500" x-text="addStaffModal.step === 'role' ? 'Choose account role' : (addStaffModal.staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Staff')"></p>
+                      </div>
+                      <button type="button" @click="closeAddStaffAccount()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close add staff account form">
+                        <i data-lucide="x" class="h-5 w-5"></i>
+                      </button>
+                    </div>
+
+                    <div x-show="addStaffModal.step === 'role'" class="space-y-3 px-5 py-6 sm:px-6">
+                      <button
+                        type="button"
+                        @click="chooseStaffType('clinic')"
+                        class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                      >
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                          <i data-lucide="stethoscope" class="h-5 w-5"></i>
+                        </span>
+                        <span class="flex-1 font-bold text-[#1f3850]">Clinic Staff</span>
+                        <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                      </button>
+                      <button
+                        type="button"
+                        @click="chooseStaffType('grooming')"
+                        class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                      >
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                          <i data-lucide="scissors" class="h-5 w-5"></i>
+                        </span>
+                        <span class="flex-1 font-bold text-[#1f3850]">Grooming Staff</span>
+                        <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                      </button>
+                    </div>
+
+                    <form x-show="addStaffModal.step === 'details'" @submit.prevent="requestNewStaffAccount()">
+                      <div class="space-y-4 px-5 py-5 sm:px-6">
+                        <label class="block">
+                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username</span>
+                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" required autocomplete="off" placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        </label>
+                        <label class="block">
+                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Email address</span>
+                          <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" placeholder="Enter email address" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        </label>
+                        <label class="block">
+                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Password</span>
+                          <div class="relative">
+                            <input :type="addStaffModal.showPassword ? 'text' : 'password'" x-model="addStaffModal.password" required autocomplete="new-password" placeholder="Enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                            <button type="button" @click="addStaffModal.showPassword = !addStaffModal.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="addStaffModal.showPassword ? 'Hide password' : 'Show password'">
+                              <i x-show="!addStaffModal.showPassword" data-lucide="eye-closed" class="h-5 w-5"></i>
+                              <i x-show="addStaffModal.showPassword" data-lucide="eye" class="h-5 w-5"></i>
+                            </button>
+                          </div>
+                        </label>
+                        <label class="block">
+                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Confirm password</span>
+                          <div class="relative">
+                            <input :type="addStaffModal.showConfirmation ? 'text' : 'password'" x-model="addStaffModal.confirmation" required autocomplete="new-password" placeholder="Re-enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                            <button type="button" @click="addStaffModal.showConfirmation = !addStaffModal.showConfirmation" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="addStaffModal.showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'">
+                              <i x-show="!addStaffModal.showConfirmation" data-lucide="eye-closed" class="h-5 w-5"></i>
+                              <i x-show="addStaffModal.showConfirmation" data-lucide="eye" class="h-5 w-5"></i>
+                            </button>
+                          </div>
+                        </label>
+                        <p x-show="addStaffModal.error" x-text="addStaffModal.error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                      </div>
+
+                      <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] px-5 py-4 sm:flex-row sm:justify-between sm:px-6">
+                        <button type="button" @click="returnToStaffType()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Back</button>
+                        <button type="submit" :disabled="addStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70">
+                          <i data-lucide="mail-check" class="h-4 w-4"></i>
+                          <span x-text="addStaffModal.submitting ? 'Sending...' : 'Continue'">Continue</span>
+                        </button>
+                      </div>
+                    </form>
+
+                    <form x-show="addStaffModal.step === 'verify'" @submit.prevent="confirmNewStaffAccount()">
+                      <div class="bg-[#315b7e] px-5 py-5 text-white sm:px-6">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex items-start gap-3">
+                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                              <i data-lucide="mail-check" class="h-5 w-5"></i>
+                            </div>
+                            <div>
+                              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Email verification</p>
+                              <h3 class="mt-1 text-xl font-bold" x-text="addStaffModal.purpose"></h3>
+                              <p class="mt-1 text-sm font-semibold text-white/75" x-text="addStaffModal.staffLabel"></p>
+                            </div>
+                          </div>
+                          <button type="button" @click="closeAddStaffAccount()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white/70 transition hover:bg-white/10 hover:text-white" aria-label="Close staff email verification">
+                            <i data-lucide="x" class="h-5 w-5"></i>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="space-y-5 px-5 py-6 sm:px-6">
+                        <div class="flex items-center gap-2 rounded-xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-[#315b7e]">
+                          <i data-lucide="mail" class="h-4 w-4 shrink-0"></i>
+                          <span class="truncate" x-text="addStaffModal.confirmationEmail"></span>
+                        </div>
+
+                        <fieldset>
+                          <legend class="mb-3 text-sm font-semibold text-slate-600">6-digit email verification code</legend>
+                          <div class="flex justify-center gap-2 sm:gap-3" @paste.prevent="pasteStaffEmailCode($event)">
+                            <template x-for="(digit, index) in addStaffModal.digits" :key="index">
+                              <input
+                                :id="`staffEmailCodeDigit${index}`"
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="1"
+                                autocomplete="one-time-code"
+                                x-model="addStaffModal.digits[index]"
+                                @input="handleStaffEmailCodeInput(index, $event)"
+                                @keydown.backspace="handleStaffEmailCodeBackspace(index)"
+                                :aria-label="`Email verification code digit ${index + 1}`"
+                                class="h-14 w-11 rounded-xl border border-slate-200 bg-[#f8fbfe] text-center text-xl font-bold text-[#1f3850] outline-none transition focus:border-[#315b7e] focus:bg-white focus:ring-4 focus:ring-[#315b7e]/10 sm:w-12"
+                              />
+                            </template>
+                          </div>
+                        </fieldset>
+
+                        <p x-show="addStaffModal.error" x-text="addStaffModal.error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                        <p x-show="addStaffModal.notice" x-text="addStaffModal.notice" class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700" role="status"></p>
+
+                        <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                          <button type="button" @click="resendNewStaffAccountCode()" :disabled="addStaffModal.resending || addStaffModal.submitting" class="text-sm font-semibold text-[#315b7e] transition hover:text-[#284a67] disabled:cursor-not-allowed disabled:opacity-60" x-text="addStaffModal.resending ? 'Sending...' : 'Resend code'">Resend code</button>
+                          <div class="flex gap-3">
+                            <button type="button" @click="closeAddStaffAccount()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancel</button>
+                            <button type="submit" :disabled="!staffEmailCodeComplete || addStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-60">
+                              <i data-lucide="user-round-check" class="h-4 w-4"></i>
+                              <span x-text="addStaffModal.submitting ? 'Confirming...' : 'Confirm account'">Confirm account</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Staff status confirmation modal -->
+              <template x-teleport="body">
+                <div
+                  x-cloak
+                  x-show="staffStatusModal.open"
+                  x-transition.opacity
+                  class="fixed inset-0 flex items-center justify-center px-4 py-6"
+                  style="z-index: 10000; background-color: rgba(15, 23, 42, 0.65)"
+                  @click.self="closeStaffStatusModal()"
+                >
+                  <div class="w-full max-w-md overflow-hidden rounded-[24px] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="staffStatusTitle">
+                    <div class="flex items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-5 sm:px-6">
+                      <div>
+                        <h3 id="staffStatusTitle" class="text-xl font-bold text-[#1f3850]" x-text="staffStatusModal.targetActive ? 'Reactivate staff account' : 'Deactivate staff account'"></h3>
+                        <p class="mt-1 text-sm font-semibold text-slate-500" x-text="staffStatusModal.staff?.fullName"></p>
+                      </div>
+                      <button type="button" @click="closeStaffStatusModal()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close staff status confirmation">
+                        <i data-lucide="x" class="h-5 w-5"></i>
+                      </button>
+                    </div>
+                    <div class="px-5 py-5 sm:px-6">
+                      <div class="flex items-center gap-3 rounded-xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dceaf5] text-sm font-bold text-[#315b7e]" x-text="staffStatusModal.staff?.initials"></span>
+                        <div class="min-w-0">
+                          <p class="truncate text-sm font-bold text-[#1f3850]" x-text="staffStatusModal.staff?.roleLabel"></p>
+                          <p class="truncate text-sm text-slate-500" x-text="staffStatusModal.staff?.email"></p>
+                        </div>
+                      </div>
+                      <p x-show="staffStatusModal.error" x-text="staffStatusModal.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                    </div>
+                    <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+                      <button type="button" @click="closeStaffStatusModal()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancel</button>
+                      <button type="button" @click="updateStaffStatus()" :disabled="staffStatusModal.busy" class="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-70" :class="staffStatusModal.targetActive ? 'bg-[#315b7e] hover:bg-[#284a67]' : 'bg-red-600 hover:bg-red-700'">
+                        <i :data-lucide="staffStatusModal.targetActive ? 'user-round-check' : 'user-round-x'" class="h-4 w-4"></i>
+                        <span x-text="staffStatusModal.busy ? 'Updating...' : (staffStatusModal.targetActive ? 'Reactivate' : 'Deactivate')"></span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
 
               <!-- Staff credential change modal -->
               <template x-teleport="body">
@@ -1124,6 +1342,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
-    <script src="../../scripts/components/admin-settings.js?v=security-code-20260828"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-username-20260830"></script>
   </body>
 </html>

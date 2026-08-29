@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Database\Seeders\AdminSeeder;
+use Database\Seeders\StaffSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -24,6 +25,7 @@ class PrivilegedCredentialSecurityTest extends TestCase
             $table->string('phone')->unique();
             $table->string('password_hash');
             $table->string('role');
+            $table->string('staff_type', 20)->nullable();
             $table->string('customer_tier')->default('new');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_archived')->default(false);
@@ -118,6 +120,39 @@ class PrivilegedCredentialSecurityTest extends TestCase
             'Admin',
             User::query()->where('email', 'new-admin@example.test')->value('username'),
         );
+    }
+
+    public function test_staff_seeder_replaces_the_legacy_identity_without_creating_a_duplicate(): void
+    {
+        $legacyStaff = $this->createUser(
+            'staff',
+            'staff@bethlehem.com',
+            '09170000104',
+        );
+        config()->set('app.privileged_seed_accounts.staff', [
+            'username' => 'groomingstaff',
+            'email' => 'bethlehem.staff.test@gmail.com',
+            'phone' => '09170000104',
+            'password' => 'StrongStaff!234',
+        ]);
+
+        $this->seed(StaffSeeder::class);
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseMissing('users', ['email' => 'staff@bethlehem.com']);
+        $this->assertDatabaseHas('users', [
+            'user_id' => $legacyStaff->user_id,
+            'first_name' => 'Grooming',
+            'last_name' => 'Staff',
+            'username' => 'groomingstaff',
+            'email' => 'bethlehem.staff.test@gmail.com',
+            'role' => 'staff',
+            'staff_type' => 'grooming',
+        ]);
+        $this->assertTrue(Hash::check(
+            'StrongStaff!234',
+            $legacyStaff->fresh()->password_hash,
+        ));
     }
 
     private function createUser(string $role, string $email, string $phone): User

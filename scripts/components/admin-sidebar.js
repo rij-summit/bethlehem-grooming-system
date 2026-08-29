@@ -66,6 +66,8 @@ function adminSidebar() {
     sidebarOpen: false,
     activePage: getAdminSidebarActivePage(),
     isAdmin: false,
+    staffDisplayName: "Staff",
+    staffInitials: "ST",
     clinicStopped: false,
     incomingAppointmentCount: 0,
     _incomingAppointmentInterval: null,
@@ -108,6 +110,7 @@ function adminSidebar() {
       });
 
       await Promise.all([
+        this.loadLoggedInIdentity(),
         this.loadClinicStatus(),
         this.loadIncomingAppointmentCount(),
       ]);
@@ -133,6 +136,23 @@ function adminSidebar() {
 
     detectActivePage() {
       this.activePage = getAdminSidebarActivePage();
+    },
+
+    async loadLoggedInIdentity() {
+      if (this.isAdmin || typeof API.getMe !== "function") return;
+
+      try {
+        const response = await API.getMe("staff");
+        const firstName = String(response?.user?.first_name || "").trim();
+        const lastName = String(response?.user?.last_name || "").trim();
+        const fullName = `${firstName} ${lastName}`.trim();
+        if (!fullName) return;
+
+        this.staffDisplayName = fullName;
+        this.staffInitials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+      } catch {
+        // Non-fatal: retain the generic staff label when profile loading fails.
+      }
     },
 
     registerIncomingAppointmentListener() {

@@ -248,6 +248,14 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             ->middleware('throttle:3,10');
         Route::post('/admin/security/staff/{staff}/credential-change', [AdminSecurityController::class, 'requestStaffChange'])
             ->middleware('throttle:3,10');
+        Route::post('/admin/security/staff-accounts', [AdminSecurityController::class, 'requestStaffAccount'])
+            ->middleware('throttle:3,10');
+        Route::post('/admin/security/staff-accounts/{pendingStaff}/confirm', [AdminSecurityController::class, 'confirmStaffAccount'])
+            ->middleware('throttle:10,1');
+        Route::post('/admin/security/staff-accounts/{pendingStaff}/resend', [AdminSecurityController::class, 'resendStaffAccountCode'])
+            ->middleware('throttle:3,10');
+        Route::patch('/admin/security/staff/{staff}/status', [AdminSecurityController::class, 'updateStaffStatus'])
+            ->middleware('throttle:10,1');
         Route::post('/admin/security/credential-changes/{change}/confirm', [AdminSecurityController::class, 'confirm'])
             ->middleware('throttle:10,1');
         Route::post('/admin/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
