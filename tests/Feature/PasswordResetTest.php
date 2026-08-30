@@ -77,7 +77,7 @@ class PasswordResetTest extends TestCase
             ->assertAccepted()
             ->assertJsonPath(
                 'message',
-                'If an account exists for that email, a password reset link has been sent.',
+                'Password reset link has been sent.',
             );
 
         $plainToken = $this->resetTokenSentTo($user);
@@ -137,7 +137,7 @@ class PasswordResetTest extends TestCase
                 ->assertAccepted()
                 ->assertJsonPath(
                     'message',
-                    'If an account exists for that email, a password reset link has been sent.',
+                    'Password reset link has been sent.',
                 );
         }
 

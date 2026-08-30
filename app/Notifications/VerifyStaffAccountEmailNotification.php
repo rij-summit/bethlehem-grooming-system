@@ -42,7 +42,8 @@ class VerifyStaffAccountEmailNotification extends Notification implements Should
             ->subject("Verify {$this->staffLabel} Email - Bethlehem Animal Clinic")
             ->greeting('Hello!')
             ->line("An administrator requested a {$this->staffLabel} account using this email address.")
-            ->line("Your six-digit email verification code is: {$this->code}")
+            ->line('Your six-digit email verification code is:')
+            ->line("**{$this->code}**")
             ->line("This code expires in {$expiryMinutes} minutes and can only be used once.")
             ->line('If you were not expecting this account, do not share the code.');
     }

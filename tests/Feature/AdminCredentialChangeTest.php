@@ -322,8 +322,13 @@ class AdminCredentialChangeTest extends TestCase
                     $mailText,
                 );
                 $this->assertStringContainsString(
-                    "Your six-digit security code is: {$notification->code}",
+                    'Your six-digit security code is:',
                     $mailText,
+                );
+                $this->assertStringContainsString("**{$notification->code}**", $mailText);
+                $this->assertMatchesRegularExpression(
+                    '/<strong\b[^>]*>'.preg_quote($notification->code, '/').'<\/strong>/',
+                    (string) $message->render(),
                 );
                 $this->assertNull($message->actionUrl);
                 $this->assertNull($message->actionText);

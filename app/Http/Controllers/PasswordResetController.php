@@ -32,7 +32,7 @@ class PasswordResetController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'If an account exists for that email, a password reset link has been sent.',
+            'message' => 'Password reset link has been sent.',
         ], 202);
     }
 

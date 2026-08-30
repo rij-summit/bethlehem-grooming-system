@@ -63,7 +63,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         foreach ([
             'x-model="adminPassword.username"',
-            '@submit.prevent="submitResetStaffPassword()"',
+            '@click="submitAdminPassword()"',
+            '@click="requestNewStaffAccount()"',
+            '@click="submitResetStaffPassword()"',
             'x-model="resetStaffModal.username"',
             'x-teleport="body"',
             'z-index: 10000',
@@ -95,6 +97,26 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         }
 
         $this->assertStringNotContainsString('staffSearch', $component);
+    }
+
+    public function test_security_password_controls_are_not_presented_as_login_forms(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/settings.html'));
+        $signIn = file_get_contents(base_path('pages/client/sign-in.html'));
+        $security = $this->sourceBetween(
+            $page,
+            'x-show="activeSettingsTab === \'security\'"',
+            '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs',
+        );
+
+        $this->assertStringNotContainsString('autocomplete="current-password"', $security);
+        $this->assertStringNotContainsString('autocomplete="new-password"', $security);
+        $this->assertSame(11, substr_count($security, 'data-lpignore="true"'));
+        $this->assertSame(11, substr_count($security, 'data-1p-ignore'));
+        $this->assertSame(11, substr_count($security, 'data-bwignore'));
+
+        $this->assertStringContainsString('autocomplete="username"', $signIn);
+        $this->assertStringContainsString('autocomplete="current-password"', $signIn);
     }
 
     public function test_old_email_link_confirmation_interface_has_been_removed(): void

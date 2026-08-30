@@ -330,8 +330,13 @@ class AdminStaffAccountManagementTest extends TestCase
                     $mailText,
                 );
                 $this->assertStringContainsString(
-                    "six-digit email verification code is: {$notification->code}",
+                    'six-digit email verification code is:',
                     $mailText,
+                );
+                $this->assertStringContainsString("**{$notification->code}**", $mailText);
+                $this->assertMatchesRegularExpression(
+                    '/<strong\b[^>]*>'.preg_quote($notification->code, '/').'<\/strong>/',
+                    (string) $message->render(),
                 );
                 $this->assertNull($message->actionText);
                 $this->assertNull($message->actionUrl);

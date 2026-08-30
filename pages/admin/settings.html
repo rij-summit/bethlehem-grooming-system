@@ -724,8 +724,7 @@
               class="space-y-6"
               @keydown.escape.window="closeSecurityModals()"
             >
-              <form
-                @submit.prevent="submitAdminPassword()"
+              <div
                 class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm"
               >
                 <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
@@ -753,7 +752,10 @@
                       <input
                         type="text"
                         x-model="adminPassword.username"
-                        autocomplete="username"
+                        autocomplete="off"
+                        data-lpignore="true"
+                        data-1p-ignore
+                        data-bwignore
                         placeholder="Enter username"
                         class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
                       />
@@ -765,7 +767,10 @@
                         <input
                           :type="adminPassword.showCurrent ? 'text' : 'password'"
                           x-model="adminPassword.current"
-                          autocomplete="current-password"
+                          autocomplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore
+                          data-bwignore
                           placeholder="Enter current password"
                           class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
                         />
@@ -787,7 +792,10 @@
                         <input
                           :type="adminPassword.showPassword ? 'text' : 'password'"
                           x-model="adminPassword.password"
-                          autocomplete="new-password"
+                          autocomplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore
+                          data-bwignore
                           placeholder="Enter new password"
                           class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
                         />
@@ -809,7 +817,10 @@
                         <input
                           :type="adminPassword.showConfirmation ? 'text' : 'password'"
                           x-model="adminPassword.confirmation"
-                          autocomplete="new-password"
+                          autocomplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore
+                          data-bwignore
                           placeholder="Re-enter new password"
                           class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
                         />
@@ -828,7 +839,8 @@
 
                   <div class="mt-4 flex justify-end border-t border-slate-100 pt-4">
                     <button
-                      type="submit"
+                      type="button"
+                      @click="submitAdminPassword()"
                       :disabled="adminPassword.submitting"
                       class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70"
                     >
@@ -840,7 +852,7 @@
                   <p x-show="adminPassword.error" x-text="adminPassword.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
                   <p x-show="adminPassword.success" x-text="adminPassword.success" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status"></p>
                 </div>
-              </form>
+              </div>
 
               <section class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm" aria-labelledby="staffAccountsHeading">
                 <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
@@ -1014,20 +1026,20 @@
                       </button>
                     </div>
 
-                    <form x-show="addStaffModal.step === 'details'" @submit.prevent="requestNewStaffAccount()">
+                    <div x-show="addStaffModal.step === 'details'">
                       <div class="space-y-4 px-5 py-5 sm:px-6">
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username</span>
-                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" required autocomplete="off" placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                         </label>
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Email address</span>
-                          <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" placeholder="Enter email address" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter email address" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                         </label>
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Password</span>
                           <div class="relative">
-                            <input :type="addStaffModal.showPassword ? 'text' : 'password'" x-model="addStaffModal.password" required autocomplete="new-password" placeholder="Enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                            <input :type="addStaffModal.showPassword ? 'text' : 'password'" x-model="addStaffModal.password" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                             <button type="button" @click="addStaffModal.showPassword = !addStaffModal.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="addStaffModal.showPassword ? 'Hide password' : 'Show password'">
                               <i x-show="!addStaffModal.showPassword" data-lucide="eye-closed" class="h-5 w-5"></i>
                               <i x-show="addStaffModal.showPassword" data-lucide="eye" class="h-5 w-5"></i>
@@ -1037,7 +1049,7 @@
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Confirm password</span>
                           <div class="relative">
-                            <input :type="addStaffModal.showConfirmation ? 'text' : 'password'" x-model="addStaffModal.confirmation" required autocomplete="new-password" placeholder="Re-enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                            <input :type="addStaffModal.showConfirmation ? 'text' : 'password'" x-model="addStaffModal.confirmation" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Re-enter password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                             <button type="button" @click="addStaffModal.showConfirmation = !addStaffModal.showConfirmation" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="addStaffModal.showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'">
                               <i x-show="!addStaffModal.showConfirmation" data-lucide="eye-closed" class="h-5 w-5"></i>
                               <i x-show="addStaffModal.showConfirmation" data-lucide="eye" class="h-5 w-5"></i>
@@ -1049,12 +1061,12 @@
 
                       <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] px-5 py-4 sm:flex-row sm:justify-between sm:px-6">
                         <button type="button" @click="returnToStaffType()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Back</button>
-                        <button type="submit" :disabled="addStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70">
+                        <button type="button" @click="requestNewStaffAccount()" :disabled="addStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70">
                           <i data-lucide="mail-check" class="h-4 w-4"></i>
                           <span x-text="addStaffModal.submitting ? 'Sending...' : 'Continue'">Continue</span>
                         </button>
                       </div>
-                    </form>
+                    </div>
 
                     <form x-show="addStaffModal.step === 'verify'" @submit.prevent="confirmNewStaffAccount()">
                       <div class="bg-[#315b7e] px-5 py-5 text-white sm:px-6">
@@ -1172,8 +1184,7 @@
                   style="z-index: 10000; background-color: rgba(15, 23, 42, 0.65)"
                   @click.self="closeResetStaffModal()"
                 >
-                  <form
-                    @submit.prevent="submitResetStaffPassword()"
+                  <div
                     class="w-full max-w-lg overflow-hidden rounded-[24px] bg-white shadow-2xl"
                     role="dialog"
                     aria-modal="true"
@@ -1196,12 +1207,12 @@
                       </div>
                       <label class="block">
                         <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username</span>
-                        <input type="text" x-model="resetStaffModal.username" autocomplete="off" placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        <input type="text" x-model="resetStaffModal.username" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                       </label>
                       <label class="block">
                         <span class="mb-1.5 block text-sm font-semibold text-slate-600">New password</span>
                         <div class="relative">
-                          <input :type="resetStaffModal.showPassword ? 'text' : 'password'" x-model="resetStaffModal.password" autocomplete="new-password" placeholder="Enter new password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <input :type="resetStaffModal.showPassword ? 'text' : 'password'" x-model="resetStaffModal.password" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter new password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                           <button
                             type="button"
                             @click="resetStaffModal.showPassword = !resetStaffModal.showPassword"
@@ -1216,7 +1227,7 @@
                       <label class="block">
                         <span class="mb-1.5 block text-sm font-semibold text-slate-600">Confirm new password</span>
                         <div class="relative">
-                          <input :type="resetStaffModal.showConfirmation ? 'text' : 'password'" x-model="resetStaffModal.confirmation" autocomplete="new-password" placeholder="Re-enter new password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <input :type="resetStaffModal.showConfirmation ? 'text' : 'password'" x-model="resetStaffModal.confirmation" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Re-enter new password" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                           <button
                             type="button"
                             @click="resetStaffModal.showConfirmation = !resetStaffModal.showConfirmation"
@@ -1233,12 +1244,12 @@
 
                     <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
                       <button type="button" @click="closeResetStaffModal()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancel</button>
-                      <button type="submit" :disabled="resetStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70">
+                      <button type="button" @click="submitResetStaffPassword()" :disabled="resetStaffModal.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70">
                         <i data-lucide="save" class="h-4 w-4"></i>
                         <span x-text="resetStaffModal.submitting ? 'Updating...' : 'Update Changes'">Update Changes</span>
                       </button>
                     </div>
-                  </form>
+                  </div>
                 </div>
               </template>
 

@@ -47,7 +47,8 @@ class ConfirmPrivilegedCredentialChangeCodeNotification extends Notification imp
             ->subject("Security code for {$this->purposeLabel} - Bethlehem Animal Clinic")
             ->greeting("Hi {$notifiable->first_name}!")
             ->line("A request was made to complete a {$this->purposeLabel} for {$accountDescription}.")
-            ->line("Your six-digit security code is: {$this->code}")
+            ->line('Your six-digit security code is:')
+            ->line("**{$this->code}**")
             ->line("This code expires in {$expiryMinutes} minutes and can only be used once.")
             ->line('If you did not request this change, do not share the code and review administrator access immediately.');
     }
