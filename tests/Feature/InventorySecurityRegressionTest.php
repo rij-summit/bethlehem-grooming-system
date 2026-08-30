@@ -225,7 +225,7 @@ class InventorySecurityRegressionTest extends TestCase
                 "{$pageName} must invalidate the old localhost-only inventory client.",
             );
             $this->assertStringContainsString(
-                'scripts/components/admin-sidebar.js?v=auth-session-20260816',
+                'scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830',
                 $page,
                 "{$pageName} must invalidate stale logout handling.",
             );
@@ -239,7 +239,7 @@ class InventorySecurityRegressionTest extends TestCase
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
         $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryLandingPage);
-        $this->assertStringContainsString('admin-sidebar.js?v=auth-session-20260816', $inventoryLandingPage);
+        $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryLandingPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=batch-expiry-20260816', $itemsPage);
         $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);

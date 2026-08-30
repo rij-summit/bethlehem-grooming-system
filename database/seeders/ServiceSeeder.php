@@ -19,6 +19,7 @@ class ServiceSeeder extends Seeder
                 'price_small' => 400,
                 'price_medium' => 500,
                 'price_large' => 600,
+                'price_extra_large' => 700,
             ],
             [
                 'service_name' => 'Regular Dog Grooming',
@@ -28,6 +29,7 @@ class ServiceSeeder extends Seeder
                 'price_small' => 550,
                 'price_medium' => 650,
                 'price_large' => 850,
+                'price_extra_large' => 1050,
             ],
             [
                 'service_name' => 'Deluxe Dog Grooming',
@@ -37,6 +39,7 @@ class ServiceSeeder extends Seeder
                 'price_small' => 650,
                 'price_medium' => 750,
                 'price_large' => 1000,
+                'price_extra_large' => 1200,
             ],
             [
                 'service_name' => 'Bath and Go!',
@@ -46,6 +49,7 @@ class ServiceSeeder extends Seeder
                 'price_small' => 450,
                 'price_medium' => 550,
                 'price_large' => 650,
+                'price_extra_large' => 750,
             ],
             // Cat package
             [
@@ -56,6 +60,7 @@ class ServiceSeeder extends Seeder
                 'price_small' => 500,
                 'price_medium' => 600,
                 'price_large' => null,
+                'price_extra_large' => null,
             ],
             // Cat a la carte
             [
@@ -63,6 +68,8 @@ class ServiceSeeder extends Seeder
                 'slug' => 'nail_clipping',
                 'description' => null,
                 'base_price' => 75,
+                'price_min' => 50,
+                'price_max' => 100,
                 'price_small' => null,
                 'price_medium' => null,
                 'price_large' => null,
@@ -72,6 +79,7 @@ class ServiceSeeder extends Seeder
                 'slug' => 'ear_cleaning',
                 'description' => null,
                 'base_price' => 150,
+                'is_starting_price' => true,
                 'price_small' => null,
                 'price_medium' => null,
                 'price_large' => null,
@@ -99,6 +107,7 @@ class ServiceSeeder extends Seeder
                 'slug' => 'tooth_brushing',
                 'description' => null,
                 'base_price' => 100,
+                'is_starting_price' => true,
                 'price_small' => null,
                 'price_medium' => null,
                 'price_large' => null,
