@@ -84,8 +84,8 @@ class StaffSeeder extends Seeder
             throw new InvalidArgumentException('STAFF_SEED_PHONE must be an 11-digit Philippine mobile number.');
         }
 
-        if (strlen($credentials['password']) < 12) {
-            throw new InvalidArgumentException('STAFF_SEED_PASSWORD must contain at least 12 characters.');
+        if (strlen($credentials['password']) < 8) {
+            throw new InvalidArgumentException('STAFF_SEED_PASSWORD must contain at least 8 characters.');
         }
     }
 }
