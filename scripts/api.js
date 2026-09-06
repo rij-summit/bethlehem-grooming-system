@@ -869,6 +869,14 @@ var API = (() => {
     return request("POST", "/email/resend", { email });
   }
 
+  async function resendLoginCode() {
+    const pollToken = safeStorageGet(sessionStorage, LOGIN_POLL_TOKEN_KEY);
+    if (!pollToken) {
+      throw new Error("This browser no longer has a pending sign-in. Please sign in again.");
+    }
+    return request("POST", "/email/login/resend", { poll_token: pollToken });
+  }
+
   async function confirmLoginCode(code) {
     const pollToken = safeStorageGet(sessionStorage, LOGIN_POLL_TOKEN_KEY);
     if (!pollToken) {
@@ -2145,6 +2153,7 @@ var API = (() => {
     // Email verification
     verifyEmail,
     resendVerification,
+    resendLoginCode,
     confirmLoginCode,
     hasPendingLoginConfirmation,
     getPendingLoginConfirmationEmail,

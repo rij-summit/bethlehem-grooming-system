@@ -45,6 +45,8 @@ Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->mi
 Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
 Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])
     ->middleware('throttle:10,1');
+Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resend'])
+    ->middleware('throttle:3,5');
 Route::post('/chatbot', [ChatbotController::class, 'chat']);
 
 // ── PUBLIC ROUTES ─────────────────────────────────────

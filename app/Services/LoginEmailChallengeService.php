@@ -12,6 +12,45 @@ use Throwable;
 
 class LoginEmailChallengeService
 {
+    public function resend(string $plainPollToken): void
+    {
+        $pollTokenHash = hash('sha256', $plainPollToken);
+
+        $challenge = LoginEmailChallenge::query()
+            ->where('poll_token_hash', $pollTokenHash)
+            ->first();
+
+        if (! $challenge) {
+            throw new \RuntimeException('No pending sign-in found for this session.');
+        }
+
+        if (now()->isAfter($challenge->expires_at)) {
+            throw new \RuntimeException('This sign-in session has expired. Please sign in again.');
+        }
+
+        $user = User::find($challenge->user_id);
+
+        if (! $user || ! $user->is_active || $user->is_archived) {
+            throw new \RuntimeException('This account cannot complete sign-in.');
+        }
+
+        EmailVerificationController::assertMailCanBeDelivered();
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $newTokenHash = hash_hmac('sha256', $code, $plainPollToken);
+
+        $challenge->update([
+            'token_hash' => $newTokenHash,
+            'expires_at' => now()->addMinutes(max(
+                1,
+                (int) config('app.login_confirmation_ttl_minutes', 15),
+            )),
+            'approved_at' => null,
+        ]);
+
+        $user->notify(new ConfirmLoginNotification($code));
+    }
+
     public function send(User $user, bool $rememberMe): string
     {
         EmailVerificationController::assertMailCanBeDelivered();
