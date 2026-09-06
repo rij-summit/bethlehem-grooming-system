@@ -486,6 +486,14 @@ function handleAddPetSubmit(event) {
 }
 
 function handleBack() {
+  try {
+    const owner = JSON.parse(sessionStorage.getItem("walkInOwnerStep") || "{}");
+    if (owner.directEntry === "clinic") {
+      window.location.href = "./clinic.html";
+      return;
+    }
+  } catch { /* fall through */ }
+
   window.location.href = getOwnerAppointmentType() === "clinic"
     ? "./walk-in-booking.html?flow=clinic&source=clinic"
     : "./walk-in-booking.html";
@@ -650,6 +658,19 @@ function bindEvents() {
   elements.size.addEventListener("change", handlePetInputs);
 }
 
+function autoSelectClinicPet() {
+  const rawId = sessionStorage.getItem("clinicPreselectedPetId");
+  if (!rawId) return;
+  sessionStorage.removeItem("clinicPreselectedPetId");
+
+  const petId = Number(rawId);
+  const pet = state.existingPets.find(p => p.petId === petId);
+  if (!pet) return;
+  if (state.pets.some(p => p.petId === pet.petId)) return;
+
+  state.pets = [...state.pets, { ...pet }];
+}
+
 function initWalkInPetStep() {
   if (!guardAdminAccess()) {
     return;
@@ -660,6 +681,7 @@ function initWalkInPetStep() {
   initializeWeightField(elements.weight);
   syncWeightAndSize();
   restorePetStepDraft();
+  autoSelectClinicPet();
   renderSelectedPets();
 
   if (window.lucide) {

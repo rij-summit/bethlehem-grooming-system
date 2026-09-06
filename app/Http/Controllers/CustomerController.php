@@ -402,8 +402,62 @@ class CustomerController extends Controller
     public function walkInSearch(Request $request)
     {
         $this->requireAdminOrStaff($request);
-        $validated = $request->validate(['q' => ['required', 'string', 'max:100']]);
-        $search = trim($validated['q']);
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+        $search = trim($validated['q'] ?? '');
+
+        // Empty query → return all active customers with their pets (for the clinic records list)
+        if ($search === '') {
+            $registered = User::query()
+                ->with(['pets' => fn ($q) => $q->where('is_archived', false)->orderBy('pet_name')])
+                ->registeredCustomer()
+                ->where('is_active', true)
+                ->where('is_archived', false)
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->limit(100)
+                ->get()
+                ->map(fn (User $user) => [
+                    'id'         => $user->user_id,
+                    'recordType' => 'registered',
+                    'firstName'  => $user->first_name,
+                    'lastName'   => $user->last_name,
+                    'middleName' => null,
+                    'fullName'   => trim($user->first_name.' '.$user->last_name),
+                    'email'      => $user->email,
+                    'phone'      => $user->phone,
+                    'status'     => 'active',
+                    'pets'       => $user->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values(),
+                ]);
+
+            $unregistered = UnregisteredCustomer::query()
+                ->availableCustomer()
+                ->with(['pets' => fn ($q) => $q->where('is_archived', false)->orderBy('pet_name')])
+                ->where('is_archived', false)
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->limit(100)
+                ->get()
+                ->map(fn (UnregisteredCustomer $customer) => [
+                    'id'         => $customer->id,
+                    'recordType' => 'unregistered',
+                    'firstName'  => $customer->first_name,
+                    'lastName'   => $customer->last_name,
+                    'middleName' => $customer->middle_name,
+                    'fullName'   => trim($customer->first_name.' '.$customer->last_name),
+                    'email'      => $customer->email,
+                    'phone'      => $customer->phone,
+                    'status'     => 'unregistered',
+                    'pets'       => $customer->pets->map(fn (Pet $pet) => $this->formatPet($pet))->values(),
+                ]);
+
+            return response()->json([
+                'success'   => true,
+                'customers' => $registered->concat($unregistered)
+                    ->sortBy('fullName', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->values(),
+                'pets'      => [],
+            ]);
+        }
 
         if (mb_strlen($search) < 2) {
             return response()->json([

@@ -1028,18 +1028,68 @@ function adminClinicPage() {
       const role  = API.getUserRole?.();
       if (!token || (role !== "admin" && role !== "staff")) {
         API.redirectToSignIn?.();
+        return;
       }
-      // Re-register global clinic action for Record / Vaccinations buttons
-      // (used by any queue card that may still appear elsewhere)
-      window.__clinicAction = async (action, id) => {
-        if (action === "record") {
-          window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: { id } } }));
+      this.loadAllRecords();
+    },
+
+    async loadAllRecords() {
+      this.searching = true;
+      this.noResults = false;
+      try {
+        const res = await API.searchWalkInCustomers("");
+        this._buildRows(res);
+      } catch {
+        this.searchRows = [];
+        this.noResults  = false;
+      } finally {
+        this.searching = false;
+        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      }
+    },
+
+    _buildRows(res) {
+      const rows = [];
+      const seenPetIds = new Set();
+
+      for (const c of (res.customers || [])) {
+        const pets = (c.pets || []).filter(p => !p.isArchived);
+        if (pets.length) {
+          for (const p of pets) {
+            seenPetIds.add(String(p.id));
+            rows.push({ owner: c, pet: p });
+          }
+        } else {
+          rows.push({ owner: c, pet: null });
         }
-      };
+      }
+      for (const p of (res.pets || [])) {
+        if (!seenPetIds.has(String(p.id))) {
+          rows.push({
+            owner: {
+              id: p.ownerId,
+              recordType: p.ownerRecordType,
+              fullName: p.ownerName,
+              phone: null,
+              email: null,
+            },
+            pet: p,
+          });
+        }
+      }
+
+      this.searchRows = rows;
+      this.noResults  = rows.length === 0;
     },
 
     async onSearchInput() {
       const q = this.searchQuery.trim();
+      if (q.length === 0) {
+        clearTimeout(this._timer);
+        this._reqId++;
+        await this.loadAllRecords();
+        return;
+      }
       if (q.length < 2) {
         clearTimeout(this._timer);
         this._reqId++;
@@ -1054,37 +1104,7 @@ function adminClinicPage() {
         try {
           const res = await API.searchWalkInCustomers(q);
           if (rid !== this._reqId) return;
-
-          const rows = [];
-          const seenOwnerKeys = new Set();
-
-          // Pet results are the primary rows (one row per pet, with owner info)
-          for (const p of (res.pets || [])) {
-            const key = `${p.ownerRecordType}_${p.ownerId}`;
-            seenOwnerKeys.add(key);
-            rows.push({
-              owner: {
-                id: p.ownerId,
-                recordType: p.ownerRecordType,
-                fullName: p.ownerName,
-                phone: p.ownerPhone || null,
-                email: p.ownerEmail || null,
-              },
-              pet: p,
-            });
-          }
-
-          // Customer results: add owners not already represented by a pet row
-          for (const c of (res.customers || [])) {
-            const key = `${c.recordType || "registered"}_${c.id}`;
-            if (!seenOwnerKeys.has(key)) {
-              seenOwnerKeys.add(key);
-              rows.push({ owner: c, pet: null });
-            }
-          }
-
-          this.searchRows = rows;
-          this.noResults  = rows.length === 0;
+          this._buildRows(res);
         } catch {
           if (rid !== this._reqId) return;
           this.searchRows = [];
@@ -1156,10 +1176,40 @@ function adminClinicPage() {
 
     newConsultation() {
       const { pet, owner } = this.profile;
-      let url = "./walk-in-booking.html?flow=clinic&source=clinic";
-      if (owner?.id)   url += `&customer_id=${encodeURIComponent(owner.id)}&record_type=${encodeURIComponent(owner.recordType || "registered")}`;
-      if (pet?.id)     url += `&pet_id=${encodeURIComponent(pet.id)}`;
-      window.location.href = url;
+      if (!pet?.id || !owner) return;
+
+      // Build the owner draft in exactly the same format that walk-in-owner-step.js
+      // saveOwnerDraft() produces, so the pet step can read it without modification.
+      const middleInitial = owner.middleName
+        ? String(owner.middleName).trim().replace(/\.+$/, "").toUpperCase().charAt(0)
+        : "";
+      const ownerDraft = {
+        firstName:              owner.firstName  || "",
+        lastName:               owner.lastName   || "",
+        middleInitial,
+        phone:                  owner.phone      || "",
+        email:                  owner.email      || "",
+        fullName:               owner.fullName   || "",
+        bookingType:            "walk_in",
+        appointmentType:        "clinic",
+        ownerRecordType:        owner.recordType || "registered",
+        customerUserId:         owner.recordType === "registered"   ? owner.id : null,
+        unregisteredCustomerId: owner.recordType === "unregistered" ? owner.id : null,
+        existingPets:           Array.isArray(owner.pets) ? owner.pets : [],
+        // Flag so the pet step Back button returns to clinic, not Step 1
+        directEntry:            "clinic",
+      };
+
+      // Clear any stale walk-in continuation data before setting the new draft
+      ["walkInPetStep", "walkInConsentStep", "walkInReviewStep", "walkInBookingConfirmation"]
+        .forEach(k => sessionStorage.removeItem(k));
+
+      sessionStorage.setItem("walkInOwnerStep", JSON.stringify(ownerDraft));
+      // Tell the pet step which pet to pre-select
+      sessionStorage.setItem("clinicPreselectedPetId", String(pet.id));
+
+      // Skip Step 1 entirely — go straight to pet details
+      window.location.href = "./walk-in-pet-details.html";
     },
 
     viewDetail(record) {
