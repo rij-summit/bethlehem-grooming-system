@@ -998,6 +998,198 @@ function adminClinicModal() {
   };
 }
 
+// ── Clinic Records Page ───────────────────────────────────────────────────────
+
+function adminClinicPage() {
+  return {
+    // Search state
+    searchQuery: "",
+    searchRows: [],
+    noResults: false,
+    searching: false,
+    _timer: null,
+    _reqId: 0,
+
+    // Patient profile panel
+    profile: {
+      open: false,
+      loading: false,
+      error: null,
+      pet: null,
+      owner: null,
+      records: [],
+    },
+
+    // Read-only consultation detail
+    detail: { open: false, record: null },
+
+    init() {
+      const token = API.getAdminToken?.();
+      const role  = API.getUserRole?.();
+      if (!token || (role !== "admin" && role !== "staff")) {
+        API.redirectToSignIn?.();
+      }
+      // Re-register global clinic action for Record / Vaccinations buttons
+      // (used by any queue card that may still appear elsewhere)
+      window.__clinicAction = async (action, id) => {
+        if (action === "record") {
+          window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: { id } } }));
+        }
+      };
+    },
+
+    async onSearchInput() {
+      const q = this.searchQuery.trim();
+      if (q.length < 2) {
+        clearTimeout(this._timer);
+        this._reqId++;
+        this.searchRows = [];
+        this.noResults  = false;
+        return;
+      }
+      clearTimeout(this._timer);
+      this._timer = setTimeout(async () => {
+        const rid = ++this._reqId;
+        this.searching = true;
+        try {
+          const res = await API.searchWalkInCustomers(q);
+          if (rid !== this._reqId) return;
+
+          const rows = [];
+          const seenOwnerKeys = new Set();
+
+          // Pet results are the primary rows (one row per pet, with owner info)
+          for (const p of (res.pets || [])) {
+            const key = `${p.ownerRecordType}_${p.ownerId}`;
+            seenOwnerKeys.add(key);
+            rows.push({
+              owner: {
+                id: p.ownerId,
+                recordType: p.ownerRecordType,
+                fullName: p.ownerName,
+                phone: p.ownerPhone || null,
+                email: p.ownerEmail || null,
+              },
+              pet: p,
+            });
+          }
+
+          // Customer results: add owners not already represented by a pet row
+          for (const c of (res.customers || [])) {
+            const key = `${c.recordType || "registered"}_${c.id}`;
+            if (!seenOwnerKeys.has(key)) {
+              seenOwnerKeys.add(key);
+              rows.push({ owner: c, pet: null });
+            }
+          }
+
+          this.searchRows = rows;
+          this.noResults  = rows.length === 0;
+        } catch {
+          if (rid !== this._reqId) return;
+          this.searchRows = [];
+          this.noResults  = false;
+        } finally {
+          if (rid === this._reqId) this.searching = false;
+        }
+      }, 350);
+    },
+
+    clearSearch() {
+      clearTimeout(this._timer);
+      this._reqId++;
+      this.searchQuery = "";
+      this.searchRows  = [];
+      this.noResults   = false;
+      this.searching   = false;
+    },
+
+    async openProfile(row) {
+      if (!row.pet?.id) return;
+      this.profile = {
+        open: true,
+        loading: true,
+        error: null,
+        pet: row.pet,
+        owner: row.owner,
+        records: [],
+      };
+      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      try {
+        const data = await API.adminGetPetProfile(row.pet.id);
+        this.profile.records = data.medical_records || [];
+      } catch (err) {
+        this.profile.error = err.message || "Failed to load pet profile.";
+      } finally {
+        this.profile.loading = false;
+        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      }
+    },
+
+    closeProfile() {
+      this.profile.open = false;
+    },
+
+    openVaccinations() {
+      const { pet, owner } = this.profile;
+      this.closeProfile();
+      window.dispatchEvent(new CustomEvent("clinic-open-modal", {
+        detail: {
+          appt: {
+            id: null,
+            ownerName: owner?.fullName || "Patient",
+            appointment_reference: null,
+            pet: {
+              id: pet.id,
+              name: pet.petName || pet.name,
+              species: pet.species,
+              breed: pet.breed,
+            },
+            record: {},
+            vitals: {},
+            chief_complaint: "",
+          },
+          section: "vaccinations",
+        },
+      }));
+    },
+
+    newConsultation() {
+      const { pet, owner } = this.profile;
+      let url = "./walk-in-booking.html?flow=clinic&source=clinic";
+      if (owner?.id)   url += `&customer_id=${encodeURIComponent(owner.id)}&record_type=${encodeURIComponent(owner.recordType || "registered")}`;
+      if (pet?.id)     url += `&pet_id=${encodeURIComponent(pet.id)}`;
+      window.location.href = url;
+    },
+
+    viewDetail(record) {
+      this.detail = { open: true, record };
+      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+    },
+
+    petAge(pet) {
+      if (!pet?.birthdate) return null;
+      const yrs = Math.floor((Date.now() - new Date(pet.birthdate)) / (365.25 * 24 * 3600 * 1000));
+      return yrs <= 0 ? "< 1 yr" : `${yrs} yr${yrs === 1 ? "" : "s"}`;
+    },
+
+    petSummary(pet) {
+      if (!pet) return "—";
+      return [pet.species, pet.breed].filter(Boolean).join(" · ") || "Pet";
+    },
+
+    ownerInitials(name) {
+      return String(name || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+    },
+
+    fmtDate(d) {
+      if (!d) return "—";
+      try { return new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }); }
+      catch { return d; }
+    },
+  };
+}
+
 // ── Payment Modal ─────────────────────────────────────────────────────────────
 
 function adminClinicPayModal() {

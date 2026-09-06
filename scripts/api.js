@@ -864,6 +864,10 @@ var API = (() => {
     return data;
   }
 
+  async function adminGetPetProfile(petId) {
+    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/profile`, null, getAdminToken());
+  }
+
   async function resendVerification(email) {
     // POST /api/email/resend  { email }
     return request("POST", "/email/resend", { email });
@@ -2152,6 +2156,7 @@ var API = (() => {
     getAdminInventoryItems,
     // Email verification
     verifyEmail,
+    adminGetPetProfile,
     resendVerification,
     resendLoginCode,
     confirmLoginCode,

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Clinic Queue | Bethlehem Animal Clinic</title>
+    <title>Clinic Records | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719" />
   </head>
@@ -11,13 +11,9 @@
     <div x-data="adminSidebar()" x-cloak class="min-h-screen flex bg-[#f5f8fb]">
 
       <!-- Mobile Backdrop -->
-      <div
-        x-cloak
-        x-show="sidebarOpen"
-        x-transition.opacity
+      <div x-cloak x-show="sidebarOpen" x-transition.opacity
         class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
-        @click="sidebarOpen = false"
-      ></div>
+        @click="sidebarOpen = false"></div>
 
       <!-- Sidebar -->
       <aside
@@ -98,658 +94,347 @@
       </aside>
 
       <!-- Main -->
-      <div class="flex flex-1 flex-col lg:ml-[280px]" x-data="adminClinic()" x-init="init()">
+      <div class="flex flex-1 flex-col lg:ml-[280px]" x-data="adminClinicPage()" x-init="init()">
 
         <!-- Top bar -->
         <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:px-6">
-          <button type="button" class="rounded-xl p-2 text-slate-600 hover:bg-slate-100 lg:hidden" @click="$store.sidebar.toggle?.() || ($dispatch('toggle-sidebar'))">
+          <button type="button" class="rounded-xl p-2 text-slate-600 hover:bg-slate-100 lg:hidden" @click="$dispatch('toggle-sidebar')">
             <i data-lucide="menu" class="h-5 w-5"></i>
           </button>
           <div class="flex items-center gap-3">
             <i data-lucide="stethoscope" class="h-5 w-5 text-[#315b7e]"></i>
-            <span class="font-semibold text-[#2f4b66]">Clinic Queue</span>
+            <span class="font-semibold text-[#2f4b66]">Clinic Records</span>
           </div>
-          <div class="flex items-center gap-3">
-            <span class="hidden text-xs text-slate-400 sm:block" x-text="todayLabel">Today</span>
-            <a href="./walk-in-booking.html?flow=clinic&amp;source=clinic" class="inline-flex items-center gap-1.5 rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864]">
-              <i data-lucide="plus" class="h-3.5 w-3.5"></i>
-              Walk-in
-            </a>
-            <button type="button" @click="loadQueue(); loadClinicReferrals()" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-              <i data-lucide="refresh-cw" class="h-3.5 w-3.5"></i>
-            </button>
-          </div>
+          <a href="./walk-in-booking.html?flow=clinic&source=clinic"
+            class="inline-flex items-center gap-1.5 rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864]">
+            <i data-lucide="plus" class="h-3.5 w-3.5"></i>
+            Walk-in
+          </a>
         </header>
 
         <main class="flex-1 p-4 md:p-6">
 
-          <!-- ── Customer Search ──────────────────────────────────────────────── -->
-          <div x-data="adminClinicSearch()" class="mb-6">
+          <!-- Search bar -->
+          <div class="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div class="flex items-center gap-3 px-4 py-3">
+              <i data-lucide="search" class="h-4 w-4 shrink-0 text-slate-400"></i>
+              <input
+                x-model="searchQuery"
+                @input="onSearchInput()"
+                type="text"
+                placeholder="Search customer or pet by name, phone, or email…"
+                class="flex-1 bg-transparent text-sm outline-none"
+                style="color:#1e293b"
+              />
+              <span x-show="searching" style="display:none" class="text-xs text-slate-400">Searching…</span>
+              <button x-show="searchQuery" style="display:none" @click="clearSearch()" type="button"
+                class="text-slate-400 transition hover:text-slate-600">
+                <i data-lucide="x" class="h-4 w-4"></i>
+              </button>
+            </div>
+          </div>
 
-            <!-- Search bar -->
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm">
-              <div class="flex items-center gap-3 px-4 py-3">
-                <i data-lucide="search" class="h-4 w-4 shrink-0 text-slate-400"></i>
-                <input
-                  x-model="searchQuery"
-                  @input="onSearchInput()"
-                  type="text"
-                  placeholder="Search customer or pet by name, phone, or email…"
-                  class="flex-1 bg-transparent text-sm outline-none"
-                  style="color:#1e293b"
-                />
-                <span x-show="searching" style="display:none" class="text-xs text-slate-400">Searching…</span>
-                <button x-show="searchQuery" style="display:none" @click="clearSearch()" type="button"
-                  class="text-slate-400 transition hover:text-slate-600">
-                  <i data-lucide="x" class="h-4 w-4"></i>
-                </button>
-              </div>
-              <!-- Results -->
-              <div x-show="searchResults.length > 0 || petSearchResults.length > 0 || noResults" style="display:none"
-                class="border-t border-slate-100">
-                <div x-show="noResults" style="display:none"
-                  class="px-4 py-3 text-center text-sm text-slate-400">No customers or pets found.</div>
-                <template x-for="c in searchResults" :key="'owner-' + c.recordType + '-' + c.id">
-                  <button @click="pickCustomer(c)" type="button"
-                    class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#eaf4fb]">
-                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                      style="background-color:#315b7e">
-                      <span x-text="(c.firstName?.[0] || '') + (c.lastName?.[0] || '')"></span>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-semibold text-slate-800" x-text="c.fullName"></p>
-                      <p class="text-xs text-slate-400"
-                        x-text="[c.phone, c.email].filter(Boolean).join(' · ')"></p>
-                    </div>
-                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
-                      :class="c.recordType === 'unregistered' ? 'bg-[#eaf4fb] text-[#315b7e]' : 'bg-green-100 text-green-700'"
-                      x-text="c.recordType === 'unregistered' ? 'Unregistered' : 'Active'"></span>
-                    <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-300"></i>
-                  </button>
+          <!-- Empty / hint state -->
+          <div x-show="!searchQuery && searchRows.length === 0" style="display:none"
+            class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]">
+              <i data-lucide="search" class="h-6 w-6"></i>
+            </div>
+            <p class="mt-4 text-sm font-semibold text-slate-600">Search for a customer or pet</p>
+            <p class="mt-1 text-xs text-slate-400">Enter a name, phone number, or email to find clinic records.</p>
+          </div>
+
+          <!-- No results -->
+          <div x-show="noResults" style="display:none"
+            class="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400">
+            No customers or pets found.
+          </div>
+
+          <!-- Results table -->
+          <div x-show="searchRows.length > 0" style="display:none"
+            class="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th class="px-4 py-3">Customer</th>
+                  <th class="px-4 py-3">Phone</th>
+                  <th class="px-4 py-3">Pet</th>
+                  <th class="px-4 py-3 text-right">View</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, idx) in searchRows" :key="idx">
+                  <tr class="border-b border-slate-100 last:border-0 hover:bg-[#f8fbfd] transition">
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-3">
+                        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                          style="background-color:#315b7e"
+                          x-text="ownerInitials(row.owner?.fullName)"></div>
+                        <div class="min-w-0">
+                          <p class="font-semibold text-slate-800 truncate" x-text="row.owner?.fullName || '—'"></p>
+                          <p class="text-xs text-slate-400 truncate" x-text="row.owner?.email || ''"></p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-slate-600" x-text="row.owner?.phone || '—'"></td>
+                    <td class="px-4 py-3">
+                      <span x-show="row.pet" style="display:none">
+                        <p class="font-semibold text-slate-800" x-text="row.pet?.petName || row.pet?.name || '—'"></p>
+                        <p class="text-xs text-slate-400" x-text="petSummary(row.pet)"></p>
+                      </span>
+                      <span x-show="!row.pet" style="display:none" class="text-slate-400 text-xs italic">No pets on record</span>
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                      <button
+                        x-show="row.pet?.id"
+                        style="display:none"
+                        @click="openProfile(row)"
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5]">
+                        View <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i>
+                      </button>
+                      <span x-show="!row.pet?.id" style="display:none" class="text-xs text-slate-300">—</span>
+                    </td>
+                  </tr>
                 </template>
-                <template x-for="pet in petSearchResults" :key="'pet-' + pet.id">
-                  <button @click="pickPet(pet)" type="button"
-                    class="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-[#eaf4fb]">
-                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white"
-                      style="background-color:#315b7e">
-                      <i x-show="normalizePetSpecies(pet.species) === 'Dog'" data-lucide="dog" class="h-4 w-4"></i>
-                      <i x-show="normalizePetSpecies(pet.species) === 'Cat'" data-lucide="cat" class="h-4 w-4"></i>
-                      <i x-show="!normalizePetSpecies(pet.species)" data-lucide="paw-print" class="h-4 w-4"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-semibold text-slate-800" x-text="petResultSummary(pet)"></p>
-                      <p class="text-xs text-slate-400">Owner: <span x-text="pet.ownerName"></span></p>
-                    </div>
-                    <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-300"></i>
-                  </button>
-                </template>
+              </tbody>
+            </table>
+          </div>
+
+        </main>
+
+        <!-- ── Patient Profile Modal ───────────────────────────────────────── -->
+        <div
+          x-cloak
+          x-show="profile.open"
+          @keydown.escape.window="if (profile.open) closeProfile()"
+          class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
+        >
+          <div class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb]">
+                  <i data-lucide="paw-print" class="h-6 w-6 text-[#315b7e]"></i>
+                </div>
+                <div>
+                  <h2 class="text-lg font-bold text-[#2f4b66]" x-text="(profile.pet?.petName || profile.pet?.name || 'Patient') + (profile.pet?.species ? ' (' + profile.pet.species + ')' : '')"></h2>
+                  <p class="text-xs text-slate-400" x-text="'Owner: ' + (profile.owner?.fullName || '—')"></p>
+                </div>
               </div>
+              <button @click="closeProfile()" type="button" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <i data-lucide="x" class="h-5 w-5"></i>
+              </button>
             </div>
 
-            <!-- Customer detail modal -->
-            <div x-cloak x-show="showPanel" style="display:none;z-index:200;background-color:rgba(15,23,42,0.6)"
-              x-transition class="fixed inset-0 flex items-center justify-center px-4">
-              <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
-                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+            <!-- Loading -->
+            <div x-show="profile.loading" class="flex flex-col items-center justify-center py-16">
+              <i data-lucide="loader-circle" class="h-8 w-8 animate-spin text-[#315b7e]"></i>
+              <p class="mt-3 text-sm text-slate-500">Loading patient profile…</p>
+            </div>
+
+            <!-- Error -->
+            <div x-show="!profile.loading && profile.error" class="px-6 py-10 text-center">
+              <p class="text-sm font-bold text-red-600" x-text="profile.error"></p>
+            </div>
+
+            <!-- Content -->
+            <div x-show="!profile.loading && !profile.error" class="divide-y divide-slate-100">
+
+              <!-- Basic Info -->
+              <div class="px-6 py-5">
+                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Basic Info</p>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
                   <div>
-                    <h2 class="text-base font-bold text-[#2f4b66]" x-text="panelCustomer?.fullName"></h2>
-                    <p class="mt-0.5 text-xs text-slate-400"
-                      x-text="[panelCustomer?.phone, panelCustomer?.email].filter(Boolean).join(' · ')"></p>
+                    <p class="text-xs text-slate-400">Breed</p>
+                    <p class="mt-0.5 font-medium text-slate-700" x-text="profile.pet?.breed || '—'"></p>
                   </div>
-                  <button @click="showPanel = false" type="button"
-                    class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                    <i data-lucide="x" class="h-5 w-5"></i>
-                  </button>
+                  <div>
+                    <p class="text-xs text-slate-400">Age</p>
+                    <p class="mt-0.5 font-medium text-slate-700" x-text="petAge(profile.pet) || '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-400">Weight</p>
+                    <p class="mt-0.5 font-medium text-slate-700" x-text="profile.pet?.weight ? profile.pet.weight + ' kg' : '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-400">Phone</p>
+                    <p class="mt-0.5 font-medium text-slate-700" x-text="profile.owner?.phone || '—'"></p>
+                  </div>
                 </div>
-                <div class="max-h-64 overflow-y-auto px-6 py-4">
-                  <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400"
-                    x-text="panelCustomer?.recordType === 'unregistered' ? 'Saved Pets' : 'Registered Pets'"></p>
-                  <div x-show="!(panelCustomer?.pets || []).filter(p => !p.isArchived).length" style="display:none"
-                    class="text-sm text-slate-400">No active pets on record.</div>
+
+                <!-- Medical Alerts -->
+                <template x-if="profile.pet?.medical_conditions">
+                  <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p class="mb-1 flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                      <i data-lucide="triangle-alert" class="h-3.5 w-3.5"></i>
+                      Medical Alerts
+                    </p>
+                    <p class="text-sm leading-relaxed text-amber-900 whitespace-pre-wrap" x-text="profile.pet.medical_conditions"></p>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Consultation History -->
+              <div class="px-6 py-5">
+                <div class="mb-3 flex items-center justify-between">
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Consultation History</p>
+                  <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600"
+                    x-text="profile.records.length + ' record' + (profile.records.length === 1 ? '' : 's')"></span>
+                </div>
+
+                <!-- No records -->
+                <div x-show="profile.records.length === 0" class="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  No consultation records yet.
+                </div>
+
+                <!-- Records table -->
+                <div x-show="profile.records.length > 0" class="overflow-hidden rounded-2xl border border-slate-200">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <th class="px-4 py-2.5">Date</th>
+                        <th class="px-4 py-2.5">Chief Complaint</th>
+                        <th class="px-4 py-2.5">Diagnosis</th>
+                        <th class="px-4 py-2.5 text-right">Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template x-for="(rec, i) in profile.records" :key="i">
+                        <tr class="border-b border-slate-100 last:border-0 hover:bg-[#f8fbfd] transition cursor-pointer" @click="viewDetail(rec)">
+                          <td class="px-4 py-3 font-medium text-slate-700 whitespace-nowrap" x-text="fmtDate(rec.appointment_date)"></td>
+                          <td class="px-4 py-3 text-slate-600 max-w-[180px] truncate" x-text="rec.chief_complaint || '—'"></td>
+                          <td class="px-4 py-3 text-slate-600 max-w-[180px] truncate" x-text="rec.diagnosis || '—'"></td>
+                          <td class="px-4 py-3 text-right">
+                            <i data-lucide="chevron-right" class="h-4 w-4 text-slate-300 inline-block"></i>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex flex-wrap gap-3 px-6 py-4">
+                <button @click="newConsultation()" type="button"
+                  class="inline-flex items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864]">
+                  <i data-lucide="plus" class="h-4 w-4"></i>
+                  New Consultation
+                </button>
+                <button @click="openVaccinations()" type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-[#dceaf5]">
+                  <i data-lucide="syringe" class="h-4 w-4"></i>
+                  Vaccinations
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Consultation Detail Modal ──────────────────────────────────── -->
+        <div
+          x-cloak
+          x-show="detail.open"
+          @keydown.escape.window="if (detail.open) detail.open = false"
+          class="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
+        >
+          <div class="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true">
+            <div class="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <h3 class="text-lg font-bold text-[#2f4b66]">Consultation Record</h3>
+                <p class="mt-0.5 text-xs text-slate-400" x-text="fmtDate(detail.record?.appointment_date)"></p>
+              </div>
+              <button @click="detail.open = false" type="button" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
+                <i data-lucide="x" class="h-5 w-5"></i>
+              </button>
+            </div>
+
+            <div x-show="detail.record" class="space-y-5 px-6 py-5">
+              <!-- Chief Complaint -->
+              <div>
+                <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Chief Complaint</p>
+                <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.chief_complaint || '—'"></p>
+              </div>
+
+              <!-- Vitals -->
+              <template x-if="detail.record?.vitals">
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Vital Signs</p>
+                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                      <p class="text-xs text-slate-400">Temp</p>
+                      <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.temperature_c ? detail.record.vitals.temperature_c + ' °C' : '—'"></p>
+                    </div>
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                      <p class="text-xs text-slate-400">HR</p>
+                      <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.heart_rate_bpm ? detail.record.vitals.heart_rate_bpm + ' bpm' : '—'"></p>
+                    </div>
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                      <p class="text-xs text-slate-400">RR</p>
+                      <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.respiratory_rate_bpm ? detail.record.vitals.respiratory_rate_bpm + ' bpm' : '—'"></p>
+                    </div>
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                      <p class="text-xs text-slate-400">Weight</p>
+                      <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.weight_kg ? detail.record.vitals.weight_kg + ' kg' : '—'"></p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Diagnosis & Treatment -->
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Diagnosis</p>
+                  <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.diagnosis || '—'"></p>
+                </div>
+                <div>
+                  <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Treatment Given</p>
+                  <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.treatment_given || '—'"></p>
+                </div>
+              </div>
+
+              <!-- Medications -->
+              <template x-if="detail.record?.medications?.length">
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Medications</p>
                   <div class="space-y-2">
-                    <template x-for="pet in (panelCustomer?.pets || []).filter(p => !p.isArchived)" :key="pet.id">
-                      <div class="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2.5" style="background-color:#f8fafc">
-                        <div class="min-w-0">
-                          <p class="text-sm font-semibold text-slate-800" x-text="pet.petName"></p>
-                          <p class="text-xs text-slate-400"
-                            x-text="[pet.species, pet.breed].filter(Boolean).join(' · ')"></p>
-                        </div>
-                        <button @click="openQueueModal(pet)" type="button"
-                          class="ml-3 shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition"
-                          style="background-color:#315b7e">
-                          Add to Queue
-                        </button>
+                    <template x-for="(med, i) in detail.record.medications" :key="i">
+                      <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
+                        <p class="font-semibold text-slate-700" x-text="med.drug_name"></p>
+                        <p class="text-xs text-slate-500" x-text="[med.dosage, med.frequency, med.duration].filter(Boolean).join(' · ')"></p>
+                        <p x-show="med.instructions" class="mt-0.5 text-xs text-slate-400" x-text="med.instructions"></p>
                       </div>
                     </template>
                   </div>
                 </div>
-                <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
-                  <a :href="'./clients.html?customer_id=' + panelCustomer?.id + '&amp;record_type=' + (panelCustomer?.recordType || 'registered')"
-                    class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                    View Profile
-                  </a>
-                  <button @click="openQueueModal(null)" type="button"
-                    class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
-                    style="background-color:#315b7e">
-                    + New Pet
-                  </button>
+              </template>
+
+              <!-- Follow-up -->
+              <template x-if="detail.record?.follow_up_date">
+                <div class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                  <p class="text-xs font-semibold text-blue-700">Follow-up</p>
+                  <p class="mt-0.5 text-sm font-medium text-blue-900" x-text="fmtDate(detail.record.follow_up_date)"></p>
+                  <p x-show="detail.record.follow_up_notes" class="mt-0.5 text-xs text-blue-700" x-text="detail.record.follow_up_notes"></p>
                 </div>
-              </div>
+              </template>
             </div>
 
-            <!-- Add to Queue modal -->
-            <div x-cloak x-show="queueModal.open" style="display:none;z-index:210;background-color:rgba(15,23,42,0.7)"
-              x-transition class="fixed inset-0 flex items-center justify-center px-4 py-4">
-              <div class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-                <div class="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-                  <div>
-                    <h2 class="text-base font-bold text-[#2f4b66]">Add to Clinic Queue</h2>
-                    <p class="mt-0.5 text-xs text-slate-400" x-text="panelCustomer?.fullName"></p>
-                  </div>
-                  <button @click="queueModal.open = false" type="button"
-                    class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                    <i data-lucide="x" class="h-5 w-5"></i>
-                  </button>
-                </div>
-                <form @submit.prevent="submitQueue()" class="flex min-h-0 flex-1 flex-col">
-                  <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label for="clinicQueuePetName" class="mb-1 block text-xs font-semibold text-slate-600">
-                          Pet Name <span class="text-red-500">*</span>
-                        </label>
-                        <input id="clinicQueuePetName" x-model="queueForm.pet_name" type="text" maxlength="100" required placeholder="e.g. Buddy"
-                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                      </div>
-                      <div>
-                        <label for="clinicQueuePetSpecies" class="mb-1 block text-xs font-semibold text-slate-600">
-                          Species <span class="text-red-500">*</span>
-                        </label>
-                        <div id="clinicQueuePetSpeciesCombobox" class="relative">
-                          <div class="relative">
-                            <input id="clinicQueuePetSpecies" x-model="queueForm.species" name="species" type="text" required readonly
-                              placeholder="Select species" role="combobox" aria-autocomplete="none"
-                              aria-controls="clinicQueuePetSpeciesOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
-                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
-                            <button id="clinicQueuePetSpeciesDropdownButton" type="button" aria-label="Show species options"
-                              aria-controls="clinicQueuePetSpeciesOptions" aria-expanded="false"
-                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
-                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                            </button>
-                          </div>
-                          <div id="clinicQueuePetSpeciesOptions" role="listbox" aria-label="Species options"
-                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label for="clinicQueuePetGender" class="mb-1 block text-xs font-semibold text-slate-600">Gender</label>
-                        <div id="clinicQueuePetGenderCombobox" class="relative">
-                          <div class="relative">
-                            <input id="clinicQueuePetGender" x-model="queueForm.gender" name="gender" type="text" readonly
-                              placeholder="Select gender" role="combobox" aria-autocomplete="none"
-                              aria-controls="clinicQueuePetGenderOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
-                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
-                            <button id="clinicQueuePetGenderDropdownButton" type="button" aria-label="Show gender options"
-                              aria-controls="clinicQueuePetGenderOptions" aria-expanded="false"
-                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
-                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                            </button>
-                          </div>
-                          <div id="clinicQueuePetGenderOptions" role="listbox" aria-label="Gender options"
-                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <label for="clinicQueuePetBirthdate" class="mb-1 block text-xs font-semibold text-slate-600">Birthdate</label>
-                        <input id="clinicQueuePetBirthdate" x-model="queueForm.birthdate" type="date"
-                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                      </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label for="clinicQueuePetBreed" class="mb-1 block text-xs font-semibold text-slate-600">
-                          Breed <span class="text-red-500">*</span>
-                        </label>
-                        <div id="clinicQueuePetBreedCombobox" class="relative">
-                          <div class="relative">
-                            <input id="clinicQueuePetBreed" x-model="queueForm.breed" name="breed" type="text" maxlength="100" required readonly
-                              placeholder="Select breed" role="combobox" aria-autocomplete="list"
-                              aria-controls="clinicQueuePetBreedOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
-                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer" />
-                            <button id="clinicQueuePetBreedDropdownButton" type="button" aria-label="Show breed options"
-                              aria-controls="clinicQueuePetBreedOptions" aria-expanded="false"
-                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e]">
-                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                            </button>
-                          </div>
-                          <div id="clinicQueuePetBreedOptions" role="listbox" aria-label="Breed options"
-                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
-                        </div>
-                        <p id="clinicQueuePetBreedError" class="mt-2 hidden text-xs text-red-600"></p>
-                      </div>
-                      <div>
-                        <label for="clinicQueuePetColor" class="mb-1 block text-xs font-semibold text-slate-600">Color</label>
-                        <input id="clinicQueuePetColor" x-model="queueForm.color" type="text" maxlength="50" placeholder="e.g. White"
-                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                      </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label for="clinicQueuePetSize" class="mb-1 block text-xs font-semibold text-slate-600">Size</label>
-                        <div id="clinicQueuePetSizeCombobox" class="relative">
-                          <div class="relative">
-                            <input id="clinicQueuePetSize" x-model="queueForm.size" name="size" type="text" readonly disabled
-                              placeholder="Select species first" role="combobox" aria-autocomplete="none"
-                              aria-controls="clinicQueuePetSizeOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
-                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400" />
-                            <button id="clinicQueuePetSizeDropdownButton" type="button" disabled aria-label="Show size options"
-                              aria-controls="clinicQueuePetSizeOptions" aria-expanded="false"
-                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e] disabled:cursor-not-allowed disabled:text-slate-300">
-                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                            </button>
-                          </div>
-                          <div id="clinicQueuePetSizeOptions" role="listbox" aria-label="Size options"
-                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <label for="clinicQueuePetFurType" class="mb-1 block text-xs font-semibold text-slate-600">Fur Type</label>
-                        <div id="clinicQueuePetFurTypeCombobox" class="relative">
-                          <div class="relative">
-                            <input id="clinicQueuePetFurType" x-model="queueForm.fur_type" name="fur_type" type="text" readonly disabled
-                              placeholder="Select breed first" role="combobox" aria-autocomplete="none"
-                              aria-controls="clinicQueuePetFurTypeOptions" aria-expanded="false" aria-invalid="false" autocomplete="off"
-                              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-11 text-sm outline-none focus:border-[#315b7e] read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400" />
-                            <button id="clinicQueuePetFurTypeDropdownButton" type="button" disabled aria-label="Show fur type options"
-                              aria-controls="clinicQueuePetFurTypeOptions" aria-expanded="false"
-                              class="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-[#315b7e] disabled:cursor-not-allowed disabled:text-slate-300">
-                              <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                            </button>
-                          </div>
-                          <div id="clinicQueuePetFurTypeOptions" role="listbox" aria-label="Fur type options"
-                            class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"></div>
-                        </div>
-                        <p id="clinicQueuePetFurTypeError" class="mt-2 hidden text-xs text-red-600"></p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label for="clinicQueuePetWeight" class="mb-1 block text-xs font-semibold text-slate-600">Weight (kg)</label>
-                      <input id="clinicQueuePetWeight" x-model="queueForm.weight" name="weight" type="text" inputmode="decimal"
-                        placeholder="e.g. 12" aria-invalid="false"
-                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                    </div>
-
-                    <div class="rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4">
-                      <div class="flex items-center gap-3">
-                        <input id="clinicQueuePetNeutered" x-model="queueForm.is_neutered" type="checkbox"
-                          class="h-4 w-4 cursor-pointer accent-[#315b7e]" />
-                        <label for="clinicQueuePetNeutered" class="cursor-pointer text-sm font-medium text-slate-700">Neutered / spayed</label>
-                      </div>
-                      <div x-show="queueForm.is_neutered" class="mt-3">
-                        <label for="clinicQueuePetNeuteredDate" class="mb-1 block text-xs font-semibold text-slate-600">Neutered / spayed date</label>
-                        <input id="clinicQueuePetNeuteredDate" x-model="queueForm.neutered_date" type="date"
-                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label for="clinicQueuePetMedicalConditions" class="mb-1 block text-xs font-semibold text-slate-600">Medical Conditions / Special Needs</label>
-                      <textarea id="clinicQueuePetMedicalConditions" x-model="queueForm.medical_conditions" rows="3" maxlength="1000"
-                        placeholder="Describe allergies, medical conditions, or special care instructions..."
-                        class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
-                    </div>
-
-                    <div>
-                      <label for="clinicQueueChiefComplaint" class="mb-1 block text-xs font-semibold text-slate-600">
-                        Chief Complaint <span class="text-red-500">*</span>
-                      </label>
-                      <textarea id="clinicQueueChiefComplaint" x-model="queueForm.chief_complaint" rows="3" maxlength="1000" required
-                        placeholder="Reason for visit..."
-                        class="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
-                    </div>
-                    <p x-show="queueModal.error" style="display:none;color:#b91c1c"
-                      class="text-xs font-semibold" x-text="queueModal.error"></p>
-                  </div>
-                  <div class="flex shrink-0 gap-3 border-t border-slate-100 px-6 py-4">
-                    <button @click="queueModal.open = false" type="button"
-                      class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-                      Cancel
-                    </button>
-                    <button :disabled="queueModal.busy" type="submit"
-                      class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
-                      :style="queueModal.busy ? 'background-color:#315b7e;opacity:0.6;cursor:not-allowed' : 'background-color:#315b7e'">
-                      <span x-text="queueModal.busy ? 'Adding...' : 'Add to Queue'"></span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-          </div><!-- /adminClinicSearch -->
-
-          <!-- Error banner -->
-          <div x-show="error" x-transition class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="error"></div>
-
-          <!-- Summary cards -->
-          <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-            <div class="rounded-2xl bg-white p-4 shadow-sm">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pending Referrals</p>
-              <p class="mt-2 text-2xl font-bold text-[#2f4b66]" x-text="clinicReferralPendingCount">0</p>
-            </div>
-            <div class="rounded-2xl bg-white p-4 shadow-sm">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Incoming</p>
-              <p class="mt-2 text-2xl font-bold text-[#2f4b66]" x-text="incoming.length">0</p>
-            </div>
-            <div class="rounded-2xl bg-white p-4 shadow-sm">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">In Queue</p>
-              <p class="mt-2 text-2xl font-bold text-[#2f4b66]" x-text="queued.length">0</p>
-            </div>
-            <div class="rounded-2xl bg-white p-4 shadow-sm">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">In Consultation</p>
-              <p class="mt-2 text-2xl font-bold text-[#2f4b66]" x-text="inConsultation.length">0</p>
-            </div>
-            <div class="rounded-2xl bg-white p-4 shadow-sm">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed</p>
-              <p class="mt-2 text-2xl font-bold text-[#2f4b66]" x-text="completed.length">0</p>
-            </div>
-          </div>
-
-          <!-- Tab bar -->
-          <div class="mb-4 flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm">
-            <template x-for="tab in tabs" :key="tab.key">
-              <button
-                type="button"
-                class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
-                :class="activeTab === tab.key ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'"
-                @click="activeTab = tab.key"
-              >
-                <span x-text="tab.label"></span>
-                <span
-                  x-show="tabCount(tab.key) > 0"
-                  class="ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs font-bold"
-                  :class="activeTab === tab.key ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'"
-                  x-text="tabCount(tab.key)"
-                ></span>
+            <div class="flex justify-end border-t border-slate-100 px-6 py-4">
+              <button @click="detail.open = false" type="button"
+                class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Close
               </button>
-            </template>
-          </div>
-
-          <!-- Tab content -->
-          <div x-show="loading" class="py-12 text-center text-sm text-slate-400">Loading clinic queue…</div>
-
-          <div x-show="!loading">
-            <template x-for="tab in tabs" :key="tab.key">
-              <div x-show="activeTab === tab.key">
-                <div x-show="tab.key === 'referrals'" class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div class="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-                    <label class="block">
-                      <span class="mb-1 block text-xs font-semibold text-slate-600">Search referrals</span>
-                      <input x-model="clinicReferralFilters.search" @keydown.enter.prevent="applyClinicReferralFilters()" type="search" placeholder="Referral, booking, pet, or owner" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
-                    </label>
-                    <label class="block">
-                      <span class="mb-1 block text-xs font-semibold text-slate-600">Status</span>
-                      <select x-model="clinicReferralFilters.status" @change="applyClinicReferralFilters()" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#315b7e]">
-                        <option value="">All queue statuses</option>
-                        <option value="pending_clinic_acceptance">Pending acceptance</option>
-                        <option value="accepted">Accepted</option>
-                        <option value="under_clinic_review">Under clinic review</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </label>
-                    <label class="block">
-                      <span class="mb-1 block text-xs font-semibold text-slate-600">Urgency</span>
-                      <select x-model="clinicReferralFilters.urgency" @change="applyClinicReferralFilters()" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#315b7e]">
-                        <option value="">All urgencies</option>
-                        <option value="emergency">Emergency</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="routine">Routine</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-xs text-slate-500">Emergency referrals are listed first, followed by Urgent and Routine.</p>
-                    <button type="button" @click="applyClinicReferralFilters()" class="rounded-xl bg-[#315b7e] px-4 py-2 text-xs font-semibold text-white">Search</button>
-                  </div>
-                  <p x-show="clinicReferralError" class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" x-text="clinicReferralError"></p>
-                  <p x-show="clinicReferralLoading" class="mt-3 text-sm text-slate-500" role="status">Loading grooming referrals...</p>
-                </div>
-                <div
-                  x-show="listFor(tab.key).length === 0 && !(tab.key === 'referrals' && clinicReferralLoading)"
-                  class="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-400"
-                  x-text="emptyLabel(tab.key)"
-                ></div>
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <template x-for="appt in listFor(tab.key)" :key="appt.public_id || appt.id">
-                    <div x-html="tab.key === 'referrals' ? clinicReferralCardHtml(appt) : cardHtml(appt)"></div>
-                  </template>
-                </div>
-              </div>
-            </template>
-          </div>
-        </main>
-
-        <!-- Grooming clinic-referral detail and acceptance -->
-        <div
-          x-cloak
-          x-show="clinicReferralModal.open"
-          @keydown.escape.window="if (clinicReferralModal.open && !clinicReferralModal.saving) closeClinicReferralQueueModal()"
-          class="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
-        >
-          <section x-ref="clinicReferralQueueDialog" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="clinic-referral-queue-title" class="w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl outline-none">
-            <header class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-[#52718e]">Grooming Referral</p>
-                <h2 id="clinic-referral-queue-title" class="mt-1 text-xl font-bold text-[#2f4b66]" x-text="clinicReferralModal.referral?.pet?.name || 'Clinic referral details'"></h2>
-              </div>
-              <button type="button" @click="closeClinicReferralQueueModal()" aria-label="Close clinic referral detail" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><i data-lucide="x" class="h-5 w-5"></i></button>
-            </header>
-
-            <div class="max-h-[75vh] overflow-y-auto px-5 py-5 sm:px-6">
-              <p x-show="clinicReferralModal.loading" class="py-10 text-center text-sm text-slate-500" role="status">Loading clinic referral details...</p>
-              <div x-show="clinicReferralModal.error" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                <p x-text="clinicReferralModal.error"></p>
-                <button type="button" @click="reloadClinicReferralDetail()" class="mt-3 rounded-xl border border-red-300 bg-white px-3 py-2 text-xs font-semibold">Retry</button>
-              </div>
-
-              <div x-show="!clinicReferralModal.loading && clinicReferralModal.referral" class="space-y-5">
-                <div class="flex flex-wrap gap-2">
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700" x-text="clinicReferralModal.referral?.status_label"></span>
-                  <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900" x-text="clinicReferralModal.referral?.urgency_label"></span>
-                  <span class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800" x-text="clinicReferralModal.referral?.grooming_state_label"></span>
-                </div>
-
-                <div class="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div><p class="text-xs font-semibold text-slate-400">Pet</p><p class="mt-1 font-semibold text-slate-800" x-text="clinicReferralModal.referral?.pet?.name"></p><p class="text-xs text-slate-500" x-text="[clinicReferralModal.referral?.pet?.species, clinicReferralModal.referral?.pet?.breed, clinicReferralModal.referral?.pet?.size].filter(Boolean).join(' · ')"></p></div>
-                  <div><p class="text-xs font-semibold text-slate-400">Owner / presenter</p><p class="mt-1 font-semibold text-slate-800" x-text="clinicReferralModal.referral?.owner_name"></p></div>
-                  <div><p class="text-xs font-semibold text-slate-400">Booking reference</p><p class="mt-1 font-semibold text-slate-800" x-text="clinicReferralModal.referral?.booking_reference"></p></div>
-                  <div><p class="text-xs font-semibold text-slate-400">Concern reference</p><p class="mt-1 break-all font-mono text-xs text-slate-700" x-text="clinicReferralModal.referral?.concern?.public_id"></p></div>
-                  <div><p class="text-xs font-semibold text-slate-400">Concern severity</p><p class="mt-1 capitalize text-slate-800" x-text="clinicReferralValue(clinicReferralModal.referral?.concern?.severity)"></p></div>
-                  <div><p class="text-xs font-semibold text-slate-400">Referred</p><p class="mt-1 text-slate-800" x-text="clinicReferralDateTime(clinicReferralModal.referral?.referred_at)"></p><p class="text-xs text-slate-500" x-text="clinicReferralModal.referral?.referred_by_name"></p></div>
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                  <div class="rounded-2xl border border-slate-200 p-4">
-                    <h3 class="text-sm font-bold text-[#2f4b66]">Internal referral reason</h3>
-                    <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700" x-text="clinicReferralModal.referral?.referral_reason"></p>
-                    <p class="mt-3 text-xs font-semibold text-slate-500">Authorized clinic staff only</p>
-                  </div>
-                  <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                    <h3 class="text-sm font-bold text-blue-900">Customer-friendly explanation</h3>
-                    <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900" x-text="clinicReferralModal.referral?.customer_explanation"></p>
-                  </div>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div class="rounded-2xl border border-slate-200 p-4">
-                    <h3 class="text-sm font-bold text-[#2f4b66]">Grooming safety state</h3>
-                    <dl class="mt-3 space-y-2 text-sm">
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Current state</dt><dd class="font-semibold text-slate-800" x-text="clinicReferralModal.referral?.grooming_state_label"></dd></div>
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Applied action</dt><dd class="text-right font-semibold capitalize text-slate-800" x-text="clinicReferralValue(clinicReferralModal.referral?.concern?.applied_grooming_action, 'Not applied').replaceAll('_', ' ')"></dd></div>
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Applied at</dt><dd class="text-right text-slate-800" x-text="clinicReferralDateTime(clinicReferralModal.referral?.concern?.action_applied_at)"></dd></div>
-                    </dl>
-                  </div>
-                  <div class="rounded-2xl border border-slate-200 p-4">
-                    <h3 class="text-sm font-bold text-[#2f4b66]">Referral consent</h3>
-                    <dl class="mt-3 space-y-2 text-sm">
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Decision</dt><dd class="font-semibold text-slate-800" x-text="clinicReferralConsentLabel(clinicReferralModal.referral)"></dd></div>
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Channel</dt><dd class="text-right text-slate-800" x-text="clinicReferralValue(clinicReferralModal.referral?.consent_response_channel_label, 'Not yet recorded')"></dd></div>
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Decision maker</dt><dd class="text-right text-slate-800" x-text="clinicReferralValue(clinicReferralModal.referral?.consent_responded_by_name, 'Not yet recorded')"></dd></div>
-                      <div class="flex justify-between gap-4"><dt class="text-slate-500">Intake before consent</dt><dd class="text-right font-semibold text-slate-800" x-text="clinicReferralModal.referral?.intake_before_consent_documented ? 'Documented' : 'No'"></dd></div>
-                    </dl>
-                  </div>
-                </div>
-
-                <div x-show="clinicReferralModal.referral?.financial_correction_review_required" class="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-                  This grooming booking was already paid. If the grooming charge changes, an administrator correction or refund workflow will be required. Clinic intake does not alter that payment.
-                </div>
-
-                <div x-show="!clinicReferralModal.referral?.can_accept && clinicReferralModal.referral?.status === 'pending_clinic_acceptance'" class="rounded-2xl border border-amber-300 bg-amber-50 p-4">
-                  <h3 class="text-sm font-bold text-amber-950">Acceptance is currently blocked</h3>
-                  <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
-                    <template x-for="reason in clinicReferralModal.referral?.acceptance_blocked_reasons || []" :key="reason"><li x-text="reason"></li></template>
-                  </ul>
-                </div>
-
-                <div x-show="clinicReferralModal.referral?.clinic_appointment" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <h3 class="text-base font-bold text-emerald-900">Clinic referral accepted</h3>
-                  <div class="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    <div><p class="text-xs font-semibold text-emerald-700">Accepted by</p><p class="font-semibold text-emerald-950" x-text="clinicReferralModal.referral?.accepted_by_name"></p></div>
-                    <div><p class="text-xs font-semibold text-emerald-700">Accepted time</p><p class="font-semibold text-emerald-950" x-text="clinicReferralDateTime(clinicReferralModal.referral?.accepted_at)"></p></div>
-                    <div><p class="text-xs font-semibold text-emerald-700">Appointment</p><p class="font-semibold text-emerald-950" x-text="clinicReferralModal.referral?.clinic_appointment?.reference"></p></div>
-                    <div><p class="text-xs font-semibold text-emerald-700">Clinic date</p><p class="font-semibold text-emerald-950" x-text="clinicReferralModal.referral?.clinic_appointment?.appointment_date"></p></div>
-                    <div><p class="text-xs font-semibold text-emerald-700">Clinic queue</p><p class="font-semibold text-emerald-950" x-text="'#' + clinicReferralModal.referral?.clinic_appointment?.queue_number"></p></div>
-                    <div><p class="text-xs font-semibold text-emerald-700">Appointment status</p><p class="font-semibold text-emerald-950" x-text="clinicReferralModal.referral?.clinic_appointment?.status_label"></p></div>
-                  </div>
-                  <p x-show="!clinicReferralModal.referral?.assessment_started" class="mt-3 text-sm text-emerald-900">The pet has entered clinic intake. Consultation has not started yet, and treatment is not automatically authorized.</p>
-                  <p x-show="clinicReferralModal.referral?.status === 'under_clinic_review'" class="mt-3 text-sm font-semibold text-emerald-950">Clinic assessment is in progress. Grooming session stopped — pet transferred to clinic care.</p>
-                  <div x-show="clinicReferralModal.referral?.status === 'completed'" class="mt-3 rounded-xl border border-emerald-300 bg-white p-3 text-sm text-emerald-950">
-                    <p class="font-bold">Assessment Completed</p>
-                    <p class="mt-1">Clinic assessment completed — grooming will not resume during this visit.</p>
-                    <dl class="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div><dt class="text-xs font-semibold text-emerald-700">Completed by</dt><dd x-text="clinicReferralValue(clinicReferralModal.referral?.resolved_by_name)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-emerald-700">Completion time</dt><dd x-text="clinicReferralDateTime(clinicReferralModal.referral?.resolved_at)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-emerald-700">Grooming outcome</dt><dd x-text="clinicReferralModal.referral?.grooming_outcome_label"></dd></div>
-                      <div><dt class="text-xs font-semibold text-emerald-700">Stopped-payment review</dt><dd class="capitalize" x-text="clinicReferralModal.referral?.stopped_payment_review_status"></dd></div>
-                    </dl>
-                    <p class="mt-3 whitespace-pre-wrap" x-text="clinicReferralModal.referral?.customer_resolution_summary"></p>
-                  </div>
-                  <button type="button" @click="activeTab = 'queued'; closeClinicReferralQueueModal()" class="mt-3 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-900">Open In Queue tab</button>
-                </div>
-
-                <div x-show="clinicReferralModal.referral?.grooming_payment_blocked_reason || clinicReferralModal.referral?.physical_pickup_blocked_reason" class="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-                  <p x-show="clinicReferralModal.referral?.grooming_payment_blocked_reason"><strong>Grooming payment:</strong> <span x-text="clinicReferralModal.referral?.grooming_payment_blocked_reason"></span></p>
-                  <p x-show="clinicReferralModal.referral?.physical_pickup_blocked_reason"><strong>Physical pickup:</strong> <span x-text="clinicReferralModal.referral?.physical_pickup_blocked_reason"></span></p>
-                </div>
-
-                <div
-                  x-show="!clinicReferralModal.confirming"
-                  data-clinic-referral-detail-actions
-                  class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
-                >
-                  <button type="button" @click="closeClinicReferralQueueModal()" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">Close</button>
-                  <button x-show="clinicReferralModal.referral?.status === 'pending_clinic_acceptance'" type="button" @click="showClinicReferralAcceptConfirmation()" :disabled="!clinicReferralModal.referral?.can_accept || clinicReferralModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Accept Referral</button>
-                </div>
-              </div>
             </div>
-
-            <div x-show="clinicReferralModal.confirming" class="border-t border-slate-200 bg-slate-50 px-5 py-5 sm:px-6" role="alertdialog" aria-labelledby="accept-referral-confirm-title">
-              <h3 id="accept-referral-confirm-title" class="text-base font-bold text-[#2f4b66]">Confirm permanent clinic acceptance</h3>
-              <div class="mt-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
-                <p><strong>Pet:</strong> <span x-text="clinicReferralModal.referral?.pet?.name"></span></p>
-                <p><strong>Urgency:</strong> <span x-text="clinicReferralModal.referral?.urgency_label"></span></p>
-                <p><strong>Consent:</strong> <span x-text="clinicReferralConsentLabel(clinicReferralModal.referral)"></span></p>
-                <p><strong>Applied grooming action:</strong> <span class="capitalize" x-text="clinicReferralValue(clinicReferralModal.referral?.concern?.applied_grooming_action).replaceAll('_', ' ')"></span></p>
-                <p><strong>Effective clinic date:</strong> <span x-text="clinicReferralModal.referral?.effective_clinic_date"></span></p>
-                <p class="mt-3 font-semibold">A same-day Checked In clinic appointment and clinic queue number will be created. Consultation will not start automatically.</p>
-                <p class="mt-2">This accepts the pet for clinic intake and initial assessment only. It does not authorize diagnostics, medication, treatment, emergency procedures, or additional charges.</p>
-              </div>
-              <div x-show="clinicReferralModal.referral?.consent_decision !== 'approved'" class="mt-3 rounded-2xl border border-red-300 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-900">
-                Customer consent is pending or declined. Intake is proceeding only under the documented urgent/emergency reason; this is not treatment consent.
-              </div>
-              <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" @click="clinicReferralModal.confirming = false" :disabled="clinicReferralModal.saving" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Go back</button>
-                <button x-ref="clinicReferralConfirmButton" type="button" @click="acceptClinicReferral()" :disabled="clinicReferralModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" x-text="clinicReferralModal.saving ? 'Accepting...' : 'Create appointment and accept'"></button>
-              </div>
-            </div>
-          </section>
+          </div>
         </div>
 
-        <!-- Permanent completion of a referral-linked clinic assessment -->
-        <div
-          x-cloak
-          x-show="clinicAssessmentCompletion.open"
-          @keydown.escape.window="if (clinicAssessmentCompletion.open && !clinicAssessmentCompletion.saving) closeClinicAssessmentCompletion()"
-          class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
-        >
-          <section x-ref="clinicAssessmentDialog" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="clinic-assessment-title" class="w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl outline-none sm:p-6">
-            <header class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-[#52718e]">Referral-linked consultation</p>
-                <h2 id="clinic-assessment-title" class="mt-1 text-xl font-bold text-[#2f4b66]">Finish Clinic Assessment</h2>
-                <p class="mt-1 text-sm text-slate-500" x-text="clinicAssessmentCompletion.appointment?.pet?.name"></p>
-              </div>
-              <button type="button" @click="closeClinicAssessmentCompletion()" :disabled="clinicAssessmentCompletion.saving" aria-label="Close assessment completion dialog" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><i data-lucide="x" class="h-5 w-5"></i></button>
-            </header>
+      </div><!-- /main column -->
+    </div><!-- /sidebar wrapper -->
 
-            <div class="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950" role="note">
-              <strong>The grooming session has ended.</strong> Finishing this clinic assessment will not restart grooming. The clinic appointment will move to For Payment, and separate clinic payment or care steps may remain.
-            </div>
-
-            <div class="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
-              <div><p class="text-xs font-semibold text-slate-400">Referral</p><p class="break-all font-semibold text-slate-800" x-text="clinicAssessmentCompletion.appointment?.grooming_referral?.public_id"></p></div>
-              <div><p class="text-xs font-semibold text-slate-400">Urgency</p><p class="font-semibold text-slate-800" x-text="clinicAssessmentCompletion.appointment?.grooming_referral?.urgency_label"></p></div>
-              <div><p class="text-xs font-semibold text-slate-400">Grooming state</p><p class="font-semibold text-slate-800">Stopped</p></div>
-              <div><p class="text-xs font-semibold text-slate-400">Outcome</p><p class="font-semibold text-slate-800">Grooming Session Stopped</p></div>
-            </div>
-
-            <form class="mt-5 space-y-4" @submit.prevent="confirmClinicAssessmentCompletion()" novalidate>
-              <div x-show="clinicAssessmentCompletion.error" x-ref="clinicAssessmentError" tabindex="-1" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert" x-text="clinicAssessmentCompletion.error"></div>
-              <label class="block">
-                <span class="text-sm font-bold text-slate-700">Internal assessment/resolution notes <span aria-hidden="true">*</span></span>
-                <textarea rows="5" maxlength="5000" x-model="clinicAssessmentCompletion.internal_resolution_notes" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" aria-describedby="clinic-assessment-internal-help"></textarea>
-                <span id="clinic-assessment-internal-help" class="mt-1 block text-xs text-slate-500">Authorized staff only · <span x-text="clinicAssessmentCompletion.internal_resolution_notes.length + ' / 5000'"></span></span>
-                <span x-show="clinicAssessmentCompletion.errors.internal_resolution_notes" class="mt-1 block text-xs text-red-600" x-text="clinicAssessmentCompletion.errors.internal_resolution_notes"></span>
-              </label>
-              <label class="block">
-                <span class="text-sm font-bold text-slate-700">Customer-friendly assessment summary <span aria-hidden="true">*</span></span>
-                <textarea rows="5" maxlength="2000" x-model="clinicAssessmentCompletion.customer_resolution_summary" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" aria-describedby="clinic-assessment-customer-help"></textarea>
-                <span id="clinic-assessment-customer-help" class="mt-1 block text-xs text-blue-700">The customer will be able to read this summary · <span x-text="clinicAssessmentCompletion.customer_resolution_summary.length + ' / 2000'"></span></span>
-                <span x-show="clinicAssessmentCompletion.errors.customer_resolution_summary" class="mt-1 block text-xs text-red-600" x-text="clinicAssessmentCompletion.errors.customer_resolution_summary"></span>
-              </label>
-              <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button type="button" @click="closeClinicAssessmentCompletion()" :disabled="clinicAssessmentCompletion.saving" class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancel</button>
-                <button type="submit" :disabled="clinicAssessmentCompletion.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Review permanent completion</button>
-              </div>
-            </form>
-
-            <div x-show="clinicAssessmentCompletion.confirming" class="absolute inset-0 flex items-center justify-center rounded-3xl bg-slate-900/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="clinic-assessment-confirm-title">
-              <section x-ref="clinicAssessmentConfirm" tabindex="-1" class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl outline-none">
-                <h3 id="clinic-assessment-confirm-title" class="text-lg font-bold text-[#2f4b66]">Confirm Permanent Assessment Result</h3>
-                <p class="mt-2 text-sm leading-6 text-slate-600">This referral result becomes permanent. Grooming remains Stopped and no treatment or payment is automatically authorized.</p>
-                <dl class="mt-4 space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
-                  <div><dt class="font-semibold text-slate-500">Pet</dt><dd x-text="clinicAssessmentCompletion.appointment?.pet?.name"></dd></div>
-                  <div><dt class="font-semibold text-slate-500">Clinic appointment</dt><dd>Moves to For Payment</dd></div>
-                  <div><dt class="font-semibold text-slate-500">Customer-friendly summary</dt><dd class="mt-1 whitespace-pre-wrap" x-text="clinicAssessmentCompletion.customer_resolution_summary"></dd></div>
-                </dl>
-                <p x-show="clinicAssessmentCompletion.error" class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" x-text="clinicAssessmentCompletion.error"></p>
-                <footer class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                  <button type="button" @click="clinicAssessmentCompletion.confirming = false" :disabled="clinicAssessmentCompletion.saving" class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Go back</button>
-                  <button type="button" @click="finishReferralClinicAssessment()" :disabled="clinicAssessmentCompletion.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" x-text="clinicAssessmentCompletion.saving ? 'Saving...' : 'Finish Assessment Permanently'"></button>
-                </footer>
-              </section>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-
-    <!-- Medical Record Modal -->
+    <!-- ── Medical Record Modal (Record + Vaccinations tabs) ──────────────── -->
     <div
       x-data="adminClinicModal()"
       x-cloak
@@ -760,47 +445,28 @@
     >
       <div class="w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <h2 id="patient-record-title" class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
-            <span x-show="currentAppt?.status === 'completed' && currentAppt?.ownerAccountDeleted" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-              <i data-lucide="user-x" class="h-3 w-3"></i>
-              Account deleted
-            </span>
-          </div>
+          <h2 id="patient-record-title" class="text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
           <button type="button" @click="closeModal()" aria-label="Close patient record" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <i data-lucide="x" class="h-5 w-5"></i>
           </button>
         </div>
 
         <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
-          <div class="flex gap-2 overflow-x-auto" role="tablist" aria-label="Patient record sections">
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="activeSection === 'medical'"
-              @click="selectSection('medical')"
+          <div class="flex gap-2 overflow-x-auto" role="tablist">
+            <button type="button" role="tab" :aria-selected="activeSection === 'medical'" @click="selectSection('medical')"
               class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
-              :class="activeSection === 'medical' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'"
-            >
-              <i data-lucide="stethoscope" class="h-4 w-4"></i>
-              Medical Record
+              :class="activeSection === 'medical' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
+              <i data-lucide="stethoscope" class="h-4 w-4"></i> Medical Record
             </button>
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="activeSection === 'vaccinations'"
-              @click="selectSection('vaccinations')"
+            <button type="button" role="tab" :aria-selected="activeSection === 'vaccinations'" @click="selectSection('vaccinations')"
               class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
-              :class="activeSection === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'"
-            >
-              <i data-lucide="syringe" class="h-4 w-4"></i>
-              Vaccinations
+              :class="activeSection === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
+              <i data-lucide="syringe" class="h-4 w-4"></i> Vaccinations
             </button>
           </div>
         </div>
 
         <form x-show="activeSection === 'medical'" @submit.prevent="saveRecord()" class="space-y-5 px-6 py-5">
-          <!-- Vitals -->
           <section>
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Vitals</h3>
             <div class="grid gap-3 md:grid-cols-3">
@@ -827,7 +493,6 @@
             </div>
           </section>
 
-          <!-- Clinical Notes -->
           <section>
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Clinical Notes</h3>
             <div class="space-y-3">
@@ -854,7 +519,6 @@
             </div>
           </section>
 
-          <!-- Medications -->
           <section>
             <div class="mb-3 flex items-center justify-between">
               <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Medications</h3>
@@ -879,13 +543,11 @@
             </div>
           </section>
 
-          <!-- Attachments -->
           <section>
             <div class="mb-3">
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Attachments</h3>
               <p class="mt-1 text-xs text-slate-400">Medical files are downloaded through the authenticated clinic API.</p>
             </div>
-
             <div class="space-y-2">
               <template x-if="attachments.length === 0">
                 <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No attachments uploaded.</p>
@@ -895,59 +557,38 @@
                   <div class="min-w-0">
                     <p class="truncate text-sm font-semibold text-[#2f4b66]" x-text="attachment.label || attachment.file_name"></p>
                     <p class="mt-0.5 truncate text-xs text-slate-400">
-                      <span x-text="attachment.file_name"></span>
-                      <span aria-hidden="true"> · </span>
-                      <span x-text="formatFileSize(attachment.file_size_bytes)"></span>
+                      <span x-text="attachment.file_name"></span> · <span x-text="formatFileSize(attachment.file_size_bytes)"></span>
                     </p>
                   </div>
                   <div class="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      @click="downloadAttachment(attachment)"
-                      :disabled="attachmentBusyId === attachment.id"
-                      class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50"
-                    >Download</button>
-                    <button
-                      type="button"
-                      @click="deleteAttachment(attachment)"
-                      :disabled="attachmentBusyId === attachment.id"
-                      class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                    >Delete</button>
+                    <button type="button" @click="downloadAttachment(attachment)" :disabled="attachmentBusyId === attachment.id"
+                      class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Download</button>
+                    <button type="button" @click="deleteAttachment(attachment)" :disabled="attachmentBusyId === attachment.id"
+                      class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50">Delete</button>
                   </div>
                 </div>
               </template>
             </div>
-
             <div class="mt-3 rounded-2xl bg-slate-50 p-3">
               <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
                 <div>
                   <label class="mb-1 block text-xs font-medium text-slate-600">File</label>
-                  <input
-                    x-ref="attachmentFile"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf,.dcm"
-                    @change="selectAttachment($event)"
-                    class="block w-full text-xs text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-[#dbe8f5] file:px-3 file:py-2 file:font-semibold file:text-[#315b7e]"
-                  />
+                  <input x-ref="attachmentFile" type="file" accept=".jpg,.jpeg,.png,.pdf,.dcm" @change="selectAttachment($event)"
+                    class="block w-full text-xs text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-[#dbe8f5] file:px-3 file:py-2 file:font-semibold file:text-[#315b7e]" />
                 </div>
                 <div>
                   <label class="mb-1 block text-xs font-medium text-slate-600">Label (optional)</label>
                   <input type="text" maxlength="200" x-model="attachmentLabel" placeholder="e.g. Laboratory result" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
                 </div>
-                <button
-                  type="button"
-                  @click="uploadAttachment()"
-                  :disabled="attachmentBusy"
+                <button type="button" @click="uploadAttachment()" :disabled="attachmentBusy"
                   class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-60"
-                  x-text="attachmentBusy ? 'Uploading…' : 'Upload'"
-                ></button>
+                  x-text="attachmentBusy ? 'Uploading…' : 'Upload'"></button>
               </div>
               <p class="mt-2 text-xs text-slate-400">JPG, PNG, PDF, or DCM up to 10 MB.</p>
               <p x-show="attachmentError" class="mt-2 text-sm text-red-600" x-text="attachmentError"></p>
             </div>
           </section>
 
-          <!-- Follow-up -->
           <section>
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Follow-up</h3>
             <div class="grid gap-3 md:grid-cols-2">
@@ -963,7 +604,6 @@
           </section>
 
           <div x-show="modalError" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="modalError"></div>
-
           <div class="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <button type="button" @click="closeModal()" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             <button type="submit" :disabled="saving" class="rounded-xl bg-[#315b7e] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-60">
@@ -972,7 +612,7 @@
           </div>
         </form>
 
-        <!-- Vaccination management -->
+        <!-- Vaccination section (same as before) -->
         <section
           x-data="adminClinicVaccinations()"
           x-show="activeSection === 'vaccinations'"
@@ -990,18 +630,13 @@
                 <p class="mt-0.5 text-xs text-slate-500">
                   <span x-text="pet?.species || 'Species not provided'"></span>
                   <span aria-hidden="true"> · </span>
-                  <span x-text="appointment?.appointment_reference || 'Appointment unavailable'"></span>
+                  <span x-text="appointment?.appointment_reference || 'No appointment linked'"></span>
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              @click="openCreateForm()"
-              :disabled="loading || petNotFound || !pet?.id"
-              class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <i data-lucide="plus" class="h-4 w-4"></i>
-              Add Vaccination Record
+            <button type="button" @click="openCreateForm()" :disabled="loading || petNotFound || !pet?.id"
+              class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50">
+              <i data-lucide="plus" class="h-4 w-4"></i> Add Vaccination Record
             </button>
           </div>
 
@@ -1010,18 +645,14 @@
             <p class="mt-3 text-sm font-semibold text-slate-600">Loading vaccination history…</p>
           </div>
 
-          <div
-            x-show="!loading && error"
-            class="rounded-2xl border px-5 py-8 text-center"
-            :class="petNotFound ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'"
-            role="alert"
-          >
+          <div x-show="!loading && error" class="rounded-2xl border px-5 py-8 text-center"
+            :class="petNotFound ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'" role="alert">
             <i :data-lucide="petNotFound ? 'paw-print' : 'circle-alert'" class="mx-auto h-7 w-7" :class="petNotFound ? 'text-amber-700' : 'text-red-600'"></i>
             <p class="mt-3 text-sm font-bold" :class="petNotFound ? 'text-amber-800' : 'text-red-700'" x-text="petNotFound ? 'Patient record unavailable' : 'Vaccination history could not be loaded'"></p>
             <p class="mx-auto mt-1 max-w-lg text-sm" :class="petNotFound ? 'text-amber-700' : 'text-red-600'" x-text="error"></p>
-            <button x-show="!petNotFound" type="button" @click="loadVaccinations()" class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
-              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
-              Retry
+            <button x-show="!petNotFound" type="button" @click="loadVaccinations()"
+              class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+              <i data-lucide="refresh-cw" class="h-4 w-4"></i> Retry
             </button>
           </div>
 
@@ -1030,7 +661,7 @@
               <i data-lucide="syringe" class="h-6 w-6"></i>
             </div>
             <p class="mt-4 text-sm font-bold text-slate-700">No vaccination records have been added for this pet.</p>
-            <p class="mt-1 text-xs text-slate-400">Create a draft to begin this patient’s vaccination history.</p>
+            <p class="mt-1 text-xs text-slate-400">Create a draft to begin this patient's vaccination history.</p>
           </div>
 
           <div x-show="!loading && !error && records.length > 0" class="grid gap-4 lg:grid-cols-2">
@@ -1046,53 +677,20 @@
                     <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" :class="dueBadgeClass(record.due_status)" x-text="dueLabel(record.due_status)"></span>
                   </div>
                 </div>
-
                 <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Administered</dt>
-                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Next Due</dt>
-                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Provider</dt>
-                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="providerLabel(record)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Dose</dt>
-                    <dd class="mt-0.5 font-medium text-slate-700" x-text="doseLabel(record)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Manufacturer</dt>
-                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="displayValue(record.manufacturer)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Batch Number</dt>
-                    <dd class="mt-0.5 break-words font-medium text-slate-700" x-text="displayValue(record.batch_number)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Product Expiration</dt>
-                    <dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.product_expiry_date)"></dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold text-slate-400">Route / Site</dt>
-                    <dd class="mt-0.5 break-words font-medium capitalize text-slate-700" x-text="[record.route?.replace('_', ' '), record.administration_site].filter(Boolean).join(' · ') || 'Not provided'"></dd>
-                  </div>
+                  <div><dt class="text-xs font-semibold text-slate-400">Administered</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd></div>
+                  <div><dt class="text-xs font-semibold text-slate-400">Next Due</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd></div>
+                  <div><dt class="text-xs font-semibold text-slate-400">Provider</dt><dd class="mt-0.5 break-words font-medium text-slate-700" x-text="providerLabel(record)"></dd></div>
+                  <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="doseLabel(record)"></dd></div>
                 </dl>
-
                 <div x-show="record.published_at" class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
                   <p class="text-xs font-bold text-emerald-700">Published record</p>
                   <p class="mt-1 text-[11px] text-emerald-600" x-text="`${formatDateTime(record.published_at)}${record.published_by_user_name ? ' · ' + record.published_by_user_name : ''}`"></p>
                 </div>
-
                 <div x-show="record.state === 'voided'" class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
                   <p class="text-xs font-bold text-red-700">Voided historical record</p>
                   <p class="mt-1 break-words text-xs text-red-600" x-text="record.void_reason || 'Reason not provided'"></p>
-                  <p class="mt-1 text-[11px] text-red-500" x-text="`${formatDateTime(record.voided_at)}${record.voided_by_user_name ? ' · ' + record.voided_by_user_name : ''}`"></p>
                 </div>
-
                 <div class="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-4">
                   <button type="button" @click="openDetails(record)" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Details</button>
                   <button x-show="record.state === 'draft'" type="button" @click="openEditForm(record)" :disabled="actionBusyId === record.id" class="rounded-xl border border-[#bfd2e4] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Edit</button>
@@ -1103,160 +701,124 @@
             </template>
           </div>
 
-          <!-- Draft create/edit dialog -->
-          <div
-            x-cloak
-            x-show="formModal.open"
-            style="display:none"
-            x-transition
+          <!-- Vaccination form dialog (create / edit) -->
+          <div x-cloak x-show="formModal.open" style="display:none" x-transition
             class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
-            @keydown.escape.window="if (formModal.open) closeForm()"
-          >
+            @keydown.escape.window="if (formModal.open) closeForm()">
             <div class="w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-form-title">
               <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
                 <div>
                   <h3 id="vaccination-form-title" class="text-lg font-bold text-[#2f4b66]" x-text="formModal.mode === 'edit' ? 'Edit Vaccination Draft' : 'Add Vaccination Record'"></h3>
-                  <p class="mt-1 text-xs text-slate-500">
-                    Patient:
-                    <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span>
-                    <span aria-hidden="true"> · </span>
-                    Saving creates a draft and does not publish it.
-                  </p>
+                  <p class="mt-1 text-xs text-slate-500">Patient: <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span> · Saving creates a draft.</p>
                 </div>
                 <button type="button" @click="closeForm()" :disabled="formModal.saving" aria-label="Close vaccination form" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 disabled:opacity-50">
                   <i data-lucide="x" class="h-5 w-5"></i>
                 </button>
               </div>
-
               <form @submit.prevent="saveDraft()" novalidate>
                 <div class="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
-                  <div
-                    x-show="formErrorSummary"
-                    x-ref="vaccinationValidationSummary"
-                    tabindex="-1"
-                    class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 outline-none focus:ring-2 focus:ring-red-300"
-                    role="alert"
-                  >
+                  <div x-show="formErrorSummary" x-ref="vaccinationValidationSummary" tabindex="-1"
+                    class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 outline-none" role="alert">
                     <p class="font-bold">Please review the vaccination form.</p>
                     <p class="mt-1" x-text="formErrorSummary"></p>
                   </div>
-
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccination information</h4>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
                         <label for="vaccination-vaccine-name" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Name <span class="text-red-600" aria-hidden="true">*</span></label>
-                        <input id="vaccination-vaccine-name" type="text" maxlength="150" required x-model="form.vaccine_name" :aria-invalid="Boolean(fieldError('vaccine_name'))" aria-describedby="vaccination-vaccine-name-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-vaccine-name-error" x-show="fieldError('vaccine_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('vaccine_name')"></p>
+                        <input id="vaccination-vaccine-name" type="text" maxlength="150" required x-model="form.vaccine_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p x-show="fieldError('vaccine_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('vaccine_name')"></p>
                       </div>
                       <div>
                         <label for="vaccination-administered-date" class="mb-1 block text-xs font-semibold text-slate-600">Administration Date <span class="text-red-600" aria-hidden="true">*</span></label>
-                        <input id="vaccination-administered-date" type="date" required x-model="form.administered_date" :aria-invalid="Boolean(fieldError('administered_date'))" aria-describedby="vaccination-administered-date-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-administered-date-error" x-show="fieldError('administered_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_date')"></p>
+                        <input id="vaccination-administered-date" type="date" required x-model="form.administered_date" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p x-show="fieldError('administered_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_date')"></p>
                       </div>
                       <div>
                         <label for="vaccination-product-name" class="mb-1 block text-xs font-semibold text-slate-600">Product Name</label>
-                        <input id="vaccination-product-name" type="text" maxlength="150" x-model="form.product_name" :aria-invalid="Boolean(fieldError('product_name'))" aria-describedby="vaccination-product-name-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-product-name-error" x-show="fieldError('product_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('product_name')"></p>
+                        <input id="vaccination-product-name" type="text" maxlength="150" x-model="form.product_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div>
                         <label for="vaccination-manufacturer" class="mb-1 block text-xs font-semibold text-slate-600">Manufacturer</label>
-                        <input id="vaccination-manufacturer" type="text" maxlength="150" x-model="form.manufacturer" :aria-invalid="Boolean(fieldError('manufacturer'))" aria-describedby="vaccination-manufacturer-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-manufacturer-error" x-show="fieldError('manufacturer')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('manufacturer')"></p>
+                        <input id="vaccination-manufacturer" type="text" maxlength="150" x-model="form.manufacturer" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div>
                         <label for="vaccination-batch-number" class="mb-1 block text-xs font-semibold text-slate-600">Batch Number</label>
-                        <input id="vaccination-batch-number" type="text" maxlength="100" x-model="form.batch_number" :aria-invalid="Boolean(fieldError('batch_number'))" aria-describedby="vaccination-batch-number-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-batch-number-error" x-show="fieldError('batch_number')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('batch_number')"></p>
+                        <input id="vaccination-batch-number" type="text" maxlength="100" x-model="form.batch_number" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div>
                         <label for="vaccination-inventory-item" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Inventory Item</label>
-                        <select id="vaccination-inventory-item" x-model="form.inventory_item_id" :disabled="inventoryLoading" :aria-invalid="Boolean(fieldError('inventory_item_id'))" aria-describedby="vaccination-inventory-item-help vaccination-inventory-item-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100">
+                        <select id="vaccination-inventory-item" x-model="form.inventory_item_id" :disabled="inventoryLoading" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100">
                           <option value="" x-text="inventoryLoading ? 'Loading vaccine items…' : 'No inventory link'"></option>
                           <template x-for="item in inventoryOptions()" :key="item.id">
                             <option :value="String(item.id)" x-text="inventoryOptionLabel(item)"></option>
                           </template>
                         </select>
-                        <p id="vaccination-inventory-item-help" class="mt-1 text-xs text-slate-400">Optional and informational only. Stock will not be deducted.</p>
-                        <p x-show="inventoryError" class="mt-1 text-xs text-amber-700" x-text="inventoryError"></p>
-                        <p id="vaccination-inventory-item-error" x-show="fieldError('inventory_item_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('inventory_item_id')"></p>
+                        <p class="mt-1 text-xs text-slate-400">Optional — stock will not be deducted.</p>
                       </div>
                     </div>
                   </section>
-
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Schedule and administration</h4>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
                         <label for="vaccination-next-due-date" class="mb-1 block text-xs font-semibold text-slate-600">Next Due Date</label>
-                        <input id="vaccination-next-due-date" type="date" x-model="form.next_due_date" :min="form.administered_date || null" :aria-invalid="Boolean(fieldError('next_due_date'))" aria-describedby="vaccination-next-due-date-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-next-due-date-error" x-show="fieldError('next_due_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('next_due_date')"></p>
+                        <input id="vaccination-next-due-date" type="date" x-model="form.next_due_date" :min="form.administered_date || null" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div>
                         <label for="vaccination-product-expiry" class="mb-1 block text-xs font-semibold text-slate-600">Product Expiration Date</label>
-                        <input id="vaccination-product-expiry" type="date" x-model="form.product_expiry_date" :min="form.administered_date || null" :aria-invalid="Boolean(fieldError('product_expiry_date'))" aria-describedby="vaccination-product-expiry-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-product-expiry-error" x-show="fieldError('product_expiry_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('product_expiry_date')"></p>
+                        <input id="vaccination-product-expiry" type="date" x-model="form.product_expiry_date" :min="form.administered_date || null" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div class="grid grid-cols-2 gap-3">
                         <div>
                           <label for="vaccination-dose-amount" class="mb-1 block text-xs font-semibold text-slate-600">Dose Amount</label>
-                          <input id="vaccination-dose-amount" type="number" min="0.001" step="0.001" x-model="form.dose_amount" :aria-invalid="Boolean(fieldError('dose_amount'))" aria-describedby="vaccination-dose-amount-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                          <p id="vaccination-dose-amount-error" x-show="fieldError('dose_amount')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_amount')"></p>
+                          <input id="vaccination-dose-amount" type="number" min="0.001" step="0.001" x-model="form.dose_amount" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                         </div>
                         <div>
                           <label for="vaccination-dose-unit" class="mb-1 block text-xs font-semibold text-slate-600">Dose Unit</label>
-                          <input id="vaccination-dose-unit" type="text" maxlength="30" placeholder="e.g. mL" x-model="form.dose_unit" :aria-invalid="Boolean(fieldError('dose_unit'))" aria-describedby="vaccination-dose-unit-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                          <p id="vaccination-dose-unit-error" x-show="fieldError('dose_unit')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_unit')"></p>
+                          <input id="vaccination-dose-unit" type="text" maxlength="30" placeholder="e.g. mL" x-model="form.dose_unit" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                         </div>
                       </div>
                       <div>
                         <label for="vaccination-route" class="mb-1 block text-xs font-semibold text-slate-600">Route</label>
-                        <select id="vaccination-route" x-model="form.route" :aria-invalid="Boolean(fieldError('route'))" aria-describedby="vaccination-route-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
+                        <select id="vaccination-route" x-model="form.route" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
                           <option value="">Not provided</option>
                           <template x-for="routeOption in administrationRoutes" :key="routeOption.value">
                             <option :value="routeOption.value" x-text="routeOption.label"></option>
                           </template>
                         </select>
-                        <p id="vaccination-route-error" x-show="fieldError('route')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('route')"></p>
                       </div>
                       <div>
                         <label for="vaccination-site" class="mb-1 block text-xs font-semibold text-slate-600">Administration Site</label>
-                        <input id="vaccination-site" type="text" maxlength="100" placeholder="e.g. Right shoulder" x-model="form.administration_site" :aria-invalid="Boolean(fieldError('administration_site'))" aria-describedby="vaccination-site-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-site-error" x-show="fieldError('administration_site')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administration_site')"></p>
+                        <input id="vaccination-site" type="text" maxlength="100" placeholder="e.g. Right shoulder" x-model="form.administration_site" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
                       <div>
                         <label for="vaccination-appointment" class="mb-1 block text-xs font-semibold text-slate-600">Clinic Appointment</label>
-                        <select id="vaccination-appointment" x-model="form.clinic_appointment_id" :aria-invalid="Boolean(fieldError('clinic_appointment_id'))" aria-describedby="vaccination-appointment-help vaccination-appointment-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
+                        <select id="vaccination-appointment" x-model="form.clinic_appointment_id" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
                           <option value="">No appointment link</option>
                           <template x-for="option in appointmentOptions()" :key="option.id">
                             <option :value="String(option.id)" x-text="option.label"></option>
                           </template>
                         </select>
-                        <p id="vaccination-appointment-help" class="mt-1 text-xs text-slate-400">Only the selected pet’s current or existing linked appointment is available here.</p>
-                        <p id="vaccination-appointment-error" x-show="fieldError('clinic_appointment_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('clinic_appointment_id')"></p>
                       </div>
                     </div>
                   </section>
-
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Provider and notes</h4>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
                         <label for="vaccination-provider-name" class="mb-1 block text-xs font-semibold text-slate-600">Administering Provider Name</label>
-                        <input id="vaccination-provider-name" type="text" maxlength="200" placeholder="e.g. Dr. Ana Santos" x-model="form.administered_by_name" :aria-invalid="Boolean(fieldError('administered_by_name'))" aria-describedby="vaccination-provider-help vaccination-provider-error" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p id="vaccination-provider-help" class="mt-1 text-xs text-slate-400">Required before publication when no staff account is already linked.</p>
-                        <p x-show="formModal.linkedProviderAccountName" class="mt-1 text-xs font-medium text-[#315b7e]">Linked provider account: <span x-text="formModal.linkedProviderAccountName"></span></p>
-                        <p id="vaccination-provider-error" x-show="fieldError('administered_by_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_by_name')"></p>
+                        <input id="vaccination-provider-name" type="text" maxlength="200" placeholder="e.g. Dr. Ana Santos" x-model="form.administered_by_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p x-show="formModal.linkedProviderAccountName" class="mt-1 text-xs font-medium text-[#315b7e]">Linked: <span x-text="formModal.linkedProviderAccountName"></span></p>
                       </div>
                       <div class="md:col-span-2">
                         <label for="vaccination-notes" class="mb-1 block text-xs font-semibold text-slate-600">Notes</label>
-                        <textarea id="vaccination-notes" rows="3" x-model="form.notes" :aria-invalid="Boolean(fieldError('notes'))" aria-describedby="vaccination-notes-error" class="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
-                        <p id="vaccination-notes-error" x-show="fieldError('notes')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('notes')"></p>
+                        <textarea id="vaccination-notes" rows="3" x-model="form.notes" class="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]"></textarea>
                       </div>
                     </div>
                   </section>
                 </div>
-
                 <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
                   <button type="button" @click="closeForm()" :disabled="formModal.saving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
                   <button type="submit" :disabled="formModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-60">
@@ -1267,15 +829,10 @@
             </div>
           </div>
 
-          <!-- Read-only detail dialog -->
-          <div
-            x-cloak
-            x-show="detailModal.open"
-            style="display:none"
-            x-transition
+          <!-- Vaccination detail dialog -->
+          <div x-cloak x-show="detailModal.open" style="display:none" x-transition
             class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
-            @keydown.escape.window="if (detailModal.open) closeDetails()"
-          >
+            @keydown.escape.window="if (detailModal.open) closeDetails()">
             <div class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-detail-title">
               <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
                 <div>
@@ -1286,98 +843,46 @@
                   <i data-lucide="x" class="h-5 w-5"></i>
                 </button>
               </div>
-
               <div x-show="detailModal.loading" class="px-5 py-12 text-center sm:px-6" aria-live="polite">
                 <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>
                 <p class="mt-3 text-sm text-slate-500">Loading complete record…</p>
               </div>
-
-              <div x-show="!detailModal.loading && detailModal.error" class="px-5 py-10 text-center sm:px-6" role="alert">
-                <p class="text-sm font-bold text-red-700">Details could not be loaded.</p>
-                <p class="mt-1 text-sm text-red-600" x-text="detailModal.error"></p>
-                <button type="button" @click="retryDetails()" class="mt-4 rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Retry</button>
-              </div>
-
               <div x-show="!detailModal.loading && detailModal.record" class="max-h-[75vh] overflow-y-auto px-5 py-5 sm:px-6">
                 <template x-if="detailModal.record">
-                  <div>
-                    <div class="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p class="text-xl font-bold text-[#2f4b66]" x-text="detailModal.record.vaccine_name"></p>
-                        <p class="mt-1 text-sm text-slate-500" x-text="detailModal.record.product_name || 'Product name not provided'"></p>
-                      </div>
-                      <div class="flex flex-wrap gap-2">
-                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold" :class="stateBadgeClass(detailModal.record.state)" x-text="stateLabel(detailModal.record.state)"></span>
-                        <span class="rounded-full border px-2.5 py-1 text-xs font-bold" :class="dueBadgeClass(detailModal.record.due_status)" x-text="dueLabel(detailModal.record.due_status)"></span>
-                      </div>
-                    </div>
-
-                    <dl class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <div><dt class="text-xs font-semibold text-slate-400">Administration Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.administered_date)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Next Due Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.next_due_date)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Product Expiration</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.product_expiry_date)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Manufacturer</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.manufacturer)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.batch_number)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="doseLabel(detailModal.record)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-1 break-words text-sm font-medium capitalize text-slate-700" x-text="displayValue(detailModal.record.route).replace('_', ' ')"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Administration Site</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administration_site)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Administering Provider</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="providerLabel(detailModal.record)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Provider Account</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administered_by_user_name)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Clinic Appointment</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.clinic_appointment_reference)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Inventory Item</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.inventory_item_name)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Recorded By</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.recorded_by_user_name)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Created</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDateTime(detailModal.record.created_at)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-400">Last Updated</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDateTime(detailModal.record.updated_at)"></dd></div>
-                    </dl>
-
-                    <div class="mt-5 rounded-2xl bg-slate-50 p-4">
-                      <p class="text-xs font-semibold text-slate-400">Notes</p>
-                      <p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700" x-text="displayValue(detailModal.record.notes)"></p>
-                    </div>
-
-                    <div x-show="detailModal.record.published_at" class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                      <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Publication</p>
-                      <p class="mt-1 text-sm text-emerald-800">Published <span x-text="formatDateTime(detailModal.record.published_at)"></span><span x-show="detailModal.record.published_by_user_name"> by <span x-text="detailModal.record.published_by_user_name"></span></span>.</p>
-                    </div>
-
-                    <div x-show="detailModal.record.voided_at" class="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
-                      <p class="text-xs font-bold uppercase tracking-wide text-red-700">Void information</p>
-                      <p class="mt-1 whitespace-pre-wrap break-words text-sm text-red-800" x-text="displayValue(detailModal.record.void_reason)"></p>
-                      <p class="mt-1 text-xs text-red-600">Voided <span x-text="formatDateTime(detailModal.record.voided_at)"></span><span x-show="detailModal.record.voided_by_user_name"> by <span x-text="detailModal.record.voided_by_user_name"></span></span>.</p>
-                    </div>
-                  </div>
+                  <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div><dt class="text-xs font-semibold text-slate-400">Vaccine Name</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="detailModal.record.vaccine_name"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Administration Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.administered_date)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Next Due Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.next_due_date)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Manufacturer</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.manufacturer)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.batch_number)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="doseLabel(detailModal.record)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-1 break-words text-sm font-medium capitalize text-slate-700" x-text="displayValue(detailModal.record.route).replace('_', ' ')"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Administration Site</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administration_site)"></dd></div>
+                    <div><dt class="text-xs font-semibold text-slate-400">Provider</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="providerLabel(detailModal.record)"></dd></div>
+                  </dl>
                 </template>
               </div>
-
               <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
                 <button type="button" @click="closeDetails()" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
               </div>
             </div>
           </div>
 
-          <!-- Void confirmation dialog -->
-          <div
-            x-cloak
-            x-show="voidModal.open"
-            style="display:none"
-            x-transition
+          <!-- Void dialog -->
+          <div x-cloak x-show="voidModal.open" style="display:none" x-transition
             class="fixed inset-0 z-[240] flex items-center justify-center bg-slate-900/75 px-4"
-            @keydown.escape.window="if (voidModal.open) closeVoidDialog()"
-          >
-            <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="vaccination-void-title" aria-describedby="vaccination-void-description">
+            @keydown.escape.window="if (voidModal.open) closeVoidDialog()">
+            <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="vaccination-void-title">
               <div class="px-6 py-5">
                 <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                   <i data-lucide="circle-alert" class="h-6 w-6"></i>
                 </div>
                 <h3 id="vaccination-void-title" class="mt-4 text-lg font-bold text-slate-800">Void Published Record</h3>
-                <p id="vaccination-void-description" class="mt-2 text-sm leading-6 text-slate-600">
-                  Voiding preserves this vaccination as historical information. It does not delete the record, and the record cannot be published again.
-                </p>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Voiding preserves this vaccination as historical information. It cannot be published again.</p>
                 <p class="mt-2 text-sm font-semibold text-[#315b7e]" x-text="voidModal.record?.vaccine_name"></p>
-
                 <label for="vaccination-void-reason" class="mt-4 block text-xs font-semibold text-slate-600">Void Reason <span class="text-red-600" aria-hidden="true">*</span></label>
-                <textarea id="vaccination-void-reason" rows="3" maxlength="500" required x-model="voidModal.reason" :aria-invalid="Boolean(voidModal.error)" aria-describedby="vaccination-void-error" class="mt-1 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-red-500"></textarea>
-                <p id="vaccination-void-error" x-show="voidModal.error" class="mt-2 text-xs font-semibold text-red-600" x-text="voidModal.error" role="alert"></p>
+                <textarea id="vaccination-void-reason" rows="3" maxlength="500" required x-model="voidModal.reason" class="mt-1 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-red-500"></textarea>
+                <p x-show="voidModal.error" class="mt-2 text-xs font-semibold text-red-600" x-text="voidModal.error" role="alert"></p>
               </div>
               <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
                 <button type="button" @click="closeVoidDialog()" :disabled="voidModal.saving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Keep Record</button>
@@ -1386,15 +891,10 @@
             </div>
           </div>
 
-          <div
-            x-show="toast.show"
-            style="display:none"
-            x-transition
+          <!-- Toast -->
+          <div x-show="toast.show" style="display:none" x-transition
             class="fixed right-4 top-20 z-[260] flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
-            :class="toast.ok ? 'bg-emerald-600' : 'bg-red-600'"
-            role="status"
-            aria-live="polite"
-          >
+            :class="toast.ok ? 'bg-emerald-600' : 'bg-red-600'" role="status" aria-live="polite">
             <i :data-lucide="toast.ok ? 'check-circle' : 'circle-alert'" class="h-5 w-5 shrink-0"></i>
             <span x-text="toast.message"></span>
           </div>
@@ -1402,49 +902,10 @@
       </div>
     </div>
 
-    <!-- Payment Modal -->
-    <div
-      x-data="adminClinicPayModal()"
-      x-cloak
-      x-show="open"
-      x-transition
-      class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 px-4"
-    >
-      <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
-        <div class="border-b border-slate-200 px-6 py-5">
-          <h2 class="text-lg font-bold text-[#2f4b66]">Process Payment</h2>
-          <p class="mt-1 text-sm text-slate-500" x-text="patientName"></p>
-        </div>
-        <div class="space-y-4 px-6 py-5">
-          <div>
-            <label class="mb-1 block text-xs font-medium text-slate-600">Total Amount (₱)</label>
-            <input type="number" step="0.01" min="0" x-model="amount" placeholder="0.00" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-medium text-slate-600">Payment Method</label>
-            <select x-model="method" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]">
-              <option value="cash">Cash</option>
-              <option value="gcash">GCash</option>
-              <option value="maya">Maya</option>
-              <option value="card">Card</option>
-            </select>
-          </div>
-          <div x-show="payError" class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" x-text="payError"></div>
-        </div>
-        <div class="flex gap-3 px-6 pb-5">
-          <button type="button" @click="open = false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button type="button" @click="submitPayment()" :disabled="paying" class="flex-1 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-60">
-            <span x-text="paying ? 'Processing…' : 'Confirm Payment'"></span>
-          </button>
-        </div>
-      </div>
-    </div>
-
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=auth-session-20260816"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=customer-account-delete-20260819"></script>
-    <script src="../../scripts/components/admin-clinic-referral-queue.js?v=clinic-referral-acceptance-20260804"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-records-20260906"></script>
     <script src="../../scripts/components/admin-vaccinations.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
