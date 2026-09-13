@@ -4,12 +4,34 @@ namespace App\Http\Controllers;
 
 use App\Models\LoginEmailChallenge;
 use App\Models\User;
+use App\Services\LoginEmailChallengeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 
 class LoginEmailChallengeController extends Controller
 {
+    public function resend(Request $request, LoginEmailChallengeService $service)
+    {
+        $data = $request->validate([
+            'poll_token' => ['required', 'string', 'size:64'],
+        ]);
+
+        try {
+            $service->resend($data['poll_token']);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'A new sign-in code has been sent to your email.',
+        ]);
+    }
+
     public function confirm(Request $request)
     {
         $data = $request->validate([

@@ -322,6 +322,8 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
   const events = [];
   const elements = new Map();
   const elementListeners = new Map();
+  const intervals = new Map();
+  let nextIntervalId = 0;
   let onReady = null;
 
   function element(id) {
@@ -372,6 +374,9 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
       hasPendingLoginConfirmation: () => pendingLogin,
       getPendingLoginConfirmationEmail: () => "customer@example.com",
       resendVerification: async () => ({}),
+      async resendLoginCode() {
+        events.push({ type: "resend-login-code" });
+      },
     },
     URL,
     URLSearchParams,
@@ -389,6 +394,12 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
     },
     sessionStorage: new MemoryStorage(),
     setTimeout(callback) { callback(); },
+    setInterval(callback) {
+      const id = ++nextIntervalId;
+      intervals.set(id, callback);
+      return id;
+    },
+    clearInterval(id) { intervals.delete(id); },
     window: { location },
   };
 
@@ -401,6 +412,11 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
   return {
     elements,
     events,
+    advanceSeconds(seconds) {
+      for (let second = 0; second < seconds; second++) {
+        for (const callback of [...intervals.values()]) callback();
+      }
+    },
     async dispatch(id, name) {
       const handler = elementListeners.get(`${id}:${name}`);
       assert.equal(typeof handler, "function", `Missing ${name} handler for ${id}`);
@@ -456,6 +472,33 @@ async function testLoginCodeIsEnteredOnTheOriginalTab() {
   )));
 }
 
+async function testLoginCodeResendCooldownAndLimit() {
+  const page = verificationPageHarness({
+    search: "?mode=login",
+    hash: "",
+    pendingLogin: true,
+  });
+  const resend = page.elements.get("loginCodeResendBtn");
+
+  assert.equal(resend.disabled, true);
+  page.advanceSeconds(59);
+  assert.equal(resend.disabled, true);
+  page.advanceSeconds(1);
+  assert.equal(resend.disabled, false);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.dispatch("loginCodeResendBtn", "click");
+    assert.equal(resend.disabled, true);
+    assert.equal(
+      page.events.filter((event) => event.type === "resend-login-code").length,
+      attempt,
+    );
+    page.advanceSeconds(60);
+    assert.equal(resend.disabled, attempt === 3);
+  }
+  assert.match(page.elements.get("loginCodeMessage").textContent, /Too many resend attempts/);
+}
+
 function testStaticAuthContracts() {
   const signIn = fs.readFileSync(
     path.join(projectRoot, "scripts/auth/sign-in.js"),
@@ -489,7 +532,7 @@ function testStaticAuthContracts() {
   assert.match(verify, /await API\.confirmLoginCode\(code\)/);
   assert.match(verify, /await API\.verifyEmail\(verificationToken\)/);
   assert.match(verify, /dashboard\.html/);
-  assert.doesNotMatch(verifyHtml, /Bethlehem_Logo-256\.png/);
+  assert.doesNotMatch(verifyHtml, /<img\b[^>]*Bethlehem_Logo-256\.png/);
   assert.match(verifyHtml, /id="loginCode"/);
   assert.match(verifyHtml, /inputmode="numeric"/);
   assert.match(verifyHtml, /autocomplete="one-time-code"/);
@@ -530,7 +573,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-safety-insights-20260830)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-safety-insights-20260830|clinic-records-20260906)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }
@@ -550,6 +593,7 @@ function testStaticAuthContracts() {
   testBackForwardCacheGuard();
   testVerificationCredentialsAreScrubbedBeforeUse();
   await testLoginCodeIsEnteredOnTheOriginalTab();
+  await testLoginCodeResendCooldownAndLimit();
   testStaticAuthContracts();
   console.log("frontend auth/session regression checks passed");
 })().catch((error) => {

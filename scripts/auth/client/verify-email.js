@@ -26,6 +26,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const resendForm     = document.getElementById("resendForm");
   const resendSubmit   = document.getElementById("resendSubmit");
   const resendMessage  = document.getElementById("resendMessage");
+  const loginCodeResendBtn       = document.getElementById("loginCodeResendBtn");
+  const loginCodeResendCountdown = document.getElementById("loginCodeResendCountdown");
+
+  let resendCodeTimer = null;
+  let resendCodeCount = 0;
+  const RESEND_CODE_MAX = 3;
 
   function showState(name) {
     [stateVerifying, stateSuccess, statePending, stateLoginCode, stateError]
@@ -94,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
       loginCodeEmail.textContent = email || "your registered email";
       showState("loginCode");
       loginCodeInput.focus();
+      startResendCountdown(60);
     }
   } else {
     const savedEmail = sessionStorage.getItem("pendingVerificationEmail");
@@ -160,6 +167,72 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  function lockResendPermanently() {
+    clearInterval(resendCodeTimer);
+    resendCodeTimer = null;
+    loginCodeResendBtn.classList.remove("hidden");
+    loginCodeResendBtn.disabled = true;
+    loginCodeResendCountdown.classList.add("hidden");
+    showLoginCodeMessage("Too many resend attempts. Try again later.", "error");
+  }
+
+  function startResendCountdown(seconds = 60) {
+    loginCodeResendBtn.disabled = true;
+    loginCodeResendBtn.classList.add("hidden");
+    loginCodeResendCountdown.classList.remove("hidden");
+
+    let remaining = seconds;
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(resendCodeTimer);
+        resendCodeTimer = null;
+        loginCodeResendCountdown.classList.add("hidden");
+        if (resendCodeCount >= RESEND_CODE_MAX) {
+          lockResendPermanently();
+        } else {
+          loginCodeResendBtn.classList.remove("hidden");
+          loginCodeResendBtn.disabled = false;
+        }
+        return;
+      }
+      loginCodeResendCountdown.textContent = `Resend available in ${remaining}s`;
+      remaining--;
+    }
+    tick();
+    resendCodeTimer = setInterval(tick, 1000);
+  }
+
+  if (loginCodeResendBtn) {
+    loginCodeResendBtn.addEventListener("click", async () => {
+      clearLoginCodeMessage();
+      loginCodeResendBtn.disabled = true;
+
+      try {
+        await API.resendLoginCode();
+        resendCodeCount++;
+        if (resendCodeCount >= RESEND_CODE_MAX) {
+          showLoginCodeMessage("A new code has been sent. This was your last resend attempt.", "success");
+          startResendCountdown(60);
+        } else {
+          showLoginCodeMessage("A new code has been sent to your email.", "success");
+          startResendCountdown(60);
+        }
+      } catch (error) {
+        loginCodeResendBtn.disabled = false;
+        if (error.status === 429) {
+          resendCodeCount = RESEND_CODE_MAX;
+          lockResendPermanently();
+        } else if (error.expired || error.status === 422) {
+          errorTitle.textContent = "Sign-In Expired";
+          errorMessage.textContent = error.message || "This sign-in session has expired. Please sign in again.";
+          showState("error");
+        } else {
+          showLoginCodeMessage(error.message || "Failed to resend. Please try again.");
+        }
+      }
+    });
+  }
+
   resendForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearResendMessage();
@@ -196,8 +269,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (label) label.textContent = busy ? "Confirming…" : "Confirm Sign-In";
   }
 
-  function showLoginCodeMessage(text) {
-    loginCodeMessage.className = "mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+  function showLoginCodeMessage(text, type = "error") {
+    const styles = {
+      error:   "mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700",
+      success: "mt-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700",
+    };
+    loginCodeMessage.className = styles[type] || styles.error;
     loginCodeMessage.textContent = text;
     loginCodeMessage.classList.remove("hidden");
   }

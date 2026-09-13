@@ -870,9 +870,21 @@ var API = (() => {
     return data;
   }
 
+  async function adminGetPetProfile(petId) {
+    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/profile`, null, getAdminToken());
+  }
+
   async function resendVerification(email) {
     // POST /api/email/resend  { email }
     return request("POST", "/email/resend", { email });
+  }
+
+  async function resendLoginCode() {
+    const pollToken = safeStorageGet(sessionStorage, LOGIN_POLL_TOKEN_KEY);
+    if (!pollToken) {
+      throw new Error("This browser no longer has a pending sign-in. Please sign in again.");
+    }
+    return request("POST", "/email/login/resend", { poll_token: pollToken });
   }
 
   async function confirmLoginCode(code) {
@@ -2195,7 +2207,9 @@ var API = (() => {
     getAdminInventoryItems,
     // Email verification
     verifyEmail,
+    adminGetPetProfile,
     resendVerification,
+    resendLoginCode,
     confirmLoginCode,
     hasPendingLoginConfirmation,
     getPendingLoginConfirmationEmail,
