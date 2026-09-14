@@ -18,9 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const vaccinationRecords = document.getElementById("petVaccinationRecords");
   const concernNotifications = document.getElementById("petConcernNotifications");
   const concernDetail = document.getElementById("petConcernDetail");
+  let groomingLoadState = "idle";
   let medicalLoadState = "idle";
   let vaccinationLoadState = "idle";
   let concernLoadState = "idle";
+  let activePetTab = "overview";
+  let petProfileReady = false;
+  let tabPrefetchStarted = false;
   let requestedConcernHandled = false;
   let concernResponseSubmitting = false;
   let requestedReferralHandled = false;
@@ -146,6 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const activateTab = (selected) => {
       if (!validTabs.has(selected)) return;
+      activePetTab = selected;
 
       tabs.forEach((candidate) => {
         const active = candidate.dataset.petTab === selected;
@@ -161,15 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
         panel.classList.toggle("hidden", panel.dataset.petPanel !== selected);
       });
 
-      if (selected === "medical") {
-        loadMedicalRecords();
-      }
-      if (selected === "vaccinations") {
-        loadVaccinations();
-      }
-      if (selected === "notifications") {
-        loadConcernNotifications();
-      }
+      if (petProfileReady) void loadPetTabData(selected);
     };
 
     tabs.forEach((tab) => {
@@ -296,6 +293,17 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const loadGrooming = async () => {
+    if (!groomingRecords || groomingLoadState === "loading" || groomingLoadState === "loaded") return;
+
+    groomingLoadState = "loading";
+    groomingRecords.innerHTML = `
+      <div class="py-12 text-center" aria-live="polite">
+        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
+        <p class="mt-3 text-sm text-portal-muted">Loading grooming records...</p>
+      </div>
+    `;
+    renderIcons();
+
     try {
       const data = await API.getBookingHistory({ petId });
       const bookings = [...(data.bookings || []), ...(data.history || [])];
@@ -320,7 +328,9 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         groomingRecords.innerHTML = `<div class="space-y-4">${records.map(renderGroomingRecord).join("")}</div>`;
       }
+      groomingLoadState = "loaded";
     } catch (error) {
+      groomingLoadState = "error";
       groomingRecords.innerHTML = `
         <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center">
           <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
@@ -1774,6 +1784,50 @@ document.addEventListener("DOMContentLoaded", () => {
     renderIcons();
   };
 
+  const petTabLoaders = {
+    grooming: loadGrooming,
+    medical: loadMedicalRecords,
+    vaccinations: loadVaccinations,
+    notifications: loadConcernNotifications,
+  };
+
+  const loadPetTabData = (tabName) => {
+    const loader = petTabLoaders[tabName];
+    return loader ? loader() : Promise.resolve();
+  };
+
+  const scheduleIdleTask = (task) => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    window.setTimeout(task, 200);
+  };
+
+  const scheduleCustomerTabPrefetch = () => {
+    if (tabPrefetchStarted) return;
+    tabPrefetchStarted = true;
+
+    const remainingTabs = [
+      "grooming",
+      "medical",
+      "vaccinations",
+      "notifications",
+    ].filter((tabName) => tabName !== activePetTab);
+
+    const prefetchNextTab = () => {
+      const nextTab = remainingTabs.shift();
+      if (!nextTab) return;
+
+      Promise.resolve(loadPetTabData(nextTab)).finally(() => {
+        if (remainingTabs.length) scheduleIdleTask(prefetchNextTab);
+      });
+    };
+
+    scheduleIdleTask(prefetchNextTab);
+  };
+
   const loadPet = async () => {
     if (!petIdParam || !Number.isInteger(petId) || petId < 1) {
       setError("Invalid pet profile link", "Choose a pet from My Pets to open its profile.");
@@ -1792,7 +1846,9 @@ document.addEventListener("DOMContentLoaded", () => {
       errorState?.classList.add("hidden");
       profileContent?.classList.remove("hidden");
       renderIcons();
-      await loadGrooming();
+      petProfileReady = true;
+      void loadPetTabData(activePetTab);
+      window.requestAnimationFrame(scheduleCustomerTabPrefetch);
     } catch (error) {
       if (error?.status === 404) {
         setError(
@@ -1820,6 +1876,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSidebar();
   setupTabs();
   renderIcons();
-  loadProfile();
-  loadPet();
+  void loadPet();
+  window.requestAnimationFrame(() => scheduleIdleTask(loadProfile));
 });

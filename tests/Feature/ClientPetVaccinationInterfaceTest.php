@@ -46,7 +46,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         );
     }
 
-    public function test_vaccination_tab_is_read_only_and_loads_on_selection(): void
+    public function test_vaccination_tab_is_read_only_and_uses_the_cached_customer_tab_loader(): void
     {
         $panel = $this->sourceBetween(
             $this->clientPage,
@@ -57,10 +57,14 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('Vaccination History', $panel);
         $this->assertStringContainsString('id="petVaccinationRecords"', $panel);
         $this->assertStringContainsString(
-            'if (selected === "vaccinations")',
+            'if (petProfileReady) void loadPetTabData(selected);',
             $this->clientComponent,
         );
-        $this->assertStringContainsString('loadVaccinations();', $this->clientComponent);
+        $this->assertStringContainsString('vaccinations: loadVaccinations,', $this->clientComponent);
+        $this->assertStringContainsString(
+            '(!retry && vaccinationLoadState === "loaded")',
+            $this->clientComponent,
+        );
 
         foreach ([
             '>Add Vaccination',

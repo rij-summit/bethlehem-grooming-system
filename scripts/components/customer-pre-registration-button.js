@@ -23,12 +23,35 @@ buttons.forEach((button) => {
   });
 });
 
-if (buttons.length > 0) {
-  try {
-    const access = await API.getPreRegistrationAccess();
-    buttons.forEach((button) => setButtonAccess(button, access.allowed));
-  } catch (error) {
-    buttons.forEach((button) => setButtonAccess(button, false));
-    console.error("Failed to check pre-registration access:", error);
+let accessRequest = null;
+
+async function loadPreRegistrationAccess() {
+  if (accessRequest) return accessRequest;
+
+  accessRequest = (async () => {
+    try {
+      const access = await API.getPreRegistrationAccess();
+      buttons.forEach((button) => setButtonAccess(button, access.allowed));
+    } catch (error) {
+      buttons.forEach((button) => setButtonAccess(button, false));
+      console.error("Failed to check pre-registration access:", error);
+    }
+  })();
+
+  return accessRequest;
+}
+
+function scheduleAccessCheck() {
+  const start = () => loadPreRegistrationAccess();
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(start, { timeout: 1200 });
+    return;
   }
+
+  window.setTimeout(start, 200);
+}
+
+if (buttons.length > 0) {
+  window.requestAnimationFrame(scheduleAccessCheck);
 }

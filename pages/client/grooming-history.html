@@ -210,6 +210,15 @@
     <script>
       lucide.createIcons();
 
+      function scheduleCustomerHistoryIdleTask(task) {
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(task, { timeout: 1200 });
+          return;
+        }
+
+        window.setTimeout(task, 200);
+      }
+
       // ── Sidebar (mobile) ──────────────────────────────────────────────────
       const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
       const sidebarToggle   = document.getElementById("clientSidebarToggle");
@@ -239,7 +248,7 @@
       mobileSidebarQuery.addEventListener("change", e => { if (!e.matches) closeSidebar(); });
 
       // ── Auth: load profile ────────────────────────────────────────────────
-      (async () => {
+      const loadCustomerProfile = async () => {
         try {
           const { user } = await API.getMe("customer");
           const firstName = user.first_name || "";
@@ -255,7 +264,7 @@
             console.error("Unable to load the customer profile.", error);
           }
         }
-      })();
+      };
 
       document.getElementById("clientLogoutBtn").addEventListener("click", async () => {
         try { await API.logout("customer"); } finally {
@@ -271,20 +280,36 @@
       const clearBtn        = document.getElementById("historyClearFilters");
 
       let allHistory = [];
+      let historyLoadState = "idle";
+      let historyLoadPromise = null;
 
-      async function loadHistory() {
-        try {
-          const data  = await API.getBookingHistory();
-          allHistory  = data.history || [];
-          applyFilters();
-        } catch {
-          historyList.innerHTML = `
-            <div class="text-center py-16">
-              <i data-lucide="alert-circle" class="w-10 h-10 mx-auto text-red-300"></i>
-              <p class="mt-3 text-red-500 text-sm">Failed to load history. Please refresh.</p>
-            </div>`;
-          lucide.createIcons();
-        }
+      function loadHistory() {
+        if (historyLoadState === "loaded") return Promise.resolve(allHistory);
+        if (historyLoadPromise) return historyLoadPromise;
+
+        historyLoadState = "loading";
+        historyLoadPromise = (async () => {
+          try {
+            const data = await API.getBookingHistory();
+            allHistory = data.history || [];
+            historyLoadState = "loaded";
+            applyFilters();
+            return allHistory;
+          } catch {
+            historyLoadState = "error";
+            historyList.innerHTML = `
+              <div class="text-center py-16">
+                <i data-lucide="alert-circle" class="w-10 h-10 mx-auto text-red-300"></i>
+                <p class="mt-3 text-red-500 text-sm">Failed to load history. Please refresh.</p>
+              </div>`;
+            lucide.createIcons();
+            return [];
+          } finally {
+            historyLoadPromise = null;
+          }
+        })();
+
+        return historyLoadPromise;
       }
 
       function applyFilters() {
@@ -400,9 +425,10 @@
       });
 
       // ── Boot ──────────────────────────────────────────────────────────────
-      loadHistory();
+      void loadHistory();
+      window.requestAnimationFrame(() => scheduleCustomerHistoryIdleTask(loadCustomerProfile));
     </script>
-    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260807-ongoing-tooltip"></script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

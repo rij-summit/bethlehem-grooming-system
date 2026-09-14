@@ -4,6 +4,25 @@
 // Client dashboard shell: mobile sidebar, profile name, and logout.
 // Icons use the local Phosphor regular SVG sprite (no hydration required).
 // Connected to the sidebar/profile controls in pages/client/dashboard.html.
+function scheduleCustomerDashboardIdleTask(task) {
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(task, { timeout: 1200 });
+    return;
+  }
+
+  setTimeout(task, 200);
+}
+
+function scheduleCustomerDashboardAfterPaint(task) {
+  const schedule = () => scheduleCustomerDashboardIdleTask(task);
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(schedule);
+    return;
+  }
+
+  schedule();
+}
+
 (function () {
   const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
   const sidebarToggle = document.getElementById("clientSidebarToggle");
@@ -86,7 +105,7 @@
   });
 
   // Client profile section: load the logged-in customer's name and initials.
-  (async () => {
+  const loadDashboardProfile = async () => {
     try {
       const { user } = await API.getMe("customer");
       const firstName = user.first_name || "";
@@ -109,7 +128,8 @@
       // A temporary API outage must not bounce between dashboard and sign-in.
       console.error("Unable to load the customer profile.", error);
     }
-  })();
+  };
+  scheduleCustomerDashboardAfterPaint(loadDashboardProfile);
 
   // Logout section: end the customer session and return to sign in.
   if (logoutBtn) {
@@ -133,6 +153,7 @@
   const pickupPopup    = document.getElementById("pickupPopup");
   const pickupMessage  = document.getElementById("pickupMessage");
   const pickupDismiss  = document.getElementById("pickupDismissBtn");
+  let notificationsLoading = false;
 
   const SHOWN_PICKUPS_KEY = "shownPickupNotifs";
   const PICKUP_READY_STATUSES = new Set([
@@ -173,6 +194,7 @@
   });
 
   function openDropdown() {
+    void loadNotifications();
     positionDropdown();
     dropdown.style.display = "flex";
   }
@@ -217,6 +239,9 @@
 
   // ── Load notifications ─────────────────────────────────────────────────────
   async function loadNotifications() {
+    if (notificationsLoading) return;
+    notificationsLoading = true;
+
     try {
       const data = await API.getCustomerNotifications();
 
@@ -244,6 +269,7 @@
         pickupPopup.classList.remove("hidden");
       }
     } catch { /* silent — non-critical */ }
+    finally { notificationsLoading = false; }
   }
 
   function renderNotifList(notifications) {
@@ -523,13 +549,21 @@
     return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
   }
 
-  // Initial load + poll every 30 seconds
-  loadNotifications();
-  setInterval(loadNotifications, 30000);
+  // Keep the notification request behind the first dashboard paint.
+  scheduleCustomerDashboardAfterPaint(loadNotifications);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadNotifications();
+  }, 30000);
 })();
 
 // ── Appointments, Grooming Tracker & History ─────────────────────────────────
 (function () {
+  const scheduleDashboardDataIdle = typeof scheduleCustomerDashboardIdleTask === "function"
+    ? scheduleCustomerDashboardIdleTask
+    : (task) => setTimeout(task, 0);
+  const scheduleDashboardDataAfterPaint = typeof scheduleCustomerDashboardAfterPaint === "function"
+    ? scheduleCustomerDashboardAfterPaint
+    : scheduleDashboardDataIdle;
   const appointmentsList         = document.getElementById("appointmentsList");
   const groomingTrackerEl        = document.getElementById("groomingTracker");
   const groomingHistoryEl        = document.getElementById("groomingHistory");
@@ -567,6 +601,9 @@
   let selectedWindowId    = null;
   let cancelTargetBooking = null;
   let rescheduleLoadId    = 0;
+  let dashboardPetsLoadState = "idle";
+  let appointmentsLoading = false;
+  let groomingCapacityLoading = false;
   let rescheduleClinicStatus = {
     stoppedToday: false,
     blockedDates: [],
@@ -578,31 +615,37 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     setRescheduleDateRange(getRescheduleTodayKey());
-    loadDashboardPets();
-    loadAppointments();
-    loadGroomingCapacity();
+    void loadAppointments();
 
-    Promise.resolve(window.AppClock?.load?.())
-      .then(() => {
-        setRescheduleDateRange(getRescheduleTodayKey());
-      })
-      .catch(() => {
+    scheduleDashboardDataAfterPaint(async () => {
+      await loadDashboardPets();
+      scheduleDashboardDataIdle(async () => {
+        await loadGroomingCapacity();
+        await Promise.resolve(window.AppClock?.load?.()).catch(() => {});
         setRescheduleDateRange(getRescheduleTodayKey());
       });
+    });
   });
 
   // ── Load & route data ──────────────────────────────────────────────────────
 
   async function loadDashboardPets() {
+    if (dashboardPetsLoadState === "loading" || dashboardPetsLoadState === "loaded") return;
+    dashboardPetsLoadState = "loading";
+
     try {
       const data = await API.getUserPets({ archived: 0 });
       renderMyPetsSummary(data.pets || []);
+      dashboardPetsLoadState = "loaded";
     } catch {
       renderMyPetsSummary([]);
+      dashboardPetsLoadState = "error";
     }
   }
 
   async function loadAppointments() {
+    if (appointmentsLoading) return;
+    appointmentsLoading = true;
     let data;
 
     try {
@@ -614,6 +657,8 @@
       renderUpcomingAppointmentsSummary([]);
       renderPastGroomingSummary([], 0);
       return;
+    } finally {
+      appointmentsLoading = false;
     }
 
     const active = Array.isArray(data?.bookings) ? data.bookings : [];
@@ -661,11 +706,16 @@
   // ── Appointments section ───────────────────────────────────────────────────
 
   async function loadGroomingCapacity() {
+    if (groomingCapacityLoading) return;
+    groomingCapacityLoading = true;
+
     try {
       const data = await API.getGroomingCapacity();
       renderGroomingCapacity(data);
     } catch {
       renderGroomingCapacity(null);
+    } finally {
+      groomingCapacityLoading = false;
     }
   }
 
@@ -1416,6 +1466,10 @@
 
   // Expose for coordination with the notification poller (pickup popup sequencing).
   window._refreshAppointments = loadAppointments;
-  setInterval(loadAppointments, 15000);
-  setInterval(loadGroomingCapacity, 15000);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadAppointments();
+  }, 15000);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadGroomingCapacity();
+  }, 15000);
 })();

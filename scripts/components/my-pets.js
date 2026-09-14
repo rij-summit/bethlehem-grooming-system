@@ -29,6 +29,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let allPets = [];
   let allKnownPets = [];
   let showingArchived = false;
+  let activePetsCache = null;
+  let archivedPetsCache = null;
+  let activePetsRequest = null;
+  let archivedPetsRequest = null;
+  let petCollectionGeneration = 0;
+  let petCollectionPrefetchStarted = false;
+  let notificationsLoading = false;
+  let notificationsLoaded = false;
   let editingPet = null;
   let confirmationResolver = null;
   let confirmationReturnFocus = null;
@@ -135,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Phosphor sprite icons render directly without JavaScript hydration.
 
   // ── Profile ───────────────────────────────────────────
-  (async () => {
+  const loadCustomerProfile = async () => {
     try {
       const { user } = await API.getMe("customer");
       const name = `${user.first_name} ${user.last_name}`;
@@ -145,7 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       // silently fail — not critical
     }
-  })();
+  };
 
   // ── Logout ────────────────────────────────────────────
   logoutBtn?.addEventListener("click", async () => {
@@ -216,13 +224,20 @@ document.addEventListener("DOMContentLoaded", () => {
     notificationDropdown.style.width = `${width}px`;
   }
 
-  async function loadNotifications() {
-    if (!notificationBadge || !notificationList) return;
+  async function loadNotifications({ force = false } = {}) {
+    if (
+      !notificationBadge
+      || !notificationList
+      || notificationsLoading
+      || (!force && notificationsLoaded)
+    ) return;
+    notificationsLoading = true;
 
     try {
       const data = await API.getCustomerNotifications();
       const notifications = Array.isArray(data.notifications) ? data.notifications : [];
       const unreadCount = Number(data.unread_count || 0);
+      notificationsLoaded = true;
 
       notificationBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
       notificationBadge.classList.toggle("hidden", unreadCount === 0);
@@ -267,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
               window.location.href = notification.destination;
               return;
             }
-            await loadNotifications();
+            await loadNotifications({ force: true });
           } catch {
             // Notifications are non-critical to pet profile management.
           }
@@ -275,6 +290,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch {
       notificationList.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">Notifications are unavailable.</p>';
+    } finally {
+      notificationsLoading = false;
     }
   }
 
@@ -282,6 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!notificationDropdown) return;
 
     if (notificationDropdown.style.display === "none") {
+      void loadNotifications();
       positionNotificationDropdown();
       notificationDropdown.style.display = "flex";
       notificationBell.setAttribute("aria-expanded", "true");
@@ -294,7 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
   markAllNotificationsRead?.addEventListener("click", async () => {
     try {
       await API.markAllCustomerNotificationsRead();
-      await loadNotifications();
+      await loadNotifications({ force: true });
     } catch {
       // Notifications are non-critical to pet profile management.
     }
@@ -317,22 +335,96 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ── Load pets ─────────────────────────────────────────
-  async function loadPets() {
-    renderGrid(null); // loading state
+  function syncAllKnownPets() {
+    allKnownPets = [
+      ...(activePetsCache || []),
+      ...(archivedPetsCache || []),
+    ];
+  }
+
+  function getPetCollectionCache(archived) {
+    return archived ? archivedPetsCache : activePetsCache;
+  }
+
+  async function loadPetCollection(archived, { force = false } = {}) {
+    const cachedPets = getPetCollectionCache(archived);
+    if (!force && cachedPets !== null) return cachedPets;
+
+    const inFlightRequest = archived ? archivedPetsRequest : activePetsRequest;
+    if (!force && inFlightRequest) return inFlightRequest;
+
+    const requestGeneration = petCollectionGeneration;
+    let request;
+    request = (archived
+      ? API.getUserPets({ archived: 1 })
+      : API.getUserPets({ archived: 0 }))
+      .then((data) => {
+        const pets = Array.isArray(data.pets) ? data.pets : [];
+        if (requestGeneration !== petCollectionGeneration) return pets;
+        if (archived) archivedPetsCache = pets;
+        else activePetsCache = pets;
+        syncAllKnownPets();
+        return pets;
+      })
+      .finally(() => {
+        if (archived && archivedPetsRequest === request) archivedPetsRequest = null;
+        if (!archived && activePetsRequest === request) activePetsRequest = null;
+      });
+
+    if (archived) archivedPetsRequest = request;
+    else activePetsRequest = request;
+
+    return request;
+  }
+
+  function scheduleIdleTask(task) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    window.setTimeout(task, 200);
+  }
+
+  function schedulePetCollectionPrefetch() {
+    if (petCollectionPrefetchStarted) return;
+    petCollectionPrefetchStarted = true;
+    scheduleIdleTask(() => {
+      loadPetCollection(!showingArchived)
+        .catch(() => {
+          // The visible collection remains usable if background prefetch fails.
+        })
+        .finally(() => scheduleIdleTask(async () => {
+          await loadNotifications();
+          scheduleIdleTask(loadCustomerProfile);
+        }));
+    });
+  }
+
+  function invalidatePetCollections() {
+    petCollectionGeneration += 1;
+    activePetsCache = null;
+    archivedPetsCache = null;
+    activePetsRequest = null;
+    archivedPetsRequest = null;
+    petCollectionPrefetchStarted = false;
+    syncAllKnownPets();
+  }
+
+  async function loadPets({ force = false } = {}) {
+    const archived = showingArchived;
+    if (getPetCollectionCache(archived) === null) renderGrid(null);
+
     try {
-      const [activeData, archivedData] = await Promise.all([
-        API.getUserPets({ archived: 0 }),
-        API.getUserPets({ archived: 1 }),
-      ]);
-      const activePets = activeData.pets || [];
-      const archivedPets = archivedData.pets || [];
-      allKnownPets = [...activePets, ...archivedPets];
-      allPets = showingArchived ? archivedPets : activePets;
+      const pets = await loadPetCollection(archived, { force });
+      if (showingArchived !== archived) return;
+      allPets = pets;
     } catch {
+      if (showingArchived !== archived) return;
       allPets = [];
-      allKnownPets = [];
     }
     applyFilter();
+    schedulePetCollectionPrefetch();
   }
 
   // ── Filter + search ───────────────────────────────────
@@ -567,6 +659,10 @@ document.addEventListener("DOMContentLoaded", () => {
   petForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     hideFormError();
+    await Promise.allSettled([
+      loadPetCollection(false),
+      loadPetCollection(true),
+    ]);
 
     const id = document.getElementById("petId").value;
     const weight = getEnteredWeight(petWeight);
@@ -624,6 +720,7 @@ document.addEventListener("DOMContentLoaded", () => {
         await API.addPet(payload);
       }
       closeModal();
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       showFormError(err.errors
@@ -647,6 +744,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirmed) return;
     try {
       await API.archivePet(id);
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       alert(err.message || "Could not archive pet.");
@@ -664,6 +762,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirmed) return;
     try {
       await API.unarchivePet(id);
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       alert(err.message || "Could not restore pet.");
@@ -888,7 +987,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── Init ──────────────────────────────────────────────
-  loadNotifications();
   loadPets();
 
   if (new URLSearchParams(window.location.search).get("add") === "1") {

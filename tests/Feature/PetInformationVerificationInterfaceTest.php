@@ -197,6 +197,31 @@ class PetInformationVerificationInterfaceTest extends TestCase
         $this->assertStringContainsString('min-h-8 w-full', $this->myPetsComponent);
     }
 
+    public function test_customer_pet_tabs_prefetch_once_after_the_profile_is_visible(): void
+    {
+        foreach ([
+            'let groomingLoadState = "idle";',
+            'let medicalLoadState = "idle";',
+            'let vaccinationLoadState = "idle";',
+            'let concernLoadState = "idle";',
+            'if (petProfileReady) void loadPetTabData(selected);',
+            'const petTabLoaders = {',
+            'grooming: loadGrooming,',
+            'medical: loadMedicalRecords,',
+            'vaccinations: loadVaccinations,',
+            'notifications: loadConcernNotifications,',
+            'window.requestIdleCallback(task, { timeout: 1200 });',
+            'window.requestAnimationFrame(scheduleCustomerTabPrefetch);',
+        ] as $customerTabOptimization) {
+            $this->assertStringContainsString(
+                $customerTabOptimization,
+                $this->petProfileComponent,
+            );
+        }
+
+        $this->assertStringNotContainsString('await loadGrooming();', $this->petProfileComponent);
+    }
+
     public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
     {
         $petCard = $this->sourceBetween(

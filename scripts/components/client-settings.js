@@ -33,12 +33,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const accountMeta = document.getElementById("accountMeta");
 
   let serverUser = null;
+  let profileLoadPromise = null;
+
+  function scheduleSettingsIdleTask(task) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 800 });
+      return;
+    }
+
+    window.setTimeout(task, 100);
+  }
 
   setupSidebar();
   setupTabs();
   setupPasswordToggles();
   setupForms();
-  loadProfile();
+  window.requestAnimationFrame(() => scheduleSettingsIdleTask(loadProfile));
 
   function setupSidebar() {
     if (!sidebarToggle || !sidebarClose || !sidebarBackdrop || !sidebar) return;
@@ -138,19 +148,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function loadProfile() {
-    try {
-      const { user } = await API.getMe("customer");
-      serverUser = user || {};
-      applyUserToAccount(serverUser);
-    } catch (error) {
-      if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {
-        API.redirectToSignIn();
-        return;
-      }
+  function loadProfile() {
+    if (serverUser) return Promise.resolve(serverUser);
+    if (profileLoadPromise) return profileLoadPromise;
 
-      showStatus("Unable to load your account right now. Please try again.", "error");
-    }
+    profileLoadPromise = (async () => {
+      try {
+        const { user } = await API.getMe("customer");
+        serverUser = user || {};
+        applyUserToAccount(serverUser);
+        return serverUser;
+      } catch (error) {
+        if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {
+          API.redirectToSignIn();
+          return null;
+        }
+
+        showStatus("Unable to load your account right now. Please try again.", "error");
+        return null;
+      } finally {
+        profileLoadPromise = null;
+      }
+    })();
+
+    return profileLoadPromise;
   }
 
   function applyUserToAccount(user) {
