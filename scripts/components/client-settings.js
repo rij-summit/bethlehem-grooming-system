@@ -2,8 +2,6 @@
 // Depends on: api.js
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (window.lucide) window.lucide.createIcons();
-
   if (!API.hasAuthenticatedSession("customer")) {
     API.redirectToSignIn();
     return;

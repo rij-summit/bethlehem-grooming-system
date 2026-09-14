@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css" />
 
-    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-slate-50 text-slate-800">
     <div class="min-h-screen flex client-dashboard-shell">
@@ -23,7 +22,7 @@
         aria-expanded="false"
         aria-label="Open navigation menu"
       >
-        <i data-lucide="menu" class="w-5 h-5"></i>
+        <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#list"></use></svg>
       </button>
 
       <button
@@ -63,7 +62,7 @@
                 class="client-sidebar-close"
                 aria-label="Close navigation menu"
               >
-                <i data-lucide="x" class="w-5 h-5"></i>
+                <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
               </button>
             </div>
           </div>
@@ -76,7 +75,7 @@
               href="./dashboard.html"
               class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
             >
-              <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#squares-four"></use></svg>
               <span>Dashboard</span>
             </a>
 
@@ -84,7 +83,7 @@
               href="./my-pets.html"
               class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
             >
-              <i data-lucide="paw-print" class="w-5 h-5"></i>
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
               <span>My Pets</span>
             </a>
 
@@ -93,7 +92,7 @@
               href="./grooming-history.html"
               class="flex items-center gap-3 rounded-2xl bg-[#355c84] px-4 py-3 font-medium shadow-sm"
             >
-              <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               <span>Grooming History</span>
             </a>
 
@@ -101,7 +100,7 @@
               href="./settings.html"
               class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
             >
-              <i data-lucide="settings" class="w-5 h-5"></i>
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#gear"></use></svg>
               <span>Settings</span>
             </a>
           </nav>
@@ -125,7 +124,7 @@
             id="clientLogoutBtn"
             class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 font-bold text-white transition hover:bg-white/20"
           >
-            <i data-lucide="log-out" class="h-4 w-4"></i>
+            <svg class="h-4 w-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#sign-out"></use></svg>
             <span>Logout</span>
           </button>
         </div>
@@ -153,7 +152,7 @@
                 title="Checking availability"
                 class="flex cursor-not-allowed items-center gap-2 rounded-full bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white opacity-60 hover:bg-[#274a67] transition"
               >
-                <i data-lucide="plus" class="w-4 h-4"></i>
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#plus"></use></svg>
                 Pre-register
               </a>
             </div>
@@ -166,7 +165,7 @@
           <!-- Filters -->
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 flex-1 max-w-sm shadow-sm">
-              <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
+              <svg class="w-4 h-4 shrink-0 fill-current text-slate-400" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
               <input
                 type="text"
                 id="historySearch"
@@ -175,7 +174,7 @@
               />
             </div>
             <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-              <i data-lucide="calendar" class="w-4 h-4 text-slate-400 shrink-0"></i>
+              <svg class="w-4 h-4 shrink-0 fill-current text-slate-400" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
               <input
                 type="date"
                 id="historyDateFilter"
@@ -197,7 +196,7 @@
           <!-- History list -->
           <div id="historyList">
             <div class="text-center py-16">
-              <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
+              <svg class="w-8 h-8 mx-auto animate-spin fill-current text-slate-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
               <p class="mt-3 text-slate-400 text-sm">Loading grooming history...</p>
             </div>
           </div>
@@ -208,8 +207,6 @@
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
     <script>
-      lucide.createIcons();
-
       function scheduleCustomerHistoryIdleTask(task) {
         if (typeof window.requestIdleCallback === "function") {
           window.requestIdleCallback(task, { timeout: 1200 });
@@ -299,10 +296,9 @@
             historyLoadState = "error";
             historyList.innerHTML = `
               <div class="text-center py-16">
-                <i data-lucide="alert-circle" class="w-10 h-10 mx-auto text-red-300"></i>
+                <svg class="w-10 h-10 mx-auto fill-current text-red-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#warning-circle"></use></svg>
                 <p class="mt-3 text-red-500 text-sm">Failed to load history. Please refresh.</p>
               </div>`;
-            lucide.createIcons();
             return [];
           } finally {
             historyLoadPromise = null;
@@ -341,10 +337,9 @@
         if (!records.length) {
           historyList.innerHTML = `
             <div class="text-center py-16">
-              <i data-lucide="clipboard-x" class="w-12 h-12 mx-auto text-slate-300"></i>
+              <svg class="w-12 h-12 mx-auto fill-current text-slate-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               <p class="mt-4 text-slate-400 text-sm">No grooming sessions found.</p>
             </div>`;
-          lucide.createIcons();
           return;
         }
 
@@ -352,7 +347,6 @@
           <div class="space-y-4">
             ${records.map(b => buildHistoryCard(b)).join("")}
           </div>`;
-        lucide.createIcons();
       }
 
       function buildHistoryCard(b) {
@@ -383,7 +377,7 @@
               <!-- Left: booking info -->
               <div class="flex gap-4">
                 <div class="h-12 w-12 rounded-2xl bg-[#eaf4fb] flex items-center justify-center shrink-0">
-                  <i data-lucide="scissors" class="w-5 h-5 text-[#315b7e]"></i>
+                  <svg class="w-5 h-5 fill-current text-[#315b7e]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
                 </div>
                 <div>
                   <p class="text-sm font-bold text-slate-800">${b.booking_reference}</p>

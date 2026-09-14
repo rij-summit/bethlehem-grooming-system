@@ -37,10 +37,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!signInForm || !identifierInput || !passwordInput) return;
 
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
-
   const passwordIconClosed = document.querySelector(".shared-password-icon-closed");
   const passwordIconOpen   = document.querySelector(".shared-password-icon-open");
 

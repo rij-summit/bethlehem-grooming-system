@@ -28,8 +28,8 @@ class PasswordResetInterfaceTest extends TestCase
             'autocomplete="off"',
             'data-lpignore="true"',
             'data-1p-ignore="true"',
-            'data-lucide="eye-closed"',
-            'data-lucide="eye"',
+            'phosphor.svg#eye-slash',
+            'phosphor.svg#eye',
         ] as $control) {
             $this->assertStringContainsString($control, $reset);
         }

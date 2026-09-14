@@ -7,7 +7,6 @@
     <title>My Pets | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css?v=20260914-pet-profile" />
     <link rel="stylesheet" href="../../css/custom.css?ui=20260914-pet-profile" />
-    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
     <div class="min-h-screen flex">
@@ -131,14 +130,8 @@
         <header class="sticky top-0 z-30 border-b border-portal-border bg-white/[0.96] backdrop-blur">
           <div class="flex flex-col gap-5 px-6 py-4 min-[1181px]:flex-row min-[1181px]:items-center min-[1181px]:justify-between min-[1181px]:max-[1420px]:flex-wrap max-[1180px]:pl-20 max-[639px]:gap-[18px] max-[639px]:px-4">
             <div class="min-w-0 max-[639px]:pl-[62px]">
-              <a
-                href="./my-pets.html"
-                class="mb-1.5 inline-flex items-center gap-2 text-sm font-semibold text-portal-primary transition-colors hover:text-portal-primary-hover"
-              >
-                <i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>
-                Back to My Pets
-              </a>
               <h2 id="pageTitle" class="text-3xl font-bold text-portal-text max-[639px]:text-[26px]">My Pets</h2>
+              <p class="mt-1 text-sm text-portal-muted">Manage your registered pet profiles.</p>
             </div>
 
             <div class="flex items-center flex-none gap-4 min-[1181px]:max-[1420px]:ml-auto max-[1180px]:flex-wrap max-[639px]:gap-2.5">
@@ -177,13 +170,13 @@
 
         <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px]">
           <div id="petLoadingState" class="portal-card px-6 py-16 text-center">
-            <i data-lucide="loader" class="mx-auto h-9 w-9 animate-spin text-slate-300"></i>
+            <svg class="mx-auto h-9 w-9 animate-spin fill-current text-slate-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
             <p class="mt-3 text-sm text-portal-muted">Loading pet profile...</p>
           </div>
 
           <div id="petErrorState" class="hidden rounded-portal border border-red-200 bg-white px-6 py-14 text-center shadow-portal" role="alert">
             <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
-              <i data-lucide="shield-alert" class="h-7 w-7"></i>
+              <svg class="h-7 w-7 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#warning-circle"></use></svg>
             </div>
             <h3 id="petErrorTitle" class="mt-4 text-[22px] font-bold text-portal-text">Pet profile unavailable</h3>
             <p id="petErrorMessage" class="mx-auto mt-2 max-w-lg text-sm leading-6 text-portal-muted"></p>
@@ -199,41 +192,36 @@
             <div class="overflow-x-auto pb-1">
               <div class="inline-flex min-w-full gap-1 rounded-2xl border border-portal-border bg-white p-1 shadow-portal sm:min-w-0" role="tablist" aria-label="Pet profile sections">
                 <button type="button" data-pet-tab="overview" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm" role="tab" aria-selected="true">
-                  <i data-lucide="paw-print" class="h-4 w-4"></i><span>Overview</span>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg><span>Overview</span>
                 </button>
                 <button type="button" data-pet-tab="grooming" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
-                  <i data-lucide="scissors" class="h-4 w-4"></i><span>Grooming</span>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg><span>Grooming</span>
                 </button>
                 <button type="button" data-pet-tab="medical" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
-                  <i data-lucide="stethoscope" class="h-4 w-4"></i><span>Medical Records</span>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#stethoscope"></use></svg><span>Medical Records</span>
                 </button>
                 <button type="button" data-pet-tab="vaccinations" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
-                  <i data-lucide="syringe" class="h-4 w-4"></i><span>Vaccinations</span>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#syringe"></use></svg><span>Vaccinations</span>
                 </button>
                 <button type="button" data-pet-tab="notifications" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
-                  <i data-lucide="bell" class="h-4 w-4"></i><span>Notifications</span>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#bell"></use></svg><span>Notifications</span>
                 </button>
               </div>
             </div>
 
-            <section data-pet-panel="overview" role="tabpanel" class="pet-profile-panel space-y-[22px] max-[639px]:space-y-4">
+            <section data-pet-panel="overview" role="tabpanel" class="pet-profile-panel space-y-4">
               <div class="portal-card">
-                <div class="mb-5">
-                  <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Basic Information</h3>
-                  <p class="mt-1 text-sm text-portal-muted">The profile information currently saved for this pet.</p>
+                <div class="mb-4">
+                  <h3 class="text-sm font-bold leading-5 text-portal-text">Basic Information</h3>
+                  <p class="mt-1 text-xs text-portal-muted">The profile information currently saved for this pet.</p>
                 </div>
-                <div id="petOverviewGrid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+                <div id="petOverviewGrid" class="grid grid-cols-1 gap-3 sm:grid-cols-2"></div>
               </div>
 
               <div class="portal-card">
-                <div class="flex items-start gap-3">
-                  <div class="portal-icon-tile h-11 w-11 rounded-[13px]">
-                    <i data-lucide="heart-pulse" class="h-5 w-5"></i>
-                  </div>
-                  <div>
-                    <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Medical Conditions / Special Needs</h3>
-                    <p id="petMedicalConditions" class="mt-2 whitespace-pre-line text-sm leading-6 text-portal-muted">Not provided.</p>
-                  </div>
+                <div>
+                  <h3 class="text-sm font-bold leading-5 text-portal-text">Medical Conditions / Special Needs</h3>
+                  <p id="petMedicalConditions" class="mt-1 whitespace-pre-line text-xs leading-5 text-portal-muted">Not provided.</p>
                 </div>
               </div>
             </section>
@@ -242,15 +230,14 @@
               <div class="portal-card">
                 <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Grooming Records</h3>
-                    <p class="mt-1 text-sm text-portal-muted">Only grooming activity connected to this pet is shown.</p>
+                    <h3 class="text-sm font-bold leading-5 text-portal-text">Grooming Records</h3>
+                    <p class="mt-1 text-xs leading-5 text-portal-muted">Only grooming activity connected to this pet is shown.</p>
                   </div>
                   <a href="./grooming-history.html" class="text-sm font-semibold text-portal-primary hover:text-portal-primary-hover">View all grooming history</a>
                 </div>
                 <div id="petGroomingRecords">
                   <div class="py-12 text-center">
-                    <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-                    <p class="mt-3 text-sm text-portal-muted">Loading grooming records...</p>
+                    <p class="text-xs text-portal-muted">Loading grooming records...</p>
                   </div>
                 </div>
               </div>
@@ -258,19 +245,13 @@
 
             <section data-pet-panel="medical" role="tabpanel" class="pet-profile-panel hidden">
               <div class="portal-card">
-                <div class="mb-5 flex items-start gap-3">
-                  <div class="portal-icon-tile h-11 w-11 rounded-[13px]">
-                    <i data-lucide="stethoscope" class="h-5 w-5"></i>
-                  </div>
-                  <div>
-                    <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Clinic Medical Records</h3>
-                    <p class="mt-1 text-sm leading-6 text-portal-muted">Completed clinic visits for this pet. Internal clinic notes and attachments are not included.</p>
-                  </div>
+                <div class="mb-5">
+                  <h3 class="text-sm font-bold leading-5 text-portal-text">Clinic Medical Records</h3>
+                  <p class="mt-1 text-xs leading-5 text-portal-muted">Completed clinic visits for this pet. Internal clinic notes and attachments are not included.</p>
                 </div>
                 <div id="petMedicalRecords">
                   <div class="py-12 text-center">
-                    <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-                    <p class="mt-3 text-sm text-portal-muted">Loading completed medical records...</p>
+                    <p class="text-xs text-portal-muted">Loading completed medical records...</p>
                   </div>
                 </div>
               </div>
@@ -278,21 +259,15 @@
 
             <section data-pet-panel="vaccinations" role="tabpanel" class="pet-profile-panel hidden">
               <div class="portal-card">
-                <div class="mb-5 flex items-start gap-3">
-                  <div class="portal-icon-tile h-11 w-11 rounded-[13px]">
-                    <i data-lucide="syringe" class="h-5 w-5"></i>
-                  </div>
-                  <div>
-                    <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Vaccination History</h3>
-                    <p class="mt-1 text-sm leading-6 text-portal-muted">
-                      Published vaccination information recorded by the clinic for this pet.
-                    </p>
-                  </div>
+                <div class="mb-5">
+                  <h3 class="text-sm font-bold leading-5 text-portal-text">Vaccination History</h3>
+                  <p class="mt-1 text-xs leading-5 text-portal-muted">
+                    Published vaccination information recorded by the clinic for this pet.
+                  </p>
                 </div>
                 <div id="petVaccinationRecords">
                   <div class="py-12 text-center" aria-live="polite">
-                    <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-                    <p class="mt-3 text-sm text-portal-muted">Loading vaccination history...</p>
+                    <p class="text-xs text-portal-muted">Loading vaccination history...</p>
                   </div>
                 </div>
               </div>
@@ -300,22 +275,16 @@
 
             <section data-pet-panel="notifications" role="tabpanel" class="pet-profile-panel hidden">
               <div class="portal-card max-[639px]:p-4">
-                <div class="mb-5 flex items-start gap-3">
-                  <div class="portal-icon-tile h-11 w-11 rounded-[13px]">
-                    <i data-lucide="bell-ring" class="h-5 w-5"></i>
-                  </div>
-                  <div>
-                    <h3 class="text-[22px] font-bold leading-[1.3] text-portal-text">Medical-Concern Notifications</h3>
-                    <p class="mt-1 text-sm leading-6 text-portal-muted">
-                      Customer-safe grooming concerns and clinic referral requests released for this pet.
-                    </p>
-                  </div>
+                <div class="mb-5">
+                  <h3 class="text-sm font-bold leading-5 text-portal-text">Medical-Concern Notifications</h3>
+                  <p class="mt-1 text-xs leading-5 text-portal-muted">
+                    Customer-safe grooming concerns and clinic referral requests released for this pet.
+                  </p>
                 </div>
 
                 <div id="petConcernNotifications" aria-live="polite">
                   <div class="py-12 text-center">
-                    <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-                    <p class="mt-3 text-sm text-portal-muted">Loading medical-concern notifications...</p>
+                    <p class="text-xs text-portal-muted">Loading medical-concern notifications...</p>
                   </div>
                 </div>
 
@@ -331,7 +300,7 @@
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
     <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260914-pet-profile"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
-    <script src="../../scripts/components/pet-details.js?v=auth-session-20260816&ui=20260914-customer-tab-prefetch"></script>
+    <script src="../../scripts/components/pet-details.js?v=auth-session-20260816&ui=20260914-compact-information-type"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

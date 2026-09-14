@@ -958,12 +958,12 @@ video {
   order: 2;
 }
 
-.col-span-full {
-  grid-column: 1 / -1;
-}
-
 .col-span-2 {
   grid-column: span 2 / span 2;
+}
+
+.col-span-full {
+  grid-column: 1 / -1;
 }
 
 .m-0 {
@@ -1330,6 +1330,10 @@ video {
   min-height: 14rem;
 }
 
+.min-h-8 {
+  min-height: 2rem;
+}
+
 .min-h-9 {
   min-height: 2.25rem;
 }
@@ -1356,10 +1360,6 @@ video {
 
 .min-h-screen {
   min-height: 100vh;
-}
-
-.min-h-8 {
-  min-height: 2rem;
 }
 
 .w-1\/2 {
@@ -2877,6 +2877,10 @@ video {
   --tw-gradient-to: #fff var(--tw-gradient-to-position);
 }
 
+.fill-current {
+  fill: currentColor;
+}
+
 .object-contain {
   -o-object-fit: contain;
      object-fit: contain;
@@ -3485,14 +3489,14 @@ video {
   color: rgb(229 168 0 / var(--tw-text-opacity, 1));
 }
 
-.text-amber-500 {
-  --tw-text-opacity: 1;
-  color: rgb(245 158 11 / var(--tw-text-opacity, 1));
-}
-
 .text-amber-600 {
   --tw-text-opacity: 1;
   color: rgb(217 119 6 / var(--tw-text-opacity, 1));
+}
+
+.text-amber-500 {
+  --tw-text-opacity: 1;
+  color: rgb(245 158 11 / var(--tw-text-opacity, 1));
 }
 
 .text-amber-700 {
@@ -4345,6 +4349,10 @@ video {
   color: var(--portal-primary);
 }
 
+.hover\:text-portal-primary-hover:hover {
+  color: var(--portal-primary-hover);
+}
+
 .hover\:text-red-500:hover {
   --tw-text-opacity: 1;
   color: rgb(239 68 68 / var(--tw-text-opacity, 1));
@@ -4373,10 +4381,6 @@ video {
 .hover\:text-white:hover {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
-}
-
-.hover\:text-portal-primary-hover:hover {
-  color: var(--portal-primary-hover);
 }
 
 .hover\:underline:hover {

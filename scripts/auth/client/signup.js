@@ -13,10 +13,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!signupForm || !phoneInput || !emailInput) return;
 
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
-
   // Independent toggle — each button only controls its own field and icons.
   const toggleMap = [
     {
