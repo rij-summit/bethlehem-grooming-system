@@ -77,6 +77,12 @@
   font-weight: 700;
 }
 
+.ai-chatbot-button.ai-chatbot-button--icon-only {
+  width: 3.75rem;
+  border-radius: 1rem;
+  padding: 0;
+}
+
 .ai-chatbot-panel .ai-chatbot-panel__eyebrow,
 .ai-chatbot-panel .ai-chatbot-panel__title,
 .ai-chatbot-send,
@@ -847,6 +853,11 @@ body.customer-detail-modal-open {
   .ai-chatbot-button__icon {
     width: 1.2rem;
     height: 1.2rem;
+  }
+
+  .ai-chatbot-button.ai-chatbot-button--icon-only {
+    width: 3.25rem;
+    padding: 0;
   }
 
   .ai-chatbot-panel {
@@ -5169,4 +5180,32 @@ body.customer-detail-modal-open {
   .inventory-search-field {
     grid-column: auto;
   }
+}
+
+/* ----- Shared Portal Widget Theme ----- */
+/* Reuses css/themes/portal.css tokens; opt in with .portal-theme. */
+.portal-theme .pickup-popup-card { background: var(--portal-surface); border-color: var(--portal-border); }
+.portal-theme .pickup-paw-ring { background: var(--portal-active); border-color: var(--portal-border); box-shadow: none; }
+.portal-theme :is(.pickup-paw-icon, .pickup-title, .pickup-bounce-text) { color: var(--portal-primary); }
+.portal-theme .pickup-subtitle { color: var(--portal-muted); }
+.portal-theme .pickup-dismiss-btn { background: var(--portal-primary); box-shadow: var(--portal-shadow); }
+
+.portal-theme .ai-chatbot-button {
+  right: 24px;
+  bottom: 24px;
+  min-height: 58px;
+  background: var(--portal-primary);
+  box-shadow: 0 6px 18px rgb(44 62 80 / 17%);
+}
+.portal-theme .ai-chatbot-button:hover { background: var(--portal-primary-hover); box-shadow: 0 8px 22px rgb(44 62 80 / 20%); transform: none; }
+.portal-theme .ai-chatbot-panel { border: 1px solid var(--portal-border); box-shadow: 0 12px 40px rgb(44 62 80 / 18%); }
+.portal-theme :is(.ai-chatbot-panel__header, .ai-chatbot-send) { background: var(--portal-primary); }
+.portal-theme .ai-chatbot-send:hover:not(:disabled) { background: var(--portal-primary-hover); }
+.portal-theme .ai-chatbot-message--user { background: var(--portal-active); color: var(--portal-text); }
+.portal-theme .ai-chatbot-message--bot { border-color: var(--portal-border); color: var(--portal-text); }
+.portal-theme .ai-chatbot-input { border-color: var(--portal-border); background: var(--portal-surface-soft); }
+
+@media (max-width: 639px) {
+  .portal-theme .ai-chatbot-button { right: 16px; bottom: 16px; min-height: 52px; font-size: 14px; }
+  .portal-theme .ai-chatbot-panel { right: 16px; bottom: 80px; max-height: calc(100dvh - 96px); }
 }

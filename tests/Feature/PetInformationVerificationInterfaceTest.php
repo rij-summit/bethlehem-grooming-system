@@ -124,13 +124,77 @@ class PetInformationVerificationInterfaceTest extends TestCase
 
         foreach ([
             'const speciesIcon = getPetSpeciesIcon(pet.species);',
-            'data-lucide="${speciesIcon}"',
+            'phosphor.svg#${speciesIcon}',
             'if (normalizedSpecies === "dog") return "dog";',
             'if (normalizedSpecies === "cat") return "cat";',
             'return "paw-print";',
         ] as $speciesIconBehavior) {
             $this->assertStringContainsString($speciesIconBehavior, $petCard);
         }
+    }
+
+    public function test_my_pets_matches_the_requested_header_toolbar_and_card_actions(): void
+    {
+        $petCard = $this->sourceBetween(
+            $this->myPetsComponent,
+            'function buildCard(pet)',
+            'function openAddModal()',
+        );
+        $chatbot = file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
+
+        foreach ([
+            'placeholder="Search pet name..."',
+            'id="notifBellBtn"',
+            'data-pre-registration-button',
+            'id="filterActiveBtn"',
+            'id="filterArchivedBtn"',
+            'id="addPetBtn"',
+        ] as $control) {
+            $this->assertStringContainsString($control, $this->myPetsPage);
+        }
+
+        $this->assertStringNotContainsString('["Species", pet.species]', $petCard);
+        $this->assertStringContainsString('flex items-start justify-between gap-4 text-sm', $petCard);
+        $this->assertStringContainsString('class="grid grid-cols-2 gap-2', $petCard);
+        $this->assertStringContainsString('View profile', $petCard);
+        $this->assertStringNotContainsString('Pet Care Assistant', $chatbot);
+        $this->assertStringContainsString('ai-chatbot-button--icon-only', $chatbot);
+    }
+
+    public function test_pet_profile_keeps_the_my_pets_shell_and_removes_the_extra_hero(): void
+    {
+        $backLink = $this->sourceBetween(
+            $this->petProfilePage,
+            'class="mb-1.5 inline-flex',
+            '</a>',
+        );
+
+        foreach ([
+            'portal-theme group/portal',
+            'w-64 flex-col',
+            'aria-current="page"',
+            'id="petProfileSearch"',
+            'id="notifBellBtn"',
+            'data-pre-registration-button',
+            'text-[22px] font-bold',
+        ] as $consistentProfileElement) {
+            $this->assertStringContainsString(
+                $consistentProfileElement,
+                $this->petProfilePage,
+            );
+        }
+
+        $this->assertStringNotContainsString('hover:underline', $backLink);
+        $this->assertStringContainsString('<title>My Pets | Bethlehem Animal Clinic</title>', $this->petProfilePage);
+        $this->assertStringContainsString('>My Pets</h2>', $this->petProfilePage);
+        $this->assertStringNotContainsString('Manage your registered pet profiles.', $this->petProfilePage);
+        $this->assertStringNotContainsString('id="pageSubtitle"', $this->petProfilePage);
+        $this->assertStringNotContainsString('id="petHeroName"', $this->petProfilePage);
+        $this->assertStringNotContainsString('Shared pet profile', $this->petProfilePage);
+        $this->assertStringContainsString('`${pet.pet_name}’s Profile`', $this->petProfileComponent);
+        $this->assertStringContainsString('text-sm font-medium text-portal-muted', $this->petProfileComponent);
+        $this->assertStringContainsString('min-h-10 rounded-[14px]', $this->myPetsPage);
+        $this->assertStringContainsString('min-h-8 w-full', $this->myPetsComponent);
     }
 
     public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
@@ -197,9 +261,9 @@ class PetInformationVerificationInterfaceTest extends TestCase
     {
         $this->assertStringNotContainsString(
             'uppercase',
-            $this->myPetsPage
+            preg_replace('/<aside\b[^>]*>.*?<\/aside>/s', '', $this->myPetsPage)
                 .$this->myPetsComponent
-                .$this->petProfilePage
+                .preg_replace('/<aside\b[^>]*>.*?<\/aside>/s', '', $this->petProfilePage)
                 .$this->petProfileComponent,
         );
     }

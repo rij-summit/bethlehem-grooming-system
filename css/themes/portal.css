@@ -1,0 +1,106 @@
+/* Shared, opt-in portal theme. Compiled through input.css into output.css.
+   Layout belongs in Tailwind classes in templates, not per-page stylesheets. */
+@layer base {
+  .portal-theme {
+    --portal-canvas: #f2f7fc;
+    --portal-surface: #ffffff;
+    --portal-sidebar: #f5f9fd;
+    --portal-surface-soft: #eff5fb;
+    /* Keep the pale Grooming Queue tile as the shared icon background. */
+    --portal-icon-surface: #f0f4f7;
+    --portal-border: #dce7f2;
+    --portal-text: #284764;
+    --portal-muted: #597592;
+    --portal-muted-icon: #9db5cd;
+    --portal-primary: #386b99;
+    --portal-primary-hover: #2f5c86;
+    --portal-active: #e3eef9;
+    --portal-accent: #4779a6;
+    --portal-success-soft: #e5efea;
+    --portal-success: #476857;
+    --portal-warning-soft: #f2ede2;
+    --portal-warning: #806a40;
+    --portal-danger-soft: #f5e9e8;
+    --portal-danger: #945a58;
+    --portal-danger-hover: #7e4c4a;
+    --portal-nav-hover: #eaf2fa;
+    --portal-record: #f3f7fc;
+    --portal-reminder: #52799f;
+    --portal-reminder-border: #5b82a8;
+    --portal-shadow: 0 2px 5px rgb(44 62 80 / 4%), 0 8px 22px rgb(44 62 80 / 2%);
+  }
+
+  .portal-theme :is(a, button, input, [tabindex]):focus-visible {
+    outline: 2px solid var(--portal-accent);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .portal-theme *, .portal-theme *::before, .portal-theme *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Small, shared component recipes; utility classes can override their sizing. */
+@layer components {
+  .ph-icon {
+    @apply inline-block flex-none fill-current align-middle;
+  }
+
+  .portal-card {
+    @apply min-w-0 rounded-portal border border-portal-border bg-portal-surface p-[22px] shadow-portal;
+  }
+
+  .portal-icon-tile {
+    @apply flex h-[50px] w-[50px] flex-none items-center justify-center rounded-[15px] bg-portal-icon-surface text-portal-primary;
+  }
+
+  .portal-button-primary {
+    @apply inline-flex min-h-[46px] items-center justify-center whitespace-nowrap rounded-2xl border border-transparent bg-portal-primary px-6 py-[11px] text-white shadow-portal-button transition-colors duration-[160ms] ease-[ease];
+  }
+
+  .portal-button-primary:hover:not([aria-disabled="true"]):not(:disabled) {
+    @apply bg-portal-primary-hover;
+  }
+
+  .portal-button-secondary {
+    @apply inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-portal-border bg-portal-surface-soft px-6 py-[11px] text-sm font-semibold text-portal-primary-hover transition-colors duration-[160ms] ease-[ease];
+  }
+
+  .portal-button-secondary:hover:not(:disabled) {
+    @apply bg-portal-active;
+  }
+
+  .portal-filter-button {
+    @apply min-h-[46px] rounded-2xl border px-5 py-[11px] text-sm font-semibold transition-colors duration-[160ms] ease-[ease];
+  }
+
+  .portal-option-list [role="option"] {
+    @apply text-portal-text;
+  }
+
+  .portal-option-list [role="option"]:hover,
+  .portal-option-list [role="option"]:focus {
+    @apply bg-portal-surface-soft;
+  }
+
+  .portal-nav-item {
+    @apply relative flex min-h-12 items-center gap-3.5 rounded-xl px-5 py-3 text-portal-text transition-colors duration-[160ms] ease-[ease];
+  }
+
+  .portal-nav-item:hover {
+    @apply bg-portal-nav-hover;
+  }
+
+  .portal-nav-item[aria-current="page"] {
+    @apply bg-portal-active text-portal-primary-hover;
+  }
+
+  .portal-nav-item[aria-current="page"]::before {
+    @apply absolute bottom-2 left-0 top-2 w-[3px] rounded-[3px] bg-portal-accent content-[''];
+  }
+}

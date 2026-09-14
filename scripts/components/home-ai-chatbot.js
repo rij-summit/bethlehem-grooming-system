@@ -13,7 +13,9 @@ if (!aiChatbotIsAdminPage) {
 
 function initializeAiChatbot() {
   ensureAiChatbotMarkup();
-  window.lucide?.createIcons();
+  if (document.body.dataset.iconLibrary !== "phosphor") {
+    window.lucide?.createIcons();
+  }
 
   const chatButton = document.getElementById("ai-chat-button");
   const chatPanel = document.getElementById("ai-chat-panel");
@@ -505,7 +507,7 @@ function initializeAiChatbot() {
 }
 
 function ensureAiChatbotStyles() {
-  const stylesheetVersion = "chatbot-safety-insights-20260830";
+  const stylesheetVersion = "chatbot-icon-only-20260914";
   const existingStylesheet = Array.from(
     document.querySelectorAll('link[rel~="stylesheet"]'),
   ).find((link) => {
@@ -547,22 +549,29 @@ function ensureAiChatbotMarkup() {
     return;
   }
 
+  // Migrated portal pages opt into Phosphor; other launchers retain their UI.
+  const usePhosphor = document.body.matches('.portal-theme[data-icon-library="phosphor"]');
+  const assistantLabel = usePhosphor ? "Bethlehem Assistant" : "AI Chatbot";
+  const spriteUrl = new URL("../../assets/icons/phosphor.svg", aiChatbotScriptUrl).href;
+  const renderIcon = (name, className, fallback) => usePhosphor
+    ? `<svg class="ph-icon ${className}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><use href="${spriteUrl}#${name}"></use></svg>`
+    : fallback;
+
   document.body.insertAdjacentHTML(
     "beforeend",
     `
       <button
         id="ai-chat-button"
         type="button"
-        class="ai-chatbot-button"
-        aria-label="Open AI Chatbot"
+        class="ai-chatbot-button ai-chatbot-button--icon-only"
+        aria-label="Open ${assistantLabel}"
         aria-controls="ai-chat-panel"
         aria-expanded="false"
         data-ai-chatbot-launcher
       >
-        <svg class="ai-chatbot-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        ${renderIcon("chat-circle", "ai-chatbot-button__icon", `<svg class="ai-chatbot-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
-        </svg>
-        <span>AI Chatbot</span>
+        </svg>`)}
       </button>
 
       <section
@@ -575,7 +584,7 @@ function ensureAiChatbotMarkup() {
         <header class="ai-chatbot-panel__header">
           <div>
             <p class="ai-chatbot-panel__eyebrow">Bethlehem Assistant</p>
-            <h2 id="ai-chat-title" class="ai-chatbot-panel__title">AI Chatbot</h2>
+            <h2 id="ai-chat-title" class="ai-chatbot-panel__title">${assistantLabel}</h2>
           </div>
           <div class="ai-chatbot-panel__actions">
             <button
@@ -585,20 +594,20 @@ function ensureAiChatbotMarkup() {
               aria-label="Start a new chatbot conversation"
               title="New chat"
             >
-              <svg class="ai-chatbot-reset__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              ${renderIcon("arrow-counter-clockwise", "ai-chatbot-reset__icon", `<svg class="ai-chatbot-reset__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M3 12a9 9 0 1 0 3-6.7"></path>
                 <path d="M3 3v6h6"></path>
-              </svg>
+              </svg>`)}
             </button>
             <button
               id="ai-chat-close"
               type="button"
               class="ai-chatbot-close"
-              aria-label="Close AI Chatbot"
+              aria-label="Close ${assistantLabel}"
             >
-              <svg class="ai-chatbot-close__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              ${renderIcon("x", "ai-chatbot-close__icon", `<svg class="ai-chatbot-close__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M18 6 6 18M6 6l12 12"></path>
-              </svg>
+              </svg>`)}
             </button>
           </div>
         </header>
@@ -615,7 +624,7 @@ function ensureAiChatbotMarkup() {
         </div>
 
         <div id="ai-chat-loading" class="ai-chatbot-loading" role="status" hidden>
-          AI Chatbot is typing...
+          ${assistantLabel} is typing...
         </div>
 
         <p id="ai-chat-error" class="ai-chatbot-error" role="alert" hidden></p>
@@ -633,10 +642,10 @@ function ensureAiChatbotMarkup() {
             required
           />
           <button id="ai-chat-send" type="submit" class="ai-chatbot-send">
-            <svg class="ai-chatbot-send__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            ${renderIcon("paper-plane-tilt", "ai-chatbot-send__icon", `<svg class="ai-chatbot-send__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="m22 2-7 20-4-9-9-4Z"></path>
               <path d="M22 2 11 13"></path>
-            </svg>
+            </svg>`)}
             <span>Send</span>
           </button>
         </form>

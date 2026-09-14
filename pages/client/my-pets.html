@@ -5,137 +5,218 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Pets | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="../../css/output.css?v=20260914-my-pets-actions" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260914-my-pets-actions" />
   </head>
-  <body class="bg-slate-50 text-slate-800">
-    <div class="min-h-screen flex client-dashboard-shell">
+  <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
+    <div class="min-h-screen flex">
 
-      <button type="button" id="clientSidebarToggle" class="client-sidebar-toggle"
-        aria-controls="clientSidebar" aria-expanded="false" aria-label="Open navigation menu">
-        <i data-lucide="menu" class="w-5 h-5"></i>
+      <button
+        type="button"
+        id="clientSidebarToggle"
+        class="fixed left-4 top-4 z-[60] hidden h-12 w-12 items-center justify-center rounded-full border border-portal-border bg-portal-surface-soft text-portal-primary shadow-portal transition-[background-color,transform] duration-200 ease-[ease] hover:-translate-y-px hover:bg-portal-active max-[1180px]:inline-flex"
+        aria-controls="clientSidebar"
+        aria-expanded="false"
+        aria-label="Open navigation menu"
+      >
+        <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#list"></use></svg>
       </button>
 
-      <button type="button" id="clientSidebarBackdrop" class="client-sidebar-backdrop"
-        aria-label="Close navigation menu"></button>
+      <button
+        type="button"
+        id="clientSidebarBackdrop"
+        class="fixed inset-0 z-[95] invisible hidden border-0 bg-[rgba(44,62,80,0.28)] p-0 opacity-0 pointer-events-none transition-[opacity,visibility] duration-[240ms] ease-[ease] max-[1180px]:block max-[1180px]:group-[.client-sidebar-open]/portal:visible max-[1180px]:group-[.client-sidebar-open]/portal:opacity-100 max-[1180px]:group-[.client-sidebar-open]/portal:pointer-events-auto"
+        aria-label="Close navigation menu"
+      ></button>
 
+      <!-- ===================================================== -->
       <!-- SIDEBAR -->
-      <aside id="clientSidebar"
-        class="client-sidebar fixed left-0 top-0 h-screen w-72 bg-[#7fa2c9] text-white flex flex-col justify-between shadow-lg">
+      <!-- Fixed sidebar for client dashboard navigation -->
+      <!-- Backend note: active page state can be set dynamically -->
+      <!-- ===================================================== -->
+      <aside
+        id="clientSidebar"
+        class="fixed left-0 top-0 z-40 flex h-screen supports-[height:100dvh]:h-dvh w-64 flex-col justify-between overflow-y-auto border-r border-portal-border bg-portal-sidebar text-portal-text shadow-none transition-[transform,box-shadow] duration-[240ms] ease-[ease] max-[1180px]:w-[min(288px,calc(100vw-40px))] max-[1180px]:-translate-x-[110%] max-[1180px]:z-[100] max-[1180px]:group-[.client-sidebar-open]/portal:translate-x-0 max-[1180px]:group-[.client-sidebar-open]/portal:shadow-[0_24px_48px_rgba(15,23,42,0.22)]"
+      >
         <div>
-          <div class="px-6 py-6">
+          <!-- Clinic Branding -->
+          <div class="px-6 pt-[25px] pb-5">
             <div class="flex items-start justify-between gap-4">
-              <a href="../../pages/client/dashboard.html" class="flex items-center gap-3">
-                <div class="h-12 w-12 rounded-2xl bg-white p-1.5 flex items-center justify-center">
+              <a
+                href="../../pages/client/dashboard.html"
+                class="flex items-center gap-3"
+              >
+                <div
+                  class="flex items-center justify-center h-[52px] w-12 flex-none rounded-[14px] border border-portal-border bg-portal-surface p-[5px]"
+                >
                   <img
                     src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                     alt="Bethlehem Animal Clinic logo"
+                    width="256"
+                    height="341"
+                    decoding="async"
                     class="h-full w-full object-contain"
                   />
                 </div>
                 <div>
-                  <h1 class="text-lg font-bold leading-tight">Bethlehem Animal Clinic</h1>
-                  <p class="text-sm text-white/80">Client Portal</p>
+                  <h1 class="font-bold leading-tight text-[16px]">
+                    Bethlehem Animal Clinic
+                  </h1>
+                  <p class="text-sm mt-[3px] text-portal-muted">Client Portal</p>
                 </div>
               </a>
-              <button type="button" id="clientSidebarClose" class="client-sidebar-close"
-                aria-label="Close navigation menu">
-                <i data-lucide="x" class="w-5 h-5"></i>
+
+              <button
+                type="button"
+                id="clientSidebarClose"
+                class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-portal-border bg-portal-surface-soft text-portal-primary shadow-portal transition-colors duration-200 ease-[ease] hover:bg-portal-active max-[1180px]:inline-flex"
+                aria-label="Close navigation menu"
+              >
+                <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
               </button>
             </div>
           </div>
 
-          <nav class="px-4 py-6 space-y-2">
-            <p class="px-3 mb-2 text-xs font-medium text-white/70">Menu</p>
+          <!-- Navigation -->
+          <nav class="grid gap-[7px] p-4" aria-label="Customer navigation">
+            <p
+              class="text-xs tracking-[0.2em] uppercase mx-3 mb-[3px] text-portal-muted"
+            >
+              Menu
+            </p>
 
-            <a href="./dashboard.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
-              <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+            <a
+              href="./dashboard.html"
+              class="portal-nav-item font-medium"
+            >
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#squares-four"></use></svg>
               <span>Dashboard</span>
             </a>
 
-            <a href="./my-pets.html"
-              class="flex items-center gap-3 rounded-2xl bg-[#355c84] px-4 py-3 font-medium shadow-sm">
-              <i data-lucide="paw-print" class="w-5 h-5"></i>
+            <a
+              href="./my-pets.html"
+              aria-current="page"
+              class="portal-nav-item font-medium"
+            >
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
               <span>My Pets</span>
             </a>
 
-            <a href="./grooming-history.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
-              <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+            <a
+              href="./grooming-history.html"
+              class="portal-nav-item font-medium"
+            >
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               <span>Grooming History</span>
             </a>
 
-            <a href="./settings.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition">
-              <i data-lucide="settings" class="w-5 h-5"></i>
+            <a
+              href="./settings.html"
+              class="portal-nav-item font-medium"
+            >
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#gear"></use></svg>
               <span>Settings</span>
             </a>
           </nav>
         </div>
 
+        <!-- Client Profile -->
+        <!-- Backend note: client name and email should come from logged-in session -->
         <div class="p-4">
-          <a href="./settings.html" aria-label="View profile settings"
-            class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3 mb-3 text-white transition hover:bg-[#3f6d9c] focus:outline-none focus:ring-2 focus:ring-white/70">
-            <div id="clientProfileInitials"
-              class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold">--</div>
-            <div>
-              <p id="clientProfileName" class="font-semibold">Loading...</p>
-              <p class="text-sm text-white/80">Pet Owner</p>
+          <a
+            href="./settings.html"
+            aria-label="View profile settings"
+            class="transition mb-2 flex items-center gap-3 rounded-[15px] border border-portal-border bg-portal-surface-soft p-[13px] text-portal-text hover:bg-portal-active"
+          >
+            <div
+              id="clientProfileInitials"
+              class="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-portal-primary font-bold text-white"
+            >
+              --
+            </div>
+            <div class="min-w-0 [overflow-wrap:anywhere]">
+              <p id="clientProfileName" class="font-semibold text-[14px]">Loading...</p>
+              <p class="text-sm text-portal-muted">Pet Owner</p>
             </div>
           </a>
-          <button type="button" id="clientLogoutBtn"
-            class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 font-bold text-white transition hover:bg-white/20">
-            <i data-lucide="log-out" class="h-4 w-4"></i>
+
+          <button
+            type="button"
+            id="clientLogoutBtn"
+            class="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-portal-border bg-transparent px-4 py-3 font-bold text-portal-primary-hover transition hover:bg-portal-active"
+          >
+            <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#sign-out"></use></svg>
             <span>Logout</span>
           </button>
         </div>
       </aside>
 
       <!-- MAIN CONTENT -->
-      <main class="client-dashboard-main ml-72 flex-1 min-h-screen">
-        <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
-          <div class="client-dashboard-header flex items-center justify-between px-6 py-5">
-            <div>
-              <h2 class="text-3xl font-bold text-[#2f4b66]">My Pets</h2>
-              <p class="text-slate-500 mt-1">Manage your registered pet profiles.</p>
+      <main class="ml-64 min-w-0 flex-1 min-h-screen transition-[margin-left] duration-[240ms] ease-[ease] max-[1180px]:!ml-0 max-[1180px]:w-full">
+        <header class="sticky top-0 z-30 backdrop-blur border-b border-portal-border bg-white/[0.96]">
+          <div class="flex flex-col gap-5 px-6 py-5 min-[1181px]:flex-row min-[1181px]:items-center min-[1181px]:justify-between min-[1181px]:max-[1420px]:flex-wrap max-[1180px]:pl-20 max-[639px]:gap-[18px] max-[639px]:px-4 max-[639px]:py-[18px]">
+            <div class="min-w-0 max-[639px]:pl-[62px]">
+              <h2 class="text-3xl font-bold text-portal-text max-[639px]:text-[26px]">My Pets</h2>
+              <p class="text-portal-muted mt-1 text-[14px] leading-[1.5]">Manage your registered pet profiles.</p>
             </div>
-            <button type="button" id="addPetBtn"
-              class="flex items-center gap-2 rounded-2xl bg-[#355c84] px-5 py-3 text-white font-semibold hover:bg-[#2d4f73] transition shadow-sm">
-              <i data-lucide="plus" class="w-4 h-4"></i>
-              Add Pet
-            </button>
+            <div class="flex items-center flex-none gap-4 min-[1181px]:max-[1420px]:ml-auto max-[1180px]:flex-wrap max-[639px]:gap-2.5">
+              <div class="flex min-h-[46px] w-[clamp(210px,18vw,300px)] items-center gap-2.5 rounded-full border border-portal-border bg-portal-surface-soft px-[15px] py-[11px] text-portal-primary focus-within:border-portal-accent max-[1180px]:w-auto max-[1180px]:flex-1 max-[639px]:order-3 max-[639px]:basis-full">
+                <svg class="ph-icon w-4 h-4 shrink-0 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
+                <input type="text" id="petSearch" placeholder="Search pet name..." aria-label="Search pet name"
+                  class="w-full min-w-0 bg-transparent text-sm text-portal-text outline-none placeholder:text-portal-muted focus-visible:!outline-none" />
+              </div>
+
+              <div class="relative" id="notifBellWrapper">
+                <button id="notifBellBtn" type="button" aria-label="Notifications"
+                  class="relative flex h-[46px] w-[46px] items-center justify-center rounded-2xl border border-portal-border bg-portal-surface-soft text-portal-primary-hover transition hover:bg-portal-active"
+                  aria-controls="notifDropdown" aria-expanded="false">
+                  <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#bell"></use></svg>
+                  <span id="notifBadge" class="absolute -right-1 -top-1 hidden min-h-5 min-w-5 items-center justify-center rounded-full bg-portal-danger px-1 text-[10px] font-bold text-white"></span>
+                </button>
+
+                <div id="notifDropdown" class="notif-client-dropdown !rounded-2xl !border-portal-border !shadow-portal-dropdown" style="display:none">
+                  <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <span class="text-sm font-semibold text-portal-text">Notifications</span>
+                    <button type="button" id="notifMarkAllRead" class="text-xs text-portal-primary hover:underline">Mark all as read</button>
+                  </div>
+                  <div id="notifList" class="notif-list divide-y divide-slate-100">
+                    <p class="px-4 py-6 text-center text-sm text-portal-muted">Loading...</p>
+                  </div>
+                </div>
+              </div>
+
+              <a id="preRegisterButton" data-pre-registration-button href="./pre-register.html"
+                aria-disabled="true" tabindex="-1" title="Checking availability"
+                class="portal-button-primary cursor-not-allowed font-semibold opacity-60 max-[639px]:flex-1">
+                Pre-register
+              </a>
+            </div>
           </div>
         </header>
 
-        <section class="p-6">
+        <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px]">
 
           <!-- Toolbar -->
-          <div class="flex flex-col sm:flex-row gap-3 mb-6">
-            <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 flex-1">
-              <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
-              <input type="text" id="petSearch" placeholder="Search by name..."
-                class="w-full bg-transparent outline-none text-sm" />
-            </div>
-
-            <div class="flex gap-2">
-              <button type="button" id="filterActiveBtn"
-                class="rounded-full px-5 py-2.5 text-sm font-semibold bg-[#355c84] text-white transition">
-                Active
-              </button>
-              <button type="button" id="filterArchivedBtn"
-                class="rounded-full px-5 py-2.5 text-sm font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
-                Archived
-              </button>
-            </div>
+          <div class="mb-[22px] flex flex-wrap gap-2">
+            <button type="button" id="filterActiveBtn"
+              class="portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-active px-4 py-2 text-portal-primary-hover">
+              Active
+            </button>
+            <button type="button" id="filterArchivedBtn"
+              class="portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-surface px-4 py-2 text-portal-muted hover:bg-portal-surface-soft">
+              Archived
+            </button>
+            <button type="button" id="addPetBtn" class="portal-button-primary min-h-10 gap-2 rounded-[14px] px-4 py-2 text-sm font-semibold">
+              <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#plus"></use></svg>
+              Add Pet
+            </button>
           </div>
 
           <!-- Pet Grid -->
-          <div id="petsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div id="petsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-[22px] max-[639px]:gap-4">
             <div class="col-span-full text-center py-16">
-              <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
-              <p class="mt-3 text-slate-400 text-sm">Loading...</p>
+              <svg class="ph-icon w-8 h-8 mx-auto text-slate-300 animate-spin" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p class="mt-3 text-portal-muted text-sm">Loading...</p>
             </div>
           </div>
 
@@ -145,11 +226,11 @@
 
     <!-- Pet Modal (Add / Edit) -->
     <div id="petModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
-      <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-y-auto max-h-[90vh]">
-        <div class="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
-          <h3 id="petModalTitle" class="text-xl font-bold text-[#2f4b66]">Add Pet</h3>
-          <button type="button" id="closePetModal" class="text-slate-400 hover:text-slate-600">
-            <i data-lucide="x" class="w-5 h-5"></i>
+      <div class="w-full max-w-lg rounded-portal border border-portal-border bg-white shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 pt-6 pb-4 border-b border-portal-border">
+          <h3 id="petModalTitle" class="text-xl font-bold text-portal-text">Add Pet</h3>
+          <button type="button" id="closePetModal" aria-label="Close pet form" class="inline-flex h-8 w-8 items-center justify-center rounded-full text-portal-muted hover:bg-portal-surface-soft">
+            <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
           </button>
         </div>
 
@@ -159,29 +240,29 @@
           <!-- Name + Species -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">
-                Pet Name <span class="text-red-500">*</span>
+              <label class="block text-sm font-medium text-portal-text mb-1">
+                Pet Name <span class="text-portal-danger">*</span>
               </label>
               <input type="text" id="petName" placeholder="e.g. Buddy"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                class="w-full rounded-xl border border-portal-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-portal-active"
                 required />
             </div>
             <div>
-              <label for="petSpecies" class="block text-sm font-medium text-slate-700 mb-1">Species</label>
+              <label for="petSpecies" class="block text-sm font-medium text-portal-text mb-1">Species</label>
               <div id="petSpeciesCombobox" class="relative">
                 <div class="relative">
                   <input id="petSpecies" name="species" type="text" placeholder="Select species"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer"
                     role="combobox" aria-autocomplete="none" aria-controls="petSpeciesOptions"
                     aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
                   <button id="petSpeciesDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active"
                     aria-label="Show species options" aria-controls="petSpeciesOptions" aria-expanded="false">
-                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
                   </button>
                 </div>
                 <div id="petSpeciesOptions"
-                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
                   role="listbox" aria-label="Species options"></div>
               </div>
             </div>
@@ -190,108 +271,108 @@
           <!-- Gender + Birthdate -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petGender" class="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+              <label for="petGender" class="block text-sm font-medium text-portal-text mb-1">Gender</label>
               <div id="petGenderCombobox" class="relative">
                 <div class="relative">
                   <input id="petGender" name="gender" type="text" placeholder="Select gender"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer"
                     role="combobox" aria-autocomplete="none" aria-controls="petGenderOptions"
                     aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
                   <button id="petGenderDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active"
                     aria-label="Show gender options" aria-controls="petGenderOptions" aria-expanded="false">
-                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
                   </button>
                 </div>
                 <div id="petGenderOptions"
-                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
                   role="listbox" aria-label="Gender options"></div>
               </div>
             </div>
             <div>
-              <label for="petBirthdate" class="block text-sm font-medium text-slate-700 mb-1">Birthdate</label>
+              <label for="petBirthdate" class="block text-sm font-medium text-portal-text mb-1">Birthdate</label>
               <input type="date" id="petBirthdate"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+                class="w-full rounded-xl border border-portal-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-portal-active" />
             </div>
           </div>
 
           <!-- Breed + Color -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petBreed" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <label for="petBreed" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
                 Breed
                 <span id="petBreedVerified"
-                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+                  class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
               </label>
               <div id="petBreedCombobox" class="relative">
                 <div class="relative">
                   <input id="petBreed" name="breed" type="text" maxlength="100" placeholder="Select breed"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer"
                     role="combobox" aria-autocomplete="list" aria-controls="petBreedOptions"
                     aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
                   <button id="petBreedDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active"
                     aria-label="Show breed options" aria-controls="petBreedOptions" aria-expanded="false">
-                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
                   </button>
                 </div>
                 <div id="petBreedOptions"
-                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
                   role="listbox" aria-label="Breed options"></div>
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Color</label>
+              <label class="block text-sm font-medium text-portal-text mb-1">Color</label>
               <input type="text" id="petColor" placeholder="e.g. White"
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]" />
+                class="w-full rounded-xl border border-portal-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-portal-active" />
             </div>
           </div>
 
           <!-- Size + Fur Type -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
                 Size
                 <span id="petSizeVerified"
-                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+                  class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
               </label>
               <div id="petSizeCombobox" class="relative">
                 <div class="relative">
                   <input id="petSize" name="size" type="text" placeholder="Select species first"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
                     aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
                   <button id="petSizeDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20 disabled:cursor-not-allowed disabled:text-slate-300"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
                     aria-label="Show size options" aria-controls="petSizeOptions" aria-expanded="false" disabled>
-                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
                   </button>
                 </div>
                 <div id="petSizeOptions"
-                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
                   role="listbox" aria-label="Size options"></div>
               </div>
             </div>
             <div>
-              <label for="petFurType" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <label for="petFurType" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
                 Fur Type
                 <span id="petFurTypeVerified"
-                  class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+                  class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
               </label>
               <div id="petFurTypeCombobox" class="relative">
                 <div class="relative">
                   <input id="petFurType" name="fur_type" type="text" placeholder="Select breed first"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     role="combobox" aria-autocomplete="none" aria-controls="petFurTypeOptions"
                     aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
                   <button id="petFurTypeDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20 disabled:cursor-not-allowed disabled:text-slate-300"
+                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
                     aria-label="Show fur type options" aria-controls="petFurTypeOptions" aria-expanded="false" disabled>
-                    <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
                   </button>
                 </div>
                 <div id="petFurTypeOptions"
-                  class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
                   role="listbox" aria-label="Fur type options"></div>
               </div>
             </div>
@@ -299,29 +380,29 @@
 
           <!-- Weight -->
           <div>
-            <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
               Weight (kg)
               <span id="petWeightVerified"
-                class="hidden rounded-full bg-[#eaf4fb] px-2 py-0.5 text-[10px] font-medium leading-none text-[#315b7e]">Verified</span>
+                class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
             </label>
             <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
               aria-invalid="false"
-              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20" />
+              class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
           </div>
 
           <!-- Medical Conditions -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Medical Conditions / Special Needs</label>
+            <label class="block text-sm font-medium text-portal-text mb-1">Medical Conditions / Special Needs</label>
             <textarea id="petMedical" rows="3" placeholder="e.g. allergic to certain shampoos, has heart condition..."
-              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e] resize-none"></textarea>
+              class="w-full rounded-xl border border-portal-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-portal-active resize-none"></textarea>
           </div>
 
           <!-- Error -->
-          <div id="petFormError" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+          <div id="petFormError" class="hidden rounded-xl border border-red-200 bg-portal-danger-soft px-4 py-3 text-sm text-portal-danger"></div>
 
           <!-- Submit -->
           <button type="submit" id="petFormSubmit"
-            class="w-full rounded-xl bg-[#355c84] px-4 py-3 text-white font-semibold hover:bg-[#2d4f73] transition">
+            class="portal-button-primary w-full font-semibold disabled:cursor-not-allowed disabled:opacity-60">
             Save Pet
           </button>
         </form>
@@ -333,21 +414,21 @@
       role="alertdialog" aria-modal="true" aria-labelledby="petConfirmationTitle"
       aria-describedby="petConfirmationMessage">
       <div id="petConfirmationCard" tabindex="-1"
-        class="w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
-        <div class="border-b border-slate-100 bg-[#f8fbfe] px-6 py-4">
-          <h3 id="petConfirmationTitle" class="text-lg font-semibold text-[#2f4b66]">Confirm action</h3>
+        class="w-full max-w-md overflow-hidden rounded-portal border border-portal-border bg-white shadow-2xl">
+        <div class="border-b border-portal-border bg-portal-surface-soft px-6 py-4">
+          <h3 id="petConfirmationTitle" class="text-lg font-semibold text-portal-text">Confirm action</h3>
         </div>
         <div class="px-6 py-5">
-          <p id="petConfirmationMessage" class="text-sm leading-6 text-slate-600"></p>
+          <p id="petConfirmationMessage" class="text-sm leading-6 text-portal-muted"></p>
           <p id="petConfirmationDetails"
-            class="mt-3 hidden rounded-xl border border-[#d9e6f1] bg-[#f8fbfd] px-4 py-3 text-sm leading-6 text-[#2f4b66]"></p>
+            class="mt-3 hidden rounded-xl border border-portal-border bg-portal-surface-soft px-4 py-3 text-sm leading-6 text-portal-text"></p>
           <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" id="cancelPetConfirmation"
-              class="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              class="portal-button-secondary">
               Cancel
             </button>
             <button type="button" id="confirmPetAction"
-              class="min-h-11 rounded-xl bg-[#355c84] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d4f73]">
+              class="portal-button-primary text-sm font-semibold">
               Continue
             </button>
           </div>
@@ -356,7 +437,8 @@
     </div>
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
-    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816"></script>
-    <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830" defer></script>
+    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816&ui=20260914-actions"></script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260807-ongoing-tooltip"></script>
+    <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

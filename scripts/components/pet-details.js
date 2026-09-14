@@ -18,7 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const vaccinationRecords = document.getElementById("petVaccinationRecords");
   const concernNotifications = document.getElementById("petConcernNotifications");
   const concernDetail = document.getElementById("petConcernDetail");
-  const bookGroomingLink = document.getElementById("bookGroomingLink");
   let medicalLoadState = "idle";
   let vaccinationLoadState = "idle";
   let concernLoadState = "idle";
@@ -151,11 +150,11 @@ document.addEventListener("DOMContentLoaded", () => {
       tabs.forEach((candidate) => {
         const active = candidate.dataset.petTab === selected;
         candidate.setAttribute("aria-selected", String(active));
-        candidate.classList.toggle("bg-[#315b7e]", active);
+        candidate.classList.toggle("bg-portal-primary", active);
         candidate.classList.toggle("text-white", active);
         candidate.classList.toggle("shadow-sm", active);
-        candidate.classList.toggle("text-[#2f4b66]", !active);
-        candidate.classList.toggle("hover:bg-slate-50", !active);
+        candidate.classList.toggle("text-portal-text", !active);
+        candidate.classList.toggle("hover:bg-portal-surface-soft", !active);
       });
 
       panels.forEach((panel) => {
@@ -212,12 +211,12 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
 
     overviewGrid.innerHTML = details.map(([label, value, field]) => `
-      <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+      <div class="rounded-[14px] border border-portal-border bg-portal-surface-soft px-4 py-4">
         <div class="flex items-center justify-between gap-3">
-          <p class="text-xs font-medium text-slate-500">${escapeHtml(label)}</p>
+          <p class="text-sm font-medium text-portal-muted">${escapeHtml(label)}</p>
           ${verifiedIndicator(isClinicVerified(pet, field))}
         </div>
-        <p class="mt-1.5 break-words font-semibold text-slate-700">${escapeHtml(value)}</p>
+        <p class="mt-1.5 break-words text-sm font-semibold text-portal-text">${escapeHtml(value)}</p>
       </div>
     `).join("");
 
@@ -1783,19 +1782,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const { pet } = await API.getPet(petId);
-      const archived = isTrue(pet.is_archived);
-      const petName = displayValue(pet.pet_name);
+      const profileTitle = isMissing(pet.pet_name) ? "Pet’s Profile" : `${pet.pet_name}’s Profile`;
 
-      document.getElementById("pageTitle").textContent = isMissing(pet.pet_name) ? "Pet Profile" : `${pet.pet_name}'s Profile`;
-      document.getElementById("pageSubtitle").textContent = "Grooming and clinic information in one shared profile.";
-      document.getElementById("petHeroName").textContent = petName;
-      document.getElementById("petHeroSpecies").textContent = titleCase(pet.species);
-      document.getElementById("petStatusBadge").textContent = archived ? "Archived" : "Active";
-
-      if (!archived) {
-        bookGroomingLink?.classList.remove("hidden");
-        bookGroomingLink?.classList.add("inline-flex");
-      }
+      document.getElementById("pageTitle").textContent = profileTitle;
+      document.title = `${profileTitle} | Bethlehem Animal Clinic`;
 
       renderOverview(pet);
       loadingState?.classList.add("hidden");
