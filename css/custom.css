@@ -77,6 +77,12 @@
   font-weight: 700;
 }
 
+.ai-chatbot-button.ai-chatbot-button--icon-only {
+  width: 3.75rem;
+  border-radius: 1rem;
+  padding: 0;
+}
+
 .ai-chatbot-panel .ai-chatbot-panel__eyebrow,
 .ai-chatbot-panel .ai-chatbot-panel__title,
 .ai-chatbot-send,
@@ -129,7 +135,15 @@
   line-height: 1.2;
 }
 
-.ai-chatbot-close {
+.ai-chatbot-panel__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.ai-chatbot-close,
+.ai-chatbot-reset {
   display: inline-flex;
   width: 2.35rem;
   height: 2.35rem;
@@ -146,12 +160,15 @@
     transform 0.2s ease;
 }
 
-.ai-chatbot-close:hover {
+.ai-chatbot-close:hover,
+.ai-chatbot-reset:hover {
   background: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
 }
 
 .ai-chatbot-close:focus-visible,
+.ai-chatbot-reset:focus-visible,
+.ai-chatbot-message__feedback-button:focus-visible,
 .ai-chatbot-send:focus-visible,
 .ai-chatbot-input:focus-visible {
   outline: 3px solid rgba(18, 74, 120, 0.22);
@@ -159,6 +176,7 @@
 }
 
 .ai-chatbot-close__icon,
+.ai-chatbot-reset__icon,
 .ai-chatbot-send__icon {
   width: 1.05rem;
   height: 1.05rem;
@@ -186,24 +204,102 @@
 }
 
 .ai-chatbot-message--bot {
+  min-width: 0;
   align-self: flex-start;
   border-bottom-left-radius: 0.35rem;
   background: #e6f0f8;
   color: #1f3850;
+  line-height: 1.6;
+}
+
+.ai-chatbot-message--bot > .ai-chatbot-message__block {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.ai-chatbot-message--bot > .ai-chatbot-message__block + .ai-chatbot-message__block {
+  margin-top: 0.72rem;
+}
+
+.ai-chatbot-message--bot > .ai-chatbot-message__heading + .ai-chatbot-message__block {
+  margin-top: 0.34rem;
+}
+
+.ai-chatbot-message--bot > .ai-chatbot-message__block + .ai-chatbot-message__heading {
+  margin-top: 0.9rem;
+}
+
+.ai-chatbot-message--bot .ai-chatbot-message__heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.42;
 }
 
 .ai-chatbot-message--bot .ai-chatbot-message__paragraph {
   margin: 0;
 }
 
-.ai-chatbot-message--bot .ai-chatbot-message__paragraph + .ai-chatbot-message__paragraph {
-  margin-top: 0.8rem;
+.ai-chatbot-message--bot .ai-chatbot-message__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  line-height: 1.55;
+}
+
+.ai-chatbot-message--bot .ai-chatbot-message__list-item {
+  margin: 0;
+  padding-left: 0.12rem;
+  overflow-wrap: anywhere;
+}
+
+.ai-chatbot-message--bot .ai-chatbot-message__list-item + .ai-chatbot-message__list-item {
+  margin-top: 0.32rem;
 }
 
 .ai-chatbot-message--bot .ai-chatbot-message__highlight {
   color: #123f65;
   font-size: 1.03em;
   font-weight: 700;
+}
+
+.ai-chatbot-message__feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-top: 1px solid rgba(18, 74, 120, 0.12);
+  margin-top: 0.72rem;
+  padding-top: 0.58rem;
+}
+
+.ai-chatbot-message__feedback-prompt {
+  color: #5a7187;
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ai-chatbot-message__feedback-button {
+  min-width: 2.2rem;
+  border: 1px solid #bed2e3;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #315b7e;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.ai-chatbot-message__feedback-button:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #8eacc5;
+}
+
+.ai-chatbot-message__feedback-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .ai-chatbot-message--user {
@@ -759,6 +855,11 @@ body.customer-detail-modal-open {
     height: 1.2rem;
   }
 
+  .ai-chatbot-button.ai-chatbot-button--icon-only {
+    width: 3.25rem;
+    padding: 0;
+  }
+
   .ai-chatbot-panel {
     right: 1rem;
     bottom: 5.35rem;
@@ -1063,8 +1164,32 @@ body.customer-detail-modal-open {
   overflow-y: auto;
 }
 
+.notif-client-dropdown {
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-height: min(32rem, calc(100dvh - 5rem));
+}
+
+.notif-client-dropdown .notif-list {
+  min-height: 4rem;
+  max-height: min(21rem, calc(100dvh - 13rem));
+}
+
+.client-notification-tab[aria-selected="true"] {
+  border-color: var(--portal-primary);
+  color: var(--portal-primary);
+}
+
+.client-notification-tab[aria-selected="false"] {
+  border-color: transparent;
+  color: var(--portal-muted);
+}
+
+.client-notification-tab[aria-selected="false"]:hover {
+  color: var(--portal-primary-hover);
+}
+
 .client-notification-emphasis {
-  color: #1e293b;
+  color: var(--portal-text, #284764);
   font-weight: 700;
 }
 
@@ -5079,4 +5204,37 @@ body.customer-detail-modal-open {
   .inventory-search-field {
     grid-column: auto;
   }
+}
+
+/* ----- Shared Portal Widget Theme ----- */
+/* Reuses css/themes/portal.css tokens; opt in with .portal-theme. */
+.portal-theme .pickup-popup-card { background: var(--portal-surface); border-color: var(--portal-border); }
+.portal-theme .pickup-paw-ring { background: var(--portal-active); border-color: var(--portal-border); box-shadow: none; }
+.portal-theme :is(.pickup-paw-icon, .pickup-title, .pickup-bounce-text) { color: var(--portal-primary); }
+.portal-theme .pickup-subtitle { color: var(--portal-muted); }
+.portal-theme .pickup-dismiss-btn { background: var(--portal-primary); box-shadow: var(--portal-shadow); }
+
+.portal-theme .ai-chatbot-button {
+  right: 24px;
+  bottom: 24px;
+  min-height: 58px;
+  background: var(--portal-primary);
+  box-shadow: 0 6px 18px rgb(44 62 80 / 17%);
+}
+.portal-theme .ai-chatbot-button:hover { background: var(--portal-primary-hover); box-shadow: 0 8px 22px rgb(44 62 80 / 20%); transform: none; }
+.portal-theme .ai-chatbot-panel { border: 1px solid var(--portal-border); box-shadow: 0 12px 40px rgb(44 62 80 / 18%); }
+.portal-theme :is(.ai-chatbot-panel__header, .ai-chatbot-send) { background: var(--portal-primary); }
+.portal-theme .ai-chatbot-send:hover:not(:disabled) { background: var(--portal-primary-hover); }
+.portal-theme .ai-chatbot-message--user { background: var(--portal-active); color: var(--portal-text); }
+.portal-theme .ai-chatbot-message--bot { border-color: var(--portal-border); color: var(--portal-text); }
+.portal-theme .ai-chatbot-input { border-color: var(--portal-border); background: var(--portal-surface-soft); }
+
+@media (max-width: 639px) {
+  .portal-theme .ai-chatbot-button { right: 16px; bottom: 16px; min-height: 52px; font-size: 14px; }
+  .portal-theme .ai-chatbot-panel { right: 16px; bottom: 80px; max-height: calc(100dvh - 96px); }
+}
+/* Hide the browser's built-in password eye when a Phosphor toggle is present. */
+.custom-password-input::-ms-reveal,
+.custom-password-input::-ms-clear {
+  display: none;
 }

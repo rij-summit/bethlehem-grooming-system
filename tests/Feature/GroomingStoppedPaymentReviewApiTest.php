@@ -633,6 +633,52 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
         $this->postJson('/api/admin/bookings/201/release')->assertOk();
     }
 
+    public function test_customer_history_uses_staff_confirmed_size_and_settled_service_prices(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('services')->where('service_id', 1)->update(['slug' => 'regular_dog_grooming']);
+        DB::table('booking_pets')->where('booking_id', 201)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+            'grooming_end_time' => '2026-08-01 11:00:00',
+        ]);
+        DB::table('booking_pets')->where('booking_pet_id', 301)->update([
+            'registered_size' => 'medium',
+        ]);
+        DB::table('bookings')->where('booking_id', 201)->update(['status' => 'for_payment']);
+
+        $this->postJson('/api/admin/bookings/201/pay', [
+            'final_price' => '1175.00',
+            'amount_paid' => '1200.00',
+            'payment_method' => 'cash',
+            'service_prices' => [
+                ['booking_service_id' => 501, 'amount' => '850.00'],
+                ['booking_service_id' => 502, 'amount' => '125.00'],
+                ['booking_service_id' => 503, 'amount' => '200.00'],
+            ],
+            'pet_sizes' => [
+                ['booking_pet_id' => 301, 'size' => 'large'],
+                ['booking_pet_id' => 302, 'size' => 'small'],
+            ],
+        ])->assertOk();
+        DB::table('bookings')->where('booking_id', 201)->update(['status' => 'archived']);
+
+        $this->authenticateAs('customer');
+        $this->getJson('/api/booking/history?pet_id=101')
+            ->assertOk()
+            ->assertJsonPath('history.0.pets.0.registered_size', 'medium')
+            ->assertJsonPath('history.0.pets.0.confirmed_size', 'large')
+            ->assertJsonPath('history.0.payment_summary.payment_method_label', 'Cash')
+            ->assertJsonPath('history.0.payment_summary.pets.0.service_breakdown.0.service_kind', 'package')
+            ->assertJsonPath('history.0.payment_summary.pets.0.service_breakdown.0.price_at_booking', '850.00')
+            ->assertJsonPath('history.0.payment_summary.pets.0.final_pet_charge', '975.00');
+
+        $paidBooking = collect($this->getJson('/api/booking/history')->assertOk()->json('history'))
+            ->firstWhere('booking_id', 201);
+        $this->assertNotNull($paidBooking);
+        $this->assertSame([301, 302], collect($paidBooking['payment_summary']['pets'])
+            ->pluck('booking_pet_id')->all());
+    }
+
     public function test_partial_review_is_used_in_mixed_total_without_overwriting_stopped_prices(): void
     {
         $this->authenticateAs('staff');
@@ -1027,6 +1073,8 @@ class GroomingStoppedPaymentReviewApiTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
+            $table->string('registered_size', 20)->nullable();
+            $table->string('confirmed_size', 20)->nullable();
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
             $table->string('grooming_state', 20)->default('not_started');

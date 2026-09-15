@@ -27,8 +27,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── State ────────────────────────────────────────────
   let allPets = [];
+  let petsLoadPending = false;
   let allKnownPets = [];
   let showingArchived = false;
+  let activePetsCache = null;
+  let archivedPetsCache = null;
+  let activePetsRequest = null;
+  let archivedPetsRequest = null;
+  let petCollectionGeneration = 0;
+  let petCollectionPrefetchStarted = false;
+  let notificationsLoading = false;
+  let notificationsLoaded = false;
   let editingPet = null;
   let confirmationResolver = null;
   let confirmationReturnFocus = null;
@@ -42,6 +51,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── DOM refs ─────────────────────────────────────────
   const petsGrid         = document.getElementById("petsGrid");
+  const petsLoadingScreen = document.getElementById("petsLoadingScreen");
+  const petsLoadingMessage = document.getElementById("petsLoadingMessage");
+  const petsContent = document.getElementById("petsContent");
   const petSearch        = document.getElementById("petSearch");
   const filterActiveBtn  = document.getElementById("filterActiveBtn");
   const filterArchivedBtn= document.getElementById("filterArchivedBtn");
@@ -73,6 +85,14 @@ document.addEventListener("DOMContentLoaded", () => {
     weight: document.getElementById("petWeightVerified"),
     size: document.getElementById("petSizeVerified"),
   };
+  const notificationBell = document.getElementById("notifBellBtn");
+  const notificationBadge = document.getElementById("notifBadge");
+  const notificationDropdown = document.getElementById("notifDropdown");
+  const notificationList = document.getElementById("notifList");
+  const markAllNotificationsRead = document.getElementById("notifMarkAllRead");
+  const currentNotificationTab = window.ClientNotificationUI.ensureDropdownControls(notificationDropdown, () => {
+    void loadNotifications({ force: true });
+  });
 
   const petTypeCombobox = createFixedOptionCombobox({
     root: document.getElementById("petSpeciesCombobox"),
@@ -127,10 +147,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ── Icons ─────────────────────────────────────────────
-  if (window.lucide) window.lucide.createIcons();
+  // Phosphor sprite icons render directly without JavaScript hydration.
 
   // ── Profile ───────────────────────────────────────────
-  (async () => {
+  const loadCustomerProfile = async () => {
     try {
       const { user } = await API.getMe("customer");
       const name = `${user.first_name} ${user.last_name}`;
@@ -140,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       // silently fail — not critical
     }
-  })();
+  };
 
   // ── Logout ────────────────────────────────────────────
   logoutBtn?.addEventListener("click", async () => {
@@ -190,27 +210,209 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!event.matches) closeSidebar();
   });
 
-  // ── Load pets ─────────────────────────────────────────
-  async function loadPets() {
-    renderGrid(null); // loading state
+  // Notifications in the My Pets header.
+  function closeNotificationDropdown() {
+    if (!notificationBell || !notificationDropdown) return;
+
+    notificationDropdown.style.display = "none";
+    notificationBell.setAttribute("aria-expanded", "false");
+  }
+
+  function positionNotificationDropdown() {
+    if (!notificationBell || !notificationDropdown) return;
+
+    const bellBounds = notificationBell.getBoundingClientRect();
+    const margin = 12;
+    const width = Math.min(384, window.innerWidth - (margin * 2));
+
+    notificationDropdown.style.top = `${bellBounds.bottom + 8}px`;
+    notificationDropdown.style.right = `${Math.max(margin, window.innerWidth - bellBounds.right)}px`;
+    notificationDropdown.style.left = "auto";
+    notificationDropdown.style.width = `${width}px`;
+  }
+
+  async function loadNotifications({ force = false } = {}) {
+    if (
+      !notificationBadge
+      || !notificationList
+      || notificationsLoading
+      || (!force && notificationsLoaded)
+    ) return;
+    notificationsLoading = true;
+
     try {
-      const [activeData, archivedData] = await Promise.all([
-        API.getUserPets({ archived: 0 }),
-        API.getUserPets({ archived: 1 }),
-      ]);
-      const activePets = activeData.pets || [];
-      const archivedPets = archivedData.pets || [];
-      allKnownPets = [...activePets, ...archivedPets];
-      allPets = showingArchived ? archivedPets : activePets;
+      const data = await API.getCustomerNotifications();
+      const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+      const unreadCount = Number(data.unread_count || 0);
+      window.ClientNotificationUI.setUnreadCount(notificationDropdown, unreadCount);
+      notificationsLoaded = true;
+
+      notificationBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+      notificationBadge.classList.toggle("hidden", unreadCount === 0);
+      notificationBadge.classList.toggle("inline-flex", unreadCount > 0);
+
+      window.ClientNotificationUI.render(notificationList, notifications, currentNotificationTab());
+
+      notificationList.querySelectorAll("[data-client-notification-index]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const notification = notifications[Number(button.dataset.clientNotificationIndex)];
+
+          try {
+            await API.markCustomerNotificationRead(notification.id);
+            if (notification.destination) {
+              window.location.href = notification.destination;
+              return;
+            }
+            await loadNotifications({ force: true });
+          } catch {
+            // Notifications are non-critical to pet profile management.
+          }
+        });
+      });
     } catch {
-      allPets = [];
-      allKnownPets = [];
+      notificationList.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">Notifications are unavailable.</p>';
+    } finally {
+      notificationsLoading = false;
     }
+  }
+
+  notificationBell?.addEventListener("click", () => {
+    if (!notificationDropdown) return;
+
+    if (notificationDropdown.style.display === "none") {
+      void loadNotifications();
+      positionNotificationDropdown();
+      notificationDropdown.style.display = "flex";
+      notificationBell.setAttribute("aria-expanded", "true");
+      return;
+    }
+
+    closeNotificationDropdown();
+  });
+
+  markAllNotificationsRead?.addEventListener("click", async () => {
+    try {
+      await API.markAllCustomerNotificationsRead();
+      await loadNotifications({ force: true });
+    } catch {
+      // Notifications are non-critical to pet profile management.
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (
+      notificationDropdown?.style.display !== "none"
+      && !notificationDropdown.contains(event.target)
+      && !notificationBell?.contains(event.target)
+    ) {
+      closeNotificationDropdown();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (notificationDropdown?.style.display !== "none") {
+      positionNotificationDropdown();
+    }
+  });
+
+  // ── Load pets ─────────────────────────────────────────
+  function syncAllKnownPets() {
+    allKnownPets = [
+      ...(activePetsCache || []),
+      ...(archivedPetsCache || []),
+    ];
+  }
+
+  function getPetCollectionCache(archived) {
+    return archived ? archivedPetsCache : activePetsCache;
+  }
+
+  async function loadPetCollection(archived, { force = false } = {}) {
+    const cachedPets = getPetCollectionCache(archived);
+    if (!force && cachedPets !== null) return cachedPets;
+
+    const inFlightRequest = archived ? archivedPetsRequest : activePetsRequest;
+    if (!force && inFlightRequest) return inFlightRequest;
+
+    const requestGeneration = petCollectionGeneration;
+    let request;
+    request = (archived
+      ? API.getUserPets({ archived: 1 })
+      : API.getUserPets({ archived: 0 }))
+      .then((data) => {
+        const pets = Array.isArray(data.pets) ? data.pets : [];
+        if (requestGeneration !== petCollectionGeneration) return pets;
+        if (archived) archivedPetsCache = pets;
+        else activePetsCache = pets;
+        syncAllKnownPets();
+        return pets;
+      })
+      .finally(() => {
+        if (archived && archivedPetsRequest === request) archivedPetsRequest = null;
+        if (!archived && activePetsRequest === request) activePetsRequest = null;
+      });
+
+    if (archived) archivedPetsRequest = request;
+    else activePetsRequest = request;
+
+    return request;
+  }
+
+  function scheduleIdleTask(task) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    window.setTimeout(task, 200);
+  }
+
+  function schedulePetCollectionPrefetch() {
+    if (petCollectionPrefetchStarted) return;
+    petCollectionPrefetchStarted = true;
+    scheduleIdleTask(() => {
+      loadPetCollection(!showingArchived)
+        .catch(() => {
+          // The visible collection remains usable if background prefetch fails.
+        })
+        .finally(() => scheduleIdleTask(async () => {
+          await loadNotifications();
+          scheduleIdleTask(loadCustomerProfile);
+        }));
+    });
+  }
+
+  function invalidatePetCollections() {
+    petCollectionGeneration += 1;
+    activePetsCache = null;
+    archivedPetsCache = null;
+    activePetsRequest = null;
+    archivedPetsRequest = null;
+    petCollectionPrefetchStarted = false;
+    syncAllKnownPets();
+  }
+
+  async function loadPets({ force = false } = {}) {
+    const archived = showingArchived;
+    petsLoadPending = true;
+    if (getPetCollectionCache(archived) === null) renderGrid(null);
+
+    try {
+      const pets = await loadPetCollection(archived, { force });
+      if (showingArchived !== archived) return;
+      allPets = pets;
+    } catch {
+      if (showingArchived !== archived) return;
+      allPets = [];
+    }
+    petsLoadPending = false;
     applyFilter();
+    schedulePetCollectionPrefetch();
   }
 
   // ── Filter + search ───────────────────────────────────
   function applyFilter() {
+    if (petsLoadPending) return;
     const q = petSearch.value.trim().toLowerCase();
     const filtered = q
       ? allPets.filter((p) => p.pet_name.toLowerCase().includes(q))
@@ -220,35 +422,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   petSearch.addEventListener("input", applyFilter);
 
-  filterActiveBtn.addEventListener("click", () => {
-    showingArchived = false;
-    filterActiveBtn.className =
-      "rounded-full px-5 py-2.5 text-sm font-semibold bg-[#355c84] text-white transition";
-    filterArchivedBtn.className =
-      "rounded-full px-5 py-2.5 text-sm font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition";
+  function setPetStatusFilter(archived) {
+    showingArchived = archived;
+    for (const [button, selected] of [
+      [filterActiveBtn, !archived],
+      [filterArchivedBtn, archived],
+    ]) {
+      button.setAttribute("aria-pressed", String(selected));
+      button.className = selected
+        ? "h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm"
+        : "h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft";
+    }
     loadPets();
-  });
+  }
 
-  filterArchivedBtn.addEventListener("click", () => {
-    showingArchived = true;
-    filterArchivedBtn.className =
-      "rounded-full px-5 py-2.5 text-sm font-semibold bg-[#355c84] text-white transition";
-    filterActiveBtn.className =
-      "rounded-full px-5 py-2.5 text-sm font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition";
-    loadPets();
-  });
+  filterActiveBtn.addEventListener("click", () => setPetStatusFilter(false));
+  filterArchivedBtn.addEventListener("click", () => setPetStatusFilter(true));
 
   // ── Render grid ───────────────────────────────────────
   function renderGrid(pets) {
     if (pets === null) {
-      petsGrid.innerHTML = `
-        <div class="col-span-full text-center py-16">
-          <i data-lucide="loader" class="w-8 h-8 mx-auto text-slate-300 animate-spin"></i>
-          <p class="mt-3 text-slate-400 text-sm">Loading...</p>
-        </div>`;
-      window.lucide?.createIcons();
+      if (petsLoadingMessage) petsLoadingMessage.textContent = showingArchived ? "Loading archived pets..." : "Loading my pets...";
+      petsLoadingScreen?.classList.remove("hidden");
+      petsContent?.classList.add("hidden");
+      petsContent?.setAttribute("inert", "");
+      petsContent?.setAttribute("aria-hidden", "true");
       return;
     }
+
+    petsLoadingScreen?.classList.add("hidden");
+    petsContent?.classList.remove("hidden");
+    petsContent?.removeAttribute("inert");
+    petsContent?.removeAttribute("aria-hidden");
 
     if (pets.length === 0) {
       const msg = showingArchived
@@ -256,15 +461,15 @@ document.addEventListener("DOMContentLoaded", () => {
         : "No pets yet. Add your first pet using the button above.";
       petsGrid.innerHTML = `
         <div class="col-span-full text-center py-16">
-          <i data-lucide="paw-print" class="w-10 h-10 mx-auto text-slate-200"></i>
-          <p class="mt-3 text-slate-400 text-sm">${msg}</p>
+          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
+          <p class="mt-3 text-portal-muted text-sm">${msg}</p>
         </div>`;
-      window.lucide?.createIcons();
+
       return;
     }
 
     petsGrid.innerHTML = pets.map((pet) => buildCard(pet)).join("");
-    window.lucide?.createIcons();
+
 
     petsGrid.querySelectorAll("[data-edit]").forEach((btn) => {
       btn.addEventListener("click", () => openEditModal(Number(btn.dataset.edit)));
@@ -284,7 +489,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const speciesIcon = getPetSpeciesIcon(pet.species);
 
     const rows = [
-      ["Species", pet.species],
       ["Breed", pet.breed],
       ["Size", sizeLabel[pet.size]],
       ["Fur Type", resolvedFurType],
@@ -295,54 +499,54 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const detailsHtml = rows.length
       ? rows.map(([label, val]) => `
-          <div class="flex gap-2 text-sm">
-            <span class="text-slate-400 shrink-0 w-20">${label}</span>
-            <span class="min-w-0 break-words text-slate-700 font-medium">${escHtml(String(val))}</span>
+          <div class="flex items-start justify-between gap-4 text-sm">
+            <span class="shrink-0 text-portal-muted">${label}</span>
+            <span class="min-w-0 break-words text-right font-semibold text-portal-text">${escHtml(String(val))}</span>
           </div>`).join("")
-      : `<p class="text-sm text-slate-400">No additional details.</p>`;
+      : `<p class="text-sm text-portal-muted">No additional details.</p>`;
 
     const archiveBtn = pet.is_archived
       ? `<button type="button" data-unarchive="${pet.pet_id}"
-            class="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Restore
+            class="portal-button-secondary col-span-2 min-h-8 w-full gap-1.5 rounded-xl px-3 py-1.5 text-xs">
+            <svg class="ph-icon w-4 h-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#arrow-counter-clockwise"></use></svg> Restore
           </button>`
       : `<button type="button" data-archive="${pet.pet_id}"
-            class="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition">
-            <i data-lucide="archive" class="w-3.5 h-3.5"></i> Archive
+            class="portal-button-secondary min-h-8 w-full gap-1.5 rounded-xl px-3 py-1.5 text-xs">
+            <svg class="ph-icon w-4 h-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#archive"></use></svg> Archive
           </button>`;
 
     const editBtn = pet.is_archived ? "" : `
       <button type="button" data-edit="${pet.pet_id}"
-        class="flex items-center gap-1.5 rounded-xl bg-[#dbe8f5] px-3 py-2 text-xs font-semibold text-[#2f4b66] hover:bg-[#ccddf0] transition">
-        <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+        class="portal-button-secondary min-h-8 w-full gap-1.5 rounded-xl px-3 py-1.5 text-xs">
+        <svg class="ph-icon w-4 h-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#pencil-simple"></use></svg> Edit
       </button>`;
 
     const viewProfileLink = `
       <a href="./pet-details.html?pet_id=${encodeURIComponent(pet.pet_id)}"
-        class="flex items-center gap-1.5 rounded-xl bg-[#355c84] px-3 py-2 text-xs font-semibold text-white hover:bg-[#2d4f73] transition">
-        <i data-lucide="user-round-search" class="w-3.5 h-3.5"></i> View Profile
+        class="portal-button-primary col-span-2 min-h-8 w-full rounded-xl px-3 py-1.5 text-xs font-semibold">
+        View profile
       </a>`;
 
     return `
-      <div class="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm flex flex-col gap-4">
+      <div class="portal-card flex w-full max-w-[400px] flex-col gap-3 p-4">
         <div class="flex items-start justify-between gap-2">
-          <div class="flex items-center gap-3">
-            <div class="h-12 w-12 rounded-2xl bg-[#dbe8f5] flex items-center justify-center shrink-0">
-              <i data-lucide="${speciesIcon}" class="w-5 h-5 text-[#355c84]" aria-hidden="true"></i>
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="portal-icon-tile h-10 w-10 rounded-xl">
+              <svg class="ph-icon w-5 h-5 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#${speciesIcon}"></use></svg>
             </div>
-            <div>
-              <p class="font-bold text-[#2f4b66] text-base leading-tight">${escHtml(pet.pet_name)}</p>
-              <p class="text-xs text-slate-400 mt-0.5">${escHtml(pet.species || "Dog")}</p>
+            <div class="min-w-0 [overflow-wrap:anywhere]">
+              <p class="font-bold text-portal-text text-base leading-tight">${escHtml(pet.pet_name)}</p>
+              <p class="text-xs text-portal-muted mt-0.5">${escHtml(pet.species || "Dog")}</p>
             </div>
           </div>
-          ${pet.is_archived ? `<span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400">Archived</span>` : ""}
+          ${pet.is_archived ? `<span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-portal-muted">Archived</span>` : ""}
         </div>
 
-        <div class="space-y-1.5 flex-1">
+        <div class="flex-1 space-y-1">
           ${detailsHtml}
         </div>
 
-        <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+        <div class="grid grid-cols-2 gap-2 border-t border-portal-border pt-2">
           ${viewProfileLink}
           ${editBtn}
           ${archiveBtn}
@@ -442,6 +646,10 @@ document.addEventListener("DOMContentLoaded", () => {
   petForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     hideFormError();
+    await Promise.allSettled([
+      loadPetCollection(false),
+      loadPetCollection(true),
+    ]);
 
     const id = document.getElementById("petId").value;
     const weight = getEnteredWeight(petWeight);
@@ -499,6 +707,7 @@ document.addEventListener("DOMContentLoaded", () => {
         await API.addPet(payload);
       }
       closeModal();
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       showFormError(err.errors
@@ -522,6 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirmed) return;
     try {
       await API.archivePet(id);
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       alert(err.message || "Could not archive pet.");
@@ -539,6 +749,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirmed) return;
     try {
       await API.unarchivePet(id);
+      invalidatePetCollections();
       await loadPets();
     } catch (err) {
       alert(err.message || "Could not restore pet.");

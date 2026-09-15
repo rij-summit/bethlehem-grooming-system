@@ -26,7 +26,7 @@
       } catch (e) {}
     </script>
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-password-reveal" />
   </head>
   <body class="min-h-screen bg-slate-100 px-4 py-8">
     <div class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-2xl items-center justify-center">
@@ -80,7 +80,7 @@
                   name="password"
                   type="password"
                   autocomplete="current-password"
-                  class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 pr-12 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/10"
+                  class="custom-password-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 pr-12 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/10"
                   required
                 />
                 <button
@@ -90,14 +90,8 @@
                   aria-label="Show password"
                   title="Show password"
                 >
-                  <i
-                    data-lucide="eye-closed"
-                    class="shared-password-icon-closed h-5 w-5"
-                  ></i>
-                  <i
-                    data-lucide="eye"
-                    class="shared-password-icon-open hidden h-5 w-5"
-                  ></i>
+                  <svg class="shared-password-icon-closed h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
+                  <svg class="shared-password-icon-open hidden h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
                 </button>
               </div>
             </div>
@@ -148,8 +142,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=session-inactivity-20260828" defer></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830" defer></script>
     <script src="../../scripts/auth/sign-in.js?v=password-reset-20260828" defer></script>
+    <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

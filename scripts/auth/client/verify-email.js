@@ -2,8 +2,6 @@
 // Handles signup verification, login confirmation, and the signup pending state.
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (window.lucide) window.lucide.createIcons();
-
   const stateVerifying = document.getElementById("stateVerifying");
   const stateSuccess   = document.getElementById("stateSuccess");
   const statePending   = document.getElementById("statePending");
@@ -44,7 +42,6 @@ document.addEventListener("DOMContentLoaded", () => {
       error: stateError,
     }[name];
     if (element) element.classList.remove("hidden");
-    if (window.lucide) window.lucide.createIcons();
   }
 
   const fragmentParams = new URLSearchParams(window.location.hash.slice(1));

@@ -3,9 +3,11 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "npm run build:css && vite build",
+        "build:css": "node node_modules/tailwindcss-v3/lib/cli.js -c tailwind.config.js -i css/input.css -o css/output.css",
+        "watch:css": "npm run build:css -- --watch",
         "dev": "vite",
-        "test": "node tests/customer-dashboard-history-regression.cjs && node tests/frontend-auth-session-regression.cjs && node tests/session-inactivity-regression.cjs && node tests/admin-notifications-date-grouping-regression.cjs && node tests/admin-security-settings-regression.cjs"
+        "test": "node tests/customer-dashboard-history-regression.cjs && node tests/client-settings-loading-regression.cjs && node tests/frontend-auth-session-regression.cjs && node tests/session-inactivity-regression.cjs && node tests/admin-notifications-date-grouping-regression.cjs && node tests/admin-security-settings-regression.cjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -13,6 +15,7 @@
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^2.0.0",
         "tailwindcss": "^4.0.0",
+        "tailwindcss-v3": "npm:tailwindcss@3.4.19",
         "vite": "^7.0.7"
     }
 }

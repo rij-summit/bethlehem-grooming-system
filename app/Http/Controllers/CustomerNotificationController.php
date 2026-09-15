@@ -11,8 +11,13 @@ class CustomerNotificationController extends Controller
     public function index(Request $request)
     {
         $userId = $request->user()->user_id;
+        $page = max(1, (int) $request->query('page', 1));
+        $pageSize = 30;
+        $recentFirst = $request->query('sort') === 'recent';
+        $unreadOnly = $request->query('status') === 'unread';
 
-        $notifications = CustomerNotification::where('user_id', $userId)
+        $query = CustomerNotification::where('user_id', $userId)
+            ->when($unreadOnly, fn ($query) => $query->where('is_read', 0))
             ->with([
                 'booking.bookingPets.pet',
                 'booking.timeWindow',
@@ -22,11 +27,14 @@ class CustomerNotificationController extends Controller
                 'groomingClinicReferral:id,public_id,pet_id',
                 'groomingClinicReferral.pet:pet_id,pet_name,species',
             ])
-            ->orderBy('is_read', 'asc')
+            ->when(! $recentFirst, fn ($query) => $query->orderBy('is_read', 'asc'))
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc')
-            ->limit(30)
-            ->get()
+            ->skip(($page - 1) * $pageSize)
+            ->take($pageSize + 1);
+        $records = $query->get();
+        $hasMore = $records->count() > $pageSize;
+        $notifications = $records->take($pageSize)
             ->map(function ($n) {
                 $petNames = $this->notificationPetNames($n);
                 $petTypes = $this->notificationPetTypes($n, $petNames);
@@ -97,6 +105,7 @@ class CustomerNotificationController extends Controller
             'success' => true,
             'unread_count' => $unreadCount,
             'notifications' => $notifications,
+            'has_more' => $hasMore,
             'pickup_alert' => $pickupNotif ? [
                 'id' => $pickupNotif->id,
                 'message' => $this->formatNotificationMessage($pickupNotif->message),

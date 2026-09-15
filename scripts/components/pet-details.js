@@ -18,10 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const vaccinationRecords = document.getElementById("petVaccinationRecords");
   const concernNotifications = document.getElementById("petConcernNotifications");
   const concernDetail = document.getElementById("petConcernDetail");
-  const bookGroomingLink = document.getElementById("bookGroomingLink");
+  let groomingLoadState = "idle";
   let medicalLoadState = "idle";
   let vaccinationLoadState = "idle";
   let concernLoadState = "idle";
+  let activePetTab = "overview";
+  let petProfileReady = false;
+  let tabPrefetchStarted = false;
   let requestedConcernHandled = false;
   let concernResponseSubmitting = false;
   let requestedReferralHandled = false;
@@ -49,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     && Array.isArray(pet?.clinic_verified_fields)
     && pet.clinic_verified_fields.includes(field);
   const verifiedIndicator = (verified) => verified
-    ? '<span class="inline-flex shrink-0 rounded-full bg-[#eaf4fb] px-2 py-0.5 text-xs font-medium text-[#315b7e]">Verified</span>'
+    ? '<span class="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#315b7e]"><span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>Verified</span>'
     : "";
 
   const titleCase = (value) => {
@@ -102,10 +105,6 @@ document.addEventListener("DOMContentLoaded", () => {
     errorState?.classList.remove("hidden");
   };
 
-  const renderIcons = () => {
-    if (window.lucide) window.lucide.createIcons();
-  };
-
   const setupSidebar = () => {
     const sidebar = document.getElementById("clientSidebar");
     const toggle = document.getElementById("clientSidebarToggle");
@@ -147,30 +146,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const activateTab = (selected) => {
       if (!validTabs.has(selected)) return;
+      activePetTab = selected;
 
       tabs.forEach((candidate) => {
         const active = candidate.dataset.petTab === selected;
         candidate.setAttribute("aria-selected", String(active));
-        candidate.classList.toggle("bg-[#315b7e]", active);
+        candidate.classList.toggle("bg-portal-primary", active);
         candidate.classList.toggle("text-white", active);
         candidate.classList.toggle("shadow-sm", active);
-        candidate.classList.toggle("text-[#2f4b66]", !active);
-        candidate.classList.toggle("hover:bg-slate-50", !active);
+        candidate.classList.toggle("text-portal-text", !active);
+        candidate.classList.toggle("hover:bg-portal-surface-soft", !active);
       });
 
       panels.forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.petPanel !== selected);
       });
 
-      if (selected === "medical") {
-        loadMedicalRecords();
-      }
-      if (selected === "vaccinations") {
-        loadVaccinations();
-      }
-      if (selected === "notifications") {
-        loadConcernNotifications();
-      }
+      if (petProfileReady) void loadPetTabData(selected);
     };
 
     tabs.forEach((tab) => {
@@ -208,18 +200,24 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Fur Type", titleCase(pet.fur_type), "fur_type"],
       ["Color", displayValue(pet.color), null],
       ["Neutered / Spayed", formatBoolean(pet.is_neutered), null],
-      ["Profile Status", archived ? "Archived" : "Active", null],
     ];
 
     overviewGrid.innerHTML = details.map(([label, value, field]) => `
-      <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+      <div class="min-w-0">
         <div class="flex items-center justify-between gap-3">
-          <p class="text-xs font-medium text-slate-500">${escapeHtml(label)}</p>
+          <p class="text-xs font-medium text-portal-muted">${escapeHtml(label)}</p>
           ${verifiedIndicator(isClinicVerified(pet, field))}
         </div>
-        <p class="mt-1.5 break-words font-semibold text-slate-700">${escapeHtml(value)}</p>
+        <p class="pet-overview-value ${label === "Pet Name" ? "pet-overview-name-value" : ""} mt-1 break-words text-xs font-semibold text-portal-text">${escapeHtml(value)}</p>
       </div>
-    `).join("");
+    `).join("") + `
+      <div class="col-span-full grid grid-cols-1 gap-1 border-t border-portal-border pt-4 sm:grid-cols-2 sm:gap-x-8">
+        <p class="text-xs font-medium text-portal-muted">Profile Status</p>
+        <p class="inline-flex items-center gap-1.5 text-xs font-semibold ${archived ? "text-portal-muted" : "text-emerald-700"}">
+          <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>${archived ? "Archived" : "Active"}
+        </p>
+      </div>
+    `;
 
     document.getElementById("petMedicalConditions").textContent = displayValue(pet.medical_conditions);
   };
@@ -261,33 +259,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const paymentReview = review ? `
       <section class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4" aria-label="Stopped grooming payment review">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h5 class="font-bold text-amber-900">Payment Review Completed</h5>
+          <h5 class="text-sm font-bold text-amber-900">Payment Review Completed</h5>
           <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-800">${escapeHtml(displayValue(review.decision_label))}</span>
         </div>
-        <dl class="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+        <dl class="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
           <div><dt class="font-semibold text-amber-800">Original amount</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.original_amount))}</dd></div>
           <div><dt class="font-semibold text-amber-800">Final reviewed amount</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.final_amount))}</dd></div>
           <div><dt class="font-semibold text-amber-800">Adjustment</dt><dd class="mt-1 text-slate-700">${escapeHtml(formatPeso(review.adjustment))}</dd></div>
         </dl>
-        <p class="mt-3 text-sm text-slate-700">${escapeHtml(displayValue(review.customer_explanation))}</p>
+        <p class="mt-3 text-xs leading-5 text-slate-700">${escapeHtml(displayValue(review.customer_explanation))}</p>
         <p class="mt-2 text-xs text-slate-500">Reviewed ${escapeHtml(formatDateTime(review.reviewed_at))}</p>
       </section>
     ` : "";
 
     return `
-      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <article class="rounded-2xl border border-slate-200 bg-white p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p class="text-xs font-medium text-slate-500">Booking Reference</p>
-            <h4 class="mt-1 text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(booking.booking_reference))}</h4>
+            <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(booking.booking_reference))}</h4>
           </div>
-          <span class="w-fit rounded-full px-3 py-1 text-xs font-bold ${statusClasses}">${escapeHtml(statusLabel)}</span>
+          <span class="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${statusClasses}"><span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>${escapeHtml(statusLabel)}</span>
         </div>
         <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           ${items.map(([label, value]) => `
             <div>
               <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-              <dd class="mt-1 break-words text-sm font-medium text-slate-700">${escapeHtml(value)}</dd>
+              <dd class="mt-1 break-words text-xs font-medium leading-5 text-slate-700">${escapeHtml(value)}</dd>
             </div>
           `).join("")}
         </dl>
@@ -297,6 +295,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const loadGrooming = async () => {
+    if (!groomingRecords || groomingLoadState === "loading" || groomingLoadState === "loaded") return;
+
+    groomingLoadState = "loading";
+    groomingRecords.innerHTML = `
+      <div class="py-12 text-center" aria-live="polite">
+        <p class="text-xs text-portal-muted">Loading grooming records...</p>
+      </div>
+    `;
     try {
       const data = await API.getBookingHistory({ petId });
       const bookings = [...(data.bookings || []), ...(data.history || [])];
@@ -313,25 +319,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!records.length) {
         groomingRecords.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <i data-lucide="scissors" class="mx-auto h-8 w-8 text-slate-300"></i>
-            <h4 class="mt-3 font-bold text-slate-700">No grooming records found</h4>
-            <p class="mt-1 text-sm text-slate-500">This pet does not have grooming activity yet.</p>
+            <h4 class="text-sm font-bold text-slate-700">No grooming records found</h4>
+            <p class="mt-1 text-xs text-slate-500">This pet does not have grooming activity yet.</p>
           </div>
         `;
       } else {
         groomingRecords.innerHTML = `<div class="space-y-4">${records.map(renderGroomingRecord).join("")}</div>`;
       }
+      groomingLoadState = "loaded";
     } catch (error) {
+      groomingLoadState = "error";
       groomingRecords.innerHTML = `
         <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center">
-          <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
-          <h4 class="mt-3 font-bold text-red-800">Grooming records could not be loaded</h4>
-          <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
+          <h4 class="text-sm font-bold text-red-800">Grooming records could not be loaded</h4>
+          <p class="mt-1 text-xs text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
         </div>
       `;
     }
 
-    renderIcons();
   };
 
   const renderMedicalRecord = (record) => {
@@ -351,14 +356,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasFollowUp = !isMissing(record.follow_up_date) || !isMissing(record.follow_up_notes);
 
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="text-xs font-medium text-slate-500">Appointment Reference</p>
-              <h4 class="mt-1 text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.appointment_reference))}</h4>
-              <p class="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                <i data-lucide="calendar-days" class="h-4 w-4"></i>
+              <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.appointment_reference))}</h4>
+              <p class="mt-1 text-xs text-slate-500">
                 <span>${escapeHtml(formatDate(record.appointment_date))}</span>
               </p>
             </div>
@@ -371,19 +375,18 @@ document.addEventListener("DOMContentLoaded", () => {
             ${summaryItems.map(([label, value]) => `
               <div>
                 <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-                <dd class="mt-1 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(value)}</dd>
+                <dd class="mt-1 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(value)}</dd>
               </div>
             `).join("")}
           </dl>
 
           ${hasFollowUp ? `
-            <section class="rounded-2xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
-              <div class="flex items-start gap-3">
-                <i data-lucide="calendar-clock" class="mt-0.5 h-5 w-5 shrink-0 text-[#315b7e]"></i>
+            <section class="border-t border-slate-200 pt-4">
+              <div>
                 <div>
-                  <h5 class="font-bold text-[#2f4b66]">Follow-up</h5>
-                  <p class="mt-1 text-sm text-slate-600"><span class="font-semibold">Date:</span> ${escapeHtml(formatDate(record.follow_up_date))}</p>
-                  <p class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">${escapeHtml(displayValue(record.follow_up_notes))}</p>
+                  <h5 class="text-sm font-bold text-[#2f4b66]">Follow-up</h5>
+                  <p class="mt-1 text-xs text-slate-600"><span class="font-semibold">Date:</span> ${escapeHtml(formatDate(record.follow_up_date))}</p>
+                  <p class="mt-1 whitespace-pre-line text-xs leading-5 text-slate-600">${escapeHtml(displayValue(record.follow_up_notes))}</p>
                 </div>
               </div>
             </section>
@@ -391,15 +394,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
           ${vitalItems.length ? `
             <section>
-              <h5 class="flex items-center gap-2 font-bold text-[#2f4b66]">
-                <i data-lucide="activity" class="h-4 w-4"></i>
+              <h5 class="text-sm font-bold text-[#2f4b66]">
                 Vital Signs
               </h5>
               <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 ${vitalItems.map(([label, value]) => `
-                  <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <div class="min-w-0">
                     <dt class="text-xs font-semibold text-slate-400">${escapeHtml(label)}</dt>
-                    <dd class="mt-1 text-sm font-bold text-slate-700">${escapeHtml(value)}</dd>
+                    <dd class="mt-1 text-xs font-bold text-slate-700">${escapeHtml(value)}</dd>
                   </div>
                 `).join("")}
               </dl>
@@ -408,8 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           ${medications.length ? `
             <section>
-              <h5 class="flex items-center gap-2 font-bold text-[#2f4b66]">
-                <i data-lucide="pill" class="h-4 w-4"></i>
+              <h5 class="text-sm font-bold text-[#2f4b66]">
                 Prescribed Medications
               </h5>
               <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -422,12 +423,12 @@ document.addEventListener("DOMContentLoaded", () => {
                   ].filter(([, value]) => !isMissing(value));
 
                   return `
-                    <div class="rounded-xl border border-slate-200 bg-white p-4">
-                      <p class="font-bold text-slate-800">${escapeHtml(displayValue(medication.drug_name))}</p>
+                    <div class="min-w-0">
+                      <p class="text-sm font-bold text-slate-800">${escapeHtml(displayValue(medication.drug_name))}</p>
                       ${details.length ? `
                         <dl class="mt-3 space-y-2">
                           ${details.map(([label, value]) => `
-                            <div class="text-sm">
+                            <div class="text-xs leading-5">
                               <dt class="inline font-semibold text-slate-500">${escapeHtml(label)}:</dt>
                               <dd class="inline whitespace-pre-line text-slate-700"> ${escapeHtml(value)}</dd>
                             </div>
@@ -451,12 +452,9 @@ document.addEventListener("DOMContentLoaded", () => {
     medicalLoadState = "loading";
     medicalRecords.innerHTML = `
       <div class="py-12 text-center">
-        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-        <p class="mt-3 text-sm text-slate-500">Loading completed medical records...</p>
+        <p class="text-xs text-slate-500">Loading completed medical records...</p>
       </div>
     `;
-    renderIcons();
-
     try {
       const data = await API.getPetMedicalRecords(petId);
       const records = Array.isArray(data.medical_records) ? data.medical_records : [];
@@ -464,9 +462,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!records.length) {
         medicalRecords.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <i data-lucide="clipboard-heart" class="mx-auto h-8 w-8 text-slate-300"></i>
-            <h4 class="mt-3 font-bold text-slate-700">No completed medical records</h4>
-            <p class="mt-1 text-sm text-slate-500">No completed medical records are available for this pet yet.</p>
+            <h4 class="text-sm font-bold text-slate-700">No completed medical records</h4>
+            <p class="mt-1 text-xs text-slate-500">No completed medical records are available for this pet yet.</p>
           </div>
         `;
       } else {
@@ -480,23 +477,20 @@ document.addEventListener("DOMContentLoaded", () => {
       if (error?.status === 404) {
         medicalRecords.innerHTML = `
           <div class="rounded-2xl border border-amber-100 bg-amber-50 px-6 py-10 text-center" role="alert">
-            <i data-lucide="shield-alert" class="mx-auto h-8 w-8 text-amber-500"></i>
-            <h4 class="mt-3 font-bold text-amber-900">Pet profile not found</h4>
-            <p class="mt-1 text-sm text-amber-700">This pet does not exist or is not available for your account.</p>
+            <h4 class="text-sm font-bold text-amber-900">Pet profile not found</h4>
+            <p class="mt-1 text-xs text-amber-700">This pet does not exist or is not available for your account.</p>
           </div>
         `;
       } else {
         medicalRecords.innerHTML = `
           <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center" role="alert">
-            <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
-            <h4 class="mt-3 font-bold text-red-800">Medical records could not be loaded</h4>
-            <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
+            <h4 class="text-sm font-bold text-red-800">Medical records could not be loaded</h4>
+            <p class="mt-1 text-xs text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
           </div>
         `;
       }
     }
 
-    renderIcons();
   };
 
   const vaccinationStatusDetails = (status) => {
@@ -545,12 +539,12 @@ document.addEventListener("DOMContentLoaded", () => {
     ].filter(([, value]) => !isMissing(value));
 
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="text-xs font-medium text-slate-500">Vaccine</p>
-              <h4 class="mt-1 break-words text-lg font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.vaccine_name))}</h4>
+              <h4 class="mt-1 break-words text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.vaccine_name))}</h4>
             </div>
             <span
               class="w-fit rounded-full border px-3 py-1 text-xs font-bold ${status.classes}"
@@ -558,7 +552,7 @@ document.addEventListener("DOMContentLoaded", () => {
             >${escapeHtml(status.label)}</span>
           </div>
           ${status.message ? `
-            <p class="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+            <p class="mt-3 text-xs leading-5 text-slate-600">
               ${escapeHtml(status.message)}
             </p>
           ` : ""}
@@ -568,15 +562,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <dt class="text-xs font-medium text-slate-500">Administration Date</dt>
-              <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.administered_date))}</dd>
+              <dd class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatDate(record.administered_date))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-slate-500">Next Due Date</dt>
-              <dd class="mt-1 text-sm font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
+              <dd class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-slate-500">Administering Provider</dt>
-              <dd class="mt-1 break-words text-sm font-medium text-slate-700">${escapeHtml(displayValue(record.administering_provider))}</dd>
+              <dd class="mt-1 break-words text-xs font-medium text-slate-700">${escapeHtml(displayValue(record.administering_provider))}</dd>
             </div>
           </dl>
 
@@ -586,7 +580,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${optionalDetails.map(([label, value]) => `
                   <div>
                     <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-                    <dd class="mt-1 break-words text-sm text-slate-700">${escapeHtml(value)}</dd>
+                    <dd class="mt-1 break-words text-xs leading-5 text-slate-700">${escapeHtml(value)}</dd>
                   </div>
                 `).join("")}
               </dl>
@@ -609,12 +603,9 @@ document.addEventListener("DOMContentLoaded", () => {
     vaccinationLoadState = "loading";
     vaccinationRecords.innerHTML = `
       <div class="py-12 text-center" aria-live="polite">
-        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-        <p class="mt-3 text-sm text-slate-500">Loading vaccination history...</p>
+        <p class="text-xs text-slate-500">Loading vaccination history...</p>
       </div>
     `;
-    renderIcons();
-
     try {
       const data = await API.getPetVaccinations(petId);
       const records = Array.isArray(data.vaccinations) ? data.vaccinations : [];
@@ -622,9 +613,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!records.length) {
         vaccinationRecords.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <i data-lucide="syringe" class="mx-auto h-8 w-8 text-slate-300"></i>
-            <h4 class="mt-3 font-bold text-slate-700">No published vaccination records</h4>
-            <p class="mt-1 text-sm text-slate-500">No published vaccination records are available for this pet yet.</p>
+            <h4 class="text-sm font-bold text-slate-700">No published vaccination records</h4>
+            <p class="mt-1 text-xs text-slate-500">No published vaccination records are available for this pet yet.</p>
           </div>
         `;
       } else {
@@ -638,23 +628,20 @@ document.addEventListener("DOMContentLoaded", () => {
       if (error?.status === 404) {
         vaccinationRecords.innerHTML = `
           <div class="rounded-2xl border border-amber-100 bg-amber-50 px-6 py-10 text-center" role="alert">
-            <i data-lucide="shield-alert" class="mx-auto h-8 w-8 text-amber-500"></i>
-            <h4 class="mt-3 font-bold text-amber-900">Pet profile not found</h4>
-            <p class="mt-1 text-sm text-amber-700">This pet does not exist or is not available for your account.</p>
+            <h4 class="text-sm font-bold text-amber-900">Pet profile not found</h4>
+            <p class="mt-1 text-xs text-amber-700">This pet does not exist or is not available for your account.</p>
           </div>
         `;
       } else {
         vaccinationRecords.innerHTML = `
           <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center" role="alert">
-            <i data-lucide="circle-alert" class="mx-auto h-8 w-8 text-red-400"></i>
-            <h4 class="mt-3 font-bold text-red-800">Vaccination history could not be loaded</h4>
-            <p class="mt-1 text-sm text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
+            <h4 class="text-sm font-bold text-red-800">Vaccination history could not be loaded</h4>
+            <p class="mt-1 text-xs text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
             <button
               type="button"
               data-retry-vaccinations
               class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
             >
-              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
               Retry
             </button>
           </div>
@@ -665,7 +652,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    renderIcons();
   };
 
   const concernSeverityClasses = (severity) => ({
@@ -707,7 +693,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const concernUrgencyGuidance = (concern) => concern.severity === "urgent"
     ? `
-      <p class="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+      <p class="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs leading-5 text-red-700">
         This concern has urgent workflow priority. It is not a final veterinary diagnosis. Contact the clinic if you need prompt guidance.
       </p>
     `
@@ -725,7 +711,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
             <p class="text-xs font-medium text-slate-500">Concern notification</p>
-            <p class="mt-1 text-sm text-slate-500">${escapeHtml(formatDateTime(concern.concern_date))}</p>
+            <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatDateTime(concern.concern_date))}</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernSeverityClasses(concern.severity)}">
@@ -737,24 +723,24 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>
 
-        <p class="mt-4 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
+        <p class="mt-4 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
 
         <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-medium text-slate-500">Recommended action</dt>
-            <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concernActionLabel(concern.recommended_grooming_action, concern.recommended_grooming_action_label))}</dd>
+            <dd class="mt-1 text-xs font-semibold text-slate-700">${escapeHtml(concernActionLabel(concern.recommended_grooming_action, concern.recommended_grooming_action_label))}</dd>
             <p class="mt-1 text-xs text-slate-500">A recommendation only; it does not confirm the action was applied.</p>
           </div>
           <div>
             <dt class="text-xs font-medium text-slate-500">Customer response</dt>
-            <dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(concern.customer_response_status_label || titleCase(concern.customer_response_status))}</dd>
+            <dd class="mt-1 text-xs font-semibold text-slate-700">${escapeHtml(concern.customer_response_status_label || titleCase(concern.customer_response_status))}</dd>
           </div>
         </dl>
 
         ${requiredAction ? `
           <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p class="text-sm font-bold text-amber-900">${escapeHtml(requiredAction.title)}</p>
-            <p class="mt-1 text-sm leading-6 text-amber-800">${escapeHtml(requiredAction.message)}</p>
+            <p class="mt-1 text-xs leading-5 text-amber-800">${escapeHtml(requiredAction.message)}</p>
           </div>
         ` : ""}
 
@@ -765,7 +751,6 @@ document.addEventListener("DOMContentLoaded", () => {
           data-open-concern="${escapeHtml(concern.public_id)}"
           class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274b69]"
         >
-          <i data-lucide="eye" class="h-4 w-4"></i>
           View concern details
         </button>
       </article>
@@ -801,22 +786,22 @@ document.addEventListener("DOMContentLoaded", () => {
     if (submitted) {
       return `
         <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-live="polite">
-          <h5 class="font-bold text-emerald-900">Response recorded</h5>
+          <h5 class="text-sm font-bold text-emerald-900">Response recorded</h5>
           <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <dt class="text-xs font-medium text-emerald-700">Response</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(submitted.decision_label || titleCase(submitted.decision))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(submitted.decision_label || titleCase(submitted.decision))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-emerald-700">Submitted by</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(submitted.responded_by_name))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(displayValue(submitted.responded_by_name))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-emerald-700">Submitted at</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(submitted.responded_at))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(formatDateTime(submitted.responded_at))}</dd>
             </div>
           </dl>
-          <p class="mt-3 text-sm leading-6 text-emerald-800">
+          <p class="mt-3 text-xs leading-5 text-emerald-800">
             This response is permanent and cannot be edited. Staff must still apply any operational grooming action separately.
           </p>
         </section>
@@ -832,7 +817,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const statement = displayValue(concern.response_statement);
     const commonNotice = `
-      <p class="mt-3 text-sm leading-6 text-amber-800">
+      <p class="mt-3 text-xs leading-5 text-amber-800">
         Opening or reading this notification is not a response. Once submitted, your response cannot be edited.
         No grooming action is applied automatically.
       </p>
@@ -847,11 +832,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (concern.required_customer_action === "acknowledgment") {
       return `
         <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h5 class="font-bold text-amber-900">Acknowledgment required</h5>
-          <p class="mt-1 text-sm leading-6 text-amber-800">
+          <h5 class="text-sm font-bold text-amber-900">Acknowledgment required</h5>
+          <p class="mt-1 text-xs leading-5 text-amber-800">
             Acknowledgment confirms that you received and understood this notice.
           </p>
-          <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(statement)}</blockquote>
+          <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-xs leading-5 text-slate-700">${escapeHtml(statement)}</blockquote>
           ${commonNotice}
           <button
             type="button"
@@ -866,11 +851,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return `
       <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <h5 class="font-bold text-amber-900">Your consent decision is required</h5>
-        <p class="mt-1 text-sm leading-6 text-amber-800">
+        <h5 class="text-sm font-bold text-amber-900">Your consent decision is required</h5>
+        <p class="mt-1 text-xs leading-5 text-amber-800">
           Approval accepts the proposed action. Decline refuses it. Neither choice means the action has already occurred.
         </p>
-        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(statement)}</blockquote>
+        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-xs leading-5 text-slate-700">${escapeHtml(statement)}</blockquote>
         <label class="mt-4 block" for="concernSignatureName">
           <span class="text-sm font-bold text-amber-900">Typed signature name <span aria-hidden="true">*</span></span>
           <input
@@ -931,12 +916,12 @@ document.addEventListener("DOMContentLoaded", () => {
           tabindex="-1"
         >
           <header class="border-b border-slate-100 bg-[#f8fbfe] px-5 py-4 sm:px-6">
-            <h4 id="concernConsentConfirmationTitle" data-concern-confirm-title class="text-lg font-bold text-[#2f4b66]">
+            <h4 id="concernConsentConfirmationTitle" data-concern-confirm-title class="text-sm font-bold text-[#2f4b66]">
               Confirm response
             </h4>
           </header>
           <div class="px-5 py-5 sm:px-6">
-            <p id="concernConsentConfirmationMessage" data-concern-confirm-message class="text-sm leading-6 text-slate-600"></p>
+            <p id="concernConsentConfirmationMessage" data-concern-confirm-message class="text-xs leading-5 text-slate-600"></p>
             <div
               data-concern-confirm-error
               class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
@@ -1122,7 +1107,6 @@ document.addEventListener("DOMContentLoaded", () => {
         data-close-concern-detail
         class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#315b7e] hover:bg-slate-50"
       >
-        <i data-lucide="arrow-left" class="h-4 w-4"></i>
         Back to notifications
       </button>
 
@@ -1131,7 +1115,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="text-xs font-medium text-slate-500">Medical-concern notification</p>
-              <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(concern.pet_name))}</h4>
+              <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(concern.pet_name))}</h4>
             </div>
             <div class="flex flex-wrap gap-2">
               <span class="rounded-full border px-3 py-1 text-xs font-bold ${concernSeverityClasses(concern.severity)}">
@@ -1147,36 +1131,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="space-y-5 p-4 sm:p-5">
           ${successMessage ? `
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800" role="status" aria-live="polite">
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800" role="status" aria-live="polite">
               ${escapeHtml(successMessage)}
             </div>
           ` : ""}
 
           <section>
-            <h5 class="font-bold text-[#2f4b66]">Message from the grooming team</h5>
-            <p class="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
+            <h5 class="text-sm font-bold text-[#2f4b66]">Message from the grooming team</h5>
+            <p class="mt-2 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(displayValue(concern.customer_message))}</p>
           </section>
 
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             ${concernDetailFields(concern).map(([label, value]) => `
               <div>
                 <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-                <dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd>
+                <dd class="mt-1 break-words text-xs font-medium leading-5 text-slate-700">${escapeHtml(value)}</dd>
               </div>
             `).join("")}
           </dl>
 
           <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
-            <h5 class="font-bold text-[#2f4b66]">Recommended and applied actions</h5>
-            <p class="mt-2 text-sm leading-6 text-slate-600">
+            <h5 class="text-sm font-bold text-[#2f4b66]">Recommended and applied actions</h5>
+            <p class="mt-2 text-xs leading-5 text-slate-600">
               The recommended action is staff guidance. It should not be treated as completed unless an applied action is shown above.
             </p>
           </section>
 
           ${requiredAction ? `
             <section class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <h5 class="font-bold text-amber-900">${escapeHtml(requiredAction.title)}</h5>
-              <p class="mt-1 text-sm leading-6 text-amber-800">${escapeHtml(requiredAction.message)}</p>
+              <h5 class="text-sm font-bold text-amber-900">${escapeHtml(requiredAction.title)}</h5>
+              <p class="mt-1 text-xs leading-5 text-amber-800">${escapeHtml(requiredAction.message)}</p>
             </section>
           ` : ""}
 
@@ -1184,8 +1168,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           ${!isMissing(concern.customer_resolution_summary) ? `
             <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <h5 class="font-bold text-emerald-900">Customer-safe resolution</h5>
-              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-emerald-800">${escapeHtml(concern.customer_resolution_summary)}</p>
+              <h5 class="text-sm font-bold text-emerald-900">Customer-safe resolution</h5>
+              <p class="mt-2 whitespace-pre-line text-xs leading-5 text-emerald-800">${escapeHtml(concern.customer_resolution_summary)}</p>
             </section>
           ` : ""}
 
@@ -1212,7 +1196,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (concernLoadState === "idle") {
       loadConcernNotifications({ retry: true });
     }
-    renderIcons();
   };
 
   const openConcernDetail = async (
@@ -1225,11 +1208,9 @@ document.addEventListener("DOMContentLoaded", () => {
     concernDetail.classList.remove("hidden");
     concernDetail.innerHTML = `
       <div class="py-12 text-center" role="status">
-        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-        <p class="mt-3 text-sm text-slate-500">Loading concern details...</p>
+        <p class="mt-3 text-xs text-slate-500">Loading concern details...</p>
       </div>
     `;
-    renderIcons();
 
     try {
       const response = await API.getPetMedicalConcern(petId, publicId);
@@ -1247,14 +1228,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const notFound = error?.status === 404;
       concernDetail.innerHTML = `
         <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
-          <i data-lucide="${notFound ? "file-question" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
-          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Medical concern not found" : "Concern details could not be loaded"}</h4>
-          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This concern does not exist or is not available for this pet." : escapeHtml(error?.message || "Please try again later.")}</p>
+          <h4 class="mt-3 text-sm font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Medical concern not found" : "Concern details could not be loaded"}</h4>
+          <p class="mt-1 text-xs ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This concern does not exist or is not available for this pet." : escapeHtml(error?.message || "Please try again later.")}</p>
           <div class="mt-4 flex flex-wrap justify-center gap-2">
             <button type="button" data-close-concern-detail class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back</button>
             ${notFound ? "" : `
               <button type="button" data-retry-concern-detail class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274b69]">
-                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
                 Retry
               </button>
             `}
@@ -1267,7 +1246,6 @@ document.addEventListener("DOMContentLoaded", () => {
         ?.addEventListener("click", () => openConcernDetail(publicId, { updateHistory: false }));
     }
 
-    renderIcons();
   };
 
   const clinicReferralStatusLabel = (referral) => ({
@@ -1305,26 +1283,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (clinicReferralConsentRecorded(referral)) {
       return `
         <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-live="polite">
-          <h5 class="font-bold text-emerald-900">Permanent response recorded</h5>
+          <h5 class="text-sm font-bold text-emerald-900">Permanent response recorded</h5>
           <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <dt class="text-xs font-medium text-emerald-700">Decision</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(titleCase(referral.consent_decision))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(titleCase(referral.consent_decision))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-emerald-700">Responding owner</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(displayValue(referral.consent_responded_by_name))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(displayValue(referral.consent_responded_by_name))}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-emerald-700">Responded at</dt>
-              <dd class="mt-1 text-sm font-semibold text-emerald-900">${escapeHtml(formatDateTime(referral.consent_responded_at))}</dd>
+              <dd class="mt-1 text-xs font-semibold text-emerald-900">${escapeHtml(formatDateTime(referral.consent_responded_at))}</dd>
             </div>
           </dl>
           <details class="mt-3 text-xs text-emerald-800">
             <summary class="cursor-pointer font-semibold">Audit statement version</summary>
             <p class="mt-1">${escapeHtml(displayValue(referral.consent_statement_version))}</p>
           </details>
-          <p class="mt-3 text-sm leading-6 text-emerald-800">The original response is permanent and cannot be edited, replaced, or deleted.</p>
+          <p class="mt-3 text-xs leading-5 text-emerald-800">The original response is permanent and cannot be edited, replaced, or deleted.</p>
         </section>
       `;
     }
@@ -1333,16 +1311,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return `
       <section class="rounded-xl border border-amber-200 bg-amber-50 p-4" data-clinic-referral-consent-panel>
-        <h5 class="font-bold text-amber-900">Your clinic-referral decision is required</h5>
-        <p class="mt-1 text-sm leading-6 text-amber-800">
+        <h5 class="text-sm font-bold text-amber-900">Your clinic-referral decision is required</h5>
+        <p class="mt-1 text-xs leading-5 text-amber-800">
           Read the complete server-provided statement before choosing. No decision is selected for you.
         </p>
-        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-sm leading-6 text-slate-700">${escapeHtml(displayValue(referral.consent_statement))}</blockquote>
+        <blockquote class="mt-3 whitespace-pre-line rounded-lg border border-amber-200 bg-white p-4 text-xs leading-5 text-slate-700">${escapeHtml(displayValue(referral.consent_statement))}</blockquote>
         <details class="mt-3 text-xs text-amber-800">
           <summary class="cursor-pointer font-semibold">Statement version</summary>
           <p class="mt-1">${escapeHtml(displayValue(referral.consent_statement_version))}</p>
         </details>
-        <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+        <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
           Approval covers referral creation, transfer to clinic intake, and an initial veterinary assessment. It does not automatically authorize diagnostics, medication, treatment, emergency procedures, additional clinic charges, or any other veterinary service.
         </div>
         <label class="mt-4 block" for="clinicReferralSignatureName">
@@ -1395,7 +1373,6 @@ document.addEventListener("DOMContentLoaded", () => {
     clinicReferralResponseSubmitting = false;
     concernDetail.innerHTML = `
       <button type="button" data-close-clinic-referral class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#315b7e] hover:bg-slate-50">
-        <i data-lucide="arrow-left" class="h-4 w-4"></i>
         Back to notifications
       </button>
       <article class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
@@ -1403,7 +1380,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="text-xs font-medium text-slate-500">Clinic referral request</p>
-              <h4 class="mt-1 text-xl font-bold text-[#2f4b66]">${escapeHtml(displayValue(referral.pet_name))}</h4>
+              <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(referral.pet_name))}</h4>
               <p class="mt-1 break-all text-xs text-slate-500">Reference: ${escapeHtml(displayValue(referral.public_id))}</p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -1413,37 +1390,37 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </header>
         <div class="space-y-5 p-4 sm:p-5">
-          ${successMessage ? `<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800" role="status" aria-live="polite">${escapeHtml(successMessage)}</div>` : ""}
+          ${successMessage ? `<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800" role="status" aria-live="polite">${escapeHtml(successMessage)}</div>` : ""}
           <section>
-            <h5 class="font-bold text-[#2f4b66]">Why this referral was requested</h5>
-            <p class="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(referral.customer_explanation))}</p>
+            <h5 class="text-sm font-bold text-[#2f4b66]">Why this referral was requested</h5>
+            <p class="mt-2 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(displayValue(referral.customer_explanation))}</p>
           </section>
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             ${clinicReferralDetailFields(referral).map(([label, value]) => `
-              <div><dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt><dd class="mt-1 break-words text-sm font-medium leading-6 text-slate-700">${escapeHtml(value)}</dd></div>
+              <div><dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt><dd class="mt-1 break-words text-xs font-medium leading-5 text-slate-700">${escapeHtml(value)}</dd></div>
             `).join("")}
           </dl>
           <section class="rounded-xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
-            <h5 class="font-bold text-[#2f4b66]">What happens next</h5>
-            <p class="mt-2 text-sm leading-6 text-slate-600">${escapeHtml(referral.customer_next_step || (referral.clinic_accepted
+            <h5 class="text-sm font-bold text-[#2f4b66]">What happens next</h5>
+            <p class="mt-2 text-xs leading-5 text-slate-600">${escapeHtml(referral.customer_next_step || (referral.clinic_accepted
               ? `The clinic accepted this referral and your pet has entered clinic intake. ${displayValue(referral.clinic_appointment_reference)} is currently ${displayValue(referral.clinic_appointment_status_label, "Checked In")}. Treatment, procedures, and additional charges may still require separate approval.`
               : "A clinic referral request does not itself create an appointment or authorize treatment. Clinic acceptance and appointment information will appear here after the clinic accepts the referral."))}</p>
           </section>
           ${renderClinicReferralConsent(referral)}
-          ${!isMissing(referral.customer_cancellation_summary) ? `<section class="rounded-xl border border-slate-200 bg-white p-4"><h5 class="font-bold text-slate-800">Cancellation update</h5><p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">${escapeHtml(referral.customer_cancellation_summary)}</p></section>` : ""}
-          ${!isMissing(referral.customer_resolution_summary) ? `<section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h5 class="font-bold text-emerald-900">Referral resolution</h5><p class="mt-2 whitespace-pre-line text-sm leading-6 text-emerald-800">${escapeHtml(referral.customer_resolution_summary)}</p></section>` : ""}
+          ${!isMissing(referral.customer_cancellation_summary) ? `<section class="rounded-xl border border-slate-200 bg-white p-4"><h5 class="text-sm font-bold text-slate-800">Cancellation update</h5><p class="mt-2 whitespace-pre-line text-xs leading-5 text-slate-600">${escapeHtml(referral.customer_cancellation_summary)}</p></section>` : ""}
+          ${!isMissing(referral.customer_resolution_summary) ? `<section class="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h5 class="text-sm font-bold text-emerald-900">Referral resolution</h5><p class="mt-2 whitespace-pre-line text-xs leading-5 text-emerald-800">${escapeHtml(referral.customer_resolution_summary)}</p></section>` : ""}
         </div>
       </article>
       <div data-clinic-referral-confirmation class="fixed inset-0 z-[70] hidden items-center justify-center overflow-y-auto bg-slate-900/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="clinicReferralConfirmationTitle">
         <div data-clinic-referral-confirmation-card class="my-auto w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" tabindex="-1">
-          <h4 id="clinicReferralConfirmationTitle" class="text-lg font-bold text-[#2f4b66]">Confirm permanent referral response</h4>
-          <p class="mt-2 text-sm leading-6 text-slate-600">Your response cannot be edited, replaced, or deleted after submission.</p>
+          <h4 id="clinicReferralConfirmationTitle" class="text-sm font-bold text-[#2f4b66]">Confirm permanent referral response</h4>
+          <p class="mt-2 text-xs leading-5 text-slate-600">Your response cannot be edited, replaced, or deleted after submission.</p>
           <dl class="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-            <div><dt class="text-xs font-medium text-slate-500">Pet</dt><dd class="mt-1 text-sm font-semibold text-slate-700">${escapeHtml(displayValue(referral.pet_name))}</dd></div>
-            <div><dt class="text-xs font-medium text-slate-500">Decision</dt><dd data-clinic-referral-confirm-decision class="mt-1 text-sm font-semibold text-slate-700"></dd></div>
-            <div class="sm:col-span-2"><dt class="text-xs font-medium text-slate-500">Typed signature name</dt><dd data-clinic-referral-confirm-name class="mt-1 break-words text-sm font-semibold text-slate-700"></dd></div>
+            <div><dt class="text-xs font-medium text-slate-500">Pet</dt><dd class="mt-1 text-xs font-semibold text-slate-700">${escapeHtml(displayValue(referral.pet_name))}</dd></div>
+            <div><dt class="text-xs font-medium text-slate-500">Decision</dt><dd data-clinic-referral-confirm-decision class="mt-1 text-xs font-semibold text-slate-700"></dd></div>
+            <div class="sm:col-span-2"><dt class="text-xs font-medium text-slate-500">Typed signature name</dt><dd data-clinic-referral-confirm-name class="mt-1 break-words text-xs font-semibold text-slate-700"></dd></div>
           </dl>
-          <p data-clinic-referral-decline-warning class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">A routine referral may be cancelled. An urgent or emergency safety referral may remain pending clinic acceptance. Declining does not erase the referral and does not automatically resume grooming.</p>
+          <p data-clinic-referral-decline-warning class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">A routine referral may be cancelled. An urgent or emergency safety referral may remain pending clinic acceptance. Declining does not erase the referral and does not automatically resume grooming.</p>
           <p class="mt-3 text-xs leading-5 text-slate-500">Approval covers referral creation, clinic intake transfer, and initial assessment only—not diagnostics, medication, treatment, emergency procedures, added charges, or other services.</p>
           <div data-clinic-referral-confirm-error class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert" tabindex="-1"></div>
           <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -1456,7 +1433,6 @@ document.addEventListener("DOMContentLoaded", () => {
     concernDetail.querySelector("[data-close-clinic-referral]")
       ?.addEventListener("click", closeClinicReferralDetail);
     attachClinicReferralConsentActions(referral);
-    renderIcons();
   };
 
   const attachClinicReferralConsentActions = (referral) => {
@@ -1568,7 +1544,6 @@ document.addEventListener("DOMContentLoaded", () => {
     clinicReferralResponseSubmitting = false;
     clinicReferralSignatureDraft = "";
     if (concernLoadState === "idle") loadConcernNotifications({ retry: true });
-    renderIcons();
   };
 
   const openClinicReferralDetail = async (
@@ -1580,11 +1555,9 @@ document.addEventListener("DOMContentLoaded", () => {
     concernDetail.classList.remove("hidden");
     concernDetail.innerHTML = `
       <div class="py-12 text-center" role="status" aria-live="polite">
-        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-        <p class="mt-3 text-sm text-slate-500">Loading clinic referral details...</p>
+        <p class="mt-3 text-xs text-slate-500">Loading clinic referral details...</p>
       </div>
     `;
-    renderIcons();
     try {
       const response = await API.getPetGroomingClinicReferral(petId, publicId);
       renderClinicReferralDetail(response.referral || {}, successMessage);
@@ -1600,12 +1573,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const notFound = error?.status === 404;
       concernDetail.innerHTML = `
         <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
-          <i data-lucide="${notFound ? "file-question" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
-          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Clinic referral not found" : "Clinic referral could not be loaded"}</h4>
-          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This referral does not exist or is not available for this pet and account." : escapeHtml(error?.message || "Please try again later.")}</p>
+          <h4 class="mt-3 text-sm font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Clinic referral not found" : "Clinic referral could not be loaded"}</h4>
+          <p class="mt-1 text-xs ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This referral does not exist or is not available for this pet and account." : escapeHtml(error?.message || "Please try again later.")}</p>
           <div class="mt-4 flex flex-wrap justify-center gap-2">
             <button type="button" data-close-clinic-referral class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Back</button>
-            ${notFound ? "" : `<button type="button" data-retry-clinic-referral class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white"><i data-lucide="refresh-cw" class="h-4 w-4"></i>Retry</button>`}
+            ${notFound ? "" : `<button type="button" data-retry-clinic-referral class="inline-flex min-h-11 items-center rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white">Retry</button>`}
           </div>
         </div>
       `;
@@ -1614,7 +1586,6 @@ document.addEventListener("DOMContentLoaded", () => {
       concernDetail.querySelector("[data-retry-clinic-referral]")
         ?.addEventListener("click", () => openClinicReferralDetail(publicId, { updateHistory: false }));
     }
-    renderIcons();
   };
 
   const attachConcernSummaryActions = () => {
@@ -1639,11 +1610,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p class="text-xs font-medium text-blue-700">${escapeHtml(clinicReferralNotificationLabel(notification.type))}</p>
-          <p class="mt-1 text-sm text-blue-800">${escapeHtml(formatDateTime(notification.created_at))}</p>
+          <p class="mt-1 text-xs text-blue-800">${escapeHtml(formatDateTime(notification.created_at))}</p>
         </div>
         <span class="w-fit rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-800">${notification.is_read ? "Read" : "Unread"}</span>
       </div>
-      <p class="mt-3 whitespace-pre-line break-words text-sm leading-6 text-slate-700">${escapeHtml(displayValue(notification.display_message || notification.message))}</p>
+      <p class="mt-3 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(displayValue(notification.display_message || notification.message))}</p>
       <button
         type="button"
         data-open-clinic-referral="${escapeHtml(notification.referral_public_id)}"
@@ -1651,7 +1622,6 @@ document.addEventListener("DOMContentLoaded", () => {
         data-clinic-referral-notification-read="${notification.is_read ? "1" : "0"}"
         class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274b69]"
       >
-        <i data-lucide="heart-pulse" class="h-4 w-4"></i>
         View clinic referral
       </button>
     </article>
@@ -1699,11 +1669,9 @@ document.addEventListener("DOMContentLoaded", () => {
     concernNotifications.classList.remove("hidden");
     concernNotifications.innerHTML = `
       <div class="py-12 text-center" role="status">
-        <i data-lucide="loader" class="mx-auto h-8 w-8 animate-spin text-slate-300"></i>
-        <p class="mt-3 text-sm text-slate-500">Loading medical-concern notifications...</p>
+        <p class="mt-3 text-xs text-slate-500">Loading medical-concern notifications...</p>
       </div>
     `;
-    renderIcons();
 
     try {
       const [response, notificationResponse] = await Promise.all([
@@ -1727,9 +1695,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!concerns.length && !referralNotifications.length) {
         concernNotifications.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <i data-lucide="bell-off" class="mx-auto h-8 w-8 text-slate-300"></i>
-            <h4 class="mt-3 font-bold text-slate-700">No medical-concern notifications</h4>
-            <p class="mt-1 text-sm text-slate-500">No medical-concern notifications are available for this pet.</p>
+            <h4 class="mt-3 text-sm font-bold text-slate-700">No medical-concern notifications</h4>
+            <p class="mt-1 text-xs text-slate-500">No medical-concern notifications are available for this pet.</p>
           </div>
         `;
       } else {
@@ -1756,12 +1723,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const notFound = error?.status === 404;
       concernNotifications.innerHTML = `
         <div class="rounded-2xl border ${notFound ? "border-amber-100 bg-amber-50" : "border-red-100 bg-red-50"} px-6 py-10 text-center" role="alert">
-          <i data-lucide="${notFound ? "shield-alert" : "circle-alert"}" class="mx-auto h-8 w-8 ${notFound ? "text-amber-500" : "text-red-400"}"></i>
-          <h4 class="mt-3 font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Pet profile not found" : "Medical-concern notifications could not be loaded"}</h4>
-          <p class="mt-1 text-sm ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This pet does not exist or is not available for your account." : escapeHtml(error?.message || "Please try again later.")}</p>
+          <h4 class="mt-3 text-sm font-bold ${notFound ? "text-amber-900" : "text-red-800"}">${notFound ? "Pet profile not found" : "Medical-concern notifications could not be loaded"}</h4>
+          <p class="mt-1 text-xs ${notFound ? "text-amber-700" : "text-red-600"}">${notFound ? "This pet does not exist or is not available for your account." : escapeHtml(error?.message || "Please try again later.")}</p>
           ${notFound ? "" : `
             <button type="button" data-retry-concerns class="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
-              <i data-lucide="refresh-cw" class="h-4 w-4"></i>
               Retry
             </button>
           `}
@@ -1772,7 +1737,50 @@ document.addEventListener("DOMContentLoaded", () => {
         ?.addEventListener("click", () => loadConcernNotifications({ retry: true }));
     }
 
-    renderIcons();
+  };
+
+  const petTabLoaders = {
+    grooming: loadGrooming,
+    medical: loadMedicalRecords,
+    vaccinations: loadVaccinations,
+    notifications: loadConcernNotifications,
+  };
+
+  const loadPetTabData = (tabName) => {
+    const loader = petTabLoaders[tabName];
+    return loader ? loader() : Promise.resolve();
+  };
+
+  const scheduleIdleTask = (task) => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    window.setTimeout(task, 200);
+  };
+
+  const scheduleCustomerTabPrefetch = () => {
+    if (tabPrefetchStarted) return;
+    tabPrefetchStarted = true;
+
+    const remainingTabs = [
+      "grooming",
+      "medical",
+      "vaccinations",
+      "notifications",
+    ].filter((tabName) => tabName !== activePetTab);
+
+    const prefetchNextTab = () => {
+      const nextTab = remainingTabs.shift();
+      if (!nextTab) return;
+
+      Promise.resolve(loadPetTabData(nextTab)).finally(() => {
+        if (remainingTabs.length) scheduleIdleTask(prefetchNextTab);
+      });
+    };
+
+    scheduleIdleTask(prefetchNextTab);
   };
 
   const loadPet = async () => {
@@ -1783,26 +1791,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const { pet } = await API.getPet(petId);
-      const archived = isTrue(pet.is_archived);
-      const petName = displayValue(pet.pet_name);
-
-      document.getElementById("pageTitle").textContent = isMissing(pet.pet_name) ? "Pet Profile" : `${pet.pet_name}'s Profile`;
-      document.getElementById("pageSubtitle").textContent = "Grooming and clinic information in one shared profile.";
-      document.getElementById("petHeroName").textContent = petName;
-      document.getElementById("petHeroSpecies").textContent = titleCase(pet.species);
-      document.getElementById("petStatusBadge").textContent = archived ? "Archived" : "Active";
-
-      if (!archived) {
-        bookGroomingLink?.classList.remove("hidden");
-        bookGroomingLink?.classList.add("inline-flex");
-      }
 
       renderOverview(pet);
       loadingState?.classList.add("hidden");
       errorState?.classList.add("hidden");
       profileContent?.classList.remove("hidden");
-      renderIcons();
-      await loadGrooming();
+      petProfileReady = true;
+      void loadPetTabData(activePetTab);
+      window.requestAnimationFrame(scheduleCustomerTabPrefetch);
     } catch (error) {
       if (error?.status === 404) {
         setError(
@@ -1815,7 +1811,6 @@ document.addEventListener("DOMContentLoaded", () => {
           error?.message || "Please try again later."
         );
       }
-      renderIcons();
     }
   };
 
@@ -1829,7 +1824,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setupSidebar();
   setupTabs();
-  renderIcons();
-  loadProfile();
-  loadPet();
+  void loadPet();
+  window.requestAnimationFrame(() => scheduleIdleTask(loadProfile));
 });

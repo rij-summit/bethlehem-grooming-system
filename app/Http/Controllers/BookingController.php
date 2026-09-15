@@ -285,11 +285,15 @@ class BookingController extends Controller
                 }
 
                 // Link pet to this booking
-                $bookingPet = BookingPet::create([
+                $bookingPetAttributes = [
                     'booking_id' => $booking->booking_id,
                     'pet_id' => $pet->pet_id,
                     'special_instructions' => $petData['special_instructions'] ?? null,
-                ]);
+                ];
+                if (Schema::hasColumn('booking_pets', 'registered_size')) {
+                    $bookingPetAttributes['registered_size'] = $petData['size'] ?? $pet->size;
+                }
+                $bookingPet = BookingPet::create($bookingPetAttributes);
 
                 // ── Save services for this pet ────────────────
                 $petSize = $pet->size ?? $petData['size'] ?? null;
@@ -504,6 +508,11 @@ class BookingController extends Controller
                     'booking_pet_id' => $bp->booking_pet_id,
                     'pet_name' => $bp->pet?->pet_name ?? '—',
                     'breed' => $bp->pet?->breed ?? '—',
+                    'species' => $bp->pet?->species,
+                    'size' => $bp->pet?->size,
+                    'weight' => $bp->pet?->weight,
+                    'registered_size' => $bp->registered_size,
+                    'confirmed_size' => $bp->confirmed_size,
                     'grooming_status' => $groomingStatus,
                     'clinic_referred' => $referredToClinic,
                     'active_in_grooming' => ! $referredToClinic && ! $groomingFinished,
@@ -513,6 +522,8 @@ class BookingController extends Controller
                     'grooming_finished_at' => $bp->grooming_end_time
                         ? Carbon::parse($bp->grooming_end_time)->format('g:i A')
                         : null,
+                    'grooming_started_timestamp' => $bp->grooming_start_time?->toIso8601String(),
+                    'grooming_finished_timestamp' => $bp->grooming_end_time?->toIso8601String(),
                     'services' => $services,
                     'payment_review' => $paymentPet
                         && ($paymentPet['payment_kind'] ?? null) === 'stopped_reviewed'
@@ -552,6 +563,7 @@ class BookingController extends Controller
                     'paid_at' => $paidPayment->paid_at?->toIso8601String(),
                     'pets' => $safePets->map(fn (array $pet) => [
                         'pet_id' => $pet['pet_id'],
+                        'booking_pet_id' => $pet['booking_pet_id'],
                         'pet_name' => $pet['pet_name'],
                         'pet_species' => $pet['pet_species'],
                         'grooming_state' => $pet['grooming_state'],
@@ -591,11 +603,20 @@ class BookingController extends Controller
                 'dropped_off_at' => $b->dropped_off_at
                     ? Carbon::parse($b->dropped_off_at)->format('g:i A')
                     : null,
+                'dropped_off_timestamp' => $b->dropped_off_at
+                    ? Carbon::parse($b->dropped_off_at, config('app.timezone'))->toIso8601String()
+                    : null,
                 'grooming_started_at' => $b->grooming_started_at
                     ? Carbon::parse($b->grooming_started_at)->format('g:i A')
                     : null,
+                'grooming_started_timestamp' => $b->grooming_started_at
+                    ? Carbon::parse($b->grooming_started_at, config('app.timezone'))->toIso8601String()
+                    : null,
                 'grooming_finished_at' => $b->grooming_finished_at
                     ? Carbon::parse($b->grooming_finished_at)->format('g:i A')
+                    : null,
+                'grooming_finished_timestamp' => $b->grooming_finished_at
+                    ? Carbon::parse($b->grooming_finished_at, config('app.timezone'))->toIso8601String()
                     : null,
                 'pets' => $pets,
             ];

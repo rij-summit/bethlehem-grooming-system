@@ -17,7 +17,7 @@
           <!-- ── Verifying state (shown while API call is in-flight) ── -->
           <div id="stateVerifying" class="hidden text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style="background-color:#dbeafe">
-              <i data-lucide="loader-circle" class="h-8 w-8 animate-spin" style="color:#315b7e"></i>
+              <svg class="h-8 w-8 animate-spin fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false" style="color:#315b7e"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
             </div>
             <h2 id="progressTitle" class="text-2xl font-bold text-slate-800">Verifying your email…</h2>
             <p id="progressMessage" class="mt-2 text-sm text-slate-500">Please wait a moment.</p>
@@ -26,7 +26,7 @@
           <!-- ── Success state ── -->
           <div id="stateSuccess" class="hidden text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style="background-color:#dcfce7">
-              <i data-lucide="circle-check-big" class="h-8 w-8" style="color:#16a34a"></i>
+              <svg class="h-8 w-8 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false" style="color:#16a34a"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>
             </div>
             <h2 id="successTitle" class="text-2xl font-bold text-slate-800">Email Verified!</h2>
             <p id="successMessage" class="mt-2 text-sm text-slate-500">Your account is now active. Redirecting you to your account…</p>
@@ -35,7 +35,7 @@
           <!-- ── Pending state (no token in URL — shown after registration redirect) ── -->
           <div id="statePending" class="hidden text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style="background-color:#dbeafe">
-              <i data-lucide="mail" class="h-8 w-8" style="color:#315b7e"></i>
+              <svg class="h-8 w-8 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false" style="color:#315b7e"><use href="../../assets/icons/phosphor.svg#envelope"></use></svg>
             </div>
             <h2 id="pendingTitle" class="text-2xl font-bold text-slate-800">Check Your Email</h2>
             <p class="mt-3 text-sm text-slate-500 leading-relaxed">
@@ -49,7 +49,7 @@
           <!-- Login code state -->
           <div id="stateLoginCode" class="hidden text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style="background-color:#dbeafe">
-              <i data-lucide="mail" class="h-8 w-8" style="color:#315b7e"></i>
+              <svg class="h-8 w-8 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false" style="color:#315b7e"><use href="../../assets/icons/phosphor.svg#envelope"></use></svg>
             </div>
             <h2 class="text-2xl font-bold text-slate-800">Confirm Your Sign-In</h2>
             <p class="mt-3 text-sm leading-relaxed text-slate-500">
@@ -94,7 +94,7 @@
           <!-- ── Error state (invalid / expired token) ── -->
           <div id="stateError" class="hidden text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style="background-color:#fee2e2">
-              <i data-lucide="circle-x" class="h-8 w-8" style="color:#dc2626"></i>
+              <svg class="h-8 w-8 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false" style="color:#dc2626"><use href="../../assets/icons/phosphor.svg#x-circle"></use></svg>
             </div>
             <h2 id="errorTitle" class="text-2xl font-bold text-slate-800">Verification Failed</h2>
             <p id="errorMessage" class="mt-2 text-sm text-slate-500"></p>
@@ -134,8 +134,8 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=session-inactivity-20260828" defer></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830" defer></script>
     <script src="../../scripts/auth/client/verify-email.js?v=admin-login-code-20260828" defer></script>
+    <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

@@ -3752,6 +3752,9 @@ function adminDashboard() {
       }
 
       const servicePrices = this.buildPaymentServicePrices(this.paymentModal.petBreakdown);
+      const petSizes = this.paymentModal.petBreakdown
+        .filter((pet) => pet.bookingPetId && ["small", "medium", "large", "extra_large"].includes(pet.sizeKey))
+        .map((pet) => ({ booking_pet_id: pet.bookingPetId, size: pet.sizeKey }));
       if (servicePrices.length !== this.paymentLineCount) {
         this.paymentModal.error = "Service price records are incomplete. Please refresh and try again.";
         return;
@@ -3767,6 +3770,7 @@ function adminDashboard() {
           payment_method:  paymentMethod,
           notes:           notes || null,
           service_prices:  servicePrices,
+          pet_sizes:       petSizes,
         };
         const res = isEarlyPayment
           ? await API.payNow(booking.id, payload)

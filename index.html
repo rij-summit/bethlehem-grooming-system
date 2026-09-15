@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico?v=bethlehem-logo-2" sizes="16x16 32x32 48x48 64x64 128x128 256x256" />
     <title>Bethlehem Animal Clinic &amp; Grooming</title>
 
     <!-- Compiled Tailwind CSS-->
@@ -225,14 +226,25 @@
             AI Chatbot
           </h2>
         </div>
-        <button
-          id="ai-chat-close"
-          type="button"
-          class="ai-chatbot-close"
-          aria-label="Close AI Chatbot"
-        >
-          <i data-lucide="x" class="ai-chatbot-close__icon"></i>
-        </button>
+        <div class="ai-chatbot-panel__actions">
+          <button
+            id="ai-chat-reset"
+            type="button"
+            class="ai-chatbot-reset"
+            aria-label="Start a new chatbot conversation"
+            title="New chat"
+          >
+            <i data-lucide="rotate-ccw" class="ai-chatbot-reset__icon"></i>
+          </button>
+          <button
+            id="ai-chat-close"
+            type="button"
+            class="ai-chatbot-close"
+            aria-label="Close AI Chatbot"
+          >
+            <i data-lucide="x" class="ai-chatbot-close__icon"></i>
+          </button>
+        </div>
       </header>
 
       <div
@@ -287,7 +299,7 @@
       </form>
     </section>
 
-    <script src="scripts/api.js?v=session-inactivity-20260828"></script>
-    <script src="scripts/components/home-ai-chatbot.js"></script>
+    <script src="scripts/api.js?v=chatbot-safety-insights-20260830"></script>
+    <script src="scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only"></script>
   </body>
 </html>

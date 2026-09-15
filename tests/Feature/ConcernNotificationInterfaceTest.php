@@ -62,7 +62,7 @@ class ConcernNotificationInterfaceTest extends TestCase
     {
         $clickHandler = $this->sourceBetween(
             $this->clientDashboard,
-            'const notification = notifications[Number(el.dataset.notifIndex)];',
+            'const notification = notifications[Number(el.dataset.clientNotificationIndex)];',
             '} catch { /* silent */ }',
         );
 

@@ -8,8 +8,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const submitLabel = document.getElementById("resetPasswordSubmitLabel");
 
   if (!form || !password || !confirmation || !message || !submit) return;
-  if (window.lucide) window.lucide.createIcons();
-
   installVisibilityToggle(
     "toggleNewPassword",
     password,

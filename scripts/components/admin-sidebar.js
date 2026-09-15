@@ -33,6 +33,50 @@
   queueIconRefresh();
 })();
 
+function installChatbotInsightsSidebarLinks() {
+  if (!window.API || API.getUserRole() !== "admin") return;
+
+  const isInsightsPage = /\/chatbot-insights\.html$/i.test(
+    window.location.pathname,
+  );
+
+  document
+    .querySelectorAll('.admin-sidebar-menu a[href$="reports.html"]')
+    .forEach((reportsLink) => {
+      const linkGroup = reportsLink.parentElement;
+      if (!linkGroup || linkGroup.querySelector("[data-chatbot-insights-link]")) {
+        return;
+      }
+
+      const insightsLink = document.createElement("a");
+      insightsLink.href = reportsLink.getAttribute("href").replace(
+        /reports\.html$/i,
+        "chatbot-insights.html",
+      );
+      insightsLink.className = [
+        "flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold",
+        "transition hover:bg-white/40",
+        isInsightsPage
+          ? "bg-[#315b7e] text-white shadow-sm"
+          : "text-[#2f4b66]",
+      ].join(" ");
+      insightsLink.dataset.chatbotInsightsLink = "true";
+      insightsLink.innerHTML = [
+        '<i data-lucide="messages-square" class="h-5 w-5"></i>',
+        "<span>Chatbot Insights</span>",
+      ].join("");
+      reportsLink.insertAdjacentElement("afterend", insightsLink);
+    });
+
+  window.lucide?.createIcons();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installChatbotInsightsSidebarLinks);
+} else {
+  installChatbotInsightsSidebarLinks();
+}
+
 function getAdminSidebarActivePage(pathname = window.location.pathname) {
   const normalizedPath = String(pathname || "")
     .replace(/\\/g, "/")
@@ -55,6 +99,7 @@ function getAdminSidebarActivePage(pathname = window.location.pathname) {
     "archive.html": "archive",
     "transactions.html": "transactions",
     "reports.html": "reports",
+    "chatbot-insights.html": "chatbot-insights",
     "settings.html": "settings",
   };
 

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chatbot Insights | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css?v=chatbot-safety-insights-20260830" />
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div x-data="adminSidebar()" x-cloak class="flex min-h-screen bg-[#f5f8fb]">
+      <div
+        x-cloak
+        x-show="sidebarOpen"
+        x-transition.opacity
+        class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+        @click="sidebarOpen = false"
+      ></div>
+
+      <aside
+        class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0"
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <div class="px-6 py-6">
+          <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm">
+              <img src="../../assets/images/clinic/Bethlehem_Logo-256.png" alt="Bethlehem Animal Clinic logo" class="h-full w-full object-contain" />
+            </div>
+            <div class="min-w-0">
+              <h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1>
+              <p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p>
+            </div>
+          </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto px-4 py-6">
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p>
+            <div class="space-y-1.5">
+              <a href="./dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="layout-dashboard" class="h-5 w-5"></i><span>Dashboard</span></a>
+              <a href="./clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="users" class="h-5 w-5"></i><span>Customers</span></a>
+              <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="calendar-days" class="h-5 w-5"></i><span>Schedules</span><span x-show="hasIncomingAppointments" style="display:none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500"></span></a>
+              <a href="./clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="stethoscope" class="h-5 w-5"></i><span>Clinic</span></a>
+              <a href="./inventory.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span></a>
+            </div>
+          </div>
+
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p>
+            <div class="space-y-1.5">
+              <a href="./archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="archive" class="h-5 w-5"></i><span>Archive</span></a>
+              <a href="./transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="receipt" class="h-5 w-5"></i><span>Transactions</span></a>
+              <a href="./reports.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="clipboard-list" class="h-5 w-5"></i><span>Reports</span></a>
+            </div>
+          </div>
+
+          <div>
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
+            <div class="space-y-1.5">
+              <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold text-[#2f4b66] transition hover:bg-white/40"><i data-lucide="settings" class="h-5 w-5"></i><span>Settings</span></a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white">AD</div>
+            <div class="min-w-0"><p class="truncate font-bold text-white">Admin</p><p class="truncate text-sm text-white/80">Clinic Manager</p></div>
+          </div>
+          <button type="button" x-show="isAdmin" @click="handleStopReceivingClick()" class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition" :class="clinicStopped ? 'btn-clinic-reopen' : 'btn-clinic-stop'"><i data-lucide="door-closed" class="h-4 w-4"></i><span x-text="clinicStopped ? 'Reopen Today' : 'We\'re Done for Today'"></span></button>
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()"><i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span></button>
+        </div>
+      </aside>
+
+      <div x-cloak x-show="stopModal.open" x-transition class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4">
+        <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div class="px-6 py-5"><h4 class="text-lg font-bold text-slate-800" x-text="stopModal.title"></h4><p class="mt-2 text-sm text-slate-600" x-text="stopModal.message"></p><p x-show="stopModal.error" class="mt-2 text-sm text-red-600" x-text="stopModal.error"></p></div>
+          <div class="flex gap-3 px-6 py-4"><button type="button" @click="stopModal.open = false" class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button><button type="button" @click="executeStopReceiving()" :disabled="stopModal.busy" class="flex-1 rounded-xl px-4 py-2 text-sm font-semibold" :class="clinicStopped ? 'btn-confirm-reopen' : 'btn-confirm-stop'"><span x-text="stopModal.busy ? 'Please wait...' : stopModal.confirmLabel"></span></button></div>
+        </div>
+      </div>
+
+      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+        <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
+          <div><p class="text-sm font-semibold text-[#5c7690]">Admin Panel</p><h2 class="text-lg font-extrabold text-[#1f3850]">Chatbot Insights</h2></div>
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen = true"><i data-lucide="menu" class="h-5 w-5"></i></button>
+        </header>
+
+        <main x-data="adminChatbotInsights()" class="flex-1 px-4 py-6 lg:px-6 lg:pt-0">
+          <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-4 lg:backdrop-blur">
+            <div class="rounded-[24px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-4 lg:px-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h2 class="text-2xl font-extrabold text-[#1f3850] lg:text-3xl">Chatbot Insights</h2><p class="mt-1 text-xs font-medium tracking-[0.16em] text-[#355674] lg:text-sm">PRIVACY-FILTERED QUESTIONS AND FEEDBACK</p></div>
+                <button type="button" @click="load()" :disabled="loading" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"><i data-lucide="refresh-cw" class="h-4 w-4"></i><span x-text="loading ? 'Loading...' : 'Refresh'"></span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-[22px] border border-[#d7e3ef] bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">New questions</p><p class="mt-2 text-3xl font-extrabold text-[#1f3850]" x-text="summary.new_questions"></p></article>
+            <article class="rounded-[22px] border border-[#d7e3ef] bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Occurrences</p><p class="mt-2 text-3xl font-extrabold text-[#1f3850]" x-text="summary.total_occurrences"></p></article>
+            <article class="rounded-[22px] border border-[#d7e3ef] bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Groq fallbacks</p><p class="mt-2 text-3xl font-extrabold text-[#1f3850]" x-text="summary.groq_fallbacks"></p></article>
+            <article class="rounded-[22px] border border-[#d7e3ef] bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Helpful feedback</p><p class="mt-2 text-3xl font-extrabold text-[#1f3850]" x-text="summary.helpful_percentage === null ? '—' : summary.helpful_percentage + '%' "></p></article>
+          </section>
+
+          <section class="mt-6 rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+            <div class="grid gap-3 border-b border-slate-100 p-5 md:grid-cols-3">
+              <label class="text-sm font-semibold text-[#2f4b66]">Status<select x-model="filters.status" @change="page = 1; load()" class="mt-2 w-full rounded-xl border border-[#c9d9e8] bg-white px-3 py-2.5 outline-none"><option value="all">All statuses</option><option value="new">New</option><option value="reviewed">Reviewed</option><option value="resolved">Resolved</option></select></label>
+              <label class="text-sm font-semibold text-[#2f4b66]">Reason<select x-model="filters.reason" @change="page = 1; load()" class="mt-2 w-full rounded-xl border border-[#c9d9e8] bg-white px-3 py-2.5 outline-none"><option value="">All reasons</option><template x-for="reason in reasonOptions" :key="reason"><option :value="reason" x-text="reasonLabel(reason)"></option></template></select></label>
+              <form @submit.prevent="page = 1; load()"><label class="text-sm font-semibold text-[#2f4b66]">Search<input x-model.trim="filters.search" type="search" placeholder="Search safe question text" class="mt-2 w-full rounded-xl border border-[#c9d9e8] px-3 py-2.5 outline-none" /></label></form>
+            </div>
+
+            <p x-show="error" class="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" x-text="error"></p>
+            <div x-show="!loading && insights.length === 0" class="px-5 py-12 text-center"><i data-lucide="message-square-dashed" class="mx-auto h-10 w-10 text-slate-300"></i><p class="mt-3 font-semibold text-slate-500">No chatbot insights match these filters.</p></div>
+
+            <div x-show="insights.length > 0" class="divide-y divide-slate-100">
+              <template x-for="insight in insights" :key="insight.id">
+                <article class="grid gap-4 px-5 py-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                  <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="rounded-full bg-[#eef5fb] px-2.5 py-1 text-xs font-bold text-[#315b7e]" x-text="reasonLabel(insight.failure_reason)"></span><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-600" x-text="insight.language"></span><span class="text-xs font-semibold text-slate-400" x-text="insight.occurrence_count + (insight.occurrence_count === 1 ? ' occurrence' : ' occurrences')"></span></div><p class="mt-3 break-words font-semibold leading-relaxed text-slate-800" x-text="insight.question_excerpt"></p><p class="mt-2 text-xs text-slate-400" x-text="'Last asked ' + formatDate(insight.last_seen_at)"></p></div>
+                  <div class="flex flex-wrap gap-2"><button type="button" @click="setStatus(insight, 'new')" class="rounded-xl border px-3 py-2 text-xs font-bold" :class="insight.status === 'new' ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-500'">New</button><button type="button" @click="setStatus(insight, 'reviewed')" class="rounded-xl border px-3 py-2 text-xs font-bold" :class="insight.status === 'reviewed' ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-500'">Reviewed</button><button type="button" @click="setStatus(insight, 'resolved')" class="rounded-xl border px-3 py-2 text-xs font-bold" :class="insight.status === 'resolved' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'">Resolved</button></div>
+                </article>
+              </template>
+            </div>
+
+            <div x-show="pagination.last_page > 1" class="flex items-center justify-between border-t border-slate-100 px-5 py-4"><button type="button" @click="previousPage()" :disabled="page <= 1" class="rounded-xl border border-[#c9d9e8] px-4 py-2 text-sm font-semibold text-[#315b7e] disabled:opacity-40">Previous</button><span class="text-sm font-semibold text-slate-500" x-text="'Page ' + pagination.current_page + ' of ' + pagination.last_page"></span><button type="button" @click="nextPage()" :disabled="page >= pagination.last_page" class="rounded-xl border border-[#c9d9e8] px-4 py-2 text-sm font-semibold text-[#315b7e] disabled:opacity-40">Next</button></div>
+          </section>
+
+          <section class="mt-6 rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+            <div class="border-b border-slate-100 px-5 py-4"><h3 class="font-extrabold text-[#1f3850]">Recent unhelpful responses</h3><p class="mt-1 text-sm text-slate-500">Only privacy-filtered excerpts are stored.</p></div>
+            <div x-show="recentUnhelpful.length === 0" class="px-5 py-8 text-center text-sm font-semibold text-slate-400">No unhelpful feedback has been submitted.</div>
+            <div class="divide-y divide-slate-100"><template x-for="item in recentUnhelpful" :key="item.id"><article class="grid gap-3 px-5 py-4 md:grid-cols-2"><div><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Question</p><p class="mt-1 break-words text-sm font-semibold text-slate-700" x-text="item.question_excerpt"></p></div><div><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Answer</p><p class="mt-1 break-words text-sm text-slate-600" x-text="item.answer_excerpt"></p></div></article></template></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
+    <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
+    <script src="../../scripts/components/admin-chatbot-insights.js?v=chatbot-safety-insights-20260830"></script>
+  </body>
+</html>

@@ -64,7 +64,12 @@ var API = (() => {
     staff: Object.freeze({ timeoutMs: 15 * 60 * 1000, warningMs: 14 * 60 * 1000 }),
     customer: Object.freeze({ timeoutMs: 30 * 60 * 1000, warningMs: 29 * 60 * 1000 }),
   });
-  const ADMIN_ONLY_PAGE_NAMES = ["reports.html", "settings.html", "services.html"];
+  const ADMIN_ONLY_PAGE_NAMES = [
+    "reports.html",
+    "settings.html",
+    "services.html",
+    "chatbot-insights.html",
+  ];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
     "sign-in.html",
     "signup.html",
@@ -101,6 +106,7 @@ var API = (() => {
     "clinicVisitDraft",
     "clinicVisitPets",
     "clinicVisitConfirmation",
+    "bethlehem.chatbot.conversation.v1",
   ];
   const BOOKING_LOCAL_KEYS = [
     "bethlehem.bookingFormLock",
@@ -974,9 +980,19 @@ var API = (() => {
     return request("GET", "/system/clock");
   }
 
-  async function sendChatbotMessage(message) {
+  async function sendChatbotMessage(message, history = []) {
     // POST /api/chatbot  (public)
-    return request("POST", "/chatbot", { message });
+    return request("POST", "/chatbot", {
+      message,
+      history: Array.isArray(history) ? history : [],
+    }, getCustomerToken(), { suppressAuthRedirect: true });
+  }
+
+  async function sendChatbotFeedback(feedbackToken, helpful) {
+    return request("POST", "/chatbot/feedback", {
+      feedback_token: feedbackToken,
+      helpful: Boolean(helpful),
+    });
   }
 
   async function getTimeslots(date) {
@@ -1738,9 +1754,15 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/picked-up`, null, getAdminToken());
   }
 
-  async function getCustomerNotifications() {
+  async function getCustomerNotifications(options = {}) {
     // GET /api/customer/notifications  (protected — customer token)
-    return request("GET", "/customer/notifications", null, getCustomerToken());
+    const page = Number(options.page || 1);
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", String(page));
+    if (options.sort === "recent") params.set("sort", "recent");
+    if (options.status === "unread") params.set("status", "unread");
+    const suffix = params.size ? `?${params.toString()}` : "";
+    return request("GET", `/customer/notifications${suffix}`, null, getCustomerToken());
   }
 
   async function markCustomerNotificationRead(id) {
@@ -1969,6 +1991,38 @@ var API = (() => {
     return request("GET", `/admin/reports/customer-activity${query}`, null, getAdminToken());
   }
 
+  async function getChatbotInsights({
+    status = "all",
+    reason = "",
+    search = "",
+    page = 1,
+    perPage = 25,
+  } = {}) {
+    const params = new URLSearchParams({
+      status,
+      page: String(page),
+      per_page: String(perPage),
+    });
+    if (reason) params.set("reason", reason);
+    if (search) params.set("search", search);
+
+    return request(
+      "GET",
+      `/admin/chatbot-insights?${params.toString()}`,
+      null,
+      getAdminToken(),
+    );
+  }
+
+  async function updateChatbotInsightStatus(insightId, status) {
+    return request(
+      "PATCH",
+      `/admin/chatbot-insights/${insightId}/status`,
+      { status },
+      getAdminToken(),
+    );
+  }
+
   function normalizePhoneLikeIdentifier(value) {
     const digits = String(value || "").replace(/\D/g, "");
 
@@ -2019,6 +2073,7 @@ var API = (() => {
     getMe,
     getSystemClock,
     sendChatbotMessage,
+    sendChatbotFeedback,
     // Timeslots
     getTimeslots,
     getClinicTimeslots,
@@ -2128,6 +2183,8 @@ var API = (() => {
     getTransactions,
     getServicesPerformedReport,
     getCustomerActivityReport,
+    getChatbotInsights,
+    updateChatbotInsightStatus,
     // Walk-in
     submitWalkIn,
     submitClinicWalkIn,

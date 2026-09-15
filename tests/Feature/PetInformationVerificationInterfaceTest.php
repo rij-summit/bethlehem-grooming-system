@@ -124,13 +124,143 @@ class PetInformationVerificationInterfaceTest extends TestCase
 
         foreach ([
             'const speciesIcon = getPetSpeciesIcon(pet.species);',
-            'data-lucide="${speciesIcon}"',
+            'phosphor.svg#${speciesIcon}',
             'if (normalizedSpecies === "dog") return "dog";',
             'if (normalizedSpecies === "cat") return "cat";',
             'return "paw-print";',
         ] as $speciesIconBehavior) {
             $this->assertStringContainsString($speciesIconBehavior, $petCard);
         }
+    }
+
+    public function test_my_pets_matches_the_requested_header_toolbar_and_card_actions(): void
+    {
+        $petCard = $this->sourceBetween(
+            $this->myPetsComponent,
+            'function buildCard(pet)',
+            'function openAddModal()',
+        );
+        $chatbot = file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
+
+        foreach ([
+            'placeholder="Search pet name..."',
+            'id="notifBellBtn"',
+            'data-pre-registration-button',
+            'id="filterActiveBtn"',
+            'id="filterArchivedBtn"',
+            'id="addPetBtn"',
+        ] as $control) {
+            $this->assertStringContainsString($control, $this->myPetsPage);
+        }
+
+        $this->assertStringNotContainsString('["Species", pet.species]', $petCard);
+        $this->assertStringContainsString('flex items-start justify-between gap-4 text-sm', $petCard);
+        $this->assertStringContainsString('class="grid grid-cols-2 gap-2', $petCard);
+        $this->assertStringContainsString('View profile', $petCard);
+        $this->assertStringNotContainsString('Pet Care Assistant', $chatbot);
+        $this->assertStringContainsString('ai-chatbot-button--icon-only', $chatbot);
+    }
+
+    public function test_pet_profile_keeps_the_my_pets_shell_and_removes_the_extra_hero(): void
+    {
+        foreach ([
+            'portal-theme group/portal',
+            'w-64 flex-col',
+            'aria-current="page"',
+            'id="petProfileSearch"',
+            'id="notifBellBtn"',
+            'data-pre-registration-button',
+        ] as $consistentProfileElement) {
+            $this->assertStringContainsString(
+                $consistentProfileElement,
+                $this->petProfilePage,
+            );
+        }
+
+        $this->assertStringContainsString('<title>My Pets | Bethlehem Animal Clinic</title>', $this->petProfilePage);
+        $this->assertStringContainsString('>My Pets</h2>', $this->petProfilePage);
+        $this->assertStringContainsString('Manage your registered pet profiles.', $this->petProfilePage);
+        $this->assertStringNotContainsString('Back to My Pets', $this->petProfilePage);
+        $this->assertStringNotContainsString('id="pageSubtitle"', $this->petProfilePage);
+        $this->assertStringNotContainsString('id="petHeroName"', $this->petProfilePage);
+        $this->assertStringNotContainsString('Shared pet profile', $this->petProfilePage);
+        $this->assertStringNotContainsString('const profileTitle =', $this->petProfileComponent);
+        $this->assertStringNotContainsString('getElementById("pageTitle").textContent', $this->petProfileComponent);
+        $this->assertStringContainsString('grid grid-cols-1 gap-3 sm:grid-cols-2', $this->petProfilePage);
+        $this->assertStringNotContainsString('sm:grid-cols-2 xl:grid-cols-3', $this->petProfilePage);
+        $this->assertStringContainsString('text-sm font-bold leading-5', $this->petProfilePage);
+        $this->assertStringContainsString('text-xs font-medium text-portal-muted', $this->petProfileComponent);
+        $this->assertStringContainsString('rounded-xl border border-portal-border bg-portal-surface-soft px-3 py-3', $this->petProfileComponent);
+        $this->assertStringContainsString('min-h-10 rounded-[14px]', $this->myPetsPage);
+        $this->assertStringContainsString('min-h-8 w-full', $this->myPetsComponent);
+    }
+
+    public function test_customer_pet_tabs_prefetch_once_after_the_profile_is_visible(): void
+    {
+        foreach ([
+            'let groomingLoadState = "idle";',
+            'let medicalLoadState = "idle";',
+            'let vaccinationLoadState = "idle";',
+            'let concernLoadState = "idle";',
+            'if (petProfileReady) void loadPetTabData(selected);',
+            'const petTabLoaders = {',
+            'grooming: loadGrooming,',
+            'medical: loadMedicalRecords,',
+            'vaccinations: loadVaccinations,',
+            'notifications: loadConcernNotifications,',
+            'window.requestIdleCallback(task, { timeout: 1200 });',
+            'window.requestAnimationFrame(scheduleCustomerTabPrefetch);',
+        ] as $customerTabOptimization) {
+            $this->assertStringContainsString(
+                $customerTabOptimization,
+                $this->petProfileComponent,
+            );
+        }
+
+        $this->assertStringNotContainsString('await loadGrooming();', $this->petProfileComponent);
+    }
+
+    public function test_all_pet_profile_information_cards_use_compact_hierarchical_typography(): void
+    {
+        foreach ([
+            'Basic Information',
+            'Medical Conditions / Special Needs',
+            'Grooming Records',
+            'Clinic Medical Records',
+            'Vaccination History',
+            'Medical-Concern Notifications',
+        ] as $sectionTitle) {
+            $this->assertStringContainsString(
+                'class="text-sm font-bold leading-5 text-portal-text">'.$sectionTitle,
+                $this->petProfilePage,
+            );
+        }
+
+        preg_match_all(
+            '/<h[45][^>]*class="([^"]*)"/',
+            $this->petProfileComponent,
+            $dynamicHeadingMatches,
+        );
+
+        $this->assertNotEmpty($dynamicHeadingMatches[1]);
+        foreach ($dynamicHeadingMatches[1] as $headingClasses) {
+            $this->assertStringContainsString('text-sm', $headingClasses);
+        }
+
+        foreach ([
+            'break-words text-xs font-semibold text-portal-text',
+            'break-words text-xs font-medium leading-5 text-slate-700',
+            'whitespace-pre-line break-words text-xs leading-5 text-slate-700',
+            'break-words text-xs leading-5 text-slate-700',
+        ] as $compactInformationText) {
+            $this->assertStringContainsString(
+                $compactInformationText,
+                $this->petProfileComponent,
+            );
+        }
+
+        $this->assertStringNotContainsString('text-lg font-bold', $this->petProfileComponent);
+        $this->assertStringNotContainsString('text-xl font-bold', $this->petProfileComponent);
     }
 
     public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
@@ -197,9 +327,9 @@ class PetInformationVerificationInterfaceTest extends TestCase
     {
         $this->assertStringNotContainsString(
             'uppercase',
-            $this->myPetsPage
+            preg_replace('/<aside\b[^>]*>.*?<\/aside>/s', '', $this->myPetsPage)
                 .$this->myPetsComponent
-                .$this->petProfilePage
+                .preg_replace('/<aside\b[^>]*>.*?<\/aside>/s', '', $this->petProfilePage)
                 .$this->petProfileComponent,
         );
     }

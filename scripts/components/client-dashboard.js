@@ -1,26 +1,29 @@
 // Connected to pages/client/dashboard.html
 // Depends on: api.js (loaded before this script)
 
-// Client dashboard shell: Lucide icons, mobile sidebar, profile name, and logout.
+// Client dashboard shell: mobile sidebar, profile name, and logout.
+// Icons use the local Phosphor regular SVG sprite (no hydration required).
 // Connected to the sidebar/profile controls in pages/client/dashboard.html.
-(function () {
-  function createIconsWhenReady() {
-    if (window.lucide) {
-      window.lucide.createIcons();
-      return;
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      window.lucide?.createIcons();
-    }, { once: true });
-
-    window.addEventListener("load", () => {
-      window.lucide?.createIcons();
-    }, { once: true });
+function scheduleCustomerDashboardIdleTask(task) {
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(task, { timeout: 1200 });
+    return;
   }
 
-  createIconsWhenReady();
+  setTimeout(task, 200);
+}
 
+function scheduleCustomerDashboardAfterPaint(task) {
+  const schedule = () => scheduleCustomerDashboardIdleTask(task);
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(schedule);
+    return;
+  }
+
+  schedule();
+}
+
+(function () {
   const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
   const sidebarToggle = document.getElementById("clientSidebarToggle");
   const sidebarClose = document.getElementById("clientSidebarClose");
@@ -33,6 +36,31 @@
   if (!sidebarToggle || !sidebarClose || !sidebarBackdrop || !sidebar) return;
 
   const sidebarLinks = sidebar.querySelectorAll("a");
+  const navigationLinks = sidebar.querySelectorAll(".portal-nav-item");
+
+  function setActiveNavigation(activeLink) {
+    navigationLinks.forEach((link) => {
+      if (link === activeLink) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
+  function syncActiveNavigation() {
+    const activeLink = Array.from(navigationLinks).find((link) =>
+      new URL(link.href, window.location.href).pathname === window.location.pathname
+    );
+    if (activeLink) setActiveNavigation(activeLink);
+  }
+
+  navigationLinks.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (!event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+        setActiveNavigation(link);
+      }
+    });
+  });
+  syncActiveNavigation();
+  window.addEventListener("pageshow", syncActiveNavigation);
 
   // Sidebar navigation section: open/close behavior for tablet and mobile.
   function setSidebarState(isOpen) {
@@ -77,7 +105,7 @@
   });
 
   // Client profile section: load the logged-in customer's name and initials.
-  (async () => {
+  const loadDashboardProfile = async () => {
     try {
       const { user } = await API.getMe("customer");
       const firstName = user.first_name || "";
@@ -100,7 +128,8 @@
       // A temporary API outage must not bounce between dashboard and sign-in.
       console.error("Unable to load the customer profile.", error);
     }
-  })();
+  };
+  scheduleCustomerDashboardAfterPaint(loadDashboardProfile);
 
   // Logout section: end the customer session and return to sign in.
   if (logoutBtn) {
@@ -124,6 +153,9 @@
   const pickupPopup    = document.getElementById("pickupPopup");
   const pickupMessage  = document.getElementById("pickupMessage");
   const pickupDismiss  = document.getElementById("pickupDismissBtn");
+  let notificationsLoading = false;
+  let shownNotifications = [];
+  const currentTab = window.ClientNotificationUI.ensureDropdownControls(dropdown, () => renderNotifList(shownNotifications));
 
   const SHOWN_PICKUPS_KEY = "shownPickupNotifs";
   const PICKUP_READY_STATUSES = new Set([
@@ -164,19 +196,22 @@
   });
 
   function openDropdown() {
+    void loadNotifications();
     positionDropdown();
     dropdown.style.display = "flex";
+    bellBtn.setAttribute("aria-expanded", "true");
   }
 
   function closeDropdown() {
     dropdown.style.display = "none";
+    bellBtn.setAttribute("aria-expanded", "false");
   }
 
   function positionDropdown() {
     const rect      = bellBtn.getBoundingClientRect();
     const gap       = 8;
     const margin    = 12;
-    const dropWidth = Math.min(320, window.innerWidth - margin * 2);
+    const dropWidth = Math.min(384, window.innerWidth - margin * 2);
 
     // Right-align to bell, clamped so it never clips the left edge
     let right = window.innerWidth - rect.right;
@@ -208,11 +243,15 @@
 
   // ── Load notifications ─────────────────────────────────────────────────────
   async function loadNotifications() {
+    if (notificationsLoading) return;
+    notificationsLoading = true;
+
     try {
       const data = await API.getCustomerNotifications();
 
       // Badge
       const count = data.unread_count || 0;
+      window.ClientNotificationUI.setUnreadCount(dropdown, Number(count));
       if (count > 0) {
         badge.textContent = count > 9 ? "9+" : count;
         badge.classList.remove("hidden");
@@ -233,44 +272,21 @@
         pickupMessage.innerHTML = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
-        if (window.lucide) lucide.createIcons();
       }
     } catch { /* silent — non-critical */ }
+    finally { notificationsLoading = false; }
   }
 
   function renderNotifList(notifications) {
-    if (!notifications.length) {
-      list.innerHTML = '<p class="px-4 py-6 text-center text-sm text-slate-400">No notifications yet.</p>';
-      return;
-    }
-
-    list.innerHTML = notifications.map((n, index) => {
-      const icon = notifIcon(n);
-      const message = formatNotificationMessage(n);
-      const bg   = n.is_read ? "bg-white" : "bg-[#eaf4fb]";
-      const dot  = n.is_read ? "bg-transparent" : "bg-[#355c84]";
-      const time = formatNotifTime(n.created_at);
-      return `
-        <button type="button"
-             class="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${bg}"
-             data-notif-id="${n.id}"
-             data-notif-index="${index}">
-          <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}"></span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-start gap-2">
-              <span class="text-base">${icon}</span>
-              <p class="text-sm text-slate-700 leading-snug">${message}</p>
-            </div>
-            <p class="mt-1 text-xs text-slate-400">${time}</p>
-          </div>
-        </button>`;
-    }).join("");
+    shownNotifications = notifications;
+    window.ClientNotificationUI.render(list, notifications, currentTab(), true, formatNotificationMessage);
 
     // Mark single notification as read on click
-    list.querySelectorAll("[data-notif-id]").forEach((el) => {
+    list.querySelectorAll("[data-client-notification-index]").forEach((el) => {
       el.addEventListener("click", async () => {
-        const id = el.dataset.notifId;
-        const notification = notifications[Number(el.dataset.notifIndex)];
+        const notification = notifications[Number(el.dataset.clientNotificationIndex)];
+        const id = notification?.id;
+        if (!id) return;
         try {
           await API.markCustomerNotificationRead(id);
 
@@ -296,7 +312,6 @@
       });
     });
 
-    if (window.lucide) lucide.createIcons();
   }
 
   function notifIcon(notification) {
@@ -516,15 +531,24 @@
     return [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
   }
 
-  // Initial load + poll every 30 seconds
-  loadNotifications();
-  setInterval(loadNotifications, 30000);
+  // Keep the notification request behind the first dashboard paint.
+  scheduleCustomerDashboardAfterPaint(loadNotifications);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadNotifications();
+  }, 30000);
 })();
 
 // ── Appointments, Grooming Tracker & History ─────────────────────────────────
 (function () {
+  const scheduleDashboardDataIdle = typeof scheduleCustomerDashboardIdleTask === "function"
+    ? scheduleCustomerDashboardIdleTask
+    : (task) => setTimeout(task, 0);
+  const scheduleDashboardDataAfterPaint = typeof scheduleCustomerDashboardAfterPaint === "function"
+    ? scheduleCustomerDashboardAfterPaint
+    : scheduleDashboardDataIdle;
   const appointmentsList         = document.getElementById("appointmentsList");
   const groomingTrackerEl        = document.getElementById("groomingTracker");
+  const groomingLiveBadgeEl      = document.getElementById("groomingLiveBadge");
   const groomingHistoryEl        = document.getElementById("groomingHistory");
   const myPetsCountEl            = document.getElementById("myPetsCount");
   const myPetsSummaryEl          = document.getElementById("myPetsSummary");
@@ -560,6 +584,9 @@
   let selectedWindowId    = null;
   let cancelTargetBooking = null;
   let rescheduleLoadId    = 0;
+  let dashboardPetsLoadState = "idle";
+  let appointmentsLoading = false;
+  let groomingCapacityLoading = false;
   let rescheduleClinicStatus = {
     stoppedToday: false,
     blockedDates: [],
@@ -571,31 +598,37 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     setRescheduleDateRange(getRescheduleTodayKey());
-    loadDashboardPets();
-    loadAppointments();
-    loadGroomingCapacity();
+    void loadAppointments();
 
-    Promise.resolve(window.AppClock?.load?.())
-      .then(() => {
-        setRescheduleDateRange(getRescheduleTodayKey());
-      })
-      .catch(() => {
+    scheduleDashboardDataAfterPaint(async () => {
+      await loadDashboardPets();
+      scheduleDashboardDataIdle(async () => {
+        await loadGroomingCapacity();
+        await Promise.resolve(window.AppClock?.load?.()).catch(() => {});
         setRescheduleDateRange(getRescheduleTodayKey());
       });
+    });
   });
 
   // ── Load & route data ──────────────────────────────────────────────────────
 
   async function loadDashboardPets() {
+    if (dashboardPetsLoadState === "loading" || dashboardPetsLoadState === "loaded") return;
+    dashboardPetsLoadState = "loading";
+
     try {
       const data = await API.getUserPets({ archived: 0 });
       renderMyPetsSummary(data.pets || []);
+      dashboardPetsLoadState = "loaded";
     } catch {
       renderMyPetsSummary([]);
+      dashboardPetsLoadState = "error";
     }
   }
 
   async function loadAppointments() {
+    if (appointmentsLoading) return;
+    appointmentsLoading = true;
     let data;
 
     try {
@@ -607,6 +640,8 @@
       renderUpcomingAppointmentsSummary([]);
       renderPastGroomingSummary([], 0);
       return;
+    } finally {
+      appointmentsLoading = false;
     }
 
     const active = Array.isArray(data?.bookings) ? data.bookings : [];
@@ -643,23 +678,28 @@
 
   function renderDashboardPanelError(target, message) {
     if (!target) return;
+    if (target === groomingTrackerEl) groomingLiveBadgeEl?.classList.add("hidden");
 
     target.innerHTML = `
-      <div class="text-center py-10" role="alert">
-        <i data-lucide="alert-circle" class="w-9 h-9 mx-auto text-red-300"></i>
-        <p class="mt-3 text-sm text-red-500">${escapeDashboardHtml(message)}</p>
+      <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center" role="alert">
+        <svg class="ph-icon w-9 h-9 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#warning-circle"></use></svg>
+        <p class="mt-3 text-sm text-portal-danger">${escapeDashboardHtml(message)}</p>
       </div>`;
-    window.lucide?.createIcons();
   }
 
   // ── Appointments section ───────────────────────────────────────────────────
 
   async function loadGroomingCapacity() {
+    if (groomingCapacityLoading) return;
+    groomingCapacityLoading = true;
+
     try {
       const data = await API.getGroomingCapacity();
       renderGroomingCapacity(data);
     } catch {
       renderGroomingCapacity(null);
+    } finally {
+      groomingCapacityLoading = false;
     }
   }
 
@@ -711,11 +751,10 @@
   function renderAppointments(bookings) {
     if (!bookings.length) {
       appointmentsList.innerHTML = `
-        <div class="text-center py-10">
-          <i data-lucide="calendar-x" class="w-10 h-10 mx-auto text-slate-300"></i>
-          <p class="mt-3 text-slate-400 text-sm">No upcoming schedule.</p>
+        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
+          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-x"></use></svg>
+          <p class="mt-3 text-portal-muted text-sm">No upcoming schedule.</p>
         </div>`;
-      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -728,15 +767,14 @@
       if (cancelBtn)     cancelBtn.addEventListener("click",     () => handleCancel(b));
     });
 
-    if (window.lucide) lucide.createIcons();
   }
 
   function buildBookingCard(b) {
     const statusConfig  = getStatusConfig(b.status);
     const timeLabel     = b.time_window?.window_label ?? "—";
     const isActionable  = b.status === "waiting_to_arrive";
-    const rescheduleAttrs = `id="reschedule-${b.booking_id}" class="flex-1 rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-[#315b7e] hover:text-white transition"`;
-    const cancelAttrs     = `id="cancel-${b.booking_id}" class="flex-1 rounded-xl border border-red-300 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition"`;
+    const rescheduleAttrs = `id="reschedule-${b.booking_id}" class="flex-1 rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-portal-primary hover:bg-[#315b7e] hover:text-white transition"`;
+    const cancelAttrs     = `id="cancel-${b.booking_id}" class="flex-1 rounded-xl border border-red-300 px-3 py-2 text-xs font-semibold text-portal-danger hover:bg-red-50 transition"`;
     const rescheduleLabel = "Reschedule";
     const cancelLabel     = "Cancel";
 
@@ -748,17 +786,17 @@
       : "";
 
     return `
-      <div class="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0 mb-4">
         <div class="flex items-start justify-between gap-2 mb-1">
           <div>
-            <p class="text-sm font-semibold text-slate-700">${b.booking_reference}</p>
-            <p class="text-xs text-slate-400 mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
+            <p class="text-sm font-semibold text-portal-text">${b.booking_reference}</p>
+            <p class="text-xs text-portal-muted mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
           </div>
           <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${statusConfig.classes}">
             ${statusConfig.label}
           </span>
         </div>
-        <p class="text-xs text-slate-500">${b.number_of_pets} pet${b.number_of_pets > 1 ? "s" : ""}</p>
+        <p class="text-xs text-portal-muted">${b.number_of_pets} pet${b.number_of_pets > 1 ? "s" : ""}</p>
         ${buttons}
       </div>`;
   }
@@ -796,7 +834,7 @@
     if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(active);
     if (groomingQueueSummaryEl) {
       groomingQueueSummaryEl.textContent = `${inProgress} in progress`;
-      groomingQueueSummaryEl.className = "text-sm text-[#315b7e] mt-1";
+      groomingQueueSummaryEl.className = "text-sm text-portal-muted mt-1";
     }
     if (groomingCapacityTextEl) {
       groomingCapacityTextEl.textContent = isFull
@@ -805,15 +843,15 @@
     }
     if (groomingCapacityBarEl) {
       groomingCapacityBarEl.style.width = `${percent}%`;
-      groomingCapacityBarEl.className = "h-full rounded-full bg-[#315b7e] transition-all duration-300";
+      groomingCapacityBarEl.className = "h-full rounded-full bg-portal-accent transition-all duration-300";
     }
     if (groomingCapacityBadgeEl) {
       groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Busy" : "Open";
       groomingCapacityBadgeEl.className = isFull
-        ? "rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-semibold text-red-700"
+        ? "rounded-full bg-portal-danger-soft px-2.5 py-1 text-[11px] font-semibold text-portal-danger"
         : isBusy
-          ? "rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
-          : "rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700";
+          ? "rounded-full bg-portal-warning-soft px-2.5 py-1 text-[11px] font-semibold text-portal-warning"
+          : "rounded-full bg-portal-success-soft px-2.5 py-1 text-[11px] font-semibold text-portal-success";
     }
   }
 
@@ -835,8 +873,8 @@
         ? `${count} active schedule`
         : "No upcoming schedule";
       upcomingAppointmentsSummaryEl.className = count
-        ? "text-sm text-emerald-600 mt-1"
-        : "text-sm text-slate-500 mt-1";
+        ? "text-sm text-portal-muted mt-1"
+        : "text-sm text-portal-muted mt-1";
     }
 
     renderUpcomingReminder(records);
@@ -889,17 +927,28 @@
 
   function renderGroomingTracker(bookings) {
     if (!bookings.length) {
+      groomingLiveBadgeEl?.classList.add("hidden");
       groomingTrackerEl.innerHTML = `
-        <div class="text-center py-10">
-          <i data-lucide="scissors" class="w-10 h-10 mx-auto text-slate-300"></i>
-          <p class="mt-3 text-slate-400 text-sm">No pets at the clinic right now.</p>
+        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
+          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
+          <p class="mt-3 text-portal-muted text-sm">No pets at the clinic right now.</p>
         </div>`;
-      if (window.lucide) lucide.createIcons();
       return;
     }
 
     groomingTrackerEl.innerHTML = bookings.map(b => buildTrackerCard(b)).join("");
-    if (window.lucide) lucide.createIcons();
+    groomingLiveBadgeEl?.classList.toggle("hidden", !bookings.some(hasQueuedOrGroomingPet));
+  }
+
+  function hasQueuedOrGroomingPet(booking) {
+    const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+    return pets.some(pet =>
+      pet.clinic_referred !== true
+      && pet.active_in_grooming !== false
+      && ["checked_in", "in_progress"].includes(
+        String(pet.grooming_status ?? booking.status ?? "").toLowerCase(),
+      )
+    );
   }
 
   function buildTrackerCard(b) {
@@ -908,7 +957,7 @@
     const petNames   = trackerPets.map(p => p.pet_name).filter(Boolean).join(", ") || "—";
     const petCount   = trackerPets.length;
     const prePaid    = b.paid
-      ? `<span class="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Pre-Paid ✓</span>`
+      ? `<span class="ml-2 rounded-full bg-portal-success-soft px-2 py-0.5 text-[11px] font-semibold text-portal-success">Pre-Paid ✓</span>`
       : "";
 
     const steps = [
@@ -919,10 +968,10 @@
     const stepOrder  = { checked_in: 0, in_progress: 1, for_payment: 2, released: 2 };
     const current    = stepOrder[b.status] ?? 0;
     const stepThemes = {
-      checked_in:  { color: "#e5a800" },
-      in_progress: { color: "#1d4ed8" },
-      for_payment: { color: "#16a34a" },
-      released:    { color: "#16a34a" },
+      checked_in:  { color: "var(--portal-warning, #806a40)" },
+      in_progress: { color: "var(--portal-primary, #486780)" },
+      for_payment: { color: "var(--portal-success, #476857)" },
+      released:    { color: "var(--portal-success, #476857)" },
     };
 
     const stepCircles = steps.map((step, i) => {
@@ -930,13 +979,13 @@
       const stepTheme = stepThemes[step.key];
       const circleClass = active
         ? "text-white"
-        : "bg-white text-slate-400 border-slate-300";
+        : "bg-white text-portal-muted border-slate-300";
       const circleStyle = active
         ? `style="background-color: ${stepTheme.color}; border-color: ${stepTheme.color};"`
         : "";
       const labelClass  = active
         ? "font-semibold"
-        : "text-slate-400";
+        : "text-portal-muted";
       const labelStyle = active
         ? `style="color: ${stepTheme.color};"`
         : "";
@@ -950,14 +999,14 @@
     }).join("");
 
     return `
-      <div class="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0 mb-4">
         <div class="flex items-start justify-between gap-2 mb-1">
           <div>
-            <p class="text-sm font-semibold text-slate-700">${b.booking_reference}${prePaid}</p>
-            <p class="text-xs text-slate-400 mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
+            <p class="text-sm font-semibold text-portal-text">${b.booking_reference}${prePaid}</p>
+            <p class="text-xs text-portal-muted mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
           </div>
         </div>
-        <p class="text-xs text-slate-500 mb-5">${petNames} &middot; ${petCount} pet${petCount > 1 ? "s" : ""}</p>
+        <p class="text-xs text-portal-muted mb-5">${petNames} &middot; ${petCount} pet${petCount > 1 ? "s" : ""}</p>
         <div class="relative flex justify-between items-start px-4">
           <!-- background track -->
           <div class="absolute top-[1.0625rem] left-4 right-4 h-1 bg-slate-200 rounded-full"></div>
@@ -971,11 +1020,10 @@
   function renderGroomingHistory(history) {
     if (!history.length) {
       groomingHistoryEl.innerHTML = `
-        <div class="text-center py-10">
-          <i data-lucide="history" class="w-10 h-10 mx-auto text-slate-300"></i>
-          <p class="mt-3 text-slate-400 text-sm">No grooming history yet.</p>
+        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
+          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clock-counter-clockwise"></use></svg>
+          <p class="mt-3 text-portal-muted text-sm">No grooming history yet.</p>
         </div>`;
-      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -983,7 +1031,6 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         ${history.map(b => buildHistoryCard(b)).join("")}
       </div>`;
-    if (window.lucide) lucide.createIcons();
   }
 
   function renderPastGroomingSummary(history, totalCount = null) {
@@ -1011,8 +1058,8 @@
     const paymentReviewSummary = reviewedPets.length ? `
       <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
         ${reviewedPets.map((pet) => `
-          <div class="rounded-xl bg-amber-50 p-3 text-xs text-slate-700">
-            <p class="font-bold text-amber-900">${escapeDashboardHtml(pet?.pet_name)} &middot; Payment Review Completed</p>
+          <div class="rounded-xl bg-portal-warning-soft p-3 text-xs text-portal-text">
+            <p class="font-bold text-portal-warning">${escapeDashboardHtml(pet?.pet_name)} &middot; Payment Review Completed</p>
             <p class="mt-1">${escapeDashboardHtml(pet?.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet?.final_pet_charge)}</p>
             <p class="mt-1">${escapeDashboardHtml(pet?.customer_explanation || "No customer explanation provided.")}</p>
           </div>
@@ -1023,20 +1070,20 @@
     const pets = Array.isArray(b?.pets) ? b.pets : [];
     const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
     const walkInBadge = b?.booking_type === "walk_in"
-      ? `<span class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">Walk-in</span>`
+      ? `<span class="rounded-full bg-portal-active px-2 py-0.5 text-[11px] font-semibold text-portal-primary">Walk-in</span>`
       : "";
     const paidBadge = b?.paid
-      ? `<span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Paid ✓</span>`
+      ? `<span class="rounded-full bg-portal-success-soft px-2 py-0.5 text-[11px] font-semibold text-portal-success">Paid ✓</span>`
       : "";
 
     return `
-      <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0">
         <div class="flex items-start justify-between gap-2 mb-1">
-          <p class="text-sm font-semibold text-slate-700">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
+          <p class="text-sm font-semibold text-portal-text">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
           <div class="flex flex-wrap justify-end gap-1.5">${walkInBadge}${paidBadge}</div>
         </div>
-        <p class="text-xs text-slate-400 mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
-        <p class="text-xs text-slate-500">${escapeDashboardHtml(petNames)}</p>
+        <p class="text-xs text-portal-muted mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
+        <p class="text-xs text-portal-muted">${escapeDashboardHtml(petNames)}</p>
         ${paymentReviewSummary}
       </div>`;
   }
@@ -1055,14 +1102,14 @@
 
   function getStatusConfig(status) {
     const map = {
-      waiting_to_arrive: { label: "Waiting",           classes: "bg-sky-100 text-sky-700" },
-      checked_in:        { label: "Checked In",         classes: "bg-amber-100 text-amber-700" },
-      in_progress:       { label: "In Progress",        classes: "bg-violet-100 text-violet-700" },
-      for_payment:       { label: "Ready for Pickup",   classes: "bg-emerald-100 text-emerald-700" },
-      released:          { label: "Ready for Pickup",   classes: "bg-emerald-100 text-emerald-700" },
-      cancelled:         { label: "Cancelled",          classes: "bg-red-100 text-red-600" },
-      no_show:           { label: "No Show",            classes: "bg-orange-100 text-orange-600" },
-      archived:          { label: "Completed",          classes: "bg-green-100 text-green-700" },
+      waiting_to_arrive: { label: "Waiting",           classes: "bg-portal-active text-portal-primary" },
+      checked_in:        { label: "Checked In",         classes: "bg-portal-warning-soft text-portal-warning" },
+      in_progress:       { label: "In Progress",        classes: "bg-portal-active text-portal-primary" },
+      for_payment:       { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
+      released:          { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
+      cancelled:         { label: "Cancelled",          classes: "bg-portal-danger-soft text-portal-danger" },
+      no_show:           { label: "No Show",            classes: "bg-portal-warning-soft text-portal-warning" },
+      archived:          { label: "Completed",          classes: "bg-portal-success-soft text-portal-success" },
     };
     return map[status] || { label: status, classes: "bg-slate-100 text-slate-600" };
   }
@@ -1081,19 +1128,19 @@
     const dateError = getRescheduleDateError(date);
     this.setCustomValidity(dateError || "");
     if (dateError) {
-      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Choose another date to see available slots.</p>';
       showRescheduleMessage("error", dateError);
       return;
     }
 
-    rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Loading slots...</p>';
+    rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Loading slots...</p>';
     try {
       const data = await API.getTimeslots(date);
       if (requestId !== rescheduleLoadId) return;
 
       if (data.cutoff_passed) {
         const cutoffLabel = data.availability?.pre_registration_cutoff_label || "the configured cutoff time";
-        rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Choose another date to see available slots.</p>';
+        rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Choose another date to see available slots.</p>';
         showRescheduleMessage("error", `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`);
         return;
       }
@@ -1101,7 +1148,7 @@
       renderSlots(data);
     } catch (error) {
       if (requestId !== rescheduleLoadId) return;
-      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-red-500">Failed to load slots. Try again.</p>';
+      rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-danger">Failed to load slots. Try again.</p>';
     }
   });
 
@@ -1149,7 +1196,7 @@
     rescheduleDate.value = "";
     rescheduleDate.setCustomValidity("");
     rescheduleDate.disabled = true;
-    rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-slate-400">Select a date to see available slots.</p>';
+    rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Select a date to see available slots.</p>';
     hideRescheduleAvailability();
     hideRescheduleMessage();
     enableSubmitIfReady();
@@ -1213,7 +1260,7 @@
     );
 
     if (!available.length) {
-      rescheduleSlotsContainer.innerHTML = `<p class="text-sm text-slate-400">${
+      rescheduleSlotsContainer.innerHTML = `<p class="text-sm text-portal-muted">${
         sameDate
           ? "No other available time slots on this date."
           : "No available time slots on this date."
@@ -1224,7 +1271,7 @@
     rescheduleSlotsContainer.innerHTML = available.map(w => `
       <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-[#315b7e] has-[:checked]:border-[#315b7e] has-[:checked]:bg-[#eaf4fb]">
         <input type="radio" name="rescheduleSlot" value="${w.window_id}" class="accent-[#315b7e]" />
-        <span class="text-sm text-slate-700">${escapeRescheduleHtml(w.window_label)}</span>
+        <span class="text-sm text-portal-text">${escapeRescheduleHtml(w.window_label)}</span>
       </label>`).join("");
     rescheduleSlotsContainer.querySelectorAll('input[name="rescheduleSlot"]').forEach(radio => {
       radio.addEventListener("change", () => {
@@ -1241,12 +1288,12 @@
       && !isCurrentRescheduleSelection(rescheduleDate.value, selectedWindowId);
     submitRescheduleBtn.disabled = !ready;
     submitRescheduleBtn.className = ready
-      ? "w-full rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-semibold text-white hover:bg-[#274a67] transition"
+      ? "w-full rounded-xl bg-portal-primary px-4 py-3 text-sm font-semibold text-white hover:bg-portal-primary-hover transition"
       : "w-full rounded-xl bg-slate-300 px-4 py-3 text-sm font-semibold text-white cursor-not-allowed transition";
   }
 
   function showRescheduleMessage(type, text) {
-    const styles = { success: "border-green-200 bg-green-50 text-green-700", error: "border-red-200 bg-red-50 text-red-700" };
+    const styles = { success: "border-green-200 bg-portal-success-soft text-portal-success", error: "border-red-200 bg-portal-danger-soft text-portal-danger" };
     rescheduleMessage.className = `mb-4 rounded-xl border px-4 py-3 text-sm ${styles[type]}`;
     rescheduleMessage.textContent = text;
     rescheduleMessage.classList.remove("hidden");
@@ -1362,7 +1409,6 @@
     confirmCancelBtn.textContent = "Cancel";
     cancelModal.classList.remove("hidden");
     cancelModal.classList.add("flex");
-    if (window.lucide) lucide.createIcons();
   }
 
   function closeCancelModal() {
@@ -1372,7 +1418,7 @@
   }
 
   function showCancelMessage(type, text) {
-    const styles = { error: "border-red-200 bg-red-50 text-red-700" };
+    const styles = { error: "border-red-200 bg-portal-danger-soft text-portal-danger" };
     cancelMessageEl.className = `mb-4 rounded-xl border px-4 py-3 text-sm ${styles[type] || styles.error}`;
     cancelMessageEl.textContent = text;
     cancelMessageEl.classList.remove("hidden");
@@ -1417,6 +1463,10 @@
 
   // Expose for coordination with the notification poller (pickup popup sequencing).
   window._refreshAppointments = loadAppointments;
-  setInterval(loadAppointments, 15000);
-  setInterval(loadGroomingCapacity, 15000);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadAppointments();
+  }, 15000);
+  setInterval(() => {
+    if (document.visibilityState === "visible") void loadGroomingCapacity();
+  }, 15000);
 })();

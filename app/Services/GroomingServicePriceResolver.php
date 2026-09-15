@@ -20,11 +20,9 @@ class GroomingServicePriceResolver
         $catalog = config("grooming_services.services.{$service->slug}");
 
         if (($catalog['kind'] ?? null) === 'package') {
-            if ($size !== 'extra_large') {
-                $databasePrice = $this->databasePackagePrice($service, $size);
-                if ($this->isPositive($databasePrice)) {
-                    return $this->normalizeMoney($databasePrice);
-                }
+            $databasePrice = $this->databasePackagePrice($service, $size);
+            if ($this->isPositive($databasePrice)) {
+                return $this->normalizeMoney($databasePrice);
             }
 
             $catalogPrice = $catalog['prices'][$size] ?? $catalog['default'] ?? null;
@@ -98,6 +96,7 @@ class GroomingServicePriceResolver
             'small' => $service->price_small ?? null,
             'medium' => $service->price_medium ?? null,
             'large' => $service->price_large ?? null,
+            'extra_large' => $service->price_extra_large ?? null,
             default => $service->base_price ?? null,
         };
     }
