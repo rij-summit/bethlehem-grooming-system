@@ -33,6 +33,8 @@ class BookingPet extends Model
     protected $fillable = [
         'booking_id',
         'pet_id',
+        'registered_size',
+        'confirmed_size',
         'pet_queue_date',
         'pet_queue_number',
         'special_instructions',

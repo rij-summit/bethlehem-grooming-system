@@ -44,6 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setupSidebar();
   setupTabs();
+  setupHeaderSearch();
   setupPasswordToggles();
   setupForms();
   window.requestAnimationFrame(() => scheduleSettingsIdleTask(loadProfile));
@@ -108,6 +109,40 @@ document.addEventListener("DOMContentLoaded", () => {
           panel.classList.toggle("hidden", panel.dataset.settingsPanel !== target);
         });
       });
+    });
+  }
+
+  function setupHeaderSearch() {
+    const search = document.getElementById("settingsSearch");
+    if (!search) return;
+
+    search.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+
+      const query = search.value.trim().toLowerCase();
+      if (!query) return;
+      const matches = document.querySelectorAll(
+        "[data-settings-tab], [data-settings-panel] h3, [data-settings-panel] label",
+      );
+      const match = Array.from(matches).find((item) =>
+        item.textContent.trim().toLowerCase().includes(query),
+      );
+
+      if (!match) {
+        search.setCustomValidity("No matching account or security setting was found.");
+        search.reportValidity();
+        search.setCustomValidity("");
+        return;
+      }
+
+      const section = match.closest("[data-settings-panel]")?.dataset.settingsPanel
+        || match.dataset.settingsTab;
+      document.querySelector(`[data-settings-tab="${section}"]`)?.click();
+      match.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (match instanceof HTMLLabelElement && match.htmlFor) {
+        document.getElementById(match.htmlFor)?.focus({ preventScroll: true });
+      }
     });
   }
 

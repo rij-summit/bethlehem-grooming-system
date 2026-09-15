@@ -5,8 +5,8 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Pets | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=20260914-my-pets-actions" />
-    <link rel="stylesheet" href="../../css/custom.css?ui=20260914-my-pets-actions" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-my-pets-toggle" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-my-pets-toggle" />
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
     <div class="min-h-screen flex">
@@ -197,15 +197,17 @@
         <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px]">
 
           <!-- Toolbar -->
-          <div class="mb-[22px] flex flex-wrap gap-2">
-            <button type="button" id="filterActiveBtn"
-              class="portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-active px-4 py-2 text-portal-primary-hover">
-              Active
-            </button>
-            <button type="button" id="filterArchivedBtn"
-              class="portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-surface px-4 py-2 text-portal-muted hover:bg-portal-surface-soft">
-              Archived
-            </button>
+          <div class="mb-[22px] flex flex-wrap items-center gap-2">
+            <div class="inline-flex gap-1 rounded-2xl border border-portal-border bg-white p-1 shadow-portal" role="group" aria-label="Pet profile status">
+              <button type="button" id="filterActiveBtn" aria-pressed="true"
+                class="min-h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm">
+                Active
+              </button>
+              <button type="button" id="filterArchivedBtn" aria-pressed="false"
+                class="min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft">
+                Archived
+              </button>
+            </div>
             <button type="button" id="addPetBtn" class="portal-button-primary min-h-10 gap-2 rounded-[14px] px-4 py-2 text-sm font-semibold">
               <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#plus"></use></svg>
               Add Pet
@@ -437,7 +439,7 @@
     </div>
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
-    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816&ui=20260914-customer-idle"></script>
+    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816&ui=20260915-status-toggle"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>

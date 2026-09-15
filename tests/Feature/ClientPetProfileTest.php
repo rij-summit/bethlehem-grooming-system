@@ -443,6 +443,9 @@ class ClientPetProfileTest extends TestCase
                 'number_of_pets' => 2,
                 'status' => 'archived',
                 'paid' => true,
+                'dropped_off_at' => '2026-07-22 08:45:00',
+                'grooming_started_at' => '2026-07-22 09:05:00',
+                'grooming_finished_at' => '2026-07-22 10:15:00',
                 'created_at' => '2026-07-20 09:00:00',
             ],
             [
@@ -454,6 +457,9 @@ class ClientPetProfileTest extends TestCase
                 'number_of_pets' => 1,
                 'status' => 'archived',
                 'paid' => false,
+                'dropped_off_at' => null,
+                'grooming_started_at' => null,
+                'grooming_finished_at' => null,
                 'created_at' => '2026-07-20 10:00:00',
             ],
         ]);
@@ -507,10 +513,16 @@ class ClientPetProfileTest extends TestCase
             ->assertJsonCount(1, 'history')
             ->assertJsonCount(1, 'history.0.pets')
             ->assertJsonPath('history.0.booking_id', 301)
+            ->assertJsonPath('history.0.dropped_off_timestamp', '2026-07-22T08:45:00+08:00')
+            ->assertJsonPath('history.0.grooming_started_timestamp', '2026-07-22T09:05:00+08:00')
+            ->assertJsonPath('history.0.grooming_finished_timestamp', '2026-07-22T10:15:00+08:00')
             ->assertJsonPath('history.0.pets.0.pet_id', 101)
+            ->assertJsonPath('history.0.pets.0.species', 'cat')
             ->assertJsonPath('history.0.pets.0.grooming_status', 'grooming_finished')
             ->assertJsonPath('history.0.pets.0.grooming_started_at', '9:05 AM')
             ->assertJsonPath('history.0.pets.0.grooming_finished_at', '10:15 AM')
+            ->assertJsonPath('history.0.pets.0.grooming_started_timestamp', '2026-07-22T09:05:00+08:00')
+            ->assertJsonPath('history.0.pets.0.grooming_finished_timestamp', '2026-07-22T10:15:00+08:00')
             ->assertJsonPath('history.0.pets.0.services.0.service_name', 'Full Groom')
             ->assertJsonMissing(['pet_id' => 102])
             ->assertJsonMissing(['service_name' => 'Nail Trim']);

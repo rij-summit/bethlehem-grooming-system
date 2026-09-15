@@ -5,8 +5,8 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Pets | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=20260914-pet-profile" />
-    <link rel="stylesheet" href="../../css/custom.css?ui=20260914-pet-profile" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-pet-profile" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-pet-profile" />
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
     <div class="min-h-screen flex">
@@ -213,27 +213,25 @@
               <div class="portal-card">
                 <div class="mb-4">
                   <h3 class="text-sm font-bold leading-5 text-portal-text">Basic Information</h3>
-                  <p class="mt-1 text-xs text-portal-muted">The profile information currently saved for this pet.</p>
                 </div>
-                <div id="petOverviewGrid" class="grid grid-cols-1 gap-3 sm:grid-cols-2"></div>
+                <div id="petOverviewGrid" class="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2"></div>
               </div>
 
               <div class="portal-card">
                 <div>
                   <h3 class="text-sm font-bold leading-5 text-portal-text">Medical Conditions / Special Needs</h3>
-                  <p id="petMedicalConditions" class="mt-1 whitespace-pre-line text-xs leading-5 text-portal-muted">Not provided.</p>
+                  <p id="petMedicalConditions" class="mt-4 whitespace-pre-line text-xs leading-5 text-portal-muted">Not provided.</p>
                 </div>
               </div>
             </section>
 
             <section data-pet-panel="grooming" role="tabpanel" class="pet-profile-panel hidden">
               <div class="portal-card">
-                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="mb-5">
                   <div>
                     <h3 class="text-sm font-bold leading-5 text-portal-text">Grooming Records</h3>
                     <p class="mt-1 text-xs leading-5 text-portal-muted">Only grooming activity connected to this pet is shown.</p>
                   </div>
-                  <a href="./grooming-history.html" class="text-sm font-semibold text-portal-primary hover:text-portal-primary-hover">View all grooming history</a>
                 </div>
                 <div id="petGroomingRecords">
                   <div class="py-12 text-center">
@@ -300,7 +298,7 @@
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
     <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260914-pet-profile"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
-    <script src="../../scripts/components/pet-details.js?v=auth-session-20260816&ui=20260914-compact-information-type"></script>
+    <script src="../../scripts/components/pet-details.js?v=auth-session-20260816&ui=20260915-open-information-layout"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

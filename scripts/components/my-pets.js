@@ -438,23 +438,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   petSearch.addEventListener("input", applyFilter);
 
-  filterActiveBtn.addEventListener("click", () => {
-    showingArchived = false;
-    filterActiveBtn.className =
-      "portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-active px-4 py-2 text-portal-primary-hover";
-    filterArchivedBtn.className =
-      "portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-surface px-4 py-2 text-portal-muted hover:bg-portal-surface-soft";
+  function setPetStatusFilter(archived) {
+    showingArchived = archived;
+    for (const [button, selected] of [
+      [filterActiveBtn, !archived],
+      [filterArchivedBtn, archived],
+    ]) {
+      button.setAttribute("aria-pressed", String(selected));
+      button.className = selected
+        ? "min-h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm"
+        : "min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft";
+    }
     loadPets();
-  });
+  }
 
-  filterArchivedBtn.addEventListener("click", () => {
-    showingArchived = true;
-    filterArchivedBtn.className =
-      "portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-active px-4 py-2 text-portal-primary-hover";
-    filterActiveBtn.className =
-      "portal-filter-button min-h-10 rounded-[14px] border-portal-border bg-portal-surface px-4 py-2 text-portal-muted hover:bg-portal-surface-soft";
-    loadPets();
-  });
+  filterActiveBtn.addEventListener("click", () => setPetStatusFilter(false));
+  filterArchivedBtn.addEventListener("click", () => setPetStatusFilter(true));
 
   // ── Render grid ───────────────────────────────────────
   function renderGrid(pets) {

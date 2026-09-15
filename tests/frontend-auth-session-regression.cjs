@@ -573,7 +573,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-safety-insights-20260830|clinic-records-20260906)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-account-delete-20260819|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-safety-insights-20260830|clinic-records-20260906|grooming-size-confirmation-20260915)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }

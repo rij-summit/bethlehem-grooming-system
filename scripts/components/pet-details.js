@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     && Array.isArray(pet?.clinic_verified_fields)
     && pet.clinic_verified_fields.includes(field);
   const verifiedIndicator = (verified) => verified
-    ? '<span class="inline-flex shrink-0 rounded-full bg-[#eaf4fb] px-2 py-0.5 text-xs font-medium text-[#315b7e]">Verified</span>'
+    ? '<span class="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#315b7e]"><span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>Verified</span>'
     : "";
 
   const titleCase = (value) => {
@@ -200,18 +200,24 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Fur Type", titleCase(pet.fur_type), "fur_type"],
       ["Color", displayValue(pet.color), null],
       ["Neutered / Spayed", formatBoolean(pet.is_neutered), null],
-      ["Profile Status", archived ? "Archived" : "Active", null],
     ];
 
     overviewGrid.innerHTML = details.map(([label, value, field]) => `
-      <div class="rounded-xl border border-portal-border bg-portal-surface-soft px-3 py-3">
+      <div class="min-w-0">
         <div class="flex items-center justify-between gap-3">
           <p class="text-xs font-medium text-portal-muted">${escapeHtml(label)}</p>
           ${verifiedIndicator(isClinicVerified(pet, field))}
         </div>
-        <p class="mt-1 break-words text-xs font-semibold text-portal-text">${escapeHtml(value)}</p>
+        <p class="pet-overview-value ${label === "Pet Name" ? "pet-overview-name-value" : ""} mt-1 break-words text-xs font-semibold text-portal-text">${escapeHtml(value)}</p>
       </div>
-    `).join("");
+    `).join("") + `
+      <div class="col-span-full grid grid-cols-1 gap-1 border-t border-portal-border pt-4 sm:grid-cols-2 sm:gap-x-8">
+        <p class="text-xs font-medium text-portal-muted">Profile Status</p>
+        <p class="inline-flex items-center gap-1.5 text-xs font-semibold ${archived ? "text-portal-muted" : "text-emerald-700"}">
+          <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>${archived ? "Archived" : "Active"}
+        </p>
+      </div>
+    `;
 
     document.getElementById("petMedicalConditions").textContent = displayValue(pet.medical_conditions);
   };
@@ -267,13 +273,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ` : "";
 
     return `
-      <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <article class="rounded-2xl border border-slate-200 bg-white p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p class="text-xs font-medium text-slate-500">Booking Reference</p>
             <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(booking.booking_reference))}</h4>
           </div>
-          <span class="w-fit rounded-full px-3 py-1 text-xs font-bold ${statusClasses}">${escapeHtml(statusLabel)}</span>
+          <span class="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${statusClasses}"><span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>${escapeHtml(statusLabel)}</span>
         </div>
         <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           ${items.map(([label, value]) => `
@@ -350,7 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasFollowUp = !isMissing(record.follow_up_date) || !isMissing(record.follow_up_notes);
 
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -375,7 +381,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </dl>
 
           ${hasFollowUp ? `
-            <section class="rounded-2xl border border-[#cfe0ee] bg-[#eef5fb] p-4">
+            <section class="border-t border-slate-200 pt-4">
               <div>
                 <div>
                   <h5 class="text-sm font-bold text-[#2f4b66]">Follow-up</h5>
@@ -393,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
               </h5>
               <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 ${vitalItems.map(([label, value]) => `
-                  <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <div class="min-w-0">
                     <dt class="text-xs font-semibold text-slate-400">${escapeHtml(label)}</dt>
                     <dd class="mt-1 text-xs font-bold text-slate-700">${escapeHtml(value)}</dd>
                   </div>
@@ -417,7 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   ].filter(([, value]) => !isMissing(value));
 
                   return `
-                    <div class="rounded-xl border border-slate-200 bg-white p-4">
+                    <div class="min-w-0">
                       <p class="text-sm font-bold text-slate-800">${escapeHtml(displayValue(medication.drug_name))}</p>
                       ${details.length ? `
                         <dl class="mt-3 space-y-2">
@@ -533,7 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ].filter(([, value]) => !isMissing(value));
 
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div class="border-b border-slate-200 bg-white px-5 py-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -546,7 +552,7 @@ document.addEventListener("DOMContentLoaded", () => {
             >${escapeHtml(status.label)}</span>
           </div>
           ${status.message ? `
-            <p class="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+            <p class="mt-3 text-xs leading-5 text-slate-600">
               ${escapeHtml(status.message)}
             </p>
           ` : ""}

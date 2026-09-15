@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
@@ -29,6 +30,9 @@ class PaymentController extends Controller
             'service_prices' => 'nullable|array',
             'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',
             'service_prices.*.amount' => 'required_with:service_prices|numeric|decimal:0,2|min:0.01',
+            'pet_sizes' => 'nullable|array',
+            'pet_sizes.*.booking_pet_id' => 'required_with:pet_sizes|integer',
+            'pet_sizes.*.size' => 'required_with:pet_sizes|in:small,medium,large,extra_large',
         ]);
 
         if ((float) $data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
@@ -105,6 +109,36 @@ class PaymentController extends Controller
         }
     }
 
+    private function updateBookingPetConfirmedSizes(Booking $booking, array $petSizes): void
+    {
+        if ($petSizes === [] || ! Schema::hasColumn('booking_pets', 'confirmed_size')) {
+            return;
+        }
+
+        $bookingPetIds = BookingPet::query()
+            ->where('booking_id', $booking->booking_id)
+            ->lockForUpdate()
+            ->pluck('booking_pet_id')
+            ->map(fn ($id) => (int) $id);
+        $submitted = collect($petSizes)->mapWithKeys(fn ($petSize) => [
+            (int) $petSize['booking_pet_id'] => $petSize['size'],
+        ]);
+
+        if ($submitted->count() !== count($petSizes)
+            || $submitted->keys()->diff($bookingPetIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'pet_sizes' => 'One or more confirmed pet sizes do not belong to this booking.',
+            ]);
+        }
+
+        foreach ($submitted as $bookingPetId => $size) {
+            BookingPet::query()
+                ->where('booking_id', $booking->booking_id)
+                ->where('booking_pet_id', $bookingPetId)
+                ->update(['confirmed_size' => $size]);
+        }
+    }
+
     public function store(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
@@ -141,6 +175,7 @@ class PaymentController extends Controller
                     $data['service_prices'] ?? [],
                     $finishedBookingPetIds,
                 );
+                $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
 
                 $summary = $this->paymentReadiness()->summarize($booking, true);
                 $serverTotal = (string) $summary['final_booking_total'];
@@ -250,6 +285,7 @@ class PaymentController extends Controller
                     $data['service_prices'] ?? [],
                     $bookingPets->pluck('booking_pet_id')->all(),
                 );
+                $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
                 $serverTotalCents = BookingService::query()
                     ->where('booking_id', $booking->booking_id)
                     ->lockForUpdate()

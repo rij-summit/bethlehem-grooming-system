@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,125 +6,149 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grooming History | Bethlehem Animal Clinic</title>
 
-    <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-session-modal" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-session-modal" />
 
   </head>
-  <body class="bg-slate-50 text-slate-800">
-    <div class="min-h-screen flex client-dashboard-shell">
+  <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
+    <div class="min-h-screen flex">
 
       <!-- Mobile sidebar toggle -->
       <button
         type="button"
         id="clientSidebarToggle"
-        class="client-sidebar-toggle"
+        class="fixed left-4 top-4 z-[60] hidden h-12 w-12 items-center justify-center rounded-full border border-portal-border bg-portal-surface-soft text-portal-primary shadow-portal transition-[background-color,transform] duration-200 ease-[ease] hover:-translate-y-px hover:bg-portal-active max-[1180px]:inline-flex"
         aria-controls="clientSidebar"
         aria-expanded="false"
         aria-label="Open navigation menu"
       >
-        <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#list"></use></svg>
+        <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#list"></use></svg>
       </button>
 
       <button
         type="button"
         id="clientSidebarBackdrop"
-        class="client-sidebar-backdrop"
+        class="fixed inset-0 z-[95] invisible hidden border-0 bg-[rgba(44,62,80,0.28)] p-0 opacity-0 pointer-events-none transition-[opacity,visibility] duration-[240ms] ease-[ease] max-[1180px]:block max-[1180px]:group-[.client-sidebar-open]/portal:visible max-[1180px]:group-[.client-sidebar-open]/portal:opacity-100 max-[1180px]:group-[.client-sidebar-open]/portal:pointer-events-auto"
         aria-label="Close navigation menu"
       ></button>
 
       <!-- ===================================================== -->
       <!-- SIDEBAR -->
+      <!-- Fixed sidebar for client dashboard navigation -->
+      <!-- Backend note: active page state can be set dynamically -->
       <!-- ===================================================== -->
       <aside
         id="clientSidebar"
-        class="client-sidebar fixed left-0 top-0 h-screen w-72 bg-[#7fa2c9] text-white flex flex-col justify-between shadow-lg"
+        class="fixed left-0 top-0 z-40 flex h-screen supports-[height:100dvh]:h-dvh w-64 flex-col justify-between overflow-y-auto border-r border-portal-border bg-portal-sidebar text-portal-text shadow-none transition-[transform,box-shadow] duration-[240ms] ease-[ease] max-[1180px]:w-[min(288px,calc(100vw-40px))] max-[1180px]:-translate-x-[110%] max-[1180px]:z-[100] max-[1180px]:group-[.client-sidebar-open]/portal:translate-x-0 max-[1180px]:group-[.client-sidebar-open]/portal:shadow-[0_24px_48px_rgba(15,23,42,0.22)]"
       >
         <div>
           <!-- Clinic Branding -->
-          <div class="px-6 py-6">
+          <div class="px-6 pt-[25px] pb-5">
             <div class="flex items-start justify-between gap-4">
-              <a href="./dashboard.html" class="flex items-center gap-3">
-                <div class="h-12 w-12 rounded-2xl bg-white p-1.5 flex items-center justify-center">
+              <a
+                href="../../pages/client/dashboard.html"
+                class="flex items-center gap-3"
+              >
+                <div
+                  class="flex items-center justify-center h-[52px] w-12 flex-none rounded-[14px] border border-portal-border bg-portal-surface p-[5px]"
+                >
                   <img
                     src="../../assets/images/clinic/Bethlehem_Logo-256.png"
                     alt="Bethlehem Animal Clinic logo"
+                    width="256"
+                    height="341"
+                    decoding="async"
                     class="h-full w-full object-contain"
                   />
                 </div>
                 <div>
-                  <h1 class="text-lg font-bold leading-tight">Bethlehem Animal Clinic</h1>
-                  <p class="text-sm text-white/80">Client Portal</p>
+                  <h1 class="font-bold leading-tight text-[16px]">
+                    Bethlehem Animal Clinic
+                  </h1>
+                  <p class="text-sm mt-[3px] text-portal-muted">Client Portal</p>
                 </div>
               </a>
+
               <button
                 type="button"
                 id="clientSidebarClose"
-                class="client-sidebar-close"
+                class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-portal-border bg-portal-surface-soft text-portal-primary shadow-portal transition-colors duration-200 ease-[ease] hover:bg-portal-active max-[1180px]:inline-flex"
                 aria-label="Close navigation menu"
               >
-                <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
+                <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
               </button>
             </div>
           </div>
 
           <!-- Navigation -->
-          <nav class="px-4 py-6 space-y-2">
-            <p class="px-3 mb-2 text-xs tracking-[0.2em] uppercase text-white/70">Menu</p>
+          <nav class="grid gap-[7px] p-4" aria-label="Customer navigation">
+            <p
+              class="text-xs tracking-[0.2em] uppercase mx-3 mb-[3px] text-portal-muted"
+            >
+              Menu
+            </p>
 
             <a
               href="./dashboard.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
+              class="portal-nav-item font-medium"
             >
-              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#squares-four"></use></svg>
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#squares-four"></use></svg>
               <span>Dashboard</span>
             </a>
 
             <a
               href="./my-pets.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
+              class="portal-nav-item font-medium"
             >
-              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
               <span>My Pets</span>
             </a>
 
-            <!-- Active page -->
             <a
               href="./grooming-history.html"
-              class="flex items-center gap-3 rounded-2xl bg-[#355c84] px-4 py-3 font-medium shadow-sm"
+              aria-current="page"
+              class="portal-nav-item font-medium"
             >
-              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               <span>Grooming History</span>
             </a>
 
             <a
               href="./settings.html"
-              class="flex items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-white/10 transition"
+              class="portal-nav-item font-medium"
             >
-              <svg class="w-5 h-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#gear"></use></svg>
+              <svg class="ph-icon w-[21px] h-[21px]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#gear"></use></svg>
               <span>Settings</span>
             </a>
           </nav>
         </div>
 
         <!-- Client Profile -->
+        <!-- Backend note: client name and email should come from logged-in session -->
         <div class="p-4">
-          <a href="./settings.html" aria-label="View profile settings"
-            class="rounded-2xl bg-[#355c84] px-4 py-4 flex items-center gap-3 mb-3 text-white transition hover:bg-[#3f6d9c] focus:outline-none focus:ring-2 focus:ring-white/70">
+          <a
+            href="./settings.html"
+            aria-label="View profile settings"
+            class="transition mb-2 flex items-center gap-3 rounded-[15px] border border-portal-border bg-portal-surface-soft p-[13px] text-portal-text hover:bg-portal-active"
+          >
             <div
               id="clientProfileInitials"
-              class="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold"
-            >--</div>
-            <div>
-              <p id="clientProfileName" class="font-semibold">Loading...</p>
-              <p class="text-sm text-white/80">Pet Owner</p>
+              class="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-portal-primary font-bold text-white"
+            >
+              --
+            </div>
+            <div class="min-w-0 [overflow-wrap:anywhere]">
+              <p id="clientProfileName" class="font-semibold text-[14px]">Loading...</p>
+              <p class="text-sm text-portal-muted">Pet Owner</p>
             </div>
           </a>
+
           <button
             type="button"
             id="clientLogoutBtn"
-            class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/30 px-4 py-3 font-bold text-white transition hover:bg-white/20"
+            class="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-portal-border bg-transparent px-4 py-3 font-bold text-portal-primary-hover transition hover:bg-portal-active"
           >
-            <svg class="h-4 w-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#sign-out"></use></svg>
+            <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#sign-out"></use></svg>
             <span>Logout</span>
           </button>
         </div>
@@ -133,26 +157,44 @@
       <!-- ===================================================== -->
       <!-- MAIN CONTENT -->
       <!-- ===================================================== -->
-      <main class="client-dashboard-main ml-72 flex-1 min-h-screen">
+      <main class="ml-64 min-w-0 flex-1 min-h-screen transition-[margin-left] duration-[240ms] ease-[ease] max-[1180px]:!ml-0 max-[1180px]:w-full">
 
         <!-- Header -->
-        <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
-          <div class="client-dashboard-header flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between px-6 py-5">
-            <div>
-              <h2 class="text-3xl font-bold text-[#2f4b66]">Grooming History</h2>
-              <p class="text-slate-500 mt-1">All your past grooming sessions in one place.</p>
+        <header class="sticky top-0 z-30 backdrop-blur border-b border-portal-border bg-white/[0.96]">
+          <div class="flex flex-col gap-5 px-6 py-5 min-[1181px]:flex-row min-[1181px]:items-center min-[1181px]:justify-between min-[1181px]:max-[1420px]:flex-wrap max-[1180px]:pl-20 max-[639px]:gap-[18px] max-[639px]:px-4 max-[639px]:py-[18px]">
+            <div class="min-w-0 max-[639px]:pl-[62px]">
+              <h2 class="text-3xl font-bold text-portal-text max-[639px]:text-[26px]">Grooming History</h2>
+              <p class="text-portal-muted mt-1 text-[14px] leading-[1.5]">Review completed grooming sessions for your pets.</p>
             </div>
-            <div class="flex items-center gap-3">
-              <a
-                id="preRegisterButton"
-                data-pre-registration-button
-                href="./pre-register.html"
-                aria-disabled="true"
-                tabindex="-1"
-                title="Checking availability"
-                class="flex cursor-not-allowed items-center gap-2 rounded-full bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white opacity-60 hover:bg-[#274a67] transition"
-              >
-                <svg class="w-4 h-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#plus"></use></svg>
+            <div class="flex items-center flex-none gap-4 min-[1181px]:max-[1420px]:ml-auto max-[1180px]:flex-wrap max-[639px]:gap-2.5">
+              <div class="flex min-h-[46px] w-[clamp(210px,18vw,300px)] items-center gap-2.5 rounded-full border border-portal-border bg-portal-surface-soft px-[15px] py-[11px] text-portal-primary focus-within:border-portal-accent max-[1180px]:w-auto max-[1180px]:flex-1 max-[639px]:order-3 max-[639px]:basis-full">
+                <svg class="ph-icon w-4 h-4 shrink-0 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
+                <input type="text" id="historySearch" placeholder="Search reference or pet name..." aria-label="Search reference or pet name"
+                  class="w-full min-w-0 bg-transparent text-sm text-portal-text outline-none placeholder:text-portal-muted focus-visible:!outline-none" />
+              </div>
+
+              <div class="relative" id="notifBellWrapper">
+                <button id="notifBellBtn" type="button" aria-label="Notifications"
+                  class="relative flex h-[46px] w-[46px] items-center justify-center rounded-2xl border border-portal-border bg-portal-surface-soft text-portal-primary-hover transition hover:bg-portal-active"
+                  aria-controls="notifDropdown" aria-expanded="false">
+                  <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#bell"></use></svg>
+                  <span id="notifBadge" class="absolute -right-1 -top-1 hidden min-h-5 min-w-5 items-center justify-center rounded-full bg-portal-danger px-1 text-[10px] font-bold text-white"></span>
+                </button>
+
+                <div id="notifDropdown" class="notif-client-dropdown !rounded-2xl !border-portal-border !shadow-portal-dropdown" style="display:none">
+                  <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <span class="text-sm font-semibold text-portal-text">Notifications</span>
+                    <button type="button" id="notifMarkAllRead" class="text-xs text-portal-primary hover:underline">Mark all as read</button>
+                  </div>
+                  <div id="notifList" class="notif-list divide-y divide-slate-100">
+                    <p class="px-4 py-6 text-center text-sm text-portal-muted">Loading...</p>
+                  </div>
+                </div>
+              </div>
+
+              <a id="preRegisterButton" data-pre-registration-button href="./pre-register.html"
+                aria-disabled="true" tabindex="-1" title="Checking availability"
+                class="portal-button-primary cursor-not-allowed font-semibold opacity-60 max-[639px]:flex-1">
                 Pre-register
               </a>
             </div>
@@ -160,19 +202,10 @@
         </header>
 
         <!-- Page Body -->
-        <section class="px-6 py-8 space-y-6">
+        <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px] space-y-6">
 
           <!-- Filters -->
-          <div class="flex flex-col sm:flex-row gap-3">
-            <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 flex-1 max-w-sm shadow-sm">
-              <svg class="w-4 h-4 shrink-0 fill-current text-slate-400" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
-              <input
-                type="text"
-                id="historySearch"
-                placeholder="Search by reference or pet name..."
-                class="w-full bg-transparent outline-none text-sm"
-              />
-            </div>
+          <div class="flex flex-col gap-3 sm:flex-row">
             <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
               <svg class="w-4 h-4 shrink-0 fill-current text-slate-400" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
               <input
@@ -203,6 +236,24 @@
 
         </section>
       </main>
+    </div>
+
+    <div id="historyModal" class="fixed inset-0 z-[110] hidden items-center justify-center p-4 sm:p-6" aria-hidden="true">
+      <div data-history-modal-backdrop class="absolute inset-0 bg-[rgba(31,50,69,0.5)]"></div>
+      <section id="historyModalDialog" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle" tabindex="-1"
+        class="relative flex max-h-[90vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-portal-border bg-white shadow-portal-dropdown">
+        <div class="flex items-start justify-between gap-4 border-b border-portal-border px-5 py-4 sm:px-6">
+          <h2 id="historyModalTitle" class="text-xl font-bold text-portal-text">Grooming Session Details</h2>
+          <button type="button" data-history-modal-close aria-label="Close grooming session details"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-portal-muted transition hover:bg-portal-active hover:text-portal-primary">
+            <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
+          </button>
+        </div>
+        <div id="historyModalContent" class="min-h-0 overflow-y-auto px-5 py-5 sm:px-6"></div>
+        <div class="flex justify-end border-t border-portal-border px-5 py-4 sm:px-6">
+          <button type="button" data-history-modal-close class="min-h-10 rounded-xl border border-portal-border bg-portal-surface-soft px-5 py-2 text-sm font-semibold text-portal-primary-hover transition hover:bg-portal-active">Close</button>
+        </div>
+      </section>
     </div>
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
@@ -343,71 +394,314 @@
           return;
         }
 
+        const search = searchInput.value.trim().toLowerCase();
+        const cards = records.flatMap((booking) => {
+          const pets = Array.isArray(booking.pets) ? booking.pets : [];
+          const visiblePets = search && !String(booking.booking_reference || "").toLowerCase().includes(search)
+            ? pets.filter((pet) => String(pet.pet_name || "").toLowerCase().includes(search))
+            : pets;
+          return (visiblePets.length ? visiblePets : [null]).map((pet) => buildHistoryCard(booking, pet));
+        });
+
         historyList.innerHTML = `
-          <div class="space-y-4">
-            ${records.map(b => buildHistoryCard(b)).join("")}
+          <div class="space-y-3">
+            ${cards.join("")}
           </div>`;
       }
 
-      function buildHistoryCard(b) {
-        const timeLabel = b.time_window?.window_label ?? "—";
-        const petNames  = (b.pets || []).map(p => p.pet_name).filter(Boolean).join(", ") || "—";
-        const breeds    = (b.pets || []).map(p => p.breed).filter(Boolean).join(", ");
-        const paidBadge = b.paid
-          ? `<span class="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">Paid ✓</span>`
-          : `<span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Unpaid</span>`;
+      function escapeHistoryHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
 
-        const walkInBadge = b.booking_type === "walk_in"
-          ? `<span class="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700">Walk-in</span>`
-          : "";
-        const droppedOff    = b.dropped_off_at     ? `<span class="text-slate-400">Dropped off:</span> ${b.dropped_off_at}` : null;
-        const groomingStart = b.grooming_started_at ? `<span class="text-slate-400">Grooming started:</span> ${b.grooming_started_at}` : null;
-        const groomingEnd   = b.grooming_finished_at ? `<span class="text-slate-400">Finished:</span> ${b.grooming_finished_at}` : null;
-        const timelineItems = [droppedOff, groomingStart, groomingEnd].filter(Boolean);
-        const timeline = timelineItems.length
-          ? `<div class="mt-2 flex flex-col gap-0.5 text-xs text-slate-600">
-               ${timelineItems.map(item => `<p>${item}</p>`).join("")}
-             </div>`
-          : "";
+      function historyDateTimeParts(timestamp) {
+        if (!timestamp) return null;
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) return null;
+        const timeZone = "Asia/Manila";
+        return {
+          date: new Intl.DateTimeFormat("en-PH", { timeZone, month: "short", day: "numeric", year: "numeric" }).format(date),
+          time: new Intl.DateTimeFormat("en-PH", { timeZone, hour: "numeric", minute: "2-digit", hour12: true }).format(date),
+        };
+      }
+
+      function historyDateTime(timestamp) {
+        const parts = historyDateTimeParts(timestamp);
+        return parts ? `${parts.date} &middot; ${parts.time}` : "Not recorded";
+      }
+
+      function groomingInterval(startTimestamp, finishTimestamp) {
+        const start = historyDateTimeParts(startTimestamp);
+        const finish = historyDateTimeParts(finishTimestamp);
+        if (start && finish && start.date === finish.date) {
+          return `${start.date} &middot; ${start.time}–${finish.time}`;
+        }
+        if (start && finish) {
+          return `${start.date} &middot; ${start.time} to ${finish.date} &middot; ${finish.time}`;
+        }
+        if (start) return `Started ${start.date} &middot; ${start.time}; finish not recorded`;
+        if (finish) return `Finished ${finish.date} &middot; ${finish.time}; start not recorded`;
+        return "Times not recorded";
+      }
+
+      function groomingOutcome(status) {
+        const outcomes = {
+          stopped: ["Grooming stopped", "bg-red-50 text-red-700"],
+          referred_to_clinic: ["Referred to clinic", "bg-violet-50 text-violet-700"],
+          paused: ["Grooming paused", "bg-amber-50 text-amber-800"],
+        };
+        return outcomes[status] || ["Completed", "bg-emerald-50 text-emerald-700"];
+      }
+
+      function historyPetIcon(pet) {
+        const species = String(pet?.species || "").toLowerCase();
+        return species === "dog" ? "dog" : species === "cat" ? "cat" : "paw-print";
+      }
+
+      function petGroomingTimes(booking, pet) {
+        const useBookingTimes = !pet || Number(booking.number_of_pets) === 1;
+        return {
+          start: pet?.grooming_started_timestamp || (useBookingTimes ? booking.grooming_started_timestamp : null),
+          finish: pet?.grooming_finished_timestamp || (useBookingTimes ? booking.grooming_finished_timestamp : null),
+        };
+      }
+
+      // Grooming-history card typography and spacing are controlled by the Tailwind classes below.
+      function buildHistoryCard(booking, pet) {
+        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status);
+        const petName = escapeHistoryHtml(pet?.pet_name || "Pet name not recorded");
+        const breed = pet?.breed && pet.breed !== "—" ? escapeHistoryHtml(pet.breed) : "Breed not recorded";
+        const species = pet?.species ? escapeHistoryHtml(String(pet.species).replace(/\b\w/g, (letter) => letter.toUpperCase())) : "Species not recorded";
+        const petIcon = historyPetIcon(pet);
+        const groomingTimes = petGroomingTimes(booking, pet);
 
         return `
-          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
-            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-
-              <!-- Left: booking info -->
-              <div class="flex gap-4">
-                <div class="h-12 w-12 rounded-2xl bg-[#eaf4fb] flex items-center justify-center shrink-0">
-                  <svg class="w-5 h-5 fill-current text-[#315b7e]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
-                </div>
-                <div>
-                  <p class="text-sm font-bold text-slate-800">${b.booking_reference}</p>
-                  <p class="text-xs text-slate-500 mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
-                  <p class="text-xs text-slate-500 mt-0.5">
-                    <span class="font-medium text-slate-700">${petNames}</span>
-                    ${breeds ? `<span class="text-slate-400"> &middot; ${breeds}</span>` : ""}
-                  </p>
-                  <p class="text-xs text-slate-400 mt-0.5">${b.number_of_pets} pet${b.number_of_pets !== 1 ? "s" : ""}</p>
-                  ${timeline}
-                </div>
+          <article class="portal-card grid grid-cols-1 items-center gap-4 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_auto]">
+            <div class="flex min-w-0 items-center gap-4">
+              <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-portal-icon-surface text-portal-primary" aria-hidden="true">
+                <svg class="ph-icon h-7 w-7" viewBox="0 0 256 256" focusable="false"><use href="../../assets/icons/phosphor.svg#${petIcon}"></use></svg>
+              </span>
+              <div class="min-w-0">
+                <h3 class="break-words text-xl font-bold leading-tight text-portal-text">${petName}</h3>
+                <p class="mt-1 break-words text-xs font-medium text-portal-muted">${breed} &middot; ${species}</p>
               </div>
+            </div>
 
-              <!-- Right: badges -->
-              <div class="flex sm:flex-col items-center sm:items-end gap-2 shrink-0">
-                ${walkInBadge}
-                ${paidBadge}
-                <span class="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-600">Completed</span>
-              </div>
+            <div class="min-w-0 space-y-2">
+              <p class="flex items-start gap-2.5 text-xs font-medium leading-5 text-portal-text">
+                <svg class="ph-icon mt-0.5 h-4 w-4 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clock-counter-clockwise"></use></svg>
+                <span><span class="font-semibold">Dropped off:</span> ${historyDateTime(booking.dropped_off_timestamp)}</span>
+              </p>
+              <p class="flex items-start gap-2.5 text-xs font-medium leading-5 text-portal-text">
+                <svg class="ph-icon mt-0.5 h-4 w-4 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
+                <span><span class="font-semibold">Grooming:</span> ${groomingInterval(groomingTimes.start, groomingTimes.finish)}</span>
+              </p>
+            </div>
 
+            <div class="flex shrink-0 items-center gap-2 md:flex-col md:items-end">
+              <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold ${outcomeClasses}">${outcomeLabel}</span>
+              <button type="button" data-history-open data-booking-id="${escapeHistoryHtml(booking.booking_id)}" data-booking-pet-id="${escapeHistoryHtml(pet?.booking_pet_id || "")}" aria-label="See grooming session details for ${petName}"
+                class="flex min-h-10 w-fit items-center gap-2 rounded-xl border border-portal-border bg-white px-3 py-2 text-xs font-semibold text-portal-primary-hover transition hover:bg-portal-surface-soft">
+                See more <svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-right"></use></svg>
+              </button>
+            </div>
+          </article>`;
+      }
+
+      const historyModal = document.getElementById("historyModal");
+      const historyModalDialog = document.getElementById("historyModalDialog");
+      const historyModalContent = document.getElementById("historyModalContent");
+      let historyModalTrigger = null;
+
+      function historySizeLabel(size) {
+        const normalized = String(size || "").trim().toLowerCase();
+        if (!normalized) return "Not recorded";
+        return normalized.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      }
+
+      function historyPeso(value) {
+        if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) {
+          return "Not recorded";
+        }
+        return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value));
+      }
+
+      function historyServiceGroup(title, lines) {
+        if (!lines.length) return "";
+        return `
+          <div class="border-b border-portal-border px-4 py-3 last:border-b-0">
+            <h4 class="text-[13px] font-semibold text-portal-text">${title}</h4>
+            <div class="mt-2 space-y-2">
+              ${lines.map((line) => `
+                <div class="flex items-start justify-between gap-4 text-xs text-portal-text">
+                  <span class="min-w-0 break-words">${escapeHistoryHtml(line.label || "Grooming service")}</span>
+                  <span class="shrink-0 font-semibold">${historyPeso(line.price_at_booking)}</span>
+                </div>
+              `).join("")}
             </div>
           </div>`;
       }
 
-      function formatDate(dateStr) {
-        if (!dateStr) return "—";
-        return new Date(dateStr + "T00:00:00").toLocaleDateString("en-PH", {
-          year: "numeric", month: "long", day: "numeric",
-        });
+      function buildHistoryModalContent(booking, pet) {
+        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status);
+        const petName = escapeHistoryHtml(pet?.pet_name || "Pet name not recorded");
+        const breed = pet?.breed && pet.breed !== "—" ? escapeHistoryHtml(pet.breed) : "Breed not recorded";
+        const species = pet?.species ? escapeHistoryHtml(String(pet.species).replace(/\b\w/g, (letter) => letter.toUpperCase())) : "Species not recorded";
+        const groomingTimes = petGroomingTimes(booking, pet);
+        const registeredSize = String(pet?.registered_size || "").trim().toLowerCase();
+        const confirmedSize = String(pet?.confirmed_size || "").trim().toLowerCase();
+        const sizeChanged = registeredSize && confirmedSize && registeredSize !== confirmedSize;
+        const sizeValue = historySizeLabel(pet?.confirmed_size || pet?.size);
+        const weight = pet?.weight === null || pet?.weight === undefined || pet?.weight === "" || !Number.isFinite(Number(pet.weight))
+          ? "Not recorded"
+          : `${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 }).format(Number(pet.weight))} kg`;
+        const paymentSummary = booking.paid && booking.payment_summary?.status === "paid"
+          ? booking.payment_summary : null;
+        const settledPet = paymentSummary?.pets?.find((item) =>
+          Number(item.booking_pet_id) === Number(pet?.booking_pet_id),
+        ) || (Number(booking.number_of_pets) === 1 ? paymentSummary?.pets?.[0] : null);
+        const settledLines = Array.isArray(settledPet?.service_breakdown)
+          ? settledPet.service_breakdown : [];
+        const mainLines = settledLines.filter((line) => line.service_kind === "package");
+        const alaCarteLines = settledLines.filter((line) => line.service_kind !== "package");
+        const reviewedAdjustment = Number(settledPet?.adjustment || 0);
+        const arrivalWindow = escapeHistoryHtml(booking.time_window?.window_label || "Not recorded");
+
+        return `
+          <div class="flex items-center gap-4">
+            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-portal-icon-surface text-portal-primary" aria-hidden="true">
+              <svg class="ph-icon h-7 w-7" viewBox="0 0 256 256" focusable="false"><use href="../../assets/icons/phosphor.svg#${historyPetIcon(pet)}"></use></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <h3 class="break-words text-xl font-bold leading-tight text-portal-text">${petName}</h3>
+              <p class="mt-1 break-words text-xs font-medium text-portal-muted">Booking ID: ${escapeHistoryHtml(booking.booking_reference || "Not recorded")}</p>
+            </div>
+            <span class="w-fit shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${outcomeClasses}">${outcomeLabel}</span>
+          </div>
+
+          <div class="mt-6 grid gap-6 sm:grid-cols-2 sm:gap-8">
+            <section class="min-w-0 pl-4">
+              <h3 class="flex items-center gap-2 text-base font-bold text-portal-text">
+                <svg class="ph-icon h-5 w-5 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
+                Schedule Information
+              </h3>
+              <dl class="mt-4 space-y-3">
+                <div class="grid grid-cols-[100px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Dropped off</dt><dd class="font-medium text-portal-text">${historyDateTime(booking.dropped_off_timestamp)}</dd></div>
+                <div class="grid grid-cols-[100px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Grooming</dt><dd class="font-medium text-portal-text">${groomingInterval(groomingTimes.start, groomingTimes.finish)}</dd></div>
+                <div class="grid grid-cols-[100px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Arrival Window</dt><dd class="font-medium text-portal-text">${arrivalWindow}</dd></div>
+              </dl>
+            </section>
+
+            <section class="min-w-0 sm:border-l sm:border-portal-border sm:pl-8">
+              <h3 class="flex items-center gap-2 text-base font-bold text-portal-text">
+                <svg class="ph-icon h-5 w-5 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
+                Pet Information
+              </h3>
+              <dl class="mt-4 space-y-3">
+                <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Pet Type</dt><dd class="font-medium text-portal-text">${breed} &middot; ${species}</dd></div>
+                <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs">
+                  <dt class="font-medium text-portal-muted">Pet Size</dt>
+                  <dd class="font-medium text-portal-text">
+                    <span>${escapeHistoryHtml(sizeValue)}</span>
+                    ${sizeChanged ? `
+                      <span class="ml-1 inline-flex align-middle text-portal-primary" title="Clinic size changed from ${escapeHistoryHtml(historySizeLabel(registeredSize))} to ${escapeHistoryHtml(sizeValue)}">
+                        <svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-label="Clinic-confirmed pet size" focusable="false"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>
+                      </span>
+                      <span class="mt-1 block text-xs text-portal-muted">Size confirmed by Bethlehem Animal Clinic Grooming</span>
+                    ` : ""}
+                  </dd>
+                </div>
+                <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Weight</dt><dd class="font-medium text-portal-text">${escapeHistoryHtml(weight)}</dd></div>
+              </dl>
+            </section>
+          </div>
+
+          <section class="mt-6 rounded-2xl border border-portal-border bg-portal-surface-soft p-4">
+            <h3 class="flex items-center gap-2 text-base font-bold text-portal-text">
+              <svg class="ph-icon h-5 w-5 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
+              Services Availed
+            </h3>
+            ${settledPet ? `
+              <div class="mt-4 overflow-hidden rounded-xl border border-portal-border bg-white">
+                ${historyServiceGroup("Main Service", mainLines)}
+                ${historyServiceGroup("A La Carte", alaCarteLines)}
+                ${settledLines.length ? "" : '<p class="px-4 py-3 text-xs text-portal-muted">No services were recorded.</p>'}
+                ${reviewedAdjustment ? `<div class="flex justify-between gap-4 border-b border-portal-border px-4 py-3 text-xs text-portal-text"><span>Reviewed adjustment</span><span class="font-semibold">${reviewedAdjustment > 0 ? "−" : "+"}${historyPeso(Math.abs(reviewedAdjustment))}</span></div>` : ""}
+                <div class="flex justify-between gap-4 border-b border-portal-border px-4 py-3">
+                  <span class="text-[13px] font-semibold text-portal-text">Payment Method</span>
+                  <span class="text-xs font-medium text-portal-text">${escapeHistoryHtml(paymentSummary.payment_method_label || "Not recorded")}</span>
+                </div>
+                <div class="flex justify-between gap-4 bg-portal-active px-4 py-3 text-sm font-bold text-portal-text">
+                  <span>Total</span><span>${historyPeso(settledPet.final_pet_charge)}</span>
+                </div>
+              </div>
+            ` : `
+              <div class="mt-4 rounded-xl border border-portal-border bg-white p-4">
+                <p class="text-xs font-medium text-portal-muted">Final service prices and payment were not recorded for this session.</p>
+                ${Array.isArray(pet?.services) && pet.services.length ? `<p class="mt-2 break-words text-xs text-portal-text">Selected services: ${pet.services.map((service) => escapeHistoryHtml(service.service_name || "")).filter(Boolean).join(", ")}</p>` : ""}
+              </div>
+            `}
+          </section>`;
       }
+
+      function closeHistoryModal() {
+        if (historyModal.classList.contains("hidden")) return;
+        historyModal.classList.add("hidden");
+        historyModal.classList.remove("flex");
+        historyModal.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("overflow-hidden");
+        historyModalTrigger?.focus();
+        historyModalTrigger = null;
+      }
+
+      function openHistoryModal(booking, pet, trigger) {
+        historyModalTrigger = trigger;
+        historyModalContent.innerHTML = buildHistoryModalContent(booking, pet);
+        historyModal.classList.remove("hidden");
+        historyModal.classList.add("flex");
+        historyModal.setAttribute("aria-hidden", "false");
+        document.body.classList.add("overflow-hidden");
+        historyModalDialog.querySelector("[data-history-modal-close]")?.focus();
+      }
+
+      historyList.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-history-open]");
+        if (!trigger) return;
+        const booking = allHistory.find((item) => Number(item.booking_id) === Number(trigger.dataset.bookingId));
+        if (!booking) return;
+        const pet = (booking.pets || []).find((item) =>
+          Number(item.booking_pet_id) === Number(trigger.dataset.bookingPetId),
+        ) || null;
+        openHistoryModal(booking, pet, trigger);
+      });
+
+      historyModal.querySelectorAll("[data-history-modal-close]").forEach((button) =>
+        button.addEventListener("click", closeHistoryModal),
+      );
+      historyModal.querySelector("[data-history-modal-backdrop]")?.addEventListener("click", closeHistoryModal);
+      document.addEventListener("keydown", (event) => {
+        if (historyModal.classList.contains("hidden")) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeHistoryModal();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(historyModalDialog.querySelectorAll("button:not([disabled]), a[href], input:not([disabled])"));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      });
 
       // ── Filter events ─────────────────────────────────────────────────────
       searchInput.addEventListener("input", applyFilters);
@@ -422,7 +716,8 @@
       void loadHistory();
       window.requestAnimationFrame(() => scheduleCustomerHistoryIdleTask(loadCustomerProfile));
     </script>
-    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
+    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-grooming-history"></script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260915-grooming-history"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>
