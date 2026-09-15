@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Schedules | Bethlehem Animal Clinic</title>
+    <title>Admin Grooming | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css?v=workflow-reconciliation-20260809" />
@@ -88,7 +88,7 @@
                 :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'"
               >
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
-                <span>Schedules</span>
+                <span>Grooming</span>
                 <span
                   x-show="hasIncomingAppointments"
                   style="display: none"
@@ -258,7 +258,7 @@
         >
           <div>
             <p class="text-sm font-semibold text-[#5c7690]">Admin Panel</p>
-            <h2 class="text-lg font-extrabold text-[#1f3850]">Schedules</h2>
+            <h2 class="text-lg font-extrabold text-[#1f3850]">Grooming</h2>
           </div>
 
           <button
@@ -270,7 +270,7 @@
           </button>
         </header>
 
-        <!-- Schedules Body -->
+        <!-- Grooming Body -->
         <main
           x-data="adminDashboard()"
           class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
@@ -287,7 +287,7 @@
                   <h2
                     class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl"
                   >
-                    Schedules
+                    Grooming
                   </h2>
                   <p
                     class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]"
@@ -763,7 +763,7 @@
 
               <template x-if="activeTab === 'incoming' && !showFutureAppointments">
                 <p>
-                  Incoming displays today's pre-registrations only. Open Schedules to
+                  Incoming displays today's pre-registrations only. Open Grooming to
                   view upcoming pre-registrations scheduled for future dates.
                 </p>
               </template>
