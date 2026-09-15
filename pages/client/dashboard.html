@@ -7,8 +7,8 @@
     <title>Client Dashboard | Bethlehem Animal Clinic</title>
 
     <!-- Tailwind output -->
-    <link rel="stylesheet" href="../../css/output.css?v=20260913-soft-blue" />
-    <link rel="stylesheet" href="../../css/custom.css?v=20260806-reschedule-availability&ui=20260913-tailwind" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-grooming-live&notif=20260915-client-notifications" />
+    <link rel="stylesheet" href="../../css/custom.css?v=20260806-reschedule-availability&ui=20260915-client-notifications" />
 
   </head>
   <body class="portal-theme customer-dashboard group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
@@ -427,7 +427,7 @@
             <div class="portal-card max-[639px]:p-5 min-h-56">
               <div class="flex items-center justify-between mb-[18px] gap-3">
                 <h3 class="font-bold text-portal-text text-[22px] leading-[1.3]">Grooming Tracker</h3>
-                <span class="font-semibold uppercase tracking-widest inline-flex items-center gap-[7px] rounded-[10px] bg-portal-active px-2.5 py-1.5 text-[10px] text-portal-primary before:h-1.5 before:w-1.5 before:rounded-full before:bg-current before:content-['']">Live</span>
+                <span id="groomingLiveBadge" class="hidden font-semibold uppercase tracking-widest inline-flex items-center gap-[7px] rounded-[10px] bg-portal-active px-2.5 py-1.5 text-[10px] text-portal-danger before:h-1.5 before:w-1.5 before:rounded-full before:bg-current before:content-['']">Live</span>
               </div>
               <div id="groomingTracker">
                 <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
@@ -536,8 +536,9 @@
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830" defer></script>
     <script src="../../scripts/services/app-clock.js" defer></script>
+    <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications" defer></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
-    <script src="../../scripts/components/client-dashboard.js?v=auth-session-20260816&ui=20260914-customer-idle" defer></script>
+    <script src="../../scripts/components/client-dashboard.js?v=auth-session-20260816&ui=20260915-grooming-live&notif=20260915-client-notifications" defer></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

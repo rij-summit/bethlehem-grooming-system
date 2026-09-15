@@ -154,6 +154,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
   const pickupMessage  = document.getElementById("pickupMessage");
   const pickupDismiss  = document.getElementById("pickupDismissBtn");
   let notificationsLoading = false;
+  let shownNotifications = [];
+  const currentTab = window.ClientNotificationUI.ensureDropdownControls(dropdown, () => renderNotifList(shownNotifications));
 
   const SHOWN_PICKUPS_KEY = "shownPickupNotifs";
   const PICKUP_READY_STATUSES = new Set([
@@ -197,17 +199,19 @@ function scheduleCustomerDashboardAfterPaint(task) {
     void loadNotifications();
     positionDropdown();
     dropdown.style.display = "flex";
+    bellBtn.setAttribute("aria-expanded", "true");
   }
 
   function closeDropdown() {
     dropdown.style.display = "none";
+    bellBtn.setAttribute("aria-expanded", "false");
   }
 
   function positionDropdown() {
     const rect      = bellBtn.getBoundingClientRect();
     const gap       = 8;
     const margin    = 12;
-    const dropWidth = Math.min(320, window.innerWidth - margin * 2);
+    const dropWidth = Math.min(384, window.innerWidth - margin * 2);
 
     // Right-align to bell, clamped so it never clips the left edge
     let right = window.innerWidth - rect.right;
@@ -247,6 +251,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
       // Badge
       const count = data.unread_count || 0;
+      window.ClientNotificationUI.setUnreadCount(dropdown, Number(count));
       if (count > 0) {
         badge.textContent = count > 9 ? "9+" : count;
         badge.classList.remove("hidden");
@@ -273,38 +278,15 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   function renderNotifList(notifications) {
-    if (!notifications.length) {
-      list.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">No notifications yet.</p>';
-      return;
-    }
-
-    list.innerHTML = notifications.map((n, index) => {
-      const icon = notifIcon(n);
-      const message = formatNotificationMessage(n);
-      const bg   = n.is_read ? "bg-white" : "bg-portal-active";
-      const dot  = n.is_read ? "bg-transparent" : "bg-portal-primary";
-      const time = formatNotifTime(n.created_at);
-      return `
-        <button type="button"
-             class="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${bg}"
-             data-notif-id="${n.id}"
-             data-notif-index="${index}">
-          <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}"></span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-start gap-2">
-              <span class="text-base">${icon}</span>
-              <p class="text-sm text-portal-text leading-snug">${message}</p>
-            </div>
-            <p class="mt-1 text-xs text-portal-muted">${time}</p>
-          </div>
-        </button>`;
-    }).join("");
+    shownNotifications = notifications;
+    window.ClientNotificationUI.render(list, notifications, currentTab(), true, formatNotificationMessage);
 
     // Mark single notification as read on click
-    list.querySelectorAll("[data-notif-id]").forEach((el) => {
+    list.querySelectorAll("[data-client-notification-index]").forEach((el) => {
       el.addEventListener("click", async () => {
-        const id = el.dataset.notifId;
-        const notification = notifications[Number(el.dataset.notifIndex)];
+        const notification = notifications[Number(el.dataset.clientNotificationIndex)];
+        const id = notification?.id;
+        if (!id) return;
         try {
           await API.markCustomerNotificationRead(id);
 
@@ -566,6 +548,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
     : scheduleDashboardDataIdle;
   const appointmentsList         = document.getElementById("appointmentsList");
   const groomingTrackerEl        = document.getElementById("groomingTracker");
+  const groomingLiveBadgeEl      = document.getElementById("groomingLiveBadge");
   const groomingHistoryEl        = document.getElementById("groomingHistory");
   const myPetsCountEl            = document.getElementById("myPetsCount");
   const myPetsSummaryEl          = document.getElementById("myPetsSummary");
@@ -695,6 +678,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function renderDashboardPanelError(target, message) {
     if (!target) return;
+    if (target === groomingTrackerEl) groomingLiveBadgeEl?.classList.add("hidden");
 
     target.innerHTML = `
       <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center" role="alert">
@@ -943,6 +927,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function renderGroomingTracker(bookings) {
     if (!bookings.length) {
+      groomingLiveBadgeEl?.classList.add("hidden");
       groomingTrackerEl.innerHTML = `
         <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
           <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
@@ -952,6 +937,18 @@ function scheduleCustomerDashboardAfterPaint(task) {
     }
 
     groomingTrackerEl.innerHTML = bookings.map(b => buildTrackerCard(b)).join("");
+    groomingLiveBadgeEl?.classList.toggle("hidden", !bookings.some(hasQueuedOrGroomingPet));
+  }
+
+  function hasQueuedOrGroomingPet(booking) {
+    const pets = Array.isArray(booking?.pets) ? booking.pets : [];
+    return pets.some(pet =>
+      pet.clinic_referred !== true
+      && pet.active_in_grooming !== false
+      && ["checked_in", "in_progress"].includes(
+        String(pet.grooming_status ?? booking.status ?? "").toLowerCase(),
+      )
+    );
   }
 
   function buildTrackerCard(b) {

@@ -8,6 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const mobileSidebarQuery = window.matchMedia("(max-width: 1180px)");
+  const settingsContent = document.getElementById("settingsContent");
+  const loadingScreen = document.getElementById("settingsLoadingScreen");
+  const loadingSpinner = document.getElementById("settingsLoadingSpinner");
+  const loadingMessage = document.getElementById("settingsLoadingMessage");
+  const loadingRetry = document.getElementById("settingsLoadingRetry");
   const sidebarToggle = document.getElementById("clientSidebarToggle");
   const sidebarClose = document.getElementById("clientSidebarClose");
   const sidebarBackdrop = document.getElementById("clientSidebarBackdrop");
@@ -18,9 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const statusBox = document.getElementById("settingsStatus");
   const passwordForm = document.getElementById("passwordForm");
-  const passwordClearBtn = document.getElementById("passwordClearBtn");
   const newPasswordInput = document.getElementById("newPassword");
+  const confirmPasswordInput = document.getElementById("confirmNewPassword");
   const passwordStrength = document.getElementById("passwordStrength");
+  const confirmPasswordFeedback = document.getElementById("confirmPasswordFeedback");
 
   const firstNameInput = document.getElementById("settingsFirstName");
   const lastNameInput = document.getElementById("settingsLastName");
@@ -47,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupHeaderSearch();
   setupPasswordToggles();
   setupForms();
+  loadingRetry?.addEventListener("click", loadProfile);
   window.requestAnimationFrame(() => scheduleSettingsIdleTask(loadProfile));
 
   function setupSidebar() {
@@ -98,11 +105,11 @@ document.addEventListener("DOMContentLoaded", () => {
         tabs.forEach((item) => {
           const isActive = item.dataset.settingsTab === target;
           item.setAttribute("aria-selected", String(isActive));
-          item.classList.toggle("bg-[#315b7e]", isActive);
+          item.classList.toggle("bg-portal-primary", isActive);
           item.classList.toggle("text-white", isActive);
           item.classList.toggle("shadow-sm", isActive);
-          item.classList.toggle("text-[#2f4b66]", !isActive);
-          item.classList.toggle("hover:bg-white", !isActive);
+          item.classList.toggle("text-portal-text", !isActive);
+          item.classList.toggle("hover:bg-portal-active", !isActive);
         });
 
         panels.forEach((panel) => {
@@ -167,29 +174,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function setupForms() {
     logoutBtn?.addEventListener("click", handleLogout);
-    newPasswordInput?.addEventListener("input", updatePasswordStrength);
+    newPasswordInput?.addEventListener("input", () => {
+      updatePasswordStrength();
+      updateConfirmationFeedback();
+    });
+    confirmPasswordInput?.addEventListener("input", updateConfirmationFeedback);
 
     passwordForm?.addEventListener("submit", (event) => {
       event.preventDefault();
       validatePasswordForm();
     });
 
-    passwordClearBtn?.addEventListener("click", () => {
-      passwordForm?.reset();
-      updatePasswordStrength();
-      hideStatus();
-    });
   }
 
   function loadProfile() {
     if (serverUser) return Promise.resolve(serverUser);
     if (profileLoadPromise) return profileLoadPromise;
 
+    loadingScreen?.setAttribute("role", "status");
+    if (loadingMessage) loadingMessage.textContent = "Loading settings...";
+    loadingSpinner?.classList.remove("hidden");
+    loadingRetry?.classList.add("hidden");
+
     profileLoadPromise = (async () => {
       try {
         const { user } = await API.getMe("customer");
-        serverUser = user || {};
-        applyUserToAccount(serverUser);
+        if (!user) throw new Error("Account profile is unavailable.");
+        applyUserToAccount(user);
+        serverUser = user;
+        settingsContent?.removeAttribute("inert");
+        settingsContent?.removeAttribute("aria-hidden");
+        settingsContent?.classList.remove("hidden");
+        loadingScreen?.classList.add("hidden");
         return serverUser;
       } catch (error) {
         if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {
@@ -197,7 +213,10 @@ document.addEventListener("DOMContentLoaded", () => {
           return null;
         }
 
-        showStatus("Unable to load your account right now. Please try again.", "error");
+        loadingScreen?.setAttribute("role", "alert");
+        if (loadingMessage) loadingMessage.textContent = "Unable to load settings right now. Please try again.";
+        loadingSpinner?.classList.add("hidden");
+        loadingRetry?.classList.remove("hidden");
         return null;
       } finally {
         profileLoadPromise = null;
@@ -258,8 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (newPassword.length < 8) {
-      showStatus("New password must be at least 8 characters.", "error");
+    if (!Object.values(getPasswordRules(newPassword)).every(Boolean)) {
+      showStatus("Please meet every new password requirement.", "error");
+      updatePasswordStrength();
       return;
     }
 
@@ -274,36 +294,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // BACKEND: Send current_password, password, and password_confirmation here.
-    passwordForm.reset();
-    updatePasswordStrength();
-    showStatus("Password details passed validation.", "success");
+    showStatus("Your password meets the requirements. No password change was made.", "info");
+  }
+
+  function getPasswordRules(value) {
+    return {
+      length: value.length >= 12,
+      uppercase: /[A-Z]/.test(value),
+      lowercase: /[a-z]/.test(value),
+      special: /[^A-Za-z0-9\s]/.test(value),
+      number: /\d/.test(value),
+    };
   }
 
   function updatePasswordStrength() {
     if (!passwordStrength || !newPasswordInput) return;
 
     const value = newPasswordInput.value;
-    if (!value) {
-      passwordStrength.textContent = "Use at least 8 characters.";
-      passwordStrength.className = "mt-2 text-xs text-slate-500";
-      return;
-    }
+    const rules = getPasswordRules(value);
+    const complete = Object.values(rules).every(Boolean);
 
-    const hasLength = value.length >= 8;
-    const hasNumber = /\d/.test(value);
-    const hasLetter = /[A-Za-z]/.test(value);
-    const score = [hasLength, hasNumber, hasLetter].filter(Boolean).length;
+    document.querySelectorAll("[data-password-rule]").forEach((item) => {
+      const satisfied = Boolean(value && rules[item.dataset.passwordRule]);
+      item.classList.toggle("text-green-700", satisfied);
+      item.classList.toggle("text-portal-muted", !satisfied);
+    });
 
-    if (score === 3) {
-      passwordStrength.textContent = "Strong password.";
-      passwordStrength.className = "mt-2 text-xs text-green-700";
-    } else if (hasLength) {
-      passwordStrength.textContent = "Good start. Add letters and numbers for a stronger password.";
-      passwordStrength.className = "mt-2 text-xs text-amber-700";
-    } else {
-      passwordStrength.textContent = "Password is too short.";
-      passwordStrength.className = "mt-2 text-xs text-red-700";
-    }
+    newPasswordInput.classList.toggle("border-green-500", Boolean(value && complete));
+    newPasswordInput.classList.toggle("border-red-400", Boolean(value && !complete));
+    newPasswordInput.classList.toggle("border-portal-border", !value);
+    newPasswordInput.setAttribute("aria-invalid", String(Boolean(value && !complete)));
+
+    passwordStrength.textContent = !value
+      ? "Please add all necessary characters to create a safe password."
+      : complete
+        ? "Your new password meets all requirements."
+        : "Please add all necessary characters to create a safe password.";
+    passwordStrength.classList.toggle("text-green-700", Boolean(value && complete));
+    passwordStrength.classList.toggle("text-red-700", Boolean(value && !complete));
+    passwordStrength.classList.toggle("text-portal-muted", !value);
+  }
+
+  function updateConfirmationFeedback() {
+    if (!confirmPasswordInput || !confirmPasswordFeedback) return;
+
+    const value = confirmPasswordInput.value;
+    const matches = value === newPasswordInput.value;
+    confirmPasswordFeedback.textContent = !value
+      ? ""
+      : matches
+        ? "Passwords match."
+        : "Passwords do not match.";
+    confirmPasswordFeedback.classList.toggle("text-green-700", Boolean(value && matches));
+    confirmPasswordFeedback.classList.toggle("text-red-700", Boolean(value && !matches));
+    confirmPasswordFeedback.classList.toggle("text-portal-muted", !value);
+    confirmPasswordInput.classList.toggle("border-green-500", Boolean(value && matches));
+    confirmPasswordInput.classList.toggle("border-red-400", Boolean(value && !matches));
+    confirmPasswordInput.classList.toggle("border-portal-border", !value);
+    confirmPasswordInput.setAttribute("aria-invalid", String(Boolean(value && !matches)));
   }
 
   async function handleLogout() {
@@ -340,6 +388,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (type === "error") {
       statusBox.classList.add("border-red-200", "bg-red-50", "text-red-700");
+    } else if (type === "info") {
+      statusBox.classList.add("border-portal-border", "bg-portal-surface-soft", "text-portal-text");
     } else {
       statusBox.classList.add("border-green-200", "bg-green-50", "text-green-700");
     }

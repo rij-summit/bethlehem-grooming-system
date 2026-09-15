@@ -21,6 +21,7 @@ function createElementStore() {
 
   function element(id) {
     if (!elements.has(id)) {
+      const classes = new Set(id === "groomingLiveBadge" ? ["hidden"] : []);
       elements.set(id, {
         id,
         innerHTML: "<initial>Loading...</initial>",
@@ -31,7 +32,17 @@ function createElementStore() {
         disabled: false,
         style: {},
         className: "",
-        classList: { add() {}, remove() {}, toggle() {} },
+        classList: {
+          add(...names) { names.forEach((name) => classes.add(name)); },
+          remove(...names) { names.forEach((name) => classes.delete(name)); },
+          toggle(name, force) {
+            const add = force === undefined ? !classes.has(name) : force;
+            if (add) classes.add(name);
+            else classes.delete(name);
+            return add;
+          },
+          contains(name) { return classes.has(name); },
+        },
         addEventListener() {},
         setCustomValidity() {},
         querySelectorAll() { return []; },
@@ -127,11 +138,49 @@ async function testApiFailureSettlesEveryDashboardPanel() {
       `${id} remained in its loading state.`,
     );
   }
+  assert.equal(element("groomingLiveBadge").classList.contains("hidden"), true);
+}
+
+async function testLiveBadgeRequiresQueuedOrGroomingPet() {
+  const scenarios = [
+    { status: "checked_in", petStatus: "checked_in", hidden: false },
+    { status: "in_progress", petStatus: "in_progress", hidden: false },
+    { status: "for_payment", petStatus: "grooming_finished", hidden: true },
+    { status: "released", petStatus: "grooming_finished", hidden: true },
+    { status: "in_progress", petStatus: "paused", hidden: true },
+    { status: "in_progress", petStatus: "in_progress", referred: true, hidden: true },
+  ];
+
+  for (const scenario of scenarios) {
+    const { element, consoleErrors } = await runDashboard(async () => ({
+      bookings: [{
+        booking_id: 1,
+        booking_reference: "BAC-20260915-0001",
+        booking_date: "2026-09-15",
+        status: scenario.status,
+        pets: [{
+          pet_name: "Peter",
+          grooming_status: scenario.petStatus,
+          clinic_referred: scenario.referred === true,
+          active_in_grooming: !scenario.referred && scenario.petStatus !== "grooming_finished",
+        }],
+      }],
+      history: [],
+    }));
+
+    assert.equal(
+      element("groomingLiveBadge").classList.contains("hidden"),
+      scenario.hidden,
+      `${scenario.status}/${scenario.petStatus} displayed the wrong Live state.`,
+    );
+    assert.equal(consoleErrors.length, 0);
+  }
 }
 
 (async () => {
   await testStoppedReviewHistoryDoesNotBreakEmptySchedule();
   await testApiFailureSettlesEveryDashboardPanel();
+  await testLiveBadgeRequiresQueuedOrGroomingPet();
   console.log("Customer dashboard history regression tests passed.");
 })().catch((error) => {
   console.error(error);

@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grooming History | Bethlehem Animal Clinic</title>
 
-    <link rel="stylesheet" href="../../css/output.css?v=20260915-session-modal" />
-    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-session-modal" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-control-height&notif=20260915-client-notifications" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-session-modal&notif=20260915-client-notifications" />
 
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
@@ -204,20 +204,28 @@
         <!-- Page Body -->
         <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px] space-y-6">
 
+          <div id="historyLoadingScreen" class="flex min-h-[60vh] items-center justify-center text-center" role="status" aria-live="polite">
+            <div class="flex flex-col items-center">
+              <svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p class="mt-3 text-sm text-portal-muted">Loading grooming history...</p>
+            </div>
+          </div>
+          <div id="historyContent" class="hidden space-y-6" inert aria-hidden="true">
+
           <!-- Filters -->
           <div class="flex flex-col gap-3 sm:flex-row">
-            <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-              <svg class="w-4 h-4 shrink-0 fill-current text-slate-400" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
+            <div class="flex h-10 items-center gap-2 rounded-xl border border-portal-border bg-white px-4 shadow-sm">
+              <svg class="ph-icon h-4 w-4 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
               <input
                 type="date"
                 id="historyDateFilter"
-                class="bg-transparent outline-none text-sm text-slate-700"
+                class="h-full min-w-0 bg-transparent outline-none text-sm text-portal-text"
               />
             </div>
             <button
               type="button"
               id="historyClearFilters"
-              class="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-50 transition shadow-sm"
+              class="h-10 rounded-xl border border-portal-border bg-white px-4 py-2 text-sm font-semibold text-portal-text shadow-sm transition hover:bg-portal-surface-soft"
             >
               Clear
             </button>
@@ -227,11 +235,8 @@
           <div id="historySummary" class="text-sm text-slate-400"></div>
 
           <!-- History list -->
-          <div id="historyList">
-            <div class="text-center py-16">
-              <svg class="w-8 h-8 mx-auto animate-spin fill-current text-slate-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-              <p class="mt-3 text-slate-400 text-sm">Loading grooming history...</p>
-            </div>
+          <div id="historyList"></div>
+
           </div>
 
         </section>
@@ -322,6 +327,8 @@
 
       // ── Grooming History ──────────────────────────────────────────────────
       const historyList     = document.getElementById("historyList");
+      const historyLoadingScreen = document.getElementById("historyLoadingScreen");
+      const historyContent = document.getElementById("historyContent");
       const historySummary  = document.getElementById("historySummary");
       const searchInput     = document.getElementById("historySearch");
       const dateFilter      = document.getElementById("historyDateFilter");
@@ -330,6 +337,13 @@
       let allHistory = [];
       let historyLoadState = "idle";
       let historyLoadPromise = null;
+
+      function showHistoryContent() {
+        historyLoadingScreen.classList.add("hidden");
+        historyContent.classList.remove("hidden");
+        historyContent.removeAttribute("inert");
+        historyContent.removeAttribute("aria-hidden");
+      }
 
       function loadHistory() {
         if (historyLoadState === "loaded") return Promise.resolve(allHistory);
@@ -342,6 +356,7 @@
             allHistory = data.history || [];
             historyLoadState = "loaded";
             applyFilters();
+            showHistoryContent();
             return allHistory;
           } catch {
             historyLoadState = "error";
@@ -350,6 +365,7 @@
                 <svg class="w-10 h-10 mx-auto fill-current text-red-300" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#warning-circle"></use></svg>
                 <p class="mt-3 text-red-500 text-sm">Failed to load history. Please refresh.</p>
               </div>`;
+            showHistoryContent();
             return [];
           } finally {
             historyLoadPromise = null;
@@ -716,7 +732,8 @@
       void loadHistory();
       window.requestAnimationFrame(() => scheduleCustomerHistoryIdleTask(loadCustomerProfile));
     </script>
-    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-grooming-history"></script>
+    <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications"></script>
+    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-client-notifications"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260915-grooming-history"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>

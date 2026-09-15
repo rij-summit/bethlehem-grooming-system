@@ -5,8 +5,8 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Pets | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=20260915-my-pets-toggle" />
-    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-my-pets-toggle" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-control-height&notif=20260915-client-notifications" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-my-pets-toggle&notif=20260915-client-notifications" />
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
     <div class="min-h-screen flex">
@@ -196,15 +196,23 @@
 
         <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px]">
 
+          <div id="petsLoadingScreen" class="flex min-h-[60vh] items-center justify-center text-center" role="status" aria-live="polite">
+            <div class="flex flex-col items-center">
+              <svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p id="petsLoadingMessage" class="mt-3 text-sm text-portal-muted">Loading my pets...</p>
+            </div>
+          </div>
+          <div id="petsContent" class="hidden" inert aria-hidden="true">
+
           <!-- Toolbar -->
           <div class="mb-[22px] flex flex-wrap items-center gap-2">
             <div class="inline-flex gap-1 rounded-2xl border border-portal-border bg-white p-1 shadow-portal" role="group" aria-label="Pet profile status">
               <button type="button" id="filterActiveBtn" aria-pressed="true"
-                class="min-h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm">
+                class="h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm">
                 Active
               </button>
               <button type="button" id="filterArchivedBtn" aria-pressed="false"
-                class="min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft">
+                class="h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft">
                 Archived
               </button>
             </div>
@@ -216,10 +224,8 @@
 
           <!-- Pet Grid -->
           <div id="petsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-[22px] max-[639px]:gap-4">
-            <div class="col-span-full text-center py-16">
-              <svg class="ph-icon w-8 h-8 mx-auto text-slate-300 animate-spin" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-              <p class="mt-3 text-portal-muted text-sm">Loading...</p>
-            </div>
+          </div>
+
           </div>
 
         </section>
@@ -439,7 +445,8 @@
     </div>
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
-    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816&ui=20260915-status-toggle"></script>
+    <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications"></script>
+    <script type="module" src="../../scripts/components/my-pets.js?v=auth-session-20260816&ui=20260915-control-height&notif=20260915-client-notifications&loader=20260915-centered"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>

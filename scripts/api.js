@@ -1754,9 +1754,15 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/picked-up`, null, getAdminToken());
   }
 
-  async function getCustomerNotifications() {
+  async function getCustomerNotifications(options = {}) {
     // GET /api/customer/notifications  (protected — customer token)
-    return request("GET", "/customer/notifications", null, getCustomerToken());
+    const page = Number(options.page || 1);
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", String(page));
+    if (options.sort === "recent") params.set("sort", "recent");
+    if (options.status === "unread") params.set("status", "unread");
+    const suffix = params.size ? `?${params.toString()}` : "";
+    return request("GET", `/customer/notifications${suffix}`, null, getCustomerToken());
   }
 
   async function markCustomerNotificationRead(id) {

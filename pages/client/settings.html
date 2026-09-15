@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings | Bethlehem Animal Clinic</title>
 
-    <link rel="stylesheet" href="../../css/output.css?v=20260915-client-settings" />
-    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-client-settings" />
+    <link rel="stylesheet" href="../../css/output.css?v=20260915-control-height&notif=20260915-client-notifications" />
+    <link rel="stylesheet" href="../../css/custom.css?ui=20260915-password-reveal&notif=20260915-client-notifications" />
 
   </head>
   <body class="portal-theme group/portal bg-portal-canvas text-portal-text" data-icon-library="phosphor">
@@ -198,11 +198,10 @@
         </header>
 
         <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px] space-y-6">
-          <div class="max-w-6xl space-y-6">
-            <!-- Horizontal settings navigation. Notifications intentionally omitted. -->
+          <!-- Horizontal settings navigation. Notifications intentionally omitted. -->
             <div class="overflow-x-auto pb-1">
               <div
-                class="inline-flex min-w-full gap-1 rounded-2xl border border-[#cfe0ee] bg-white p-1 shadow-sm sm:min-w-0"
+                class="inline-flex min-w-full gap-1 rounded-2xl border border-portal-border bg-white p-1 shadow-sm sm:min-w-0"
                 role="tablist"
                 aria-label="Client settings sections"
               >
@@ -210,12 +209,12 @@
                   type="button"
                   id="accountTab"
                   data-settings-tab="account"
-                  class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition"
+                  class="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
                   role="tab"
                   aria-selected="true"
                   aria-controls="accountPanel"
                 >
-                  <svg class="h-4 w-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#user-circle"></use></svg>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg?v=20260915-user#user"></use></svg>
                   <span>Account</span>
                 </button>
 
@@ -223,17 +222,25 @@
                   type="button"
                   id="securityTab"
                   data-settings-tab="security"
-                  class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-[#2f4b66] transition hover:bg-white"
+                  class="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text transition hover:bg-portal-active"
                   role="tab"
                   aria-selected="false"
                   aria-controls="securityPanel"
                 >
-                  <svg class="h-4 w-4 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#lock-key"></use></svg>
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#lock-key"></use></svg>
                   <span>Security</span>
                 </button>
               </div>
             </div>
 
+          <div id="settingsLoadingScreen" class="flex min-h-[60vh] items-center justify-center text-center" role="status" aria-live="polite">
+            <div class="flex flex-col items-center">
+              <svg id="settingsLoadingSpinner" class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p id="settingsLoadingMessage" class="mt-3 text-sm text-portal-muted">Loading settings...</p>
+              <button id="settingsLoadingRetry" type="button" class="portal-button-primary mt-5 hidden text-sm font-semibold">Try again</button>
+            </div>
+          </div>
+          <div id="settingsContent" class="hidden max-w-6xl space-y-6" inert aria-hidden="true">
             <div
               id="settingsStatus"
               class="hidden rounded-xl border px-4 py-3 text-sm font-medium"
@@ -246,35 +253,18 @@
               data-settings-panel="account"
               role="tabpanel"
               aria-labelledby="accountTab"
-              class="space-y-6"
+              class="max-w-[680px] space-y-4"
             >
+              <h3 class="text-xl font-bold text-portal-text">Personal Information</h3>
               <form
                 id="accountForm"
-                class="rounded-3xl border border-slate-200 bg-white shadow-sm"
+                class="rounded-3xl border border-portal-border bg-white p-5 shadow-portal sm:p-6"
               >
-                <div
-                  class="flex items-center gap-3 border-b border-slate-100 px-5 py-5"
-                >
-                  <div
-                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"
-                  >
-                    <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#user-circle"></use></svg>
-                  </div>
-                  <div>
-                    <h3 class="text-lg font-bold text-[#2f4b66]">
-                      Personal Information
-                    </h3>
-                    <p class="mt-1 text-sm text-slate-500">
-                      Contact or visit us to update your account information.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="px-5 py-6 space-y-6">
+                <div class="space-y-6">
                   <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <div
                       id="accountInitials"
-                      class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#2f4b66] text-xl font-bold text-white"
+                      class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-portal-primary text-lg font-bold text-white"
                     >
                       --
                     </div>
@@ -282,13 +272,13 @@
                     <div class="min-w-0">
                       <p
                         id="accountDisplayName"
-                        class="text-base font-bold text-slate-800"
+                        class="text-base font-bold text-portal-text"
                       >
                         Loading...
                       </p>
                       <p
                         id="accountMeta"
-                        class="mt-1 text-sm text-slate-500"
+                        class="mt-1 text-sm text-portal-muted"
                       >
                         Pet Owner
                       </p>
@@ -299,7 +289,7 @@
                     <div>
                       <label
                         for="settingsFirstName"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         First Name
                       </label>
@@ -309,14 +299,14 @@
                         name="first_name"
                         autocomplete="given-name"
                         readonly
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600 focus:outline-none"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-3 text-portal-text focus:outline-none"
                       />
                     </div>
 
                     <div>
                       <label
                         for="settingsLastName"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         Last Name
                       </label>
@@ -326,7 +316,7 @@
                         name="last_name"
                         autocomplete="family-name"
                         readonly
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600 focus:outline-none"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-3 text-portal-text focus:outline-none"
                       />
                     </div>
                   </div>
@@ -335,7 +325,7 @@
                     <div>
                       <label
                         for="settingsPhone"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         Phone Number
                       </label>
@@ -348,14 +338,14 @@
                         placeholder="09XX-XXX-XXXX"
                         autocomplete="tel"
                         readonly
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600 focus:outline-none"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-3 text-portal-text focus:outline-none"
                       />
                     </div>
 
                     <div>
                       <label
                         for="settingsEmail"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         Email Address
                       </label>
@@ -365,7 +355,7 @@
                         name="email"
                         autocomplete="email"
                         readonly
-                        class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600 focus:outline-none"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-3 text-portal-text focus:outline-none"
                       />
                     </div>
                   </div>
@@ -378,65 +368,48 @@
               data-settings-panel="security"
               role="tabpanel"
               aria-labelledby="securityTab"
-              class="hidden space-y-6"
+              class="hidden max-w-[680px] space-y-4"
             >
+              <h3 class="text-xl font-bold text-portal-text">Change Password</h3>
               <form
                 id="passwordForm"
-                class="rounded-3xl border border-slate-200 bg-white shadow-sm"
+                class="rounded-3xl border border-portal-border bg-white p-5 shadow-portal sm:p-6"
               >
-                <div
-                  class="flex items-center gap-3 border-b border-slate-100 px-5 py-5"
-                >
-                  <div
-                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"
-                  >
-                    <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#shield-check"></use></svg>
-                  </div>
-                  <div>
-                    <h3 class="text-lg font-bold text-[#2f4b66]">
-                      Password &amp; Sign In
-                    </h3>
-                    <p class="mt-1 text-sm text-slate-500">
-                      Review password details before submitting a change.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="px-5 py-6 space-y-5">
+                <div class="space-y-6">
                   <!-- BACKEND: Wire this form to the customer password update endpoint when it is available. -->
                   <div>
                     <label
                       for="currentPassword"
-                      class="block text-sm font-medium text-slate-700 mb-2"
+                      class="mb-2 block text-sm font-semibold text-portal-text"
                     >
-                      Current Password
+                      Old Password
                     </label>
                     <div class="relative">
                       <input
                         type="password"
                         id="currentPassword"
                         autocomplete="current-password"
-                        class="w-full rounded-xl border border-slate-300 px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                        class="custom-password-input w-full rounded-xl border border-portal-border px-4 py-3 pr-12 text-portal-text focus:border-portal-accent focus:outline-none"
                         required
                       />
                       <button
                         type="button"
                         data-password-toggle="currentPassword"
-                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus-visible:outline-none"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-portal-muted transition hover:text-portal-primary focus:outline-none focus-visible:outline-none"
                         aria-label="Show password"
                         title="Show password"
                       >
-                        <svg class="password-icon-closed h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
-                        <svg class="password-icon-open hidden h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
+                        <svg class="password-icon-closed ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
+                        <svg class="password-icon-open ph-icon hidden h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
                       </button>
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div class="space-y-6">
                     <div>
                       <label
                         for="newPassword"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         New Password
                       </label>
@@ -445,29 +418,37 @@
                           type="password"
                           id="newPassword"
                           autocomplete="new-password"
-                          class="w-full rounded-xl border border-slate-300 px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                          aria-describedby="passwordStrength passwordRequirements"
+                          class="custom-password-input w-full rounded-xl border border-portal-border px-4 py-3 pr-12 text-portal-text focus:border-portal-accent focus:outline-none"
                           required
                         />
                         <button
                           type="button"
                           data-password-toggle="newPassword"
-                          class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus-visible:outline-none"
+                          class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-portal-muted transition hover:text-portal-primary focus:outline-none focus-visible:outline-none"
                           aria-label="Show password"
                           title="Show password"
                         >
-                          <svg class="password-icon-closed h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
-                          <svg class="password-icon-open hidden h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
+                          <svg class="password-icon-closed ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
+                          <svg class="password-icon-open ph-icon hidden h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
                         </button>
                       </div>
-                      <p id="passwordStrength" class="mt-2 text-xs text-slate-500">
-                        Use at least 8 characters.
+                      <p id="passwordStrength" class="mt-2 text-xs font-medium text-portal-muted">
+                        Please add all necessary characters to create a safe password.
                       </p>
+                      <ul id="passwordRequirements" class="mt-2 grid gap-1.5 text-xs text-portal-muted sm:grid-cols-2" aria-label="New password requirements">
+                        <li data-password-rule="length" class="flex items-center gap-1.5"><svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg><span>Minimum 12 characters</span></li>
+                        <li data-password-rule="uppercase" class="flex items-center gap-1.5"><svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg><span>One uppercase character</span></li>
+                        <li data-password-rule="lowercase" class="flex items-center gap-1.5"><svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg><span>One lowercase character</span></li>
+                        <li data-password-rule="special" class="flex items-center gap-1.5"><svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg><span>One special character</span></li>
+                        <li data-password-rule="number" class="flex items-center gap-1.5"><svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg><span>One number</span></li>
+                      </ul>
                     </div>
 
                     <div>
                       <label
                         for="confirmNewPassword"
-                        class="block text-sm font-medium text-slate-700 mb-2"
+                        class="mb-2 block text-sm font-semibold text-portal-text"
                       >
                         Confirm New Password
                       </label>
@@ -476,36 +457,31 @@
                           type="password"
                           id="confirmNewPassword"
                           autocomplete="new-password"
-                          class="w-full rounded-xl border border-slate-300 px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-[#315b7e]"
+                          aria-describedby="confirmPasswordFeedback"
+                          class="custom-password-input w-full rounded-xl border border-portal-border px-4 py-3 pr-12 text-portal-text focus:border-portal-accent focus:outline-none"
                           required
                         />
                         <button
                           type="button"
                           data-password-toggle="confirmNewPassword"
-                          class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus-visible:outline-none"
+                          class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-portal-muted transition hover:text-portal-primary focus:outline-none focus-visible:outline-none"
                           aria-label="Show password"
                           title="Show password"
                         >
-                          <svg class="password-icon-closed h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
-                          <svg class="password-icon-open hidden h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
+                          <svg class="password-icon-closed ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye-slash"></use></svg>
+                          <svg class="password-icon-open ph-icon hidden h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#eye"></use></svg>
                         </button>
                       </div>
+                      <p id="confirmPasswordFeedback" class="mt-2 text-xs text-portal-muted" aria-live="polite"></p>
                     </div>
                   </div>
 
-                  <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-                    <button
-                      type="button"
-                      id="passwordClearBtn"
-                      class="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-                    >
-                      Clear
-                    </button>
+                  <div class="flex justify-end pt-1">
                     <button
                       type="submit"
-                      class="rounded-xl bg-[#355c84] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2d4f73]"
+                      class="portal-button-primary w-full text-sm font-semibold sm:w-[240px]"
                     >
-                      Update Password
+                      Change Password
                     </button>
                   </div>
                 </div>
@@ -518,9 +494,10 @@
     </div>
 
     <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
-    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-client-settings"></script>
+    <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications"></script>
+    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-client-notifications"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260915-client-settings"></script>
-    <script src="../../scripts/components/client-settings.js?v=auth-session-20260816&ui=20260915-client-settings"></script>
+    <script src="../../scripts/components/client-settings.js?v=auth-session-20260816&ui=20260915-client-loading-controls"></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
 </html>

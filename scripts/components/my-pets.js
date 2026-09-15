@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── State ────────────────────────────────────────────
   let allPets = [];
+  let petsLoadPending = false;
   let allKnownPets = [];
   let showingArchived = false;
   let activePetsCache = null;
@@ -50,6 +51,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── DOM refs ─────────────────────────────────────────
   const petsGrid         = document.getElementById("petsGrid");
+  const petsLoadingScreen = document.getElementById("petsLoadingScreen");
+  const petsLoadingMessage = document.getElementById("petsLoadingMessage");
+  const petsContent = document.getElementById("petsContent");
   const petSearch        = document.getElementById("petSearch");
   const filterActiveBtn  = document.getElementById("filterActiveBtn");
   const filterArchivedBtn= document.getElementById("filterArchivedBtn");
@@ -86,6 +90,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const notificationDropdown = document.getElementById("notifDropdown");
   const notificationList = document.getElementById("notifList");
   const markAllNotificationsRead = document.getElementById("notifMarkAllRead");
+  const currentNotificationTab = window.ClientNotificationUI.ensureDropdownControls(notificationDropdown, () => {
+    void loadNotifications({ force: true });
+  });
 
   const petTypeCombobox = createFixedOptionCombobox({
     root: document.getElementById("petSpeciesCombobox"),
@@ -216,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const bellBounds = notificationBell.getBoundingClientRect();
     const margin = 12;
-    const width = Math.min(320, window.innerWidth - (margin * 2));
+    const width = Math.min(384, window.innerWidth - (margin * 2));
 
     notificationDropdown.style.top = `${bellBounds.bottom + 8}px`;
     notificationDropdown.style.right = `${Math.max(margin, window.innerWidth - bellBounds.right)}px`;
@@ -237,44 +244,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await API.getCustomerNotifications();
       const notifications = Array.isArray(data.notifications) ? data.notifications : [];
       const unreadCount = Number(data.unread_count || 0);
+      window.ClientNotificationUI.setUnreadCount(notificationDropdown, unreadCount);
       notificationsLoaded = true;
 
       notificationBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
       notificationBadge.classList.toggle("hidden", unreadCount === 0);
       notificationBadge.classList.toggle("inline-flex", unreadCount > 0);
 
-      if (notifications.length === 0) {
-        notificationList.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">No notifications yet.</p>';
-        return;
-      }
+      window.ClientNotificationUI.render(notificationList, notifications, currentNotificationTab());
 
-      notificationList.innerHTML = notifications.map((notification, index) => {
-        const surfaceClass = notification.is_read ? "bg-white" : "bg-portal-active";
-        const dotClass = notification.is_read ? "bg-transparent" : "bg-portal-primary";
-        const message = escHtml(String(notification.display_message || notification.message || "Notification"));
-        const createdAt = notification.created_at
-          ? new Date(notification.created_at).toLocaleString("en-PH", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })
-          : "";
-
-        return `
-          <button type="button" data-notification-index="${index}"
-            class="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-portal-surface-soft ${surfaceClass}">
-            <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotClass}"></span>
-            <span class="min-w-0 flex-1">
-              <span class="block text-sm leading-snug text-portal-text">${message}</span>
-              <span class="mt-1 block text-xs text-portal-muted">${escHtml(createdAt)}</span>
-            </span>
-          </button>`;
-      }).join("");
-
-      notificationList.querySelectorAll("[data-notification-index]").forEach((button) => {
+      notificationList.querySelectorAll("[data-client-notification-index]").forEach((button) => {
         button.addEventListener("click", async () => {
-          const notification = notifications[Number(button.dataset.notificationIndex)];
+          const notification = notifications[Number(button.dataset.clientNotificationIndex)];
 
           try {
             await API.markCustomerNotificationRead(notification.id);
@@ -413,6 +394,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadPets({ force = false } = {}) {
     const archived = showingArchived;
+    petsLoadPending = true;
     if (getPetCollectionCache(archived) === null) renderGrid(null);
 
     try {
@@ -423,12 +405,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (showingArchived !== archived) return;
       allPets = [];
     }
+    petsLoadPending = false;
     applyFilter();
     schedulePetCollectionPrefetch();
   }
 
   // ── Filter + search ───────────────────────────────────
   function applyFilter() {
+    if (petsLoadPending) return;
     const q = petSearch.value.trim().toLowerCase();
     const filtered = q
       ? allPets.filter((p) => p.pet_name.toLowerCase().includes(q))
@@ -446,8 +430,8 @@ document.addEventListener("DOMContentLoaded", () => {
     ]) {
       button.setAttribute("aria-pressed", String(selected));
       button.className = selected
-        ? "min-h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm"
-        : "min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft";
+        ? "h-10 rounded-xl bg-portal-primary px-4 py-2 text-sm font-semibold text-white shadow-sm"
+        : "h-10 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft";
     }
     loadPets();
   }
@@ -458,14 +442,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Render grid ───────────────────────────────────────
   function renderGrid(pets) {
     if (pets === null) {
-      petsGrid.innerHTML = `
-        <div class="col-span-full text-center py-16">
-          <svg class="ph-icon w-8 h-8 mx-auto text-portal-muted-icon animate-spin" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-          <p class="mt-3 text-portal-muted text-sm">Loading...</p>
-        </div>`;
-
+      if (petsLoadingMessage) petsLoadingMessage.textContent = showingArchived ? "Loading archived pets..." : "Loading my pets...";
+      petsLoadingScreen?.classList.remove("hidden");
+      petsContent?.classList.add("hidden");
+      petsContent?.setAttribute("inert", "");
+      petsContent?.setAttribute("aria-hidden", "true");
       return;
     }
+
+    petsLoadingScreen?.classList.add("hidden");
+    petsContent?.classList.remove("hidden");
+    petsContent?.removeAttribute("inert");
+    petsContent?.removeAttribute("aria-hidden");
 
     if (pets.length === 0) {
       const msg = showingArchived

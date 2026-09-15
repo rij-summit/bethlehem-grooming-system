@@ -1164,8 +1164,32 @@ body.customer-detail-modal-open {
   overflow-y: auto;
 }
 
+.notif-client-dropdown {
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-height: min(32rem, calc(100dvh - 5rem));
+}
+
+.notif-client-dropdown .notif-list {
+  min-height: 4rem;
+  max-height: min(21rem, calc(100dvh - 13rem));
+}
+
+.client-notification-tab[aria-selected="true"] {
+  border-color: var(--portal-primary);
+  color: var(--portal-primary);
+}
+
+.client-notification-tab[aria-selected="false"] {
+  border-color: transparent;
+  color: var(--portal-muted);
+}
+
+.client-notification-tab[aria-selected="false"]:hover {
+  color: var(--portal-primary-hover);
+}
+
 .client-notification-emphasis {
-  color: #1e293b;
+  color: var(--portal-text, #284764);
   font-weight: 700;
 }
 
@@ -5208,4 +5232,9 @@ body.customer-detail-modal-open {
 @media (max-width: 639px) {
   .portal-theme .ai-chatbot-button { right: 16px; bottom: 16px; min-height: 52px; font-size: 14px; }
   .portal-theme .ai-chatbot-panel { right: 16px; bottom: 80px; max-height: calc(100dvh - 96px); }
+}
+/* Hide the browser's built-in password eye when a Phosphor toggle is present. */
+.custom-password-input::-ms-reveal,
+.custom-password-input::-ms-clear {
+  display: none;
 }
