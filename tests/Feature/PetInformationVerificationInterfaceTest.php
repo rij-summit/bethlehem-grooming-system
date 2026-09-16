@@ -186,12 +186,10 @@ class PetInformationVerificationInterfaceTest extends TestCase
         $this->assertStringNotContainsString('Shared pet profile', $this->petProfilePage);
         $this->assertStringNotContainsString('const profileTitle =', $this->petProfileComponent);
         $this->assertStringNotContainsString('getElementById("pageTitle").textContent', $this->petProfileComponent);
-        $this->assertStringContainsString('grid grid-cols-1 gap-3 sm:grid-cols-2', $this->petProfilePage);
         $this->assertStringNotContainsString('sm:grid-cols-2 xl:grid-cols-3', $this->petProfilePage);
         $this->assertStringContainsString('text-sm font-bold leading-5', $this->petProfilePage);
         $this->assertStringContainsString('text-xs font-medium text-portal-muted', $this->petProfileComponent);
-        $this->assertStringContainsString('rounded-xl border border-portal-border bg-portal-surface-soft px-3 py-3', $this->petProfileComponent);
-        $this->assertStringContainsString('min-h-10 rounded-[14px]', $this->myPetsPage);
+        $this->assertStringContainsString('min-h-10 gap-2 rounded-[14px]', $this->myPetsPage);
         $this->assertStringContainsString('min-h-8 w-full', $this->myPetsComponent);
     }
 
@@ -201,13 +199,11 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'let groomingLoadState = "idle";',
             'let medicalLoadState = "idle";',
             'let vaccinationLoadState = "idle";',
-            'let concernLoadState = "idle";',
             'if (petProfileReady) void loadPetTabData(selected);',
             'const petTabLoaders = {',
             'grooming: loadGrooming,',
             'medical: loadMedicalRecords,',
             'vaccinations: loadVaccinations,',
-            'notifications: loadConcernNotifications,',
             'window.requestIdleCallback(task, { timeout: 1200 });',
             'window.requestAnimationFrame(scheduleCustomerTabPrefetch);',
         ] as $customerTabOptimization) {
@@ -228,7 +224,6 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'Grooming Records',
             'Clinic Medical Records',
             'Vaccination History',
-            'Medical-Concern Notifications',
         ] as $sectionTitle) {
             $this->assertStringContainsString(
                 'class="text-sm font-bold leading-5 text-portal-text">'.$sectionTitle,

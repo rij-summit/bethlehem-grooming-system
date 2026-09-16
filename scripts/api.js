@@ -1027,77 +1027,6 @@ var API = (() => {
     return request("GET", `/pets/${petId}/vaccinations`, null, getCustomerToken());
   }
 
-  async function getPetMedicalConcerns(petId) {
-    return request(
-      "GET",
-      `/pets/${encodeURIComponent(petId)}/medical-concerns`,
-      null,
-      getCustomerToken(),
-    );
-  }
-
-  async function getPetMedicalConcern(petId, publicId) {
-    return request(
-      "GET",
-      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}`,
-      null,
-      getCustomerToken(),
-    );
-  }
-
-  async function acknowledgePetMedicalConcern(petId, publicId) {
-    return request(
-      "POST",
-      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/acknowledge`,
-      {},
-      getCustomerToken(),
-    );
-  }
-
-  async function submitPetMedicalConcernConsent(
-    petId,
-    publicId,
-    decision,
-    signatureName,
-  ) {
-    return request(
-      "POST",
-      `/pets/${encodeURIComponent(petId)}/medical-concerns/${encodeURIComponent(publicId)}/consent`,
-      {
-        decision,
-        signature_name: signatureName,
-      },
-      getCustomerToken(),
-    );
-  }
-
-  function petClinicReferralPath(petId, publicId) {
-    return `/pets/${encodeURIComponent(petId)}/grooming-clinic-referrals/${encodeURIComponent(publicId)}`;
-  }
-
-  async function getPetGroomingClinicReferral(petId, publicId) {
-    return request(
-      "GET",
-      petClinicReferralPath(petId, publicId),
-      null,
-      getCustomerToken(),
-    );
-  }
-
-  async function submitPetGroomingClinicReferralConsent(
-    petId,
-    publicId,
-    decision,
-    signatureName,
-  ) {
-    return request(
-      "POST",
-      `${petClinicReferralPath(petId, publicId)}/consent`,
-      { decision, signature_name: signatureName },
-      getCustomerToken(),
-    );
-  }
-
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -1259,184 +1188,6 @@ var API = (() => {
       "POST",
       `/admin/bookings/${bookingId}/pets/${bookingPetId}/mark-done`,
       null,
-      getAdminToken(),
-    );
-  }
-
-  function adminBookingPetConcernPath(bookingId, bookingPetId) {
-    return `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/medical-concerns`;
-  }
-
-  async function getAdminBookingPetMedicalConcerns(bookingId, bookingPetId) {
-    return request(
-      "GET",
-      adminBookingPetConcernPath(bookingId, bookingPetId),
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function createAdminBookingPetMedicalConcern(bookingId, bookingPetId, payload) {
-    return request(
-      "POST",
-      adminBookingPetConcernPath(bookingId, bookingPetId),
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function getAdminBookingPetMedicalConcern(bookingId, bookingPetId, concernId) {
-    return request(
-      "GET",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function updateAdminBookingPetMedicalConcern(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "PATCH",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function cancelAdminBookingPetMedicalConcern(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/cancel`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function resolveAdminBookingPetMedicalConcern(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resolve`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function notifyCustomerAboutAdminBookingPetMedicalConcern(
-    bookingId,
-    bookingPetId,
-    concernId,
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/notify-customer`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function applyAdminBookingPetMedicalConcernAction(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload = {},
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/apply-recommended-action`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function resumeAdminBookingPetGrooming(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/resume-grooming`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  function adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId) {
-    return `${adminBookingPetConcernPath(bookingId, bookingPetId)}/${encodeURIComponent(concernId)}/clinic-referral`;
-  }
-
-  async function getAdminBookingPetClinicReferral(bookingId, bookingPetId, concernId) {
-    return request(
-      "GET",
-      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function createAdminBookingPetClinicReferral(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId),
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function recordAdminBookingPetClinicReferralInPersonConsent(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      `${adminBookingPetClinicReferralPath(bookingId, bookingPetId, concernId)}/in-person-consent`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
-  async function getAdminStoppedPaymentReview(bookingId, bookingPetId) {
-    return request(
-      "GET",
-      `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/stopped-payment-review`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function createAdminStoppedPaymentReview(
-    bookingId,
-    bookingPetId,
-    concernId,
-    payload,
-  ) {
-    return request(
-      "POST",
-      `/admin/bookings/${encodeURIComponent(bookingId)}/pets/${encodeURIComponent(bookingPetId)}/medical-concerns/${encodeURIComponent(concernId)}/stopped-payment-review`,
-      payload,
       getAdminToken(),
     );
   }
@@ -1816,33 +1567,6 @@ var API = (() => {
     return request("GET", "/admin/clinic-appointments", null, getAdminToken());
   }
 
-  async function getAdminClinicReferrals(filters = {}) {
-    const params = new URLSearchParams();
-    if (filters.status) params.set("status", filters.status);
-    if (filters.urgency) params.set("urgency", filters.urgency);
-    if (filters.search) params.set("search", filters.search);
-    const query = params.toString() ? `?${params.toString()}` : "";
-    return request("GET", `/admin/clinic-referrals${query}`, null, getAdminToken());
-  }
-
-  async function getAdminClinicReferral(publicId) {
-    return request(
-      "GET",
-      `/admin/clinic-referrals/${encodeURIComponent(publicId)}`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function acceptAdminClinicReferral(publicId) {
-    return request(
-      "POST",
-      `/admin/clinic-referrals/${encodeURIComponent(publicId)}/accept`,
-      {},
-      getAdminToken(),
-    );
-  }
-
   async function clinicCheckIn(id) {
     return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
   }
@@ -1851,8 +1575,8 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/start-consultation`, {}, getAdminToken());
   }
 
-  async function clinicFinishConsultation(id, payload = {}) {
-    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, payload, getAdminToken());
+  async function clinicFinishConsultation(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, {}, getAdminToken());
   }
 
   async function clinicMarkPaid(id, payload) {
@@ -2082,12 +1806,6 @@ var API = (() => {
     getPet,
     getPetMedicalRecords,
     getPetVaccinations,
-    getPetMedicalConcerns,
-    getPetMedicalConcern,
-    acknowledgePetMedicalConcern,
-    submitPetMedicalConcernConsent,
-    getPetGroomingClinicReferral,
-    submitPetGroomingClinicReferralConsent,
     addPet,
     updatePet,
     adminUpdatePet,
@@ -2112,20 +1830,6 @@ var API = (() => {
     adminStartPetGrooming,
     adminMarkDone,
     adminMarkPetDone,
-    getAdminBookingPetMedicalConcerns,
-    createAdminBookingPetMedicalConcern,
-    getAdminBookingPetMedicalConcern,
-    updateAdminBookingPetMedicalConcern,
-    cancelAdminBookingPetMedicalConcern,
-    resolveAdminBookingPetMedicalConcern,
-    notifyCustomerAboutAdminBookingPetMedicalConcern,
-    applyAdminBookingPetMedicalConcernAction,
-    resumeAdminBookingPetGrooming,
-    getAdminBookingPetClinicReferral,
-    createAdminBookingPetClinicReferral,
-    recordAdminBookingPetClinicReferralInPersonConsent,
-    getAdminStoppedPaymentReview,
-    createAdminStoppedPaymentReview,
     adminCancelBooking,
     // Admin customers
     searchAdminDashboard,
@@ -2190,9 +1894,6 @@ var API = (() => {
     submitClinicWalkIn,
     // Clinic queue
     getClinicAppointments,
-    getAdminClinicReferrals,
-    getAdminClinicReferral,
-    acceptAdminClinicReferral,
     clinicCheckIn,
     clinicStartConsultation,
     clinicFinishConsultation,

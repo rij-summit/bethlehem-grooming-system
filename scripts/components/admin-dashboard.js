@@ -486,9 +486,6 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
  */
 function adminDashboard() {
   return {
-    ...adminGroomingConcernState(),
-    ...adminClinicReferralState(),
-    ...adminStoppedPaymentReviewState(),
     activeTab: "incoming",
     dashboardSearchQuery: "",
     dashboardSearchOpen: false,
@@ -1020,7 +1017,7 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (this.isPetReferredToClinic(pet) || pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
         if (this.isGroomerCapacityFull) {
           this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
         }
@@ -1071,11 +1068,7 @@ function adminDashboard() {
     },
 
     isPetGroomingStarted(pet) {
-      if (this.isPetReferredToClinic(pet)) {
-        return false;
-      }
-
-      if (["in_progress", "paused", "stopped", "finished"].includes(
+      if (["in_progress", "finished"].includes(
         this.petGroomingState(pet),
       )) {
         return true;
@@ -1121,9 +1114,7 @@ function adminDashboard() {
 
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) =>
-        !this.isPetReferredToClinic(pet) && !this.isPetGroomingFinished(pet),
-      );
+      return pets.some((pet) => !this.isPetGroomingFinished(pet));
     },
 
     getWaitingGroomingPets(booking) {
@@ -1132,14 +1123,10 @@ function adminDashboard() {
     },
 
     petGroomingState(pet) {
-      if (this.isPetReferredToClinic(pet)) {
-        return "referred_to_clinic";
-      }
-
       const explicit = String(
         pet?.groomingState ?? pet?.grooming_state ?? "",
       ).trim().toLowerCase();
-      if (["not_started", "in_progress", "paused", "stopped", "finished"].includes(explicit)) {
+      if (["not_started", "in_progress", "finished"].includes(explicit)) {
         return explicit;
       }
 
@@ -1161,35 +1148,8 @@ function adminDashboard() {
       return {
         not_started: "Not started",
         in_progress: "In progress",
-        paused: "Paused",
-        stopped: "Grooming stopped",
         finished: "Finished",
-        referred_to_clinic: "Referred to clinic",
       }[this.petGroomingState(pet)] || "Not started";
-    },
-
-    isPetReferredToClinic(pet) {
-      if (
-        pet?.hasActiveClinicReferral === true
-        || pet?.has_active_clinic_referral === true
-      ) {
-        return true;
-      }
-
-      const referralStatus = String(
-        pet?.clinicReferralStatus ?? pet?.clinic_referral_status ?? "",
-      ).trim().toLowerCase();
-
-      return [
-        "pending_consent",
-        "pending_clinic_acceptance",
-        "accepted",
-        "under_clinic_review",
-      ].includes(referralStatus);
-    },
-
-    bookingRequiresAction(booking) {
-      return booking?.actionRequired === true || booking?.action_required === true;
     },
 
     isPetGroomingInProgress(pet) {
@@ -2113,7 +2073,6 @@ function adminDashboard() {
       for (const booking of sortedInProgress) {
         for (const pet of booking.pets ?? []) {
           if (
-            this.isPetReferredToClinic(pet) ||
             !this.isPetGroomingStarted(pet) ||
             this.isPetGroomingFinished(pet)
           ) continue;
@@ -2721,8 +2680,7 @@ function adminDashboard() {
       );
     },
 
-    // Hides clinic-referred pets from the active grooming card, then presents
-    // the remaining records as dogs first, cats second, and others afterward.
+    // Presents pets as dogs first, cats second, and others afterward.
     getQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
       const speciesRank = (pet) => {
@@ -2736,7 +2694,6 @@ function adminDashboard() {
       };
 
       return pets
-        .filter((pet) => !this.isPetReferredToClinic(pet))
         .map((pet, originalIndex) => ({ pet, originalIndex }))
         .sort((left, right) =>
           speciesRank(left.pet) - speciesRank(right.pet) ||
@@ -3198,12 +3155,6 @@ function adminDashboard() {
 
     // ── Payment ───────────────────────────────────────────────────────────────
 
-    bookingHasPayNowBlockedPet(booking) {
-      return (booking?.pets || []).some((pet) =>
-        ["paused", "stopped"].includes(pet?.groomingState ?? pet?.grooming_state),
-      );
-    },
-
     get paymentTotalDue() {
       return this.paymentModal.petBreakdown.reduce(
         (sum, pet) => sum + this.paymentPetSubtotal(pet),
@@ -3213,7 +3164,7 @@ function adminDashboard() {
 
     get paymentLineCount() {
       return this.paymentModal.petBreakdown.reduce(
-        (count, pet) => count + (pet.isStoppedReviewed ? 0 : (Array.isArray(pet.lines) ? pet.lines.length : 0)),
+        (count, pet) => count + (Array.isArray(pet.lines) ? pet.lines.length : 0),
         0,
       );
     },
@@ -3229,16 +3180,14 @@ function adminDashboard() {
 
     get canSubmitPayment() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
-      const isZeroTotal = !this.paymentModal.isEarlyPayment && this.paymentTotalDue === 0;
-
       return (
         !this.paymentModal.busy &&
         this.paymentModal.petBreakdown.length > 0 &&
-        (isZeroTotal || this.paymentTotalDue > 0) &&
+        this.paymentTotalDue > 0 &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        (isZeroTotal || this.paymentChange >= 0) &&
-        (isZeroTotal || paid <= this.paymentMaximumAmount)
+        this.paymentChange >= 0 &&
+        paid <= this.paymentMaximumAmount
       );
     },
 
@@ -3249,17 +3198,14 @@ function adminDashboard() {
       }
 
       const petBreakdown = this.buildPaymentBreakdown(booking, { lockFixedPrices: true });
-      const zeroTotal = !isEarlyPayment
-        && petBreakdown.length > 0
-        && petBreakdown.reduce((sum, pet) => sum + this.paymentPetSubtotal(pet), 0) === 0;
       this.paymentModal = {
         open: true,
         booking,
         isEarlyPayment,
         finalPrice: "",
         petBreakdown,
-        amountPaid: zeroTotal ? "0.00" : "",
-        paymentMethod: zeroTotal ? "others" : "cash",
+        amountPaid: "",
+        paymentMethod: "cash",
         notes: "",
         busy: false,
         error: "",
@@ -3277,42 +3223,13 @@ function adminDashboard() {
     buildPaymentBreakdown(booking, paymentOptions = {}) {
       const pets = this.normalizePaymentPets(booking);
       const services = this.normalizePaymentServices(booking?.services);
-      const serverSummary = booking?.paymentSummary ?? booking?.payment_summary ?? {};
-      const serverPets = new Map(
-        (serverSummary?.pets || []).map((pet) => [String(pet.booking_pet_id), pet]),
-      );
-
       /*
        * Backend handoff:
        * Multi-pet payment cards need either pets[].services or services[] items
        * that include bookingPetId/booking_pet_id. Service slug fields are also
        * preferred so the frontend can show the exact minimum price rule.
-       */
+      */
       return pets.map((pet, petIndex) => {
-        const serverPet = serverPets.get(String(pet.bookingPetId)) || null;
-        if (serverPet?.payment_kind === "stopped_reviewed") {
-          return {
-            ...pet,
-            isStoppedReviewed: true,
-            groomingState: "stopped",
-            lines: (serverPet.service_breakdown || []).map((line, lineIndex) => ({
-              id: line.booking_service_id ?? `stopped-${petIndex}-${lineIndex}`,
-              bookingServiceId: line.booking_service_id,
-              name: line.label || "Grooming Service",
-              description: line.line_type === "add_on" ? "Saved add-on price" : "Saved original service price",
-              amount: Number(line.price_at_booking || 0).toFixed(2),
-              isFixedPriceLocked: true,
-            })),
-            originalSubtotal: Number(serverPet.review_original_pet_subtotal ?? serverPet.original_pet_subtotal ?? 0),
-            finalReviewedCharge: Number(serverPet.final_pet_charge || 0),
-            adjustment: Number(serverPet.adjustment || 0),
-            reviewDecision: serverPet.review_decision,
-            reviewDecisionLabel: serverPet.review_decision_label,
-            customerExplanation: serverPet.customer_explanation || "",
-            reviewedAt: serverPet.reviewed_at || null,
-          };
-        }
-
         const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
         const inferredSizeKey = inferPaymentSizeFromServices(petServices, pet.petTypeKey);
         const pricedPet = inferredSizeKey
@@ -3328,7 +3245,6 @@ function adminDashboard() {
 
         return {
           ...pricedPet,
-          isStoppedReviewed: false,
           lines,
         };
       });
@@ -3552,10 +3468,6 @@ function adminDashboard() {
     },
 
     paymentPetSubtotal(pet) {
-      if (pet?.isStoppedReviewed) {
-        return Number(pet.finalReviewedCharge || 0);
-      }
-
       return (pet?.lines || []).reduce((sum, line) => {
         const amount = parseFloat(line.amount);
         return Number.isFinite(amount) ? sum + amount : sum;
@@ -3601,13 +3513,12 @@ function adminDashboard() {
 
     hasMissingPaymentPrices() {
       return this.paymentModal.petBreakdown.some((pet) =>
-        !pet.isStoppedReviewed && (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
+        (pet.lines || []).some((line) => line.amount === "" || line.amount === null || line.amount === undefined),
       );
     },
 
     getInvalidPaymentLine() {
       for (const pet of this.paymentModal.petBreakdown) {
-        if (pet.isStoppedReviewed) continue;
         for (const line of pet.lines || []) {
           const amount = parseFloat(line.amount);
           const minimum = parseFloat(line.minAmount) || 0.01;
@@ -3669,7 +3580,6 @@ function adminDashboard() {
       const servicePrices = [];
 
       pets.forEach((pet) => {
-        if (pet?.isStoppedReviewed) return;
         (Array.isArray(pet?.lines) ? pet.lines : []).forEach((line) => {
           const bookingServiceId =
             line?.bookingServiceId ?? line?.booking_service_id ?? null;
@@ -3700,12 +3610,6 @@ function adminDashboard() {
         species: this.formatReceiptValue(pet.pet_species),
         breed: "Not specified",
         sizeLabel: "Not specified",
-        stoppedReviewed: pet.payment_kind === "stopped_reviewed",
-        groomingStateLabel: pet.grooming_state_label,
-        reviewDecisionLabel: pet.review_decision_label,
-        originalSubtotal: Number(pet.review_original_pet_subtotal ?? pet.original_pet_subtotal ?? 0),
-        adjustment: Number(pet.adjustment || 0),
-        customerExplanation: pet.customer_explanation || "",
         lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
           id: line.booking_service_id ?? `${index}-${lineIndex}`,
           name: this.formatReceiptValue(line.label, "Grooming Service"),
@@ -3718,8 +3622,7 @@ function adminDashboard() {
     async submitPayment() {
       const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
       const fp = Number(this.paymentTotalDue.toFixed(2));
-      const isZeroTotal = !isEarlyPayment && fp === 0;
-      const ap = isZeroTotal ? 0 : parseFloat(amountPaid);
+      const ap = parseFloat(amountPaid);
       const paymentMethod = this.paymentModal.paymentMethod || "cash";
 
       if (this.paymentModal.petBreakdown.length === 0) {
@@ -3738,15 +3641,15 @@ function adminDashboard() {
         return;
       }
 
-      if (isEarlyPayment && (!fp || fp <= 0)) {
+      if (!fp || fp <= 0) {
         this.paymentModal.error = "Please enter service prices before confirming payment.";
         return;
       }
-      if (!isZeroTotal && (!ap || ap < fp)) {
+      if (!ap || ap < fp) {
         this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
         return;
       }
-      if (!isZeroTotal && ap > this.paymentMaximumAmount) {
+      if (ap > this.paymentMaximumAmount) {
         this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
         return;
       }
@@ -3898,8 +3801,6 @@ function adminDashboard() {
         });
         this._resetPollFailures("_bookingInterval");
         this.applyDashboardData(data);
-        await this.refreshMedicalConcernIndicators();
-        await this.refreshStoppedPaymentReviewStatuses();
       } catch (error) {
         this._stopPollOnFailure("_bookingInterval", "loadAdminBookings", error);
       }

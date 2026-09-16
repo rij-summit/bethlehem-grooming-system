@@ -51,7 +51,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         $panel = $this->sourceBetween(
             $this->clientPage,
             '<section data-pet-panel="vaccinations"',
-            '<section data-pet-panel="notifications"',
+            '<script src="../../scripts/api.js',
         );
 
         $this->assertStringContainsString('Vaccination History', $panel);
@@ -170,18 +170,18 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         }
     }
 
-    public function test_concern_notifications_and_existing_profile_tabs_remain_present(): void
+    public function test_existing_profile_tabs_remain_present_without_the_removed_notifications_panel(): void
     {
         foreach ([
             'data-pet-panel="overview"',
             'data-pet-panel="grooming"',
             'data-pet-panel="medical"',
             'data-pet-panel="vaccinations"',
-            'data-pet-panel="notifications"',
-            'Medical-Concern Notifications',
         ] as $existingContent) {
             $this->assertStringContainsString($existingContent, $this->clientPage);
         }
+
+        $this->assertStringNotContainsString('data-pet-panel="notifications"', $this->clientPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

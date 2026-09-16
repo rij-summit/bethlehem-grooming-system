@@ -107,8 +107,6 @@ class PetProfileHistoryService
         }
 
         return match (true) {
-            $bookingPet->grooming_state === BookingPet::GROOMING_STATE_STOPPED => 'stopped',
-            $bookingPet->grooming_state === BookingPet::GROOMING_STATE_PAUSED => 'paused',
             $bookingPet->grooming_end_time !== null => 'grooming_finished',
             $bookingPet->grooming_start_time !== null => 'in_progress',
             default => $booking->status,

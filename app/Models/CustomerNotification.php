@@ -8,16 +8,6 @@ class CustomerNotification extends Model
 {
     public const TYPE_BOOKING_CANCELLED = 'booking_cancelled';
 
-    public const TYPE_GROOMING_MEDICAL_CONCERN = 'grooming_medical_concern';
-
-    public const TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED = 'grooming_clinic_referral_requested';
-
-    public const TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED = 'grooming_clinic_referral_accepted';
-
-    public const TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED = 'grooming_clinic_assessment_started';
-
-    public const TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED = 'grooming_clinic_assessment_completed';
-
     public const TYPE_PET_INFORMATION_UPDATED = 'pet_information_updated';
 
     protected $table = 'customer_notifications';
@@ -28,8 +18,6 @@ class CustomerNotification extends Model
         'user_id',
         'booking_id',
         'pet_id',
-        'grooming_medical_concern_id',
-        'grooming_clinic_referral_id',
         'type',
         'message',
         'is_read',
@@ -56,19 +44,4 @@ class CustomerNotification extends Model
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
     }
 
-    public function groomingMedicalConcern()
-    {
-        return $this->belongsTo(
-            GroomingMedicalConcern::class,
-            'grooming_medical_concern_id',
-        );
-    }
-
-    public function groomingClinicReferral()
-    {
-        return $this->belongsTo(
-            GroomingClinicReferral::class,
-            'grooming_clinic_referral_id',
-        );
-    }
 }

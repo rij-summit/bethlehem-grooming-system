@@ -77,26 +77,4 @@ class Pet extends Model
         return $this->hasMany(VaccinationRecord::class, 'pet_id', 'pet_id');
     }
 
-    public function groomingMedicalConcerns()
-    {
-        return $this->hasMany(GroomingMedicalConcern::class, 'pet_id', 'pet_id');
-    }
-
-    public function groomingStoppedPaymentReviews()
-    {
-        return $this->hasMany(
-            GroomingStoppedPaymentReview::class,
-            'pet_id',
-            'pet_id',
-        );
-    }
-
-    public function groomingClinicReferrals()
-    {
-        return $this->hasMany(
-            GroomingClinicReferral::class,
-            'pet_id',
-            'pet_id',
-        );
-    }
 }

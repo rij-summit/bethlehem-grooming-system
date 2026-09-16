@@ -6,31 +6,16 @@ use Tests\TestCase;
 
 class AdminDashboardScriptDependenciesTest extends TestCase
 {
-    public function test_dashboard_loads_each_state_dependency_before_the_dashboard_component(): void
+    public function test_dashboard_loads_the_shared_dashboard_component(): void
     {
         $page = file_get_contents(base_path('pages/admin/dashboard.html'));
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=auth-session-20260816',
+            'scripts/components/admin-dashboard.js?v=grooming-size-confirmation-20260915',
         );
 
         $this->assertNotFalse($dashboardPosition);
-
-        foreach ([
-            'scripts/components/admin-grooming-concerns.js?v=medical-concern-ui-20260724',
-            'scripts/components/admin-clinic-referrals.js?v=clinic-referral-ui-20260804',
-            'scripts/components/admin-stopped-payment-review.js?v=zero-charge-auto-payment-20260809',
-        ] as $dependency) {
-            $dependencyPosition = strpos($page, $dependency);
-
-            $this->assertNotFalse($dependencyPosition, "Missing dashboard dependency: {$dependency}");
-            $this->assertLessThan(
-                $dashboardPosition,
-                $dependencyPosition,
-                "Dashboard dependency must load first: {$dependency}",
-            );
-        }
 
         $this->assertStringContainsString(
             'scripts/api.js?v=session-inactivity-20260828',
@@ -128,7 +113,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
         $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=sedation-consent-20260822', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=grooming-size-confirmation-20260915', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

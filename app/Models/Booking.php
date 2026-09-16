@@ -101,26 +101,4 @@ class Booking extends Model
         return $this->hasMany(Payment::class, 'booking_id', 'booking_id');
     }
 
-    public function groomingMedicalConcerns()
-    {
-        return $this->hasMany(GroomingMedicalConcern::class, 'booking_id', 'booking_id');
-    }
-
-    public function groomingStoppedPaymentReviews()
-    {
-        return $this->hasMany(
-            GroomingStoppedPaymentReview::class,
-            'booking_id',
-            'booking_id',
-        );
-    }
-
-    public function groomingClinicReferrals()
-    {
-        return $this->hasMany(
-            GroomingClinicReferral::class,
-            'booking_id',
-            'booking_id',
-        );
-    }
 }

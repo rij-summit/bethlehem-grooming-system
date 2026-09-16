@@ -346,7 +346,6 @@
                               <span class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
                                 <strong x-text="pet.pet_name"></strong>
                                 <span x-text="' · ' + formatPeso(pet.final_pet_charge)"></span>
-                                <span x-show="pet.payment_kind === 'stopped_reviewed'" class="font-semibold text-amber-700" x-text="' · ' + (pet.review_decision_label || 'Reviewed stop')"></span>
                               </span>
                             </template>
                           </div>

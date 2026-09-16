@@ -160,8 +160,6 @@ class ChatbotBookingStatusService
             'waiting_to_arrive' => 'Waiting to arrive',
             'waiting', 'checked_in' => 'Checked in / waiting',
             'in_progress', 'in_consultation' => 'In progress',
-            'paused' => 'Paused — clinic will contact you',
-            'stopped' => 'Stopped — check your notifications',
             'grooming_finished', 'finished', 'groomed' => 'Grooming finished',
             'checked_in_for_pickup' => 'Ready for pickup',
             'waiting_for_payment', 'for_payment' => 'For payment',
