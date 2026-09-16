@@ -32,9 +32,7 @@
     <div class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-2xl items-center justify-center">
       <div class="w-full rounded-[1.75rem] bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
         <div class="px-8 py-10 sm:px-10">
-          <!-- TODO: Add clinic logo / branding above the "Sign In" heading.
-               Recommended: same logo used on signup.html left panel
-               (assets/images/clinic/Bethlehem_Logo-256.png), ~80px, centered. -->
+          <!-- Logo Icon -->
           <div class="mb-8 text-center">
             <img class="mx-auto mb-4 h-16 w-auto"
             src="../../assets/images/clinic/Bethlehem_Logo-256.png"
@@ -49,7 +47,8 @@
             </p>
           </div>
 
-          <form id="sharedSignInForm" class="space-y-5">
+          <!-- Sign In Form. There's an event listener -->
+          <form id="signin" class="space-y-5">
             <div>
               <label
                 for="identifier"
@@ -142,7 +141,7 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830" defer></script>
+    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830" defer></script><!-- api.js must load before sign-in.js so that sign-in.js can call api.js functions. -->
     <script src="../../scripts/auth/sign-in.js?v=password-reset-20260828" defer></script>
     <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
   </body>
