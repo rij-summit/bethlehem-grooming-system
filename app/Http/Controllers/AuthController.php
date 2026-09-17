@@ -93,7 +93,7 @@ class AuthController extends Controller
     }
 
     // ── UNIFIED SIGN-IN ───────────────────────────────────
-    public function signIn(Request $request, LoginEmailChallengeService $loginChallenges)
+    public function signIn(Request $request/*, LoginEmailChallengeService $loginChallenges*/)
     {
         $request->merge([
             'identifier' => trim((string) $request->input('identifier')),
@@ -185,11 +185,11 @@ class AuthController extends Controller
                 'email' => $user->email,
             ], 403);
         }
-
+    
         if (in_array($user->role, ['customer', 'admin', 'staff'], true)) {
             $confirmationThrottleKey = 'login-confirmation:'
                 .hash('sha256', $user->user_id.'|'.$request->ip());
-
+/*
             if (RateLimiter::tooManyAttempts($confirmationThrottleKey, 3)) {
                 $seconds = RateLimiter::availableIn($confirmationThrottleKey);
 
@@ -199,7 +199,7 @@ class AuthController extends Controller
                     'retry_after' => $seconds,
                 ], 429)->header('Retry-After', (string) $seconds);
             }
-
+/*
             try {
                 $pollToken = $loginChallenges->send(
                     $user,
@@ -213,10 +213,10 @@ class AuthController extends Controller
                     'message' => 'Your credentials were confirmed, but the login confirmation email could not be queued. Please try again.',
                 ], 503);
             }
-
+*/
             RateLimiter::hit($confirmationThrottleKey, 600);
             RateLimiter::clear($throttleKey);
-
+/*
             return response()->json([
                 'success' => true,
                 'code' => 'login_confirmation_required',
@@ -226,8 +226,9 @@ class AuthController extends Controller
                 'login_poll_token' => $pollToken,
                 'email' => $user->email,
             ], 202);
+            */
         }
-
+        
         RateLimiter::clear($throttleKey);
         $tokenName = 'admin_token';
         $token = $user->createToken($tokenName)->plainTextToken;
