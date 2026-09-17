@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }
 
-  const signInForm              = document.getElementById("sharedSignInForm");
+  const signInForm              = document.getElementById("signin");
   const identifierInput         = document.getElementById("identifier");
   const passwordInput           = document.getElementById("password");
   const messageBox              = document.getElementById("sharedSignInMessage");
