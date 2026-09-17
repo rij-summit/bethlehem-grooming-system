@@ -29,32 +29,18 @@ return new class extends Migration
             ->whereNull('grooming_end_time')
             ->update(['grooming_state' => 'not_started']);
 
-        if (DB::table('booking_pets')->whereNull('grooming_state')->exists()) {
-            throw new RuntimeException(
-                'Unable to make booking_pets.grooming_state required because one or more rows could not be backfilled.',
-            );
-        }
-
         Schema::table('booking_pets', function (Blueprint $table) {
             $table->string('grooming_state', 20)
                 ->default('not_started')
                 ->nullable(false)
                 ->change();
-        });
-
-        Schema::table('booking_pets', function (Blueprint $table) {
             $table->index('grooming_state', 'bp_grooming_state_idx');
-            $table->unique(
-                ['booking_pet_id', 'booking_id', 'pet_id'],
-                'bp_concern_identity_uq',
-            );
         });
     }
 
     public function down(): void
     {
         Schema::table('booking_pets', function (Blueprint $table) {
-            $table->dropUnique('bp_concern_identity_uq');
             $table->dropIndex('bp_grooming_state_idx');
             $table->dropColumn('grooming_state');
         });

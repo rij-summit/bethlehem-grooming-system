@@ -7,7 +7,6 @@ use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
-use App\Models\GroomingClinicReferral;
 use App\Models\Notification;
 use App\Models\Pet;
 use App\Models\Service;
@@ -409,10 +408,6 @@ class BookingController extends Controller
             'cancel_count',
             'cancellation_reason',
         ]);
-        $hasReferralFoundation = Schema::hasTable('grooming_clinic_referrals');
-        if ($hasReferralFoundation) {
-            $relations[] = 'bookingPets.groomingClinicReferrals:id,booking_id,booking_pet_id,pet_id,status';
-        }
         if (Schema::hasTable('payments')) {
             $relations['payments'] = fn ($query) => $query
                 ->where('payment_status', 'paid')
@@ -456,16 +451,12 @@ class BookingController extends Controller
             ? collect()
             : $historyQuery->get();
 
-        $format = function ($b) use ($petId, $hasReferralFoundation) {
+        $format = function ($b) use ($petId) {
             $bookingPets = $b->bookingPets ?? collect();
-            $showGroomingTracker = $this->shouldShowGroomingTracker(
-                $bookingPets,
-                $hasReferralFoundation,
-            );
+            $showGroomingTracker = true;
             $paymentSummary = (bool) $b->paid
                 ? app(GroomingPaymentReadinessService::class)->summarize($b)
                 : null;
-            $paymentPetsById = collect($paymentSummary['pets'] ?? [])->keyBy('booking_pet_id');
 
             if ($petId !== null) {
                 $bookingPets = $bookingPets->where('pet_id', $petId);
@@ -473,8 +464,6 @@ class BookingController extends Controller
 
             $pets = $bookingPets->map(function ($bp) use (
                 $b,
-                $paymentPetsById,
-                $hasReferralFoundation,
             ) {
                 $services = ($b->bookingServices ?? collect())
                     ->where('booking_pet_id', $bp->booking_pet_id)
@@ -486,22 +475,14 @@ class BookingController extends Controller
                     ])
                     ->values();
 
-                $referredToClinic = $this->bookingPetIsReferredToClinic(
-                    $bp,
-                    $hasReferralFoundation,
-                );
                 $groomingFinished = $bp->grooming_state === BookingPet::GROOMING_STATE_FINISHED
                     || $bp->grooming_end_time !== null;
                 $groomingStatus = match (true) {
                     in_array($b->status, ['cancelled', 'no_show'], true) => $b->status,
-                    $referredToClinic => 'referred_to_clinic',
-                    $bp->grooming_state === BookingPet::GROOMING_STATE_STOPPED => 'stopped',
-                    $bp->grooming_state === BookingPet::GROOMING_STATE_PAUSED => 'paused',
                     $bp->grooming_end_time !== null => 'grooming_finished',
                     $bp->grooming_start_time !== null => 'in_progress',
                     default => $b->status,
                 };
-                $paymentPet = $paymentPetsById->get($bp->booking_pet_id);
 
                 return [
                     'pet_id' => $bp->pet_id,
@@ -514,8 +495,7 @@ class BookingController extends Controller
                     'registered_size' => $bp->registered_size,
                     'confirmed_size' => $bp->confirmed_size,
                     'grooming_status' => $groomingStatus,
-                    'clinic_referred' => $referredToClinic,
-                    'active_in_grooming' => ! $referredToClinic && ! $groomingFinished,
+                    'active_in_grooming' => ! $groomingFinished,
                     'grooming_started_at' => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,
@@ -525,19 +505,6 @@ class BookingController extends Controller
                     'grooming_started_timestamp' => $bp->grooming_start_time?->toIso8601String(),
                     'grooming_finished_timestamp' => $bp->grooming_end_time?->toIso8601String(),
                     'services' => $services,
-                    'payment_review' => $paymentPet
-                        && ($paymentPet['payment_kind'] ?? null) === 'stopped_reviewed'
-                        ? [
-                            'status' => 'completed',
-                            'decision' => $paymentPet['review_decision'],
-                            'decision_label' => $paymentPet['review_decision_label'],
-                            'original_amount' => $paymentPet['review_original_pet_subtotal'],
-                            'final_amount' => $paymentPet['final_pet_charge'],
-                            'adjustment' => $paymentPet['adjustment'],
-                            'customer_explanation' => $paymentPet['customer_explanation'],
-                            'reviewed_at' => $paymentPet['reviewed_at'],
-                        ]
-                        : null,
                 ];
             })->values();
 
@@ -557,9 +524,7 @@ class BookingController extends Controller
                     'amount_tendered' => $paidPayment->amount_tendered,
                     'change_amount' => $paidPayment->change_amount,
                     'payment_method' => $paidPayment->payment_method,
-                    'payment_method_label' => (float) $paidPayment->total_amount === 0.0
-                        ? 'No payment required'
-                        : ucfirst((string) $paidPayment->payment_method),
+                    'payment_method_label' => ucfirst((string) $paidPayment->payment_method),
                     'paid_at' => $paidPayment->paid_at?->toIso8601String(),
                     'pets' => $safePets->map(fn (array $pet) => [
                         'pet_id' => $pet['pet_id'],
@@ -571,11 +536,6 @@ class BookingController extends Controller
                         'service_breakdown' => $pet['service_breakdown'],
                         'original_pet_subtotal' => $pet['original_pet_subtotal'],
                         'final_pet_charge' => $pet['final_pet_charge'],
-                        'adjustment' => $pet['adjustment'],
-                        'review_decision' => $pet['review_decision'],
-                        'review_decision_label' => $pet['review_decision_label'],
-                        'customer_explanation' => $pet['customer_explanation'],
-                        'reviewed_at' => $pet['reviewed_at'],
                     ])->values()->all(),
                 ];
             }
@@ -630,43 +590,6 @@ class BookingController extends Controller
         ]);
     }
 
-    private function shouldShowGroomingTracker($bookingPets, bool $hasReferralFoundation): bool
-    {
-        if (! $hasReferralFoundation) {
-            return true;
-        }
-
-        $hasReferral = $bookingPets->contains(
-            fn (BookingPet $bookingPet) => $this->bookingPetIsReferredToClinic(
-                $bookingPet,
-                $hasReferralFoundation,
-            ),
-        );
-
-        if (! $hasReferral) {
-            return true;
-        }
-
-        return $bookingPets->contains(function (BookingPet $bookingPet): bool {
-            $finished = $bookingPet->grooming_state === BookingPet::GROOMING_STATE_FINISHED
-                || $bookingPet->grooming_end_time !== null;
-            $referred = $this->bookingPetIsReferredToClinic($bookingPet, true);
-
-            return ! $finished && ! $referred;
-        });
-    }
-
-    private function bookingPetIsReferredToClinic(
-        BookingPet $bookingPet,
-        bool $hasReferralFoundation,
-    ): bool {
-        return $hasReferralFoundation
-            && $bookingPet->groomingClinicReferrals->contains(
-                fn (GroomingClinicReferral $referral) => $referral->status
-                    !== GroomingClinicReferral::STATUS_CANCELLED,
-            );
-    }
-
     private function activeGroomingPetQuery(string $date): Builder
     {
         $query = BookingPet::query()
@@ -676,12 +599,6 @@ class BookingController extends Controller
                 $booking->where('booking_date', $date)
                     ->whereIn('status', ['checked_in', 'in_progress']);
             });
-
-        if (Schema::hasTable('grooming_clinic_referrals')) {
-            $query->whereDoesntHave('groomingClinicReferrals', function (Builder $referral) {
-                $referral->where('status', '!=', GroomingClinicReferral::STATUS_CANCELLED);
-            });
-        }
 
         return $query;
     }

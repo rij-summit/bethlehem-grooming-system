@@ -3,8 +3,6 @@
 use App\Http\Controllers\AdminBookingController;
 use App\Http\Controllers\AdminChatbotInsightController;
 use App\Http\Controllers\AdminClinicController;
-use App\Http\Controllers\AdminGroomingClinicReferralController;
-use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\AdminPetProfileController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminVaccinationController;
@@ -17,15 +15,12 @@ use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\EmailVerificationController;
-use App\Http\Controllers\GroomingClinicReferralController;
-use App\Http\Controllers\GroomingStoppedPaymentReviewController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginEmailChallengeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PetController;
-use App\Http\Controllers\PetGroomingMedicalConcernController;
 use App\Http\Controllers\PetMedicalRecordController;
 use App\Http\Controllers\PetVaccinationController;
 use App\Http\Controllers\PosController;
@@ -82,12 +77,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::get('/pets/{id}', [PetController::class, 'show']);
     Route::get('/pets/{petId}/medical-records', [PetMedicalRecordController::class, 'index']);
     Route::get('/pets/{petId}/vaccinations', [PetVaccinationController::class, 'index']);
-    Route::get('/pets/{petId}/medical-concerns', [PetGroomingMedicalConcernController::class, 'index']);
-    Route::get('/pets/{petId}/medical-concerns/{publicId}', [PetGroomingMedicalConcernController::class, 'show']);
-    Route::post('/pets/{petId}/medical-concerns/{publicId}/acknowledge', [PetGroomingMedicalConcernController::class, 'acknowledge']);
-    Route::post('/pets/{petId}/medical-concerns/{publicId}/consent', [PetGroomingMedicalConcernController::class, 'consent']);
-    Route::get('/pets/{petId}/grooming-clinic-referrals/{publicId}', [GroomingClinicReferralController::class, 'customerShow']);
-    Route::post('/pets/{petId}/grooming-clinic-referrals/{publicId}/consent', [GroomingClinicReferralController::class, 'customerConsent']);
     Route::post('/pets', [PetController::class, 'store']);
     Route::put('/pets/{id}', [PetController::class, 'update']);
     Route::post('/pets/{id}/archive', [PetController::class, 'archive']);
@@ -154,23 +143,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/bookings/{id}/late-check-in', [AdminBookingController::class, 'lateCheckIn']);
         Route::get('/admin/bookings/no-shows', [AdminBookingController::class, 'noShowIndex']);
 
-        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns', [AdminGroomingMedicalConcernController::class, 'index']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns', [AdminGroomingMedicalConcernController::class, 'store']);
-        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'show']);
-        Route::patch('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}', [AdminGroomingMedicalConcernController::class, 'update']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer', [AdminGroomingMedicalConcernController::class, 'notifyCustomer']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/apply-recommended-action', [AdminGroomingMedicalConcernController::class, 'applyRecommendedAction']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming', [AdminGroomingMedicalConcernController::class, 'resumeGrooming']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel', [AdminGroomingMedicalConcernController::class, 'cancel']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve', [AdminGroomingMedicalConcernController::class, 'resolve']);
-
-        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral', [GroomingClinicReferralController::class, 'staffShow']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral', [GroomingClinicReferralController::class, 'store']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/clinic-referral/in-person-consent', [GroomingClinicReferralController::class, 'inPersonConsent']);
-
-        Route::get('/admin/bookings/{bookingId}/pets/{bookingPetId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'show']);
-        Route::post('/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/stopped-payment-review', [GroomingStoppedPaymentReviewController::class, 'store']);
-
         Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
         Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);
         Route::post('/admin/bookings/{id}/release', [PaymentController::class, 'release']);
@@ -185,10 +157,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     // Clinic administration — available only to the project's staff/admin roles.
     Route::middleware('role:admin,staff')->group(function () {
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
-
-        Route::get('/admin/clinic-referrals', [AdminGroomingClinicReferralController::class, 'index']);
-        Route::get('/admin/clinic-referrals/{publicId}', [AdminGroomingClinicReferralController::class, 'show']);
-        Route::post('/admin/clinic-referrals/{publicId}/accept', [AdminGroomingClinicReferralController::class, 'accept']);
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);

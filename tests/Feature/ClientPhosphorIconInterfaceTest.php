@@ -63,7 +63,6 @@ class ClientPhosphorIconInterfaceTest extends TestCase
             'phosphor.svg#scissors',
             'phosphor.svg#stethoscope',
             'phosphor.svg#syringe',
-            'phosphor.svg#bell',
         ] as $icon) {
             $this->assertStringContainsString($icon, $tabBar);
         }
@@ -72,7 +71,7 @@ class ClientPhosphorIconInterfaceTest extends TestCase
             ['<section data-pet-panel="overview"', '<section data-pet-panel="grooming"'],
             ['<section data-pet-panel="grooming"', '<section data-pet-panel="medical"'],
             ['<section data-pet-panel="medical"', '<section data-pet-panel="vaccinations"'],
-            ['<section data-pet-panel="vaccinations"', '<section data-pet-panel="notifications"'],
+            ['<section data-pet-panel="vaccinations"', '<script src="../../scripts/api.js'],
         ];
 
         foreach ($panelBoundaries as [$start, $end]) {

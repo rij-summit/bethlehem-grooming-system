@@ -291,14 +291,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
           await API.markCustomerNotificationRead(id);
 
           if (
-            [
-              "grooming_medical_concern",
-              "grooming_clinic_referral_requested",
-              "grooming_clinic_referral_accepted",
-              "grooming_clinic_assessment_started",
-              "grooming_clinic_assessment_completed",
-              "pet_information_updated",
-            ].includes(
+            ["pet_information_updated"].includes(
               notification?.type,
             )
             && notification.destination
@@ -321,19 +314,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
     if (type === "grooming_finished") {
       return groomingFinishedIcon(notification);
-    }
-
-    if (type === "grooming_medical_concern") {
-      return "!";
-    }
-
-    if ([
-      "grooming_clinic_referral_requested",
-      "grooming_clinic_referral_accepted",
-      "grooming_clinic_assessment_started",
-      "grooming_clinic_assessment_completed",
-    ].includes(type)) {
-      return "+";
     }
 
     const icons = {
@@ -1050,22 +1030,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   function buildHistoryCard(b) {
-    const paymentPets = Array.isArray(b?.payment_summary?.pets)
-      ? b.payment_summary.pets
-      : [];
-    const reviewedPets = paymentPets
-      .filter((pet) => pet?.payment_kind === "stopped_reviewed");
-    const paymentReviewSummary = reviewedPets.length ? `
-      <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
-        ${reviewedPets.map((pet) => `
-          <div class="rounded-xl bg-portal-warning-soft p-3 text-xs text-portal-text">
-            <p class="font-bold text-portal-warning">${escapeDashboardHtml(pet?.pet_name)} &middot; Payment Review Completed</p>
-            <p class="mt-1">${escapeDashboardHtml(pet?.review_decision_label || "Reviewed")} &middot; ${formatPaymentPeso(pet?.final_pet_charge)}</p>
-            <p class="mt-1">${escapeDashboardHtml(pet?.customer_explanation || "No customer explanation provided.")}</p>
-          </div>
-        `).join("")}
-      </div>
-    ` : "";
     const timeLabel = b?.time_window?.window_label ?? "—";
     const pets = Array.isArray(b?.pets) ? b.pets : [];
     const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
@@ -1084,7 +1048,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
         </div>
         <p class="text-xs text-portal-muted mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
         <p class="text-xs text-portal-muted">${escapeDashboardHtml(petNames)}</p>
-        ${paymentReviewSummary}
       </div>`;
   }
 
@@ -1452,13 +1415,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
     if (!dateStr) return "—";
     const d = new Date(dateStr + "T00:00:00");
     return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
-  }
-
-  function formatPaymentPeso(value) {
-    return new Intl.NumberFormat("en-PH", {
-      style: "currency",
-      currency: "PHP",
-    }).format(Number(value || 0));
   }
 
   // Expose for coordination with the notification poller (pickup popup sequencing).

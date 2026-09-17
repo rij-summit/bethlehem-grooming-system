@@ -63,15 +63,7 @@ function buildClinicActionButtons(appt) {
 
   const parts = [];
   if (s === "waiting_to_arrive") { parts.push(btn("Check In", "check-in", primary)); parts.push(btn("Cancel", "cancel", danger)); }
-  if (s === "checked_in") {
-    if (appt.grooming_referral && appt.grooming_referral.grooming_state !== "stopped") {
-      parts.push(`<button type="button" disabled class="cursor-not-allowed rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 opacity-80">Stop Grooming Required</button>`);
-    } else {
-      parts.push(btn("Start Consultation", "start-consultation", primary));
-    }
-    parts.push(btn("Record", "record", outline));
-    parts.push(btn("Cancel", "cancel", danger));
-  }
+  if (s === "checked_in")        { parts.push(btn("Start Consultation", "start-consultation", primary)); parts.push(btn("Record", "record", outline)); parts.push(btn("Cancel", "cancel", danger)); }
   if (s === "in_consultation")   { parts.push(btn("Finish Consultation", "finish-consultation", primary)); parts.push(btn("Record", "record", outline)); }
   if (s === "for_payment")       { parts.push(btn("Process Payment", "pay", primary)); parts.push(btn("Record", "record", outline)); }
   if (s === "completed")         { parts.push(btn("View Record", "record", outline)); }
@@ -112,17 +104,6 @@ function buildClinicCard(appt) {
          <p class="text-xs font-semibold text-slate-500">Chief Complaint</p>
          <p class="text-sm text-slate-700">${escapeHtml(appt.chief_complaint)}</p>
        </div>` : "";
-  const referral = appt.grooming_referral;
-  const referralSection = referral
-    ? `<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-         <p class="text-xs font-bold text-amber-950">Grooming clinic referral · ${escapeHtml(referral.status_label)}</p>
-         <p class="mt-1 text-xs leading-5 text-amber-900">${referral.assessment_completed
-           ? "Clinic assessment completed — grooming will not resume during this visit."
-           : (referral.grooming_state === "stopped"
-             ? "Grooming session stopped — pet transferred to clinic care."
-             : "Stop Grooming must be applied to this pet before consultation can begin.")}</p>
-       </div>`
-    : "";
 
   return `<article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <div class="mb-3 flex items-start justify-between gap-2">
@@ -140,7 +121,7 @@ function buildClinicCard(appt) {
         ${queueLabel}
       </div>
     </div>
-    ${petSection}${complaintSection}${referralSection}
+    ${petSection}${complaintSection}
     ${timeline ? `<div class="mb-3 space-y-0.5">${timeline}</div>` : ""}
     <div class="flex flex-wrap gap-2">${buildClinicActionButtons(appt)}</div>
   </article>`;
@@ -149,10 +130,7 @@ function buildClinicCard(appt) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 function adminClinic() {
-  const clinicReferralState = window.adminClinicReferralQueueState?.() || {};
-
   return {
-    ...clinicReferralState,
     loading: true,
     error:   "",
     activeTab: "queued",
@@ -162,20 +140,8 @@ function adminClinic() {
     inConsultation: [],
     forPayment:     [],
     completed:      [],
-    clinicAssessmentCompletion: {
-      open: false,
-      confirming: false,
-      saving: false,
-      appointment: null,
-      internal_resolution_notes: "",
-      customer_resolution_summary: "",
-      errors: {},
-      error: "",
-      returnFocus: null,
-    },
 
     tabs: [
-      { key: "referrals",    label: "Grooming Referrals" },
       { key: "incoming",     label: "Incoming" },
       { key: "queued",       label: "In Queue" },
       { key: "consultation", label: "In Consultation" },
@@ -187,9 +153,7 @@ function adminClinic() {
 
     init() {
       this.checkAuth();
-      this.initializeClinicReferralQueue?.();
       this.loadQueue();
-      this.loadClinicReferrals?.();
       this.bindGlobalActions();
     },
 
@@ -220,7 +184,6 @@ function adminClinic() {
 
     tabCount(key) {
       return {
-        referrals:    this.clinicReferralPendingCount,
         incoming:     this.incoming.length,
         queued:       this.queued.length,
         consultation: this.inConsultation.length,
@@ -235,7 +198,6 @@ function adminClinic() {
 
     listFor(key) {
       return {
-        referrals:    this.clinicReferrals,
         incoming:     this.incoming,
         queued:       this.queued,
         consultation: this.inConsultation,
@@ -246,7 +208,6 @@ function adminClinic() {
 
     emptyLabel(key) {
       return {
-        referrals:    "No grooming referrals match the selected filters.",
         incoming:     "No incoming appointments right now.",
         queued:       "Queue is empty.",
         consultation: "No active consultations.",
@@ -276,14 +237,10 @@ function adminClinic() {
         if (action === "cancel" && !confirm("Cancel this appointment?")) return;
         try {
           if (action === "check-in")           await API.clinicCheckIn(id);
-          if (action === "start-consultation") await API.clinicStartConsultation(id);
-          if (action === "finish-consultation" && appt?.grooming_referral) {
-            self.openClinicAssessmentCompletion(appt);
-            return;
-          }
+          if (action === "start-consultation")  await API.clinicStartConsultation(id);
           if (action === "finish-consultation") await API.clinicFinishConsultation(id);
           if (action === "cancel")              await API.clinicCancel(id);
-          await Promise.all([self.loadQueue(), self.loadClinicReferrals?.()]);
+          await self.loadQueue();
           if (window.lucide) window.lucide.createIcons();
         } catch (e) {
           alert(e.message || "Action failed. Please try again.");
@@ -301,74 +258,6 @@ function adminClinic() {
         ...this.incoming, ...this.queued,
         ...this.inConsultation, ...this.forPayment, ...this.completed,
       ].find((a) => a.id === id) || null;
-    },
-
-    openClinicAssessmentCompletion(appointment) {
-      this.clinicAssessmentCompletion = {
-        open: true,
-        confirming: false,
-        saving: false,
-        appointment,
-        internal_resolution_notes: "",
-        customer_resolution_summary: "",
-        errors: {},
-        error: "",
-        returnFocus: document.activeElement,
-      };
-      this.$nextTick?.(() => this.$refs.clinicAssessmentDialog?.focus());
-    },
-
-    closeClinicAssessmentCompletion() {
-      if (this.clinicAssessmentCompletion.saving) return;
-      const returnFocus = this.clinicAssessmentCompletion.returnFocus;
-      this.clinicAssessmentCompletion.open = false;
-      this.clinicAssessmentCompletion.confirming = false;
-      this.$nextTick?.(() => returnFocus?.focus?.());
-    },
-
-    validateClinicAssessmentCompletion() {
-      const modal = this.clinicAssessmentCompletion;
-      const errors = {};
-      const internalNotes = String(modal.internal_resolution_notes || "").trim();
-      const customerSummary = String(modal.customer_resolution_summary || "").trim();
-      if (!internalNotes) errors.internal_resolution_notes = "Internal assessment notes are required.";
-      else if (internalNotes.length > 5000) errors.internal_resolution_notes = "Internal assessment notes may not exceed 5,000 characters.";
-      if (!customerSummary) errors.customer_resolution_summary = "Customer-friendly assessment summary is required.";
-      else if (customerSummary.length > 2000) errors.customer_resolution_summary = "Customer summary may not exceed 2,000 characters.";
-      modal.errors = errors;
-      modal.error = Object.values(errors)[0] || "";
-      if (Object.keys(errors).length) this.$nextTick?.(() => this.$refs.clinicAssessmentError?.focus());
-      return Object.keys(errors).length === 0;
-    },
-
-    confirmClinicAssessmentCompletion() {
-      if (!this.validateClinicAssessmentCompletion()) return;
-      this.clinicAssessmentCompletion.confirming = true;
-      this.$nextTick?.(() => this.$refs.clinicAssessmentConfirm?.focus());
-    },
-
-    async finishReferralClinicAssessment() {
-      const modal = this.clinicAssessmentCompletion;
-      if (modal.saving || !this.validateClinicAssessmentCompletion()) return;
-      modal.saving = true;
-      modal.error = "";
-      try {
-        await API.clinicFinishConsultation(modal.appointment.id, {
-          internal_resolution_notes: String(modal.internal_resolution_notes).trim(),
-          customer_resolution_summary: String(modal.customer_resolution_summary).trim(),
-        });
-        modal.confirming = false;
-        modal.open = false;
-        await Promise.all([this.loadQueue(), this.loadClinicReferrals?.()]);
-      } catch (error) {
-        modal.error = error?.errors
-          ? Object.values(error.errors).flat().join(" ")
-          : (error?.message || "Clinic assessment could not be completed.");
-        modal.confirming = false;
-        if (error?.status === 409) await this.loadQueue();
-      } finally {
-        modal.saving = false;
-      }
     },
   };
 }

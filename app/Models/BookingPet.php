@@ -10,17 +10,11 @@ class BookingPet extends Model
 
     public const GROOMING_STATE_IN_PROGRESS = 'in_progress';
 
-    public const GROOMING_STATE_PAUSED = 'paused';
-
-    public const GROOMING_STATE_STOPPED = 'stopped';
-
     public const GROOMING_STATE_FINISHED = 'finished';
 
     public const GROOMING_STATES = [
         self::GROOMING_STATE_NOT_STARTED,
         self::GROOMING_STATE_IN_PROGRESS,
-        self::GROOMING_STATE_PAUSED,
-        self::GROOMING_STATE_STOPPED,
         self::GROOMING_STATE_FINISHED,
     ];
 
@@ -61,33 +55,6 @@ class BookingPet extends Model
     public function pet()
     {
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
-    }
-
-    public function groomingMedicalConcerns()
-    {
-        return $this->hasMany(
-            GroomingMedicalConcern::class,
-            'booking_pet_id',
-            'booking_pet_id',
-        );
-    }
-
-    public function groomingStoppedPaymentReview()
-    {
-        return $this->hasOne(
-            GroomingStoppedPaymentReview::class,
-            'booking_pet_id',
-            'booking_pet_id',
-        );
-    }
-
-    public function groomingClinicReferrals()
-    {
-        return $this->hasMany(
-            GroomingClinicReferral::class,
-            'booking_pet_id',
-            'booking_pet_id',
-        );
     }
 
     public static function isValidGroomingState(string $state): bool

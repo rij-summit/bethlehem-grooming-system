@@ -88,7 +88,7 @@ async function runDashboard(getBookingHistory) {
   return { element, consoleErrors };
 }
 
-async function testStoppedReviewHistoryDoesNotBreakEmptySchedule() {
+async function testCompletedHistoryDoesNotBreakEmptySchedule() {
   const { element, consoleErrors } = await runDashboard(async () => ({
     bookings: [],
     history_total: 1,
@@ -98,15 +98,6 @@ async function testStoppedReviewHistoryDoesNotBreakEmptySchedule() {
       booking_date: "2026-08-03",
       paid: true,
       pets: [{ pet_name: "Peter" }],
-      payment_summary: {
-        pets: [{
-          payment_kind: "stopped_reviewed",
-          pet_name: "Peter <script>",
-          review_decision_label: "Partial charge",
-          final_pet_charge: "100.00",
-          customer_explanation: "Reviewed <safely>",
-        }],
-      },
     }],
   }));
 
@@ -115,9 +106,7 @@ async function testStoppedReviewHistoryDoesNotBreakEmptySchedule() {
 
   assert.match(schedule, /No upcoming schedule\./);
   assert.doesNotMatch(schedule, /Failed to load schedule/);
-  assert.match(history, /Payment Review Completed/);
-  assert.match(history, /Peter &lt;script&gt;/);
-  assert.match(history, /Reviewed &lt;safely&gt;/);
+  assert.match(history, /Peter/);
   assert.doesNotMatch(history, /<initial>Loading/);
   assert.equal(consoleErrors.length, 0, "Rendering emitted an unexpected error.");
 }
@@ -147,7 +136,6 @@ async function testLiveBadgeRequiresQueuedOrGroomingPet() {
     { status: "in_progress", petStatus: "in_progress", hidden: false },
     { status: "for_payment", petStatus: "grooming_finished", hidden: true },
     { status: "released", petStatus: "grooming_finished", hidden: true },
-    { status: "in_progress", petStatus: "paused", hidden: true },
     { status: "in_progress", petStatus: "in_progress", referred: true, hidden: true },
   ];
 
@@ -178,7 +166,7 @@ async function testLiveBadgeRequiresQueuedOrGroomingPet() {
 }
 
 (async () => {
-  await testStoppedReviewHistoryDoesNotBreakEmptySchedule();
+  await testCompletedHistoryDoesNotBreakEmptySchedule();
   await testApiFailureSettlesEveryDashboardPanel();
   await testLiveBadgeRequiresQueuedOrGroomingPet();
   console.log("Customer dashboard history regression tests passed.");

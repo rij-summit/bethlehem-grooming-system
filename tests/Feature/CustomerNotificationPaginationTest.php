@@ -20,8 +20,6 @@ class CustomerNotificationPaginationTest extends TestCase
             $table->unsignedInteger('user_id');
             $table->unsignedInteger('booking_id')->nullable();
             $table->unsignedInteger('pet_id')->nullable();
-            $table->unsignedInteger('grooming_medical_concern_id')->nullable();
-            $table->unsignedInteger('grooming_clinic_referral_id')->nullable();
             $table->string('type');
             $table->text('message');
             $table->boolean('is_read');

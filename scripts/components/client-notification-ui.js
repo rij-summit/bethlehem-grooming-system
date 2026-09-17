@@ -29,8 +29,6 @@
   function iconFor(notification) {
     const type = String(notification?.type || "").toLowerCase();
     if (type.includes("cancel")) return "x-circle";
-    if (type.includes("medical_concern")) return "warning-circle";
-    if (type.includes("clinic_referral") || type.includes("assessment")) return "stethoscope";
     if (type.includes("pet_information")) return "paw-print";
     if (type.includes("reminder")) return "clock-counter-clockwise";
     if (type.includes("grooming") || type.includes("pickup") || type === "picked_up") return "check-circle";

@@ -203,9 +203,6 @@
                 <button type="button" data-pet-tab="vaccinations" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
                   <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#syringe"></use></svg><span>Vaccinations</span>
                 </button>
-                <button type="button" data-pet-tab="notifications" class="pet-profile-tab flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-portal-text hover:bg-portal-surface-soft" role="tab" aria-selected="false">
-                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#bell"></use></svg><span>Notifications</span>
-                </button>
               </div>
             </div>
 
@@ -271,25 +268,6 @@
               </div>
             </section>
 
-            <section data-pet-panel="notifications" role="tabpanel" class="pet-profile-panel hidden">
-              <div class="portal-card max-[639px]:p-4">
-                <div class="mb-5">
-                  <h3 class="text-sm font-bold leading-5 text-portal-text">Medical-Concern Notifications</h3>
-                  <p class="mt-1 text-xs leading-5 text-portal-muted">
-                    Customer-safe grooming concerns and clinic referral requests released for this pet.
-                  </p>
-                </div>
-
-                <div id="petConcernNotifications" aria-live="polite">
-                  <div class="py-12 text-center">
-                    <p class="text-xs text-portal-muted">Loading medical-concern notifications...</p>
-                  </div>
-                </div>
-
-                <div id="petConcernDetail" class="hidden" aria-live="polite">
-                </div>
-              </div>
-            </section>
           </div>
         </section>
       </main>

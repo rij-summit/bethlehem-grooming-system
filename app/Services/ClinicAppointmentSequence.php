@@ -9,11 +9,8 @@ use Carbon\Carbon;
 class ClinicAppointmentSequence
 {
     /**
-     * Reserve the next appointment reference and, when requested, queue number.
-     *
-     * Call this method from inside the same database transaction that creates or
-     * checks in the appointment. The clinic-settings singleton is the shared
-     * mutex for every clinic intake path, including walk-ins and referrals.
+     * Reserve the next clinic appointment reference and optional queue number.
+     * Call this from the transaction that creates or checks in the appointment.
      *
      * @return array{appointment_reference: string, queue_number: ?int}
      */

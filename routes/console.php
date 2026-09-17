@@ -19,11 +19,6 @@ Schedule::command('reminders:send')->everyThirtyMinutes();
 // Send hourly pickup reminders for released bookings
 Schedule::command('pickups:remind')->hourly();
 
-// Repair safe workflow drift and surface unresolved stopped-grooming reviews.
-Schedule::command('bookings:reconcile-workflows')
-    ->dailyAt('06:00')
-    ->withoutOverlapping();
-
 // Remove expired bearer-token rows after their configured lifetime.
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
 

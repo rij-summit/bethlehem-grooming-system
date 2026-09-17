@@ -305,10 +305,6 @@ class AdminCustomerDeletionTest extends TestCase
             'booking' => $base + 3,
             'booking_pet' => $base + 4,
             'appointment' => $base + 5,
-            'concern' => $base + 6,
-            'response' => $base + 7,
-            'referral' => $base + 8,
-            'review' => $base + 9,
             'record' => $base + 10,
             'attachment' => $base + 11,
             'vital' => $base + 12,
@@ -346,33 +342,6 @@ class AdminCustomerDeletionTest extends TestCase
             'user_id' => $userId,
             'walkin_id' => $ids['walkin'],
             'pet_id' => $ids['pet'],
-        ]);
-        DB::table('grooming_medical_concerns')->insert([
-            'id' => $ids['concern'],
-            'booking_id' => $ids['booking'],
-            'booking_pet_id' => $ids['booking_pet'],
-            'pet_id' => $ids['pet'],
-            'clinic_appointment_id' => $ids['appointment'],
-        ]);
-        DB::table('grooming_medical_concern_responses')->insert([
-            'id' => $ids['response'],
-            'concern_id' => $ids['concern'],
-        ]);
-        DB::table('grooming_clinic_referrals')->insert([
-            'id' => $ids['referral'],
-            'grooming_medical_concern_id' => $ids['concern'],
-            'booking_id' => $ids['booking'],
-            'booking_pet_id' => $ids['booking_pet'],
-            'pet_id' => $ids['pet'],
-            'clinic_appointment_id' => $ids['appointment'],
-            'owner_user_id_at_referral' => $userId,
-        ]);
-        DB::table('grooming_stopped_payment_reviews')->insert([
-            'id' => $ids['review'],
-            'booking_id' => $ids['booking'],
-            'booking_pet_id' => $ids['booking_pet'],
-            'pet_id' => $ids['pet'],
-            'grooming_medical_concern_id' => $ids['concern'],
         ]);
         DB::table('clinic_records')->insert([
             'id' => $ids['record'],
@@ -413,8 +382,6 @@ class AdminCustomerDeletionTest extends TestCase
             'user_id' => $userId,
             'booking_id' => $ids['booking'],
             'pet_id' => $ids['pet'],
-            'grooming_medical_concern_id' => $ids['concern'],
-            'grooming_clinic_referral_id' => $ids['referral'],
         ]);
 
         Storage::disk('local')->put($ids['attachment_path'], "owner {$base}");
@@ -442,10 +409,6 @@ class AdminCustomerDeletionTest extends TestCase
             'bookings' => ['booking_id' => $ids['booking']],
             'booking_pets' => ['booking_pet_id' => $ids['booking_pet']],
             'clinic_appointments' => ['id' => $ids['appointment']],
-            'grooming_medical_concerns' => ['id' => $ids['concern']],
-            'grooming_medical_concern_responses' => ['id' => $ids['response']],
-            'grooming_clinic_referrals' => ['id' => $ids['referral']],
-            'grooming_stopped_payment_reviews' => ['id' => $ids['review']],
             'clinic_records' => ['id' => $ids['record']],
             'clinic_attachments' => ['id' => $ids['attachment']],
             'clinic_vitals' => ['id' => $ids['vital']],
@@ -528,8 +491,6 @@ class AdminCustomerDeletionTest extends TestCase
             $table->unsignedInteger('user_id')->nullable();
             $table->unsignedInteger('booking_id')->nullable();
             $table->unsignedInteger('pet_id')->nullable();
-            $table->unsignedBigInteger('grooming_medical_concern_id')->nullable();
-            $table->unsignedBigInteger('grooming_clinic_referral_id')->nullable();
         });
         Schema::create('clinic_appointments', function (Blueprint $table): void {
             $table->id();
@@ -558,33 +519,6 @@ class AdminCustomerDeletionTest extends TestCase
             $table->id();
             $table->unsignedInteger('pet_id');
             $table->unsignedBigInteger('clinic_appointment_id')->nullable();
-        });
-        Schema::create('grooming_medical_concerns', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedInteger('booking_id');
-            $table->unsignedInteger('booking_pet_id');
-            $table->unsignedInteger('pet_id');
-            $table->unsignedBigInteger('clinic_appointment_id')->nullable();
-        });
-        Schema::create('grooming_medical_concern_responses', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('concern_id');
-        });
-        Schema::create('grooming_clinic_referrals', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('grooming_medical_concern_id');
-            $table->unsignedInteger('booking_id');
-            $table->unsignedInteger('booking_pet_id');
-            $table->unsignedInteger('pet_id');
-            $table->unsignedBigInteger('clinic_appointment_id')->nullable();
-            $table->unsignedInteger('owner_user_id_at_referral')->nullable();
-        });
-        Schema::create('grooming_stopped_payment_reviews', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedInteger('booking_id');
-            $table->unsignedInteger('booking_pet_id');
-            $table->unsignedInteger('pet_id');
-            $table->unsignedBigInteger('grooming_medical_concern_id');
         });
         Schema::create('personal_access_tokens', function (Blueprint $table): void {
             $table->id();

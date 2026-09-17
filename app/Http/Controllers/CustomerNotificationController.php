@@ -22,10 +22,6 @@ class CustomerNotificationController extends Controller
                 'booking.bookingPets.pet',
                 'booking.timeWindow',
                 'pet:pet_id,user_id,pet_name,species',
-                'groomingMedicalConcern:id,public_id,pet_id',
-                'groomingMedicalConcern.pet:pet_id,pet_name,species',
-                'groomingClinicReferral:id,public_id,pet_id',
-                'groomingClinicReferral.pet:pet_id,pet_name,species',
             ])
             ->when(! $recentFirst, fn ($query) => $query->orderBy('is_read', 'asc'))
             ->orderBy('created_at', 'desc')
@@ -38,29 +34,11 @@ class CustomerNotificationController extends Controller
             ->map(function ($n) {
                 $petNames = $this->notificationPetNames($n);
                 $petTypes = $this->notificationPetTypes($n, $petNames);
-                $concern = $n->type === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
-                    ? $n->groomingMedicalConcern
-                    : null;
-                $pet = $concern?->pet;
-                $referral = $this->isClinicReferralNotification($n->type)
-                    ? $n->groomingClinicReferral
-                    : null;
-                $referralPet = $referral?->pet;
                 $updatedPet = $n->type === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
                     && (int) $n->pet?->user_id === (int) $n->user_id
                         ? $n->pet
                         : null;
-                $linkedPetId = $referralPet?->pet_id ?? $pet?->pet_id;
-                $linkedPetName = $referralPet?->pet_name ?? $pet?->pet_name;
-                $destination = $referral
-                    ? $this->referralDestination(
-                        $referralPet?->pet_id,
-                        $referral->public_id,
-                    )
-                    : $this->concernDestination(
-                        $pet?->pet_id,
-                        $concern?->public_id,
-                    );
+                $destination = null;
 
                 if (! $destination && $updatedPet) {
                     $destination = $this->petOverviewDestination(
@@ -78,10 +56,8 @@ class CustomerNotificationController extends Controller
                     'is_read' => (bool) $n->is_read,
                     'created_at' => $n->created_at?->toDateTimeString(),
                     'booking_id' => $n->booking_id,
-                    'concern_public_id' => $concern?->public_id,
-                    'referral_public_id' => $referral?->public_id,
-                    'pet_id' => $linkedPetId ?? $updatedPet?->pet_id,
-                    'pet_name' => $linkedPetName ?? $updatedPet?->pet_name,
+                    'pet_id' => $updatedPet?->pet_id,
+                    'pet_name' => $updatedPet?->pet_name,
                     'destination' => $destination,
                 ];
             });
@@ -155,23 +131,6 @@ class CustomerNotificationController extends Controller
                 ->all();
         }
 
-        if (
-            $notification->type
-            === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
-        ) {
-            return collect([$notification->groomingMedicalConcern?->pet?->pet_name])
-                ->filter()
-                ->values()
-                ->all();
-        }
-
-        if ($this->isClinicReferralNotification($notification->type)) {
-            return collect([$notification->groomingClinicReferral?->pet?->pet_name])
-                ->filter()
-                ->values()
-                ->all();
-        }
-
         $petNames = ($notification->booking?->bookingPets ?? collect())
             ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
@@ -195,25 +154,6 @@ class CustomerNotificationController extends Controller
             === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
         ) {
             return collect([$notification->pet?->species])
-                ->map(fn ($type) => mb_strtolower(trim((string) $type)))
-                ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
-                ->values()
-                ->all();
-        }
-
-        if (
-            $notification->type
-            === CustomerNotification::TYPE_GROOMING_MEDICAL_CONCERN
-        ) {
-            return collect([$notification->groomingMedicalConcern?->pet?->species])
-                ->map(fn ($type) => mb_strtolower(trim((string) $type)))
-                ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
-                ->values()
-                ->all();
-        }
-
-        if ($this->isClinicReferralNotification($notification->type)) {
-            return collect([$notification->groomingClinicReferral?->pet?->species])
                 ->map(fn ($type) => mb_strtolower(trim((string) $type)))
                 ->filter(fn ($type) => in_array($type, ['dog', 'cat'], true))
                 ->values()
@@ -325,36 +265,6 @@ class CustomerNotificationController extends Controller
         return implode(', ', array_slice($cleanNames, 0, -1)).', and '.end($cleanNames);
     }
 
-    private function concernDestination(
-        ?int $petId,
-        ?string $publicId,
-    ): ?string {
-        if (! $petId || ! $publicId) {
-            return null;
-        }
-
-        return './pet-details.html?'.http_build_query([
-            'pet_id' => $petId,
-            'tab' => 'notifications',
-            'concern' => $publicId,
-        ]);
-    }
-
-    private function referralDestination(
-        ?int $petId,
-        ?string $publicId,
-    ): ?string {
-        if (! $petId || ! $publicId) {
-            return null;
-        }
-
-        return './pet-details.html?'.http_build_query([
-            'pet_id' => $petId,
-            'tab' => 'notifications',
-            'referral' => $publicId,
-        ]);
-    }
-
     private function petOverviewDestination(?int $petId): ?string
     {
         if (! $petId) {
@@ -367,13 +277,4 @@ class CustomerNotificationController extends Controller
         ]);
     }
 
-    private function isClinicReferralNotification(string $type): bool
-    {
-        return in_array($type, [
-            CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_REQUESTED,
-            CustomerNotification::TYPE_GROOMING_CLINIC_REFERRAL_ACCEPTED,
-            CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_STARTED,
-            CustomerNotification::TYPE_GROOMING_CLINIC_ASSESSMENT_COMPLETED,
-        ], true);
-    }
 }

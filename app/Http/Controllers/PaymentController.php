@@ -91,7 +91,7 @@ class PaymentController extends Controller
 
         if ($submittedPrices->keys()->diff($editableServiceIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'service_prices' => 'Stopped-pet service prices are historical and cannot be changed during payment.',
+                'service_prices' => 'Only services for pets eligible for this payment can be changed.',
             ]);
         }
 
@@ -231,11 +231,8 @@ class PaymentController extends Controller
             'final_price' => $payment->total_amount,
             'amount_paid' => $payment->amount_tendered,
             'payment_method' => $payment->payment_method,
-            'payment_method_label' => $result['summary']['zero_total']
-                ? 'No payment required'
-                : ucfirst((string) $payment->payment_method),
+            'payment_method_label' => ucfirst((string) $payment->payment_method),
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
-            'zero_total' => $result['summary']['zero_total'],
             'payment_summary' => $result['summary'],
         ]);
     }
@@ -266,20 +263,6 @@ class PaymentController extends Controller
                     ->with('pet:pet_id,pet_name')
                     ->lockForUpdate()
                     ->get();
-                $blockingPet = $bookingPets->first(fn (BookingPet $bookingPet) => in_array(
-                    $bookingPet->grooming_state,
-                    [BookingPet::GROOMING_STATE_PAUSED, BookingPet::GROOMING_STATE_STOPPED],
-                    true,
-                ));
-
-                if ($blockingPet) {
-                    return $this->transactionError(
-                        'Pay Now is unavailable while a booking pet is paused or stopped. '
-                            .$this->blockingPetDescription($blockingPet).'.',
-                        422,
-                    );
-                }
-
                 $this->updateBookingServicePrices(
                     $booking,
                     $data['service_prices'] ?? [],
@@ -302,7 +285,6 @@ class PaymentController extends Controller
                 [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
                     $data,
                     $serverTotal,
-                    allowZeroTotal: false,
                 );
                 $payment = $this->paymentSettlement()->recordPaidPayment(
                     $booking,
@@ -381,14 +363,6 @@ class PaymentController extends Controller
 
             if (! $booking->paid) {
                 return $this->transactionError('Booking has not been paid yet.', 422);
-            }
-
-            $summary = $this->paymentReadiness()->summarize($booking, true);
-            if (! $summary['payment_ready']) {
-                return $this->transactionError(
-                    'Release to pickup is unavailable. '.$summary['payment_blocked_reason'],
-                    422,
-                );
             }
 
             $booking->update(['status' => 'released', 'archived_at' => null]);
@@ -533,10 +507,7 @@ class PaymentController extends Controller
             'amountPaid' => (float) $payment->amount_tendered,
             'changeGiven' => (float) $payment->change_amount,
             'paymentMethod' => $payment->payment_method,
-            'paymentMethodLabel' => (float) $payment->total_amount === 0.0
-                ? 'No payment required'
-                : ucfirst((string) $payment->payment_method),
-            'zeroTotal' => (float) $payment->total_amount === 0.0,
+            'paymentMethodLabel' => ucfirst((string) $payment->payment_method),
             'notes' => $payment->notes,
             'paidAt' => $payment->paid_at?->format('Y-m-d H:i:s'),
             'paidAtFormatted' => $payment->paid_at?->format('g:i A') ?? '—',
@@ -558,28 +529,15 @@ class PaymentController extends Controller
     private function resolvePaymentInput(
         array $data,
         string $serverTotal,
-        bool $allowZeroTotal = true,
     ): array {
         $money = $this->paymentReadiness();
         $totalCents = $money->moneyToCents($serverTotal);
         $amountCents = $money->moneyToCents($data['amount_paid'] ?? 0);
 
-        if ($totalCents === 0) {
-            if (! $allowZeroTotal) {
-                throw ValidationException::withMessages([
-                    'final_price' => 'This payment flow requires a positive total.',
-                ]);
-            }
-            if ($amountCents !== 0) {
-                throw ValidationException::withMessages([
-                    'amount_paid' => 'A zero-total completion cannot record cash tender or change.',
-                ]);
-            }
-
-            $marker = 'Zero-total completion: no payment required.';
-            $notes = trim((string) ($data['notes'] ?? ''));
-
-            return ['0.00', 'others', $notes === '' ? $marker : $marker.' '.$notes];
+        if ($totalCents <= 0) {
+            throw ValidationException::withMessages([
+                'final_price' => 'A grooming payment requires a positive total.',
+            ]);
         }
 
         if (! array_key_exists('amount_paid', $data)) {
@@ -613,19 +571,6 @@ class PaymentController extends Controller
                 ->where('payment_status', 'paid')
                 ->lockForUpdate()
                 ->exists();
-    }
-
-    private function blockingPetDescription(BookingPet $bookingPet): string
-    {
-        $petName = $bookingPet->pet?->pet_name ?? "Booking pet #{$bookingPet->booking_pet_id}";
-
-        return $petName.' is '.match ($bookingPet->grooming_state) {
-            BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
-            BookingPet::GROOMING_STATE_PAUSED => 'Paused',
-            BookingPet::GROOMING_STATE_STOPPED => 'Stopped',
-            BookingPet::GROOMING_STATE_FINISHED => 'Finished',
-            default => 'Not started',
-        };
     }
 
     private function transactionError(string $message, int $status): array

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminBookingController;
-use App\Http\Controllers\AdminGroomingMedicalConcernController;
 use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
@@ -47,15 +46,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/picked-up'],
         ['POST', 'api/admin/bookings/{id}/late-check-in'],
         ['GET', 'api/admin/bookings/no-shows'],
-        ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns'],
-        ['GET', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
-        ['PATCH', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/notify-customer'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/apply-recommended-action'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resume-grooming'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/cancel'],
-        ['POST', 'api/admin/bookings/{bookingId}/pets/{bookingPetId}/medical-concerns/{concernId}/resolve'],
         ['POST', 'api/admin/bookings/{id}/pay'],
         ['POST', 'api/admin/bookings/{id}/pay-now'],
         ['POST', 'api/admin/bookings/{id}/release'],
@@ -203,7 +193,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('groomer_id')->nullable();
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
-            $table->string('grooming_state', 20)->default('not_started');
+            $table->string('grooming_state', 20)->default(
+                BookingPet::GROOMING_STATE_NOT_STARTED,
+            );
             $table->unique(['pet_queue_date', 'pet_queue_number']);
         });
 
@@ -354,13 +346,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'mark picked up' => ['POST', '/api/admin/bookings/1/picked-up'],
             'late check in no-show' => ['POST', '/api/admin/bookings/1/late-check-in'],
             'no-show listing' => ['GET', '/api/admin/bookings/no-shows'],
-            'list medical concerns' => ['GET', '/api/admin/bookings/1/pets/1/medical-concerns'],
-            'create medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns'],
-            'view medical concern' => ['GET', '/api/admin/bookings/1/pets/1/medical-concerns/1'],
-            'update medical concern' => ['PATCH', '/api/admin/bookings/1/pets/1/medical-concerns/1'],
-            'send medical concern to customer' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns/1/notify-customer'],
-            'cancel medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns/1/cancel'],
-            'resolve medical concern' => ['POST', '/api/admin/bookings/1/pets/1/medical-concerns/1/resolve'],
             'record final payment' => ['POST', '/api/admin/bookings/1/pay'],
             'record early payment' => ['POST', '/api/admin/bookings/1/pay-now'],
             'release paid booking' => ['POST', '/api/admin/bookings/1/release'],
@@ -858,14 +843,12 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                         'payment_ready',
                         'payment_blocked_reason',
                         'final_booking_total',
-                        'zero_total',
                         'pets',
                     ],
                     'payment_summary' => [
                         'payment_ready',
                         'payment_blocked_reason',
                         'final_booking_total',
-                        'zero_total',
                         'pets',
                     ],
                     'payment' => [
@@ -911,11 +894,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                             'grooming_state',
                             'groomingStateLabel',
                             'grooming_state_label',
-                            'paymentReviewRequired',
-                            'paymentReviewCompleted',
-                            'paymentReviewDecision',
-                            'paymentReviewDecisionLabel',
-                            'reviewedFinalCharge',
                         ],
                     ],
                     'services' => [
@@ -1013,33 +991,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.services.0.paidPriceSource', 'payment_total')
             ->assertJsonPath('archived.0.services.0.paymentTotal', 500);
 
-        // Non-standard historical records must use the authoritative fallback
-        // instead of fabricating a completed stopped-grooming review.
-        DB::table('booking_pets')->where('booking_pet_id', 12)->update([
-            'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
-            'grooming_end_time' => null,
-        ]);
-
-        $this->getJson('/api/admin/bookings/archived?search=ARCHIVE-12')
-            ->assertOk()
-            ->assertJsonPath('total', 1)
-            ->assertJsonPath('archived.0.paymentReady', false)
-            ->assertJsonPath('archived.0.finalPaymentTotal', null)
-            ->assertJsonPath('archived.0.pets.0.paymentReviewRequired', true)
-            ->assertJsonPath('archived.0.pets.0.paymentReviewCompleted', false);
-
-        DB::table('booking_pets')->where('booking_pet_id', 12)->update([
-            'grooming_state' => '',
-            'grooming_end_time' => '2026-07-24 10:00:00',
-        ]);
-
-        $this->getJson('/api/admin/bookings/archived?search=ARCHIVE-12')
-            ->assertOk()
-            ->assertJsonPath('archived.0.paymentReady', false)
-            ->assertJsonPath(
-                'archived.0.paymentSummary.pets.0.grooming_state',
-                BookingPet::GROOMING_STATE_NOT_STARTED,
-            );
     }
 
     #[DataProvider('authorizedGroomingRoles')]
@@ -1663,28 +1614,12 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                 'cancel_count' => 1,
                 'dropped_off_at' => null,
             ],
-            [
-                'booking_id' => 91,
-                'booking_reference' => 'CAPACITY-STOPPED',
-                'user_id' => 90,
-                'booking_date' => now()->toDateString(),
-                'number_of_pets' => 1,
-                'status' => 'checked_in',
-                'cancellation_reason' => null,
-                'cancel_count' => 0,
-                'dropped_off_at' => now(),
-            ],
         ]);
         DB::table('booking_pets')->insert([
             [
                 'booking_pet_id' => 90,
                 'booking_id' => 90,
                 'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
-            ],
-            [
-                'booking_pet_id' => 91,
-                'booking_id' => 91,
-                'grooming_state' => BookingPet::GROOMING_STATE_STOPPED,
             ],
         ]);
 
@@ -1769,7 +1704,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $controllerClasses = [
             AdminBookingController::class,
-            AdminGroomingMedicalConcernController::class,
             NotificationController::class,
             PaymentController::class,
             WalkinController::class,
@@ -1805,8 +1739,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ['GET', 'api/pets/{id}'],
             ['GET', 'api/pets/{petId}/medical-records'],
             ['GET', 'api/pets/{petId}/vaccinations'],
-            ['GET', 'api/pets/{petId}/medical-concerns'],
-            ['GET', 'api/pets/{petId}/medical-concerns/{publicId}'],
             ['GET', 'api/customer/notifications'],
             ['PATCH', 'api/customer/notifications/read-all'],
             ['PATCH', 'api/customer/notifications/{id}/read'],
