@@ -45,7 +45,27 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-## 4. Goal-Driven Execution
+## 4. Frontend Performance
+
+**Measure first. Optimize the actual bottleneck. Preserve behavior.**
+
+When working on website performance, use Core Web Vitals as performance targets:
+
+- LCP (Largest Contentful Paint): 2.5 seconds or less
+- INP (Interaction to Next Paint): 200 milliseconds or less
+- CLS (Cumulative Layout Shift): 0.1 or less
+
+When investigating performance:
+
+- Measure or inspect the current behavior before making changes.
+- Identify the actual bottleneck before optimizing.
+- Do not make unrelated refactors solely for performance.
+- Do not remove or change existing functionality unless required.
+- Prefer the smallest change that fixes the performance issue.
+- Verify that the affected feature still works after optimization.
+- Compare performance before and after the change when possible.
+
+## 5. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
