@@ -176,7 +176,7 @@ class InventoryController extends Controller
             $query->whereRaw('reorder_level > 0 AND quantity_on_hand <= reorder_level');
         }
 
-        $paginator = $query->orderBy('item_name')->paginate(20, ['*'], 'page', $page);
+        $paginator = $query->orderBy('item_name')->paginate(15, ['*'], 'page', $page);
 
         return response()->json([
             'data'      => $this->formatItems($paginator->items()),
@@ -192,20 +192,20 @@ class InventoryController extends Controller
 
         $validated = $request->validate([
             'item_name'     => 'required|string|max:150',
-            'barcode'       => 'nullable|string|max:100|unique:inventory_items,barcode',
+            'barcode'       => 'nullable|string|regex:/^[0-9]{1,13}$/|unique:inventory_items,barcode',
             'category'      => 'required|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
             'unit'          => 'required|string|max:50',
             'description'   => 'nullable|string|max:255',
-            'unit_cost'     => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
-            'selling_price' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
-            'reorder_level' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_QUANTITY,
+            'unit_cost'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+            'selling_price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+            'reorder_level' => 'required|integer|min:0|max:99999999',
         ]);
 
         $item = InventoryItem::create([
             ...$validated,
-            'unit_cost'        => $validated['unit_cost'] ?? 0,
+            'unit_cost'        => $validated['unit_cost'],
             'quantity_on_hand' => 0,
-            'reorder_level'    => $validated['reorder_level'] ?? 0,
+            'reorder_level'    => $validated['reorder_level'],
             'is_active'        => 1,
         ]);
 
@@ -229,13 +229,13 @@ class InventoryController extends Controller
 
         $validated = $request->validate([
             'item_name'     => 'sometimes|string|max:150',
-            'barcode'       => "nullable|string|max:100|unique:inventory_items,barcode,{$item->item_id},item_id",
+            'barcode'       => "nullable|string|regex:/^[0-9]{1,13}$/|unique:inventory_items,barcode,{$item->item_id},item_id",
             'category'      => 'sometimes|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
             'unit'          => 'sometimes|string|max:50',
             'description'   => 'nullable|string|max:255',
-            'unit_cost'     => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
-            'selling_price' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
-            'reorder_level' => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_QUANTITY,
+            'unit_cost'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+            'selling_price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+            'reorder_level' => 'required|integer|min:0|max:99999999',
         ]);
 
         // Prevent accidentally overwriting stock quantity via edit form

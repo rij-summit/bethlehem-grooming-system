@@ -7,7 +7,7 @@
         "build:css": "node node_modules/tailwindcss-v3/lib/cli.js -c tailwind.config.js -i css/input.css -o css/output.css",
         "watch:css": "npm run build:css -- --watch",
         "dev": "vite",
-        "test": "node tests/customer-dashboard-history-regression.cjs && node tests/client-settings-loading-regression.cjs && node tests/frontend-auth-session-regression.cjs && node tests/session-inactivity-regression.cjs && node tests/admin-notifications-date-grouping-regression.cjs && node tests/admin-security-settings-regression.cjs"
+        "test": "node tests/customer-dashboard-history-regression.cjs && node tests/client-settings-loading-regression.cjs && node tests/frontend-auth-session-regression.cjs && node tests/frontend-inventory-items-regression.cjs && node tests/session-inactivity-regression.cjs && node tests/admin-notifications-date-grouping-regression.cjs && node tests/admin-security-settings-regression.cjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

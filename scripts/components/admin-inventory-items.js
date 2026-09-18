@@ -49,6 +49,10 @@ function adminInventoryItems() {
         this.currentPage = res.page;
         this.lastPage    = res.last_page;
         this.total       = res.total;
+        if (this.items.length === 0 && page > this.lastPage) {
+          await this.load(this.lastPage);
+          return;
+        }
       } catch (err) {
         this.error = err.message || "Failed to load items.";
       } finally {
@@ -81,6 +85,23 @@ function adminInventoryItems() {
     prevPage() { if (this.currentPage > 1) this.load(this.currentPage - 1); },
     nextPage() { if (this.currentPage < this.lastPage) this.load(this.currentPage + 1); },
 
+    normalizeBarcode(value) {
+      return String(value ?? "").replace(/\D/g, "").slice(0, 13);
+    },
+
+    handleBarcodeInput(event) {
+      const barcode = this.normalizeBarcode(event.target.value);
+      this.form.barcode = barcode;
+      event.target.value = barcode;
+    },
+
+    normalizeReorderLevel(value) {
+      const reorderLevel = String(value ?? "");
+      return /^\d+\.0+$/.test(reorderLevel)
+        ? reorderLevel.slice(0, reorderLevel.indexOf("."))
+        : reorderLevel;
+    },
+
     // ── Add / Edit modal ────────────────────────────────────────────────────
 
     openAdd() {
@@ -102,7 +123,7 @@ function adminInventoryItems() {
         description:   item.description ?? "",
         unit_cost:     item.unit_cost ?? "",
         selling_price: item.selling_price ?? "",
-        reorder_level: item.reorder_level ?? "",
+        reorder_level: this.normalizeReorderLevel(item.reorder_level),
       };
       this.modal = { open: true, busy: false, error: "" };
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -114,17 +135,42 @@ function adminInventoryItems() {
       if (!this.form.category)          { this.modal.error = "Category is required."; return; }
       if (!this.form.unit.trim())        { this.modal.error = "Unit is required."; return; }
 
+      const barcode = this.form.barcode ?? "";
+      const unitCost = String(this.form.unit_cost ?? "");
+      const sellingPrice = String(this.form.selling_price ?? "");
+      const reorderLevel = String(this.form.reorder_level ?? "");
+      const validMoney = (value) => /^\d+(?:\.\d{1,2})?$/.test(value)
+        && Number(value) >= 0.01
+        && Number(value) <= 999999.99;
+
+      if (barcode !== "" && !/^[0-9]{1,13}$/.test(barcode)) {
+        this.modal.error = "Barcode must contain 1 to 13 digits.";
+        return;
+      }
+      if (!validMoney(unitCost)) {
+        this.modal.error = "Unit cost is required and must be at least ₱0.01 with no more than 2 decimal places.";
+        return;
+      }
+      if (!validMoney(sellingPrice)) {
+        this.modal.error = "Selling price is required and must be at least ₱0.01 with no more than 2 decimal places.";
+        return;
+      }
+      if (!/^\d+$/.test(reorderLevel) || Number(reorderLevel) > 99999999) {
+        this.modal.error = "Minimum stock is required and must be a whole number of at least 0.";
+        return;
+      }
+
       this.modal.busy = true;
       try {
         const payload = {
           item_name:     this.form.item_name.trim(),
-          barcode:       this.form.barcode.trim() || null,
+          barcode:       barcode || null,
           category:      this.form.category,
           unit:          this.form.unit.trim(),
           description:   this.form.description.trim() || null,
-          unit_cost:     this.form.unit_cost !== "" ? parseFloat(this.form.unit_cost) : 0,
-          selling_price: this.form.selling_price !== "" ? parseFloat(this.form.selling_price) : null,
-          reorder_level: this.form.reorder_level !== "" ? parseFloat(this.form.reorder_level) : 0,
+          unit_cost:     parseFloat(unitCost),
+          selling_price: parseFloat(sellingPrice),
+          reorder_level: parseInt(reorderLevel, 10),
         };
         if (this.form.item_id) {
           await InventoryAPI.updateItem(this.form.item_id, payload);

@@ -229,6 +229,119 @@ class InventorySecurityRegressionTest extends TestCase
         );
     }
 
+    public function test_product_crud_requires_positive_prices_a_numeric_barcode_and_an_integer_minimum_stock(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000017'));
+
+        $basePayload = [
+            'item_name' => 'Validated Product',
+            'category' => 'medicine',
+            'unit' => 'piece',
+        ];
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => 'ABC-123',
+            'unit_cost' => 0,
+            'selling_price' => 10.999,
+            'reorder_level' => 1.5,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['barcode', 'unit_cost', 'selling_price', 'reorder_level']);
+
+        $this->postJson('/api/inventory/items', $basePayload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['unit_cost', 'selling_price', 'reorder_level']);
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '0012345678901',
+            'unit_cost' => 0,
+            'selling_price' => 2.50,
+            'reorder_level' => 0,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['unit_cost']);
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '0012345678901',
+            'unit_cost' => 1.25,
+            'selling_price' => 0,
+            'reorder_level' => 0,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['selling_price']);
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '0012345678901',
+            'unit_cost' => 1.25,
+            'selling_price' => 2.50,
+            'reorder_level' => 1.5,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['reorder_level']);
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '0012345678901',
+            'unit_cost' => 1.25,
+            'selling_price' => 2.50,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['reorder_level']);
+
+        $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '00123456789012',
+            'unit_cost' => 1.25,
+            'selling_price' => 2.50,
+            'reorder_level' => 0,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['barcode']);
+
+        $itemId = $this->postJson('/api/inventory/items', [
+            ...$basePayload,
+            'barcode' => '0012345678901',
+            'unit_cost' => 1.25,
+            'selling_price' => 2.50,
+            'reorder_level' => 0,
+        ])->assertCreated()
+            ->json('data.item_id');
+
+        $this->assertDatabaseHas('inventory_items', [
+            'item_id' => $itemId,
+            'barcode' => '0012345678901',
+        ]);
+
+        $legacyItemId = $this->createInventoryItem('Legacy Price Product', 0, null);
+        $this->putJson("/api/inventory/items/{$legacyItemId}", [
+            ...$basePayload,
+            'unit_cost' => 0,
+            'selling_price' => null,
+            'reorder_level' => 0,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['unit_cost', 'selling_price']);
+    }
+
+    public function test_product_list_returns_exactly_fifteen_items_per_page_and_the_filtered_total(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000018'));
+
+        foreach (range(1, 16) as $number) {
+            $this->createInventoryItem("Paged Product {$number}", 0, 10);
+        }
+        $this->createInventoryItem('Nonmatching Product', 0, 10);
+
+        $this->getJson('/api/inventory/items?page=1')
+            ->assertOk()
+            ->assertJsonCount(15, 'data')
+            ->assertJsonPath('total', 17)
+            ->assertJsonPath('last_page', 2);
+
+        $this->getJson('/api/inventory/items?q=Paged%20Product&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('total', 16)
+            ->assertJsonPath('last_page', 2);
+    }
+
     public function test_stock_movement_service_records_stock_in_with_a_batched_balance_projection(): void
     {
         $actor = $this->createUser('admin', '09170000015');
@@ -334,7 +447,7 @@ class InventorySecurityRegressionTest extends TestCase
 
         $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-inventory-items.js?v=batch-expiry-20260816', $itemsPage);
+        $this->assertStringContainsString('admin-inventory-items.js?v=product-validation-pagination-20260918', $itemsPage);
         $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
         $this->assertStringContainsString('admin-stock-out.js?v=fefo-expiry-20260816', $stockOutPage);
