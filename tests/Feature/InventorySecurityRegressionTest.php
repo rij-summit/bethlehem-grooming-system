@@ -146,6 +146,27 @@ class InventorySecurityRegressionTest extends TestCase
         $this->postJson('/api/pos/transactions', [])->assertForbidden();
     }
 
+    public function test_inventory_dashboard_summary_paginates_recent_transactions_ten_per_page(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000002'));
+
+        $itemId = $this->createInventoryItem('Dashboard Pagination Product', 20, 100);
+
+        foreach (range(1, 11) as $sequence) {
+            $this->recordInventoryTransaction($itemId, 'stock_in', $sequence, [
+                'created_at' => now()->subMinutes(11 - $sequence),
+            ]);
+        }
+
+        $this->getJson('/api/inventory/summary?page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'recent_transactions')
+            ->assertJsonPath('recent_transactions.0.quantity', '1.00')
+            ->assertJsonPath('recent_transactions_page', 2)
+            ->assertJsonPath('recent_transactions_last_page', 2)
+            ->assertJsonPath('recent_transactions_total', 11);
+    }
+
     public function test_staff_can_process_a_pos_sale_under_the_inventory_role_contract(): void
     {
         Sanctum::actingAs($this->createUser('staff', '09170000014'));

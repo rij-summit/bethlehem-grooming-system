@@ -89,8 +89,8 @@ var InventoryAPI = (() => {
     return request("GET", `/inventory/transactions?${p}`);
   }
 
-  function getSummary() {
-    return request("GET", "/inventory/summary");
+  function getSummary({ page = 1 } = {}) {
+    return request("GET", `/inventory/summary?page=${page}`);
   }
 
   // ── Suppliers ─────────────────────────────────────────────────────────────

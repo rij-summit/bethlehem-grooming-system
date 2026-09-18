@@ -450,7 +450,7 @@ class InventoryController extends Controller
 
     // ── Dashboard Summary ──────────────────────────────────────────────────────
 
-    public function summary(): JsonResponse
+    public function summary(Request $request): JsonResponse
     {
         $this->requireAuth();
 
@@ -461,11 +461,10 @@ class InventoryController extends Controller
 
         $expiryCount = $this->currentExpiryAlerts()->count();
 
+        $recentTransactionsPage = max(1, $request->integer('page', 1));
         $recentTransactions = InventoryTransaction::with(['item', 'supplier', 'performedBy'])
             ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(fn ($t) => $this->formatTransaction($t));
+            ->paginate(10, ['*'], 'page', $recentTransactionsPage);
 
         $topUsed = InventoryTransaction::where('inventory_transactions.type', 'stock_out')
             ->join('inventory_items', 'inventory_transactions.item_id', '=', 'inventory_items.item_id')
@@ -489,7 +488,11 @@ class InventoryController extends Controller
             'total_items'         => $totalItems,
             'low_stock_count'     => $lowStockCount,
             'expiry_alert_count'  => $expiryCount,
-            'recent_transactions' => $recentTransactions,
+            'recent_transactions' => collect($recentTransactions->items())
+                ->map(fn ($t) => $this->formatTransaction($t)),
+            'recent_transactions_page' => $recentTransactions->currentPage(),
+            'recent_transactions_last_page' => $recentTransactions->lastPage(),
+            'recent_transactions_total' => $recentTransactions->total(),
             'top_used_30_days'    => $topUsed,
         ]);
     }

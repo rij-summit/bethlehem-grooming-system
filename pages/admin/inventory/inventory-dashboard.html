@@ -208,6 +208,13 @@
                     </template>
                   </tbody>
                 </table>
+                <div x-show="recentTransactionsLastPage > 1" class="flex items-center justify-between border-t border-[#e6eef7] px-4 py-3 text-sm" style="display:none">
+                  <span class="text-slate-500" x-text="`Page ${recentTransactionsPage} of ${recentTransactionsLastPage}`"></span>
+                  <div class="flex gap-2">
+                    <button type="button" @click="prevRecentTransactionsPage()" :disabled="recentTransactionsPage === 1" class="rounded-lg border border-[#c9d9e8] px-3 py-1.5 font-semibold text-[#315b7e] transition hover:bg-[#f5f8fb] disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
+                    <button type="button" @click="nextRecentTransactionsPage()" :disabled="recentTransactionsPage === recentTransactionsLastPage" class="rounded-lg border border-[#c9d9e8] px-3 py-1.5 font-semibold text-[#315b7e] transition hover:bg-[#f5f8fb] disabled:cursor-not-allowed disabled:opacity-50">Next</button>
+                  </div>
+                </div>
               </div>
             </div>
 

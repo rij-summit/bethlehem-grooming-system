@@ -8,6 +8,9 @@ function adminInventoryDashboard() {
     lowStockCount: 0,
     expiryCount: 0,
     recentTransactions: [],
+    recentTransactionsPage: 1,
+    recentTransactionsLastPage: 1,
+    recentTransactionsTotal: 0,
     topUsed: [],
 
     // Alert lists
@@ -20,12 +23,12 @@ function adminInventoryDashboard() {
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
     },
 
-    async load() {
+    async load(page = 1) {
       this.loading = true;
       this.error   = "";
       try {
         const [summary, lowStock, expiry] = await Promise.all([
-          InventoryAPI.getSummary(),
+          InventoryAPI.getSummary({ page }),
           InventoryAPI.getLowStock(),
           InventoryAPI.getExpiryAlerts(),
         ]);
@@ -34,6 +37,9 @@ function adminInventoryDashboard() {
         this.lowStockCount       = summary.low_stock_count;
         this.expiryCount         = summary.expiry_alert_count;
         this.recentTransactions  = summary.recent_transactions ?? [];
+        this.recentTransactionsPage = summary.recent_transactions_page ?? 1;
+        this.recentTransactionsLastPage = summary.recent_transactions_last_page ?? 1;
+        this.recentTransactionsTotal = summary.recent_transactions_total ?? this.recentTransactions.length;
         this.topUsed             = summary.top_used_30_days ?? [];
 
         this.lowStockItems = lowStock.data ?? [];
@@ -44,6 +50,14 @@ function adminInventoryDashboard() {
         this.loading = false;
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
       }
+    },
+
+    prevRecentTransactionsPage() {
+      if (this.recentTransactionsPage > 1) this.load(this.recentTransactionsPage - 1);
+    },
+
+    nextRecentTransactionsPage() {
+      if (this.recentTransactionsPage < this.recentTransactionsLastPage) this.load(this.recentTransactionsPage + 1);
     },
 
     // ── Helpers ──────────────────────────────────────────────────────────────
