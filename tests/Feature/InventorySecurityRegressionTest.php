@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\InventoryStockMovementService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\DB;
@@ -145,6 +146,38 @@ class InventorySecurityRegressionTest extends TestCase
         $this->postJson('/api/pos/transactions', [])->assertForbidden();
     }
 
+    public function test_staff_can_process_a_pos_sale_under_the_inventory_role_contract(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000014'));
+
+        $itemId = $this->createInventoryItem('Staff POS Product', 1, 125.50);
+        $this->recordInventoryTransaction($itemId, 'stock_in', 1, [
+            'batch_number' => 'STAFF-POS-BATCH',
+            'expiry_date' => now()->addYear()->toDateString(),
+        ]);
+
+        $this->postJson('/api/pos/transactions', [
+            'items' => [[
+                'item_id' => $itemId,
+                'quantity' => 1,
+            ]],
+            'amount_tendered' => 200,
+        ])->assertCreated()
+            ->assertJsonPath('data.total_amount', '125.50')
+            ->assertJsonPath('data.change_amount', '74.50');
+
+        $this->assertDatabaseHas('inventory_items', [
+            'item_id' => $itemId,
+            'quantity_on_hand' => 0,
+        ]);
+        $this->assertDatabaseHas('inventory_transactions', [
+            'item_id' => $itemId,
+            'type' => 'stock_out',
+            'reason' => 'sold',
+            'reference_type' => 'pos',
+        ]);
+    }
+
     public function test_product_has_no_misleading_expiry_and_stock_in_validates_batch_expiry(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000002'));
@@ -196,11 +229,72 @@ class InventorySecurityRegressionTest extends TestCase
         );
     }
 
+    public function test_stock_movement_service_records_stock_in_with_a_batched_balance_projection(): void
+    {
+        $actor = $this->createUser('admin', '09170000015');
+        $itemId = $this->createInventoryItem('Service Stock-In Product', 0, 75);
+
+        $results = DB::transaction(fn () => app(InventoryStockMovementService::class)->receive(
+            $actor,
+            [[
+                'item_id' => $itemId,
+                'quantity' => 3,
+                'reason' => 'purchase',
+                'batch_number' => 'SERVICE-IN-BATCH',
+                'expiry_date' => now()->addYear()->toDateString(),
+            ]],
+        ));
+
+        $this->assertEquals(3.0, $results[0]['quantity_added']);
+        $this->assertEquals(3.0, $results[0]['quantity_on_hand']);
+        $this->assertEquals(3.0, $results[0]['unexpired_quantity']);
+        $this->assertDatabaseHas('inventory_transactions', [
+            'item_id' => $itemId,
+            'type' => 'stock_in',
+            'reason' => 'purchase',
+            'batch_number' => 'SERVICE-IN-BATCH',
+            'performed_by' => $actor->user_id,
+        ]);
+    }
+
+    public function test_stock_movement_service_records_stock_out_and_preserves_the_ledger_reference(): void
+    {
+        $actor = $this->createUser('admin', '09170000016');
+        $itemId = $this->createInventoryItem('Service Stock-Out Product', 3, 75);
+        $this->recordInventoryTransaction($itemId, 'stock_in', 3, [
+            'batch_number' => 'SERVICE-OUT-BATCH',
+            'expiry_date' => now()->addYear()->toDateString(),
+        ]);
+
+        $results = DB::transaction(fn () => app(InventoryStockMovementService::class)->remove(
+            $actor,
+            [[
+                'item_id' => $itemId,
+                'quantity' => 1,
+                'reason' => 'used',
+                'reference_type' => 'appointment',
+                'reference_id' => 42,
+            ]],
+        ));
+
+        $this->assertEquals(1.0, $results[0]['quantity_removed']);
+        $this->assertEquals(2.0, $results[0]['quantity_on_hand']);
+        $this->assertEquals(2.0, $results[0]['unexpired_quantity']);
+        $this->assertDatabaseHas('inventory_transactions', [
+            'item_id' => $itemId,
+            'type' => 'stock_out',
+            'reason' => 'used',
+            'reference_type' => 'appointment',
+            'reference_id' => 42,
+            'performed_by' => $actor->user_id,
+        ]);
+    }
+
     public function test_inventory_pages_use_the_shared_api_base_and_fresh_script_versions(): void
     {
         $service = file_get_contents(base_path('scripts/services/inventory-service.js'));
 
-        $this->assertStringContainsString('API.getBaseUrl()', $service);
+        $this->assertStringContainsString('API.adminRequest(method, endpoint, body)', $service);
         $this->assertStringNotContainsString('127.0.0.1:8000', $service);
 
         foreach ([
@@ -231,15 +325,15 @@ class InventorySecurityRegressionTest extends TestCase
             );
         }
 
-        $inventoryLandingPage = file_get_contents(base_path('pages/admin/inventory.html'));
+        $inventoryDashboardPage = file_get_contents(base_path('pages/admin/inventory/inventory-dashboard.html'));
         $itemsPage = file_get_contents(base_path('pages/admin/inventory/inventory-items.html'));
         $posPage = file_get_contents(base_path('pages/admin/inventory/pos.html'));
         $stockInPage = file_get_contents(base_path('pages/admin/inventory/stock-in.html'));
         $stockOutPage = file_get_contents(base_path('pages/admin/inventory/stock-out.html'));
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
-        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryLandingPage);
-        $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryLandingPage);
+        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryDashboardPage);
+        $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=batch-expiry-20260816', $itemsPage);
         $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);

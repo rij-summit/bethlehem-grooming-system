@@ -3,10 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
-use App\Models\InventoryTransaction;
 use App\Models\PosTransaction;
 use App\Models\PosTransactionItem;
-use App\Services\InventoryBatchBalanceService;
+use App\Services\InventoryStockMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -14,23 +13,11 @@ class PosController extends Controller
 {
     private const MAX_MONEY = 999999.99;
 
-    public function __construct(private readonly InventoryBatchBalanceService $batchBalances) {}
-
-    private function requireAdmin(Request $request): void
-    {
-        if ($request->user()?->role !== 'admin') {
-            abort(response()->json([
-                'success' => false,
-                'message' => 'Unauthorized. Admin access required.',
-            ], 403));
-        }
-    }
+    public function __construct(private readonly InventoryStockMovementService $stockMovements) {}
 
     // POST /api/pos/transactions
     public function processSale(Request $request)
     {
-        $this->requireAdmin($request);
-
         $validated = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:inventory_items,item_id',
@@ -64,21 +51,6 @@ class PosController extends Controller
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Item ID '.$line['item_id'].' is inactive or not found.',
-                    ], 422));
-                }
-
-                if ((float) $item->quantity_on_hand < (float) $line['quantity']) {
-                    abort(response()->json([
-                        'success' => false,
-                        'message' => 'Insufficient stock for "'.$item->item_name.'". Available: '.$item->quantity_on_hand.' '.$item->unit.'.',
-                    ], 422));
-                }
-
-                $balance = $this->batchBalances->forItem((int) $item->item_id);
-                if ((float) $balance['unexpired_quantity'] + 0.00001 < (float) $line['quantity']) {
-                    abort(response()->json([
-                        'success' => false,
-                        'message' => 'Insufficient unexpired stock for "'.$item->item_name.'". Unexpired available: '.$balance['unexpired_quantity'].' '.$item->unit.'; physical stock: '.$item->quantity_on_hand.' '.$item->unit.'.',
                     ], 422));
                 }
 
@@ -128,6 +100,8 @@ class PosController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
+            $stockOutEntries = [];
+
             foreach ($preparedLines as $line) {
                 /** @var InventoryItem $item */
                 $item = $line['item'];
@@ -139,20 +113,18 @@ class PosController extends Controller
                     'subtotal' => $line['subtotal'],
                 ]);
 
-                $item->decrement('quantity_on_hand', $line['quantity']);
-
-                InventoryTransaction::create([
+                $stockOutEntries[] = [
                     'item_id' => $item->item_id,
-                    'type' => 'stock_out',
                     'quantity' => $line['quantity'],
                     'unit_cost_at_time' => $item->unit_cost,
-                    'selling_price_at_time' => $line['price_at_sale'],
+                    'selling_price' => $line['price_at_sale'],
                     'reason' => 'sold',
                     'reference_type' => 'pos',
                     'reference_id' => $pos->pos_id,
-                    'performed_by' => $request->user()->user_id,
-                ]);
+                ];
             }
+
+            $this->stockMovements->remove($request->user(), $stockOutEntries);
 
             return $pos;
         });
@@ -167,8 +139,6 @@ class PosController extends Controller
     // GET /api/pos/transactions/{posId}
     public function getReceipt(Request $request, int $posId)
     {
-        $this->requireAdmin($request);
-
         $pos = PosTransaction::with(['items.item', 'cashier'])->find($posId);
         if (!$pos) {
             return response()->json(['success' => false, 'message' => 'Transaction not found.'], 404);
@@ -180,8 +150,6 @@ class PosController extends Controller
     // GET /api/pos/transactions
     public function getTransactions(Request $request)
     {
-        $this->requireAdmin($request);
-
         $query = PosTransaction::with(['items.item', 'cashier']);
 
         if ($request->filled('cashier_id')) {

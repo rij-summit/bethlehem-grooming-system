@@ -199,6 +199,22 @@ async function testReal401ClearsAndUsesNestedSafePath() {
   );
 }
 
+async function testAdminRequestUsesTheCurrentAdminSession() {
+  let request = null;
+  const browser = createBrowser({
+    local: { admin_token: "inventory-admin-token", user_role: "admin" },
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return jsonResponse(200, { data: [] });
+    },
+  });
+
+  await browser.API.adminRequest("GET", "/inventory/items");
+
+  assert.equal(request.url, "http://127.0.0.1:8000/api/inventory/items");
+  assert.equal(request.options.headers.Authorization, "Bearer inventory-admin-token");
+}
+
 async function testStale401CannotClearANewerLogin() {
   let resolveRequest;
   const browser = createBrowser({
@@ -586,6 +602,7 @@ function testStaticAuthContracts() {
   await testCustomerPasswordStepDoesNotCreateBrowserSession();
   await testTemporaryServerFailureDoesNotRedirect();
   await testReal401ClearsAndUsesNestedSafePath();
+  await testAdminRequestUsesTheCurrentAdminSession();
   await testStale401CannotClearANewerLogin();
   await testOnlyExplicit403AuthCodesInvalidateSession();
   await testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs();

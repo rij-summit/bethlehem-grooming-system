@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Services\InventoryBatchBalanceService;
+use App\Services\InventoryStockMovementService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,10 @@ class InventoryController extends Controller
 
     private const MAX_QUANTITY = 99999999.99;
 
-    public function __construct(private readonly InventoryBatchBalanceService $batchBalances)
+    public function __construct(
+        private readonly InventoryBatchBalanceService $batchBalances,
+        private readonly InventoryStockMovementService $stockMovements,
+    )
     {
     }
 
@@ -326,52 +330,11 @@ class InventoryController extends Controller
             'supplier_id'          => 'nullable|integer|exists:suppliers,supplier_id',
         ]);
 
-        $results = [];
-
-        DB::transaction(function () use ($validated, $user, &$results) {
-            // A stable item order prevents opposing multi-item requests from
-            // taking row locks in reverse order.
-            $entries = collect($validated['items'])
-                ->sortBy(fn (array $entry) => (int) $entry['item_id'])
-                ->values();
-
-            foreach ($entries as $entry) {
-                $item = InventoryItem::where('item_id', $entry['item_id'])
-                                     ->where('is_active', 1)
-                                     ->lockForUpdate()
-                                     ->firstOrFail();
-
-                if ((float) $item->quantity_on_hand + (float) $entry['quantity'] > self::MAX_QUANTITY) {
-                    abort(422, "Stock-in would exceed the maximum supported quantity for \"{$item->item_name}\".");
-                }
-
-                $item->increment('quantity_on_hand', $entry['quantity']);
-
-                $tx = InventoryTransaction::create([
-                    'item_id'           => $item->item_id,
-                    'type'              => 'stock_in',
-                    'quantity'          => $entry['quantity'],
-                    'unit_cost_at_time' => $entry['unit_cost'] ?? $item->unit_cost,
-                    'reason'            => $entry['reason'],
-                    'supplier_id'       => $validated['supplier_id'] ?? null,
-                    'batch_number'      => $entry['batch_number'] ?? null,
-                    'expiry_date'       => $entry['expiry_date'] ?? null,
-                    'notes'             => $entry['notes'] ?? null,
-                    'reference_type'    => 'manual',
-                    'performed_by'      => $user->user_id,
-                ]);
-
-                $results[] = [
-                    'item_id'          => $item->item_id,
-                    'item_name'        => $item->item_name,
-                    'quantity_added'   => $entry['quantity'],
-                    'quantity_on_hand' => $item->quantity_on_hand,
-                    'unexpired_quantity' => $this->batchBalances
-                        ->forItem((int) $item->item_id)['unexpired_quantity'],
-                    'transaction_id'   => $tx->transaction_id,
-                ];
-            }
-        });
+        $results = DB::transaction(fn () => $this->stockMovements->receive(
+            $user,
+            $validated['items'],
+            $validated['supplier_id'] ?? null,
+        ));
 
         return response()->json(['data' => $results], 201);
     }
@@ -391,75 +354,10 @@ class InventoryController extends Controller
             'items.*.reference_id'   => 'nullable|integer',
         ]);
 
-        $results = [];
-
-        DB::transaction(function () use ($validated, $user, &$results) {
-            // Process constrained expiry pools before unrestricted write-offs,
-            // and lock item rows in a deterministic order. This makes a valid
-            // mixed request independent of its client-side row order.
-            $reasonPriority = fn (string $reason): int => match ($reason) {
-                'expired' => 0,
-                'sold', 'used' => 1,
-                default => 2,
-            };
-            $entries = collect($validated['items'])
-                ->sort(function (array $left, array $right) use ($reasonPriority): int {
-                    return [
-                        (int) $left['item_id'],
-                        $reasonPriority($left['reason']),
-                    ] <=> [
-                        (int) $right['item_id'],
-                        $reasonPriority($right['reason']),
-                    ];
-                })
-                ->values();
-
-            foreach ($entries as $entry) {
-                $item = InventoryItem::where('item_id', $entry['item_id'])
-                                     ->where('is_active', 1)
-                                     ->lockForUpdate()
-                                     ->firstOrFail();
-
-                if ((float) $item->quantity_on_hand < (float) $entry['quantity']) {
-                    abort(422, "Insufficient stock for \"{$item->item_name}\". Available: {$item->quantity_on_hand} {$item->unit}.");
-                }
-
-                $balance = $this->batchBalances->forItem((int) $item->item_id);
-                if (in_array($entry['reason'], ['sold', 'used'], true)
-                    && (float) $balance['unexpired_quantity'] + 0.00001 < (float) $entry['quantity']) {
-                    abort(422, "Insufficient unexpired stock for \"{$item->item_name}\". Unexpired available: {$balance['unexpired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
-                }
-                if ($entry['reason'] === 'expired'
-                    && (float) $balance['expired_quantity'] + 0.00001 < (float) $entry['quantity']) {
-                    abort(422, "Insufficient expired stock for \"{$item->item_name}\". Expired available: {$balance['expired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
-                }
-
-                $item->decrement('quantity_on_hand', $entry['quantity']);
-
-                $tx = InventoryTransaction::create([
-                    'item_id'               => $item->item_id,
-                    'type'                  => 'stock_out',
-                    'quantity'              => $entry['quantity'],
-                    'selling_price_at_time' => $entry['selling_price'] ?? $item->selling_price,
-                    'reason'                => $entry['reason'],
-                    'notes'                 => $entry['notes'] ?? null,
-                    'reference_type'        => $entry['reference_type'] ?? 'manual',
-                    'reference_id'          => $entry['reference_id'] ?? null,
-                    'performed_by'          => $user->user_id,
-                ]);
-
-                $results[] = [
-                    'item_id'          => $item->item_id,
-                    'item_name'        => $item->item_name,
-                    'unit'             => $item->unit,
-                    'quantity_removed' => $entry['quantity'],
-                    'quantity_on_hand' => $item->quantity_on_hand,
-                    'unexpired_quantity' => $this->batchBalances
-                        ->forItem((int) $item->item_id)['unexpired_quantity'],
-                    'transaction_id'   => $tx->transaction_id,
-                ];
-            }
-        });
+        $results = DB::transaction(fn () => $this->stockMovements->remove(
+            $user,
+            $validated['items'],
+        ));
 
         return response()->json(['data' => $results], 201);
     }

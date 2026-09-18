@@ -803,6 +803,10 @@ var API = (() => {
     return data;
   }
 
+  function adminRequest(method, endpoint, body = null, requestOptions = {}) {
+    return request(method, endpoint, body, getAdminToken(), requestOptions);
+  }
+
   function isAuthenticationError(error) {
     return error?.status === 401
       || (error?.status === 403 && INVALID_SESSION_CODES.has(error?.code));
@@ -1763,6 +1767,7 @@ var API = (() => {
   return {
     // Resolved endpoint (shared by standalone browser services).
     getBaseUrl,
+    adminRequest,
     // Token access (used by other scripts that need to attach the token)
     getCustomerToken,
     setCustomerToken,
