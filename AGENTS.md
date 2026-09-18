@@ -65,7 +65,22 @@ When investigating performance:
 - Verify that the affected feature still works after optimization.
 - Compare performance before and after the change when possible.
 
-## 5. Goal-Driven Execution
+## 5. System Performance Awareness
+
+**Preserve or improve performance with every change.**
+
+For all implementation tasks:
+
+ - Do not introduce unnecessary database queries, network requests, re-renders, DOM work, or repeated computations.
+ - Watch for N+1 queries — use eager loading (with()) instead of querying inside a loop, whether in a controller, model accessor, or Blade @foreach.
+ - Avoid changes that noticeably worsen page load or interaction performance. Treat any query added inside a loop over user-facing data as significant.
+ - Reuse already-loaded data when appropriate instead of fetching the same data repeatedly.
+ - Prefer paginating large result sets over loading full tables.
+ - Avoid loading unrelated features or data for the current page/tab when they are not needed.
+ - If the requested implementation would create a significant performance problem, explain the tradeoff briefly and propose a simpler, efficient approach before implementing.
+ - Do not perform unrelated performance refactors unless the task specifically asks for optimization.
+
+## 6. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
