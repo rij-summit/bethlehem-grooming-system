@@ -391,8 +391,9 @@ class InventoryController extends Controller
             $query->whereDate('created_at', '<=', $request->query('date_to'));
         }
 
-        $page      = max(1, $request->integer('page', 1));
-        $paginator = $query->paginate(20, ['*'], 'page', $page);
+        $page = max(1, $request->integer('page', 1));
+        $perPage = $request->integer('per_page', 20) === 10 ? 10 : 20;
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
             'data'      => collect($paginator->items())->map(fn ($t) => $this->formatTransaction($t)),
@@ -404,30 +405,40 @@ class InventoryController extends Controller
 
     // ── Alerts ─────────────────────────────────────────────────────────────────
 
-    public function lowStock(): JsonResponse
+    public function lowStock(Request $request): JsonResponse
     {
         $this->requireAuth();
 
-        $items = InventoryItem::where('is_active', 1)
+        $page = max(1, $request->integer('page', 1));
+        $paginator = InventoryItem::where('is_active', 1)
             ->whereRaw('reorder_level > 0 AND quantity_on_hand <= reorder_level')
             ->orderByRaw('quantity_on_hand / reorder_level ASC')
-            ->get();
+            ->orderBy('item_id')
+            ->paginate(10, ['*'], 'page', $page);
 
         return response()->json([
-            'data'  => $this->formatItems($items),
-            'count' => $items->count(),
+            'data' => $this->formatItems($paginator->items()),
+            'count' => $paginator->total(),
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
         ]);
     }
 
-    public function expiryAlerts(): JsonResponse
+    public function expiryAlerts(Request $request): JsonResponse
     {
         $this->requireAuth();
 
         $data = $this->currentExpiryAlerts();
+        $page = max(1, $request->integer('page', 1));
+        $total = $data->count();
 
         return response()->json([
-            'data'  => $data,
-            'count' => $data->count(),
+            'data' => $data->forPage($page, 10)->values(),
+            'count' => $total,
+            'total' => $total,
+            'page' => $page,
+            'last_page' => max(1, (int) ceil($total / 10)),
         ]);
     }
 

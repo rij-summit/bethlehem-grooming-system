@@ -67,20 +67,21 @@ var InventoryAPI = (() => {
 
   // ── Alerts & history ──────────────────────────────────────────────────────
 
-  function getLowStock() {
-    return request("GET", "/inventory/low-stock");
+  function getLowStock({ page = 1 } = {}) {
+    return request("GET", `/inventory/low-stock?page=${page}`);
   }
 
-  function getExpiryAlerts() {
-    return request("GET", "/inventory/alerts/expiry");
+  function getExpiryAlerts({ page = 1 } = {}) {
+    return request("GET", `/inventory/alerts/expiry?page=${page}`);
   }
 
   function getAlertBadge() {
     return request("GET", "/inventory/alerts/badge");
   }
 
-  function getTransactions({ item_id = "", type = "", category = "", date_from = "", date_to = "", page = 1 } = {}) {
+  function getTransactions({ item_id = "", type = "", category = "", date_from = "", date_to = "", page = 1, per_page = 20 } = {}) {
     const p = new URLSearchParams({ page });
+    if (per_page !== 20) p.set("per_page", per_page);
     if (item_id)   p.set("item_id", item_id);
     if (type)      p.set("type", type);
     if (category)  p.set("category", category);

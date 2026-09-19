@@ -167,6 +167,67 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonPath('recent_transactions_total', 11);
     }
 
+    public function test_low_stock_alerts_paginate_ten_items_per_page(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000015'));
+
+        foreach (range(1, 11) as $sequence) {
+            $itemId = $this->createInventoryItem("Low Stock {$sequence}", 1, 2);
+            DB::table('inventory_items')
+                ->where('item_id', $itemId)
+                ->update(['reorder_level' => 2]);
+        }
+
+        $this->getJson('/api/inventory/low-stock?page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('page', 2)
+            ->assertJsonPath('last_page', 2)
+            ->assertJsonPath('total', 11)
+            ->assertJsonPath('count', 11);
+    }
+
+    public function test_expiry_alerts_paginate_the_calculated_records_ten_per_page(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000016'));
+
+        foreach (range(1, 11) as $sequence) {
+            $itemId = $this->createInventoryItem("Expiry Alert {$sequence}", 1, 0);
+            $this->recordInventoryTransaction($itemId, 'stock_in', 1, [
+                'batch_number' => "EXP-{$sequence}",
+                'expiry_date' => now()->addDays($sequence)->toDateString(),
+            ]);
+        }
+
+        $this->getJson('/api/inventory/alerts/expiry?page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('page', 2)
+            ->assertJsonPath('last_page', 2)
+            ->assertJsonPath('total', 11)
+            ->assertJsonPath('count', 11);
+    }
+
+    public function test_transaction_history_supports_the_dashboard_ten_row_page_size(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000017'));
+
+        $itemId = $this->createInventoryItem('Dashboard Transaction Page', 20, 0);
+        foreach (range(1, 11) as $sequence) {
+            $this->recordInventoryTransaction($itemId, 'stock_in', $sequence, [
+                'created_at' => now()->subMinutes(11 - $sequence),
+            ]);
+        }
+
+        $this->getJson('/api/inventory/transactions?page=2&per_page=10')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.quantity', '1.00')
+            ->assertJsonPath('page', 2)
+            ->assertJsonPath('last_page', 2)
+            ->assertJsonPath('total', 11);
+    }
+
     public function test_staff_can_process_a_pos_sale_under_the_inventory_role_contract(): void
     {
         Sanctum::actingAs($this->createUser('staff', '09170000014'));
@@ -447,8 +508,11 @@ class InventorySecurityRegressionTest extends TestCase
                 $page,
                 "{$pageName} must load the compatible shared API client.",
             );
+            $expectedInventoryServiceVersion = $pageName === 'inventory-dashboard.html'
+                ? 'scripts/services/inventory-service.js?v=dashboard-pagination-20260919'
+                : 'scripts/services/inventory-service.js?v=inventory-security-20260816';
             $this->assertStringContainsString(
-                'scripts/services/inventory-service.js?v=inventory-security-20260816',
+                $expectedInventoryServiceVersion,
                 $page,
                 "{$pageName} must invalidate the old localhost-only inventory client.",
             );
@@ -467,7 +531,9 @@ class InventorySecurityRegressionTest extends TestCase
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
         $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryDashboardPage);
+        $this->assertStringContainsString('inventory-service.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
+        $this->assertStringContainsString('admin-inventory-dashboard.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=product-validation-pagination-20260918', $itemsPage);
         $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
