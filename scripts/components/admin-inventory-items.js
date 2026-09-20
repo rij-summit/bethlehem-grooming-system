@@ -44,7 +44,7 @@ function adminInventoryItems() {
       this.loading = true;
       this.error = "";
       try {
-        const res = await InventoryAPI.getItems({ q: this.q, category: this.category, include_inactive: this.showInactive, page });
+        const res = await InventoryAPI.getItems({ q: this.q, category: this.category, inactive_only: this.showInactive, page });
         this.items       = res.data;
         this.currentPage = res.page;
         this.lastPage    = res.last_page;
@@ -70,7 +70,7 @@ function adminInventoryItems() {
     async onSearchEnter() {
       if (!this.q.trim()) return;
       try {
-        const res = await InventoryAPI.findByBarcode(this.q.trim());
+        const res = await InventoryAPI.findByBarcode(this.q.trim(), this.showInactive);
         // Found exact match — replace list with single result
         this.items = [res.data];
         this.currentPage = 1;
@@ -204,7 +204,7 @@ function adminInventoryItems() {
       try {
         await InventoryAPI.deactivateItem(this.deactivateTarget.item_id);
         this.deactivateModal.open = false;
-        this.showToast("Item deactivated.");
+        this.showToast("Item deactivated");
         await this.load(this.currentPage);
       } catch (err) {
         this.deactivateModal.error = err.message || "Failed to deactivate.";
@@ -216,7 +216,7 @@ function adminInventoryItems() {
     async doReactivate(item) {
       try {
         await InventoryAPI.reactivateItem(item.item_id);
-        this.showToast(`"${item.item_name}" reactivated.`);
+        this.showToast("Item reactivated");
         await this.load(this.currentPage);
       } catch (err) {
         this.showToast(err.message || "Failed to reactivate.", false);

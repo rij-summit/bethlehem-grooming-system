@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class InventoryController extends Controller
 {
@@ -138,7 +140,9 @@ class InventoryController extends Controller
             'reference_id'          => $t->reference_id,
             'notes'                 => $t->notes,
             'performed_by'          => $t->performed_by,
-            'performed_by_name'     => $t->performedBy?->name,
+            'performed_by_name'     => $t->performedBy
+                ? trim("{$t->performedBy->first_name} {$t->performedBy->last_name}")
+                : null,
             'created_at'            => $t->created_at,
         ];
     }
@@ -153,11 +157,12 @@ class InventoryController extends Controller
         $category       = $request->query('category', '');
         $lowStock       = $request->boolean('low_stock');
         $includeInactive = $request->boolean('include_inactive');
+        $inactiveOnly   = $request->boolean('inactive_only');
         $page           = max(1, (int) $request->query('page', 1));
 
-        $query = $includeInactive
-            ? InventoryItem::query()
-            : InventoryItem::where('is_active', 1);
+        $query = $inactiveOnly
+            ? InventoryItem::where('is_active', 0)
+            : ($includeInactive ? InventoryItem::query() : InventoryItem::where('is_active', 1));
 
         if ($q) {
             $query->where(function ($qb) use ($q) {
@@ -271,12 +276,12 @@ class InventoryController extends Controller
 
     // ── Barcode & Search ───────────────────────────────────────────────────────
 
-    public function findByBarcode(string $barcode): JsonResponse
+    public function findByBarcode(Request $request, string $barcode): JsonResponse
     {
         $this->requireAuth();
 
         $item = InventoryItem::where('barcode', $barcode)
-                             ->where('is_active', 1)
+                             ->when(! $request->boolean('include_inactive'), fn ($query) => $query->where('is_active', 1))
                              ->first();
 
         if (! $item) {
@@ -325,9 +330,32 @@ class InventoryController extends Controller
             'items.*.reason'       => 'required|in:purchase,return,adjustment',
             'items.*.unit_cost'    => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
             'items.*.batch_number' => 'nullable|string|max:100',
-            'items.*.expiry_date'  => 'required|date|after_or_equal:today',
+            'items.*.expiry_date'  => 'nullable',
             'items.*.notes'        => 'nullable|string|max:500',
         ]);
+
+        $categories = InventoryItem::query()
+            ->whereIn('item_id', collect($validated['items'])->pluck('item_id')->unique())
+            ->pluck('category', 'item_id');
+
+        foreach ($validated['items'] as $index => $item) {
+            $doesNotExpire = in_array($categories[$item['item_id']] ?? null, ['pet_shop', 'miscellaneous'], true);
+
+            if ($doesNotExpire) {
+                $validated['items'][$index]['expiry_date'] = null;
+                continue;
+            }
+
+            $expiryValidator = Validator::make($item, [
+                'expiry_date' => 'required|date|after_or_equal:today',
+            ]);
+
+            if ($expiryValidator->fails()) {
+                throw ValidationException::withMessages([
+                    "items.{$index}.expiry_date" => $expiryValidator->errors()->first('expiry_date'),
+                ]);
+            }
+        }
 
         $results = DB::transaction(fn () => $this->stockMovements->receive(
             $user,
@@ -344,13 +372,26 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'items'                  => 'required|array|min:1',
             'items.*.item_id'        => 'required|integer|exists:inventory_items,item_id',
-            'items.*.quantity'       => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_QUANTITY,
+            'items.*.quantity'       => 'required|integer|min:1|max:99999999',
             'items.*.reason'         => 'required|in:used,sold,expired,damaged,adjustment',
             'items.*.selling_price'  => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
             'items.*.notes'          => 'nullable|string|max:500',
             'items.*.reference_type' => 'nullable|in:manual,appointment,pos',
             'items.*.reference_id'   => 'nullable|integer',
         ]);
+
+        $categories = InventoryItem::query()
+            ->whereIn('item_id', collect($validated['items'])->pluck('item_id')->unique())
+            ->pluck('category', 'item_id');
+
+        foreach ($validated['items'] as $index => $item) {
+            if ($item['reason'] === 'expired'
+                && in_array($categories[$item['item_id']] ?? null, ['pet_shop', 'miscellaneous'], true)) {
+                throw ValidationException::withMessages([
+                    "items.{$index}.reason" => 'Expired is not available for Pet Shop or Miscellaneous products.',
+                ]);
+            }
+        }
 
         $results = DB::transaction(fn () => $this->stockMovements->remove(
             $user,

@@ -234,6 +234,57 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonPath('total', 11);
     }
 
+    public function test_stock_movement_actor_is_shown_in_transaction_history_and_dashboard(): void
+    {
+        $actor = $this->createUser('staff', '09170000020');
+        Sanctum::actingAs($actor);
+
+        $itemId = $this->createInventoryItem('Actor-tracked Product', 0, 100);
+
+        $this->postJson('/api/inventory/stock-in', [
+            'items' => [[
+                'item_id' => $itemId,
+                'quantity' => 2,
+                'reason' => 'purchase',
+                'expiry_date' => now()->addYear()->toDateString(),
+            ]],
+        ])->assertCreated();
+
+        $this->postJson('/api/inventory/stock-out', [
+            'items' => [[
+                'item_id' => $itemId,
+                'quantity' => 1,
+                'reason' => 'used',
+            ]],
+        ])->assertCreated();
+
+        $actorDetails = [
+            'performed_by' => $actor->user_id,
+            'performed_by_name' => 'Staff Inventory Tester',
+        ];
+
+        $history = $this->getJson('/api/inventory/transactions')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $summary = $this->getJson('/api/inventory/summary')
+            ->assertOk()
+            ->assertJsonCount(2, 'recent_transactions');
+
+        foreach ([$history->json('data'), $summary->json('recent_transactions')] as $transactions) {
+            $this->assertSame(
+                ['stock_in', 'stock_out'],
+                collect($transactions)
+                    ->filter(fn (array $transaction) => $transaction['performed_by'] === $actorDetails['performed_by']
+                        && $transaction['performed_by_name'] === $actorDetails['performed_by_name'])
+                    ->pluck('type')
+                    ->sort()
+                    ->values()
+                    ->all(),
+            );
+        }
+    }
+
     public function test_staff_can_process_a_pos_sale_under_the_inventory_role_contract(): void
     {
         Sanctum::actingAs($this->createUser('staff', '09170000014'));
@@ -344,6 +395,41 @@ class InventorySecurityRegressionTest extends TestCase
             ]],
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['items.0.quantity']);
+
+        foreach (['pet_shop', 'miscellaneous'] as $category) {
+            $itemId = $this->postJson('/api/inventory/items', [
+                'item_name' => "Non-expiring {$category} item",
+                'category' => $category,
+                'unit' => 'piece',
+                'unit_cost' => 100,
+                'selling_price' => 150,
+                'reorder_level' => 2,
+            ])->assertCreated()->json('data.item_id');
+
+            $this->postJson('/api/inventory/stock-in', [
+                'items' => [[
+                    'item_id' => $itemId,
+                    'quantity' => 1,
+                    'reason' => 'purchase',
+                    'expiry_date' => now()->addYear()->toDateString(),
+                ]],
+            ])->assertCreated();
+
+            $this->assertDatabaseHas('inventory_transactions', [
+                'item_id' => $itemId,
+                'type' => 'stock_in',
+                'expiry_date' => null,
+            ]);
+
+            $this->postJson('/api/inventory/stock-out', [
+                'items' => [[
+                    'item_id' => $itemId,
+                    'quantity' => 1,
+                    'reason' => 'expired',
+                ]],
+            ])->assertUnprocessable()
+                ->assertJsonValidationErrors(['items.0.reason']);
+        }
     }
 
     public function test_product_crud_requires_positive_prices_a_numeric_barcode_and_an_integer_minimum_stock(): void
@@ -573,10 +659,10 @@ class InventorySecurityRegressionTest extends TestCase
         $this->assertStringContainsString('admin-inventory-items.js?v=product-validation-pagination-20260918', $itemsPage);
         $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockInPage);
         $this->assertStringContainsString('inventory-service.js?v=inventory-search-inactive-20260920', $stockInPage);
-        $this->assertStringContainsString('admin-stock-in.js?v=stock-in-deactivated-search-20260920', $stockInPage);
+        $this->assertStringContainsString('admin-stock-in.js?v=stock-in-category-expiry-20260920', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
         $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockOutPage);
-        $this->assertStringContainsString('admin-stock-out.js?v=success-toast-20260920', $stockOutPage);
+        $this->assertStringContainsString('admin-stock-out.js?v=stock-out-selling-price-readonly-20260920', $stockOutPage);
         $this->assertStringContainsString(
             'p.item_id === this.selected.item_id && p.reason === this.reason',
             $stockOutScript,
@@ -953,6 +1039,17 @@ class InventorySecurityRegressionTest extends TestCase
             ]],
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['items.0.quantity']);
+
+        foreach ([0.04, 1.5, 2.25] as $quantity) {
+            $this->postJson('/api/inventory/stock-out', [
+                'items' => [[
+                    'item_id' => $itemId,
+                    'quantity' => $quantity,
+                    'reason' => 'used',
+                ]],
+            ])->assertUnprocessable()
+                ->assertJsonValidationErrors(['items.0.quantity']);
+        }
 
         $this->postJson('/api/pos/transactions', [
             'items' => [[

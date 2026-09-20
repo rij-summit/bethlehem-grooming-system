@@ -113,7 +113,7 @@ function adminStockIn() {
     },
 
     get needsExpiry() {
-      return !!this.selected;
+      return !!this.selected && !["pet_shop", "miscellaneous"].includes(this.selected.category);
     },
 
     // ── Inline create product ─────────────────────────────────────────────────
@@ -207,11 +207,11 @@ function adminStockIn() {
         this.entryError = "Enter a whole number quantity.";
         return;
       }
-      if (!this.expiryDate) {
+      if (this.needsExpiry && !this.expiryDate) {
         this.entryError = "Expiry date is required.";
         return;
       }
-      if (this.expiryDate < this.today) {
+      if (this.needsExpiry && this.expiryDate < this.today) {
         this.entryError = "Expiry date cannot be in the past.";
         return;
       }
@@ -235,7 +235,7 @@ function adminStockIn() {
           unit_cost:      this.unitCost !== "" ? parseFloat(this.unitCost) : null,
           reason:         this.reason,
           batch_number:   this.batchNumber.trim() || null,
-          expiry_date:    this.expiryDate || null,
+          expiry_date:    this.needsExpiry ? (this.expiryDate || null) : null,
           notes:          this.notes.trim() || null,
           _newly_created: this.selected._newly_created ?? false,
         });

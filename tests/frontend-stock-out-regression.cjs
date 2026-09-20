@@ -8,6 +8,10 @@ const source = fs.readFileSync(
   path.join(projectRoot, "scripts/components/admin-stock-out.js"),
   "utf8",
 );
+const stockOutPage = fs.readFileSync(
+  path.join(projectRoot, "pages/admin/inventory/stock-out.html"),
+  "utf8",
+);
 
 function createPage(inventoryApi = {}, toastMessages = []) {
   const context = {
@@ -70,6 +74,57 @@ function testPendingStockOutReducesDisplayedAndValidatedAvailability() {
   assert.equal(page.availableForReason(), 0);
 }
 
+function testStockOutRejectsDecimalQuantities() {
+  for (const qty of ["0.04", "1.5", "2.25"]) {
+    const page = createPage();
+    page.pickItem(product());
+    page.qty = qty;
+
+    page.addToPending();
+
+    assert.equal(page.pending.length, 0);
+    assert.equal(page.entryError, "Enter a whole number quantity.");
+  }
+}
+
+function testExpiredReasonDependsOnProductCategory() {
+  const page = createPage();
+  page.selected = { ...product(), category: "pet_shop" };
+  page.reason = "expired";
+  assert.equal(page.canUseExpired(), false);
+
+  page.qty = "1";
+  page.addToPending();
+  assert.equal(page.pending.length, 1);
+  assert.equal(page.pending[0].reason, "used");
+
+  page.selected = { ...product(), category: "food" };
+  assert.equal(page.canUseExpired(), true);
+}
+
+function testSellingPriceOnlyAppliesToSoldReason() {
+  const page = createPage();
+  page.pickItem(product());
+  assert.equal(page.sellingPrice, "100.00");
+  page.qty = "1";
+  page.sellingPrice = "150";
+  page.reason = "used";
+  page.addToPending();
+
+  assert.equal(page.pending[0].selling_price, null);
+
+  page.pickItem(product());
+  page.qty = "1";
+  page.reason = "sold";
+  page.sellingPrice = "150";
+  page.addToPending();
+
+  assert.equal(page.pending[1].selling_price, 150);
+
+  assert.match(stockOutPage, /:value="selected\?\.selling_price \?\? ''" type="text" readonly/);
+  assert.doesNotMatch(stockOutPage, /x-model="sellingPrice" type="number"/);
+}
+
 async function testSuccessfulStockOutShowsReusableSuccessToast() {
   const page = createPage({ stockOut: async () => {} });
   page.pending = [{ item_id: 1, quantity: 2, reason: "used", selling_price: null, notes: null }];
@@ -82,6 +137,9 @@ async function testSuccessfulStockOutShowsReusableSuccessToast() {
 
 (async () => {
   testPendingStockOutReducesDisplayedAndValidatedAvailability();
+  testStockOutRejectsDecimalQuantities();
+  testExpiredReasonDependsOnProductCategory();
+  testSellingPriceOnlyAppliesToSoldReason();
   await testSuccessfulStockOutShowsReusableSuccessToast();
   console.log("frontend stock-out regression checks passed");
 })().catch((error) => {

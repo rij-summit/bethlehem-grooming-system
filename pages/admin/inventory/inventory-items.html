@@ -7,6 +7,7 @@
     <title>Products | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../../css/output.css" />
     <link rel="stylesheet" href="../../../css/custom.css?v=staff-sidebar-20260719" />
+    <link rel="stylesheet" href="../../../css/components/toast.css?v=success-toast-20260920" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   </head>
@@ -209,14 +210,18 @@
               <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
                 <!-- Name -->
                 <div>
-                  <label class="block text-sm font-semibold text-slate-700 mb-1.5">Item Name *</label>
+                  <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Item Name <span style="color:#ef4444" class="font-bold">*</span>
+                  </label>
                   <input x-model="form.item_name" type="text" placeholder="e.g. Frontline Plus Spot-On"
                     class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                 </div>
                 <!-- Category + Unit -->
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Category *</label>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                      Category <span style="color:#ef4444" class="font-bold">*</span>
+                    </label>
                     <select x-model="form.category"
                       class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
                       <option value="">Select…</option>
@@ -229,7 +234,9 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Unit *</label>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+                      Unit <span style="color:#ef4444" class="font-bold">*</span>
+                    </label>
                     <input x-model="form.unit" type="text" list="unit-suggestions" placeholder="bottle, vial, pcs…"
                       class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                     <datalist id="unit-suggestions">
@@ -341,12 +348,18 @@
             </div>
           </div>
 
-          <!-- Toast -->
-          <div x-show="toast.show" style="display:none" x-transition
-            class="fixed bottom-6 right-6 z-[70] flex items-center gap-3 rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-lg"
-            :style="toast.ok ? 'background-color:#16a34a' : 'background-color:#dc2626'">
-            <i :data-lucide="toast.ok ? 'check-circle' : 'x-circle'" class="h-4 w-4"></i>
-            <span x-text="toast.msg"></span>
+          <!-- Reusable success toast -->
+          <div x-show="toast.show" x-transition
+            class="app-success-toast"
+            :class="{ 'is-visible': toast.show }"
+            role="status" aria-live="polite">
+            <span class="app-success-toast__icon">
+              <i :data-lucide="toast.ok ? 'check' : 'x'" aria-hidden="true"></i>
+            </span>
+            <span class="app-success-toast__message" x-text="toast.msg"></span>
+            <span class="app-success-toast__progress" aria-hidden="true">
+              <span class="app-success-toast__progress-fill"></span>
+            </span>
           </div>
 
         </main>

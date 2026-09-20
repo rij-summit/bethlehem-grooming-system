@@ -238,6 +238,7 @@
                     <th class="px-4 py-3">Item</th>
                     <th class="px-4 py-3">Type</th>
                     <th class="px-4 py-3 hidden sm:table-cell">Qty</th>
+                    <th class="px-4 py-3 hidden lg:table-cell">Processed By</th>
                     <th class="px-4 py-3 hidden md:table-cell">Date</th>
                   </tr></thead>
                   <tbody class="divide-y divide-[#e6eef7]">
@@ -246,6 +247,7 @@
                         <td class="px-4 py-3 font-semibold text-slate-800" x-text="tx.item_name ?? tx.item?.item_name ?? '—'"></td>
                         <td class="px-4 py-3"><span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="typeStyle(tx.type)" x-text="tx.type==='stock_in'?'Stock In':'Stock Out'"></span></td>
                         <td class="px-4 py-3 hidden sm:table-cell text-slate-600" x-text="fmtQty(tx.quantity)"></td>
+                        <td class="px-4 py-3 hidden lg:table-cell text-xs text-slate-500" x-text="tx.performed_by_name ?? '—'"></td>
                         <td class="px-4 py-3 hidden md:table-cell text-slate-400 text-xs" x-text="fmtDate(tx.created_at)"></td>
                       </tr>
                     </template>

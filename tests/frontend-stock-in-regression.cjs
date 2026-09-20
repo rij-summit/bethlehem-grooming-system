@@ -82,6 +82,25 @@ function testExpiryDateIsRequired() {
   assert.equal(page.entryError, "Expiry date is required.");
 }
 
+function testPetShopAndMiscellaneousDoNotRequireAnExpiryDate() {
+  for (const category of ["pet_shop", "miscellaneous"]) {
+    const page = createPage();
+    page.selected = {
+      item_id: 1,
+      item_name: "Non-expiring product",
+      unit: "piece",
+      category,
+    };
+    page.qty = "1";
+
+    page.addToPending();
+
+    assert.equal(page.entryError, "");
+    assert.equal(page.pending.length, 1);
+    assert.equal(page.pending[0].expiry_date, null);
+  }
+}
+
 function testAllowsSameProductWithDifferentExpiryDates() {
   const page = createPage();
   page.selected = {
@@ -184,6 +203,7 @@ async function testFailedStockInDoesNotShowSuccessToast() {
 (async () => {
   testClientRejectsDecimalStockInQuantity();
   testExpiryDateIsRequired();
+  testPetShopAndMiscellaneousDoNotRequireAnExpiryDate();
   testAllowsSameProductWithDifferentExpiryDates();
   testSearchResultsDisplayWholeNumberQuantity();
   testDeactivatedSearchResultIsRenderedAsAnInertNotice();

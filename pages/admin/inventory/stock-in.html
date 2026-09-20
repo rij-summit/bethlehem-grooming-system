@@ -129,9 +129,9 @@
                           <div class="flex items-center justify-between rounded-xl border border-[#D4DAE1] bg-[#F3F5F7] px-4 py-3 text-sm">
                             <div class="min-w-0 text-left">
                               <p class="truncate font-semibold text-[#687482]" x-text="item.item_name"></p>
-                              <p class="text-xs text-[#A6B3C2]">This product is deactivated and cannot receive stock.</p>
+                              <p class="text-xs text-[#A6B3C2]">This product cannot receive stock.</p>
                             </div>
-                            <span class="ml-3 shrink-0 rounded-full bg-[#E8EBEF] px-3 py-1 text-xs font-semibold text-[#596572]">DEACTIVATED</span>
+                            <span class="ml-3 shrink-0 rounded-full bg-[#E8EBEF] px-3 py-1 text-xs font-semibold text-[#596572]">Deactivated</span>
                           </div>
                         </template>
                       </div>
@@ -346,7 +346,7 @@
                         <input x-model="batchNumber" type="text" placeholder="e.g. BT-2024-001"
                           class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                       </div>
-                      <div>
+                      <div x-show="needsExpiry" x-cloak>
                         <label class="mb-1 block text-xs font-semibold text-slate-600">
                           Expiry Date <span style="color:#ef4444" class="font-bold">*</span>  
                         </label>
@@ -481,7 +481,7 @@
     <script src="../../../scripts/services/inventory-service.js?v=inventory-search-inactive-20260920"></script>
     <script src="../../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
     <script src="../../../scripts/components/success-toast.js?v=success-toast-20260920"></script>
-    <script src="../../../scripts/components/admin-stock-in.js?v=stock-in-deactivated-search-20260920"></script>
+    <script src="../../../scripts/components/admin-stock-in.js?v=stock-in-category-expiry-20260920"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

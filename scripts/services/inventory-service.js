@@ -12,12 +12,13 @@ var InventoryAPI = (() => {
 
   // ── Items ─────────────────────────────────────────────────────────────────
 
-  function getItems({ q = "", category = "", low_stock = false, include_inactive = false, page = 1 } = {}) {
+  function getItems({ q = "", category = "", low_stock = false, include_inactive = false, inactive_only = false, page = 1 } = {}) {
     const p = new URLSearchParams({ page });
     if (q)                p.set("q", q);
     if (category)         p.set("category", category);
     if (low_stock)        p.set("low_stock", "1");
     if (include_inactive) p.set("include_inactive", "1");
+    if (inactive_only)    p.set("inactive_only", "1");
     return request("GET", `/inventory/items?${p}`);
   }
 
@@ -43,8 +44,9 @@ var InventoryAPI = (() => {
 
   // ── Barcode & search ──────────────────────────────────────────────────────
 
-  function findByBarcode(barcode) {
-    return request("GET", `/inventory/barcode/${encodeURIComponent(barcode)}`);
+  function findByBarcode(barcode, includeInactive = false) {
+    const query = includeInactive ? "?include_inactive=1" : "";
+    return request("GET", `/inventory/barcode/${encodeURIComponent(barcode)}${query}`);
   }
 
   function searchItems(q, includeInactive = false) {

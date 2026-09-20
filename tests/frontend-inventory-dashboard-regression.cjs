@@ -8,6 +8,10 @@ const source = fs.readFileSync(
   path.join(projectRoot, "scripts/components/admin-inventory-dashboard.js"),
   "utf8",
 );
+const dashboardPage = fs.readFileSync(
+  path.join(projectRoot, "pages/admin/inventory/inventory-dashboard.html"),
+  "utf8",
+);
 
 function createPage(inventoryApi) {
   const context = {
@@ -95,9 +99,15 @@ function testPaginationPageNumbersStaySmallAndIncludeTheCurrentPage() {
   assert.deepEqual(Array.from(page.paginationPages(8, 8)), [4, 5, 6, 7, 8]);
 }
 
+function testRecentTransactionsShowTheSharedActorName() {
+  assert.match(dashboardPage, />Processed By<\/th>/);
+  assert.match(dashboardPage, /x-text="tx\.performed_by_name \?\? '—'"/);
+}
+
 (async () => {
   await testEachDashboardTableLoadsItsPageIndependently();
   testPaginationPageNumbersStaySmallAndIncludeTheCurrentPage();
+  testRecentTransactionsShowTheSharedActorName();
   console.log("frontend inventory dashboard regression checks passed");
 })().catch((error) => {
   console.error(error);

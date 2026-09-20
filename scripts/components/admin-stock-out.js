@@ -57,6 +57,7 @@ function adminStockOut() {
     pickItem(item) {
       this.selected      = item;
       this.sellingPrice  = item.selling_price ?? "";
+      if (this.reason === "expired" && !this.canUseExpired(item)) this.reason = "used";
       this.qty           = "";
       this.notes         = "";
       this.entryError    = "";
@@ -76,6 +77,10 @@ function adminStockOut() {
       this.entryError   = "";
     },
 
+    canUseExpired(item = this.selected) {
+      return !!item && !["pet_shop", "miscellaneous"].includes(item.category);
+    },
+
     availableForReason(item = this.selected) {
       if (!item) return 0;
       const pendingQuantity = this.pending
@@ -91,9 +96,15 @@ function adminStockOut() {
     addToPending() {
       this.entryError = "";
       if (!this.selected) { this.entryError = "Select an item first."; return; }
+      if (this.reason === "expired" && !this.canUseExpired()) {
+        this.reason = "used";
+      }
 
-      const qty = parseFloat(this.qty);
-      if (!qty || qty <= 0) { this.entryError = "Enter a valid quantity."; return; }
+      const qty = Number(this.qty);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        this.entryError = "Enter a whole number quantity.";
+        return;
+      }
 
       const available = this.availableForReason();
       if (qty > available) {
@@ -105,9 +116,10 @@ function adminStockOut() {
         p.item_id === this.selected.item_id && p.reason === this.reason
       );
       if (existing) {
-        const newQty = Math.round((existing.quantity + qty) * 100) / 100;
-        existing.quantity      = newQty;
-        if (this.sellingPrice !== "") existing.selling_price = parseFloat(this.sellingPrice);
+        existing.quantity      += qty;
+        if (this.reason === "sold" && this.sellingPrice !== "") {
+          existing.selling_price = parseFloat(this.sellingPrice);
+        }
         if (this.notes.trim())        existing.notes         = this.notes.trim();
       } else {
         this.pending.push({
@@ -117,7 +129,9 @@ function adminStockOut() {
           category:      this.selected.category,
           quantity:      qty,
           reason:        this.reason,
-          selling_price: this.sellingPrice !== "" ? parseFloat(this.sellingPrice) : null,
+          selling_price: this.reason === "sold" && this.sellingPrice !== ""
+            ? parseFloat(this.sellingPrice)
+            : null,
           notes:         this.notes.trim() || null,
         });
       }
