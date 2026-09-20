@@ -1,4 +1,4 @@
-// inventory-service.js — HTTP layer for all inventory and supplier endpoints.
+// inventory-service.js — HTTP layer for inventory and POS endpoints.
 // Loaded as a plain <script> before Alpine. Exposes global InventoryAPI.
 
 var InventoryAPI = (() => {
@@ -47,17 +47,18 @@ var InventoryAPI = (() => {
     return request("GET", `/inventory/barcode/${encodeURIComponent(barcode)}`);
   }
 
-  function searchItems(q) {
-    return request("GET", `/inventory/search?q=${encodeURIComponent(q)}`);
+  function searchItems(q, includeInactive = false) {
+    const params = new URLSearchParams({ q });
+    if (includeInactive) params.set("include_inactive", "1");
+    return request("GET", `/inventory/search?${params}`);
   }
 
   // ── Stock movements ───────────────────────────────────────────────────────
 
-  function stockIn(items, supplierId = null) {
+  function stockIn(items) {
     // items: [{ item_id, quantity, reason, unit_cost?, batch_number?, expiry_date?, notes? }]
     return request("POST", "/inventory/stock-in", {
       items,
-      supplier_id: supplierId,
     });
   }
 
@@ -94,27 +95,6 @@ var InventoryAPI = (() => {
     return request("GET", `/inventory/summary?page=${page}`);
   }
 
-  // ── Suppliers ─────────────────────────────────────────────────────────────
-
-  function getSuppliers({ q = "", paginate = false, page = 1 } = {}) {
-    const p = new URLSearchParams();
-    if (q)       p.set("q", q);
-    if (paginate) { p.set("paginate", "1"); p.set("page", page); }
-    return request("GET", `/inventory/suppliers?${p}`);
-  }
-
-  function createSupplier(payload) {
-    return request("POST", "/inventory/suppliers", payload);
-  }
-
-  function updateSupplier(id, payload) {
-    return request("PUT", `/inventory/suppliers/${id}`, payload);
-  }
-
-  function deactivateSupplier(id) {
-    return request("POST", `/inventory/suppliers/${id}/deactivate`);
-  }
-
   // ── POS ───────────────────────────────────────────────────────────────────
 
   function processSale(payload) {
@@ -142,8 +122,6 @@ var InventoryAPI = (() => {
     stockIn, stockOut,
     // alerts + history
     getLowStock, getExpiryAlerts, getAlertBadge, getTransactions, getSummary,
-    // suppliers
-    getSuppliers, createSupplier, updateSupplier, deactivateSupplier,
     // pos
     processSale, getReceipt, getPosTransactions,
   };

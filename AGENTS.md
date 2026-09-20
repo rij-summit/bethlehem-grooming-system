@@ -10,42 +10,70 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 Before implementing:
 
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
+- State material assumptions explicitly. If ambiguity could significantly affect the implementation, explain it and ask before making a consequential assumption.
+- If multiple materially different interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
 
-## 2. Simplicity First
+## 2. Focused Dependency Tracing
+
+**Start local. Expand only when necessary.**
+
+When investigating a task:
+
+- Start with the directly affected file, page, component, feature, or module.
+- Inspect immediate dependencies such as scripts, handlers, controllers, services, or validation.
+- Trace routes, APIs, models, database constraints, shared utilities, or tests only when required.
+- Broaden repository search only if the relevant logic cannot be found or a dependency requires it.
+- Do not let the initial scope block inspection of dependencies necessary to complete the task correctly.
+
+## 3. Simplicity First
 
 **Minimum code that solves the problem. Nothing speculative.**
 
 - No features beyond what was asked.
 - No abstractions for single-use code.
 - No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+- No speculative error handling for scenarios outside the task or established system behavior.
+- If the implementation is substantially longer or more complex than necessary, simplify it.
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## 3. Surgical Changes
+## 4. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
 
 When editing existing code:
 
+- Do not refactor unrelated code unless the task requires it.
+- If directly affected code has a clear structural problem that makes the task harder, riskier, or unnecessarily complex, point it out.
+- Apply a refactor only if it is small, contained, and directly supports the task; otherwise ask first.
 - Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+- Follow existing project conventions unless they conflict with the requested change or introduce a clear structural problem.
+- If you notice unrelated dead code, mention it — don't delete it.
 
 When your changes create orphans:
 
-- Remove imports/variables/functions that YOUR changes made unused.
+- Remove imports, variables, or functions made unused by your changes.
 - Don't remove pre-existing dead code unless asked.
 
 The test: Every changed line should trace directly to the user's request.
 
-## 4. Frontend Performance
+## 5. System Performance Awareness
+
+**Avoid degrading performance with every change.**
+
+For all implementation tasks:
+
+ - Do not introduce unnecessary database queries, network requests, re-renders, DOM work, or repeated computations.
+ - Watch for N+1 queries — use eager loading (with()) instead of querying inside a loop, whether in a controller, model accessor, or Blade @foreach.
+ - Avoid changes that noticeably worsen page load or interaction performance. Treat any query added inside a loop over user-facing data as significant.
+ - Reuse already-loaded data when appropriate instead of fetching the same data repeatedly.
+ - Prefer paginating large result sets over loading full tables.
+ - Avoid loading unrelated features or data for the current page/tab when they are not needed.
+ - If the requested implementation would create a significant performance problem, explain the tradeoff briefly and propose a simpler, efficient approach before implementing.
+ - Do not perform unrelated performance refactors unless the task specifically asks for optimization.
+
+## 6. Frontend Performance
 
 **Measure first. Optimize the actual bottleneck. Preserve behavior.**
 
@@ -59,36 +87,24 @@ When investigating performance:
 
 - Measure or inspect the current behavior before making changes.
 - Identify the actual bottleneck before optimizing.
-- Do not make unrelated refactors solely for performance.
 - Do not remove or change existing functionality unless required.
 - Prefer the smallest change that fixes the performance issue.
 - Verify that the affected feature still works after optimization.
 - Compare performance before and after the change when possible.
 
-## 5. System Performance Awareness
 
-**Preserve or improve performance with every change.**
-
-For all implementation tasks:
-
- - Do not introduce unnecessary database queries, network requests, re-renders, DOM work, or repeated computations.
- - Watch for N+1 queries — use eager loading (with()) instead of querying inside a loop, whether in a controller, model accessor, or Blade @foreach.
- - Avoid changes that noticeably worsen page load or interaction performance. Treat any query added inside a loop over user-facing data as significant.
- - Reuse already-loaded data when appropriate instead of fetching the same data repeatedly.
- - Prefer paginating large result sets over loading full tables.
- - Avoid loading unrelated features or data for the current page/tab when they are not needed.
- - If the requested implementation would create a significant performance problem, explain the tradeoff briefly and propose a simpler, efficient approach before implementing.
- - Do not perform unrelated performance refactors unless the task specifically asks for optimization.
-
-## 6. Goal-Driven Execution
+## 7. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
 Transform tasks into verifiable goals:
 
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+- "Add validation" → "Verify invalid inputs are rejected; add or update focused tests when appropriate"
+- "Fix the bug" → "Reproduce the bug, fix it, and verify the affected behavior"
+- "Refactor X" → "Verify relevant behavior before and after the change"
+
+- Run only the smallest relevant tests/checks for the files and behavior changed; avoid unrelated or redundant verification.
+- Run broader test suites or production builds only when the scope of the change warrants them.
 
 For multi-step tasks, state a brief plan:
 
@@ -98,7 +114,7 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 ```
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+Strong success criteria let you loop independently. Weak criteria ("make it work") may require clarification.
 
 ---
 

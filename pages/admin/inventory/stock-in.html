@@ -7,6 +7,7 @@
     <title>Stock In | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../../css/output.css" />
     <link rel="stylesheet" href="../../../css/custom.css?v=staff-sidebar-20260719" />
+    <link rel="stylesheet" href="../../../css/components/toast.css?v=success-toast-20260920" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   </head>
@@ -63,14 +64,8 @@
             </div>
           </section>
 
-          <!-- Alerts -->
+          <!-- Error alert -->
           <div class="mt-4 max-w-2xl space-y-3">
-            <div x-show="success" style="display:none"
-              class="flex items-start gap-3 rounded-2xl p-4 text-sm font-semibold"
-              style="background-color:#d1fae5;color:#065f46">
-              <i data-lucide="check-circle" class="h-4 w-4 mt-0.5 shrink-0"></i>
-              <span x-text="success"></span>
-            </div>
             <div x-show="error" style="display:none"
               class="flex items-start gap-3 rounded-2xl p-4 text-sm"
               style="background-color:#fee2e2;color:#b91c1c">
@@ -84,7 +79,7 @@
             <!-- ── Step 1: Search item ─────────────────────────────────────── -->
             <div class="rounded-2xl border border-[#e6eef7] bg-white shadow-sm overflow-hidden">
               <div class="px-5 py-4 border-b border-[#e6eef7]" style="background-color:#f8fafc">
-                <p class="text-sm font-bold text-slate-700">1. Search Item</p>
+                <p class="text-sm font-bold text-slate-700">Search Item</p>
               </div>
               <div class="p-5">
 
@@ -117,16 +112,29 @@
                   <div x-show="searchResults.length > 0" style="display:none"
                     class="mt-1 overflow-hidden rounded-2xl border border-[#d7e3ef] bg-white shadow-lg">
                     <template x-for="item in searchResults" :key="item.item_id">
-                      <button type="button" @click="pickItem(item)"
-                        class="flex w-full items-center justify-between px-4 py-3 text-sm transition hover:bg-[#eaf4fb]">
-                        <div class="text-left min-w-0">
-                          <p class="font-semibold text-slate-800 truncate" x-text="item.item_name"></p>
-                          <p class="text-xs text-slate-400 capitalize" x-text="item.category?.replace('_',' ')"></p>
-                        </div>
-                        <span class="ml-3 shrink-0 text-xs text-slate-500">
-                          <span x-text="item.quantity_on_hand"></span> <span x-text="item.unit"></span>
-                        </span>
-                      </button>
+                      <div>
+                        <template x-if="item.is_active">
+                          <button type="button" @click="pickItem(item)"
+                            class="flex w-full items-center justify-between px-4 py-3 text-sm transition hover:bg-[#eaf4fb]">
+                            <div class="min-w-0 text-left">
+                              <p class="truncate font-semibold text-slate-800" x-text="item.item_name"></p>
+                              <p class="text-xs capitalize text-slate-400" x-text="item.category?.replace('_',' ')"></p>
+                            </div>
+                            <span class="ml-3 shrink-0 text-xs text-slate-500">
+                              <span x-text="Math.trunc(Number(item.quantity_on_hand ?? 0))"></span> <span x-text="item.unit"></span>
+                            </span>
+                          </button>
+                        </template>
+                        <template x-if="!item.is_active">
+                          <div class="flex items-center justify-between rounded-xl border border-[#D4DAE1] bg-[#F3F5F7] px-4 py-3 text-sm">
+                            <div class="min-w-0 text-left">
+                              <p class="truncate font-semibold text-[#687482]" x-text="item.item_name"></p>
+                              <p class="text-xs text-[#A6B3C2]">This product is deactivated and cannot receive stock.</p>
+                            </div>
+                            <span class="ml-3 shrink-0 rounded-full bg-[#E8EBEF] px-3 py-1 text-xs font-semibold text-[#596572]">DEACTIVATED</span>
+                          </div>
+                        </template>
+                      </div>
                     </template>
                   </div>
 
@@ -162,7 +170,9 @@
                       <!-- Name + Barcode -->
                       <div class="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label class="mb-1 block text-xs font-semibold text-slate-600">Product Name *</label>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600">
+                            Product Name <span style="color:#ef4444" class="font-bold">*</span>
+                          </label>
                           <input x-model="createForm.item_name" type="text" placeholder="e.g. Amoxicillin 500mg"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                         </div>
@@ -176,7 +186,9 @@
                       <!-- Category + Unit -->
                       <div class="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label class="mb-1 block text-xs font-semibold text-slate-600">Category *</label>
+                          <label class="mb-1 block text-xs font-semibold text-slate-600">
+                            Category <span style="color:#ef4444" class="font-bold">*</span>
+                          </label>
                           <select x-model="createForm.category"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
                             <option value="">— Select —</option>
@@ -189,9 +201,33 @@
                           </select>
                         </div>
                         <div>
-                          <label class="mb-1 block text-xs font-semibold text-slate-600">Unit *</label>
-                          <input x-model="createForm.unit" type="text" placeholder="tablet, vial, kg, pc…"
-                            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                          <label class="mb-1 block text-xs font-semibold text-slate-600">
+                            Unit <span style="color:#ef4444" class="font-bold">*</span>
+                          </label>
+                          <select x-model="createForm.unit" required
+                            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                            <option value="">Select unit ▾</option>
+                            <option value="pc">Piece (pc)</option>
+                            <option value="tablet">Tablet</option>
+                            <option value="capsule">Capsule</option>
+                            <option value="bottle">Bottle</option>
+                            <option value="vial">Vial</option>
+                            <option value="sachet">Sachet</option>
+                            <option value="pack">Pack</option>
+                            <option value="box">Box</option>
+                            <option value="can">Can</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="g">Gram (g)</option>
+                            <option value="L">Liter (L)</option>
+                            <option value="mL">Milliliter (mL)</option>
+                            <option value="other">Other…</option>
+                          </select>
+                          <div x-show="createForm.unit === 'other'" x-cloak class="mt-2">
+                            <label class="mb-1 block text-xs font-semibold text-slate-600">Custom unit *</label>
+                            <input x-model="createForm.customUnit" type="text" :required="createForm.unit === 'other'"
+                              placeholder="Enter custom unit"
+                              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                          </div>
                         </div>
                       </div>
 
@@ -253,7 +289,7 @@
                       </div>
                       <p class="text-xs text-slate-500">
                         Current stock:
-                        <span class="font-semibold" x-text="selected?.quantity_on_hand"></span>
+                        <span class="font-semibold" x-text="Math.trunc(Number(selected?.quantity_on_hand ?? 0))"></span>
                         <span x-text="selected?.unit"></span>
                       </p>
                     </div>
@@ -278,8 +314,10 @@
                     <!-- Row 1: Qty / Cost / Reason -->
                     <div class="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <label class="mb-1 block text-xs font-semibold text-slate-600">Quantity *</label>
-                        <input x-model="qty" data-qty-input type="number" step="0.01" min="0.01" placeholder="0"
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">
+                          Quantity <span style="color:#ef4444" class="font-bold">*</span>
+                        </label>
+                        <input x-model="qty" data-qty-input type="number" step="1" min="1" inputmode="numeric" placeholder="0"
                           class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                       </div>
                       <div>
@@ -310,7 +348,7 @@
                       </div>
                       <div>
                         <label class="mb-1 block text-xs font-semibold text-slate-600">
-                          Expiry Date <span style="color:#ef4444" class="font-bold">*</span>
+                          Expiry Date <span style="color:#ef4444" class="font-bold">*</span>  
                         </label>
                         <input x-model="expiryDate" type="date" :min="today"
                           class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
@@ -343,31 +381,11 @@
               </div>
             </div>
 
-            <!-- ── Supplier ─────────────────────────────────────────────────── -->
-            <div class="rounded-2xl border border-[#e6eef7] bg-white shadow-sm overflow-hidden">
-              <div class="px-5 py-4 border-b border-[#e6eef7]" style="background-color:#f8fafc">
-                <p class="text-sm font-bold text-slate-700">2. Supplier <span class="font-normal text-slate-400">(optional)</span></p>
-              </div>
-              <div class="p-5">
-                <select x-model="supplierId"
-                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
-                  <option value="">— No supplier —</option>
-                  <template x-for="s in suppliers" :key="s.supplier_id">
-                    <option :value="s.supplier_id" x-text="s.supplier_name"></option>
-                  </template>
-                </select>
-                <p class="mt-2 text-xs text-slate-400">
-                  Supplier not in the list?
-                  <a href="./suppliers.html" class="font-semibold hover:underline" style="color:#315b7e">Manage suppliers →</a>
-                </p>
-              </div>
-            </div>
-
             <!-- ── Pending list ─────────────────────────────────────────────── -->
             <div x-show="pending.length > 0" style="display:none"
               class="overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
               <div class="flex items-center justify-between border-b border-[#e6eef7] px-5 py-4" style="background-color:#f8fafc">
-                <p class="text-sm font-bold text-slate-700">3. Items to Stock In</p>
+                <p class="text-sm font-bold text-slate-700">Items to Stock In</p>
                 <span class="rounded-full px-2.5 py-0.5 text-xs font-bold"
                   style="background-color:#fef3c7;color:#92400e"
                   x-text="pending.length + ' item(s)'"></span>
@@ -460,9 +478,10 @@
       </div>
     </div>
     <script src="../../../scripts/api.js?v=session-inactivity-20260828"></script>
-    <script src="../../../scripts/services/inventory-service.js?v=inventory-security-20260816"></script>
+    <script src="../../../scripts/services/inventory-service.js?v=inventory-search-inactive-20260920"></script>
     <script src="../../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
-    <script src="../../../scripts/components/admin-stock-in.js?v=batch-expiry-20260816"></script>
+    <script src="../../../scripts/components/success-toast.js?v=success-toast-20260920"></script>
+    <script src="../../../scripts/components/admin-stock-in.js?v=stock-in-deactivated-search-20260920"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

@@ -11,7 +11,7 @@ function adminStockIn() {
     showCreateForm: false,
     createForm: {
       item_name: "", barcode: "", category: "",
-      unit: "", unit_cost: "", selling_price: "", reorder_level: "",
+      unit: "", customUnit: "", unit_cost: "", selling_price: "", reorder_level: "",
     },
     createBusy: false,
     createError: "",
@@ -30,32 +30,19 @@ function adminStockIn() {
     notes: "",
     entryError: "",
 
-    // ── Supplier ──────────────────────────────────────────────────────────────
-    supplierId: "",
-    suppliers: [],
-
     // ── Pending list ──────────────────────────────────────────────────────────
     pending: [],
 
     // ── Submit state ──────────────────────────────────────────────────────────
     submitting: false,
     error: "",
-    success: "",
 
     // ── Camera scanner ────────────────────────────────────────────────────────
     scannerActive: false,
     _scanner: null,
 
-    async init() {
-      await this.loadSuppliers();
+    init() {
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
-    },
-
-    async loadSuppliers() {
-      try {
-        const res = await InventoryAPI.getSuppliers();
-        this.suppliers = res.data ?? [];
-      } catch { this.suppliers = []; }
     },
 
     // ── Search ────────────────────────────────────────────────────────────────
@@ -71,7 +58,7 @@ function adminStockIn() {
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(async () => {
         try {
-          const res = await InventoryAPI.searchItems(q);
+          const res = await InventoryAPI.searchItems(q, true);
           this.searchResults = res.data;
           this.noResults     = res.data.length === 0;
           if (!this.noResults) this.showCreateForm = false;
@@ -90,13 +77,14 @@ function adminStockIn() {
         this.noResults = false;
         this.pickItem(res.data);
       } catch {
-        const res = await InventoryAPI.searchItems(this.searchQuery.trim()).catch(() => ({ data: [] }));
+        const res = await InventoryAPI.searchItems(this.searchQuery.trim(), true).catch(() => ({ data: [] }));
         this.searchResults = res.data;
         this.noResults     = res.data.length === 0;
       }
     },
 
     pickItem(item) {
+      if (item.is_active === false) return;
       this.selected       = item;
       this.unitCost       = item.unit_cost ?? "";
       this.qty            = "";
@@ -136,6 +124,7 @@ function adminStockIn() {
         barcode:       "",
         category:      "",
         unit:          "",
+        customUnit:    "",
         unit_cost:     "",
         selling_price: "",
         reorder_level: "",
@@ -154,7 +143,11 @@ function adminStockIn() {
       this.createError = "";
       if (!this.createForm.item_name.trim()) { this.createError = "Product name is required."; return; }
       if (!this.createForm.category)          { this.createError = "Category is required."; return; }
-      if (!this.createForm.unit.trim())        { this.createError = "Unit is required."; return; }
+      if (!this.createForm.unit)              { this.createError = "Unit is required."; return; }
+      if (this.createForm.unit === "other" && !this.createForm.customUnit.trim()) {
+        this.createError = "Custom unit is required.";
+        return;
+      }
 
       this.createBusy = true;
       try {
@@ -162,7 +155,9 @@ function adminStockIn() {
           item_name:     this.createForm.item_name.trim(),
           barcode:       this.createForm.barcode.trim() || null,
           category:      this.createForm.category,
-          unit:          this.createForm.unit.trim(),
+          unit:          this.createForm.unit === "other"
+            ? this.createForm.customUnit.trim()
+            : this.createForm.unit,
           unit_cost:     this.createForm.unit_cost     !== "" ? parseFloat(this.createForm.unit_cost)     : 0,
           selling_price: this.createForm.selling_price !== "" ? parseFloat(this.createForm.selling_price) : null,
           reorder_level: this.createForm.reorder_level !== "" ? parseFloat(this.createForm.reorder_level) : 0,
@@ -207,8 +202,11 @@ function adminStockIn() {
     addToPending() {
       this.entryError = "";
       if (!this.selected)        { this.entryError = "Select an item first.";       return; }
-      const qty = parseFloat(this.qty);
-      if (!qty || qty <= 0)      { this.entryError = "Enter a valid quantity.";      return; }
+      const qty = Number(this.qty);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        this.entryError = "Enter a whole number quantity.";
+        return;
+      }
       if (!this.expiryDate) {
         this.entryError = "Expiry date is required.";
         return;
@@ -218,15 +216,13 @@ function adminStockIn() {
         return;
       }
 
-      const existing = this.pending.find(p => p.item_id === this.selected.item_id);
+      const existing = this.pending.find(p =>
+        p.item_id === this.selected.item_id
+        && (p.batch_number ?? "") === this.batchNumber.trim()
+        && (p.expiry_date ?? "") === this.expiryDate
+      );
       if (existing) {
-        const sameBatch  = (existing.batch_number ?? "") === (this.batchNumber.trim() ?? "");
-        const sameExpiry = (existing.expiry_date  ?? "") === (this.expiryDate         ?? "");
-        if (!sameBatch || !sameExpiry) {
-          this.entryError = "This item is already in the list with a different batch/expiry. Remove the existing entry first, or combine them manually.";
-          return;
-        }
-        existing.quantity = Math.round((existing.quantity + qty) * 100) / 100;
+        existing.quantity += qty;
         if (this.unitCost !== "") existing.unit_cost = parseFloat(this.unitCost);
         if (this.notes.trim())    existing.notes     = this.notes.trim();
       } else {
@@ -256,26 +252,22 @@ function adminStockIn() {
     // ── Submit ────────────────────────────────────────────────────────────────
 
     async submit() {
-      this.error = this.success = "";
+      this.error = "";
       if (!this.pending.length) { this.error = "Add at least one item first."; return; }
 
       this.submitting = true;
       try {
-        await InventoryAPI.stockIn(
-          this.pending.map(p => ({
-            item_id:      p.item_id,
-            quantity:     p.quantity,
-            reason:       p.reason,
-            unit_cost:    p.unit_cost,
-            batch_number: p.batch_number,
-            expiry_date:  p.expiry_date,
-            notes:        p.notes,
-          })),
-          this.supplierId || null
-        );
-        this.success    = `Stock-in recorded for ${this.pending.length} item(s).`;
+        await InventoryAPI.stockIn(this.pending.map(p => ({
+          item_id:      p.item_id,
+          quantity:     p.quantity,
+          reason:       p.reason,
+          unit_cost:    p.unit_cost,
+          batch_number: p.batch_number,
+          expiry_date:  p.expiry_date,
+          notes:        p.notes,
+        })));
+        window.showSuccessToast("Stock-in recorded successfully.");
         this.pending    = [];
-        this.supplierId = "";
         this.clearSelected();
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
       } catch (err) {

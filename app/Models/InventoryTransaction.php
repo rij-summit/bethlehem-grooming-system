@@ -19,7 +19,6 @@ class InventoryTransaction extends Model
         'unit_cost_at_time',
         'selling_price_at_time',
         'reason',
-        'supplier_id',
         'batch_number',
         'expiry_date',
         'reference_type',
@@ -48,11 +47,6 @@ class InventoryTransaction extends Model
     public function item()
     {
         return $this->belongsTo(InventoryItem::class, 'item_id', 'item_id');
-    }
-
-    public function supplier()
-    {
-        return $this->belongsTo(Supplier::class, 'supplier_id', 'supplier_id');
     }
 
     public function performedBy()

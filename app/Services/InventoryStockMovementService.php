@@ -20,7 +20,7 @@ class InventoryStockMovementService
      * @param iterable<int, array<string, mixed>> $entries
      * @return array<int, array<string, mixed>>
      */
-    public function receive(User $actor, iterable $entries, ?int $supplierId = null): array
+    public function receive(User $actor, iterable $entries): array
     {
         $results = [];
 
@@ -46,7 +46,6 @@ class InventoryStockMovementService
                 'quantity' => $entry['quantity'],
                 'unit_cost_at_time' => $entry['unit_cost'] ?? $item->unit_cost,
                 'reason' => $entry['reason'],
-                'supplier_id' => $supplierId,
                 'batch_number' => $entry['batch_number'] ?? null,
                 'expiry_date' => $entry['expiry_date'] ?? null,
                 'notes' => $entry['notes'] ?? null,
@@ -74,7 +73,7 @@ class InventoryStockMovementService
      * @param iterable<int, array<string, mixed>> $entries
      * @return array<int, array<string, mixed>>
      */
-    public function remove(User $actor, iterable $entries): array
+    public function remove(User $actor, iterable $entries, bool $enforceBatchAvailability = true): array
     {
         $results = [];
         $reasonPriority = fn (string $reason): int => match ($reason) {
@@ -105,14 +104,19 @@ class InventoryStockMovementService
                 abort(422, "Insufficient stock for \"{$item->item_name}\". Available: {$item->quantity_on_hand} {$item->unit}.");
             }
 
-            $balance = $this->batchBalances->forItem((int) $item->item_id);
-            if (in_array($entry['reason'], ['sold', 'used'], true)
-                && (float) $balance['unexpired_quantity'] + 0.00001 < (float) $entry['quantity']) {
-                abort(422, "Insufficient unexpired stock for \"{$item->item_name}\". Unexpired available: {$balance['unexpired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
+            if ($enforceBatchAvailability && in_array($entry['reason'], ['sold', 'used'], true)) {
+                $balance = $this->batchBalances->forItem((int) $item->item_id);
+
+                if ((float) $balance['unexpired_quantity'] + 0.00001 < (float) $entry['quantity']) {
+                    abort(422, "Insufficient unexpired stock for \"{$item->item_name}\". Unexpired available: {$balance['unexpired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
+                }
             }
-            if ($entry['reason'] === 'expired'
-                && (float) $balance['expired_quantity'] + 0.00001 < (float) $entry['quantity']) {
-                abort(422, "Insufficient expired stock for \"{$item->item_name}\". Expired available: {$balance['expired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
+            if ($enforceBatchAvailability && $entry['reason'] === 'expired') {
+                $balance = $this->batchBalances->forItem((int) $item->item_id);
+
+                if ((float) $balance['expired_quantity'] + 0.00001 < (float) $entry['quantity']) {
+                    abort(422, "Insufficient expired stock for \"{$item->item_name}\". Expired available: {$balance['expired_quantity']} {$item->unit}; physical stock: {$item->quantity_on_hand} {$item->unit}.");
+                }
             }
 
             $item->decrement('quantity_on_hand', $entry['quantity']);

@@ -132,8 +132,6 @@ class InventoryController extends Controller
             'unit_cost_at_time'     => $t->unit_cost_at_time,
             'selling_price_at_time' => $t->selling_price_at_time,
             'reason'                => $t->reason,
-            'supplier_id'           => $t->supplier_id,
-            'supplier_name'         => $t->supplier?->supplier_name,
             'batch_number'          => $t->batch_number,
             'expiry_date'           => $t->expiry_date?->format('Y-m-d'),
             'reference_type'        => $t->reference_type,
@@ -293,12 +291,14 @@ class InventoryController extends Controller
         $this->requireAuth();
 
         $q = trim($request->query('q', ''));
+        $includeInactive = $request->boolean('include_inactive');
 
         if (strlen($q) < 2) {
             return response()->json(['data' => []]);
         }
 
-        $items = InventoryItem::where('is_active', 1)
+        $items = InventoryItem::query()
+            ->when(! $includeInactive, fn ($query) => $query->where('is_active', 1))
             ->where(function ($query) use ($q) {
                 $query->where('item_name', 'like', "%{$q}%")
                       ->orWhere('barcode', 'like', "%{$q}%");
@@ -321,19 +321,17 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'items'                => 'required|array|min:1',
             'items.*.item_id'      => 'required|integer|exists:inventory_items,item_id',
-            'items.*.quantity'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_QUANTITY,
+            'items.*.quantity'     => 'required|integer|min:1|max:99999999',
             'items.*.reason'       => 'required|in:purchase,return,adjustment',
             'items.*.unit_cost'    => 'nullable|numeric|decimal:0,2|min:0|max:'.self::MAX_MONEY,
             'items.*.batch_number' => 'nullable|string|max:100',
             'items.*.expiry_date'  => 'required|date|after_or_equal:today',
             'items.*.notes'        => 'nullable|string|max:500',
-            'supplier_id'          => 'nullable|integer|exists:suppliers,supplier_id',
         ]);
 
         $results = DB::transaction(fn () => $this->stockMovements->receive(
             $user,
             $validated['items'],
-            $validated['supplier_id'] ?? null,
         ));
 
         return response()->json(['data' => $results], 201);
@@ -357,6 +355,7 @@ class InventoryController extends Controller
         $results = DB::transaction(fn () => $this->stockMovements->remove(
             $user,
             $validated['items'],
+            enforceBatchAvailability: false,
         ));
 
         return response()->json(['data' => $results], 201);
@@ -368,7 +367,7 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $query = InventoryTransaction::with(['item', 'supplier', 'performedBy'])
+        $query = InventoryTransaction::with(['item', 'performedBy'])
                      ->orderBy('created_at', 'desc');
 
         if ($request->filled('item_id')) {
@@ -473,7 +472,7 @@ class InventoryController extends Controller
         $expiryCount = $this->currentExpiryAlerts()->count();
 
         $recentTransactionsPage = max(1, $request->integer('page', 1));
-        $recentTransactions = InventoryTransaction::with(['item', 'supplier', 'performedBy'])
+        $recentTransactions = InventoryTransaction::with(['item', 'performedBy'])
             ->orderBy('created_at', 'desc')
             ->paginate(10, ['*'], 'page', $recentTransactionsPage);
 

@@ -19,7 +19,6 @@ function adminStockOut() {
     // ── Submit state ──────────────────────────────────────────────────────────
     submitting: false,
     error: "",
-    success: "",
 
     // ── Camera scanner ────────────────────────────────────────────────────────
     scannerActive: false,
@@ -77,15 +76,14 @@ function adminStockOut() {
       this.entryError   = "";
     },
 
-    availableForReason(item = this.selected, reason = this.reason) {
+    availableForReason(item = this.selected) {
       if (!item) return 0;
-      if (["sold", "used"].includes(reason)) {
-        return parseFloat(item.unexpired_quantity ?? 0);
-      }
-      if (reason === "expired") {
-        return parseFloat(item.expired_quantity ?? 0);
-      }
-      return parseFloat(item.quantity_on_hand ?? 0);
+      const pendingQuantity = this.pending
+        .filter(pending => pending.item_id === item.item_id)
+        .reduce((sum, pending) => sum + Number(pending.quantity), 0);
+      const physicalQuantity = parseFloat(item.quantity_on_hand ?? 0);
+
+      return Math.max(0, Math.round((physicalQuantity - pendingQuantity) * 100) / 100);
     },
 
     // ── Add to pending ────────────────────────────────────────────────────────
@@ -98,30 +96,8 @@ function adminStockOut() {
       if (!qty || qty <= 0) { this.entryError = "Enter a valid quantity."; return; }
 
       const available = this.availableForReason();
-      const availabilityLabel = ["sold", "used"].includes(this.reason)
-        ? "unexpired"
-        : (this.reason === "expired" ? "expired" : "physical");
       if (qty > available) {
-        this.entryError = `Only ${available} ${this.selected.unit} ${availabilityLabel} stock available.`;
-        return;
-      }
-
-      const pendingForItem = this.pending.filter(p => p.item_id === this.selected.item_id);
-      const pendingPhysical = pendingForItem.reduce((sum, p) => sum + p.quantity, 0);
-      const physicalAvailable = parseFloat(this.selected.quantity_on_hand ?? 0);
-      if (pendingPhysical + qty > physicalAvailable) {
-        this.entryError = `Total would exceed physical stock (${physicalAvailable} ${this.selected.unit}).`;
-        return;
-      }
-
-      const sameAvailabilityGroup = this.reason === "expired"
-        ? ["expired"]
-        : (["sold", "used"].includes(this.reason) ? ["sold", "used"] : []);
-      const pendingForAvailability = pendingForItem
-        .filter(p => sameAvailabilityGroup.includes(p.reason))
-        .reduce((sum, p) => sum + p.quantity, 0);
-      if (sameAvailabilityGroup.length && pendingForAvailability + qty > available) {
-        this.entryError = `Total would exceed available ${availabilityLabel} stock (${available} ${this.selected.unit}).`;
+        this.entryError = "Insufficient stock. Please check available inventory.";
         return;
       }
 
@@ -196,7 +172,7 @@ function adminStockOut() {
     // ── Submit ────────────────────────────────────────────────────────────────
 
     async submit() {
-      this.error = this.success = "";
+      this.error = "";
       if (!this.pending.length) { this.error = "Add at least one item first."; return; }
 
       this.submitting = true;
@@ -210,7 +186,7 @@ function adminStockOut() {
             notes:         p.notes,
           }))
         );
-        this.success    = `Stock-out recorded for ${this.pending.length} item(s).`;
+        window.showSuccessToast(`Stock-out recorded for ${this.pending.length} item(s).`);
         this.pending    = [];
         this.clearSelected();
         this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });

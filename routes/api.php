@@ -25,7 +25,6 @@ use App\Http\Controllers\PetMedicalRecordController;
 use App\Http\Controllers\PetVaccinationController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WalkinController;
 use Illuminate\Support\Facades\Route;
 
@@ -178,7 +177,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void', [AdminVaccinationController::class, 'void']);
     });
 
-    // Inventory, suppliers, and POS expose stock and financial data only to staff/admin roles.
+    // Inventory and POS expose stock and financial data only to staff/admin roles.
     Route::middleware('role:admin,staff')->group(function () {
         // Admin — Inventory: Products
         Route::get('/inventory/items', [InventoryController::class, 'index']);
@@ -202,12 +201,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/inventory/alerts/expiry', [InventoryController::class, 'expiryAlerts']);
         Route::get('/inventory/alerts/badge', [InventoryController::class, 'alertBadge']);
         Route::get('/inventory/summary', [InventoryController::class, 'summary']);
-
-        // Admin — Suppliers
-        Route::get('/inventory/suppliers', [SupplierController::class, 'index']);
-        Route::post('/inventory/suppliers', [SupplierController::class, 'store']);
-        Route::put('/inventory/suppliers/{id}', [SupplierController::class, 'update']);
-        Route::post('/inventory/suppliers/{id}/deactivate', [SupplierController::class, 'deactivate']);
 
         // Admin — POS
         Route::post('/pos/transactions', [PosController::class, 'processSale']);

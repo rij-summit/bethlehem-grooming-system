@@ -56,7 +56,6 @@ class InventorySecurityRegressionTest extends TestCase
             $table->decimal('unit_cost_at_time', 8, 2)->nullable();
             $table->decimal('selling_price_at_time', 8, 2)->nullable();
             $table->string('reason');
-            $table->unsignedInteger('supplier_id')->nullable();
             $table->string('batch_number', 100)->nullable();
             $table->date('expiry_date')->nullable();
             $table->string('reference_type')->default('manual');
@@ -97,7 +96,7 @@ class InventorySecurityRegressionTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_every_inventory_supplier_and_pos_route_requires_staff_or_admin_role(): void
+    public function test_every_inventory_and_pos_route_requires_staff_or_admin_role(): void
     {
         $expected = [
             ['GET', 'api/inventory/items'],
@@ -115,10 +114,6 @@ class InventorySecurityRegressionTest extends TestCase
             ['GET', 'api/inventory/alerts/expiry'],
             ['GET', 'api/inventory/alerts/badge'],
             ['GET', 'api/inventory/summary'],
-            ['GET', 'api/inventory/suppliers'],
-            ['POST', 'api/inventory/suppliers'],
-            ['PUT', 'api/inventory/suppliers/{id}'],
-            ['POST', 'api/inventory/suppliers/{id}/deactivate'],
             ['POST', 'api/pos/transactions'],
             ['GET', 'api/pos/transactions'],
             ['GET', 'api/pos/transactions/{posId}'],
@@ -135,6 +130,17 @@ class InventorySecurityRegressionTest extends TestCase
             $this->assertNotNull($route, "Expected protected route [{$method} {$uri}] is not registered.");
             $this->assertContains('auth:sanctum', $route->gatherMiddleware());
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
+        }
+
+        foreach ([
+            'api/inventory/suppliers',
+            'api/inventory/suppliers/{id}',
+            'api/inventory/suppliers/{id}/deactivate',
+        ] as $uri) {
+            $this->assertNull(
+                $routes->first(fn (RoutingRoute $route) => $route->uri() === $uri),
+                "Supplier route [{$uri}] must not be registered.",
+            );
         }
     }
 
@@ -260,6 +266,25 @@ class InventorySecurityRegressionTest extends TestCase
         ]);
     }
 
+    public function test_inventory_search_can_include_deactivated_products_when_requested(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000019'));
+
+        $activeId = $this->createInventoryItem('Searchable Active Product', 0, 50);
+        $inactiveId = $this->createInventoryItem('Searchable Deactivated Product', 0, 50);
+        DB::table('inventory_items')->where('item_id', $inactiveId)->update(['is_active' => false]);
+
+        $this->getJson('/api/inventory/search?q=Searchable')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.item_id', $activeId);
+
+        $this->getJson('/api/inventory/search?q=Searchable&include_inactive=1')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['item_id' => $inactiveId, 'is_active' => false]);
+    }
+
     public function test_product_has_no_misleading_expiry_and_stock_in_validates_batch_expiry(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000002'));
@@ -309,6 +334,16 @@ class InventorySecurityRegressionTest extends TestCase
                 ->whereDate('expiry_date', $expiryDate)
                 ->exists(),
         );
+
+        $this->postJson('/api/inventory/stock-in', [
+            'items' => [[
+                'item_id' => $itemId,
+                'quantity' => 1.5,
+                'reason' => 'purchase',
+                'expiry_date' => now()->addYear()->toDateString(),
+            ]],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.0.quantity']);
     }
 
     public function test_product_crud_requires_positive_prices_a_numeric_barcode_and_an_integer_minimum_stock(): void
@@ -499,7 +534,6 @@ class InventorySecurityRegressionTest extends TestCase
             'pos.html',
             'stock-in.html',
             'stock-out.html',
-            'suppliers.html',
         ] as $pageName) {
             $page = file_get_contents(base_path("pages/admin/inventory/{$pageName}"));
 
@@ -508,9 +542,11 @@ class InventorySecurityRegressionTest extends TestCase
                 $page,
                 "{$pageName} must load the compatible shared API client.",
             );
-            $expectedInventoryServiceVersion = $pageName === 'inventory-dashboard.html'
-                ? 'scripts/services/inventory-service.js?v=dashboard-pagination-20260919'
-                : 'scripts/services/inventory-service.js?v=inventory-security-20260816';
+            $expectedInventoryServiceVersion = match ($pageName) {
+                'inventory-dashboard.html' => 'scripts/services/inventory-service.js?v=dashboard-pagination-20260919',
+                'stock-in.html' => 'scripts/services/inventory-service.js?v=inventory-search-inactive-20260920',
+                default => 'scripts/services/inventory-service.js?v=inventory-security-20260816',
+            };
             $this->assertStringContainsString(
                 $expectedInventoryServiceVersion,
                 $page,
@@ -535,15 +571,19 @@ class InventorySecurityRegressionTest extends TestCase
         $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-dashboard.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=product-validation-pagination-20260918', $itemsPage);
-        $this->assertStringContainsString('admin-stock-in.js?v=batch-expiry-20260816', $stockInPage);
+        $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockInPage);
+        $this->assertStringContainsString('inventory-service.js?v=inventory-search-inactive-20260920', $stockInPage);
+        $this->assertStringContainsString('admin-stock-in.js?v=stock-in-deactivated-search-20260920', $stockInPage);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
-        $this->assertStringContainsString('admin-stock-out.js?v=fefo-expiry-20260816', $stockOutPage);
+        $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockOutPage);
+        $this->assertStringContainsString('admin-stock-out.js?v=success-toast-20260920', $stockOutPage);
         $this->assertStringContainsString(
             'p.item_id === this.selected.item_id && p.reason === this.reason',
             $stockOutScript,
         );
-        $this->assertStringContainsString('pendingPhysical + qty > physicalAvailable', $stockOutScript);
-        $this->assertStringContainsString('pendingForAvailability + qty > available', $stockOutScript);
+        $this->assertStringContainsString('physicalQuantity - pendingQuantity', $stockOutScript);
+        $this->assertStringNotContainsString('unexpired_quantity ?? 0', $stockOutScript);
+        $this->assertStringNotContainsString('expired_quantity ?? 0', $stockOutScript);
     }
 
     public function test_exhausted_expired_batch_does_not_create_a_false_alert_after_restock(): void
@@ -583,7 +623,7 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonPath('expiry_alert_count', 0);
     }
 
-    public function test_expired_only_stock_is_rejected_for_sale_and_use_but_can_be_written_off(): void
+    public function test_manual_stock_out_uses_physical_stock_while_pos_rejects_expired_stock(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000004'));
 
@@ -599,8 +639,8 @@ class InventorySecurityRegressionTest extends TestCase
                 'quantity' => 1,
                 'reason' => 'used',
             ]],
-        ])->assertUnprocessable()
-            ->assertJsonPath('message', 'Insufficient unexpired stock for "Expired Medicine". Unexpired available: 0 piece; physical stock: 5.00 piece.');
+        ])->assertCreated()
+            ->assertJsonPath('data.0.quantity_on_hand', '4.00');
 
         $this->postJson('/api/pos/transactions', [
             'items' => [[
@@ -612,18 +652,13 @@ class InventorySecurityRegressionTest extends TestCase
             'amount_tendered' => 100,
             'change_amount' => 99,
         ])->assertUnprocessable()
-            ->assertJsonPath('message', 'Insufficient unexpired stock for "Expired Medicine". Unexpired available: 0 piece; physical stock: 5.00 piece.');
+            ->assertJsonPath('message', 'Insufficient unexpired stock for "Expired Medicine". Unexpired available: 0 piece; physical stock: 4.00 piece.');
 
         $this->assertDatabaseCount('pos_transactions', 0);
-        $this->assertDatabaseMissing('inventory_transactions', [
-            'item_id' => $itemId,
-            'type' => 'stock_out',
-        ]);
-
         $this->postJson('/api/inventory/stock-out', [
             'items' => [[
                 'item_id' => $itemId,
-                'quantity' => 5,
+                'quantity' => 4,
                 'reason' => 'expired',
             ]],
         ])->assertCreated()
@@ -637,7 +672,7 @@ class InventorySecurityRegressionTest extends TestCase
             'item_id' => $itemId,
             'type' => 'stock_out',
             'reason' => 'expired',
-            'quantity' => 5,
+            'quantity' => 4,
         ]);
     }
 
@@ -702,7 +737,7 @@ class InventorySecurityRegressionTest extends TestCase
         ]);
     }
 
-    public function test_sale_or_use_consumes_fresh_stock_without_making_expired_stock_sellable(): void
+    public function test_manual_stock_out_uses_remaining_physical_stock_after_fresh_stock_is_used(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000006'));
 
@@ -732,13 +767,13 @@ class InventorySecurityRegressionTest extends TestCase
                 'quantity' => 1,
                 'reason' => 'used',
             ]],
-        ])->assertUnprocessable()
-            ->assertJsonPath('message', 'Insufficient unexpired stock for "Mixed Expiry Stock". Unexpired available: 0 piece; physical stock: 5.00 piece.');
+        ])->assertCreated()
+            ->assertJsonPath('data.0.quantity_on_hand', '4.00');
 
         $this->getJson("/api/inventory/items/{$itemId}")
             ->assertOk()
             ->assertJsonPath('data.unexpired_quantity', 0)
-            ->assertJsonPath('data.expired_quantity', 5);
+            ->assertJsonPath('data.expired_quantity', 4);
     }
 
     public function test_pos_rejects_an_item_without_a_server_selling_price(): void
@@ -824,7 +859,7 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonPath('data.0.expiring_batches.0.batch_number', 'RECEIVED-LATER-EXPIRED');
     }
 
-    public function test_expired_writeoff_cannot_consume_fresh_stock_but_damage_writeoff_can(): void
+    public function test_manual_expired_writeoff_uses_physical_stock(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000009'));
 
@@ -844,13 +879,13 @@ class InventorySecurityRegressionTest extends TestCase
                 'quantity' => 3,
                 'reason' => 'expired',
             ]],
-        ])->assertUnprocessable()
-            ->assertJsonPath('message', 'Insufficient expired stock for "Writeoff Stock". Expired available: 2 piece; physical stock: 5.00 piece.');
+        ])->assertCreated()
+            ->assertJsonPath('data.0.quantity_on_hand', '2.00');
 
         $this->postJson('/api/inventory/stock-out', [
             'items' => [[
                 'item_id' => $itemId,
-                'quantity' => 5,
+                'quantity' => 2,
                 'reason' => 'damaged',
             ]],
         ])->assertCreated();
