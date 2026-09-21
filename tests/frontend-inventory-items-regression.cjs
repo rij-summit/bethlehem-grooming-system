@@ -160,12 +160,24 @@ async function testPageRecoveryKeepsLoadingUntilTheFallbackResponseArrives() {
   assert.equal(page.loading, false);
 }
 
+function testRowNumbersFollowTheCurrentPaginationAndResetWithFilters() {
+  const page = createPage();
+
+  page.currentPage = 2;
+  assert.equal(page.rowNumber(0), 11);
+  assert.equal(page.rowNumber(9), 20);
+
+  page.currentPage = 1;
+  assert.equal(page.rowNumber(0), 1);
+}
+
 (async () => {
   await testClientRejectsInvalidProductFormValuesWithoutSubmitting();
   testBarcodeInputKeepsOnlyThirteenDigits();
   await testEditingAnIntegerMinimumStockStoredAsDecimalCanBeSavedUnchanged();
   await testClientPreservesLeadingZeroBarcodeAndReloadsTheLastValidPage();
   await testPageRecoveryKeepsLoadingUntilTheFallbackResponseArrives();
+  testRowNumbersFollowTheCurrentPaginationAndResetWithFilters();
   console.log("frontend inventory item regression checks passed");
 })().catch((error) => {
   console.error(error);

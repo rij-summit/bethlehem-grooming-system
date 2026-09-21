@@ -179,7 +179,7 @@ class InventoryController extends Controller
             $query->whereRaw('reorder_level > 0 AND quantity_on_hand <= reorder_level');
         }
 
-        $paginator = $query->orderBy('item_name')->paginate(15, ['*'], 'page', $page);
+        $paginator = $query->orderBy('item_name')->paginate(10, ['*'], 'page', $page);
 
         return response()->json([
             'data'      => $this->formatItems($paginator->items()),

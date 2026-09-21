@@ -12,6 +12,7 @@ function adminInventoryItems() {
     currentPage: 1,
     lastPage: 1,
     total: 0,
+    perPage: 10,
     _searchTimer: null,
 
     // Add / edit modal
@@ -84,6 +85,10 @@ function adminInventoryItems() {
 
     prevPage() { if (this.currentPage > 1) this.load(this.currentPage - 1); },
     nextPage() { if (this.currentPage < this.lastPage) this.load(this.currentPage + 1); },
+
+    rowNumber(index) {
+      return ((this.currentPage - 1) * this.perPage) + index + 1;
+    },
 
     normalizeBarcode(value) {
       return String(value ?? "").replace(/\D/g, "").slice(0, 13);

@@ -523,7 +523,7 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonValidationErrors(['unit_cost', 'selling_price']);
     }
 
-    public function test_product_list_returns_exactly_fifteen_items_per_page_and_the_filtered_total(): void
+    public function test_product_list_returns_exactly_ten_items_per_page_and_the_filtered_total(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000018'));
 
@@ -534,13 +534,13 @@ class InventorySecurityRegressionTest extends TestCase
 
         $this->getJson('/api/inventory/items?page=1')
             ->assertOk()
-            ->assertJsonCount(15, 'data')
+            ->assertJsonCount(10, 'data')
             ->assertJsonPath('total', 17)
             ->assertJsonPath('last_page', 2);
 
         $this->getJson('/api/inventory/items?q=Paged%20Product&page=2')
             ->assertOk()
-            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(6, 'data')
             ->assertJsonPath('total', 16)
             ->assertJsonPath('last_page', 2);
     }
@@ -656,7 +656,7 @@ class InventorySecurityRegressionTest extends TestCase
         $this->assertStringContainsString('inventory-service.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-dashboard.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-inventory-items.js?v=product-validation-pagination-20260918', $itemsPage);
+        $this->assertStringContainsString('admin-inventory-items.js?v=product-row-numbers-20260921', $itemsPage);
         $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockInPage);
         $this->assertStringContainsString('inventory-service.js?v=inventory-search-inactive-20260920', $stockInPage);
         $this->assertStringContainsString('admin-stock-in.js?v=stock-in-category-expiry-20260920', $stockInPage);

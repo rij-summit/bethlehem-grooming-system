@@ -51,12 +51,25 @@ When editing existing code:
 - Follow existing project conventions unless they conflict with the requested change or introduce a clear structural problem.
 - If you notice unrelated dead code, mention it — don't delete it.
 
+Shared Existing Behavior:
+
+- When the requested behavior already exists elsewhere, inspect and reuse the existing implementation when practical instead of creating duplicate logic.
+- If directly affected code contains separate implementations of the same behavior, consolidate them when a small, contained change can safely create a shared source of truth.
+- Preserve the existing behavior of all affected consumers when consolidating shared code.
+- Only remove duplicate code made unnecessary by that consolidation. Do not search for or clean up unrelated duplication elsewhere in the codebase.
+
+When extracting shared behavior:
+
+- Place it in the project's existing appropriate shared location when one already exists.
+- If no suitable shared location exists, create a clearly named shared file in the appropriate existing project location.
+- Do not create a new folder or file solely for organization if the logic is small, single-use, or naturally belongs in an existing component.
+
 When your changes create orphans:
 
 - Remove imports, variables, or functions made unused by your changes.
 - Don't remove pre-existing dead code unless asked.
 
-The test: Every changed line should trace directly to the user's request.
+The test: Every changed line should trace directly to the user's request or be necessary cleanup caused by the requested change.
 
 ## 5. System Performance Awareness
 
@@ -114,7 +127,7 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 ```
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") may require clarification.
+Strong success criteria let you loop independently within the approved task scope. Weak criteria ("make it work") may require clarification.
 
 ---
 
