@@ -8,6 +8,10 @@ const source = fs.readFileSync(
   path.join(projectRoot, "scripts/components/admin-inventory-items.js"),
   "utf8",
 );
+const productFormSource = fs.readFileSync(
+  path.join(projectRoot, "scripts/components/product-form.js"),
+  "utf8",
+);
 
 function createPage(inventoryApi = {}) {
   const context = {
@@ -18,6 +22,10 @@ function createPage(inventoryApi = {}) {
   };
 
   vm.createContext(context);
+  vm.runInContext(productFormSource, context, {
+    filename: "scripts/components/product-form.js",
+  });
+  context.ProductForm = context.window.ProductForm;
   vm.runInContext(source, context, {
     filename: "scripts/components/admin-inventory-items.js",
   });

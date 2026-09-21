@@ -1,7 +1,7 @@
 (function (global) {
   let dismissTimer;
 
-  global.showSuccessToast = function showSuccessToast(message, duration = 4000) {
+  global.showSuccessToast = function showSuccessToast(message, duration = 5000) {
     let toast = document.getElementById("success-toast");
 
     if (!toast) {

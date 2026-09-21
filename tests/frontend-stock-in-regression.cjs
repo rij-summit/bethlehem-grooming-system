@@ -8,6 +8,14 @@ const source = fs.readFileSync(
   path.join(projectRoot, "scripts/components/admin-stock-in.js"),
   "utf8",
 );
+const inventoryItemsSource = fs.readFileSync(
+  path.join(projectRoot, "scripts/components/admin-inventory-items.js"),
+  "utf8",
+);
+const productFormSource = fs.readFileSync(
+  path.join(projectRoot, "scripts/components/product-form.js"),
+  "utf8",
+);
 const stockInPage = fs.readFileSync(
   path.join(projectRoot, "pages/admin/inventory/stock-in.html"),
   "utf8",
@@ -24,6 +32,10 @@ function createPage(inventoryApi = {}, toastMessages = []) {
   };
 
   vm.createContext(context);
+  vm.runInContext(productFormSource, context, {
+    filename: "scripts/components/product-form.js",
+  });
+  context.ProductForm = context.window.ProductForm;
   vm.runInContext(source, context, {
     filename: "scripts/components/admin-stock-in.js",
   });
@@ -128,6 +140,20 @@ function testSearchResultsDisplayWholeNumberQuantity() {
   );
 }
 
+function testNewProductBarcodeScannerUsesTheSharedScanner() {
+  assert.match(stockInPage, /@click="openCreateBarcodeScanner\(\)"/);
+  assert.match(stockInPage, /title="Scan with camera"/);
+  assert.match(source, /ProductForm\.openBarcodeScanner\(this, "stockin-qr-reader"/);
+  assert.match(inventoryItemsSource, /ProductForm\.openBarcodeScanner\(this, "inv-qr-reader"/);
+
+  const page = createPage();
+  page.createForm.barcode = "";
+  page._scanTarget = "create-form";
+  page.onScanned("0012345678901");
+
+  assert.equal(page.createForm.barcode, "0012345678901");
+}
+
 function testDeactivatedSearchResultIsRenderedAsAnInertNotice() {
   assert.match(stockInPage, /<template x-if="item\.is_active">/);
   assert.match(stockInPage, /<template x-if="!item\.is_active">/);
@@ -137,8 +163,7 @@ function testDeactivatedSearchResultIsRenderedAsAnInertNotice() {
 
 async function testNewProductUnitOptionsAndCustomUnit() {
   assert.match(stockInPage, /<select x-model="createForm\.unit" required/);
-  assert.match(stockInPage, /<option value="pc">Piece \(pc\)<\/option>/);
-  assert.match(stockInPage, /<option value="other">Other…<\/option>/);
+  assert.match(stockInPage, /x-for="unitOption in ProductForm\.unitOptions"/);
   assert.match(stockInPage, /x-show="createForm\.unit === 'other'"/);
 
   const createCalls = [];
@@ -151,6 +176,9 @@ async function testNewProductUnitOptionsAndCustomUnit() {
   page.createForm.item_name = "Custom Supply";
   page.createForm.category = "miscellaneous";
   page.createForm.unit = "other";
+  page.createForm.unit_cost = "1.00";
+  page.createForm.selling_price = "2.00";
+  page.createForm.reorder_level = "0";
   await page.createAndSelect();
   assert.equal(page.createError, "Custom unit is required.");
   assert.equal(createCalls.length, 0);
@@ -158,6 +186,25 @@ async function testNewProductUnitOptionsAndCustomUnit() {
   page.createForm.customUnit = "Roll";
   await page.createAndSelect();
   assert.equal(createCalls[0].unit, "Roll");
+}
+
+async function testNewProductUsesSharedValidationMessages() {
+  const page = createPage({ createItem: async () => { throw new Error("must not submit"); } });
+  page.createForm = {
+    item_name: "Validated product",
+    barcode: "0012345678901",
+    category: "medicine",
+    unit: "pc",
+    customUnit: "",
+    description: "",
+    unit_cost: "1.25",
+    selling_price: "0",
+    reorder_level: "0",
+  };
+
+  await page.createAndSelect();
+
+  assert.equal(page.createError, "Selling price is required and must be at least ₱0.01 with no more than 2 decimal places.");
 }
 
 async function testSuccessfulStockInUsesSupplierFreePayloadAndShowsToast() {
@@ -206,8 +253,10 @@ async function testFailedStockInDoesNotShowSuccessToast() {
   testPetShopAndMiscellaneousDoNotRequireAnExpiryDate();
   testAllowsSameProductWithDifferentExpiryDates();
   testSearchResultsDisplayWholeNumberQuantity();
+  testNewProductBarcodeScannerUsesTheSharedScanner();
   testDeactivatedSearchResultIsRenderedAsAnInertNotice();
   await testNewProductUnitOptionsAndCustomUnit();
+  await testNewProductUsesSharedValidationMessages();
   await testSuccessfulStockInUsesSupplierFreePayloadAndShowsToast();
   await testFailedStockInDoesNotShowSuccessToast();
   console.log("frontend stock-in regression checks passed");

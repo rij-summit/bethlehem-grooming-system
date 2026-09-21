@@ -9,10 +9,7 @@ function adminStockIn() {
 
     // ── Inline create product ─────────────────────────────────────────────────
     showCreateForm: false,
-    createForm: {
-      item_name: "", barcode: "", category: "",
-      unit: "", customUnit: "", unit_cost: "", selling_price: "", reorder_level: "",
-    },
+    createForm: ProductForm.empty(),
     createBusy: false,
     createError: "",
 
@@ -40,6 +37,7 @@ function adminStockIn() {
     // ── Camera scanner ────────────────────────────────────────────────────────
     scannerActive: false,
     _scanner: null,
+    _scanTarget: "search",
 
     init() {
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -119,16 +117,7 @@ function adminStockIn() {
     // ── Inline create product ─────────────────────────────────────────────────
 
     openCreateForm() {
-      this.createForm = {
-        item_name:     this.searchQuery.trim(),
-        barcode:       "",
-        category:      "",
-        unit:          "",
-        customUnit:    "",
-        unit_cost:     "",
-        selling_price: "",
-        reorder_level: "",
-      };
+      this.createForm = ProductForm.empty({ item_name: this.searchQuery.trim() });
       this.createError    = "";
       this.showCreateForm = true;
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -139,29 +128,24 @@ function adminStockIn() {
       this.createError    = "";
     },
 
+    handleCreateBarcodeInput(event) {
+      const barcode = ProductForm.normalizeBarcode(event.target.value);
+      this.createForm.barcode = barcode;
+      event.target.value = barcode;
+    },
+
+    openCreateBarcodeScanner() {
+      this.openScanner("create-form");
+    },
+
     async createAndSelect() {
       this.createError = "";
-      if (!this.createForm.item_name.trim()) { this.createError = "Product name is required."; return; }
-      if (!this.createForm.category)          { this.createError = "Category is required."; return; }
-      if (!this.createForm.unit)              { this.createError = "Unit is required."; return; }
-      if (this.createForm.unit === "other" && !this.createForm.customUnit.trim()) {
-        this.createError = "Custom unit is required.";
-        return;
-      }
+      this.createError = ProductForm.validate(this.createForm);
+      if (this.createError) return;
 
       this.createBusy = true;
       try {
-        const payload = {
-          item_name:     this.createForm.item_name.trim(),
-          barcode:       this.createForm.barcode.trim() || null,
-          category:      this.createForm.category,
-          unit:          this.createForm.unit === "other"
-            ? this.createForm.customUnit.trim()
-            : this.createForm.unit,
-          unit_cost:     this.createForm.unit_cost     !== "" ? parseFloat(this.createForm.unit_cost)     : 0,
-          selling_price: this.createForm.selling_price !== "" ? parseFloat(this.createForm.selling_price) : null,
-          reorder_level: this.createForm.reorder_level !== "" ? parseFloat(this.createForm.reorder_level) : 0,
-        };
+        const payload = ProductForm.payload(this.createForm);
         const res     = await InventoryAPI.createItem(payload);
         const newItem = { ...res.data, _newly_created: true };
         this.pickItem(newItem);
@@ -279,44 +263,23 @@ function adminStockIn() {
 
     // ── Camera scanner ────────────────────────────────────────────────────────
 
-    openScanner() {
-      if (typeof Html5Qrcode === "undefined") {
-        alert("Camera scanner library not loaded. Try refreshing the page.");
-        return;
-      }
-      this.scannerActive = true;
-      // Double rAF: waits until the modal is fully painted (not just in the DOM)
-      // so Html5Qrcode can measure the element's real dimensions.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const cfg     = { fps: 10, qrbox: { width: 260, height: 120 } };
-        const onDecode = (decoded) => {
-          this.closeScanner();
-          this.searchQuery = decoded;
-          this.onSearchEnter();
-        };
-        const tryStart = (constraints) => {
-          this._scanner = new Html5Qrcode("stockin-qr-reader");
-          return this._scanner.start(constraints, cfg, onDecode, () => {});
-        };
-        tryStart({
-          facingMode: { ideal: "environment" },
-          advanced: [{ focusMode: "continuous" }],
-        }).catch(() =>
-          // Fallback: drop focus constraint if device doesn't support it
-          tryStart({ facingMode: "environment" })
-        ).catch(() => {
-          this.scannerActive = false;
-          alert("Camera not available. Make sure the app is served on localhost or HTTPS, and that camera permission is granted.");
-        });
-      }));
+    openScanner(target = "search") {
+      this._scanTarget = target;
+      ProductForm.openBarcodeScanner(this, "stockin-qr-reader", (decoded) => this.onScanned(decoded));
     },
 
     closeScanner() {
-      if (this._scanner) {
-        this._scanner.stop().catch(() => {});
-        this._scanner = null;
+      ProductForm.closeBarcodeScanner(this);
+    },
+
+    onScanned(barcode) {
+      this.closeScanner();
+      if (this._scanTarget === "create-form") {
+        this.createForm.barcode = barcode;
+        return;
       }
-      this.scannerActive = false;
+      this.searchQuery = barcode;
+      this.onSearchEnter();
     },
   };
 }

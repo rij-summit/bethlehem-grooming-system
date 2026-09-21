@@ -178,9 +178,22 @@
                         </div>
                         <div>
                           <label class="mb-1 block text-xs font-semibold text-slate-600">Barcode <span class="font-normal text-slate-400">(optional)</span></label>
-                          <input x-model="createForm.barcode" type="text" placeholder="Scan or type barcode"
-                            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                          <div class="relative">
+                            <input :value="createForm.barcode" @input="handleCreateBarcodeInput($event)" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="13" placeholder="Scan or type barcode"
+                              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                            <button type="button" @click="openCreateBarcodeScanner()" title="Scan with camera"
+                              class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#315b7e]">
+                              <i data-lucide="scan-line" class="h-4 w-4"></i>
+                            </button>
+                          </div>
                         </div>
+                      </div>
+
+                      <!-- Description -->
+                      <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Description <span class="font-normal text-slate-400">(optional)</span></label>
+                        <input x-model="createForm.description" type="text" placeholder="e.g. 0.67ml, for dogs 10–20kg"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                       </div>
 
                       <!-- Category + Unit -->
@@ -190,14 +203,12 @@
                             Category <span style="color:#ef4444" class="font-bold">*</span>
                           </label>
                           <select x-model="createForm.category"
+                            style="appearance: none; -webkit-appearance: none;"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
-                            <option value="">— Select —</option>
-                            <option value="medicine">Medicine</option>
-                            <option value="vaccine">Vaccine</option>
-                            <option value="food">Food</option>
-                            <option value="grooming_supply">Grooming Supply</option>
-                            <option value="pet_shop">Pet Shop</option>
-                            <option value="miscellaneous">Miscellaneous</option>
+                            <option value="">Select category ▾</option>
+                            <template x-for="categoryOption in ProductForm.categoryOptions" :key="categoryOption.value">
+                              <option :value="categoryOption.value" x-text="categoryOption.label"></option>
+                            </template>
                           </select>
                         </div>
                         <div>
@@ -205,22 +216,12 @@
                             Unit <span style="color:#ef4444" class="font-bold">*</span>
                           </label>
                           <select x-model="createForm.unit" required
+                            style="appearance: none; -webkit-appearance: none;"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
                             <option value="">Select unit ▾</option>
-                            <option value="pc">Piece (pc)</option>
-                            <option value="tablet">Tablet</option>
-                            <option value="capsule">Capsule</option>
-                            <option value="bottle">Bottle</option>
-                            <option value="vial">Vial</option>
-                            <option value="sachet">Sachet</option>
-                            <option value="pack">Pack</option>
-                            <option value="box">Box</option>
-                            <option value="can">Can</option>
-                            <option value="kg">Kilogram (kg)</option>
-                            <option value="g">Gram (g)</option>
-                            <option value="L">Liter (L)</option>
-                            <option value="mL">Milliliter (mL)</option>
-                            <option value="other">Other…</option>
+                            <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value">
+                              <option :value="unitOption.value" x-text="unitOption.label"></option>
+                            </template>
                           </select>
                           <div x-show="createForm.unit === 'other'" x-cloak class="mt-2">
                             <label class="mb-1 block text-xs font-semibold text-slate-600">Custom unit *</label>
@@ -235,17 +236,17 @@
                       <div class="grid gap-3 sm:grid-cols-3">
                         <div>
                           <label class="mb-1 block text-xs font-semibold text-slate-600">Unit Cost (₱)</label>
-                          <input x-model="createForm.unit_cost" type="number" step="0.01" min="0" placeholder="0.00"
+                          <input x-model="createForm.unit_cost" type="number" step="0.01" min="0.01" required placeholder="0.00"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                         </div>
                         <div>
                           <label class="mb-1 block text-xs font-semibold text-slate-600">Selling Price (₱)</label>
-                          <input x-model="createForm.selling_price" type="number" step="0.01" min="0" placeholder="0.00"
+                          <input x-model="createForm.selling_price" type="number" step="0.01" min="0.01" required placeholder="0.00"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                         </div>
                         <div>
                           <label class="mb-1 block text-xs font-semibold text-slate-600">Min. Stock</label>
-                          <input x-model="createForm.reorder_level" type="number" step="0.01" min="0" placeholder="0"
+                          <input x-model="createForm.reorder_level" type="number" step="1" min="0" required placeholder="0"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
                         </div>
                       </div>
@@ -481,7 +482,8 @@
     <script src="../../../scripts/services/inventory-service.js?v=inventory-search-inactive-20260920"></script>
     <script src="../../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
     <script src="../../../scripts/components/success-toast.js?v=success-toast-20260920"></script>
-    <script src="../../../scripts/components/admin-stock-in.js?v=stock-in-category-expiry-20260920"></script>
+    <script src="../../../scripts/components/product-form.js?v=shared-product-form-20260921"></script>
+    <script src="../../../scripts/components/admin-stock-in.js?v=shared-product-form-20260921"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>
