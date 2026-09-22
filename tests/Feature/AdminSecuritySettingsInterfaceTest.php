@@ -24,7 +24,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             "staff.active ? 'Deactivate' : 'Reactivate'",
             "chooseStaffType('clinic')",
             "chooseStaffType('grooming')",
-            'x-model="addStaffModal.username" required',
+            'x-model="addStaffModal.firstName" required',
+            'x-model="addStaffModal.lastName" required',
+            'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
             'x-model="addStaffModal.password" required',
             'x-model="addStaffModal.confirmation" required',
@@ -51,7 +53,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertSame(7, substr_count($security, 'data-lucide="eye-closed"'));
         $this->assertSame(7, substr_count($security, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-username-20260830',
+            'admin-settings.js?v=staff-account-names-20260922',
             $page,
         );
     }
@@ -111,9 +113,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('autocomplete="current-password"', $security);
         $this->assertStringNotContainsString('autocomplete="new-password"', $security);
-        $this->assertSame(11, substr_count($security, 'data-lpignore="true"'));
-        $this->assertSame(11, substr_count($security, 'data-1p-ignore'));
-        $this->assertSame(11, substr_count($security, 'data-bwignore'));
+        $this->assertSame(13, substr_count($security, 'data-lpignore="true"'));
+        $this->assertSame(13, substr_count($security, 'data-1p-ignore'));
+        $this->assertSame(13, substr_count($security, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);

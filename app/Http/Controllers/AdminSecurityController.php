@@ -81,14 +81,21 @@ class AdminSecurityController extends Controller
         Request $request,
         PendingStaffAccountService $staffAccounts,
     ) {
+        $firstName = $request->input('first_name');
+        $lastName = $request->input('last_name');
+        $username = trim((string) $request->input('username'));
         $request->merge([
+            'first_name' => is_string($firstName) ? User::normalizeName($firstName) : $firstName,
+            'last_name' => is_string($lastName) ? User::normalizeName($lastName) : $lastName,
             'email' => Str::lower(trim((string) $request->input('email'))),
-            'username' => trim((string) $request->input('username')),
+            'username' => $username === '' ? null : $username,
         ]);
         $data = $request->validate([
             'staff_type' => ['required', Rule::in(['clinic', 'grooming'])],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
             'username' => [
-                'required',
+                'nullable',
                 'string',
                 'min:3',
                 'max:50',
@@ -108,6 +115,8 @@ class AdminSecurityController extends Controller
             $result = $staffAccounts->request(
                 $request->user(),
                 $data['staff_type'],
+                $data['first_name'],
+                $data['last_name'],
                 $data['username'],
                 $data['email'],
                 $data['password'],

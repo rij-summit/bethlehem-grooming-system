@@ -23,13 +23,20 @@ class PendingStaffAccountService
     public function request(
         User $requester,
         string $staffType,
-        string $username,
+        string $firstName,
+        string $lastName,
+        ?string $username,
         string $email,
         string $password,
     ): array {
         $this->assertAdminIsEligible($requester);
-        $normalizedUsername = trim($username);
+        $normalizedFirstName = User::normalizeName($firstName);
+        $normalizedLastName = User::normalizeName($lastName);
+        $normalizedUsername = filled($username)
+            ? trim((string) $username)
+            : $this->generateUsername($normalizedFirstName, $normalizedLastName);
         $normalizedEmail = Str::lower(trim($email));
+        $this->assertUsernameIsValid($normalizedUsername);
         $this->assertEmailIsAvailable($normalizedEmail);
         $this->assertUsernameIsAvailable($normalizedUsername, $normalizedEmail);
         EmailVerificationController::assertMailCanBeDelivered();
@@ -38,6 +45,8 @@ class PendingStaffAccountService
         $pending = DB::transaction(function () use (
             $requester,
             $staffType,
+            $normalizedFirstName,
+            $normalizedLastName,
             $normalizedUsername,
             $normalizedEmail,
             $password,
@@ -50,6 +59,8 @@ class PendingStaffAccountService
             return PendingStaffAccount::query()->create([
                 'requested_by_user_id' => $requester->user_id,
                 'staff_type' => $staffType,
+                'first_name' => $normalizedFirstName,
+                'last_name' => $normalizedLastName,
                 'username' => $normalizedUsername,
                 'email' => $normalizedEmail,
                 'password_hash' => Hash::make($password),
@@ -119,7 +130,7 @@ class PendingStaffAccountService
             }
 
             $label = $this->staffLabel($pending->staff_type);
-            [$firstName, $lastName] = explode(' ', $label, 2);
+            [$firstName, $lastName] = $this->pendingStaffName($pending, $label);
             $staff = User::query()->create([
                 'first_name' => $firstName,
                 'last_name' => $lastName,
@@ -228,6 +239,15 @@ class PendingStaffAccountService
         }
     }
 
+    private function assertUsernameIsValid(string $username): void
+    {
+        if (! preg_match('/^[A-Za-z][A-Za-z0-9._-]{2,49}$/', $username)) {
+            throw ValidationException::withMessages([
+                'username' => 'The generated username must use letters, numbers, periods, underscores, or hyphens, beginning with a letter.',
+            ]);
+        }
+    }
+
     private function usernameIsAvailable(string $username, string $email): bool
     {
         $normalizedUsername = Str::lower($username);
@@ -275,6 +295,23 @@ class PendingStaffAccountService
     private function staffLabel(string $staffType): string
     {
         return $staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Staff';
+    }
+
+    private function generateUsername(string $firstName, string $lastName): string
+    {
+        $asciiName = Str::ascii($firstName.$lastName);
+        $username = preg_replace('/[^A-Za-z0-9._-]/', '', $asciiName) ?? '';
+
+        return mb_substr($username, 0, 50);
+    }
+
+    private function pendingStaffName(PendingStaffAccount $pending, string $label): array
+    {
+        if (filled($pending->first_name) && filled($pending->last_name)) {
+            return [$pending->first_name, $pending->last_name];
+        }
+
+        return explode(' ', $label, 2);
     }
 
     private function generateCode(): string

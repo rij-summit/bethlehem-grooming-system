@@ -54,6 +54,8 @@ class AdminStaffAccountManagementTest extends TestCase
             $table->id();
             $table->unsignedInteger('requested_by_user_id');
             $table->string('staff_type', 20);
+            $table->string('first_name', 100)->nullable();
+            $table->string('last_name', 100)->nullable();
             $table->string('username', 50)->nullable()->unique();
             $table->string('email', 150)->unique();
             $table->string('password_hash');
@@ -119,7 +121,9 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $response = $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
-            'username' => 'clinicstaff',
+            'first_name' => 'jOhN',
+            'last_name' => 'sMiTh',
+            'username' => 'Clinic_Staff',
             'email' => 'NEW.CLINIC.STAFF@example.test',
             'password' => 'ClinicStaff!234',
             'password_confirmation' => 'ClinicStaff!234',
@@ -132,7 +136,9 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'new.clinic.staff@example.test']);
         $pending = PendingStaffAccount::query()->sole();
-        $this->assertSame('clinicstaff', $pending->username);
+        $this->assertSame('John', $pending->first_name);
+        $this->assertSame('Smith', $pending->last_name);
+        $this->assertSame('Clinic_Staff', $pending->username);
         $this->assertSame('new.clinic.staff@example.test', $pending->email);
         $this->assertNotSame('ClinicStaff!234', $pending->password_hash);
         $this->assertTrue(Hash::check('ClinicStaff!234', $pending->password_hash));
@@ -153,11 +159,11 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertJsonPath('staff.is_active', true);
 
         $staff = User::query()->where('email', 'new.clinic.staff@example.test')->sole();
-        $this->assertSame('Clinic', $staff->first_name);
-        $this->assertSame('Staff', $staff->last_name);
+        $this->assertSame('John', $staff->first_name);
+        $this->assertSame('Smith', $staff->last_name);
         $this->assertSame('staff', $staff->role);
         $this->assertSame('clinic', $staff->staff_type);
-        $this->assertSame('clinicstaff', $staff->username);
+        $this->assertSame('Clinic_Staff', $staff->username);
         $this->assertNull($staff->phone);
         $this->assertTrue(Hash::check('ClinicStaff!234', $staff->password_hash));
         $this->assertDatabaseCount('pending_staff_accounts', 0);
@@ -172,6 +178,8 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'first_name' => 'Grooming',
+            'last_name' => 'Staff',
             'username' => 'anothergroomer',
             'email' => 'EXISTING.STAFF@example.test',
             'password' => 'GroomingStaff!234',
@@ -185,7 +193,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_staff_account_role_username_email_and_password_fields_are_required(): void
+    public function test_staff_account_role_names_email_and_password_fields_are_required(): void
     {
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
         Sanctum::actingAs($admin);
@@ -194,7 +202,8 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors([
                 'staff_type',
-                'username',
+                'first_name',
+                'last_name',
                 'email',
                 'password',
                 'password_confirmation',
@@ -210,6 +219,8 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
+            'first_name' => 'Clinic',
+            'last_name' => 'Staff',
             'username' => 'clinicstaff',
             'email' => 'different.staff@example.test',
             'password' => 'AnotherStaff!234',
@@ -221,6 +232,85 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertDatabaseCount('users', 2);
         $this->assertDatabaseCount('pending_staff_accounts', 0);
         Notification::assertNothingSent();
+    }
+
+    public function test_blank_username_is_generated_from_normalized_staff_names(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => 'jOhN',
+            'last_name' => 'sMiTh',
+            'email' => 'generated.staff@example.test',
+            'password' => 'GeneratedStaff!234',
+            'password_confirmation' => 'GeneratedStaff!234',
+        ])->assertAccepted();
+
+        $pending = PendingStaffAccount::query()->sole();
+        $this->assertSame('John', $pending->first_name);
+        $this->assertSame('Smith', $pending->last_name);
+        $this->assertSame('JohnSmith', $pending->username);
+
+        $code = $this->staffAccountCodeSentTo(
+            'generated.staff@example.test',
+            'Grooming Staff',
+        );
+        $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
+            'code' => $code,
+        ])->assertCreated();
+
+        $staff = User::query()->where('email', 'generated.staff@example.test')->sole();
+        $this->assertSame('JohnSmith', $staff->username);
+    }
+
+    public function test_generated_username_must_be_unique(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
+        $this->createUser('staff', 'existing.staff@example.test', 'JohnSmith');
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'clinic',
+            'first_name' => 'john',
+            'last_name' => 'smith',
+            'email' => 'different.staff@example.test',
+            'password' => 'AnotherStaff!234',
+            'password_confirmation' => 'AnotherStaff!234',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('username');
+
+        $this->assertDatabaseCount('pending_staff_accounts', 0);
+        Notification::assertNothingSent();
+    }
+
+    public function test_legacy_pending_staff_account_uses_the_existing_role_label_name(): void
+    {
+        $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
+        Sanctum::actingAs($admin);
+        $pending = PendingStaffAccount::query()->create([
+            'requested_by_user_id' => $admin->user_id,
+            'staff_type' => 'clinic',
+            'username' => 'legacyclinic',
+            'email' => 'legacy.clinic@example.test',
+            'password_hash' => Hash::make('LegacyStaff!234'),
+            'code_hash' => Hash::make('123456'),
+            'failed_attempts' => 0,
+            'expires_at' => now()->addMinutes(10),
+            'last_sent_at' => now(),
+        ]);
+
+        $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
+            'code' => '123456',
+        ])->assertCreated();
+
+        $staff = User::query()->where('email', 'legacy.clinic@example.test')->sole();
+        $this->assertSame('Clinic', $staff->first_name);
+        $this->assertSame('Staff', $staff->last_name);
     }
 
     public function test_deactivated_staff_is_retained_and_cannot_sign_in_until_reactivated(): void
@@ -293,6 +383,8 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
+            'first_name' => 'Another',
+            'last_name' => 'Staff',
             'username' => 'anotherstaff',
             'email' => 'another.staff@example.test',
             'password' => 'AnotherStaff!234',

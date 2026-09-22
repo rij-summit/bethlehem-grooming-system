@@ -151,7 +151,8 @@ vm.runInThisContext(componentSource, {
 
   settings.openAddStaffAccount();
   settings.chooseStaffType("clinic");
-  settings.addStaffModal.username = "clinicstaff";
+  settings.addStaffModal.firstName = "John";
+  settings.addStaffModal.lastName = "Smith";
   settings.addStaffModal.email = "clinic.staff@example.test";
   settings.addStaffModal.password = "ClinicStaff!234";
   settings.addStaffModal.confirmation = "ClinicStaff!234";
@@ -162,7 +163,9 @@ vm.runInThisContext(componentSource, {
     "add-staff",
     {
       staff_type: "clinic",
-      username: "clinicstaff",
+      first_name: "John",
+      last_name: "Smith",
+      username: null,
       email: "clinic.staff@example.test",
       password: "ClinicStaff!234",
       password_confirmation: "ClinicStaff!234",

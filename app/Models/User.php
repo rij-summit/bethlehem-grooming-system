@@ -58,6 +58,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Store account names in a consistent display format.
+     */
+    public static function normalizeName(mixed $name): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim((string) $name)) ?: trim((string) $name);
+
+        return mb_convert_case(mb_strtolower($normalized), MB_CASE_TITLE, 'UTF-8');
+    }
+
+    /**
      * Customer accounts are operational only after email ownership is proven.
      * The schema check keeps focused tests with reduced user tables compatible.
      */
@@ -100,5 +110,4 @@ class User extends Authenticatable
     {
         return $this->hasMany(VaccinationRecord::class, 'voided_by_user_id', 'user_id');
     }
-
 }

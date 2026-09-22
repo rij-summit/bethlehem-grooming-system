@@ -62,6 +62,8 @@ function adminSettings() {
       open: false,
       step: "role",
       staffType: "",
+      firstName: "",
+      lastName: "",
       username: "",
       email: "",
       password: "",
@@ -406,6 +408,8 @@ function adminSettings() {
         open,
         step: "role",
         staffType: "",
+        firstName: "",
+        lastName: "",
         username: "",
         email: "",
         password: "",
@@ -441,7 +445,7 @@ function adminSettings() {
       this.addStaffModal.step = "details";
       this.addStaffModal.error = "";
       this.refreshSecurityIcons();
-      this.$nextTick(() => document.getElementById("newStaffUsername")?.focus());
+      this.$nextTick(() => document.getElementById("newStaffFirstName")?.focus());
     },
 
     returnToStaffType() {
@@ -456,8 +460,15 @@ function adminSettings() {
       this.addStaffModal.error = "";
       this.addStaffModal.notice = "";
 
+      const firstName = this.addStaffModal.firstName.trim();
+      const lastName = this.addStaffModal.lastName.trim();
+      if (!firstName || !lastName) {
+        this.addStaffModal.error = "Enter the staff first and last name.";
+        return;
+      }
+
       const username = this.addStaffModal.username.trim();
-      if (!/^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(username)) {
+      if (username && !/^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(username)) {
         this.addStaffModal.error = "Enter a valid username.";
         return;
       }
@@ -481,7 +492,9 @@ function adminSettings() {
       try {
         const response = await API.requestStaffAccount({
           staff_type: this.addStaffModal.staffType,
-          username,
+          first_name: firstName,
+          last_name: lastName,
+          username: username || null,
           email,
           password: this.addStaffModal.password,
           password_confirmation: this.addStaffModal.confirmation,

@@ -1029,13 +1029,23 @@
 
                     <div x-show="addStaffModal.step === 'details'">
                       <div class="space-y-4 px-5 py-5 sm:px-6">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                          <label class="block">
+                            <span class="mb-1.5 block text-sm font-semibold text-slate-600">First Name</span>
+                            <input id="newStaffFirstName" type="text" x-model="addStaffModal.firstName" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter first name" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          </label>
+                          <label class="block">
+                            <span class="mb-1.5 block text-sm font-semibold text-slate-600">Last Name</span>
+                            <input id="newStaffLastName" type="text" x-model="addStaffModal.lastName" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter last name" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          </label>
+                        </div>
                         <label class="block">
-                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username</span>
-                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username <span class="font-normal text-slate-400">(optional)</span></span>
+                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                         </label>
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Email address</span>
-                          <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter email address" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                          <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="name@example.com" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                         </label>
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Password</span>
@@ -1354,6 +1364,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-username-20260830"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-account-names-20260922"></script>
   </body>
 </html>
