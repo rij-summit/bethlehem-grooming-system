@@ -523,7 +523,9 @@ function handleNext() {
     }
     clearStepError();
     savePetStepDraft();
-    window.history.pushState(null, "", "./walk-in-clinic-complaint.html");
+    // The complaint UI is rendered in this document. Keep a reloadable URL
+    // instead of advertising an HTML file that does not exist.
+    window.history.pushState(null, "", "./walk-in-pet-details.html?step=clinic-complaint");
     renderWalkInClinicComplaintStep({ pet: state.pets[0] });
     return;
   }

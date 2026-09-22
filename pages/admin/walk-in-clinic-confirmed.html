@@ -17,7 +17,7 @@
           </svg>
         </div>
         <h1 class="mt-4 text-3xl font-bold text-[#2f4b66]">Clinic Walk-in Registered</h1>
-        <p class="mt-2 text-sm text-slate-500">The patient has been added to today's clinic queue.</p>
+        <p class="mt-2 text-sm text-slate-500">The patient has been added to Active Cases.</p>
       </section>
 
       <section class="mt-8 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8">
@@ -39,8 +39,8 @@
 
         <div class="mb-6 grid gap-4 md:grid-cols-3">
           <div class="rounded-2xl border border-[#91aeca] bg-white p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Queue Number</p>
-            <p id="queueNumber" class="mt-2 text-2xl font-bold text-[#2f4b66]">—</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Case Status</p>
+            <p id="queueNumber" class="mt-2 text-lg font-bold text-[#2f4b66]">Active</p>
           </div>
           <div class="rounded-2xl border border-[#91aeca] bg-white p-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Visit Date</p>
@@ -101,7 +101,7 @@
           href="./clinic.html"
           class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
         >
-          Go to Clinic Queue
+          Go to Active Cases
         </a>
         <a
           href="./walk-in-booking.html"
@@ -127,7 +127,6 @@
         }
 
         setText("appointmentReference", data.appointment_reference);
-        setText("queueNumber", data.queue_number);
         setText("visitDate", data.appointment_date);
         setText("ownerName", data.owner?.fullName);
         setText("ownerPhone", data.owner?.phone);

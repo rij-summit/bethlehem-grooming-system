@@ -159,12 +159,12 @@ function handleSubmit(event) {
     JSON.stringify({ chiefComplaint: complaint.trim(), pet: state.pet }),
   );
 
-  window.history.pushState(null, "", "./walk-in-clinic-consent.html");
+  window.history.pushState(null, "", "./walk-in-pet-details.html?step=clinic-consent");
   renderWalkInClinicConsentStep({
     pet: state.pet,
     chiefComplaint: complaint.trim(),
     onBack: () => {
-      window.history.pushState(null, "", "./walk-in-clinic-complaint.html");
+      window.history.pushState(null, "", "./walk-in-pet-details.html?step=clinic-complaint");
       renderWalkInClinicComplaintStep({ pet: state.pet });
     },
   });

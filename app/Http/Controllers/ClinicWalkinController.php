@@ -220,6 +220,7 @@ class ClinicWalkinController extends Controller
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
                 'appointment_type' => 'pre_registered',
+                'case_type' => 'online_request',
                 'status' => 'waiting_to_arrive',
                 'queue_number' => null,
                 'appointment_date' => $appointmentDate,
@@ -298,15 +299,15 @@ class ClinicWalkinController extends Controller
 
             $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $data);
 
-            $sequence = $clinicSequence->reserve(now()->toDateString(), true);
-            $queueNumber = $sequence['queue_number'];
+            $sequence = $clinicSequence->reserve(now()->toDateString(), false);
             $reference = $sequence['appointment_reference'];
 
             $appointment = ClinicAppointment::create([
                 'appointment_reference' => $reference,
                 'appointment_type' => 'walk_in',
-                'status' => 'checked_in',
-                'queue_number' => $queueNumber,
+                'case_type' => 'consultation',
+                'status' => 'in_consultation',
+                'queue_number' => null,
                 'appointment_date' => now()->toDateString(),
                 'user_id' => $user?->user_id,
                 'walkin_id' => $walkin->id,
@@ -314,7 +315,7 @@ class ClinicWalkinController extends Controller
                 'chief_complaint' => $data['chief_complaint'],
                 'total_amount' => 0,
                 'paid' => false,
-                'checked_in_at' => now(),
+                'consultation_started_at' => now(),
             ]);
 
             $ownerName = trim("{$walkin->fname} {$walkin->lname}");
@@ -327,7 +328,7 @@ class ClinicWalkinController extends Controller
             return response()->json([
                 'success' => true,
                 'appointment_reference' => $reference,
-                'queue_number' => $queueNumber,
+                'queue_number' => null,
                 'appointment_id' => $appointment->id,
                 'appointment_date' => $appointment->appointment_date->toDateString(),
                 'status' => $appointment->status,

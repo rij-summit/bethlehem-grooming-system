@@ -2,11 +2,11 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+*Tradeoff:* These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 ## 1. Think Before Coding
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+*Don't assume. Don't hide confusion. Surface tradeoffs.*
 
 Before implementing:
 
@@ -28,7 +28,7 @@ When investigating a task:
 
 ## 3. Simplicity First
 
-**Minimum code that solves the problem. Nothing speculative.**
+*Minimum code that solves the problem. Nothing speculative.*
 
 - No features beyond what was asked.
 - No abstractions for single-use code.
@@ -40,7 +40,7 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 
 ## 4. Surgical Changes
 
-**Touch only what you must. Clean up only your own mess.**
+*Touch only what you must. Clean up only your own mess.*
 
 When editing existing code:
 
@@ -88,7 +88,7 @@ For all implementation tasks:
 
 ## 6. Frontend Performance
 
-**Measure first. Optimize the actual bottleneck. Preserve behavior.**
+*Measure first. Optimize the actual bottleneck. Preserve behavior.*
 
 When working on website performance, use Core Web Vitals as performance targets:
 
@@ -105,10 +105,9 @@ When investigating performance:
 - Verify that the affected feature still works after optimization.
 - Compare performance before and after the change when possible.
 
-
 ## 7. Goal-Driven Execution
 
-**Define success criteria. Loop until verified.**
+*Define success criteria. Loop until verified.*
 
 Transform tasks into verifiable goals:
 
@@ -121,14 +120,12 @@ Transform tasks into verifiable goals:
 
 For multi-step tasks, state a brief plan:
 
-```less
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]
 3. [Step] → verify: [check]
-```
 
 Strong success criteria let you loop independently within the approved task scope. Weak criteria ("make it work") may require clarification.
 
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+*These guidelines are working if:* fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

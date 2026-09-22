@@ -431,6 +431,27 @@ function adminClinicVaccinations() {
       }
     },
 
+    async saveAndFinishCase() {
+      if (!this.appointment?.id || this.formModal.saving || !this.validateForm()) return;
+      this.formModal.saving = true;
+      try {
+        const payload = this.buildPayload();
+        const editing = this.formModal.mode === "edit";
+        await (editing
+          ? API.updateAdminPetVaccination(this.pet.id, this.formModal.recordId, payload)
+          : API.createAdminPetVaccination(this.pet.id, payload));
+        await API.finishClinicCase(this.appointment.id);
+        this.formModal.open = false;
+        await this.loadVaccinations();
+        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
+        this.showToast("Vaccination saved and case completed.");
+      } catch (error) {
+        this.applyBackendValidation(error, "Vaccination could not be saved and the case remains active.");
+      } finally {
+        this.formModal.saving = false;
+      }
+    },
+
     applyBackendValidation(error, fallback) {
       const backendErrors = error.errors || {};
       this.formErrors = Object.fromEntries(

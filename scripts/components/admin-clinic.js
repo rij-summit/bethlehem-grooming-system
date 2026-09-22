@@ -856,7 +856,7 @@ function adminClinicModal() {
       this.form.medications.splice(idx, 1);
     },
 
-    async saveRecord() {
+    async saveRecord(finishCase = false) {
       this.saving     = true;
       this.modalError = "";
       try {
@@ -874,10 +874,12 @@ function adminClinicModal() {
           respiratory_rate_bpm: this.form.respiratory_rate_bpm  || null,
           body_condition_score: this.form.body_condition_score   || null,
           medications:          this.form.medications.filter((m) => m.drug_name?.trim()),
+          finish_case:          finishCase,
         };
         await API.clinicSaveRecord(this.apptId, payload);
         this.open = false;
         window.__clinicReload?.();
+        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (e) {
         this.modalError = e.message || "Failed to save record.";
       } finally {
@@ -898,6 +900,11 @@ function adminClinicPage() {
     searching: false,
     _timer: null,
     _reqId: 0,
+    recordsPage: 1,
+    hasMoreRecords: false,
+    activeCases: [],
+    activeCasesLoading: false,
+    addCustomer: { open: false, saving: false, error: "", form: {} },
 
     // Patient profile panel
     profile: {
@@ -920,17 +927,67 @@ function adminClinicPage() {
         return;
       }
       this.loadAllRecords();
+      this.loadActiveCases();
+      window.addEventListener("clinic-case-updated", () => this.loadActiveCases());
     },
 
-    async loadAllRecords() {
+    async loadActiveCases() {
+      this.activeCasesLoading = true;
+      try { this.activeCases = (await API.getActiveClinicCases()).cases || []; }
+      catch { this.activeCases = []; }
+      finally { this.activeCasesLoading = false; }
+    },
+
+    caseLabel(item) { return ({ online_request: "Online request", consultation: "Consultation", vaccination: "Vaccination" })[item.case_type] || "Clinic case"; },
+    caseStatus(item) { return item.status === "waiting_to_arrive" ? "Waiting for Arrival" : "In Progress"; },
+    caseOpened(item) { return item.created_at ? new Date(item.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—"; },
+    async cancelCase(item) {
+      if (!window.confirm(`Cancel the case for ${item.pet?.name || "this patient"}?`)) return;
+      try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
+      catch (error) { alert(error.message || "Could not cancel this case."); }
+    },
+    openCase(item) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: item.case_type === "vaccination" ? "vaccinations" : "medical" } })); },
+    async startCase(item) {
+      try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
+      catch (error) { alert(error.message || "Could not start this case."); }
+    },
+    openAddCustomer() {
+      this.addCustomer = { open: true, saving: false, error: "", form: { first_name: "", last_name: "", middle_name: "", phone: "", email: "", pet_name: "", species: "", breed: "" } };
+    },
+    closeAddCustomer() { if (!this.addCustomer.saving) this.addCustomer.open = false; },
+    async saveCustomerRecord(confirmSimilarName = false) {
+      this.addCustomer.saving = true; this.addCustomer.error = "";
+      try {
+        const form = this.addCustomer.form;
+        const owner = await API.createUnregisteredCustomer({ first_name: form.first_name, last_name: form.last_name, middle_name: form.middle_name || null, phone: form.phone, email: form.email || null, confirm_similar_name: confirmSimilarName });
+        const petResponse = await API.adminAddCustomerPet("unregistered", owner.customer.id, { pet_name: form.pet_name, species: form.species, breed: form.breed || null });
+        const pet = petResponse.pet;
+        this.searchRows.unshift({ owner: owner.customer, pet: { id: pet.pet_id, petName: pet.pet_name, species: pet.species, breed: pet.breed } });
+        this.noResults = false;
+        this.addCustomer.open = false;
+        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      } catch (error) {
+        if (error.code === "similar_customer_name" && !confirmSimilarName && window.confirm(error.message)) {
+          this.addCustomer.saving = false;
+          return this.saveCustomerRecord(true);
+        }
+        this.addCustomer.error = error.errors ? Object.values(error.errors).flat().join(" ") : (error.message || "Customer record could not be saved.");
+      } finally { this.addCustomer.saving = false; }
+    },
+
+    async loadAllRecords(append = false) {
       this.searching = true;
       this.noResults = false;
+      const page = append ? this.recordsPage + 1 : 1;
       try {
-        const res = await API.searchWalkInCustomers("");
-        this._buildRows(res);
+        const res = await API.getClinicRecords(page);
+        this.recordsPage = page;
+        this.hasMoreRecords = !!res.has_more;
+        this.searchRows = append ? this.searchRows.concat(res.rows || []) : (res.rows || []);
+        this.noResults = this.searchRows.length === 0;
       } catch {
-        this.searchRows = [];
-        this.noResults  = false;
+        if (!append) this.searchRows = [];
+        this.noResults = false;
       } finally {
         this.searching = false;
         this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
@@ -968,6 +1025,7 @@ function adminClinicPage() {
       }
 
       this.searchRows = rows;
+      this.hasMoreRecords = false;
       this.noResults  = rows.length === 0;
     },
 
@@ -1011,6 +1069,7 @@ function adminClinicPage() {
       this.searchRows  = [];
       this.noResults   = false;
       this.searching   = false;
+      this.loadAllRecords();
     },
 
     async openProfile(row) {
@@ -1039,33 +1098,28 @@ function adminClinicPage() {
       this.profile.open = false;
     },
 
-    openVaccinations() {
+    async openVaccinations() {
       const { pet, owner } = this.profile;
-      this.closeProfile();
-      window.dispatchEvent(new CustomEvent("clinic-open-modal", {
-        detail: {
-          appt: {
-            id: null,
-            ownerName: owner?.fullName || "Patient",
-            appointment_reference: null,
-            pet: {
-              id: pet.id,
-              name: pet.petName || pet.name,
-              species: pet.species,
-              breed: pet.breed,
-            },
-            record: {},
-            vitals: {},
-            chief_complaint: "",
-          },
-          section: "vaccinations",
-        },
-      }));
+      try {
+        const response = await API.createClinicCase({ pet_id: pet.id, case_type: "vaccination" });
+        await this.loadActiveCases(); this.closeProfile(); this.openCase(response.case);
+      } catch (error) { alert(error.message || "Could not open a vaccination case."); }
     },
 
-    newConsultation() {
+    async newConsultation() {
       const { pet, owner } = this.profile;
       if (!pet?.id || !owner) return;
+
+      try {
+        const response = await API.createClinicCase({ pet_id: pet.id, case_type: "consultation" });
+        await this.loadActiveCases();
+        this.closeProfile();
+        this.openCase(response.case);
+        return;
+      } catch (error) {
+        alert(error.message || "Could not open a consultation case.");
+        return;
+      }
 
       // Build the owner draft in exactly the same format that walk-in-owner-step.js
       // saveOwnerDraft() produces, so the pet step can read it without modification.

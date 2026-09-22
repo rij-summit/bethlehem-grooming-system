@@ -157,6 +157,12 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::middleware('role:admin,staff')->group(function () {
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
 
+        Route::get('/admin/clinic-records', [AdminClinicController::class, 'records']);
+        Route::get('/admin/clinic-cases', [AdminClinicController::class, 'activeCases']);
+        Route::post('/admin/clinic-cases', [AdminClinicController::class, 'createCase']);
+        Route::post('/admin/clinic-cases/{id}/start', [AdminClinicController::class, 'startCase']);
+        Route::post('/admin/clinic-cases/{id}/finish', [AdminClinicController::class, 'finishCase']);
+
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);
         Route::post('/admin/clinic-appointments/{id}/check-in', [AdminClinicController::class, 'checkIn']);

@@ -7,6 +7,7 @@ use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
 use App\Models\Notification;
+use App\Models\Pet;
 use App\Services\ClinicAppointmentSequence;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ use Throwable;
 
 class AdminClinicController extends Controller
 {
+    private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show'];
     private const CLINICAL_CONTENT_EDITABLE_STATUSES = [
         'checked_in',
         'in_consultation',
@@ -72,6 +74,129 @@ class AdminClinicController extends Controller
             'for_payment' => $forPayment,
             'completed' => $completed,
         ]);
+    }
+
+    /** Paginated, newest-first patient directory for the Clinic Records landing view. */
+    public function records(Request $request)
+    {
+        $perPage = 25;
+        $page = Pet::query()
+            ->with(['user:user_id,first_name,last_name,phone,email', 'unregisteredCustomer:id,first_name,last_name,phone,email'])
+            ->where('is_archived', false)
+            ->where(fn ($q) => $q->whereHas('user', fn ($u) => $u->where('is_archived', false))
+                ->orWhereHas('unregisteredCustomer', fn ($u) => $u->where('is_archived', false)))
+            ->orderByDesc('pet_id')
+            ->simplePaginate($perPage);
+
+        $rows = $page->getCollection()->map(function (Pet $pet) {
+            $owner = $pet->user ?? $pet->unregisteredCustomer;
+            return [
+                'owner' => [
+                    'id' => $pet->user ? $pet->user->user_id : $owner?->id,
+                    'recordType' => $pet->user ? 'registered' : 'unregistered',
+                    'fullName' => trim(($owner?->first_name ?? '').' '.($owner?->last_name ?? '')),
+                    'phone' => $owner?->phone,
+                    'email' => $owner?->email,
+                ],
+                'pet' => [
+                    'id' => $pet->pet_id,
+                    'petName' => $pet->pet_name,
+                    'species' => $pet->species,
+                    'breed' => $pet->breed,
+                ],
+            ];
+        })->values();
+
+        return response()->json(['success' => true, 'rows' => $rows, 'has_more' => $page->hasMorePages()]);
+    }
+
+    /** Lightweight, case-oriented replacement for the old queue response. */
+    public function activeCases()
+    {
+        $cases = ClinicAppointment::query()
+            ->with($this->appointmentRelations())
+            ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
+            ->orderByRaw("CASE WHEN status = 'waiting_to_arrive' THEN 0 ELSE 1 END")
+            ->orderBy('created_at')
+            ->limit(100)
+            ->get()
+            ->map(fn (ClinicAppointment $case) => $this->formatAppointment($case))
+            ->values();
+
+        return response()->json(['success' => true, 'cases' => $cases]);
+    }
+
+    public function createCase(Request $request, ClinicAppointmentSequence $sequence)
+    {
+        $data = $request->validate([
+            'pet_id' => ['required', 'integer', 'exists:pets,pet_id'],
+            'case_type' => ['required', 'in:consultation,vaccination'],
+            'chief_complaint' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return DB::transaction(function () use ($data, $sequence) {
+            $pet = Pet::query()->whereKey($data['pet_id'])->where('is_archived', false)->firstOrFail();
+            $existing = ClinicAppointment::query()
+                ->where('pet_id', $pet->pet_id)
+                ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                if ($existing->status === 'waiting_to_arrive') {
+                    $existing->update(['status' => 'in_consultation', 'queue_number' => null, 'consultation_started_at' => now()]);
+                }
+
+                return response()->json(['success' => true, 'created' => false, 'case' => $this->formatAppointment($existing)]);
+            }
+
+            $reserved = $sequence->reserve(now()->toDateString(), false);
+            $case = ClinicAppointment::create([
+                'appointment_reference' => $reserved['appointment_reference'],
+                'appointment_type' => 'walk_in',
+                'case_type' => $data['case_type'],
+                'status' => 'in_consultation',
+                'queue_number' => null,
+                'appointment_date' => now()->toDateString(),
+                'user_id' => $pet->user_id,
+                'pet_id' => $pet->pet_id,
+                'chief_complaint' => $data['chief_complaint'] ?? null,
+                'total_amount' => 0,
+                'paid' => false,
+                'consultation_started_at' => now(),
+            ]);
+
+            return response()->json(['success' => true, 'created' => true, 'case' => $this->formatAppointment($case)], 201);
+        });
+    }
+
+    public function startCase(int $id)
+    {
+        $case = ClinicAppointment::query()->whereKey($id)->firstOrFail();
+        if ($case->status === 'waiting_to_arrive') {
+            $case->update(['status' => 'in_consultation', 'queue_number' => null, 'consultation_started_at' => now()]);
+        }
+        if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
+            return response()->json(['success' => false, 'message' => 'This case is already closed.'], 409);
+        }
+        return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
+    }
+
+    public function finishCase(int $id)
+    {
+        $case = DB::transaction(function () use ($id) {
+            $appointment = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            if (in_array($appointment->status, self::TERMINAL_CASE_STATUSES, true)) {
+                throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
+            }
+            $appointment->update([
+                'status' => 'completed',
+                'queue_number' => null,
+                'consultation_finished_at' => now(),
+            ]);
+            return $appointment;
+        });
+        return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
     }
 
     public function archivedIndex(Request $request)
@@ -290,6 +415,7 @@ class AdminClinicController extends Controller
             'follow_up_date' => ['nullable', 'date'],
             'follow_up_notes' => ['nullable', 'string', 'max:1000'],
             'vet_notes' => ['nullable', 'string', 'max:2000'],
+            'finish_case' => ['sometimes', 'boolean'],
 
             // Vitals
             'weight_kg' => ['nullable', 'numeric', 'min:0'],
@@ -354,6 +480,14 @@ class AdminClinicController extends Controller
                 foreach ($data['medications'] ?? [] as $med) {
                     $record->medications()->create($med);
                 }
+            }
+
+            if (! empty($data['finish_case'])) {
+                $appt->update([
+                    'status' => 'completed',
+                    'queue_number' => null,
+                    'consultation_finished_at' => now(),
+                ]);
             }
 
             $record->load(['medications', 'attachments']);
@@ -486,15 +620,16 @@ class AdminClinicController extends Controller
         $record = Schema::hasTable('clinic_records') ? $a->record : null;
         $timeWindow = Schema::hasTable('time_windows') ? $a->timeWindow : null;
 
+        $petOwner = $pet?->unregisteredCustomer;
         $ownerName = $user
             ? trim(($user->first_name ?? '').' '.($user->last_name ?? ''))
-            : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : '—');
+            : ($walkin ? trim("{$walkin->fname} {$walkin->lname}") : ($petOwner ? trim("{$petOwner->first_name} {$petOwner->last_name}") : '—'));
 
         $ownerAccountDeleted = $this->ownerAccountDeleted($a);
         $contactNumber = $ownerAccountDeleted
             ? '—'
-            : ($user?->phone ?? $walkin?->phone ?? '—');
-        $ownerEmail = $ownerAccountDeleted ? null : ($user?->email ?? $walkin?->email);
+            : ($user?->phone ?? $walkin?->phone ?? $petOwner?->phone ?? '—');
+        $ownerEmail = $ownerAccountDeleted ? null : ($user?->email ?? $walkin?->email ?? $petOwner?->email);
         $appointmentTypeLabel = match ($a->appointment_type) {
             'pre_registered' => 'Pre-Registered',
             'scheduled' => 'Scheduled',
@@ -505,6 +640,7 @@ class AdminClinicController extends Controller
             'id' => $a->id,
             'appointment_reference' => $a->appointment_reference,
             'appointment_type' => $a->appointment_type,
+            'case_type' => $a->case_type ?? ($a->appointment_type === 'pre_registered' ? 'online_request' : 'consultation'),
             'status' => $a->status,
             'queue_number' => $a->queue_number,
             'appointment_date' => $a->appointment_date?->toDateString(),
@@ -581,6 +717,10 @@ class AdminClinicController extends Controller
             'walkin',
             'pet',
         ];
+
+        if (Schema::hasTable('unregistered_customers')) {
+            $relations[] = 'pet.unregisteredCustomer';
+        }
 
         if (Schema::hasTable('unregistered_customers')
             && Schema::hasColumn('walkins', 'unregistered_customer_id')) {
