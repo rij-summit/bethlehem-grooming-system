@@ -61,6 +61,7 @@ function adminSettings() {
     addStaffModal: {
       open: false,
       step: "role",
+      roleStage: "main",
       staffType: "",
       staffSubrole: "",
       firstName: "",
@@ -414,6 +415,7 @@ function adminSettings() {
       return {
         open,
         step: "role",
+        roleStage: "main",
         staffType: "",
         staffSubrole: "",
         firstName: "",
@@ -447,10 +449,43 @@ function adminSettings() {
       this.addStaffModal = this.emptyAddStaffModal(false);
     },
 
+    handleAddStaffClose() {
+      if (this.addStaffModal.step === "role"
+        && this.addStaffModal.roleStage === "clinic") {
+        this.addStaffModal.roleStage = "main";
+        this.addStaffModal.staffType = "";
+        this.addStaffModal.staffSubrole = "";
+        this.addStaffModal.error = "";
+        this.addStaffModal.notice = "";
+        this.refreshSecurityIcons();
+        return;
+      }
+
+      this.closeAddStaffAccount();
+    },
+
     chooseStaffType(staffType) {
       if (!["clinic", "grooming"].includes(staffType)) return;
       this.addStaffModal.staffType = staffType;
       this.addStaffModal.staffSubrole = "";
+
+      if (staffType === "clinic") {
+        this.addStaffModal.roleStage = "clinic";
+        this.addStaffModal.error = "";
+        this.refreshSecurityIcons();
+        return;
+      }
+
+      this.addStaffModal.step = "details";
+      this.addStaffModal.error = "";
+      this.refreshSecurityIcons();
+      this.$nextTick(() => document.getElementById("newStaffFirstName")?.focus());
+    },
+
+    chooseClinicSubrole(staffSubrole) {
+      if (!["veterinarian", "clinic_receptionist"].includes(staffSubrole)) return;
+      this.addStaffModal.staffType = "clinic";
+      this.addStaffModal.staffSubrole = staffSubrole;
       this.addStaffModal.step = "details";
       this.addStaffModal.error = "";
       this.refreshSecurityIcons();
@@ -460,6 +495,7 @@ function adminSettings() {
     returnToStaffType() {
       if (this.addStaffModal.submitting) return;
       this.addStaffModal.step = "role";
+      this.addStaffModal.roleStage = this.addStaffModal.staffType === "clinic" ? "clinic" : "main";
       this.addStaffModal.error = "";
       this.addStaffModal.notice = "";
       this.refreshSecurityIcons();

@@ -998,34 +998,72 @@
                         <h3 id="addStaffAccountTitle" class="text-xl font-bold text-[#1f3850]">Add staff account</h3>
                         <p class="mt-1 text-sm font-semibold text-slate-500" x-text="addStaffModal.step === 'role' ? 'Choose account role' : (addStaffModal.staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Receptionist')"></p>
                       </div>
-                      <button type="button" @click="closeAddStaffAccount()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close add staff account form">
+                      <button
+                        type="button"
+                        @click="handleAddStaffClose()"
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                        :aria-label="addStaffModal.step === 'role' && addStaffModal.roleStage === 'clinic' ? 'Back to account roles' : 'Close add staff account form'"
+                      >
                         <i data-lucide="x" class="h-5 w-5"></i>
                       </button>
                     </div>
 
-                    <div x-show="addStaffModal.step === 'role'" class="space-y-3 px-5 py-6 sm:px-6">
-                      <button
-                        type="button"
-                        @click="chooseStaffType('clinic')"
-                        class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                    <div x-show="addStaffModal.step === 'role'" class="overflow-hidden">
+                      <div
+                        class="flex transition-transform duration-300"
+                        style="width: 200%"
+                        :style="{ transform: addStaffModal.roleStage === 'clinic' ? 'translateX(-50%)' : 'translateX(0)' }"
                       >
-                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
-                          <i data-lucide="stethoscope" class="h-5 w-5"></i>
-                        </span>
-                        <span class="flex-1 font-bold text-[#1f3850]">Clinic Staff</span>
-                        <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
-                      </button>
-                      <button
-                        type="button"
-                        @click="chooseStaffType('grooming')"
-                        class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
-                      >
-                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
-                          <i data-lucide="scissors" class="h-5 w-5"></i>
-                        </span>
-                        <span class="flex-1 font-bold text-[#1f3850]">Grooming Receptionist</span>
-                        <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
-                      </button>
+                        <div class="w-1/2 shrink-0 space-y-3 px-5 py-6 sm:px-6" :inert="addStaffModal.roleStage !== 'main'" :aria-hidden="addStaffModal.roleStage !== 'main'">
+                          <button
+                            type="button"
+                            @click="chooseStaffType('clinic')"
+                            class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                          >
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                              <i data-lucide="stethoscope" class="h-5 w-5"></i>
+                            </span>
+                            <span class="flex-1 font-bold text-[#1f3850]">Clinic Staff</span>
+                            <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                          </button>
+                          <button
+                            type="button"
+                            @click="chooseStaffType('grooming')"
+                            class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                          >
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                              <i data-lucide="scissors" class="h-5 w-5"></i>
+                            </span>
+                            <span class="flex-1 font-bold text-[#1f3850]">Grooming Receptionist</span>
+                            <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                          </button>
+                        </div>
+
+                        <div class="w-1/2 shrink-0 space-y-3 px-5 py-6 sm:px-6" :inert="addStaffModal.roleStage !== 'clinic'" :aria-hidden="addStaffModal.roleStage !== 'clinic'">
+                          <button
+                            type="button"
+                            @click="chooseClinicSubrole('veterinarian')"
+                            class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                          >
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                              <i data-lucide="heart-pulse" class="h-5 w-5"></i>
+                            </span>
+                            <span class="flex-1 font-bold text-[#1f3850]">Veterinarian</span>
+                            <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                          </button>
+                          <button
+                            type="button"
+                            @click="chooseClinicSubrole('clinic_receptionist')"
+                            class="flex w-full items-center gap-4 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-4 text-left transition hover:border-[#9fb9d1] hover:bg-[#eef5fb]"
+                          >
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
+                              <i data-lucide="headset" class="h-5 w-5"></i>
+                            </span>
+                            <span class="flex-1 font-bold text-[#1f3850]">Clinic Receptionist</span>
+                            <i data-lucide="chevron-right" class="h-5 w-5 text-slate-400"></i>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div x-show="addStaffModal.step === 'details'">
@@ -1040,14 +1078,6 @@
                             <input id="newStaffLastName" type="text" x-model="addStaffModal.lastName" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter last name" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                           </label>
                         </div>
-                        <label x-show="addStaffModal.staffType === 'clinic'" class="block">
-                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Sub-role</span>
-                          <select id="newStaffSubrole" x-model="addStaffModal.staffSubrole" :required="addStaffModal.staffType === 'clinic'" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10">
-                            <option value="">Select sub-role</option>
-                            <option value="veterinarian">Veterinarian</option>
-                            <option value="clinic_receptionist">Clinic Receptionist</option>
-                          </select>
-                        </label>
                         <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username <span class="font-normal text-slate-400">(optional)</span></span>
                           <input id="newStaffUsername" type="text" x-model="addStaffModal.username" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
@@ -1373,6 +1403,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-role-hierarchy-20260922"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-role-hierarchy-close-20260922"></script>
   </body>
 </html>

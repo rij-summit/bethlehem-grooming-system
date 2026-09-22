@@ -24,12 +24,14 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             "staff.active ? 'Deactivate' : 'Reactivate'",
             "chooseStaffType('clinic')",
             "chooseStaffType('grooming')",
+            '@click="handleAddStaffClose()"',
+            "? 'Back to account roles' : 'Close add staff account form'",
+            "chooseClinicSubrole('veterinarian')",
+            "chooseClinicSubrole('clinic_receptionist')",
             'x-model="addStaffModal.firstName" required',
             'x-model="addStaffModal.lastName" required',
-            'x-model="addStaffModal.staffSubrole"',
-            '>Sub-role</span>',
-            '>Veterinarian</option>',
-            '>Clinic Receptionist</option>',
+            '>Veterinarian</span>',
+            '>Clinic Receptionist</span>',
             '>Grooming Receptionist</span>',
             'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
@@ -55,10 +57,12 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('Use at least 12 characters', $security);
         $this->assertStringNotContainsString('type="search"', $security);
         $this->assertStringNotContainsString('staffSearch', $security);
+        $this->assertStringNotContainsString('id="newStaffSubrole"', $security);
+        $this->assertStringNotContainsString('>Sub-role</span>', $security);
         $this->assertSame(7, substr_count($security, 'data-lucide="eye-closed"'));
         $this->assertSame(7, substr_count($security, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-role-hierarchy-20260922',
+            'admin-settings.js?v=staff-role-hierarchy-close-20260922',
             $page,
         );
     }
@@ -88,6 +92,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'loadSecurityAccounts()',
             'submitAdminPassword()',
             'submitResetStaffPassword()',
+            'handleAddStaffClose()',
             'API.getAdminSecurityAccounts()',
             'API.requestAdminCredentialChange({',
             'API.requestStaffCredentialChange(staff.id, {',

@@ -152,7 +152,20 @@ vm.runInThisContext(componentSource, {
 
   settings.openAddStaffAccount();
   settings.chooseStaffType("clinic");
-  settings.addStaffModal.staffSubrole = "veterinarian";
+  assert.equal(settings.addStaffModal.step, "role");
+  assert.equal(settings.addStaffModal.roleStage, "clinic");
+  settings.handleAddStaffClose();
+  assert.equal(settings.addStaffModal.open, true);
+  assert.equal(settings.addStaffModal.roleStage, "main");
+  assert.equal(settings.addStaffModal.staffType, "");
+  settings.handleAddStaffClose();
+  assert.equal(settings.addStaffModal.open, false);
+
+  settings.openAddStaffAccount();
+  settings.chooseStaffType("clinic");
+  settings.chooseClinicSubrole("veterinarian");
+  assert.equal(settings.addStaffModal.step, "details");
+  assert.equal(settings.addStaffModal.staffSubrole, "veterinarian");
   settings.addStaffModal.firstName = "John";
   settings.addStaffModal.lastName = "Smith";
   settings.addStaffModal.email = "clinic.staff@example.test";
