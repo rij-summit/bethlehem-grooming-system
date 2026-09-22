@@ -57,6 +57,7 @@ var API = (() => {
   const LOGIN_CONFIRMATION_EMAIL_KEY = "pending_login_confirmation_email";
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
   const AUTH_LAST_ACTIVITY_KEY = "bethlehem.auth.last_activity";
+  const CUSTOMER_PROFILE_NAME_KEY = "bethlehem.customer.profile_name";
   const INACTIVITY_WARNING_ID = "bethlehem-session-inactivity-warning";
   const ACTIVITY_WRITE_THROTTLE_MS = 1000;
   const SESSION_INACTIVITY_POLICIES = Object.freeze({
@@ -86,6 +87,7 @@ var API = (() => {
     ADMIN_TOKEN_KEY,
     USER_ROLE_KEY,
     AUTH_LAST_ACTIVITY_KEY,
+    CUSTOMER_PROFILE_NAME_KEY,
   ];
 
   let inactivityTimerId = null;
@@ -839,6 +841,7 @@ var API = (() => {
     const role = data?.user?.role;
     if (role === "customer") clearBookingDraft();
     setAuthSession(data?.token, role, isAdminRole(role) ? true : remember);
+    if (role === "customer") rememberCustomerProfileName(data.user.first_name, data.user.last_name);
     return data;
   }
 
@@ -866,6 +869,7 @@ var API = (() => {
     if (data?.token && data?.user?.role === "customer") {
       clearBookingDraft();
       setAuthSession(data.token, "customer", true);
+      rememberCustomerProfileName(data.user.first_name, data.user.last_name);
     }
     return data;
   }
@@ -910,6 +914,7 @@ var API = (() => {
         role,
         isAdminRole(role) ? true : data?.remember_me !== false,
       );
+      if (role === "customer") rememberCustomerProfileName(data.user.first_name, data.user.last_name);
 
       // Acknowledge only after the browser has stored the session. Failure is
       // non-fatal: the approved challenge remains retryable until it expires.
@@ -973,7 +978,61 @@ var API = (() => {
     // GET /api/me  (protected)
     const token =
       isAdminRole(role) ? getAdminToken() : getCustomerToken();
-    return request("GET", "/me", null, token);
+    const response = await request("GET", "/me", null, token);
+    if (!isAdminRole(role) && response?.user) {
+      rememberCustomerProfileName(response.user.first_name, response.user.last_name);
+    }
+    return response;
+  }
+
+  // Lets every client page show the sidebar name on first paint instead of
+  // "Loading..." while GET /me is in flight. It lives in the same storage as the
+  // customer token, so clearAuthStorage() (and closing a session-only login)
+  // removes it together with the session.
+  function customerSessionStorage() {
+    return safeStorageGet(localStorage, CUSTOMER_TOKEN_KEY) ? localStorage : sessionStorage;
+  }
+
+  function rememberCustomerProfileName(firstName, lastName) {
+    try {
+      customerSessionStorage().setItem(
+        CUSTOMER_PROFILE_NAME_KEY,
+        JSON.stringify({ first: firstName || "", last: lastName || "" }),
+      );
+    } catch {
+      // Storage may be unavailable; the page falls back to its placeholder.
+    }
+  }
+
+  function showCachedCustomerProfileName() {
+    const nameEl = document.getElementById("clientProfileName");
+    const initialsEl = document.getElementById("clientProfileInitials");
+    if (!nameEl || !getCustomerToken()) return;
+
+    let stored;
+    try {
+      stored = JSON.parse(safeStorageGet(customerSessionStorage(), CUSTOMER_PROFILE_NAME_KEY) || "null");
+    } catch {
+      return;
+    }
+    const first = String(stored?.first || "");
+    const last = String(stored?.last || "");
+    const fullName = `${first} ${last}`.trim();
+    if (!fullName) return;
+
+    nameEl.textContent = fullName;
+    if (initialsEl) {
+      initialsEl.textContent = ((first[0] || "") + (last[0] || "")).toUpperCase() || "--";
+    }
+  }
+
+  // Apply as soon as api.js runs. Waiting for DOMContentLoaded would also wait
+  // for every deferred/module script, which is what left "Loading..." on screen.
+  if (typeof document !== "undefined") {
+    showCachedCustomerProfileName();
+    if (!document.getElementById("clientProfileName")) {
+      document.addEventListener("DOMContentLoaded", showCachedCustomerProfileName);
+    }
   }
 
   async function getSystemClock() {
@@ -1567,6 +1626,26 @@ var API = (() => {
     return request("GET", "/admin/clinic-appointments", null, getAdminToken());
   }
 
+  async function getClinicRecords(page = 1) {
+    return request("GET", `/admin/clinic-records?page=${page}`, null, getAdminToken());
+  }
+
+  async function getActiveClinicCases() {
+    return request("GET", "/admin/clinic-cases", null, getAdminToken());
+  }
+
+  async function createClinicCase(payload) {
+    return request("POST", "/admin/clinic-cases", payload, getAdminToken());
+  }
+
+  async function startClinicCase(id) {
+    return request("POST", `/admin/clinic-cases/${id}/start`, {}, getAdminToken());
+  }
+
+  async function finishClinicCase(id) {
+    return request("POST", `/admin/clinic-cases/${id}/finish`, {}, getAdminToken());
+  }
+
   async function clinicCheckIn(id) {
     return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
   }
@@ -1892,6 +1971,11 @@ var API = (() => {
     // Walk-in
     submitWalkIn,
     submitClinicWalkIn,
+    getClinicRecords,
+    getActiveClinicCases,
+    createClinicCase,
+    startClinicCase,
+    finishClinicCase,
     // Clinic queue
     getClinicAppointments,
     clinicCheckIn,

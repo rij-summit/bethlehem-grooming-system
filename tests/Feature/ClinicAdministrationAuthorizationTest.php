@@ -92,6 +92,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->id();
             $table->string('appointment_reference')->unique();
             $table->string('appointment_type')->default('walk_in');
+            $table->string('case_type', 30)->nullable();
             $table->string('status')->default('checked_in');
             $table->unsignedSmallInteger('queue_number')->nullable();
             $table->date('appointment_date');
@@ -481,8 +482,76 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'terms_agreed' => true,
         ])
             ->assertCreated()
-            ->assertJsonPath('status', 'checked_in')
+            ->assertJsonPath('status', 'in_consultation')
+            ->assertJsonPath('queue_number', null)
             ->assertJsonPath('pet.name', 'Bantay');
+    }
+
+    public function test_clinic_cases_reuse_one_open_case_per_pet_and_finish_with_saved_record(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('clinic_settings')->insert(['created_at' => now(), 'updated_at' => now()]);
+        DB::table('unregistered_customers')->insert([
+            'id' => 1, 'first_name' => 'Ana', 'last_name' => 'Cruz', 'phone' => '09171234567',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('pets')->insert(['pet_id' => 1, 'unregistered_customer_id' => 1, 'pet_name' => 'Mochi', 'species' => 'Dog']);
+
+        $caseId = $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'consultation'])
+            ->assertCreated()
+            ->assertJsonPath('case.queue_number', null)
+            ->json('case.id');
+        $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'vaccination'])
+            ->assertOk()
+            ->assertJsonPath('created', false)
+            ->assertJsonPath('case.id', $caseId);
+        $this->assertSame(1, DB::table('clinic_appointments')->count());
+
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases');
+
+        $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
+            'diagnosis' => 'Healthy', 'finish_case' => true,
+        ])->assertOk();
+
+        $this->assertSame('completed', DB::table('clinic_appointments')->where('id', $caseId)->value('status'));
+        $this->assertSame('Healthy', DB::table('clinic_records')->where('clinic_appointment_id', $caseId)->value('diagnosis'));
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
+    }
+
+    public function test_online_request_is_an_active_case_that_starts_without_a_queue_number(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('waiting_to_arrive');
+        DB::table('clinic_appointments')->where('id', 1)->update(['appointment_type' => 'pre_registered', 'queue_number' => null]);
+
+        $this->getJson('/api/admin/clinic-cases')
+            ->assertOk()
+            ->assertJsonPath('cases.0.case_type', 'online_request')
+            ->assertJsonPath('cases.0.queue_number', null);
+
+        $this->postJson('/api/admin/clinic-cases/1/start')
+            ->assertOk()
+            ->assertJsonPath('case.status', 'in_consultation')
+            ->assertJsonPath('case.queue_number', null);
+    }
+
+    public function test_clinic_records_are_paginated_newest_first(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('unregistered_customers')->insert([
+            'id' => 1, 'first_name' => 'Ana', 'last_name' => 'Cruz', 'phone' => '09171234567',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        foreach (range(1, 30) as $n) {
+            DB::table('pets')->insert(['pet_id' => $n, 'unregistered_customer_id' => 1, 'pet_name' => "Pet{$n}", 'species' => 'Dog']);
+        }
+
+        $this->getJson('/api/admin/clinic-records')
+            ->assertOk()
+            ->assertJsonCount(25, 'rows')
+            ->assertJsonPath('rows.0.pet.petName', 'Pet30')
+            ->assertJsonPath('has_more', true);
+        $this->getJson('/api/admin/clinic-records?page=2')->assertJsonCount(5, 'rows')->assertJsonPath('has_more', false);
     }
 
     public function test_staff_can_create_a_clinic_walk_in_for_a_registered_customer_and_saved_pet(): void
@@ -532,7 +601,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('clinic_appointments', [
             'user_id' => 10,
             'pet_id' => 101,
-            'status' => 'checked_in',
+            'status' => 'in_consultation',
         ]);
         $this->assertDatabaseCount('pets', 1);
     }
@@ -585,7 +654,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('clinic_appointments', [
             'user_id' => null,
             'pet_id' => 102,
-            'status' => 'checked_in',
+            'status' => 'in_consultation',
         ]);
         $this->assertDatabaseCount('pets', 1);
     }
@@ -655,7 +724,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
         $this->assertDatabaseHas('clinic_appointments', [
             'user_id' => 11,
-            'status' => 'checked_in',
+            'status' => 'in_consultation',
         ]);
     }
 
@@ -1690,6 +1759,11 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     {
         $expected = [
             ['POST', 'api/admin/clinic-walk-in', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-records', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/start', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/finish', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-appointments', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-appointments/archived', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-appointments/{id}/check-in', 'role:admin,staff'],
@@ -1733,7 +1807,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             fn (RoutingRoute $route) => str_starts_with($route->getActionName(), AdminClinicController::class.'@'),
         );
 
-        $this->assertCount(11, $adminClinicRoutes);
+        $this->assertCount(16, $adminClinicRoutes);
         $adminClinicRoutes->each(function (RoutingRoute $route): void {
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
         });

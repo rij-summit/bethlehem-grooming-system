@@ -11,6 +11,7 @@ class ClinicAppointment extends Model
     protected $fillable = [
         'appointment_reference',
         'appointment_type',
+        'case_type',
         'status',
         'queue_number',
         'appointment_date',
