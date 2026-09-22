@@ -37,6 +37,7 @@ function createBrowser({
   pathname = "/pages/client/sign-in.html",
   local = {},
   session = {},
+  elements = {},
   fetchImpl = async () => jsonResponse(200, {}),
 } = {}) {
   const localStorage = new MemoryStorage(local);
@@ -69,7 +70,12 @@ function createBrowser({
     URLSearchParams,
     clearTimeout,
     console,
-    document: { querySelector: () => null },
+    document: {
+      readyState: "loading",
+      querySelector: () => null,
+      getElementById: (id) => elements[id] || null,
+      addEventListener() {},
+    },
     fetch: (...args) => fetchImpl(...args),
     localStorage,
     sessionStorage,
@@ -134,6 +140,64 @@ async function testLoginCodeHonorsRememberMeStorage() {
       body: { poll_token: "login-poll-token" },
     },
   ]);
+}
+
+async function testProfileNameLivesAndDiesWithTheSession() {
+  const profileKey = "bethlehem.customer.profile_name";
+  const user = { role: "customer", first_name: "Ridge", last_name: "Marino" };
+  const confirm = (rememberMe) => createBrowser({
+    session: {
+      pending_login_poll_token: "login-poll-token",
+      pending_login_confirmation_email: "customer@example.com",
+    },
+    fetchImpl: async (url) => url.endsWith("/email/login/complete")
+      ? jsonResponse(200, { success: true })
+      : jsonResponse(200, {
+        approved: true,
+        session_established: true,
+        token: "session-token",
+        remember_me: rememberMe,
+        user,
+      }),
+  });
+
+  const sessionOnly = confirm(false);
+  await sessionOnly.API.confirmLoginCode("012345");
+  assert.ok(sessionOnly.sessionStorage.getItem(profileKey), "Name should be stored with a session-only login.");
+  assert.equal(sessionOnly.localStorage.getItem(profileKey), null);
+  sessionOnly.API.clearAuthState();
+  assert.equal(sessionOnly.sessionStorage.getItem(profileKey), null);
+
+  const remembered = confirm(true);
+  await remembered.API.confirmLoginCode("012345");
+  assert.ok(remembered.localStorage.getItem(profileKey), "Name should be stored with a remembered login.");
+  assert.equal(remembered.sessionStorage.getItem(profileKey), null);
+  remembered.API.clearAuthState();
+  assert.equal(remembered.localStorage.getItem(profileKey), null);
+}
+
+function testProfileNameIsAppliedWithoutWaitingForDomContentLoaded() {
+  const nameEl = { textContent: "Loading..." };
+  const initialsEl = { textContent: "--" };
+  createBrowser({
+    pathname: "/pages/client/my-pets.html",
+    local: {
+      customer_token: "token",
+      user_role: "customer",
+      "bethlehem.customer.profile_name": JSON.stringify({ first: "Ridge", last: "Marino" }),
+    },
+    elements: { clientProfileName: nameEl, clientProfileInitials: initialsEl },
+  });
+  assert.equal(nameEl.textContent, "Ridge Marino");
+  assert.equal(initialsEl.textContent, "RM");
+
+  const otherName = { textContent: "Loading..." };
+  createBrowser({
+    pathname: "/pages/client/my-pets.html",
+    local: { "bethlehem.customer.profile_name": JSON.stringify({ first: "Ridge", last: "Marino" }) },
+    elements: { clientProfileName: otherName },
+  });
+  assert.equal(otherName.textContent, "Loading...", "A cached name must not show without a session token.");
 }
 
 async function testCustomerPasswordStepDoesNotCreateBrowserSession() {
@@ -541,7 +605,7 @@ function testStaticAuthContracts() {
   assert.match(signup, /email_delivery_queued === false/);
   assert.match(signup, /pendingVerificationDeliveryFailed/);
   assert.match(webRoutes, /no-store, private, max-age=0, must-revalidate/);
-  assert.match(webRoutes, /no-cache, public, must-revalidate/);
+  assert.match(webRoutes, /public, max-age=3600/);
 
   const htmlFiles = [
     path.join(projectRoot, "index.html"),
@@ -583,6 +647,8 @@ function testStaticAuthContracts() {
 
 (async () => {
   await testLoginCodeHonorsRememberMeStorage();
+  await testProfileNameLivesAndDiesWithTheSession();
+  testProfileNameIsAppliedWithoutWaitingForDomContentLoaded();
   await testCustomerPasswordStepDoesNotCreateBrowserSession();
   await testTemporaryServerFailureDoesNotRedirect();
   await testReal401ClearsAndUsesNestedSafePath();
