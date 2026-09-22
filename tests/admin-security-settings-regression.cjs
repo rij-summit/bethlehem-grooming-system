@@ -35,6 +35,7 @@ global.API = {
         username: "groomingstaff",
         email: "bethlehem.staff.test@gmail.com",
         staff_type: "grooming",
+        staff_subrole: null,
         is_active: true,
         is_archived: false,
       }],
@@ -115,7 +116,7 @@ vm.runInThisContext(componentSource, {
   assert.equal(settings.staffAccounts.length, 1);
   assert.equal(settings.staffAccounts[0].username, "groomingstaff");
   assert.equal(settings.staffAccounts[0].email, "bethlehem.staff.test@gmail.com");
-  assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Staff");
+  assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
 
   settings.adminPassword.current = "CurrentAdmin!234";
   settings.adminPassword.username = "ClinicAdmin";
@@ -151,6 +152,7 @@ vm.runInThisContext(componentSource, {
 
   settings.openAddStaffAccount();
   settings.chooseStaffType("clinic");
+  settings.addStaffModal.staffSubrole = "veterinarian";
   settings.addStaffModal.firstName = "John";
   settings.addStaffModal.lastName = "Smith";
   settings.addStaffModal.email = "clinic.staff@example.test";
@@ -163,6 +165,7 @@ vm.runInThisContext(componentSource, {
     "add-staff",
     {
       staff_type: "clinic",
+      staff_subrole: "veterinarian",
       first_name: "John",
       last_name: "Smith",
       username: null,

@@ -31,6 +31,7 @@ class AdminStaffAccountManagementTest extends TestCase
             $table->string('password_hash');
             $table->string('role');
             $table->string('staff_type', 20)->nullable();
+            $table->string('staff_subrole', 30)->nullable();
             $table->string('customer_tier')->default('new');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_archived')->default(false);
@@ -54,6 +55,7 @@ class AdminStaffAccountManagementTest extends TestCase
             $table->id();
             $table->unsignedInteger('requested_by_user_id');
             $table->string('staff_type', 20);
+            $table->string('staff_subrole', 30)->nullable();
             $table->string('first_name', 100)->nullable();
             $table->string('last_name', 100)->nullable();
             $table->string('username', 50)->nullable()->unique();
@@ -121,6 +123,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $response = $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
+            'staff_subrole' => 'veterinarian',
             'first_name' => 'jOhN',
             'last_name' => 'sMiTh',
             'username' => 'Clinic_Staff',
@@ -138,6 +141,7 @@ class AdminStaffAccountManagementTest extends TestCase
         $pending = PendingStaffAccount::query()->sole();
         $this->assertSame('John', $pending->first_name);
         $this->assertSame('Smith', $pending->last_name);
+        $this->assertSame('veterinarian', $pending->staff_subrole);
         $this->assertSame('Clinic_Staff', $pending->username);
         $this->assertSame('new.clinic.staff@example.test', $pending->email);
         $this->assertNotSame('ClinicStaff!234', $pending->password_hash);
@@ -156,6 +160,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('message', 'Clinic Staff account created.')
             ->assertJsonPath('staff.staff_type', 'clinic')
+            ->assertJsonPath('staff.staff_subrole', 'veterinarian')
             ->assertJsonPath('staff.is_active', true);
 
         $staff = User::query()->where('email', 'new.clinic.staff@example.test')->sole();
@@ -163,6 +168,7 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertSame('Smith', $staff->last_name);
         $this->assertSame('staff', $staff->role);
         $this->assertSame('clinic', $staff->staff_type);
+        $this->assertSame('veterinarian', $staff->staff_subrole);
         $this->assertSame('Clinic_Staff', $staff->username);
         $this->assertNull($staff->phone);
         $this->assertTrue(Hash::check('ClinicStaff!234', $staff->password_hash));
@@ -219,6 +225,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
+            'staff_subrole' => 'clinic_receptionist',
             'first_name' => 'Clinic',
             'last_name' => 'Staff',
             'username' => 'clinicstaff',
@@ -252,11 +259,12 @@ class AdminStaffAccountManagementTest extends TestCase
         $pending = PendingStaffAccount::query()->sole();
         $this->assertSame('John', $pending->first_name);
         $this->assertSame('Smith', $pending->last_name);
+        $this->assertNull($pending->staff_subrole);
         $this->assertSame('JohnSmith', $pending->username);
 
         $code = $this->staffAccountCodeSentTo(
             'generated.staff@example.test',
-            'Grooming Staff',
+            'Grooming Receptionist',
         );
         $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
             'code' => $code,
@@ -275,6 +283,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
+            'staff_subrole' => 'veterinarian',
             'first_name' => 'john',
             'last_name' => 'smith',
             'email' => 'different.staff@example.test',
@@ -283,6 +292,38 @@ class AdminStaffAccountManagementTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('username');
+
+        $this->assertDatabaseCount('pending_staff_accounts', 0);
+        Notification::assertNothingSent();
+    }
+
+    public function test_staff_subrole_must_match_the_selected_staff_type(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
+        Sanctum::actingAs($admin);
+
+        $basePayload = [
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'email' => 'subrole.staff@example.test',
+            'password' => 'SubroleStaff!234',
+            'password_confirmation' => 'SubroleStaff!234',
+        ];
+
+        $this->postJson('/api/admin/security/staff-accounts', $basePayload + [
+            'staff_type' => 'clinic',
+        ])->assertUnprocessable()->assertJsonValidationErrors('staff_subrole');
+
+        $this->postJson('/api/admin/security/staff-accounts', $basePayload + [
+            'staff_type' => 'clinic',
+            'staff_subrole' => 'grooming_receptionist',
+        ])->assertUnprocessable()->assertJsonValidationErrors('staff_subrole');
+
+        $this->postJson('/api/admin/security/staff-accounts', $basePayload + [
+            'staff_type' => 'grooming',
+            'staff_subrole' => 'veterinarian',
+        ])->assertUnprocessable()->assertJsonValidationErrors('staff_subrole');
 
         $this->assertDatabaseCount('pending_staff_accounts', 0);
         Notification::assertNothingSent();

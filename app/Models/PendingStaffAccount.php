@@ -9,6 +9,7 @@ class PendingStaffAccount extends Model
     protected $fillable = [
         'requested_by_user_id',
         'staff_type',
+        'staff_subrole',
         'first_name',
         'last_name',
         'username',

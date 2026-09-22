@@ -23,6 +23,7 @@ class PendingStaffAccountService
     public function request(
         User $requester,
         string $staffType,
+        ?string $staffSubrole,
         string $firstName,
         string $lastName,
         ?string $username,
@@ -30,6 +31,7 @@ class PendingStaffAccountService
         string $password,
     ): array {
         $this->assertAdminIsEligible($requester);
+        $this->assertStaffSubroleIsValid($staffType, $staffSubrole);
         $normalizedFirstName = User::normalizeName($firstName);
         $normalizedLastName = User::normalizeName($lastName);
         $normalizedUsername = filled($username)
@@ -45,6 +47,7 @@ class PendingStaffAccountService
         $pending = DB::transaction(function () use (
             $requester,
             $staffType,
+            $staffSubrole,
             $normalizedFirstName,
             $normalizedLastName,
             $normalizedUsername,
@@ -59,6 +62,7 @@ class PendingStaffAccountService
             return PendingStaffAccount::query()->create([
                 'requested_by_user_id' => $requester->user_id,
                 'staff_type' => $staffType,
+                'staff_subrole' => $staffSubrole,
                 'first_name' => $normalizedFirstName,
                 'last_name' => $normalizedLastName,
                 'username' => $normalizedUsername,
@@ -140,6 +144,7 @@ class PendingStaffAccountService
                 'password_hash' => $pending->password_hash,
                 'role' => 'staff',
                 'staff_type' => $pending->staff_type,
+                'staff_subrole' => $pending->staff_subrole,
                 'customer_tier' => 'new',
                 'is_active' => true,
                 'is_archived' => false,
@@ -294,7 +299,24 @@ class PendingStaffAccountService
 
     private function staffLabel(string $staffType): string
     {
-        return $staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Staff';
+        return $staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Receptionist';
+    }
+
+    private function assertStaffSubroleIsValid(string $staffType, ?string $staffSubrole): void
+    {
+        $allowedClinicSubroles = ['veterinarian', 'clinic_receptionist'];
+
+        if ($staffType === 'clinic' && ! in_array($staffSubrole, $allowedClinicSubroles, true)) {
+            throw ValidationException::withMessages([
+                'staff_subrole' => 'Choose Veterinarian or Clinic Receptionist for Clinic Staff.',
+            ]);
+        }
+
+        if ($staffType === 'grooming' && $staffSubrole !== null) {
+            throw ValidationException::withMessages([
+                'staff_subrole' => 'Grooming Receptionist does not use a sub-role.',
+            ]);
+        }
     }
 
     private function generateUsername(string $firstName, string $lastName): string

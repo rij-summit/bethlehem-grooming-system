@@ -62,6 +62,7 @@ function adminSettings() {
       open: false,
       step: "role",
       staffType: "",
+      staffSubrole: "",
       firstName: "",
       lastName: "",
       username: "",
@@ -197,11 +198,17 @@ function adminSettings() {
             username: staff.username || "",
             email: staff.email || "",
             staffType: staff.staff_type || "",
+            staffSubrole: staff.staff_subrole || "",
             roleLabel: staff.staff_type === "clinic"
               ? "Clinic Staff"
               : staff.staff_type === "grooming"
-                ? "Grooming Staff"
+                ? "Grooming Receptionist"
                 : "Staff",
+            subroleLabel: staff.staff_subrole === "veterinarian"
+              ? "Veterinarian"
+              : staff.staff_subrole === "clinic_receptionist"
+                ? "Clinic Receptionist"
+                : "",
             active: Boolean(staff.is_active) && !Boolean(staff.is_archived),
           };
         });
@@ -408,6 +415,7 @@ function adminSettings() {
         open,
         step: "role",
         staffType: "",
+        staffSubrole: "",
         firstName: "",
         lastName: "",
         username: "",
@@ -442,6 +450,7 @@ function adminSettings() {
     chooseStaffType(staffType) {
       if (!["clinic", "grooming"].includes(staffType)) return;
       this.addStaffModal.staffType = staffType;
+      this.addStaffModal.staffSubrole = "";
       this.addStaffModal.step = "details";
       this.addStaffModal.error = "";
       this.refreshSecurityIcons();
@@ -464,6 +473,13 @@ function adminSettings() {
       const lastName = this.addStaffModal.lastName.trim();
       if (!firstName || !lastName) {
         this.addStaffModal.error = "Enter the staff first and last name.";
+        return;
+      }
+
+      const staffSubrole = this.addStaffModal.staffSubrole;
+      if (this.addStaffModal.staffType === "clinic"
+        && !["veterinarian", "clinic_receptionist"].includes(staffSubrole)) {
+        this.addStaffModal.error = "Choose a Clinic Staff sub-role.";
         return;
       }
 
@@ -492,6 +508,7 @@ function adminSettings() {
       try {
         const response = await API.requestStaffAccount({
           staff_type: this.addStaffModal.staffType,
+          staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null,
           first_name: firstName,
           last_name: lastName,
           username: username || null,

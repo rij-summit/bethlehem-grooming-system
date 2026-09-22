@@ -26,6 +26,11 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             "chooseStaffType('grooming')",
             'x-model="addStaffModal.firstName" required',
             'x-model="addStaffModal.lastName" required',
+            'x-model="addStaffModal.staffSubrole"',
+            '>Sub-role</span>',
+            '>Veterinarian</option>',
+            '>Clinic Receptionist</option>',
+            '>Grooming Receptionist</span>',
             'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
             'x-model="addStaffModal.password" required',
@@ -53,7 +58,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertSame(7, substr_count($security, 'data-lucide="eye-closed"'));
         $this->assertSame(7, substr_count($security, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-account-names-20260922',
+            'admin-settings.js?v=staff-role-hierarchy-20260922',
             $page,
         );
     }
@@ -87,6 +92,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'API.requestAdminCredentialChange({',
             'API.requestStaffCredentialChange(staff.id, {',
             'API.requestStaffAccount({',
+            'staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null',
             'API.confirmStaffAccountEmail(',
             'API.resendStaffAccountEmailCode(',
             'API.updateStaffAccountStatus(staff.id, targetActive)',

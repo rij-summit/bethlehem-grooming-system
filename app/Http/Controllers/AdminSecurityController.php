@@ -84,14 +84,23 @@ class AdminSecurityController extends Controller
         $firstName = $request->input('first_name');
         $lastName = $request->input('last_name');
         $username = trim((string) $request->input('username'));
+        $staffSubrole = trim((string) $request->input('staff_subrole'));
         $request->merge([
             'first_name' => is_string($firstName) ? User::normalizeName($firstName) : $firstName,
             'last_name' => is_string($lastName) ? User::normalizeName($lastName) : $lastName,
             'email' => Str::lower(trim((string) $request->input('email'))),
             'username' => $username === '' ? null : $username,
+            'staff_subrole' => $staffSubrole === '' ? null : $staffSubrole,
         ]);
         $data = $request->validate([
             'staff_type' => ['required', Rule::in(['clinic', 'grooming'])],
+            'staff_subrole' => [
+                'nullable',
+                'string',
+                Rule::requiredIf($request->input('staff_type') === 'clinic'),
+                Rule::prohibitedIf($request->input('staff_type') === 'grooming'),
+                Rule::in(['veterinarian', 'clinic_receptionist']),
+            ],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'username' => [
@@ -115,6 +124,7 @@ class AdminSecurityController extends Controller
             $result = $staffAccounts->request(
                 $request->user(),
                 $data['staff_type'],
+                $data['staff_subrole'],
                 $data['first_name'],
                 $data['last_name'],
                 $data['username'],
@@ -437,6 +447,7 @@ class AdminSecurityController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'staff_type' => $user->staff_type,
+            'staff_subrole' => $user->staff_subrole,
             'is_active' => (bool) $user->is_active,
             'is_archived' => (bool) $user->is_archived,
         ];
