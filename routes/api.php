@@ -133,7 +133,16 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
         Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
         Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
+        Route::get('/admin/clinic/settings/availability', [ClinicSettingController::class, 'availability']);
+        Route::get('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'blockedDates']);
         Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
+        Route::get('/settings/security/account', [AdminSecurityController::class, 'ownAccount']);
+        Route::post('/settings/security/password-change', [AdminSecurityController::class, 'requestStaffPasswordChange'])
+            ->middleware(['role:staff', 'throttle:3,10']);
+        Route::post('/settings/security/credential-changes/{change}/confirm', [AdminSecurityController::class, 'confirm'])
+            ->middleware(['role:staff', 'throttle:10,1']);
+        Route::post('/settings/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
+            ->middleware(['role:staff', 'throttle:3,10']);
         Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
         Route::post('/admin/bookings/{id}/sedation-consent', [AdminBookingController::class, 'recordSedationConsent']);
         Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
@@ -243,10 +252,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
         Route::post('/admin/clinic/stop-today', [ClinicClosureController::class, 'stopToday']);
         Route::post('/admin/clinic/reopen-today', [ClinicClosureController::class, 'reopenToday']);
-        Route::get('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'blockedDates']);
         Route::post('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'addBlockedDate']);
         Route::delete('/admin/clinic/blocked-dates/{id}', [ClinicClosureController::class, 'removeBlockedDate']);
-        Route::get('/admin/clinic/settings/availability', [ClinicSettingController::class, 'availability']);
         Route::patch('/admin/clinic/settings/availability', [ClinicSettingController::class, 'updateAvailability']);
     });
 });

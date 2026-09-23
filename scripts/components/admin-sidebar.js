@@ -106,6 +106,15 @@ function getAdminSidebarActivePage(pathname = window.location.pathname) {
   return pageMap[pageName] || "";
 }
 
+function revealStaffSettingsSidebarLink() {
+  if (!window.API || API.getUserRole() !== "staff") return;
+
+  document.querySelectorAll('.admin-sidebar-menu a[href$="settings.html"]').forEach((link) => {
+    const adminOnlySection = link.closest('[x-show="isAdmin"]');
+    if (adminOnlySection) adminOnlySection.style.removeProperty("display");
+  });
+}
+
 function adminSidebar() {
   return {
     sidebarOpen: false,
@@ -151,6 +160,7 @@ function adminSidebar() {
       this.registerIncomingAppointmentListener();
 
       this.$nextTick(() => {
+        revealStaffSettingsSidebarLink();
         if (window.lucide) window.lucide.createIcons();
       });
 

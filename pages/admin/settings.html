@@ -169,7 +169,7 @@
               <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <h2 class="text-2xl font-bold text-[#1f3850] lg:text-3xl">Settings</h2>
-                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">ADMIN SYSTEM PREFERENCES</p>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">SYSTEM SETTINGS</p>
                 </div>
 
                 <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white/75 px-4 py-2.5 text-sm font-semibold text-[#1f3850]">
@@ -236,6 +236,26 @@
 
           <section class="mt-6 space-y-6">
             <form x-show="activeSettingsTab === 'general'" class="space-y-6">
+              <div x-show="isStaff" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+                These settings are managed by an administrator.
+              </div>
+
+              <div x-show="isStaff" class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">General</p>
+                <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">General Information</h3>
+                <dl class="mt-5 grid gap-5 sm:grid-cols-2">
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Name</dt><dd class="mt-1 font-semibold text-[#1f3850]">Bethlehem Animal Clinic</dd></div>
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Business Type</dt><dd class="mt-1 font-semibold text-[#1f3850]">Clinic &amp; Grooming</dd></div>
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Contact Number</dt><dd class="mt-1 font-semibold text-[#1f3850]">+63 900 000 0000</dd></div>
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Email Address</dt><dd class="mt-1 font-semibold text-[#1f3850]">bethlehemclinic@example.com</dd></div>
+                  <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Address</dt><dd class="mt-1 font-semibold text-[#1f3850]">Bethlehem Animal Clinic &amp; Grooming, Philippines</dd></div>
+                  <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clinic Description</dt><dd class="mt-1 font-semibold text-[#1f3850]">Compassionate veterinary care and grooming services for pets and their families.</dd></div>
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Website</dt><dd class="mt-1 break-all font-semibold text-[#1f3850]">https://bethlehemanimalclinic.example</dd></div>
+                  <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Facebook Page</dt><dd class="mt-1 break-all font-semibold text-[#1f3850]">https://facebook.com/bethlehemanimalclinic</dd></div>
+                </dl>
+              </div>
+
+              <div x-show="isAdmin" class="space-y-6">
               <!-- BACKEND: Replace hardcoded values with clinic settings data once the endpoint is available. -->
               <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
                 <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -369,9 +389,31 @@
                   <span>Save Changes</span>
                 </button>
               </div>
+              </div>
             </form>
 
             <form x-show="activeSettingsTab === 'availability'" class="space-y-6" @submit.prevent>
+              <div x-show="isStaff" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+                Most settings on this page are managed by an administrator. You can update the number of groomers currently on duty.
+              </div>
+
+              <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Live Grooming Capacity</p>
+                    <h3 class="mt-1 text-xl font-bold text-[#1f3850]">Groomers on Duty</h3>
+                    <p class="mt-1 text-sm text-slate-500">Update the number of groomers currently available.</p>
+                  </div>
+                  <div class="flex items-center gap-2 rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] p-1.5">
+                    <button type="button" @click="setGroomersOnDuty(groomersOnDuty - 1)" :disabled="groomersOnDuty <= 1 || groomersOnDutySaving" class="flex h-10 w-10 items-center justify-center rounded-xl text-xl font-bold text-[#315b7e] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-30" aria-label="Decrease groomers on duty">−</button>
+                    <span class="w-10 text-center text-xl font-bold text-[#1f3850]" x-text="groomersOnDuty"></span>
+                    <button type="button" @click="setGroomersOnDuty(groomersOnDuty + 1)" :disabled="groomersOnDuty >= 5 || groomersOnDutySaving" class="flex h-10 w-10 items-center justify-center rounded-xl text-xl font-bold text-[#315b7e] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-30" aria-label="Increase groomers on duty">+</button>
+                  </div>
+                </div>
+                <p x-show="groomersOnDutyError" class="mt-3 text-sm font-semibold text-red-600" x-text="groomersOnDutyError"></p>
+                <p x-show="groomersOnDutySuccess" class="mt-3 text-sm font-semibold text-emerald-700" x-text="groomersOnDutySuccess"></p>
+              </div>
+
               <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
                 <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
                   <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -422,7 +464,13 @@
                       </div>
                     </div>
 
-                    <div class="grid gap-4 lg:grid-cols-3">
+                    <dl x-show="isStaff" class="grid gap-4 lg:grid-cols-3">
+                      <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Opening Time`"></dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.open_time"></dd></div>
+                      <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Closing Time`"></dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.close_time"></dd></div>
+                      <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Same-day Pre-registration Cutoff</dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.pre_registration_cutoff_time"></dd></div>
+                    </dl>
+
+                    <div x-show="isAdmin" class="grid gap-4 lg:grid-cols-3">
                       <label class="block">
                         <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Opening Time`"></span>
                         <input
@@ -457,7 +505,7 @@
                     <p x-show="availabilityError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="availabilityError"></p>
                     <p x-show="availabilitySuccess" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" x-text="availabilitySuccess"></p>
 
-                    <div class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                    <div x-show="isAdmin" class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
                       <button
                         type="button"
                         @click="resetAvailability()"
@@ -489,13 +537,13 @@
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Availability</p>
                       <h3 class="mt-1 text-xl font-bold text-[#1f3850]">Block Dates</h3>
-                      <p class="mt-1 text-sm text-slate-500">Set holidays, vacations, or closure periods for both Clinic and Grooming.</p>
+                      <p class="mt-1 text-sm text-slate-500" x-text="isAdmin ? 'Set holidays, vacations, or closure periods for both Clinic and Grooming.' : 'View holidays, vacations, and closure periods for both Clinic and Grooming.'"></p>
                     </div>
                   </div>
                 </div>
 
                 <div class="px-5 py-5 lg:px-6">
-                  <div class="grid gap-4 lg:grid-cols-3">
+                  <div x-show="isAdmin" class="grid gap-4 lg:grid-cols-3">
                     <label class="block">
                       <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Start Date</span>
                       <input
@@ -526,10 +574,10 @@
                     </label>
                   </div>
 
-                  <p x-show="blockForm.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="blockForm.error"></p>
-                  <p x-show="blockForm.warning" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700" x-text="blockForm.warning"></p>
+                  <p x-show="isAdmin && blockForm.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="blockForm.error"></p>
+                  <p x-show="isAdmin && blockForm.warning" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700" x-text="blockForm.warning"></p>
 
-                  <div class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                  <div x-show="isAdmin" class="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
                     <button
                       type="button"
                       @click="clearBlockedDateForm()"
@@ -565,6 +613,7 @@
                             <p class="mt-0.5 text-sm text-slate-500" x-text="blockedDate.reason || 'No reason provided'"></p>
                           </div>
                           <button
+                            x-show="isAdmin"
                             type="button"
                             @click="removeBlockedDate(blockedDate.id)"
                             class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
@@ -582,6 +631,9 @@
             </form>
 
             <form x-show="activeSettingsTab === 'capacity'" class="space-y-6">
+              <div x-show="isStaff" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+                These settings are managed by an administrator.
+              </div>
               <!-- BACKEND: Replace static capacity values with real clinic capacity settings and persist changes here. -->
               <div class="rounded-[24px] border border-[#d7e3ef] bg-white p-5 shadow-sm lg:p-6">
                 <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -596,14 +648,19 @@
                   </div>
                 </div>
 
-                <div class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div x-show="isAdmin" class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                   <div class="flex items-start gap-2">
                     <i data-lucide="alert-triangle" class="mt-0.5 h-4 w-4 shrink-0"></i>
                     <p class="font-medium">Changes here will affect the pre-register options customers see.</p>
                   </div>
                 </div>
 
-                <div class="grid gap-5 md:grid-cols-2">
+                <dl x-show="isStaff" class="grid gap-5 md:grid-cols-2">
+                  <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Max Daily Capacity</dt><dd class="mt-1 text-lg font-bold text-[#1f3850]">20 pets</dd></div>
+                  <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Advance Pre-register Window</dt><dd class="mt-1 text-lg font-bold text-[#1f3850]">Up to 3 days ahead</dd></div>
+                </dl>
+
+                <div x-show="isAdmin" class="grid gap-5 md:grid-cols-2">
                   <label class="block">
                     <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Max Daily Capacity</span>
                     <input
@@ -628,7 +685,7 @@
                 </div>
               </div>
 
-              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+              <div x-show="isAdmin" class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
                 <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
                   Cancel
                 </button>
@@ -641,6 +698,9 @@
             </form>
 
             <form x-show="activeSettingsTab === 'notifications'" class="space-y-6">
+              <div x-show="isStaff" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
+                These settings are managed by an administrator.
+              </div>
               <!-- BACKEND: Replace local toggle values with saved notification preferences and persist changes here. -->
               <div class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
                 <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
@@ -664,6 +724,7 @@
                       <p class="mt-1 text-xs font-normal text-slate-400">Notify customers 1 hour before their schedule.</p>
                     </div>
                     <button
+                      x-show="isAdmin"
                       type="button"
                       @click="appointmentReminders = !appointmentReminders"
                       :aria-label="appointmentReminders ? 'Pre-register reminders enabled' : 'Pre-register reminders disabled'"
@@ -672,6 +733,7 @@
                     >
                       <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
                     </button>
+                    <span x-show="isStaff" class="shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700" x-text="appointmentReminders ? 'Enabled' : 'Disabled'"></span>
                   </div>
 
                   <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
@@ -680,6 +742,7 @@
                       <p class="mt-1 text-xs font-normal text-slate-400">Notify admin when a customer misses their slot.</p>
                     </div>
                     <button
+                      x-show="isAdmin"
                       type="button"
                       @click="noShowAlerts = !noShowAlerts"
                       :aria-label="noShowAlerts ? 'No-show alerts enabled' : 'No-show alerts disabled'"
@@ -688,6 +751,7 @@
                     >
                       <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
                     </button>
+                    <span x-show="isStaff" class="shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700" x-text="noShowAlerts ? 'Enabled' : 'Disabled'"></span>
                   </div>
 
                   <div class="flex items-center justify-between gap-4 px-5 py-5 lg:px-6">
@@ -696,6 +760,7 @@
                       <p class="mt-1 text-xs font-normal text-slate-400">Auto-send receipt after payment is marked.</p>
                     </div>
                     <button
+                      x-show="isAdmin"
                       type="button"
                       @click="paymentReceipt = !paymentReceipt"
                       :aria-label="paymentReceipt ? 'Payment receipt enabled' : 'Payment receipt disabled'"
@@ -704,11 +769,12 @@
                     >
                       <span class="h-6 w-6 rounded-full bg-white shadow-sm"></span>
                     </button>
+                    <span x-show="isStaff" class="shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700" x-text="paymentReceipt ? 'Enabled' : 'Disabled'"></span>
                   </div>
                 </div>
               </div>
 
-              <div class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
+              <div x-show="isAdmin" class="flex flex-col gap-3 rounded-[24px] border border-[#d7e3ef] bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-end">
                 <button type="button" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50">
                   Cancel
                 </button>
@@ -725,6 +791,7 @@
               class="space-y-6"
               @keydown.escape.window="closeSecurityModals()"
             >
+              <div x-show="isAdmin" class="space-y-6">
               <div
                 class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm"
               >
@@ -1177,6 +1244,64 @@
                   </div>
                 </div>
               </template>
+              </div>
+
+              <div x-show="isStaff" class="space-y-6">
+                <section class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm" aria-labelledby="yourAccountHeading">
+                  <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
+                    <div class="flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="user-round" class="h-5 w-5"></i></div>
+                      <div><h3 id="yourAccountHeading" class="text-xl font-bold text-[#1f3850]">Your Account</h3><p class="mt-1 text-sm text-slate-500">Your staff account information</p></div>
+                    </div>
+                  </div>
+                  <dl class="grid gap-5 px-5 py-5 sm:grid-cols-2 lg:px-6">
+                    <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Full name</dt><dd class="mt-1 font-semibold text-[#1f3850]" x-text="staffAccount.fullName"></dd></div>
+                    <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Staff role</dt><dd class="mt-1 font-semibold text-[#1f3850]" x-text="staffAccount.roleLabel"></dd></div>
+                    <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Username</dt><dd class="mt-1 font-semibold text-[#1f3850]" x-text="staffAccount.username"></dd></div>
+                    <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Email address</dt><dd class="mt-1 break-all font-semibold text-[#1f3850]" x-text="staffAccount.email"></dd></div>
+                    <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Account status</dt><dd class="mt-2"><span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700" x-text="staffAccount.statusLabel"></span></dd></div>
+                  </dl>
+                </section>
+
+                <form @submit.prevent="submitStaffPassword()" class="overflow-hidden rounded-[24px] border border-[#d7e3ef] bg-white shadow-sm">
+                  <div class="border-b border-[#e8f0f8] px-5 py-5 lg:px-6">
+                    <div class="flex items-start gap-3">
+                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="key-round" class="h-5 w-5"></i></div>
+                      <div><h3 class="text-xl font-bold text-[#1f3850]">Change Password</h3><p class="mt-1 text-sm text-slate-500">A verification code will be sent to your registered email before your password is changed.</p></div>
+                    </div>
+                  </div>
+                  <div class="space-y-4 px-5 py-5 lg:px-6">
+                    <label class="block">
+                      <span class="mb-1.5 block text-sm font-semibold text-slate-600">Current Password</span>
+                      <div class="relative">
+                        <input :type="staffPassword.showCurrent ? 'text' : 'password'" x-model="staffPassword.current" autocomplete="current-password" required class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        <button type="button" @click="staffPassword.showCurrent = !staffPassword.showCurrent" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="staffPassword.showCurrent ? 'Hide current password' : 'Show current password'"><i :data-lucide="staffPassword.showCurrent ? 'eye' : 'eye-closed'" class="h-5 w-5"></i></button>
+                      </div>
+                    </label>
+                    <label class="block">
+                      <span class="mb-1.5 block text-sm font-semibold text-slate-600">New Password</span>
+                      <div class="relative">
+                        <input :type="staffPassword.showPassword ? 'text' : 'password'" x-model="staffPassword.password" autocomplete="new-password" required class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        <button type="button" @click="staffPassword.showPassword = !staffPassword.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="staffPassword.showPassword ? 'Hide new password' : 'Show new password'"><i :data-lucide="staffPassword.showPassword ? 'eye' : 'eye-closed'" class="h-5 w-5"></i></button>
+                      </div>
+                    </label>
+                    <label class="block">
+                      <span class="mb-1.5 block text-sm font-semibold text-slate-600">Confirm New Password</span>
+                      <div class="relative">
+                        <input :type="staffPassword.showConfirmation ? 'text' : 'password'" x-model="staffPassword.confirmation" autocomplete="new-password" required class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        <button type="button" @click="staffPassword.showConfirmation = !staffPassword.showConfirmation" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]" :aria-label="staffPassword.showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'"><i :data-lucide="staffPassword.showConfirmation ? 'eye' : 'eye-closed'" class="h-5 w-5"></i></button>
+                      </div>
+                    </label>
+                    <p class="text-xs text-slate-500">Use at least 12 characters with uppercase, lowercase, a number, and a symbol.</p>
+                    <p x-show="staffPassword.error" x-text="staffPassword.error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                    <div class="flex justify-end border-t border-slate-100 pt-4">
+                      <button type="submit" :disabled="staffPassword.submitting" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-70"><i data-lucide="key-round" class="h-4 w-4"></i><span x-text="staffPassword.submitting ? 'Sending code...' : 'Change Password'">Change Password</span></button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <div x-cloak x-show="staffPassword.success" x-transition class="fixed right-4 top-4 z-[11000] rounded-2xl border border-emerald-200 bg-white px-5 py-4 font-semibold text-emerald-700 shadow-xl" role="status" x-text="staffPassword.success"></div>
 
               <!-- Security code verification modal -->
               <template x-teleport="body">
@@ -1203,8 +1328,8 @@
                           </div>
                           <div>
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Security verification</p>
-                            <h3 id="securityVerificationTitle" class="mt-1 text-xl font-bold" x-text="securityVerification.purpose"></h3>
-                            <p class="mt-1 text-sm font-semibold text-white/75" x-text="securityVerification.targetName"></p>
+                            <h3 id="securityVerificationTitle" class="mt-1 text-xl font-bold" x-text="isStaff ? 'Verify your identity' : securityVerification.purpose"></h3>
+                            <p class="mt-1 text-sm font-semibold text-white/75" x-text="isStaff ? 'We sent a 6-digit verification code to your registered email address.' : securityVerification.targetName"></p>
                           </div>
                         </div>
                         <button type="button" @click="closeSecurityVerification()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white/70 transition hover:bg-white/10 hover:text-white" aria-label="Close security verification">
@@ -1249,8 +1374,7 @@
                           @click="resendSecurityCredentialChangeCode()"
                           :disabled="securityVerification.resending || securityVerification.submitting"
                           class="text-sm font-semibold text-[#315b7e] transition hover:text-[#284a67] disabled:cursor-not-allowed disabled:opacity-60"
-                          x-text="securityVerification.resending ? 'Sending...' : 'Resend code'"
-                        >Resend code</button>
+                        ><span x-show="isStaff">Didn't receive a code? </span><span x-text="securityVerification.resending ? 'Sending...' : 'Resend code'">Resend code</span></button>
                         <div class="flex gap-3">
                           <button type="button" @click="closeSecurityVerification()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancel</button>
                           <button
@@ -1259,7 +1383,7 @@
                             class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <i data-lucide="shield-check" class="h-4 w-4"></i>
-                            <span x-text="securityVerification.submitting ? 'Confirming...' : 'Confirm change'">Confirm change</span>
+                            <span x-text="securityVerification.submitting ? 'Confirming...' : (isStaff ? 'Change Password' : 'Confirm change')">Confirm change</span>
                           </button>
                         </div>
                       </div>
@@ -1276,8 +1400,8 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-account-details-20260923"></script>
+    <script src="../../scripts/api.js?v=staff-settings-20260923"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=staff-settings-20260923"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260923"></script>
   </body>
 </html>

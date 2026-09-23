@@ -1,0 +1,59 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+
+class StaffSettingsInterfaceTest extends TestCase
+{
+    public function test_settings_page_exposes_role_specific_staff_views(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/settings.html'));
+
+        foreach ([
+            '>SYSTEM SETTINGS</p>',
+            '>General</span>',
+            '>Availability</span>',
+            '>Capacity</span>',
+            '>Notifications</span>',
+            '>Security</span>',
+            'These settings are managed by an administrator.',
+            'Most settings on this page are managed by an administrator. You can update the number of groomers currently on duty.',
+            '>Groomers on Duty</h3>',
+            'setGroomersOnDuty(groomersOnDuty - 1)',
+            'setGroomersOnDuty(groomersOnDuty + 1)',
+            'x-show="isStaff"',
+            'x-show="isAdmin"',
+            "appointmentReminders ? 'Enabled' : 'Disabled'",
+            "noShowAlerts ? 'Enabled' : 'Disabled'",
+            "paymentReceipt ? 'Enabled' : 'Disabled'",
+        ] as $expected) {
+            $this->assertStringContainsString($expected, $page);
+        }
+    }
+
+    public function test_groomer_control_moved_without_moving_queue_information(): void
+    {
+        $settings = file_get_contents(base_path('pages/admin/settings.html'));
+        $appointments = file_get_contents(base_path('pages/admin/appointments.html'));
+
+        $this->assertStringContainsString('>Groomers on Duty</h3>', $settings);
+        $this->assertStringNotContainsString('>Groomers on duty</span>', $appointments);
+        $this->assertStringContainsString('>Pets waiting</p>', $appointments);
+        $this->assertStringContainsString('>Avg grooming time</p>', $appointments);
+    }
+
+    public function test_staff_can_reach_settings_from_the_shared_admin_shell(): void
+    {
+        $api = file_get_contents(base_path('scripts/api.js'));
+        $sidebar = file_get_contents(base_path('scripts/components/admin-sidebar.js'));
+
+        $this->assertStringNotContainsString(
+            "\"reports.html\",\n    \"settings.html\"",
+            $api,
+        );
+        $this->assertStringContainsString('function revealStaffSettingsSidebarLink()', $sidebar);
+        $this->assertStringContainsString('API.getUserRole() !== "staff"', $sidebar);
+        $this->assertStringContainsString('a[href$="settings.html"]', $sidebar);
+    }
+}

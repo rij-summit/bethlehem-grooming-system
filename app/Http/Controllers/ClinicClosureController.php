@@ -127,10 +127,8 @@ class ClinicClosureController extends Controller
 
     // ── LIST BLOCKED DATES ────────────────────────────────
     // GET /api/admin/clinic/blocked-dates
-    public function blockedDates(Request $request)
+    public function blockedDates()
     {
-        $this->requireAdmin($request);
-
         $dates = ClinicClosure::where('type', 'blocked_date')
             ->where('is_active', 1)
             ->orderBy('start_date')

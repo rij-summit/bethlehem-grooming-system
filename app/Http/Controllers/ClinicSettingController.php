@@ -14,9 +14,12 @@ class ClinicSettingController extends Controller
 {
     public function availability()
     {
+        $settings = ClinicSetting::current();
+
         return response()->json([
             'success' => true,
-            'availability' => ClinicSetting::current()->availabilityPayload(),
+            'availability' => $settings->availabilityPayload(),
+            'groomers_on_duty' => $settings->groomers_on_duty,
         ]);
     }
 

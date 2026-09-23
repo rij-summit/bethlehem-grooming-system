@@ -1,4 +1,7 @@
 function adminSettings() {
+  const currentRole = typeof API !== "undefined" && typeof API.getUserRole === "function"
+    ? API.getUserRole()
+    : "admin";
   const defaultAvailability = {
     clinic: {
       open_time: "08:00",
@@ -15,6 +18,8 @@ function adminSettings() {
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
   return {
+    isAdmin: currentRole === "admin",
+    isStaff: currentRole === "staff",
     activeSettingsTab: "general",
     appointmentReminders: true,
     noShowAlerts: true,
@@ -26,12 +31,34 @@ function adminSettings() {
     availabilitySaving: false,
     availabilityError: "",
     availabilitySuccess: "",
+    groomersOnDuty: 2,
+    groomersOnDutySaving: false,
+    groomersOnDutyError: "",
+    groomersOnDutySuccess: "",
     adminAccount: {
       email: "Admin email",
       username: "",
     },
     adminPassword: {
       username: "",
+      current: "",
+      password: "",
+      confirmation: "",
+      showCurrent: false,
+      showPassword: false,
+      showConfirmation: false,
+      submitting: false,
+      error: "",
+      success: "",
+    },
+    staffAccount: {
+      fullName: "",
+      roleLabel: "Staff",
+      username: "",
+      email: "",
+      statusLabel: "",
+    },
+    staffPassword: {
       current: "",
       password: "",
       confirmation: "",
@@ -116,7 +143,10 @@ function adminSettings() {
     },
 
     async init() {
-      await Promise.all([this.loadAvailability(), this.loadSecurityAccounts()]);
+      await Promise.all([
+        this.loadAvailability(),
+        this.isAdmin ? this.loadSecurityAccounts() : this.loadOwnAccount(),
+      ]);
 
       this.$nextTick(() => {
         if (window.lucide) window.lucide.createIcons();
@@ -150,11 +180,54 @@ function adminSettings() {
         const response = await API.getAvailabilitySettings();
         this.availability = this.normalizeAvailability(response.availability);
         this.savedAvailability = clone(this.availability);
+        this.groomersOnDuty = Number(response.groomers_on_duty) || 1;
       } catch (error) {
         this.availabilityError =
           error.message || "Could not load availability settings.";
       } finally {
         this.availabilityLoading = false;
+      }
+    },
+
+    accountRoleLabel(account) {
+      if (account?.staff_subrole === "veterinarian") return "Veterinarian";
+      if (account?.staff_subrole === "clinic_receptionist") return "Clinic Receptionist";
+      if (account?.staff_type === "grooming") return "Grooming Staff";
+      if (account?.staff_type === "clinic") return "Clinic Staff";
+      return account?.role === "admin" ? "Administrator" : "Staff";
+    },
+
+    async loadOwnAccount() {
+      try {
+        const response = await API.getSettingsSecurityAccount();
+        const account = response?.account || {};
+        this.staffAccount = {
+          fullName: `${account.first_name || ""} ${account.last_name || ""}`.trim() || "Staff account",
+          roleLabel: this.accountRoleLabel(account),
+          username: account.username || "No username",
+          email: account.email || "No email address",
+          statusLabel: account.is_active && !account.is_archived ? "Active" : "Inactive",
+        };
+      } catch (error) {
+        this.staffPassword.error = error.message || "Could not load your account information.";
+      }
+    },
+
+    async setGroomersOnDuty(value) {
+      const nextValue = Math.min(5, Math.max(1, Number(value) || 1));
+      if (this.groomersOnDutySaving || nextValue === this.groomersOnDuty) return;
+
+      this.groomersOnDutySaving = true;
+      this.groomersOnDutyError = "";
+      this.groomersOnDutySuccess = "";
+      try {
+        const response = await API.adminUpdateGroomersOnDuty(nextValue);
+        this.groomersOnDuty = Number(response.groomers_on_duty) || nextValue;
+        this.groomersOnDutySuccess = "Groomers on duty updated.";
+      } catch (error) {
+        this.groomersOnDutyError = error.message || "Could not update groomers on duty.";
+      } finally {
+        this.groomersOnDutySaving = false;
       }
     },
 
@@ -339,6 +412,46 @@ function adminSettings() {
         this.adminPassword.error = this.firstApiError(error);
       } finally {
         this.adminPassword.submitting = false;
+      }
+    },
+
+    async submitStaffPassword() {
+      this.staffPassword.error = "";
+      this.staffPassword.success = "";
+
+      if (!this.staffPassword.current) {
+        this.staffPassword.error = "Enter your current password.";
+        return;
+      }
+
+      const validationError = this.passwordValidationError(
+        this.staffPassword.password,
+        this.staffPassword.confirmation,
+      );
+      if (validationError) {
+        this.staffPassword.error = validationError;
+        return;
+      }
+      if (this.staffPassword.current === this.staffPassword.password) {
+        this.staffPassword.error = "Choose a password that is different from your current password.";
+        return;
+      }
+
+      this.staffPassword.submitting = true;
+      try {
+        const response = await API.requestStaffPasswordChange({
+          current_password: this.staffPassword.current,
+          password: this.staffPassword.password,
+          password_confirmation: this.staffPassword.confirmation,
+        });
+        this.staffPassword.current = "";
+        this.staffPassword.password = "";
+        this.staffPassword.confirmation = "";
+        this.openSecurityVerification(response);
+      } catch (error) {
+        this.staffPassword.error = this.firstApiError(error);
+      } finally {
+        this.staffPassword.submitting = false;
       }
     },
 
@@ -605,7 +718,10 @@ function adminSettings() {
       this.securityVerification.notice = "";
       this.securityVerification.submitting = true;
       try {
-        const response = await API.confirmSecurityCredentialChange(
+        const confirmChange = this.isStaff
+          ? API.confirmStaffPasswordChange
+          : API.confirmSecurityCredentialChange;
+        const response = await confirmChange(
           this.securityVerification.changeId,
           this.securityVerification.digits.join(""),
         );
@@ -616,10 +732,16 @@ function adminSettings() {
           return;
         }
 
-        const message = response.message;
         this.securityVerification = this.emptySecurityVerification(false);
-        this.staffNotice = message;
-        await this.loadSecurityAccounts();
+        if (this.isStaff) {
+          this.staffPassword.success = "Password updated successfully.";
+          window.setTimeout?.(() => {
+            this.staffPassword.success = "";
+          }, 5000);
+        } else {
+          this.staffNotice = response.message;
+          await this.loadSecurityAccounts();
+        }
       } catch (error) {
         this.securityVerification.error = this.firstApiError(error);
         this.clearSecurityCode();
@@ -635,9 +757,10 @@ function adminSettings() {
       this.securityVerification.notice = "";
       this.securityVerification.resending = true;
       try {
-        const response = await API.resendSecurityCredentialChangeCode(
-          this.securityVerification.changeId,
-        );
+        const resendCode = this.isStaff
+          ? API.resendStaffPasswordChangeCode
+          : API.resendSecurityCredentialChangeCode;
+        const response = await resendCode(this.securityVerification.changeId);
         this.securityVerification.email = response.confirmation_email;
         this.securityVerification.notice = response.message;
         this.clearSecurityCode();

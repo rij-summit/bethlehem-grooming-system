@@ -27,6 +27,8 @@ class AdminCredentialChangeTest extends TestCase
             $table->string('phone')->unique();
             $table->string('password_hash');
             $table->string('role');
+            $table->string('staff_type')->nullable();
+            $table->string('staff_subrole')->nullable();
             $table->string('customer_tier')->default('new');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_archived')->default(false);
@@ -253,6 +255,67 @@ class AdminCredentialChangeTest extends TestCase
         Sanctum::actingAs($staff);
 
         $this->getJson('/api/admin/security/accounts')->assertForbidden();
+    }
+
+    public function test_staff_can_only_change_their_own_password_after_email_code_verification(): void
+    {
+        Notification::fake();
+        $staff = $this->createUser('staff', 'staff@example.test', '09170001009', 'clinicstaff');
+        $staff->update([
+            'staff_type' => 'clinic',
+            'staff_subrole' => 'veterinarian',
+        ]);
+        $staff->createToken('staff_token');
+        Sanctum::actingAs($staff);
+
+        $this->getJson('/api/settings/security/account')
+            ->assertOk()
+            ->assertJsonPath('account.user_id', $staff->user_id)
+            ->assertJsonPath('account.staff_type', 'clinic')
+            ->assertJsonPath('account.staff_subrole', 'veterinarian')
+            ->assertJsonMissingPath('staff')
+            ->assertJsonMissingPath('admin');
+
+        $this->postJson('/api/settings/security/password-change', [
+            'current_password' => 'wrong-password',
+            'password' => 'ChangedStaff!234',
+            'password_confirmation' => 'ChangedStaff!234',
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/settings/security/password-change', [
+            'current_password' => 'CurrentAdmin!234',
+            'password' => 'ChangedStaff!234',
+            'password_confirmation' => 'ChangedStaff!234',
+            'username' => 'changedstaff',
+        ])->assertUnprocessable();
+
+        $response = $this->postJson('/api/settings/security/password-change', [
+            'current_password' => 'CurrentAdmin!234',
+            'password' => 'ChangedStaff!234',
+            'password_confirmation' => 'ChangedStaff!234',
+        ])
+            ->assertAccepted()
+            ->assertJsonPath('purpose', 'Staff password change');
+
+        $this->assertTrue(Hash::check('CurrentAdmin!234', $staff->fresh()->password_hash));
+        $plainCode = $this->credentialChangeCodeSentTo(
+            $staff,
+            'Staff password change',
+            'Staff Bethlehem',
+        );
+        $change = PrivilegedCredentialChange::query()->findOrFail($response->json('change_id'));
+
+        $this->postJson("/api/settings/security/credential-changes/{$change->id}/confirm", [
+            'code' => $plainCode,
+        ])
+            ->assertOk()
+            ->assertJsonPath('changes.0', 'password')
+            ->assertJsonPath('requires_reauthentication', false);
+
+        $staff->refresh();
+        $this->assertTrue(Hash::check('ChangedStaff!234', $staff->password_hash));
+        $this->assertSame('clinicstaff', $staff->username);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
     private function credentialChangeCodeSentTo(

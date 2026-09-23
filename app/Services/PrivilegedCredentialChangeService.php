@@ -163,7 +163,12 @@ class PrivilegedCredentialChangeService
                 $target->password_hash = $change->new_password_hash;
             }
             $target->save();
-            $target->tokens()->delete();
+
+            $staffSelfServiceChange = $target->is($lockedRequester)
+                && $lockedRequester->role === 'staff';
+            if (! $staffSelfServiceChange) {
+                $target->tokens()->delete();
+            }
 
             $change->update([
                 'new_password_hash' => null,
@@ -177,7 +182,8 @@ class PrivilegedCredentialChangeService
                 'target_name' => $this->displayName($target),
                 'target_role' => $target->role,
                 'changes' => $changedFields,
-                'requires_reauthentication' => $target->is($lockedRequester),
+                'requires_reauthentication' => $target->is($lockedRequester)
+                    && ! $staffSelfServiceChange,
             ];
         });
     }
@@ -282,12 +288,21 @@ class PrivilegedCredentialChangeService
         $requesterIsUsableAdmin = $requester->role === 'admin'
             && $requester->is_active
             && ! $requester->is_archived;
+        $requesterIsUsableStaff = $requester->role === 'staff'
+            && $requester->is_active
+            && ! $requester->is_archived;
         $targetIsAllowed = $target->role === $targetRole
             && in_array($target->role, ['admin', 'staff'], true)
             && ! $target->is_archived;
         $selfChangeIsValid = $target->role !== 'admin' || $target->is($requester);
+        $staffSelfChangeIsValid = $requesterIsUsableStaff
+            && $target->role === 'staff'
+            && $target->is($requester);
 
-        return $requesterIsUsableAdmin && $targetIsAllowed && $selfChangeIsValid;
+        return $targetIsAllowed && (
+            ($requesterIsUsableAdmin && $selfChangeIsValid)
+            || $staffSelfChangeIsValid
+        );
     }
 
     private function assertUsernameIsAvailable(string $username, int $targetUserId): void

@@ -67,7 +67,6 @@ var API = (() => {
   });
   const ADMIN_ONLY_PAGE_NAMES = [
     "reports.html",
-    "settings.html",
     "services.html",
     "chatbot-insights.html",
   ];
@@ -1476,6 +1475,37 @@ var API = (() => {
     return request("GET", "/admin/security/accounts", null, getAdminToken());
   }
 
+  async function getSettingsSecurityAccount() {
+    return request("GET", "/settings/security/account", null, getAdminToken());
+  }
+
+  async function requestStaffPasswordChange(payload) {
+    return request(
+      "POST",
+      "/settings/security/password-change",
+      payload,
+      getAdminToken(),
+    );
+  }
+
+  async function confirmStaffPasswordChange(changeId, code) {
+    return request(
+      "POST",
+      `/settings/security/credential-changes/${encodeURIComponent(changeId)}/confirm`,
+      { code },
+      getAdminToken(),
+    );
+  }
+
+  async function resendStaffPasswordChangeCode(changeId) {
+    return request(
+      "POST",
+      `/settings/security/credential-changes/${encodeURIComponent(changeId)}/resend`,
+      null,
+      getAdminToken(),
+    );
+  }
+
   async function requestAdminCredentialChange(payload) {
     return request(
       "POST",
@@ -1970,6 +2000,8 @@ var API = (() => {
     getAvailabilitySettings,
     adminUpdateAvailability,
     getAdminSecurityAccounts,
+    getSettingsSecurityAccount,
+    requestStaffPasswordChange,
     requestAdminCredentialChange,
     requestStaffAccount,
     confirmStaffAccountEmail,
@@ -1977,6 +2009,8 @@ var API = (() => {
     updateStaffAccountStatus,
     confirmSecurityCredentialChange,
     resendSecurityCredentialChangeCode,
+    confirmStaffPasswordChange,
+    resendStaffPasswordChangeCode,
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,

@@ -37,6 +37,14 @@ class AdminSecurityController extends Controller
         ]);
     }
 
+    public function ownAccount(Request $request)
+    {
+        return response()->json([
+            'success' => true,
+            'account' => $this->accountPayload($request->user()),
+        ]);
+    }
+
     public function requestOwnChange(
         Request $request,
         PrivilegedCredentialChangeService $credentialChanges,
@@ -54,6 +62,42 @@ class AdminSecurityController extends Controller
             $credentialChanges,
             $admin,
             $admin,
+            $data,
+        );
+    }
+
+    public function requestStaffPasswordChange(
+        Request $request,
+        PrivilegedCredentialChangeService $credentialChanges,
+    ) {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(12)->mixedCase()->numbers()->symbols(),
+            ],
+            'password_confirmation' => ['required', 'string'],
+            'username' => ['prohibited'],
+            'email' => ['prohibited'],
+            'role' => ['prohibited'],
+            'staff_type' => ['prohibited'],
+            'staff_subrole' => ['prohibited'],
+            'active' => ['prohibited'],
+        ]);
+        $staff = $request->user();
+
+        if (! Hash::check($data['current_password'], $staff->password_hash)) {
+            throw ValidationException::withMessages([
+                'current_password' => 'The current password is incorrect.',
+            ]);
+        }
+
+        return $this->requestChange(
+            $credentialChanges,
+            $staff,
+            $staff,
             $data,
         );
     }

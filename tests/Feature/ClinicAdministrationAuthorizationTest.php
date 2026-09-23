@@ -993,19 +993,38 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
     }
 
-    public function test_administrator_only_clinic_settings_remain_restricted_to_admin(): void
+    public function test_staff_can_view_but_cannot_modify_administrator_managed_availability(): void
     {
         $this->authenticateAs('staff');
 
         $this->getJson('/api/admin/clinic/blocked-dates')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->getJson('/api/admin/clinic/settings/availability')
+            ->assertOk()
+            ->assertJsonPath('availability.clinic.open_time', '08:00')
+            ->assertJsonPath('groomers_on_duty', 2);
+
+        $this->postJson('/api/admin/clinic/blocked-dates', [
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+        ])
             ->assertForbidden()
             ->assertExactJson(self::FORBIDDEN_RESPONSE);
 
-        $this->authenticateAs('admin');
+        $this->deleteJson('/api/admin/clinic/blocked-dates/1')
+            ->assertForbidden()
+            ->assertExactJson(self::FORBIDDEN_RESPONSE);
 
-        $this->getJson('/api/admin/clinic/blocked-dates')
-            ->assertOk()
-            ->assertJsonPath('success', true);
+        $this->patchJson('/api/admin/clinic/settings/availability', [
+            'service' => 'clinic',
+            'open_time' => '09:00',
+            'close_time' => '18:00',
+            'pre_registration_cutoff_time' => '15:00',
+        ])
+            ->assertForbidden()
+            ->assertExactJson(self::FORBIDDEN_RESPONSE);
     }
 
     public function test_public_clinic_status_includes_configured_service_availability(): void
@@ -1777,10 +1796,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['DELETE', 'api/admin/clinic-appointments/{id}/attachments/{attachmentId}', 'role:admin,staff'],
             ['POST', 'api/admin/clinic/stop-today', 'role:admin'],
             ['POST', 'api/admin/clinic/reopen-today', 'role:admin'],
-            ['GET', 'api/admin/clinic/blocked-dates', 'role:admin'],
+            ['GET', 'api/admin/clinic/blocked-dates', 'role:admin,staff'],
             ['POST', 'api/admin/clinic/blocked-dates', 'role:admin'],
             ['DELETE', 'api/admin/clinic/blocked-dates/{id}', 'role:admin'],
-            ['GET', 'api/admin/clinic/settings/availability', 'role:admin'],
+            ['GET', 'api/admin/clinic/settings/availability', 'role:admin,staff'],
             ['PATCH', 'api/admin/clinic/settings/availability', 'role:admin'],
             ['PATCH', 'api/admin/clinic/settings/groomers-on-duty', 'role:admin,staff'],
         ];

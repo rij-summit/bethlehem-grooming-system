@@ -50,7 +50,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'x-for="staff in filteredStaffAccounts"',
             "staffAccounts.length === 0 ? 'No staff accounts yet' : 'No staff accounts in this category'",
             '>Security verification</p>',
-            'x-text="securityVerification.purpose"',
+            "x-text=\"isStaff ? 'Verify your identity' : securityVerification.purpose\"",
             '>6-digit security code</legend>',
             'x-for="(digit, index) in securityVerification.digits"',
             '@submit.prevent="confirmSecurityCredentialChange()"',
@@ -61,7 +61,13 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('Admin Account Change Password', $security);
         $this->assertStringNotContainsString('Staff Account Change Password', $security);
-        $this->assertStringNotContainsString('Use at least 12 characters', $security);
+        $adminSecurity = $this->sourceBetween(
+            $security,
+            'x-show="isAdmin" class="space-y-6"',
+            'x-show="isStaff" class="space-y-6"',
+        );
+
+        $this->assertStringNotContainsString('Use at least 12 characters', $adminSecurity);
         $this->assertStringNotContainsString('type="search"', $security);
         $this->assertStringNotContainsString('staffSearch', $security);
         $this->assertStringNotContainsString('id="newStaffSubrole"', $security);
@@ -71,10 +77,10 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('Change credentials', $security);
         $this->assertStringNotContainsString('resetStaffModal', $security);
         $this->assertStringNotContainsString('6-digit email verification code', $security);
-        $this->assertSame(3, substr_count($security, 'data-lucide="eye-closed"'));
-        $this->assertSame(3, substr_count($security, 'data-lucide="eye"'));
+        $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
+        $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-account-details-20260923',
+            'admin-settings.js?v=staff-settings-20260923',
             $page,
         );
     }
@@ -113,8 +119,10 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'this.addStaffModal.createdUsername = response.username',
             'this.addStaffModal.step = "success"',
             'API.updateStaffAccountStatus(staff.id, targetActive)',
-            'API.confirmSecurityCredentialChange(',
-            'API.resendSecurityCredentialChangeCode(',
+            '? API.confirmStaffPasswordChange',
+            ': API.confirmSecurityCredentialChange',
+            '? API.resendStaffPasswordChangeCode',
+            ': API.resendSecurityCredentialChangeCode',
             'openSecurityVerification(response)',
             'password_setup_required',
             'statusLabel:',
@@ -137,15 +145,77 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'x-show="activeSettingsTab === \'security\'"',
             '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs',
         );
+        $adminSecurity = $this->sourceBetween(
+            $security,
+            'x-show="isAdmin" class="space-y-6"',
+            'x-show="isStaff" class="space-y-6"',
+        );
 
-        $this->assertStringNotContainsString('autocomplete="current-password"', $security);
-        $this->assertStringNotContainsString('autocomplete="new-password"', $security);
-        $this->assertSame(8, substr_count($security, 'data-lpignore="true"'));
-        $this->assertSame(8, substr_count($security, 'data-1p-ignore'));
-        $this->assertSame(8, substr_count($security, 'data-bwignore'));
+        $this->assertStringNotContainsString('autocomplete="current-password"', $adminSecurity);
+        $this->assertStringNotContainsString('autocomplete="new-password"', $adminSecurity);
+        $this->assertSame(8, substr_count($adminSecurity, 'data-lpignore="true"'));
+        $this->assertSame(8, substr_count($adminSecurity, 'data-1p-ignore'));
+        $this->assertSame(8, substr_count($adminSecurity, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);
+    }
+
+    public function test_staff_security_is_self_service_only_and_uses_verified_password_change(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/settings.html'));
+        $component = file_get_contents(base_path('scripts/components/admin-settings.js'));
+        $securityTab = $this->sourceBetween(
+            $page,
+            'x-show="activeSettingsTab === \'security\'"',
+            '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs',
+        );
+        $security = $this->sourceBetween(
+            $securityTab,
+            'x-show="isStaff" class="space-y-6"',
+            '<!-- Security code verification modal -->',
+        );
+
+        foreach ([
+            '>Your Account</h3>',
+            '>Full name</dt>',
+            '>Staff role</dt>',
+            '>Username</dt>',
+            '>Email address</dt>',
+            '>Account status</dt>',
+            '>Change Password</h3>',
+            '>Current Password</span>',
+            '>New Password</span>',
+            '>Confirm New Password</span>',
+            '@submit.prevent="submitStaffPassword()"',
+            'autocomplete="current-password"',
+            'autocomplete="new-password"',
+        ] as $staffControl) {
+            $this->assertStringContainsString($staffControl, $security);
+        }
+
+        foreach ([
+            'Admin account',
+            'Staff accounts',
+            'Add staff account',
+            'openStaffStatusModal',
+        ] as $adminControl) {
+            $this->assertStringNotContainsString($adminControl, $security);
+        }
+
+        foreach ([
+            'API.getSettingsSecurityAccount()',
+            'API.requestStaffPasswordChange({',
+            'API.confirmStaffPasswordChange',
+            'API.resendStaffPasswordChangeCode',
+            'Password updated successfully.',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $component);
+        }
+
+        $this->assertStringContainsString("'Verify your identity'", $page);
+        $this->assertStringContainsString('We sent a 6-digit verification code to your registered email address.', $page);
+        $this->assertStringContainsString("Didn't receive a code?", $page);
     }
 
     public function test_old_email_link_confirmation_interface_has_been_removed(): void
