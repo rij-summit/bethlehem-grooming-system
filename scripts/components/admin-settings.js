@@ -47,17 +47,6 @@ function adminSettings() {
     staffError: "",
     staffFilter: "all",
     staffNotice: "",
-    resetStaffModal: {
-      open: false,
-      staff: null,
-      username: "",
-      password: "",
-      confirmation: "",
-      showPassword: false,
-      showConfirmation: false,
-      submitting: false,
-      error: "",
-    },
     addStaffModal: {
       open: false,
       step: "role",
@@ -68,19 +57,9 @@ function adminSettings() {
       lastName: "",
       username: "",
       email: "",
-      password: "",
-      confirmation: "",
-      showPassword: false,
-      showConfirmation: false,
-      pendingStaffId: null,
-      purpose: "",
-      staffLabel: "",
-      confirmationEmail: "",
-      digits: ["", "", "", "", "", ""],
+      createdUsername: "",
       submitting: false,
-      resending: false,
       error: "",
-      notice: "",
     },
     staffStatusModal: {
       open: false,
@@ -88,6 +67,10 @@ function adminSettings() {
       targetActive: false,
       busy: false,
       error: "",
+    },
+    staffDetailsModal: {
+      open: false,
+      staff: null,
     },
     securityVerification: {
       open: false,
@@ -130,10 +113,6 @@ function adminSettings() {
 
     get securityCodeComplete() {
       return this.securityVerification.digits.every((digit) => /^\d$/.test(digit));
-    },
-
-    get staffEmailCodeComplete() {
-      return this.addStaffModal.digits.every((digit) => /^\d$/.test(digit));
     },
 
     async init() {
@@ -192,6 +171,18 @@ function adminSettings() {
         this.staffAccounts = (response?.staff || []).map((staff) => {
           const fullName = `${staff.first_name || ""} ${staff.last_name || ""}`.trim()
             || "Staff account";
+          const roleLabel = staff.staff_type === "clinic"
+            ? "Clinic Staff"
+            : staff.staff_type === "grooming"
+              ? "Grooming Receptionist"
+              : "Staff";
+          const subroleLabel = staff.staff_subrole === "veterinarian"
+            ? "Veterinarian"
+            : staff.staff_subrole === "clinic_receptionist"
+              ? "Clinic Receptionist"
+              : "";
+          const active = Boolean(staff.is_active) && !Boolean(staff.is_archived);
+          const setupRequired = Boolean(staff.password_setup_required);
           return {
             id: staff.user_id,
             fullName,
@@ -200,17 +191,21 @@ function adminSettings() {
             email: staff.email || "",
             staffType: staff.staff_type || "",
             staffSubrole: staff.staff_subrole || "",
-            roleLabel: staff.staff_type === "clinic"
-              ? "Clinic Staff"
-              : staff.staff_type === "grooming"
-                ? "Grooming Receptionist"
-                : "Staff",
-            subroleLabel: staff.staff_subrole === "veterinarian"
-              ? "Veterinarian"
-              : staff.staff_subrole === "clinic_receptionist"
-                ? "Clinic Receptionist"
-                : "",
-            active: Boolean(staff.is_active) && !Boolean(staff.is_archived),
+            roleLabel,
+            subroleLabel,
+            detailRoleLabel: subroleLabel ? `${subroleLabel} (${roleLabel})` : roleLabel,
+            active,
+            setupRequired,
+            statusLabel: !active
+              ? "Deactivated"
+              : setupRequired
+                ? "Setup Required"
+                : "Active",
+            statusClass: !active
+              ? "bg-slate-100 text-slate-500"
+              : setupRequired
+                ? "bg-amber-50 text-amber-700"
+                : "bg-emerald-50 text-emerald-700",
           };
         });
       } catch (error) {
@@ -347,70 +342,6 @@ function adminSettings() {
       }
     },
 
-    emptyResetStaffModal(open = false, staff = null) {
-      return {
-        open,
-        staff,
-        username: staff?.username || "",
-        password: "",
-        confirmation: "",
-        showPassword: false,
-        showConfirmation: false,
-        submitting: false,
-        error: "",
-      };
-    },
-
-    openResetStaffPassword(staff) {
-      if (!staff?.active) return;
-
-      this.staffNotice = "";
-      this.resetStaffModal = this.emptyResetStaffModal(true, staff);
-      this.refreshSecurityIcons();
-    },
-
-    closeResetStaffModal() {
-      this.resetStaffModal = this.emptyResetStaffModal(false);
-    },
-
-    async submitResetStaffPassword() {
-      const staff = this.resetStaffModal.staff;
-      if (!staff) return;
-
-      this.resetStaffModal.error = "";
-      const username = this.resetStaffModal.username.trim();
-      const usernameChanged = username !== staff.username;
-      const validationError = this.passwordValidationError(
-        this.resetStaffModal.password,
-        this.resetStaffModal.confirmation,
-        false,
-      );
-      if (validationError) {
-        this.resetStaffModal.error = validationError;
-        return;
-      }
-
-      if (!usernameChanged && !this.resetStaffModal.password) {
-        this.resetStaffModal.error = "Enter a different username or a new password.";
-        return;
-      }
-
-      this.resetStaffModal.submitting = true;
-      try {
-        const response = await API.requestStaffCredentialChange(staff.id, {
-          username,
-          password: this.resetStaffModal.password || null,
-          password_confirmation: this.resetStaffModal.confirmation || null,
-        });
-        this.closeResetStaffModal();
-        this.openSecurityVerification(response);
-      } catch (error) {
-        this.resetStaffModal.error = this.firstApiError(error);
-      } finally {
-        this.resetStaffModal.submitting = false;
-      }
-    },
-
     emptyAddStaffModal(open = false) {
       return {
         open,
@@ -422,19 +353,9 @@ function adminSettings() {
         lastName: "",
         username: "",
         email: "",
-        password: "",
-        confirmation: "",
-        showPassword: false,
-        showConfirmation: false,
-        pendingStaffId: null,
-        purpose: "",
-        staffLabel: "",
-        confirmationEmail: "",
-        digits: ["", "", "", "", "", ""],
+        createdUsername: "",
         submitting: false,
-        resending: false,
         error: "",
-        notice: "",
       };
     },
 
@@ -456,7 +377,6 @@ function adminSettings() {
         this.addStaffModal.staffType = "";
         this.addStaffModal.staffSubrole = "";
         this.addStaffModal.error = "";
-        this.addStaffModal.notice = "";
         this.refreshSecurityIcons();
         return;
       }
@@ -497,13 +417,11 @@ function adminSettings() {
       this.addStaffModal.step = "role";
       this.addStaffModal.roleStage = this.addStaffModal.staffType === "clinic" ? "clinic" : "main";
       this.addStaffModal.error = "";
-      this.addStaffModal.notice = "";
       this.refreshSecurityIcons();
     },
 
     async requestNewStaffAccount() {
       this.addStaffModal.error = "";
-      this.addStaffModal.notice = "";
 
       const firstName = this.addStaffModal.firstName.trim();
       const lastName = this.addStaffModal.lastName.trim();
@@ -531,15 +449,6 @@ function adminSettings() {
         return;
       }
 
-      const validationError = this.passwordValidationError(
-        this.addStaffModal.password,
-        this.addStaffModal.confirmation,
-      );
-      if (validationError) {
-        this.addStaffModal.error = validationError;
-        return;
-      }
-
       this.addStaffModal.submitting = true;
       try {
         const response = await API.requestStaffAccount({
@@ -549,108 +458,15 @@ function adminSettings() {
           last_name: lastName,
           username: username || null,
           email,
-          password: this.addStaffModal.password,
-          password_confirmation: this.addStaffModal.confirmation,
         });
-        this.addStaffModal.pendingStaffId = response.pending_staff_id;
-        this.addStaffModal.purpose = response.purpose;
-        this.addStaffModal.staffLabel = response.staff_label;
-        this.addStaffModal.confirmationEmail = response.confirmation_email;
-        this.addStaffModal.password = "";
-        this.addStaffModal.confirmation = "";
-        this.addStaffModal.digits = ["", "", "", "", "", ""];
-        this.addStaffModal.step = "verify";
-        this.refreshSecurityIcons();
-        this.$nextTick(() => document.getElementById("staffEmailCodeDigit0")?.focus());
-      } catch (error) {
-        this.addStaffModal.error = this.firstApiError(error);
-      } finally {
-        this.addStaffModal.submitting = false;
-      }
-    },
-
-    focusStaffEmailCodeDigit(index) {
-      this.$nextTick(() => document.getElementById(`staffEmailCodeDigit${index}`)?.focus());
-    },
-
-    applyStaffEmailCode(value, startIndex = 0) {
-      const digits = String(value || "").replace(/\D/g, "").slice(0, 6 - startIndex);
-      if (!digits) return;
-
-      [...digits].forEach((digit, offset) => {
-        this.addStaffModal.digits[startIndex + offset] = digit;
-      });
-      this.focusStaffEmailCodeDigit(Math.min(5, startIndex + digits.length));
-    },
-
-    handleStaffEmailCodeInput(index, event) {
-      const digits = String(event.target.value || "").replace(/\D/g, "");
-      if (digits.length > 1) {
-        this.applyStaffEmailCode(digits, index);
-        return;
-      }
-
-      const digit = digits.slice(-1);
-      this.addStaffModal.digits[index] = digit;
-      event.target.value = digit;
-      if (digit && index < 5) this.focusStaffEmailCodeDigit(index + 1);
-    },
-
-    handleStaffEmailCodeBackspace(index) {
-      if (this.addStaffModal.digits[index] || index === 0) return;
-      this.addStaffModal.digits[index - 1] = "";
-      this.focusStaffEmailCodeDigit(index - 1);
-    },
-
-    pasteStaffEmailCode(event) {
-      this.addStaffModal.digits = ["", "", "", "", "", ""];
-      this.applyStaffEmailCode(event.clipboardData?.getData("text") || "");
-    },
-
-    clearStaffEmailCode() {
-      this.addStaffModal.digits = ["", "", "", "", "", ""];
-      this.focusStaffEmailCodeDigit(0);
-    },
-
-    async confirmNewStaffAccount() {
-      if (!this.staffEmailCodeComplete || !this.addStaffModal.pendingStaffId) return;
-
-      this.addStaffModal.error = "";
-      this.addStaffModal.notice = "";
-      this.addStaffModal.submitting = true;
-      try {
-        const response = await API.confirmStaffAccountEmail(
-          this.addStaffModal.pendingStaffId,
-          this.addStaffModal.digits.join(""),
-        );
-        this.addStaffModal = this.emptyAddStaffModal(false);
-        this.staffNotice = response.message;
+        this.addStaffModal.createdUsername = response.username;
+        this.addStaffModal.step = "success";
         await this.loadSecurityAccounts();
+        this.refreshSecurityIcons();
       } catch (error) {
         this.addStaffModal.error = this.firstApiError(error);
-        this.clearStaffEmailCode();
       } finally {
         this.addStaffModal.submitting = false;
-      }
-    },
-
-    async resendNewStaffAccountCode() {
-      if (!this.addStaffModal.pendingStaffId || this.addStaffModal.resending) return;
-
-      this.addStaffModal.error = "";
-      this.addStaffModal.notice = "";
-      this.addStaffModal.resending = true;
-      try {
-        const response = await API.resendStaffAccountEmailCode(
-          this.addStaffModal.pendingStaffId,
-        );
-        this.addStaffModal.confirmationEmail = response.confirmation_email;
-        this.addStaffModal.notice = response.message;
-        this.clearStaffEmailCode();
-      } catch (error) {
-        this.addStaffModal.error = this.firstApiError(error);
-      } finally {
-        this.addStaffModal.resending = false;
       }
     },
 
@@ -663,6 +479,17 @@ function adminSettings() {
         error: "",
       };
       this.refreshSecurityIcons();
+    },
+
+    openStaffDetails(staff) {
+      if (!staff) return;
+
+      this.staffDetailsModal = { open: true, staff };
+      this.refreshSecurityIcons();
+    },
+
+    closeStaffDetails() {
+      this.staffDetailsModal = { open: false, staff: null };
     },
 
     closeStaffStatusModal() {
@@ -695,7 +522,7 @@ function adminSettings() {
     },
 
     closeSecurityModals() {
-      if (this.resetStaffModal.open) this.closeResetStaffModal();
+      if (this.staffDetailsModal.open) this.closeStaffDetails();
       if (this.addStaffModal.open) this.closeAddStaffAccount();
       if (this.staffStatusModal.open) this.closeStaffStatusModal();
       if (this.securityVerification.open) this.closeSecurityVerification();

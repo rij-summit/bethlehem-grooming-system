@@ -28,17 +28,44 @@ global.API = {
         is_active: true,
         is_archived: false,
       },
-      staff: [{
-        user_id: 2,
-        first_name: "Grooming",
-        last_name: "Staff",
-        username: "groomingstaff",
-        email: "bethlehem.staff.test@gmail.com",
-        staff_type: "grooming",
-        staff_subrole: null,
-        is_active: true,
-        is_archived: false,
-      }],
+      staff: [
+        {
+          user_id: 2,
+          first_name: "Grooming",
+          last_name: "Staff",
+          username: "groomingstaff",
+          email: "bethlehem.staff.test@gmail.com",
+          staff_type: "grooming",
+          staff_subrole: null,
+          is_active: true,
+          is_archived: false,
+          password_setup_required: false,
+        },
+        {
+          user_id: 3,
+          first_name: "Clinic",
+          last_name: "Staff",
+          username: "clinicstaff",
+          email: "clinic.staff.test@gmail.com",
+          staff_type: "clinic",
+          staff_subrole: "veterinarian",
+          is_active: true,
+          is_archived: false,
+          password_setup_required: true,
+        },
+        {
+          user_id: 4,
+          first_name: "Former",
+          last_name: "Staff",
+          username: "formerstaff",
+          email: "former.staff.test@gmail.com",
+          staff_type: "clinic",
+          staff_subrole: "clinic_receptionist",
+          is_active: false,
+          is_archived: false,
+          password_setup_required: false,
+        },
+      ],
     };
   },
   async requestAdminCredentialChange(payload) {
@@ -50,19 +77,10 @@ global.API = {
       confirmation_email: "b**************@gmail.com",
     };
   },
-  async requestStaffCredentialChange(staffId, payload) {
-    calls.push(["staff", staffId, payload]);
-    return {
-      change_id: 12,
-      purpose: "Staff username and password change",
-      target_name: "Staff Bethlehem",
-      confirmation_email: "b**************@gmail.com",
-    };
-  },
   async confirmSecurityCredentialChange(changeId, code) {
     calls.push(["confirm", changeId, code]);
     return {
-      message: "Staff username and password change confirmed.",
+      message: "Admin username change confirmed.",
       requires_reauthentication: false,
     };
   },
@@ -76,21 +94,8 @@ global.API = {
   async requestStaffAccount(payload) {
     calls.push(["add-staff", payload]);
     return {
-      pending_staff_id: 21,
-      purpose: "Verify Clinic Staff email",
-      staff_label: "Clinic Staff",
-      confirmation_email: "c**********@example.test",
-    };
-  },
-  async confirmStaffAccountEmail(pendingStaffId, code) {
-    calls.push(["confirm-staff", pendingStaffId, code]);
-    return { message: "Clinic Staff account created." };
-  },
-  async resendStaffAccountEmailCode(pendingStaffId) {
-    calls.push(["resend-staff", pendingStaffId]);
-    return {
-      message: "A new email verification code was sent.",
-      confirmation_email: "c**********@example.test",
+      message: "Staff account created",
+      username: "JohnSmith",
     };
   },
   async updateStaffAccountStatus(staffId, active) {
@@ -113,10 +118,13 @@ vm.runInThisContext(componentSource, {
 
   await settings.loadSecurityAccounts();
   assert.equal(settings.adminAccount.username, "Admin");
-  assert.equal(settings.staffAccounts.length, 1);
+  assert.equal(settings.staffAccounts.length, 3);
   assert.equal(settings.staffAccounts[0].username, "groomingstaff");
   assert.equal(settings.staffAccounts[0].email, "bethlehem.staff.test@gmail.com");
   assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
+  assert.equal(settings.staffAccounts[0].statusLabel, "Active");
+  assert.equal(settings.staffAccounts[1].statusLabel, "Setup Required");
+  assert.equal(settings.staffAccounts[2].statusLabel, "Deactivated");
 
   settings.adminPassword.current = "CurrentAdmin!234";
   settings.adminPassword.username = "ClinicAdmin";
@@ -131,24 +139,24 @@ vm.runInThisContext(componentSource, {
   settings.closeSecurityVerification();
 
   const staff = settings.staffAccounts[0];
-  settings.openResetStaffPassword(staff);
-  settings.resetStaffModal.username = "ClinicStaff";
-  settings.resetStaffModal.password = "UpdatedPass!123";
-  settings.resetStaffModal.confirmation = "UpdatedPass!123";
-  await settings.submitResetStaffPassword();
-  assert.equal(settings.resetStaffModal.open, false);
-  assert.equal(settings.securityVerification.open, true);
-  assert.equal(settings.securityVerification.changeId, 12);
-  assert.equal(settings.securityVerification.purpose, "Staff username and password change");
-  assert.equal(calls[1][0], "staff");
-  assert.equal(calls[1][1], 2);
-  assert.equal(calls[1][2].username, "ClinicStaff");
+  settings.openStaffDetails(staff);
+  assert.equal(settings.staffDetailsModal.open, true);
+  assert.equal(settings.staffDetailsModal.staff.fullName, "Grooming Staff");
+  assert.equal(settings.staffDetailsModal.staff.statusLabel, "Active");
+  settings.closeStaffDetails();
+  assert.equal(settings.staffDetailsModal.open, false);
 
+  settings.openSecurityVerification({
+    change_id: 11,
+    purpose: "Admin username change",
+    target_name: "Admin Bethlehem",
+    confirmation_email: "b**************@gmail.com",
+  });
   settings.securityVerification.digits = ["1", "2", "3", "4", "5", "6"];
   await settings.confirmSecurityCredentialChange();
-  assert.deepEqual(calls[2], ["confirm", 12, "123456"]);
+  assert.deepEqual(calls[1], ["confirm", 11, "123456"]);
   assert.equal(settings.securityVerification.open, false);
-  assert.equal(settings.staffNotice, "Staff username and password change confirmed.");
+  assert.equal(settings.staffNotice, "Admin username change confirmed.");
 
   settings.openAddStaffAccount();
   settings.chooseStaffType("clinic");
@@ -169,11 +177,9 @@ vm.runInThisContext(componentSource, {
   settings.addStaffModal.firstName = "John";
   settings.addStaffModal.lastName = "Smith";
   settings.addStaffModal.email = "clinic.staff@example.test";
-  settings.addStaffModal.password = "ClinicStaff!234";
-  settings.addStaffModal.confirmation = "ClinicStaff!234";
   await settings.requestNewStaffAccount();
-  assert.equal(settings.addStaffModal.step, "verify");
-  assert.equal(settings.addStaffModal.purpose, "Verify Clinic Staff email");
+  assert.equal(settings.addStaffModal.step, "success");
+  assert.equal(settings.addStaffModal.createdUsername, "JohnSmith");
   assert.deepEqual(calls.find((call) => call[0] === "add-staff"), [
     "add-staff",
     {
@@ -183,19 +189,8 @@ vm.runInThisContext(componentSource, {
       last_name: "Smith",
       username: null,
       email: "clinic.staff@example.test",
-      password: "ClinicStaff!234",
-      password_confirmation: "ClinicStaff!234",
     },
   ]);
-
-  settings.addStaffModal.digits = ["6", "5", "4", "3", "2", "1"];
-  await settings.confirmNewStaffAccount();
-  assert.deepEqual(
-    calls.find((call) => call[0] === "confirm-staff"),
-    ["confirm-staff", 21, "654321"],
-  );
-  assert.equal(settings.addStaffModal.open, false);
-  assert.equal(settings.staffNotice, "Clinic Staff account created.");
 
   settings.openStaffStatusModal(settings.staffAccounts[0]);
   await settings.updateStaffStatus();

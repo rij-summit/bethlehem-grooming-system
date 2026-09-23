@@ -56,6 +56,59 @@ class PasswordResetController extends Controller
         ]);
     }
 
+    public function verifyStaffSetupLink(Request $request, PasswordResetService $passwordResets)
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'size:64'],
+        ]);
+        $result = $passwordResets->inspectStaffSetup($data['token']);
+
+        if ($result['status'] !== 'valid') {
+            return response()->json([
+                'success' => false,
+                'expired' => $result['status'] === 'expired',
+                'message' => $result['status'] === 'expired'
+                    ? 'This setup link has expired. Request a new link to finish setting up your account.'
+                    : 'This setup link is no longer valid.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'email' => $result['email'],
+        ]);
+    }
+
+    public function requestNewStaffSetupLink(Request $request, PasswordResetService $passwordResets)
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'size:64'],
+        ]);
+
+        try {
+            $result = $passwordResets->resendExpiredStaffSetupLink($data['token']);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The setup email could not be queued. Please try again.',
+            ], 503);
+        }
+
+        if ($result['status'] !== 'sent') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This setup link is no longer valid.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'A new setup link has been sent to your email.',
+        ], 202);
+    }
+
     public function reset(Request $request, PasswordResetService $passwordResets)
     {
         $data = $request->validate([
@@ -92,9 +145,74 @@ class PasswordResetController extends Controller
             ], 422);
         }
 
+        $response = [
+            'success' => true,
+            'message' => $result['completed_setup']
+                ? 'Your staff account is ready.'
+                : 'Your password has been reset successfully.',
+            'completed_setup' => $result['completed_setup'],
+        ];
+
+        if ($result['completed_setup']) {
+            $user = $result['user'];
+            $response['token'] = $user->createToken('admin_token')->plainTextToken;
+            $response['user'] = [
+                'user_id' => $user->user_id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'role' => $user->role,
+            ];
+        }
+
+        return response()->json($response);
+    }
+
+    public function completeStaffSetup(Request $request, PasswordResetService $passwordResets)
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'size:64'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(12)->mixedCase()->numbers()->symbols(),
+            ],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+        $result = $passwordResets->completeStaffSetup($data['token'], $data['password']);
+
+        if ($result['status'] === 'expired') {
+            return response()->json([
+                'success' => false,
+                'expired' => true,
+                'message' => 'This setup link has expired. Request a new link to finish setting up your account.',
+            ], 422);
+        }
+
+        if ($result['status'] !== 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This setup link is no longer valid.',
+            ], 422);
+        }
+
+        $user = $result['user'];
+
         return response()->json([
             'success' => true,
-            'message' => 'Your password has been reset successfully.',
+            'message' => 'Your staff account is ready.',
+            'completed_setup' => true,
+            'token' => $user->createToken('admin_token')->plainTextToken,
+            'user' => [
+                'user_id' => $user->user_id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
         ]);
     }
 }

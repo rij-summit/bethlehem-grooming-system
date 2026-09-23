@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
+
+    private const PASSWORD_SETUP_REQUIRED_PREFIX = '!staff-password-setup-required!';
 
     protected $table = 'users';
 
@@ -56,6 +59,20 @@ class User extends Authenticatable
     public function getAuthPassword()
     {
         return $this->password_hash;
+    }
+
+    public static function passwordSetupPlaceholder(): string
+    {
+        return self::PASSWORD_SETUP_REQUIRED_PREFIX.Str::random(40);
+    }
+
+    public function requiresPasswordSetup(): bool
+    {
+        return $this->role === 'staff'
+            && str_starts_with(
+                (string) $this->password_hash,
+                self::PASSWORD_SETUP_REQUIRED_PREFIX,
+            );
     }
 
     /**

@@ -77,10 +77,12 @@ var API = (() => {
     "verify-email.html",
     "forgot-password.html",
     "reset-password.html",
+    "set-up-password.html",
   ]);
   const INVALID_SESSION_CODES = new Set([
     "account_disabled",
     "email_not_verified",
+    "password_setup_required",
   ]);
   const AUTH_STORAGE_KEYS = [
     CUSTOMER_TOKEN_KEY,
@@ -858,11 +860,39 @@ var API = (() => {
   }
 
   async function resetPassword(token, password, passwordConfirmation) {
-    return request("POST", "/password/reset", {
+    const data = await request("POST", "/password/reset", {
       token,
       password,
       password_confirmation: passwordConfirmation,
     });
+
+    if (data?.completed_setup && data?.token && data?.user?.role === "staff") {
+      setAuthSession(data.token, "staff", true);
+    }
+
+    return data;
+  }
+
+  async function verifyStaffPasswordSetupToken(token) {
+    return request("POST", "/staff/password-setup/verify", { token });
+  }
+
+  async function completeStaffPasswordSetup(token, password, passwordConfirmation) {
+    const data = await request("POST", "/staff/password-setup/complete", {
+      token,
+      password,
+      password_confirmation: passwordConfirmation,
+    });
+
+    if (data?.completed_setup && data?.token && data?.user?.role === "staff") {
+      setAuthSession(data.token, "staff", true);
+    }
+
+    return data;
+  }
+
+  async function requestNewStaffPasswordSetupLink(token) {
+    return request("POST", "/staff/password-setup/request-new-link", { token });
   }
 
   async function verifyEmail(token) {
@@ -1455,15 +1485,6 @@ var API = (() => {
     );
   }
 
-  async function requestStaffCredentialChange(staffId, payload) {
-    return request(
-      "POST",
-      `/admin/security/staff/${encodeURIComponent(staffId)}/credential-change`,
-      payload,
-      getAdminToken(),
-    );
-  }
-
   async function requestStaffAccount(payload) {
     return request(
       "POST",
@@ -1877,6 +1898,9 @@ var API = (() => {
     requestPasswordReset,
     verifyPasswordResetToken,
     resetPassword,
+    verifyStaffPasswordSetupToken,
+    completeStaffPasswordSetup,
+    requestNewStaffPasswordSetupLink,
     logout,
     getMe,
     getSystemClock,
@@ -1947,7 +1971,6 @@ var API = (() => {
     adminUpdateAvailability,
     getAdminSecurityAccounts,
     requestAdminCredentialChange,
-    requestStaffCredentialChange,
     requestStaffAccount,
     confirmStaffAccountEmail,
     resendStaffAccountEmailCode,

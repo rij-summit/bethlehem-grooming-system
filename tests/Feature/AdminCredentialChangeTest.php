@@ -167,57 +167,23 @@ class AdminCredentialChangeTest extends TestCase
         ])->assertUnprocessable();
     }
 
-    public function test_staff_username_and_password_change_is_confirmed_only_from_the_admin_email(): void
+    public function test_admin_cannot_change_staff_credentials(): void
     {
         Notification::fake();
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', '09170001004', 'Admin');
         $staff = $this->createUser('staff', 'staff-placeholder@example.test', '09170001005');
-        $adminToken = $admin->createToken('admin_token');
-        $staff->createToken('admin_token');
         Sanctum::actingAs($admin);
 
-        $response = $this->postJson("/api/admin/security/staff/{$staff->user_id}/credential-change", [
+        $this->postJson("/api/admin/security/staff/{$staff->user_id}/credential-change", [
             'username' => 'ClinicStaff',
             'password' => 'NewStaffPass!234',
             'password_confirmation' => 'NewStaffPass!234',
-        ]);
-        $response->assertAccepted()
-            ->assertJsonPath('purpose', 'Staff username and password change');
-
-        Notification::assertNotSentTo(
-            $staff,
-            ConfirmPrivilegedCredentialChangeCodeNotification::class,
-        );
-        $plainCode = $this->credentialChangeCodeSentTo(
-            $admin,
-            'Staff username and password change',
-            'Staff Bethlehem',
-        );
-        $change = PrivilegedCredentialChange::query()->findOrFail($response->json('change_id'));
+        ])->assertNotFound();
 
         $this->assertNull($staff->fresh()->username);
         $this->assertTrue(Hash::check('CurrentAdmin!234', $staff->fresh()->password_hash));
-        $this->assertNotSame('NewStaffPass!234', $change->new_password_hash);
-        $this->assertTrue(Hash::check('NewStaffPass!234', $change->new_password_hash));
-
-        $this->postJson("/api/admin/security/credential-changes/{$change->id}/confirm", [
-            'code' => $plainCode,
-        ])
-            ->assertOk()
-            ->assertJsonPath('requires_reauthentication', false)
-            ->assertJsonPath('target_role', 'staff');
-
-        $staff->refresh();
-        $this->assertSame('ClinicStaff', $staff->username);
-        $this->assertTrue(Hash::check('NewStaffPass!234', $staff->password_hash));
-        $this->assertDatabaseHas('personal_access_tokens', [
-            'id' => $adminToken->accessToken->id,
-            'tokenable_id' => $admin->user_id,
-        ]);
-        $this->assertDatabaseMissing('personal_access_tokens', [
-            'tokenable_id' => $staff->user_id,
-        ]);
-        $this->assertNull($change->fresh()->new_password_hash);
+        $this->assertDatabaseCount('privileged_credential_changes', 0);
+        Notification::assertNothingSent();
     }
 
     public function test_expired_change_does_not_modify_credentials(): void

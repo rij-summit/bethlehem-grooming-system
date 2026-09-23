@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\PasswordResetLinkNotification;
+use App\Notifications\SetUpStaffPasswordNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -182,6 +183,117 @@ class PasswordResetTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
+    }
+
+    public function test_forgot_password_does_not_send_a_reset_link_or_replace_a_valid_staff_setup_link(): void
+    {
+        Notification::fake();
+        $staff = $this->createUser('staff', 'setup.staff@example.test');
+        $staff->update(['password_hash' => User::passwordSetupPlaceholder()]);
+        $oldToken = str_repeat('a', 64);
+        PasswordResetRequest::query()->create([
+            'user_id' => $staff->user_id,
+            'token_hash' => hash('sha256', $oldToken),
+            'expires_at' => now()->addHours(24),
+            'last_sent_at' => now(),
+        ]);
+
+        $this->postJson('/api/password/forgot', [
+            'email' => $staff->email,
+        ])
+            ->assertAccepted()
+            ->assertJsonPath('message', 'Password reset link has been sent.');
+
+        Notification::assertNotSentTo($staff, PasswordResetLinkNotification::class);
+        $this->assertDatabaseHas('password_reset_requests', [
+            'token_hash' => hash('sha256', $oldToken),
+        ]);
+        $this->postJson('/api/password/reset', [
+            'token' => $oldToken,
+            'password' => 'SetupComplete!234',
+            'password_confirmation' => 'SetupComplete!234',
+        ])->assertUnprocessable();
+        $this->postJson('/api/staff/password-setup/verify', [
+            'token' => $oldToken,
+        ])->assertOk();
+
+        $staff->refresh();
+        $this->assertTrue($staff->requiresPasswordSetup());
+    }
+
+    public function test_expired_staff_setup_link_can_be_replaced_only_through_the_setup_flow(): void
+    {
+        Notification::fake();
+        $staff = $this->createUser('staff', 'setup.staff@example.test');
+        $staff->update(['password_hash' => User::passwordSetupPlaceholder()]);
+        $expiredToken = str_repeat('a', 64);
+        PasswordResetRequest::query()->create([
+            'user_id' => $staff->user_id,
+            'token_hash' => hash('sha256', $expiredToken),
+            'expires_at' => now()->subMinute(),
+            'last_sent_at' => now()->subDay(),
+        ]);
+
+        $this->postJson('/api/staff/password-setup/verify', [
+            'token' => $expiredToken,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('expired', true)
+            ->assertJsonPath('message', 'This setup link has expired. Request a new link to finish setting up your account.');
+
+        $this->postJson('/api/staff/password-setup/request-new-link', [
+            'token' => $expiredToken,
+        ])
+            ->assertAccepted()
+            ->assertJsonPath('message', 'A new setup link has been sent to your email.');
+
+        $newToken = $this->setupTokenSentTo($staff);
+        $this->assertNotSame($expiredToken, $newToken);
+        $this->assertDatabaseMissing('password_reset_requests', [
+            'token_hash' => hash('sha256', $expiredToken),
+        ]);
+        $this->postJson('/api/staff/password-setup/verify', [
+            'token' => $expiredToken,
+        ])->assertUnprocessable();
+        $this->postJson('/api/staff/password-setup/verify', [
+            'token' => $newToken,
+        ])->assertOk();
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $newToken,
+            'password' => 'SetupComplete!234',
+            'password_confirmation' => 'SetupComplete!234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('completed_setup', true)
+            ->assertJsonPath('user.role', 'staff')
+            ->assertJsonStructure(['token']);
+
+        $staff->refresh();
+        $this->assertFalse($staff->requiresPasswordSetup());
+        $this->assertTrue(Hash::check('SetupComplete!234', $staff->password_hash));
+        $this->assertDatabaseCount('password_reset_requests', 0);
+    }
+
+    private function setupTokenSentTo(User $user): string
+    {
+        $plainToken = null;
+
+        Notification::assertSentTo(
+            $user,
+            SetUpStaffPasswordNotification::class,
+            function (SetUpStaffPasswordNotification $notification) use (&$plainToken): bool {
+                parse_str(
+                    (string) parse_url($notification->setupUrl, PHP_URL_FRAGMENT),
+                    $fragment,
+                );
+                $plainToken = $fragment['token'] ?? null;
+
+                return is_string($plainToken) && strlen($plainToken) === 64;
+            },
+        );
+
+        return $plainToken;
     }
 
     private function resetTokenSentTo(User $user): string

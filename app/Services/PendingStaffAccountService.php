@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Http\Controllers\EmailVerificationController;
 use App\Models\PendingCustomerRegistration;
 use App\Models\PendingStaffAccount;
+use App\Models\PasswordResetRequest;
 use App\Models\User;
+use App\Notifications\SetUpStaffPasswordNotification;
 use App\Notifications\VerifyStaffAccountEmailNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -28,7 +30,6 @@ class PendingStaffAccountService
         string $lastName,
         ?string $username,
         string $email,
-        string $password,
     ): array {
         $this->assertAdminIsEligible($requester);
         $this->assertStaffSubroleIsValid($staffType, $staffSubrole);
@@ -43,46 +44,76 @@ class PendingStaffAccountService
         $this->assertUsernameIsAvailable($normalizedUsername, $normalizedEmail);
         EmailVerificationController::assertMailCanBeDelivered();
 
-        $plainCode = $this->generateCode();
-        $pending = DB::transaction(function () use (
-            $requester,
+        $plainToken = Str::random(64);
+        $tokenHash = hash('sha256', $plainToken);
+        $staff = DB::transaction(function () use (
             $staffType,
             $staffSubrole,
             $normalizedFirstName,
             $normalizedLastName,
             $normalizedUsername,
             $normalizedEmail,
-            $password,
-            $plainCode,
-        ): PendingStaffAccount {
+            $tokenHash,
+        ): User {
             PendingStaffAccount::query()
                 ->whereRaw('LOWER(email) = ?', [$normalizedEmail])
                 ->delete();
 
-            return PendingStaffAccount::query()->create([
-                'requested_by_user_id' => $requester->user_id,
-                'staff_type' => $staffType,
-                'staff_subrole' => $staffSubrole,
+            $staff = User::query()->create([
                 'first_name' => $normalizedFirstName,
                 'last_name' => $normalizedLastName,
                 'username' => $normalizedUsername,
                 'email' => $normalizedEmail,
-                'password_hash' => Hash::make($password),
-                'code_hash' => Hash::make($plainCode),
-                'failed_attempts' => 0,
-                'expires_at' => now()->addMinutes($this->ttlMinutes()),
+                'phone' => null,
+                'password_hash' => User::passwordSetupPlaceholder(),
+                'role' => 'staff',
+                'staff_type' => $staffType,
+                'staff_subrole' => $staffSubrole,
+                'customer_tier' => 'new',
+                'is_active' => true,
+                'is_archived' => false,
+                'email_verified_at' => now(),
+            ]);
+
+            PasswordResetRequest::query()->create([
+                'user_id' => $staff->getKey(),
+                'token_hash' => $tokenHash,
+                'expires_at' => now()->addHours(24),
                 'last_sent_at' => now(),
             ]);
+
+            return $staff;
         });
 
+        $frontendUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $setupUrl = $frontendUrl
+            .'/pages/client/set-up-password.html#token='.rawurlencode($plainToken);
+
         try {
-            $this->sendCode($pending, $plainCode);
+            $staff->notify(new SetUpStaffPasswordNotification($setupUrl));
         } catch (Throwable $exception) {
-            $pending->delete();
+            DB::transaction(function () use ($staff, $tokenHash): void {
+                $createdStaff = User::query()
+                    ->whereKey($staff->getKey())
+                    ->lockForUpdate()
+                    ->first();
+                $request = PasswordResetRequest::query()
+                    ->where('user_id', $staff->getKey())
+                    ->where('token_hash', $tokenHash)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($createdStaff?->requiresPasswordSetup() && $request) {
+                    $createdStaff->delete();
+                }
+            });
             throw $exception;
         }
 
-        return $this->challengePayload($pending);
+        return [
+            'staff' => $staff,
+            'staff_label' => $this->staffLabel($staffType),
+        ];
     }
 
     public function confirm(

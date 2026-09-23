@@ -56,8 +56,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setBusy(true);
     try {
-      await API.resetPassword(resetToken, password.value, confirmation.value);
-      window.location.replace("./sign-in.html?password_reset=1");
+      const response = await API.resetPassword(
+        resetToken,
+        password.value,
+        confirmation.value,
+      );
+      window.location.replace(
+        response.completed_setup
+          ? "../admin/dashboard.html"
+          : "./sign-in.html?password_reset=1",
+      );
     } catch (error) {
       setMessage("error", firstApiError(error));
     } finally {

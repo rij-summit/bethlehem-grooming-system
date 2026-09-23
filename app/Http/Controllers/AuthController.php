@@ -140,6 +140,17 @@ class AuthController extends Controller
         $pendingRegistration = $user
             ? null
             : PendingCustomerRegistration::where($field, $lookupIdentifier)->first();
+
+        if ($user?->requiresPasswordSetup()) {
+            RateLimiter::clear($throttleKey);
+
+            return response()->json([
+                'success' => false,
+                'code' => 'password_setup_required',
+                'message' => 'Set up your password using the link sent to your email before signing in.',
+            ], 403);
+        }
+
         $passwordHash = $user?->password_hash
             ?? $pendingRegistration?->password_hash
             ?? '$2y$12$phAn9O3fw5n4sHb8YADptOZicYefzNF1mfQlOwFAKzEQ533R6y4iq';

@@ -4,11 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\LoginEmailChallenge;
 use App\Models\PendingStaffAccount;
+use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\ConfirmLoginNotification;
-use App\Notifications\VerifyStaffAccountEmailNotification;
+use App\Notifications\SetUpStaffPasswordNotification;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
@@ -68,6 +68,15 @@ class AdminStaffAccountManagementTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('password_reset_requests', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('user_id')->unique();
+            $table->string('token_hash', 64)->unique();
+            $table->timestamp('expires_at');
+            $table->timestamp('last_sent_at');
+            $table->timestamps();
+        });
+
         Schema::create('login_email_challenges', function (Blueprint $table): void {
             $table->id();
             $table->unsignedInteger('user_id')->unique();
@@ -108,6 +117,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Schema::dropIfExists('personal_access_tokens');
         Schema::dropIfExists('privileged_credential_changes');
         Schema::dropIfExists('login_email_challenges');
+        Schema::dropIfExists('password_reset_requests');
         Schema::dropIfExists('pending_staff_accounts');
         Schema::dropIfExists('pending_customer_registrations');
         Schema::dropIfExists('users');
@@ -115,7 +125,7 @@ class AdminStaffAccountManagementTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_admin_creates_a_clinic_staff_account_only_after_email_code_confirmation(): void
+    public function test_admin_creates_staff_with_a_single_use_password_setup_link(): void
     {
         Notification::fake();
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
@@ -128,40 +138,16 @@ class AdminStaffAccountManagementTest extends TestCase
             'last_name' => 'sMiTh',
             'username' => 'Clinic_Staff',
             'email' => 'NEW.CLINIC.STAFF@example.test',
-            'password' => 'ClinicStaff!234',
-            'password_confirmation' => 'ClinicStaff!234',
         ]);
         $response
-            ->assertAccepted()
-            ->assertJsonPath('purpose', 'Verify Clinic Staff email')
-            ->assertJsonPath('staff_label', 'Clinic Staff')
-            ->assertJsonMissingPath('code');
-
-        $this->assertDatabaseMissing('users', ['email' => 'new.clinic.staff@example.test']);
-        $pending = PendingStaffAccount::query()->sole();
-        $this->assertSame('John', $pending->first_name);
-        $this->assertSame('Smith', $pending->last_name);
-        $this->assertSame('veterinarian', $pending->staff_subrole);
-        $this->assertSame('Clinic_Staff', $pending->username);
-        $this->assertSame('new.clinic.staff@example.test', $pending->email);
-        $this->assertNotSame('ClinicStaff!234', $pending->password_hash);
-        $this->assertTrue(Hash::check('ClinicStaff!234', $pending->password_hash));
-
-        $code = $this->staffAccountCodeSentTo(
-            'new.clinic.staff@example.test',
-            'Clinic Staff',
-        );
-        $this->assertNotSame($code, $pending->code_hash);
-        $this->assertTrue(Hash::check($code, $pending->code_hash));
-
-        $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
-            'code' => $code,
-        ])
             ->assertCreated()
-            ->assertJsonPath('message', 'Clinic Staff account created.')
+            ->assertJsonPath('message', 'Staff account created')
+            ->assertJsonPath('username', 'Clinic_Staff')
             ->assertJsonPath('staff.staff_type', 'clinic')
             ->assertJsonPath('staff.staff_subrole', 'veterinarian')
-            ->assertJsonPath('staff.is_active', true);
+            ->assertJsonPath('staff.is_active', true)
+            ->assertJsonMissingPath('token')
+            ->assertJsonMissingPath('password');
 
         $staff = User::query()->where('email', 'new.clinic.staff@example.test')->sole();
         $this->assertSame('John', $staff->first_name);
@@ -171,8 +157,55 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertSame('veterinarian', $staff->staff_subrole);
         $this->assertSame('Clinic_Staff', $staff->username);
         $this->assertNull($staff->phone);
-        $this->assertTrue(Hash::check('ClinicStaff!234', $staff->password_hash));
+        $this->assertTrue($staff->requiresPasswordSetup());
         $this->assertDatabaseCount('pending_staff_accounts', 0);
+
+        $plainToken = $this->staffSetupLinkSentTo($staff);
+        $setupRequest = PasswordResetRequest::query()->sole();
+        $this->assertSame(hash('sha256', $plainToken), $setupRequest->token_hash);
+        $this->assertTrue(
+            $setupRequest->expires_at->between(
+                now()->addHours(23)->addMinutes(59),
+                now()->addHours(24)->addSeconds(5),
+            ),
+        );
+
+        $this->postJson('/api/sign-in', [
+            'identifier' => 'Clinic_Staff',
+            'password' => 'AnyPassword!234',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'password_setup_required');
+
+        Sanctum::actingAs($staff);
+        $this->getJson('/api/me')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'password_setup_required');
+
+        $this->postJson('/api/password/reset/verify', [
+            'token' => $plainToken,
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $plainToken,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('completed_setup', true)
+            ->assertJsonPath('user.role', 'staff')
+            ->assertJsonStructure(['token']);
+
+        $staff->refresh();
+        $this->assertFalse($staff->requiresPasswordSetup());
+        $this->assertTrue(Hash::check('CreatedPassword!234', $staff->password_hash));
+        $this->assertDatabaseCount('password_reset_requests', 0);
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $plainToken,
+            'password' => 'DifferentPassword!234',
+            'password_confirmation' => 'DifferentPassword!234',
+        ])->assertUnprocessable();
     }
 
     public function test_existing_email_cannot_create_a_duplicate_staff_account(): void
@@ -188,8 +221,6 @@ class AdminStaffAccountManagementTest extends TestCase
             'last_name' => 'Staff',
             'username' => 'anothergroomer',
             'email' => 'EXISTING.STAFF@example.test',
-            'password' => 'GroomingStaff!234',
-            'password_confirmation' => 'GroomingStaff!234',
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
@@ -199,7 +230,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_staff_account_role_names_email_and_password_fields_are_required(): void
+    public function test_staff_account_role_names_and_email_fields_are_required(): void
     {
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
         Sanctum::actingAs($admin);
@@ -211,8 +242,6 @@ class AdminStaffAccountManagementTest extends TestCase
                 'first_name',
                 'last_name',
                 'email',
-                'password',
-                'password_confirmation',
             ]);
     }
 
@@ -230,8 +259,6 @@ class AdminStaffAccountManagementTest extends TestCase
             'last_name' => 'Staff',
             'username' => 'clinicstaff',
             'email' => 'different.staff@example.test',
-            'password' => 'AnotherStaff!234',
-            'password_confirmation' => 'AnotherStaff!234',
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('username');
@@ -252,26 +279,14 @@ class AdminStaffAccountManagementTest extends TestCase
             'first_name' => 'jOhN',
             'last_name' => 'sMiTh',
             'email' => 'generated.staff@example.test',
-            'password' => 'GeneratedStaff!234',
-            'password_confirmation' => 'GeneratedStaff!234',
-        ])->assertAccepted();
-
-        $pending = PendingStaffAccount::query()->sole();
-        $this->assertSame('John', $pending->first_name);
-        $this->assertSame('Smith', $pending->last_name);
-        $this->assertNull($pending->staff_subrole);
-        $this->assertSame('JohnSmith', $pending->username);
-
-        $code = $this->staffAccountCodeSentTo(
-            'generated.staff@example.test',
-            'Grooming Receptionist',
-        );
-        $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
-            'code' => $code,
         ])->assertCreated();
 
         $staff = User::query()->where('email', 'generated.staff@example.test')->sole();
+        $this->assertSame('John', $staff->first_name);
+        $this->assertSame('Smith', $staff->last_name);
+        $this->assertNull($staff->staff_subrole);
         $this->assertSame('JohnSmith', $staff->username);
+        $this->assertTrue($staff->requiresPasswordSetup());
     }
 
     public function test_generated_username_must_be_unique(): void
@@ -287,8 +302,6 @@ class AdminStaffAccountManagementTest extends TestCase
             'first_name' => 'john',
             'last_name' => 'smith',
             'email' => 'different.staff@example.test',
-            'password' => 'AnotherStaff!234',
-            'password_confirmation' => 'AnotherStaff!234',
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('username');
@@ -307,8 +320,6 @@ class AdminStaffAccountManagementTest extends TestCase
             'first_name' => 'Jane',
             'last_name' => 'Doe',
             'email' => 'subrole.staff@example.test',
-            'password' => 'SubroleStaff!234',
-            'password_confirmation' => 'SubroleStaff!234',
         ];
 
         $this->postJson('/api/admin/security/staff-accounts', $basePayload + [
@@ -428,8 +439,6 @@ class AdminStaffAccountManagementTest extends TestCase
             'last_name' => 'Staff',
             'username' => 'anotherstaff',
             'email' => 'another.staff@example.test',
-            'password' => 'AnotherStaff!234',
-            'password_confirmation' => 'AnotherStaff!234',
         ])->assertForbidden();
 
         $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", [
@@ -437,49 +446,39 @@ class AdminStaffAccountManagementTest extends TestCase
         ])->assertForbidden();
     }
 
-    private function staffAccountCodeSentTo(string $email, string $staffLabel): string
+    private function staffSetupLinkSentTo(User $staff): string
     {
-        $code = null;
+        $plainToken = null;
 
-        Notification::assertSentOnDemand(
-            VerifyStaffAccountEmailNotification::class,
-            function (
-                VerifyStaffAccountEmailNotification $notification,
-                array $channels,
-                AnonymousNotifiable $notifiable,
-            ) use ($email, $staffLabel, &$code): bool {
-                $message = $notification->toMail($notifiable);
-                $mailText = implode(' ', $message->introLines);
-
-                $this->assertSame($email, $notifiable->routes['mail']);
-                $this->assertContains('mail', $channels);
-                $this->assertSame($staffLabel, $notification->staffLabel);
+        Notification::assertSentTo(
+            $staff,
+            SetUpStaffPasswordNotification::class,
+            function (SetUpStaffPasswordNotification $notification) use ($staff, &$plainToken): bool {
+                $message = $notification->toMail($staff);
                 $this->assertSame(
-                    "Verify {$staffLabel} Email - Bethlehem Animal Clinic",
+                    'Set Up Your Password - Bethlehem Animal Clinic',
                     $message->subject,
                 );
+                $this->assertSame('Set Up Your Password', $message->actionText);
                 $this->assertStringContainsString(
-                    "administrator requested a {$staffLabel} account",
-                    $mailText,
+                    'expires in 24 hours',
+                    implode(' ', [...$message->introLines, ...$message->outroLines]),
                 );
                 $this->assertStringContainsString(
-                    'six-digit email verification code is:',
-                    $mailText,
+                    '/pages/client/set-up-password.html#token=',
+                    $notification->setupUrl,
                 );
-                $this->assertStringContainsString("**{$notification->code}**", $mailText);
-                $this->assertMatchesRegularExpression(
-                    '/<strong\b[^>]*>'.preg_quote($notification->code, '/').'<\/strong>/',
-                    (string) $message->render(),
+                parse_str(
+                    (string) parse_url($notification->setupUrl, PHP_URL_FRAGMENT),
+                    $fragment,
                 );
-                $this->assertNull($message->actionText);
-                $this->assertNull($message->actionUrl);
-                $code = $notification->code;
+                $plainToken = $fragment['token'] ?? null;
 
-                return preg_match('/^\d{6}$/', $code) === 1;
+                return is_string($plainToken) && strlen($plainToken) === 64;
             },
         );
 
-        return $code;
+        return $plainToken;
     }
 
     private function createUser(

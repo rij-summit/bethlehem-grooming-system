@@ -31,6 +31,16 @@ class EnsureAccountIsUsable
             ], 403);
         }
 
+        if ($user?->requiresPasswordSetup()) {
+            $this->revokeCurrentToken($user);
+
+            return new JsonResponse([
+                'success' => false,
+                'code' => 'password_setup_required',
+                'message' => 'This staff account requires password setup.',
+            ], 403);
+        }
+
         if ($user->role === 'customer'
             && array_key_exists('email_verified_at', $attributes)
             && ! $user->email_verified_at) {

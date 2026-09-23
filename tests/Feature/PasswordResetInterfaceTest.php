@@ -44,10 +44,9 @@ class PasswordResetInterfaceTest extends TestCase
             strpos($resetScript, 'history.replaceState('),
         );
         $this->assertStringContainsString('await API.resetPassword(', $resetScript);
-        $this->assertStringContainsString(
-            'window.location.replace("./sign-in.html?password_reset=1")',
-            $resetScript,
-        );
+        $this->assertStringContainsString('response.completed_setup', $resetScript);
+        $this->assertStringContainsString('"../admin/dashboard.html"', $resetScript);
+        $this->assertStringContainsString('"./sign-in.html?password_reset=1"', $resetScript);
         $this->assertStringNotContainsString('one-time-code', $reset);
         $this->assertStringNotContainsString('6-digit', $reset);
         $this->assertStringNotContainsString('autocomplete="new-password"', $reset);
@@ -62,5 +61,52 @@ class PasswordResetInterfaceTest extends TestCase
         ] as $apiContract) {
             $this->assertStringContainsString($apiContract, $api);
         }
+    }
+
+    public function test_staff_password_setup_page_uses_the_login_design_without_login_extras(): void
+    {
+        $page = file_get_contents(base_path('pages/client/set-up-password.html'));
+        $script = file_get_contents(base_path('scripts/auth/set-up-password.js'));
+        $api = file_get_contents(base_path('scripts/api.js'));
+
+        foreach ([
+            'Bethlehem Animal Clinic Logo',
+            '>Set Up Your Password</h1>',
+            '>Create a password to secure your account</p>',
+            '>New password</label>',
+            '>Confirm new password</label>',
+            'autocomplete="new-password"',
+            'phosphor.svg#eye-slash',
+            'phosphor.svg#eye',
+            '>Create Account</span>',
+            'id="setupExpiredLink"',
+            'This setup link has expired. Request a new link to finish setting up your account.',
+            '>Request New Setup Link</button>',
+        ] as $content) {
+            $this->assertStringContainsString($content, $page);
+        }
+
+        foreach ([
+            'Remember me',
+            'Forgot password?',
+            "Don't have an account?",
+            '>Home</a>',
+            'home-ai-chatbot.js',
+        ] as $excluded) {
+            $this->assertStringNotContainsString($excluded, $page);
+        }
+
+        $this->assertSame(2, substr_count($page, 'autocomplete="new-password"'));
+        $this->assertStringContainsString('await API.verifyStaffPasswordSetupToken(setupToken)', $script);
+        $this->assertStringContainsString('await API.completeStaffPasswordSetup(', $script);
+        $this->assertStringContainsString('API.requestNewStaffPasswordSetupLink(setupToken)', $script);
+        $this->assertStringContainsString('password.disabled = true', $script);
+        $this->assertStringContainsString('confirmation.disabled = true', $script);
+        $this->assertStringContainsString('window.location.replace("../admin/dashboard.html")', $script);
+        $this->assertStringContainsString('submit.disabled = busy || validationError() !== ""', $script);
+        $this->assertStringContainsString('"set-up-password.html"', $api);
+        $this->assertStringContainsString('"/staff/password-setup/verify"', $api);
+        $this->assertStringContainsString('"/staff/password-setup/complete"', $api);
+        $this->assertStringContainsString('"/staff/password-setup/request-new-link"', $api);
     }
 }

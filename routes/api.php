@@ -36,6 +36,12 @@ Route::post('/password/reset/verify', [PasswordResetController::class, 'verifyLi
     ->middleware('throttle:10,1');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])
     ->middleware('throttle:10,1');
+Route::post('/staff/password-setup/verify', [PasswordResetController::class, 'verifyStaffSetupLink'])
+    ->middleware('throttle:10,1');
+Route::post('/staff/password-setup/complete', [PasswordResetController::class, 'completeStaffSetup'])
+    ->middleware('throttle:10,1');
+Route::post('/staff/password-setup/request-new-link', [PasswordResetController::class, 'requestNewStaffSetupLink'])
+    ->middleware('throttle:3,10');
 Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
 Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
 Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])
@@ -221,8 +227,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
         Route::get('/admin/security/accounts', [AdminSecurityController::class, 'accounts']);
         Route::post('/admin/security/account/credential-change', [AdminSecurityController::class, 'requestOwnChange'])
-            ->middleware('throttle:3,10');
-        Route::post('/admin/security/staff/{staff}/credential-change', [AdminSecurityController::class, 'requestStaffChange'])
             ->middleware('throttle:3,10');
         Route::post('/admin/security/staff-accounts', [AdminSecurityController::class, 'requestStaffAccount'])
             ->middleware('throttle:3,10');

@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class AdminSecuritySettingsInterfaceTest extends TestCase
 {
-    public function test_security_tab_exposes_real_admin_and_staff_credential_controls(): void
+    public function test_security_tab_exposes_admin_controls_and_staff_account_details(): void
     {
         $page = file_get_contents(base_path('pages/admin/settings.html'));
         $security = $this->sourceBetween(
@@ -20,7 +20,14 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             '>Staff accounts</h3>',
             '>Add staff account</span>',
             '>Username</span>',
-            '>Change credentials</span>',
+            '@click="openStaffDetails(staff)"',
+            '>Staff account details</h3>',
+            '>Staff name</dt>',
+            '>Username</dt>',
+            '>Email</dt>',
+            '>Role</dt>',
+            '>Status</dt>',
+            'x-text="staff.statusLabel"',
             "staff.active ? 'Deactivate' : 'Reactivate'",
             "chooseStaffType('clinic')",
             "chooseStaffType('grooming')",
@@ -28,6 +35,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             "? 'Back to account roles' : 'Close add staff account form'",
             "chooseClinicSubrole('veterinarian')",
             "chooseClinicSubrole('clinic_receptionist')",
+            "addStaffModal.staffSubrole === 'veterinarian' ? 'Veterinarian' : 'Clinic Receptionist'",
             'x-model="addStaffModal.firstName" required',
             'x-model="addStaffModal.lastName" required',
             '>Veterinarian</span>',
@@ -35,10 +43,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             '>Grooming Receptionist</span>',
             'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
-            'x-model="addStaffModal.password" required',
-            'x-model="addStaffModal.confirmation" required',
-            '>6-digit email verification code</legend>',
-            '@submit.prevent="confirmNewStaffAccount()"',
+            '>Staff account created</h3>',
+            'Username: <span class="text-[#1f3850]" x-text="addStaffModal.createdUsername"></span>',
+            "A Set Up Your Password link has been sent to the staff member's email address.",
             'Update Changes',
             'x-for="staff in filteredStaffAccounts"',
             "staffAccounts.length === 0 ? 'No staff accounts yet' : 'No staff accounts in this category'",
@@ -59,15 +66,20 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('staffSearch', $security);
         $this->assertStringNotContainsString('id="newStaffSubrole"', $security);
         $this->assertStringNotContainsString('>Sub-role</span>', $security);
-        $this->assertSame(7, substr_count($security, 'data-lucide="eye-closed"'));
-        $this->assertSame(7, substr_count($security, 'data-lucide="eye"'));
+        $this->assertStringNotContainsString('x-model="addStaffModal.password"', $security);
+        $this->assertStringNotContainsString('x-model="addStaffModal.confirmation"', $security);
+        $this->assertStringNotContainsString('Change credentials', $security);
+        $this->assertStringNotContainsString('resetStaffModal', $security);
+        $this->assertStringNotContainsString('6-digit email verification code', $security);
+        $this->assertSame(3, substr_count($security, 'data-lucide="eye-closed"'));
+        $this->assertSame(3, substr_count($security, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-role-hierarchy-close-20260922',
+            'admin-settings.js?v=staff-account-details-20260923',
             $page,
         );
     }
 
-    public function test_security_component_calls_the_protected_credential_change_apis(): void
+    public function test_security_component_calls_admin_credential_and_staff_account_apis(): void
     {
         $page = file_get_contents(base_path('pages/admin/settings.html'));
         $component = file_get_contents(base_path('scripts/components/admin-settings.js'));
@@ -76,8 +88,8 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'x-model="adminPassword.username"',
             '@click="submitAdminPassword()"',
             '@click="requestNewStaffAccount()"',
-            '@click="submitResetStaffPassword()"',
-            'x-model="resetStaffModal.username"',
+            '@click="openStaffDetails(staff)"',
+            'x-show="staffDetailsModal.open"',
             'x-teleport="body"',
             'z-index: 10000',
             'role="dialog"',
@@ -91,25 +103,29 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'get filteredStaffAccounts()',
             'loadSecurityAccounts()',
             'submitAdminPassword()',
-            'submitResetStaffPassword()',
+            'openStaffDetails(staff)',
+            'closeStaffDetails()',
             'handleAddStaffClose()',
             'API.getAdminSecurityAccounts()',
             'API.requestAdminCredentialChange({',
-            'API.requestStaffCredentialChange(staff.id, {',
             'API.requestStaffAccount({',
             'staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null',
-            'API.confirmStaffAccountEmail(',
-            'API.resendStaffAccountEmailCode(',
+            'this.addStaffModal.createdUsername = response.username',
+            'this.addStaffModal.step = "success"',
             'API.updateStaffAccountStatus(staff.id, targetActive)',
             'API.confirmSecurityCredentialChange(',
             'API.resendSecurityCredentialChangeCode(',
             'openSecurityVerification(response)',
+            'password_setup_required',
+            'statusLabel:',
             'password.length < 12',
         ] as $behavior) {
             $this->assertStringContainsString($behavior, $component);
         }
 
         $this->assertStringNotContainsString('staffSearch', $component);
+        $this->assertStringNotContainsString('resetStaffModal', $component);
+        $this->assertStringNotContainsString('requestStaffCredentialChange', $component);
     }
 
     public function test_security_password_controls_are_not_presented_as_login_forms(): void
@@ -124,9 +140,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('autocomplete="current-password"', $security);
         $this->assertStringNotContainsString('autocomplete="new-password"', $security);
-        $this->assertSame(13, substr_count($security, 'data-lpignore="true"'));
-        $this->assertSame(13, substr_count($security, 'data-1p-ignore'));
-        $this->assertSame(13, substr_count($security, 'data-bwignore'));
+        $this->assertSame(8, substr_count($security, 'data-lpignore="true"'));
+        $this->assertSame(8, substr_count($security, 'data-1p-ignore'));
+        $this->assertSame(8, substr_count($security, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);
@@ -142,6 +158,8 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('previewCredentialChange', $api);
         $this->assertStringNotContainsString("'token' =>", $routes);
         $this->assertStringNotContainsString('credential-changes/preview', $routes);
+        $this->assertStringNotContainsString('/admin/security/staff/{staff}/credential-change', $routes);
+        $this->assertStringNotContainsString('requestStaffCredentialChange', $api);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

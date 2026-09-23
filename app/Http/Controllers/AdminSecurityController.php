@@ -58,25 +58,6 @@ class AdminSecurityController extends Controller
         );
     }
 
-    public function requestStaffChange(
-        Request $request,
-        User $staff,
-        PrivilegedCredentialChangeService $credentialChanges,
-    ) {
-        if ($staff->role !== 'staff') {
-            abort(404);
-        }
-
-        $data = $this->validateChange($request);
-
-        return $this->requestChange(
-            $credentialChanges,
-            $request->user(),
-            $staff,
-            $data,
-        );
-    }
-
     public function requestStaffAccount(
         Request $request,
         PendingStaffAccountService $staffAccounts,
@@ -111,13 +92,6 @@ class AdminSecurityController extends Controller
                 'regex:/^[A-Za-z][A-Za-z0-9._-]{2,49}$/',
             ],
             'email' => ['required', 'email', 'max:150'],
-            'password' => [
-                'required',
-                'string',
-                'confirmed',
-                Password::min(12)->mixedCase()->numbers()->symbols(),
-            ],
-            'password_confirmation' => ['required', 'string'],
         ]);
 
         try {
@@ -129,7 +103,6 @@ class AdminSecurityController extends Controller
                 $data['last_name'],
                 $data['username'],
                 $data['email'],
-                $data['password'],
             );
         } catch (ValidationException $exception) {
             throw $exception;
@@ -138,14 +111,16 @@ class AdminSecurityController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'The staff email verification code could not be queued. Please try again.',
+                'message' => 'The password setup email could not be queued. Please try again.',
             ], 503);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'A six-digit email verification code was sent.',
-        ] + $result, 202);
+            'message' => 'Staff account created',
+            'username' => $result['staff']->username,
+            'staff' => $this->accountPayload($result['staff']),
+        ], 201);
     }
 
     public function confirmStaffAccount(
@@ -450,6 +425,7 @@ class AdminSecurityController extends Controller
             'staff_subrole' => $user->staff_subrole,
             'is_active' => (bool) $user->is_active,
             'is_archived' => (bool) $user->is_archived,
+            'password_setup_required' => $user->requiresPasswordSetup(),
         ];
     }
 }
