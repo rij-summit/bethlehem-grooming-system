@@ -11,7 +11,7 @@ import {
   loadPetsFromApi,
 } from "../services/pet-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
-import { normalizePetSize } from "../services/booking-draft-service.js";
+import { formatPetSizeLabel, normalizePetSize } from "../services/booking-draft-service.js";
 import {
   CLINIC_VISIT_PETS_KEY,
   normalizeApiPet,
@@ -22,6 +22,7 @@ import {
 import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
+import { canSelectAllSavedPets, showPetSelectionSection } from "./pet-selection-tabs.js";
 import {
   getEnteredWeight,
   getSizeForWeight,
@@ -60,6 +61,7 @@ const SELECTED_PETS_STORAGE_KEY = IS_CLINIC_VISIT
   ? CLINIC_VISIT_PETS_KEY
   : undefined;
 const MAX_PETS_PER_BOOKING = IS_CLINIC_VISIT ? 1 : GROOMING_MAX_PETS;
+let savedPetsLoading = false;
 
 function getBookingPets() {
   return getStoredBookingPets(SELECTED_PETS_STORAGE_KEY);
@@ -106,6 +108,7 @@ const elements = {
 
   existingPetSection: document.getElementById("existingPetSection"),
   existingPetEmptyState: document.getElementById("existingPetEmptyState"),
+  existingPetsLoading: document.getElementById("existingPetsLoading"),
   existingPetList: document.getElementById("existingPetList"),
   selectAllExistingPetsBtn: document.getElementById("selectAllExistingPetsBtn"),
 
@@ -253,23 +256,26 @@ function saveStepTwoDraft() {
   return draft;
 }
 
-function hideSections() {
-  elements.existingPetSection.classList.add("hidden");
-  elements.addPetSection.classList.add("hidden");
-}
-
 function showExistingPetSection() {
-  hideSections();
   activePetSection = "existing";
-  elements.existingPetSection.classList.remove("hidden");
+  showPetSelectionSection({
+    existingButton: elements.showExistingPetBtn,
+    addButton: elements.showAddPetBtn,
+    existingSection: elements.existingPetSection,
+    addSection: elements.addPetSection,
+  }, "existing");
   renderExistingPets();
   saveStepTwoDraft();
 }
 
 function showAddPetSection() {
-  hideSections();
   activePetSection = "add";
-  elements.addPetSection.classList.remove("hidden");
+  showPetSelectionSection({
+    existingButton: elements.showExistingPetBtn,
+    addButton: elements.showAddPetBtn,
+    existingSection: elements.existingPetSection,
+    addSection: elements.addPetSection,
+  }, "add");
   saveStepTwoDraft();
 }
 
@@ -313,7 +319,14 @@ function renderExistingPets() {
   const bookingPets = getBookingPets();
 
   elements.existingPetList.innerHTML = "";
+  elements.existingPetsLoading.classList.toggle("hidden", !savedPetsLoading);
+  elements.existingPetEmptyState.classList.add("hidden");
   syncSelectAllButtonState(savedPets, bookingPets);
+
+  if (savedPetsLoading) {
+    elements.selectAllExistingPetsBtn.classList.add("hidden");
+    return;
+  }
 
   if (savedPets.length === 0) {
     elements.existingPetEmptyState.classList.remove("hidden");
@@ -368,11 +381,10 @@ function syncSelectAllButtonState(
   savedPets = getSavedPets(),
   bookingPets = getBookingPets(),
 ) {
-  const selectedPetIds = new Set(bookingPets.map((pet) => pet.id));
-  const hasSelectablePets = savedPets.some((pet) => !selectedPetIds.has(pet.id));
-  const bookingIsFull = bookingPets.length >= MAX_PETS_PER_BOOKING;
-
-  elements.selectAllExistingPetsBtn.disabled = !hasSelectablePets || bookingIsFull;
+  const canSelectAll = !IS_CLINIC_VISIT
+    && canSelectAllSavedPets(savedPets, bookingPets, MAX_PETS_PER_BOOKING);
+  elements.selectAllExistingPetsBtn.classList.toggle("hidden", !canSelectAll);
+  elements.selectAllExistingPetsBtn.disabled = !canSelectAll;
 }
 
 function bindExistingPetButtons() {
@@ -421,15 +433,18 @@ function handleSelectAllExistingPets() {
   const unselectedSavedPets = savedPets.filter(
     (pet) => !selectedPetIds.has(pet.id),
   );
-  const petsToAdd = unselectedSavedPets.slice(0, remainingSlots);
+  if (!canSelectAllSavedPets(savedPets, bookingPets, MAX_PETS_PER_BOOKING)) {
+    syncSelectAllButtonState(savedPets, bookingPets);
+    return;
+  }
 
-  if (petsToAdd.length === 0) {
+  if (unselectedSavedPets.length === 0) {
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
 
   try {
-    petsToAdd.forEach((pet) => addPetToBooking(pet));
+    unselectedSavedPets.forEach((pet) => addPetToBooking(pet));
     renderExistingPets();
     renderSelectedPets();
     clearStepError();
@@ -464,14 +479,18 @@ function renderSelectedPets() {
   bookingPets.forEach((pet) => {
     const card = document.createElement("article");
     card.className =
-      "rounded-2xl border border-[#c6dbef] bg-[#f8fbfe] p-4 shadow-sm";
+      "rounded-2xl border border-[#c6dbef] bg-[#f8fbfe] p-3";
 
     card.innerHTML = `
-      <div class="mb-3 flex items-start justify-between gap-3">
+      <div class="flex items-start justify-between gap-3">
         <div>
           <h4 class="text-base font-bold text-[#2f4b66]">${escapeHtml(
             pet.petName,
           )}</h4>
+          <p class="mt-1 text-sm text-slate-500">${escapeHtml(pet.petType || "Pet")}${pet.breed ? ` · ${escapeHtml(pet.breed)}` : ""}</p>
+          <p class="mt-1 text-xs text-slate-500">${pet.size
+            ? `${pet.sizeVerified ? "Size" : "Estimated Size"}: ${escapeHtml(formatPetSizeLabel(pet.size))}`
+            : `Weight: ${escapeHtml(formatWeightLabel(pet.weight))}`}</p>
         </div>
 
         <button
@@ -483,7 +502,6 @@ function renderSelectedPets() {
         </button>
       </div>
 
-      ${buildPetSummaryHtml(pet)}
     `;
 
     elements.selectedPetCards.appendChild(card);
@@ -545,17 +563,14 @@ function readStepTwoDraft() {
   }
 }
 
-function hasEnteredPetFormValues(values = {}) {
-  return Object.values(values).some((value) => String(value || "").trim());
-}
-
 function restoreAddPetFormDraft() {
   const draft = readStepTwoDraft();
   const values = draft?.newPetForm || {};
 
   petTypeCombobox.setValue(values.petType || "");
+  breedCombobox.setDisabled(!values.petType);
   elements.petName.value = values.petName || "";
-  elements.breed.value = values.breed || "";
+  elements.breed.value = values.petType ? values.breed || "" : "";
 
   if (values.weight) {
     resetWeightFieldForEntry(elements.weight);
@@ -573,15 +588,6 @@ function restoreAddPetFormDraft() {
   }
 
   elements.medicalNotes.value = values.medicalNotes || "";
-  activePetSection = draft?.activePetSection || "";
-
-  if (activePetSection === "existing") {
-    elements.existingPetSection.classList.remove("hidden");
-    renderExistingPets();
-  } else if (activePetSection === "add" || hasEnteredPetFormValues(values)) {
-    activePetSection = "add";
-    elements.addPetSection.classList.remove("hidden");
-  }
 }
 
 function validatePetForm(values) {
@@ -623,6 +629,9 @@ function validatePetForm(values) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
+  petTypeCombobox.reset();
+  breedCombobox.reset();
+  breedCombobox.setDisabled(true);
   breedCoatCombobox.reset();
   sizeCombobox.reset();
   initializeWeightField(elements.weight);
@@ -655,7 +664,7 @@ async function handleAddPetSubmit(event) {
     elements.savePetBtn.disabled = true;
     elements.savePetBtn.textContent = "Saving...";
 
-    if (IS_CLINIC_VISIT) {
+    if (IS_CLINIC_VISIT || API.getCustomerToken?.()) {
       const response = await API.addPet({
         pet_name: formValues.petName.trim(),
         species: formValues.petType,
@@ -682,9 +691,7 @@ async function handleAddPetSubmit(event) {
     showStepError(error.message);
   } finally {
     elements.savePetBtn.disabled = false;
-    elements.savePetBtn.textContent = IS_CLINIC_VISIT
-      ? "Save and Select Pet"
-      : "Save Pet to Booking";
+    elements.savePetBtn.textContent = "Save & Select Pet";
   }
 }
 
@@ -812,6 +819,9 @@ function bindEvents() {
   elements.nextBtn.addEventListener("click", handleNext);
 
   elements.petType.addEventListener("change", () => {
+    breedCombobox.reset();
+    breedCombobox.setDisabled(!elements.petType.value);
+    breedCoatCombobox.update();
     if (elements.weight.dataset.weightFieldMode === "range") {
       resetWeightFieldForEntry(elements.weight);
     }
@@ -836,10 +846,13 @@ async function initStepState() {
   }
 
   restoreAddPetFormDraft();
+  savedPetsLoading = true;
   renderSelectedPets();
+  showExistingPetSection();
 
   // Sync pets from the backend into localStorage before rendering the list
   await loadPetsFromApi();
+  savedPetsLoading = false;
   const savedPetsById = new Map(getSavedPets().map((pet) => [pet.id, pet]));
   const currentPets = getBookingPets();
   const refreshedPets = currentPets.map((pet) => savedPetsById.get(pet.id) || pet);
@@ -848,9 +861,8 @@ async function initStepState() {
     renderSelectedPets();
   }
 
-  if (activePetSection === "existing") {
-    renderExistingPets();
-  }
+  if (getSavedPets().length === 0) showAddPetSection();
+  else showExistingPetSection();
 }
 
 function configurePageForFlow() {
@@ -864,9 +876,7 @@ function configurePageForFlow() {
   elements.pageTitle.textContent = "Pet Information";
   elements.savedPetsInstruction.textContent =
     "Select one pet from your saved pet list.";
-  elements.selectAllExistingPetsBtn.classList.add("hidden");
   elements.selectedPetsTitle.textContent = "Selected Pet";
-  elements.savePetBtn.textContent = "Save and Select Pet";
 }
 
 function initBookingPetStep() {

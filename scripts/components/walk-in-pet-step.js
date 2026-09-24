@@ -1,8 +1,10 @@
 import { renderWalkInServicesStep } from "./walk-in-services-step.js";
 import { renderWalkInClinicComplaintStep } from "./walk-in-clinic-complaint-step.js";
-import { createBreedCombobox } from "./breed-combobox.js";
+import { createBreedCombobox } from "./breed-combobox.js?v=walk-in-owner-mode-20260924";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
+import { showPetSelectionSection } from "./pet-selection-tabs.js?v=walk-in-owner-mode-20260924";
+import { formatPetSizeLabel } from "../services/booking-draft-service.js";
 import {
   getEnteredWeight,
   getSizeForWeight,
@@ -15,10 +17,13 @@ import {
   showWeightValidationInField,
 } from "./pet-weight-size.js";
 
-const MAX_PETS_PER_BOOKING = 10;
+const MAX_PETS_PER_BOOKING = getOwnerAppointmentType() === "clinic" ? 1 : 10;
 const WALK_IN_PET_STORAGE_KEY = "walkInPetStep";
 
 const elements = {
+  petSelectionTabs: document.getElementById("petSelectionTabs"),
+  petSelectionLimitText: document.getElementById("petSelectionLimitText"),
+  showExistingPetBtn: document.getElementById("showExistingPetBtn"),
   showAddPetBtn: document.getElementById("showAddPetBtn"),
   petStepError: document.getElementById("petStepError"),
   addPetSection: document.getElementById("addPetSection"),
@@ -29,12 +34,14 @@ const elements = {
   weight: document.getElementById("weight"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
+  medicalNotes: document.getElementById("medicalNotes"),
   selectedPetCount: document.getElementById("selectedPetCount"),
   selectedPetsEmptyState: document.getElementById("selectedPetsEmptyState"),
   selectedPetCards: document.getElementById("selectedPetCards"),
   existingPetsSection: document.getElementById("existingPetsSection"),
   existingPetsOwnerText: document.getElementById("existingPetsOwnerText"),
   existingPetsCount: document.getElementById("existingPetsCount"),
+  existingPetsLoading: document.getElementById("existingPetsLoading"),
   existingPetCards: document.getElementById("existingPetCards"),
   backBtn: document.getElementById("backBtn"),
   nextBtn: document.getElementById("nextBtn"),
@@ -89,9 +96,15 @@ const sizeCombobox = createFixedOptionCombobox({
 const state = {
   pets: [],
   existingPets: [],
+  existingPetsLoading: false,
   owner: null,
 };
 let hasSubmittedOnce = false;
+
+function isExistingCustomer() {
+  return state.owner?.ownerRecordType === "registered"
+    || state.owner?.ownerRecordType === "unregistered";
+}
 
 /*
   BACKEND TEAMMATE + CLAUDE CODE:
@@ -172,8 +185,9 @@ function restorePetStepDraft() {
 
   state.pets = Array.isArray(draft?.pets) ? draft.pets : [];
   petTypeCombobox.setValue(values.petType || "");
+  breedCombobox.setDisabled(!values.petType);
   elements.petName.value = values.petName || "";
-  elements.breed.value = values.breed || "";
+  elements.breed.value = values.petType ? values.breed || "" : "";
 
   if (values.weight) {
     resetWeightFieldForEntry(elements.weight);
@@ -249,6 +263,7 @@ function createPetObject(formData) {
     weight: formData.weight,
     furType: formData.furType,
     size: formData.size,
+    sizeVerified: true,
     medicalNotes: formData.medicalNotes,
     petId: null,
     isNew: true,
@@ -274,16 +289,20 @@ function normalizeExistingPet(pet) {
 }
 
 function renderExistingPets() {
-  if (!elements.existingPetsSection || !state.owner || state.owner.ownerRecordType === "new") return;
+  if (!isExistingCustomer()) return;
 
-  elements.existingPetsSection.classList.remove("hidden");
-  elements.existingPetsOwnerText.textContent = `Choose a saved pet for ${state.owner.fullName || "this customer"}, or add a new pet below.`;
+  elements.existingPetsOwnerText.textContent = `Choose a saved pet for ${state.owner.fullName || "this customer"}, or use Add New Pet.`;
+  elements.existingPetsLoading.classList.toggle("hidden", !state.existingPetsLoading);
   elements.existingPetsCount.textContent = `${state.existingPets.length} saved pet${state.existingPets.length === 1 ? "" : "s"}`;
 
   if (state.existingPets.length === 0) {
+    if (state.existingPetsLoading) {
+      elements.existingPetCards.innerHTML = "";
+      return;
+    }
     elements.existingPetCards.innerHTML = `
       <div class="md:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm text-slate-500">
-        This customer has no saved pets yet. Add a new pet below.
+        This customer has no saved pets yet. Use Add New Pet to create one.
       </div>
     `;
     return;
@@ -321,32 +340,27 @@ function loadExistingOwnerPets() {
   state.existingPets = Array.isArray(state.owner?.existingPets)
     ? state.owner.existingPets.map(normalizeExistingPet)
     : [];
-  renderExistingPets();
+  state.existingPetsLoading = isExistingCustomer();
 }
 
-function buildPetSummaryHtml(pet) {
-  return `
-    <div class="grid gap-2 text-sm text-slate-600">
-      <p><span class="font-semibold text-slate-700">Type:</span> ${escapeHtml(
-        pet.petType || "Not specified",
-      )}</p>
-      <p><span class="font-semibold text-slate-700">Breed:</span> ${escapeHtml(
-        pet.breed || "Not specified",
-      )}</p>
-      <p><span class="font-semibold text-slate-700">Weight:</span> ${escapeHtml(
-        pet.weight ? `${pet.weight} kg` : "Not specified",
-      )}</p>
-      <p><span class="font-semibold text-slate-700">Fur Type:</span> ${escapeHtml(
-        pet.furType || "Not specified",
-      )}</p>
-      <p><span class="font-semibold text-slate-700">Size:</span> ${escapeHtml(
-        pet.size || "Not specified",
-      )} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}</p>
-      <p><span class="font-semibold text-slate-700">Medical Notes:</span> ${escapeHtml(
-        pet.medicalNotes || "None",
-      )}</p>
-    </div>
-  `;
+async function refreshExistingOwnerPets() {
+  if (!isExistingCustomer()) return;
+
+  try {
+    const response = state.owner.ownerRecordType === "registered"
+      ? await API.getCustomerDetails(state.owner.customerUserId)
+      : await API.getUnregisteredCustomerDetails(state.owner.unregisteredCustomerId);
+    if (Array.isArray(response.customer?.pets)) {
+      state.existingPets = response.customer.pets
+        .filter((pet) => !pet.isArchived)
+        .map(normalizeExistingPet);
+    }
+  } catch {
+    // Keep the pet list passed from Step 1 if refreshing it fails.
+  } finally {
+    state.existingPetsLoading = false;
+    renderExistingPets();
+  }
 }
 
 function renderSelectedPets() {
@@ -360,17 +374,34 @@ function renderSelectedPets() {
   elements.nextBtn.classList.toggle("cursor-not-allowed", !hasPets);
 
   state.pets.forEach((pet) => {
+    const showEnteredDetails = !isExistingCustomer() && pet.isNew;
+    const enteredDetails = showEnteredDetails
+      ? [
+        ["Pet Type", pet.petType],
+        ["Breed", pet.breed],
+        ["Fur Type", pet.furType],
+        ["Weight", pet.weight ? `${pet.weight} kg` : ""],
+        ["Size", pet.size ? formatPetSizeLabel(pet.size) : ""],
+        ["Medical Conditions / Special Needs", pet.medicalNotes],
+      ].filter(([, value]) => String(value ?? "").trim())
+        .map(([label, value]) => `<p><span class="font-semibold text-slate-700">${label}:</span> ${escapeHtml(value)}</p>`)
+        .join("")
+      : "";
     const card = document.createElement("article");
     card.className =
-      "rounded-2xl border border-[#c6dbef] bg-[#f8fbfe] p-4 shadow-sm";
+      "rounded-2xl border border-[#c6dbef] bg-[#f8fbfe] p-3";
 
     card.innerHTML = `
-      <div class="mb-3 flex items-start justify-between gap-3">
+      <div class="flex items-start justify-between gap-3">
         <div>
           <h4 class="text-base font-bold text-[#2f4b66]">${escapeHtml(
             pet.petName,
           )}</h4>
-          <p class="mt-1 text-xs text-slate-400">Included in this walk-in schedule</p>
+          ${showEnteredDetails ? `<div class="mt-2 grid gap-1 text-xs text-slate-600">${enteredDetails}</div>` : `
+          <p class="mt-1 text-sm text-slate-500">${escapeHtml(pet.petType || "Pet")}${pet.breed ? ` · ${escapeHtml(pet.breed)}` : ""}</p>
+          <p class="mt-1 text-xs text-slate-500">${pet.size
+            ? `Size: ${escapeHtml(formatPetSizeLabel(pet.size))}`
+            : pet.weight ? `Weight: ${escapeHtml(pet.weight)} kg` : "Size not provided"}</p>`}
         </div>
 
         <button
@@ -382,7 +413,6 @@ function renderSelectedPets() {
         </button>
       </div>
 
-      ${buildPetSummaryHtml(pet)}
     `;
 
     elements.selectedPetCards.appendChild(card);
@@ -458,6 +488,9 @@ function renderValidationErrors(values, { showAll = false } = {}) {
 
 function resetAddPetForm() {
   elements.addPetForm.reset();
+  petTypeCombobox.reset();
+  breedCombobox.reset();
+  breedCombobox.setDisabled(true);
   breedCoatCombobox.reset();
   sizeCombobox.reset();
   initializeWeightField(elements.weight);
@@ -610,10 +643,29 @@ function guardAdminAccess() {
   return false;
 }
 
+function showExistingPetSection() {
+  if (!isExistingCustomer()) return;
+  showPetSelectionSection({
+    existingButton: elements.showExistingPetBtn,
+    addButton: elements.showAddPetBtn,
+    existingSection: elements.existingPetsSection,
+    addSection: elements.addPetSection,
+  }, "existing");
+  renderExistingPets();
+}
+
+function showAddPetSection() {
+  showPetSelectionSection({
+    existingButton: elements.showExistingPetBtn,
+    addButton: elements.showAddPetBtn,
+    existingSection: elements.existingPetsSection,
+    addSection: elements.addPetSection,
+  }, "add");
+}
+
 function bindEvents() {
-  elements.showAddPetBtn.addEventListener("click", () => {
-    elements.addPetSection.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  elements.showExistingPetBtn.addEventListener("click", showExistingPetSection);
+  elements.showAddPetBtn.addEventListener("click", showAddPetSection);
   elements.addPetForm.addEventListener("submit", handleAddPetSubmit);
   elements.addPetForm.addEventListener("input", savePetStepDraft);
   elements.addPetForm.addEventListener("change", savePetStepDraft);
@@ -630,7 +682,10 @@ function bindEvents() {
   });
 
   const handlePetInputs = (event) => {
-    if (event.target === elements.petType) {
+    if (event.target === elements.petType && event.type === "change") {
+      breedCombobox.reset();
+      breedCombobox.setDisabled(!elements.petType.value);
+      breedCoatCombobox.update();
       if (elements.weight.dataset.weightFieldMode === "range") {
         resetWeightFieldForEntry(elements.weight);
       }
@@ -683,11 +738,19 @@ function initWalkInPetStep() {
 
   bindEvents();
   loadExistingOwnerPets();
+  elements.petSelectionLimitText.textContent = MAX_PETS_PER_BOOKING === 1
+    ? "One pet per clinic walk-in visit."
+    : "Maximum of 10 pets per walk-in schedule.";
+  elements.petSelectionTabs.classList.toggle("hidden", !isExistingCustomer());
+  if (isExistingCustomer()) showExistingPetSection();
+  else showAddPetSection();
+
   initializeWeightField(elements.weight);
   syncWeightAndSize();
   restorePetStepDraft();
   autoSelectClinicPet();
   renderSelectedPets();
+  if (isExistingCustomer()) refreshExistingOwnerPets();
 
   if (window.lucide) {
     window.lucide.createIcons();

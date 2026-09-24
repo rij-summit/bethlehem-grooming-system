@@ -47,31 +47,36 @@
         <div class="mx-auto max-w-5xl">
           <div class="mb-6">
             <h2 class="text-3xl font-bold text-[#2f4b66]">Pet Information</h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p id="petSelectionLimitText" class="mt-1 text-xs text-slate-500">
               Maximum of 10 pets per walk-in schedule.
             </p>
+          </div>
+
+          <div id="petSelectionTabs" class="mb-6 flex flex-col gap-3 sm:flex-row">
+            <button id="showExistingPetBtn" type="button" aria-controls="existingPetsSection" aria-pressed="false"
+              class="rounded-2xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]">
+              Select Existing Pet
+            </button>
+            <button id="showAddPetBtn" type="button" aria-controls="addPetSection" aria-pressed="false"
+              class="rounded-2xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]">
+              Add New Pet
+            </button>
           </div>
 
           <section id="existingPetsSection" class="mb-6 hidden rounded-2xl border border-[#b9d1e7] bg-white/85 p-5 shadow-sm">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 class="text-lg font-semibold text-[#2f4b66]">Owner's pets</h3>
+                <h3 class="text-lg font-semibold text-[#2f4b66]">Your Saved Pets</h3>
                 <p id="existingPetsOwnerText" class="mt-1 text-sm text-slate-500"></p>
               </div>
               <span id="existingPetsCount" class="self-start rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-medium text-[#315b7e]"></span>
             </div>
+            <div id="existingPetsLoading" class="mt-4 hidden py-8 text-center" role="status" aria-live="polite">
+              <svg class="mx-auto h-8 w-8 animate-spin fill-current text-[#315b7e]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p class="mt-2 text-sm text-slate-500">Loading saved pets...</p>
+            </div>
             <div id="existingPetCards" class="mt-4 grid gap-3 md:grid-cols-2"></div>
           </section>
-
-          <div class="mb-6 flex flex-col gap-3 sm:flex-row">
-            <button
-              id="showAddPetBtn"
-              type="button"
-              class="rounded-2xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274864]"
-            >
-              Add new pet
-            </button>
-          </div>
 
           <p
             id="petStepError"
@@ -81,7 +86,7 @@
 
           <section
             id="addPetSection"
-            class="rounded-2xl bg-white/85 p-5 shadow-sm"
+            class="hidden rounded-2xl bg-white/85 p-5 shadow-sm"
           >
             <div class="mb-4">
               <h3 class="text-lg font-bold text-[#2f4b66]">Add Pet</h3>
@@ -173,8 +178,8 @@
                         name="breed"
                         type="text"
                         maxlength="100"
-                        placeholder="Select breed"
-                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer"
+                        placeholder="Select pet type first"
+                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20 read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         role="combobox"
                         aria-autocomplete="list"
                         aria-controls="breedOptions"
@@ -182,14 +187,16 @@
                         aria-invalid="false"
                         autocomplete="off"
                         readonly
+                        disabled
                       />
                       <button
                         id="breedDropdownButton"
                         type="button"
-                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-[#315b7e] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#315b7e]/20 disabled:cursor-not-allowed disabled:text-slate-300"
                         aria-label="Show breed options"
                         aria-controls="breedOptions"
                         aria-expanded="false"
+                        disabled
                       >
                         <i data-lucide="chevron-down" class="h-5 w-5" aria-hidden="true"></i>
                       </button>
@@ -202,24 +209,6 @@
                     ></div>
                   </div>
                   <p id="breedError" class="mt-2 hidden text-sm text-red-600"></p>
-                </div>
-
-                <div>
-                  <label
-                    for="weight"
-                    class="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Weight (kg)
-                  </label>
-                  <input
-                    id="weight"
-                    name="weight"
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="e.g. 12"
-                    aria-invalid="false"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
-                  />
                 </div>
 
                 <div>
@@ -268,7 +257,25 @@
                   <p id="furTypeError" class="mt-2 hidden text-sm text-red-600"></p>
                 </div>
 
-                <div class="md:col-span-2">
+                <div>
+                  <label
+                    for="weight"
+                    class="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Weight (kg)
+                  </label>
+                  <input
+                    id="weight"
+                    name="weight"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="e.g. 12"
+                    aria-invalid="false"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                  />
+                </div>
+
+                <div>
                   <label
                     for="size"
                     class="mb-2 block text-sm font-medium text-slate-700"
@@ -365,7 +372,7 @@
               <p class="mt-1">Add a pet to continue.</p>
             </div>
 
-            <div id="selectedPetCards" class="grid gap-4 md:grid-cols-2"></div>
+            <div id="selectedPetCards" class="grid gap-3 md:grid-cols-2"></div>
           </section>
 
           <div class="mt-8 flex items-center justify-between gap-4">
@@ -397,7 +404,7 @@
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script
       type="module"
-      src="../../scripts/components/walk-in-pet-step.js?v=existing-owner-pets-20260810"
+      src="../../scripts/components/walk-in-pet-step.js?v=walk-in-owner-mode-20260924"
     ></script>
   </body>
 </html>

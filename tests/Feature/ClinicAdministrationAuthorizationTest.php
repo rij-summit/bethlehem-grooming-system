@@ -63,10 +63,13 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->date('birthdate')->nullable();
             $table->boolean('is_neutered')->nullable();
             $table->date('neutered_date')->nullable();
+            $table->boolean('is_deceased')->default(false);
+            $table->date('deceased_date')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->string('color')->nullable();
             $table->string('size')->nullable();
             $table->string('fur_type')->nullable();
+            $table->json('clinic_verified_fields')->nullable();
             $table->text('medical_conditions')->nullable();
             $table->boolean('is_archived')->default(false);
             $table->dateTime('created_at')->nullable();
@@ -480,6 +483,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'phone' => '09171234567',
             'pet_name' => 'Bantay',
             'species' => 'dog',
+            'weight' => 12,
+            'size' => 'medium',
             'chief_complaint' => 'Routine consultation',
             'terms_agreed' => true,
         ])
@@ -494,6 +499,73 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['Routine check-up', 'Vaccination'],
             json_decode(DB::table('clinic_appointments')->value('common_concerns'), true),
         );
+        $this->assertDatabaseHas('pets', ['pet_name' => 'Bantay', 'size' => 'medium', 'weight' => 12]);
+        $this->assertSame(['size'], json_decode(DB::table('pets')->value('clinic_verified_fields'), true));
+    }
+
+    public function test_staff_weight_update_replaces_a_verified_size(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('pets')->insert([
+            'pet_id' => 501,
+            'pet_name' => 'Bantay',
+            'species' => 'Dog',
+            'weight' => 8,
+            'size' => 'small',
+            'clinic_verified_fields' => json_encode(['size']),
+        ]);
+
+        $this->putJson('/api/admin/pets/501', [
+            'pet_name' => 'Bantay',
+            'species' => 'Dog',
+            'weight' => 20,
+            'size' => 'small',
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.size', 'medium');
+
+        $this->assertDatabaseHas('pets', ['pet_id' => 501, 'weight' => 20, 'size' => 'medium']);
+        $this->assertSame(['size', 'weight'], json_decode(DB::table('pets')->where('pet_id', 501)->value('clinic_verified_fields'), true));
+    }
+
+    public function test_customer_weight_sets_estimated_size_even_if_a_different_size_is_sent(): void
+    {
+        $this->authenticateAs('customer', 10);
+
+        $this->postJson('/api/pets', [
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'weight' => 20,
+            'size' => 'small',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('pet.size', 'medium')
+            ->assertJsonPath('pet.clinic_verified_fields', null);
+    }
+
+    public function test_customer_size_estimate_cannot_replace_a_clinic_verified_size(): void
+    {
+        $this->authenticateAs('customer', 10);
+        DB::table('pets')->insert([
+            'pet_id' => 502,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'weight' => 8,
+            'size' => 'small',
+            'clinic_verified_fields' => json_encode(['size']),
+        ]);
+
+        $this->putJson('/api/pets/502', [
+            'pet_name' => 'Mochi',
+            'species' => 'Dog',
+            'weight' => 20,
+            'size' => 'medium',
+        ])
+            ->assertOk()
+            ->assertJsonPath('pet.size', 'small');
+
+        $this->assertSame(['size'], json_decode(DB::table('pets')->where('pet_id', 502)->value('clinic_verified_fields'), true));
     }
 
     public function test_walk_in_requires_valid_distinct_common_concerns(): void

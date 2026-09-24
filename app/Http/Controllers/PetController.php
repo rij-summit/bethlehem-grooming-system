@@ -77,6 +77,9 @@ class PetController extends Controller
             $data['pet_name'],
         );
         $data = PetWeightSize::withComputedSize($data);
+        if (! empty($data['weight'])) {
+            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? 'Dog', $data['weight']);
+        }
 
         $pet = Pet::create([
             'user_id' => $request->user()->user_id,
@@ -130,10 +133,14 @@ class PetController extends Controller
             $data['pet_name'],
             $pet->pet_id,
         );
-        if ($pet->hasClinicVerifiedSize() && ! array_key_exists('size', $data)) {
+        if ($pet->hasClinicVerifiedSize()) {
             $data['size'] = $pet->size;
         }
         $data = PetWeightSize::withComputedSize($data);
+
+        if (! $pet->hasClinicVerifiedSize() && ! empty($data['weight'])) {
+            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? $pet->species, $data['weight']);
+        }
 
         $attributes = [
             'pet_name' => $data['pet_name'],
@@ -215,6 +222,11 @@ class PetController extends Controller
             $data['size'] = $pet->size;
         }
         $data = PetWeightSize::withComputedSize($data);
+
+        if (array_key_exists('weight', $data) && $data['weight'] !== null
+            && (float) $data['weight'] !== (float) $pet->weight) {
+            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? $pet->species, $data['weight']);
+        }
 
         $attributes = [
             'pet_name' => $data['pet_name'],

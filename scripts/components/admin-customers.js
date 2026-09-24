@@ -811,7 +811,7 @@ function adminCustomers() {
 
       controls.size.setOptions(options, { preserveValue: !clearManualSize });
       const computedSize = tools.getSizeForWeight(elements.species.value, rawWeight);
-      if (computedSize && !this.petModal.pet?.sizeVerified) controls.size.setValue(computedSize);
+      if (computedSize) controls.size.setValue(computedSize);
       controls.size.setDisabled(options.length === 0);
     },
 

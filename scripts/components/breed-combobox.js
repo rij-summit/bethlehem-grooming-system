@@ -22,6 +22,7 @@ export function createBreedCombobox({
 
   let isCustomEntry = false;
   let isOpen = false;
+  let isDisabled = input.disabled || toggleButton.disabled;
   let shouldShowValidation = false;
 
   function getValidationMessage() {
@@ -119,7 +120,7 @@ export function createBreedCombobox({
   }
 
   function setOpen(nextOpen) {
-    isOpen = nextOpen;
+    isOpen = Boolean(nextOpen && !isDisabled);
     listbox.classList.toggle("hidden", !isOpen);
     input.setAttribute("aria-expanded", String(isOpen));
     toggleButton.setAttribute("aria-expanded", String(isOpen));
@@ -130,6 +131,7 @@ export function createBreedCombobox({
   }
 
   function selectValue(value) {
+    if (isDisabled) return;
     if (value === OTHER_BREED) {
       isCustomEntry = true;
       input.readOnly = false;
@@ -160,9 +162,19 @@ export function createBreedCombobox({
     isCustomEntry = false;
     input.value = "";
     input.readOnly = true;
-    input.placeholder = "Select breed";
+    input.placeholder = isDisabled ? "Select pet type first" : "Select breed";
     clearValidation();
     setOpen(false);
+  }
+
+  function setDisabled(disabled) {
+    isDisabled = Boolean(disabled);
+    input.disabled = isDisabled;
+    toggleButton.disabled = isDisabled;
+    input.setAttribute("aria-disabled", String(isDisabled));
+    toggleButton.setAttribute("aria-disabled", String(isDisabled));
+    if (isDisabled) setOpen(false);
+    input.placeholder = isDisabled ? "Select pet type first" : (isCustomEntry ? "Type a breed" : "Select breed");
   }
 
   function focusOption(offset) {
@@ -181,6 +193,7 @@ export function createBreedCombobox({
   }
 
   root.addEventListener("click", (event) => {
+    if (isDisabled) return;
     const option = event.target.closest("[data-breed-value]");
 
     if (option) {
@@ -252,10 +265,12 @@ export function createBreedCombobox({
     }
   });
   reset();
+  setDisabled(isDisabled);
 
   return {
     getValidationMessage,
     reset,
+    setDisabled,
     showValidation,
   };
 }

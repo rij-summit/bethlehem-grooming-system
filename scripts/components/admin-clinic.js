@@ -524,7 +524,7 @@ function adminClinicSearch() {
       tools.initializeWeightField(elements.weight);
       elements.weight.value = pet?.weight ?? "";
       this.syncQueuePetWeightAndSize({ clearManualSize: true });
-      if (!tools.getSizeForWeight(species, tools.getEnteredWeight(elements.weight))) {
+      if (pet?.sizeVerified || !tools.getSizeForWeight(species, tools.getEnteredWeight(elements.weight))) {
         this.setStoredQueuePetSize(pet?.size);
       }
       await tools.breedCoatCatalogueReady;

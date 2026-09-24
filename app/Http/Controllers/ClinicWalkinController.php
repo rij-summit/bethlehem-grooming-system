@@ -486,6 +486,7 @@ class ClinicWalkinController extends Controller
             'fur_type' => $data['fur_type'] ?? null,
             'weight' => $data['weight'] ?? null,
             'size' => $data['size'] ?? null,
+            'clinic_verified_fields' => ! empty($data['size']) ? ['size'] : null,
             'color' => $data['color'] ?? null,
             'medical_conditions' => $data['medical_conditions'] ?? null,
             'is_archived' => false,
@@ -504,10 +505,13 @@ class ClinicWalkinController extends Controller
                 : $pet->neutered_date,
             'fur_type' => $data['fur_type'] ?? $pet->fur_type,
             'weight' => $data['weight'] ?? $pet->weight,
-            'size' => $data['size'] ?? $pet->size,
             'color' => $data['color'] ?? $pet->color,
             'medical_conditions' => $data['medical_conditions'] ?? $pet->medical_conditions,
         ]);
+
+        if (! empty($data['size'])) {
+            $pet->confirmClinicSize($data['size']);
+        }
 
         return $pet;
     }
