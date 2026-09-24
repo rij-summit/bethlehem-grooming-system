@@ -168,7 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Breed", displayValue(pet.breed), "breed"],
       ["Gender", titleCase(pet.gender), null],
       ["Birthdate", formatDate(pet.birthdate), null],
-      ["Size", titleCase(pet.size), "size"],
+      ["Size", `${titleCase(pet.size)} · ${isClinicVerified(pet, "size") ? "✓ Verified by Bethlehem Animal Clinic" : "Estimated from weight"}`, null],
       ["Weight", formatWeight(pet.weight), "weight"],
       ["Fur Type", titleCase(pet.fur_type), "fur_type"],
       ["Color", displayValue(pet.color), null],

@@ -420,6 +420,38 @@ class ClientPetProfileTest extends TestCase
         );
     }
 
+    public function test_weight_change_preserves_verified_size_until_customer_changes_size(): void
+    {
+        $this->authenticateCustomer(10);
+
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Rigby',
+            'species' => 'Dog',
+            'weight' => 8,
+            'size' => 'small',
+            'clinic_verified_fields' => json_encode(['size'], JSON_THROW_ON_ERROR),
+        ]);
+
+        $this->putJson('/api/pets/101', [
+            'pet_name' => 'Rigby',
+            'species' => 'Dog',
+            'weight' => 12,
+        ])->assertOk()
+            ->assertJsonPath('pet.size', 'small')
+            ->assertJsonPath('pet.clinic_verified_fields', ['size']);
+
+        $this->putJson('/api/pets/101', [
+            'pet_name' => 'Rigby',
+            'species' => 'Dog',
+            'weight' => 12,
+            'size' => 'medium',
+        ])->assertOk()
+            ->assertJsonPath('pet.size', 'medium')
+            ->assertJsonPath('pet.clinic_verified_fields', null);
+    }
+
     public function test_pet_filtered_history_excludes_sibling_pets_and_their_services(): void
     {
         $this->authenticateCustomer(10);

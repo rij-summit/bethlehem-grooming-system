@@ -300,7 +300,7 @@ function buildPetSummaryHtml(pet) {
       )}</p>
       <p><span class="font-semibold text-slate-700">Size:</span> ${escapeHtml(
         pet.size || "Not specified",
-      )}</p>
+      )} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}</p>
       <p><span class="font-semibold text-slate-700">Medical Notes:</span> ${escapeHtml(
         pet.medicalNotes || "None",
       )}</p>
@@ -840,6 +840,13 @@ async function initStepState() {
 
   // Sync pets from the backend into localStorage before rendering the list
   await loadPetsFromApi();
+  const savedPetsById = new Map(getSavedPets().map((pet) => [pet.id, pet]));
+  const currentPets = getBookingPets();
+  const refreshedPets = currentPets.map((pet) => savedPetsById.get(pet.id) || pet);
+  if (refreshedPets.some((pet, index) => pet !== currentPets[index])) {
+    saveBookingPets(refreshedPets);
+    renderSelectedPets();
+  }
 
   if (activePetSection === "existing") {
     renderExistingPets();

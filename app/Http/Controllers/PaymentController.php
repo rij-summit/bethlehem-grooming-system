@@ -115,27 +115,30 @@ class PaymentController extends Controller
             return;
         }
 
-        $bookingPetIds = BookingPet::query()
+        $bookingPets = BookingPet::query()
             ->where('booking_id', $booking->booking_id)
+            ->with('pet')
             ->lockForUpdate()
-            ->pluck('booking_pet_id')
-            ->map(fn ($id) => (int) $id);
+            ->get()
+            ->keyBy('booking_pet_id');
         $submitted = collect($petSizes)->mapWithKeys(fn ($petSize) => [
             (int) $petSize['booking_pet_id'] => $petSize['size'],
         ]);
 
         if ($submitted->count() !== count($petSizes)
-            || $submitted->keys()->diff($bookingPetIds)->isNotEmpty()) {
+            || $submitted->keys()->diff($bookingPets->keys())->isNotEmpty()) {
             throw ValidationException::withMessages([
                 'pet_sizes' => 'One or more confirmed pet sizes do not belong to this booking.',
             ]);
         }
 
         foreach ($submitted as $bookingPetId => $size) {
-            BookingPet::query()
-                ->where('booking_id', $booking->booking_id)
-                ->where('booking_pet_id', $bookingPetId)
-                ->update(['confirmed_size' => $size]);
+            $bookingPet = $bookingPets->get($bookingPetId);
+            if ($bookingPet->confirmed_size && $bookingPet->confirmed_size !== $size) {
+                $bookingPet->pet?->confirmClinicSize($size);
+            }
+            $bookingPet->confirmed_size = $size;
+            $bookingPet->save();
         }
     }
 

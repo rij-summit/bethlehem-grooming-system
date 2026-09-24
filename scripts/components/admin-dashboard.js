@@ -562,6 +562,7 @@ function adminDashboard() {
       icon: "checkIn",
       variant: "primary",
       cancellationReason: "",
+      petSizes: [],
       busy: false,
       error: "",
     },
@@ -670,8 +671,8 @@ function adminDashboard() {
       // Configure action handlers to call the real API
       this.mergeConfig({
         handlers: {
-          checkIn: async ({ booking }) => {
-            await API.adminCheckIn(booking.id);
+          checkIn: async ({ booking, petSizes }) => {
+            await API.adminCheckIn(booking.id, petSizes);
             await this.loadAdminBookings();
             this.setTab("queued");
           },
@@ -990,6 +991,23 @@ function adminDashboard() {
         icon: "checkIn",
         variant: "primary",
       });
+      this.actionConfirmModal.petSizes = (booking?.pets || []).map((pet) => ({
+        bookingPetId: pet.bookingPetId ?? pet.booking_pet_id ?? pet.id,
+        name: pet.petName ?? pet.pet_name ?? pet.name ?? "Pet",
+        weight: pet.weight ?? "—",
+        currentSize: normalizePaymentSize(pet.size) || "",
+        verified: Boolean(pet.sizeVerified),
+        species: pet.species ?? pet.petType,
+        size: normalizePaymentSizeForPet(pet.size, pet.species ?? pet.petType),
+      }));
+    },
+
+    formatPaymentSizeLabel(value) {
+      return formatPaymentSizeLabel(value);
+    },
+
+    getPaymentBaseSizeOptions(species) {
+      return getPaymentBaseSizeOptions(species);
     },
 
     // Opens a second confirmation before moving a Queued booking into In-Progress.
@@ -1295,6 +1313,7 @@ function adminDashboard() {
         icon,
         variant,
         cancellationReason: "",
+        petSizes: [],
         busy: false,
         error: "",
       };
@@ -1316,6 +1335,7 @@ function adminDashboard() {
         icon: "checkIn",
         variant: "primary",
         cancellationReason: "",
+        petSizes: [],
         busy: false,
         error: "",
       };
@@ -1332,7 +1352,7 @@ function adminDashboard() {
 
       try {
         if (action === "checkIn") {
-          await this.checkInBooking(booking);
+          await this.checkInBooking(booking, this.actionConfirmModal.petSizes);
         } else if (action === "startGrooming") {
           await this.startGroomingBooking(booking);
         } else if (action === "startPetGrooming") {
@@ -1360,8 +1380,10 @@ function adminDashboard() {
     },
 
     // Starts the Incoming -> Queued transition for a booking.
-    async checkInBooking(booking) {
-      await this.runBookingAction("checkIn", booking);
+    async checkInBooking(booking, petSizes = []) {
+      await this.runBookingAction("checkIn", booking, {
+        petSizes: petSizes.map((pet) => ({ booking_pet_id: pet.bookingPetId, size: pet.size })),
+      });
     },
 
     async cancelBooking(booking, cancellationReason = "") {
@@ -3232,7 +3254,7 @@ function adminDashboard() {
       return pets.map((pet, petIndex) => {
         const petServices = this.getPaymentServicesForPet(booking, pet, pets, services);
         const inferredSizeKey = inferPaymentSizeFromServices(petServices, pet.petTypeKey);
-        const pricedPet = inferredSizeKey
+        const pricedPet = inferredSizeKey && !pet.confirmedSize
           ? {
               ...pet,
               sizeKey: inferredSizeKey,
@@ -3286,6 +3308,7 @@ function adminDashboard() {
           breed: this.toStringValue(pet?.breed),
           sizeKey,
           sizeLabel: formatPaymentSizeLabel(sizeKey),
+          confirmedSize: pet?.confirmedSize ?? pet?.confirmed_size ?? null,
           services: Array.isArray(pet?.services) ? pet.services : [],
           groomingState: pet?.groomingState ?? pet?.grooming_state ?? "not_started",
         };

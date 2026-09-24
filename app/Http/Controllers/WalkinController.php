@@ -38,8 +38,7 @@ class WalkinController extends Controller
 
             [$user, $unregisteredCustomer, $owner] = $this->resolveOwner($data);
 
-            // Resolve all services and prices upfront before any DB writes
-            $resolvedPets = $this->resolveAllPets($data['pets']);
+            $resolvedPets = $this->resolveAllPets($data['pets'], $user, $unregisteredCustomer);
             $totalAmount = array_sum(array_map(
                 fn ($p) => array_sum(array_column($p['services'], 'price')),
                 $resolvedPets,
@@ -84,11 +83,13 @@ class WalkinController extends Controller
             // For each pet: find or create a pet record, then attach services
             $petsResponse = [];
             foreach ($resolvedPets as $item) {
-                $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $item['petData']);
+                $pet = $item['pet'];
 
                 $bookingPet = BookingPet::create([
                     'booking_id' => $booking->booking_id,
                     'pet_id' => $pet->pet_id,
+                    'registered_size' => $item['petData']['size'] ?? null,
+                    'confirmed_size' => $item['size'],
                     'special_instructions' => $item['petData']['special_instructions'] ?? null,
                 ]);
 
@@ -106,7 +107,7 @@ class WalkinController extends Controller
                     'pet_id' => $pet->pet_id,
                     'pet_name' => $item['petData']['pet_name'],
                     'species' => $item['petData']['species'],
-                    'size' => $item['petData']['size'] ?? null,
+                    'size' => $item['size'],
                     'services' => array_map(fn ($s) => [
                         'name' => $s['name'],
                         'price' => $s['price'],
@@ -236,12 +237,22 @@ class WalkinController extends Controller
         }
     }
 
-    private function resolveAllPets(array $pets): array
+    private function resolveAllPets(array $pets, ?User $user, ?UnregisteredCustomer $unregisteredCustomer): array
     {
-        return array_map(function (array $petData) {
+        return array_map(function (array $petData) use ($user, $unregisteredCustomer) {
+            $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $petData);
+            $size = $pet->hasClinicVerifiedSize()
+                ? $pet->size
+                : ($petData['size'] ?? $pet->groomingSize());
+            if ($size && PetWeightSize::isValidSize($pet->species, $size)) {
+                $pet->confirmClinicSize($size);
+            }
+
             return [
+                'pet' => $pet,
                 'petData' => $petData,
-                'services' => $this->resolveServices($petData['services'], $petData['size'] ?? null),
+                'size' => $size,
+                'services' => $this->resolveServices($petData['services'], $size),
             ];
         }, $pets);
     }
@@ -323,7 +334,6 @@ class WalkinController extends Controller
             'breed' => $petData['breed'] ?? $pet->breed,
             'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
             'weight' => $petData['weight'] ?? $pet->weight,
-            'size' => $petData['size'] ?? $pet->size,
             'medical_conditions' => $petData['medical_conditions'] ?? $pet->medical_conditions,
         ]);
 

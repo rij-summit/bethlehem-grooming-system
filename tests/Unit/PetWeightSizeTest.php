@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Models\Pet;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
 use App\Support\PetWeightSize;
@@ -11,6 +12,20 @@ use Tests\TestCase;
 
 class PetWeightSizeTest extends TestCase
 {
+    public function test_verified_size_takes_priority_over_weight_estimate(): void
+    {
+        $pet = new Pet([
+            'species' => 'Dog',
+            'weight' => 12,
+            'size' => 'small',
+            'clinic_verified_fields' => ['size'],
+        ]);
+        $this->assertSame('small', $pet->groomingSize());
+
+        $pet->clinic_verified_fields = null;
+        $this->assertSame('medium', $pet->groomingSize());
+    }
+
     #[DataProvider('acceptedWeights')]
     public function test_it_resolves_accepted_weights_to_the_expected_size(
         string $species,

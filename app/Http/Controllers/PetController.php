@@ -130,6 +130,9 @@ class PetController extends Controller
             $data['pet_name'],
             $pet->pet_id,
         );
+        if ($pet->hasClinicVerifiedSize() && ! array_key_exists('size', $data)) {
+            $data['size'] = $pet->size;
+        }
         $data = PetWeightSize::withComputedSize($data);
 
         $attributes = [
@@ -207,6 +210,9 @@ class PetController extends Controller
                 $pet->pet_id,
                 $pet->unregistered_customer_id,
             );
+        }
+        if ($pet->hasClinicVerifiedSize() && ! array_key_exists('size', $data)) {
+            $data['size'] = $pet->size;
         }
         $data = PetWeightSize::withComputedSize($data);
 

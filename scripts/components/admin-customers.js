@@ -640,10 +640,7 @@ function adminCustomers() {
       tools.initializeWeightField(elements.weight);
       elements.weight.value = p.weight ?? "";
       this.syncPetWeightAndSize({ clearManualSize: true });
-
-      if (!tools.getSizeForWeight(species, tools.getEnteredWeight(elements.weight))) {
-        this.setStoredPetSize(p.size);
-      }
+      this.setStoredPetSize(p.size);
 
       await tools.breedCoatCatalogueReady;
       controls.furType.update();
@@ -709,6 +706,7 @@ function adminCustomers() {
           isDeceased:        Boolean(savedPet.is_deceased),
           deceasedDate:      savedPet.deceased_date,
           size:              savedPet.size,
+          sizeVerified:      Array.isArray(savedPet.clinic_verified_fields) && savedPet.clinic_verified_fields.includes("size"),
           furType:           savedPet.fur_type,
           weight:            savedPet.weight,
           color:             savedPet.color,
@@ -813,7 +811,7 @@ function adminCustomers() {
 
       controls.size.setOptions(options, { preserveValue: !clearManualSize });
       const computedSize = tools.getSizeForWeight(elements.species.value, rawWeight);
-      if (computedSize) controls.size.setValue(computedSize);
+      if (computedSize && !this.petModal.pet?.sizeVerified) controls.size.setValue(computedSize);
       controls.size.setDisabled(options.length === 0);
     },
 
@@ -994,7 +992,7 @@ function adminCustomers() {
         { label: "Breed", value: this.formatTextValue(pet.breed) },
         { label: "Gender", value: this.formatLabel(pet.gender) },
         { label: "Birthdate", value: this.formatDate(pet.birthdate) },
-        { label: "Size", value: this.formatLabel(pet.size) },
+        { label: "Size", value: `${this.formatLabel(pet.size)} · ${pet.sizeVerified ? "✓ Clinic verified" : "Estimated from weight"}` },
         { label: "Weight", value: this.formatWeight(pet.weight) },
         { label: "Fur Type", value: this.formatLabel(pet.furType) },
         { label: "Color", value: this.formatTextValue(pet.color) },

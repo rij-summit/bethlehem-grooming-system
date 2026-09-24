@@ -264,7 +264,9 @@ class BookingController extends Controller
                         'breed' => $petData['breed'] ?? $pet->breed,
                         'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
                         'weight' => $petData['weight'] ?? $pet->weight,
-                        'size' => $petData['size'] ?? $pet->size,
+                        'size' => $pet->hasClinicVerifiedSize()
+                            ? $pet->size
+                            : (PetWeightSize::sizeFor($pet->species, $petData['weight'] ?? $pet->weight) ?? $petData['size'] ?? $pet->size),
                     ]);
                 }
 
@@ -277,7 +279,8 @@ class BookingController extends Controller
                         'breed' => $petData['breed'] ?? null,
                         'weight' => $petData['weight'] ?? null,
                         'color' => $petData['color'] ?? null,
-                        'size' => $petData['size'] ?? null,
+                        'size' => PetWeightSize::sizeFor($petData['species'] ?? 'Dog', $petData['weight'] ?? null)
+                            ?? $petData['size'] ?? null,
                         'fur_type' => $petData['fur_type'] ?? null,
                         'medical_conditions' => $petData['medical_conditions'] ?? null,
                     ]);
@@ -290,12 +293,12 @@ class BookingController extends Controller
                     'special_instructions' => $petData['special_instructions'] ?? null,
                 ];
                 if (Schema::hasColumn('booking_pets', 'registered_size')) {
-                    $bookingPetAttributes['registered_size'] = $petData['size'] ?? $pet->size;
+                    $bookingPetAttributes['registered_size'] = $pet->groomingSize();
                 }
                 $bookingPet = BookingPet::create($bookingPetAttributes);
 
                 // ── Save services for this pet ────────────────
-                $petSize = $pet->size ?? $petData['size'] ?? null;
+                $petSize = $pet->groomingSize();
                 $slugsToSave = [];
 
                 $packageSlug = $petData['services']['package'] ?? null;
@@ -490,7 +493,7 @@ class BookingController extends Controller
                     'pet_name' => $bp->pet?->pet_name ?? '—',
                     'breed' => $bp->pet?->breed ?? '—',
                     'species' => $bp->pet?->species,
-                    'size' => $bp->pet?->size,
+                    'size' => $bp->confirmed_size ?? $bp->registered_size ?? $bp->pet?->groomingSize(),
                     'weight' => $bp->pet?->weight,
                     'registered_size' => $bp->registered_size,
                     'confirmed_size' => $bp->confirmed_size,

@@ -490,7 +490,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = [
       ["Breed", pet.breed],
-      ["Size", sizeLabel[pet.size]],
+      ["Size", sizeLabel[pet.size] ? `${sizeLabel[pet.size]}${isClinicVerified(pet, "size") ? " ✓" : ""}` : null],
       ["Fur Type", resolvedFurType],
       ["Weight", pet.weight ? `${pet.weight} kg` : null],
       ["Color", pet.color],
@@ -592,10 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeWeightField(petWeight);
     petWeight.value = pet.weight ?? "";
     syncWeightAndSize({ clearManualSize: true });
-
-    if (!getSizeForWeight(petSpecies.value, getEnteredWeight(petWeight))) {
-      setStoredSize(pet.size);
-    }
+    setStoredSize(pet.size);
 
     await breedCoatCatalogueReady;
     breedCoatCombobox.update();
@@ -809,6 +806,7 @@ document.addEventListener("DOMContentLoaded", () => {
     Object.entries(editVerifiedIndicators).forEach(([field, indicator]) => {
       indicator?.classList.toggle("hidden", !isClinicVerified(pet, field));
     });
+    document.getElementById("petSizeEstimateNote")?.classList.toggle("hidden", isClinicVerified(pet, "size"));
   }
 
   function getChangedVerifiedFieldLabels(pet, payload) {
@@ -884,7 +882,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const computedSize = getSizeForWeight(petSpecies.value, rawWeight);
-    if (computedSize) {
+    if (computedSize && !isClinicVerified(editingPet, "size")) {
       sizeCombobox.setValue(computedSize);
     }
 

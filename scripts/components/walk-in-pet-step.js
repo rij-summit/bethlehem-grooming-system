@@ -264,7 +264,10 @@ function normalizeExistingPet(pet) {
     breed: pet.breed || "",
     weight: pet.weight ?? "",
     furType: pet.furType || "",
-    size: pet.size || "",
+    size: pet.sizeVerified
+      ? pet.size || ""
+      : (getSizeForWeight(pet.species, pet.weight).toLowerCase().replaceAll(" ", "_") || pet.size || ""),
+    sizeVerified: Boolean(pet.sizeVerified),
     medicalNotes: pet.medicalConditions || "",
     isNew: false,
   };
@@ -294,7 +297,7 @@ function renderExistingPets() {
           <div>
             <h4 class="font-semibold text-[#2f4b66]">${escapeHtml(pet.petName)}</h4>
             <p class="mt-1 text-sm text-slate-500">${escapeHtml(pet.petType || "Pet")}${pet.breed ? ` &middot; ${escapeHtml(pet.breed)}` : ""}</p>
-            <p class="mt-1 text-xs text-slate-400">${escapeHtml(pet.size || "Size not provided")}${pet.weight ? ` &middot; ${escapeHtml(pet.weight)} kg` : ""}</p>
+            <p class="mt-1 text-xs text-slate-400">${escapeHtml(pet.size || "Size not provided")} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}${pet.weight ? ` &middot; ${escapeHtml(pet.weight)} kg` : ""}</p>
           </div>
           <button
             type="button"
@@ -338,7 +341,7 @@ function buildPetSummaryHtml(pet) {
       )}</p>
       <p><span class="font-semibold text-slate-700">Size:</span> ${escapeHtml(
         pet.size || "Not specified",
-      )}</p>
+      )} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}</p>
       <p><span class="font-semibold text-slate-700">Medical Notes:</span> ${escapeHtml(
         pet.medicalNotes || "None",
       )}</p>

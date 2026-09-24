@@ -102,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td class="px-3 py-3 font-medium text-slate-700">${escapeHtml(pet.petName || "Unnamed Pet")}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(formatLabel(pet.petType) || "Not specified")}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(pet.breed || "Not specified")}</td>
-                <td class="px-3 py-3 text-slate-600">${escapeHtml(formatLabel(pet.size) || "Not specified")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(formatLabel(pet.size) || "Not specified")} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}<br>${escapeHtml(pet.weight ? `${pet.weight} kg` : "Weight not specified")}</td>
               </tr>
             `,
           )

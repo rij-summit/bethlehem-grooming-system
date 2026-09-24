@@ -1222,9 +1222,9 @@ var API = (() => {
     return request("GET", `/admin/bookings${query}`, null, getAdminToken());
   }
 
-  async function adminCheckIn(bookingId) {
+  async function adminCheckIn(bookingId, petSizes = []) {
     // POST /api/admin/bookings/{id}/check-in  (protected — admin token)
-    return request("POST", `/admin/bookings/${bookingId}/check-in`, null, getAdminToken());
+    return request("POST", `/admin/bookings/${bookingId}/check-in`, { pet_sizes: petSizes }, getAdminToken());
   }
 
   async function adminRecordSedationConsent(bookingId) {

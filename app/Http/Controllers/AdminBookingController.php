@@ -9,6 +9,7 @@ use App\Models\ClinicSetting;
 use App\Models\CustomerNotification;
 use App\Models\Notification;
 use App\Models\Payment;
+use App\Support\PetWeightSize;
 use App\Notifications\GroomingFinishedNotification;
 use App\Services\DailyPetQueue;
 use App\Services\GroomingPaymentReadinessService;
@@ -294,8 +295,14 @@ class AdminBookingController extends Controller
     // waiting_to_arrive → checked_in, assigns queue number
     public function checkIn($id)
     {
+        $data = request()->validate([
+            'pet_sizes' => ['nullable', 'array'],
+            'pet_sizes.*.booking_pet_id' => ['required_with:pet_sizes', 'integer'],
+            'pet_sizes.*.size' => ['required_with:pet_sizes', 'in:small,medium,large,extra_large'],
+        ]);
+        $selectedSizes = collect($data['pet_sizes'] ?? [])->pluck('size', 'booking_pet_id');
         $queueDate = now()->toDateString();
-        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate) {
+        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate, $selectedSizes) {
             $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])
                 ->whereKey($id)
                 ->lockForUpdate()
@@ -311,6 +318,32 @@ class AdminBookingController extends Controller
 
             if ($booking->booking_date !== $queueDate) {
                 return ['error' => ['message' => 'Check-in is only allowed on the day of the appointment.', 'status' => 422]];
+            }
+
+            $bookingPetIds = $booking->bookingPets->pluck('booking_pet_id')->map(fn ($id) => (int) $id)->all();
+            if ($selectedSizes->isNotEmpty() &&
+                (count($bookingPetIds) !== $selectedSizes->count()
+                    || array_diff($bookingPetIds, $selectedSizes->keys()->map(fn ($id) => (int) $id)->all()))) {
+                return ['error' => ['message' => 'Confirm a size for every pet in this booking.', 'status' => 422]];
+            }
+
+            foreach ($booking->bookingPets as $bookingPet) {
+                $pet = $bookingPet->pet;
+                if (! $pet) {
+                    return ['error' => ['message' => 'A pet in this booking could not be found.', 'status' => 422]];
+                }
+                $size = $selectedSizes->get($bookingPet->booking_pet_id) ?? $pet->groomingSize();
+                if (! PetWeightSize::isValidSize($pet->species, $size)) {
+                    return ['error' => ['message' => "Select a valid size for {$pet->pet_name}.", 'status' => 422]];
+                }
+            }
+
+            foreach ($booking->bookingPets as $bookingPet) {
+                $pet = $bookingPet->pet;
+                $size = $selectedSizes->get($bookingPet->booking_pet_id) ?? $pet->groomingSize();
+                $bookingPet->confirmed_size = $size;
+                $bookingPet->save();
+                $pet->confirmClinicSize($size);
             }
 
             $queueNumber = ((int) Booking::where('booking_date', $queueDate)
@@ -1339,8 +1372,8 @@ class AdminBookingController extends Controller
             'petName' => $petName,
             'petType' => $petType,
             'breed' => $breed,
-            'petSize' => $firstPet?->size,
-            'size' => $firstPet?->size,
+            'petSize' => $firstBp?->confirmed_size ?? $firstPet?->groomingSize(),
+            'size' => $firstBp?->confirmed_size ?? $firstPet?->groomingSize(),
             'serviceLabel' => $serviceLabel,
             'appointmentDate' => $booking->booking_date,
             'appointmentTime' => $window?->window_label ?? '—',
@@ -1397,12 +1430,15 @@ class AdminBookingController extends Controller
                     'name' => $pet?->pet_name,
                     'petType' => ucfirst($pet?->species ?? 'Dog'),
                     'pet_type' => $pet?->species,
-                    'petSize' => $pet?->size,
-                    'pet_size' => $pet?->size,
+                    'petSize' => $bp->confirmed_size ?? $pet?->groomingSize(),
+                    'pet_size' => $bp->confirmed_size ?? $pet?->groomingSize(),
                     'petName' => $pet?->pet_name ?? '—',
                     'species' => ucfirst($pet?->species ?? '—'),
                     'breed' => $pet?->breed ?? '—',
-                    'size' => $pet?->size ?? '—',
+                    'size' => $bp->confirmed_size ?? $pet?->groomingSize() ?? '—',
+                    'sizeVerified' => $pet?->hasClinicVerifiedSize() ?? false,
+                    'registeredSize' => $bp->registered_size,
+                    'confirmedSize' => $bp->confirmed_size,
                     'furType' => $pet?->fur_type ?? '—',
                     'weight' => $pet?->weight ? $pet->weight.' kg' : '—',
                     'medicalConditions' => $pet?->medical_conditions ?? null,

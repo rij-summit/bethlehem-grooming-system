@@ -1180,7 +1180,9 @@
                               <span x-text="formatPetCardValue(pet.breed)"></span>
                               <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
+                              <span aria-hidden="true"> &middot; </span><span>Confirmed</span>
                             </p>
+                            <p class="admin-queued-pet-services" x-text="pet.weight"></p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
@@ -1433,9 +1435,11 @@
                               <span x-text="formatPetCardValue(pet.breed)"></span>
                               <span aria-hidden="true"> &middot; </span>
                               <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
+                              <span aria-hidden="true"> &middot; </span><span>Confirmed</span>
                               <span x-show="pet.groomingStartedAt" aria-hidden="true"> &middot; </span>
                               <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
                             </p>
+                            <p class="admin-queued-pet-services" x-text="pet.weight"></p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
@@ -1835,6 +1839,7 @@
                           </div>
 
                           <label class="payment-size-select">
+                            <span class="block text-xs text-slate-500">Pet size · Clinic confirmed</span>
                             <select x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
                               <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
                                 <option :value="option.value" :selected="option.value === pet.sizeKey" x-text="option.label"></option>
@@ -2187,7 +2192,7 @@
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
             @click.self="closeActionConfirmModal()"
           >
-            <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div class="w-full max-w-sm overflow-y-auto rounded-3xl bg-white shadow-2xl" style="max-height:calc(100vh - 2rem)">
               <div class="px-6 py-5 text-center">
                 <div
                   class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
@@ -2211,6 +2216,22 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <div x-show="actionConfirmModal.action === 'checkIn'" class="mt-4 space-y-3 text-left">
+                  <template x-for="pet in actionConfirmModal.petSizes" :key="pet.bookingPetId">
+                    <div class="rounded-xl border border-slate-200 p-3">
+                      <p class="font-semibold text-slate-800" x-text="pet.name"></p>
+                      <p class="text-xs text-slate-600">Weight: <span x-text="pet.weight"></span></p>
+                      <p class="text-xs text-slate-600">Current size: <span x-text="formatPaymentSizeLabel(pet.currentSize)"></span> · <span x-text="pet.verified ? 'Clinic verified' : 'Estimated from weight'"></span></p>
+                      <label class="mt-2 block text-xs font-semibold text-slate-700">Clinic size
+                        <select x-model="pet.size" :disabled="actionConfirmModal.busy" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                          <template x-for="option in getPaymentBaseSizeOptions(pet.species)" :key="option.value">
+                            <option :value="option.value" x-text="option.label"></option>
+                          </template>
+                        </select>
+                      </label>
+                    </div>
+                  </template>
+                </div>
                 <div
                   x-show="actionConfirmModal.action === 'cancel'"
                   class="mt-4 text-left"

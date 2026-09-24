@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PetWeightSize;
 use Illuminate\Database\Eloquent\Model;
 
 class Pet extends Model
@@ -43,6 +44,39 @@ class Pet extends Model
     protected $casts = [
         'clinic_verified_fields' => 'array',
     ];
+
+    public function hasClinicVerifiedSize(): bool
+    {
+        return in_array('size', $this->clinic_verified_fields ?? [], true);
+    }
+
+    public function groomingSize(): ?string
+    {
+        return $this->hasClinicVerifiedSize() && $this->size
+            ? $this->size
+            : (PetWeightSize::sizeFor($this->species, $this->weight) ?? $this->size);
+    }
+
+    public function confirmClinicSize(string $size): void
+    {
+        $sizeChanged = $this->size !== $size;
+        $this->size = $size;
+        $this->clinic_verified_fields = array_values(array_unique([
+            ...($this->clinic_verified_fields ?? []), 'size',
+        ]));
+        $this->save();
+
+        if ($sizeChanged && $this->user_id) {
+            CustomerNotification::create([
+                'user_id' => $this->user_id,
+                'pet_id' => $this->pet_id,
+                'type' => CustomerNotification::TYPE_PET_INFORMATION_UPDATED,
+                'message' => "Information for {$this->pet_name} has been updated by Bethlehem Animal Clinic.",
+                'is_read' => false,
+                'created_at' => now(),
+            ]);
+        }
+    }
 
     public static function normalizeName(mixed $name): string
     {

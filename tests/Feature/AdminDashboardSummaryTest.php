@@ -74,6 +74,7 @@ class AdminDashboardSummaryTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
+            $table->string('confirmed_size')->nullable();
             $table->date('pet_queue_date')->nullable();
             $table->unsignedInteger('pet_queue_number')->nullable();
             $table->text('special_instructions')->nullable();
@@ -91,6 +92,7 @@ class AdminDashboardSummaryTest extends TestCase
             $table->string('species')->nullable();
             $table->string('breed')->nullable();
             $table->string('size')->nullable();
+            $table->json('clinic_verified_fields')->nullable();
             $table->string('fur_type')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->text('medical_conditions')->nullable();
@@ -301,6 +303,7 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => $petId,
                 'pet_name' => "Pet {$petId}",
                 'species' => 'dog',
+                'size' => 'small',
             ];
 
             $bookingId = $petId <= 7 ? 1 : ($petId <= 12 ? 2 : ($petId <= 17 ? 3 : 4));

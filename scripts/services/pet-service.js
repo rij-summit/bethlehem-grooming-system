@@ -8,6 +8,7 @@
  * On the pet step, call loadPetsFromApi() first to sync the user's pets
  * from the database into localStorage before rendering.
  */
+import { getSizeForWeight } from "../components/pet-weight-size.js";
 
 const CLIENT_PETS_KEY = "clientPets";     // localStorage — persists across tabs/sessions
 const BOOKING_PETS_KEY = "bookingPets";   // sessionStorage — current booking draft only
@@ -41,16 +42,23 @@ export async function loadPetsFromApi() {
     const { pets: apiPets } = await API.getUserPets();
 
     // Convert backend field names to frontend format
-    const mappedPets = apiPets.map((p) => ({
-      id: String(p.pet_id),
-      petName: p.pet_name || "",
-      petType: p.species || "Dog",
-      breed: p.breed || "",
-      weight: p.weight ? String(p.weight) : "",
-      furType: p.fur_type || "",
-      size: p.size || "",
-      medicalNotes: p.medical_conditions || "",
-    }));
+    const mappedPets = apiPets.map((p) => {
+      const sizeVerified = Array.isArray(p.clinic_verified_fields)
+        && p.clinic_verified_fields.includes("size");
+      return {
+        id: String(p.pet_id),
+        petName: p.pet_name || "",
+        petType: p.species || "Dog",
+        breed: p.breed || "",
+        weight: p.weight ? String(p.weight) : "",
+        furType: p.fur_type || "",
+        size: sizeVerified
+          ? p.size || ""
+          : (getSizeForWeight(p.species, p.weight).toLowerCase().replaceAll(" ", "_") || p.size || ""),
+        sizeVerified,
+        medicalNotes: p.medical_conditions || "",
+      };
+    });
 
     // Replace entirely — the API is the source of truth for the logged-in user.
     // Never merge with existing localStorage data because it may contain
@@ -98,6 +106,7 @@ export function createPetObject(formData) {
     weight: formData.weight.trim(),
     furType: formData.furType,
     size: formData.size,
+    sizeVerified: false,
     medicalNotes: formData.medicalNotes.trim(),
   };
 }

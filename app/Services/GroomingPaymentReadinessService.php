@@ -65,7 +65,7 @@ class GroomingPaymentReadinessService
                     $isAddon = $line->addon_id !== null;
                     $resolvedPrice = $this->servicePrices->bookingServicePrice(
                         $line,
-                        $bookingPet->pet?->size,
+                        $bookingPet->confirmed_size ?? $bookingPet->registered_size ?? $bookingPet->pet?->groomingSize(),
                     );
 
                     return [

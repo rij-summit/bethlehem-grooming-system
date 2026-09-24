@@ -177,6 +177,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->decimal('weight', 5, 2)->nullable();
             $table->string('color')->nullable();
             $table->string('size')->nullable();
+            $table->json('clinic_verified_fields')->nullable();
             $table->string('fur_type')->nullable();
             $table->text('medical_conditions')->nullable();
             $table->boolean('is_archived')->default(false);
@@ -187,6 +188,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
+            $table->string('registered_size')->nullable();
+            $table->string('confirmed_size')->nullable();
             $table->date('pet_queue_date')->nullable();
             $table->unsignedInteger('pet_queue_number')->nullable();
             $table->text('special_instructions')->nullable();
@@ -248,6 +251,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->id();
             $table->unsignedInteger('user_id');
             $table->unsignedInteger('booking_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
             $table->string('type');
             $table->text('message');
             $table->boolean('is_read')->default(false);
@@ -403,6 +407,52 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ];
     }
 
+    public function test_pre_registration_uses_verified_size_for_existing_pet_and_price(): void
+    {
+        $this->authenticateAs('customer');
+        DB::table('time_windows')->insert([
+            'window_id' => 1,
+            'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00',
+            'end_time' => '12:00:00',
+            'max_slots' => 4,
+            'is_active' => true,
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 3,
+            'user_id' => 3,
+            'pet_name' => 'Rigby',
+            'species' => 'dog',
+            'weight' => 12,
+            'size' => 'small',
+            'clinic_verified_fields' => json_encode(['size'], JSON_THROW_ON_ERROR),
+        ]);
+        DB::table('services')->insert([
+            'service_id' => 3,
+            'service_name' => 'Regular Dog Grooming',
+            'slug' => 'regular_dog_grooming',
+            'base_price' => 0,
+        ]);
+
+        $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(),
+            'window_id' => 1,
+            'number_of_pets' => 1,
+            'pets' => [[
+                'pet_id' => 3,
+                'pet_name' => 'Rigby',
+                'species' => 'dog',
+                'weight' => 12,
+                'size' => 'medium',
+                'services' => ['package' => 'regular_dog_grooming'],
+            ]],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('pets', ['pet_id' => 3, 'size' => 'small', 'weight' => 12]);
+        $this->assertDatabaseHas('booking_pets', ['pet_id' => 3, 'registered_size' => 'small']);
+        $this->assertDatabaseHas('booking_services', ['service_id' => 3, 'price_at_booking' => 550]);
+    }
+
     public function test_staff_can_record_in_person_sedation_consent_before_grooming(): void
     {
         DB::table('bookings')->insert([
@@ -481,8 +531,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'status' => 'waiting_to_arrive',
         ]);
         DB::table('pets')->insert([
-            ['pet_id' => 100, 'user_id' => 100, 'pet_name' => 'Alpha', 'species' => 'dog'],
-            ['pet_id' => 101, 'user_id' => 100, 'pet_name' => 'Beta', 'species' => 'cat'],
+            ['pet_id' => 100, 'user_id' => 100, 'pet_name' => 'Alpha', 'species' => 'dog', 'size' => 'small'],
+            ['pet_id' => 101, 'user_id' => 100, 'pet_name' => 'Beta', 'species' => 'cat', 'size' => 'small'],
         ]);
         DB::table('booking_pets')->insert([
             ['booking_pet_id' => 100, 'booking_id' => 100, 'pet_id' => 100],
@@ -549,6 +599,56 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('queue_number', 1);
         $this->assertSame(2, DB::table('booking_pets')->where('booking_id', 100)->whereNotNull('pet_queue_number')->count());
+    }
+
+    public function test_check_in_confirms_size_independently_of_weight_and_notifies_owner(): void
+    {
+        DB::table('users')->insert([
+            'user_id' => 120,
+            'first_name' => 'Rigby',
+            'last_name' => 'Owner',
+            'role' => 'customer',
+        ]);
+        DB::table('pets')->insert([
+            'pet_id' => 120,
+            'user_id' => 120,
+            'pet_name' => 'Rigby',
+            'species' => 'dog',
+            'weight' => 12,
+            'size' => 'medium',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 120,
+            'booking_reference' => 'SIZE-120',
+            'user_id' => 120,
+            'booking_date' => now()->toDateString(),
+            'number_of_pets' => 1,
+            'status' => 'waiting_to_arrive',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 120,
+            'booking_id' => 120,
+            'pet_id' => 120,
+            'registered_size' => 'medium',
+        ]);
+
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/bookings/120/check-in', [
+            'pet_sizes' => [['booking_pet_id' => 120, 'size' => 'small']],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('pets', ['pet_id' => 120, 'size' => 'small', 'weight' => 12]);
+        $this->assertDatabaseHas('booking_pets', [
+            'booking_pet_id' => 120,
+            'registered_size' => 'medium',
+            'confirmed_size' => 'small',
+        ]);
+        $this->assertSame(['size'], json_decode(DB::table('pets')->where('pet_id', 120)->value('clinic_verified_fields'), true));
+        $this->assertDatabaseHas('customer_notifications', [
+            'user_id' => 120,
+            'pet_id' => 120,
+            'type' => 'pet_information_updated',
+        ]);
     }
 
     public function test_revert_grooming_start_restores_queue_and_removes_customer_notification(): void
@@ -1141,7 +1241,15 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'user_id' => 50,
             'pet_name' => 'Buddy',
             'species' => 'Dog',
+            'weight' => 12,
             'size' => 'small',
+            'clinic_verified_fields' => json_encode(['size'], JSON_THROW_ON_ERROR),
+        ]);
+        DB::table('services')->insert([
+            'service_id' => 2,
+            'service_name' => 'Regular Dog Grooming',
+            'slug' => 'regular_dog_grooming',
+            'base_price' => 0,
         ]);
 
         $registeredResponse = $this->postJson('/api/admin/walk-in', [
@@ -1155,8 +1263,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                     'pet_id' => 50,
                     'pet_name' => 'Buddy',
                     'species' => 'Dog',
-                    'size' => 'small',
-                    'services' => [['service_slug' => 'basic-grooming']],
+                    'weight' => 12,
+                    'size' => 'medium',
+                    'services' => [['service_slug' => 'regular_dog_grooming']],
                 ],
                 [
                     'pet_name' => 'Luna',
@@ -1181,6 +1290,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'user_id' => 50,
             'pet_name' => 'Luna',
         ]);
+        $this->assertDatabaseHas('pets', ['pet_id' => 50, 'size' => 'small', 'weight' => 12]);
+        $this->assertDatabaseHas('booking_pets', ['pet_id' => 50, 'confirmed_size' => 'small']);
+        $this->assertDatabaseHas('booking_services', ['service_id' => 2, 'price_at_booking' => 550]);
 
         DB::table('booking_services')->delete();
         DB::table('booking_pets')->delete();

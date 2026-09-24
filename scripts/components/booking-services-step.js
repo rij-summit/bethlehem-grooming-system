@@ -222,9 +222,10 @@ function renderPetSelectionCard(pet, index) {
             </div>
           </div>
           <span class="shrink-0 rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
-            ${escapeHtml(formatPetSizeLabel(pet.size))}
+            ${escapeHtml(formatPetSizeLabel(pet.size))} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}
           </span>
         </div>
+        ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size and final service price may be confirmed by clinic staff at check-in.</p>'}
       </div>
 
       <section>

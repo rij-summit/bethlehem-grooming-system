@@ -169,13 +169,14 @@ function renderPetReviewCard(item, index) {
 
         <div class="flex shrink-0 flex-col items-end gap-2">
           <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
-            ${escapeHtml(formatPetSizeLabel(item.pet.size))}
+            ${escapeHtml(formatPetSizeLabel(item.pet.size))} · ${item.pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}
           </span>
           <span class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
             item.pricing.hasSelection ? formatAmountRange(item.pricing.total) : "No price available",
           )}</span>
         </div>
       </div>
+      <p class="mt-2 text-sm text-slate-600">Weight: ${escapeHtml(item.pet.weight ? `${item.pet.weight} kg` : "Not specified")}</p>
 
       <div class="mt-6 space-y-4">
         ${packageCard}
@@ -318,6 +319,8 @@ function saveReviewDraft() {
       petType: item.pet.petType,
       breed: item.pet.breed,
       size: item.pet.size,
+      sizeVerified: item.pet.sizeVerified,
+      weight: item.pet.weight,
       servicePackage: item.selection.servicePackage,
       alaCarteServices: [...item.selection.alaCarteServices],
       addOns: [...item.selection.addOns],

@@ -336,30 +336,17 @@
             </div>
           </div>
 
-          <!-- Size + Fur Type -->
+          <!-- Weight + Fur Type -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
-                Size
-                <span id="petSizeVerified"
+              <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
+                Weight (kg)
+                <span id="petWeightVerified"
                   class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
               </label>
-              <div id="petSizeCombobox" class="relative">
-                <div class="relative">
-                  <input id="petSize" name="size" type="text" placeholder="Select species first"
-                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                    role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
-                    aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
-                  <button id="petSizeDropdownButton" type="button"
-                    class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
-                    aria-label="Show size options" aria-controls="petSizeOptions" aria-expanded="false" disabled>
-                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
-                  </button>
-                </div>
-                <div id="petSizeOptions"
-                  class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
-                  role="listbox" aria-label="Size options"></div>
-              </div>
+              <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
+                aria-invalid="false"
+                class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
             </div>
             <div>
               <label for="petFurType" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
@@ -386,16 +373,30 @@
             </div>
           </div>
 
-          <!-- Weight -->
+          <!-- Size -->
           <div>
-            <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
-              Weight (kg)
-              <span id="petWeightVerified"
+            <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
+              Size
+              <span id="petSizeVerified"
                 class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
             </label>
-            <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
-              aria-invalid="false"
-              class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
+            <p id="petSizeEstimateNote" class="mb-2 text-xs text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
+            <div id="petSizeCombobox" class="relative">
+              <div class="relative">
+                <input id="petSize" name="size" type="text" placeholder="Select species first"
+                  class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
+                  aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
+                <button id="petSizeDropdownButton" type="button"
+                  class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
+                  aria-label="Show size options" aria-controls="petSizeOptions" aria-expanded="false" disabled>
+                  <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                </button>
+              </div>
+              <div id="petSizeOptions"
+                class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                role="listbox" aria-label="Size options"></div>
+            </div>
           </div>
 
           <!-- Medical Conditions -->

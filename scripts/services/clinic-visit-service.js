@@ -73,6 +73,7 @@ export function normalizeApiPet(pet) {
     weight: pet?.weight ? String(pet.weight) : "",
     furType: pet?.fur_type || pet?.furType || "",
     size: pet?.size || "",
+    sizeVerified: Array.isArray(pet?.clinic_verified_fields) && pet.clinic_verified_fields.includes("size"),
     medicalNotes: pet?.medical_conditions || pet?.medicalNotes || "",
   };
 }

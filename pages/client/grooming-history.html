@@ -565,9 +565,7 @@
         const breed = pet?.breed && pet.breed !== "—" ? escapeHistoryHtml(pet.breed) : "Breed not recorded";
         const species = pet?.species ? escapeHistoryHtml(String(pet.species).replace(/\b\w/g, (letter) => letter.toUpperCase())) : "Species not recorded";
         const groomingTimes = petGroomingTimes(booking, pet);
-        const registeredSize = String(pet?.registered_size || "").trim().toLowerCase();
         const confirmedSize = String(pet?.confirmed_size || "").trim().toLowerCase();
-        const sizeChanged = registeredSize && confirmedSize && registeredSize !== confirmedSize;
         const sizeValue = historySizeLabel(pet?.confirmed_size || pet?.size);
         const weight = pet?.weight === null || pet?.weight === undefined || pet?.weight === "" || !Number.isFinite(Number(pet.weight))
           ? "Not recorded"
@@ -620,8 +618,8 @@
                   <dt class="font-medium text-portal-muted">Pet Size</dt>
                   <dd class="font-medium text-portal-text">
                     <span>${escapeHistoryHtml(sizeValue)}</span>
-                    ${sizeChanged ? `
-                      <span class="ml-1 inline-flex align-middle text-portal-primary" title="Clinic size changed from ${escapeHistoryHtml(historySizeLabel(registeredSize))} to ${escapeHistoryHtml(sizeValue)}">
+                    ${confirmedSize ? `
+                      <span class="ml-1 inline-flex align-middle text-portal-primary" title="Clinic-confirmed pet size">
                         <svg class="ph-icon h-3.5 w-3.5" viewBox="0 0 256 256" aria-label="Clinic-confirmed pet size" focusable="false"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>
                       </span>
                       <span class="mt-1 block text-xs text-portal-muted">Size confirmed by Bethlehem Animal Clinic Grooming</span>

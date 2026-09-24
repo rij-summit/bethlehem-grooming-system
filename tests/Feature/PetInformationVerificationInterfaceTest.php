@@ -258,7 +258,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
         $this->assertStringNotContainsString('text-xl font-bold', $this->petProfileComponent);
     }
 
-    public function test_verified_text_appears_only_in_profile_overview_and_edit_pet(): void
+    public function test_verified_size_is_marked_on_card_and_in_profile_and_edit_pet(): void
     {
         $petCard = $this->sourceBetween(
             $this->myPetsComponent,
@@ -266,7 +266,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'function openAddModal()',
         );
 
-        $this->assertStringNotContainsString('Verified', $petCard);
+        $this->assertStringContainsString('" ✓"', $petCard);
 
         foreach ([
             'id="petBreedVerified"',
