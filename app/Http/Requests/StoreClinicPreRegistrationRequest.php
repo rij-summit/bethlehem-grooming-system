@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ClinicConcerns;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,7 +39,9 @@ class StoreClinicPreRegistrationRequest extends FormRequest
                         ->where('is_archived', false),
                 ),
             ],
-            'chief_complaint' => ['required', 'string', 'min:5', 'max:1000'],
+            'common_concerns' => ['required', 'array', 'min:1', 'max:11'],
+            'common_concerns.*' => ['required', 'string', 'distinct', Rule::in(ClinicConcerns::OPTIONS)],
+            'chief_complaint' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
@@ -49,8 +52,9 @@ class StoreClinicPreRegistrationRequest extends FormRequest
             'window_id.required' => 'Select an available clinic visit time before continuing.',
             'window_id.exists' => 'Select an available clinic visit time before continuing.',
             'pet_id.exists' => 'Select one of your active pets before continuing.',
-            'chief_complaint.required' => 'A reason for the clinic visit is required.',
-            'chief_complaint.min' => 'Please provide more detail about the reason for the visit.',
+            'common_concerns.required' => 'Select at least one common concern.',
+            'common_concerns.min' => 'Select at least one common concern.',
+            'common_concerns.*.in' => 'Select a valid common concern.',
         ];
     }
 }

@@ -4530,6 +4530,22 @@ video {
   outline-offset: 2px;
 }
 
+.focus-visible\:outline:focus-visible {
+  outline-style: solid;
+}
+
+.focus-visible\:outline-2:focus-visible {
+  outline-width: 2px;
+}
+
+.focus-visible\:outline-offset-2:focus-visible {
+  outline-offset: 2px;
+}
+
+.focus-visible\:outline-\[\#315b7e\]:focus-visible {
+  outline-color: #315b7e;
+}
+
 .enabled\:hover\:bg-portal-danger-hover:hover:enabled {
   background-color: var(--portal-danger-hover);
 }

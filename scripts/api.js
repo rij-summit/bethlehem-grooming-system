@@ -1202,7 +1202,7 @@ var API = (() => {
 
   async function submitClinicPreRegistration(payload) {
     // POST /api/clinic/pre-register (protected — customer token)
-    // payload: { appointment_date, pet_id, chief_complaint }
+    // payload: { appointment_date, window_id, pet_id, common_concerns, chief_complaint? }
     return request(
       "POST",
       "/clinic/pre-register",
@@ -1673,7 +1673,7 @@ var API = (() => {
 
   async function submitClinicWalkIn(payload) {
     // POST /api/admin/clinic-walk-in  (protected — admin token)
-    // payload: { owner_record_type, customer_user_id?, unregistered_customer_id?, pet_id?, pet_name, species, breed?, gender?, birthdate?, is_neutered?, neutered_date?, fur_type?, weight?, size?, color?, medical_conditions?, chief_complaint, terms_agreed }
+    // payload: { owner_record_type, customer_user_id?, unregistered_customer_id?, pet_id?, pet_name, species, breed?, gender?, birthdate?, is_neutered?, neutered_date?, fur_type?, weight?, size?, color?, medical_conditions?, common_concerns, chief_complaint?, terms_agreed }
     return request("POST", "/admin/clinic-walk-in", payload, getAdminToken());
   }
 

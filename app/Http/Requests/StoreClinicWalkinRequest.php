@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Rules\ValidBreedCoat;
 use App\Rules\ValidPetSize;
 use App\Rules\ValidPetWeight;
+use App\Support\ClinicConcerns;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -76,7 +77,9 @@ class StoreClinicWalkinRequest extends FormRequest
             'medical_conditions' => ['nullable', 'string', 'max:1000'],
 
             // Clinic
-            'chief_complaint' => ['required', 'string', 'max:1000'],
+            'common_concerns' => ['required', 'array', 'min:1', 'max:11'],
+            'common_concerns.*' => ['required', 'string', 'distinct', Rule::in(ClinicConcerns::OPTIONS)],
+            'chief_complaint' => ['nullable', 'string', 'max:1000'],
             'clinic_quick_entry' => ['sometimes', 'boolean'],
 
             // Consent
@@ -88,7 +91,9 @@ class StoreClinicWalkinRequest extends FormRequest
     {
         return [
             'terms_agreed.accepted' => 'The customer must agree to the terms before registration.',
-            'chief_complaint.required' => 'A chief complaint or reason for visit is required.',
+            'common_concerns.required' => 'Select at least one common concern.',
+            'common_concerns.min' => 'Select at least one common concern.',
+            'common_concerns.*.in' => 'Select a valid common concern.',
             'phone.regex' => ($this->input('owner_record_type') ?? 'new') === 'new'
                 ? 'Phone number must be 11 digits and start with 09.'
                 : 'Phone number may only contain digits, spaces, +, -, and parentheses.',

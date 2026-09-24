@@ -325,12 +325,7 @@ function renderPackageCard(pet, selection, service) {
           ${isChecked ? "checked" : ""}
         />
         <div class="service-card__content">
-          <div class="flex items-start justify-between gap-3">
-            <h4 class="font-semibold text-[#2f4b66]">${escapeHtml(service.name)}</h4>
-            <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-              ${escapeHtml(formatPetTypeLabel(pet.petType))}
-            </span>
-          </div>
+          <h4 class="font-semibold text-[#2f4b66]">${escapeHtml(service.name)}</h4>
           <ul class="mt-2 space-y-1 text-sm text-slate-600">
             ${service.descriptionItems
               .map((item) => `<li>&bull; ${escapeHtml(item)}</li>`)

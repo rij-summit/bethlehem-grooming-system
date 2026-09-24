@@ -1,4 +1,5 @@
 import { getClinicVisitSummaryMarkup } from "./clinic-visit-summary-card.js";
+import { formatClinicVisitReason } from "../services/clinic-visit-service.js";
 
 const WALK_IN_OWNER_KEY = "walkInOwnerStep";
 const WALK_IN_CLINIC_CONFIRMED_KEY = "walkInClinicConfirmation";
@@ -6,12 +7,13 @@ const WALK_IN_CLINIC_CONFIRMED_KEY = "walkInClinicConfirmation";
 const state = {
   pet: null,
   chiefComplaint: "",
+  commonConcerns: [],
   onBack: null,
 };
 
 let elements = {};
 
-function getMarkup(pet, chiefComplaint) {
+function getMarkup(pet, commonConcerns, chiefComplaint) {
   return `
     <main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
       <button
@@ -44,7 +46,7 @@ function getMarkup(pet, chiefComplaint) {
         ${getClinicVisitSummaryMarkup({
           visitType: "Clinic Walk-in",
           pet,
-          reason: chiefComplaint,
+          reason: formatClinicVisitReason(commonConcerns, chiefComplaint),
         })}
 
         <div
@@ -178,6 +180,7 @@ async function handleSubmit(event) {
     size:              normalizeSizeForApi(state.pet?.size),
     medical_conditions: state.pet?.medicalNotes || null,
     chief_complaint:   state.chiefComplaint,
+    common_concerns:   state.commonConcerns,
     terms_agreed:      true,
   };
 
@@ -201,6 +204,7 @@ async function handleSubmit(event) {
         },
         pet: response.pet,
         chief_complaint: response.chief_complaint,
+        common_concerns: response.common_concerns,
       }),
     );
 
@@ -241,14 +245,15 @@ function bindEvents() {
   elements.backButtons.forEach((btn) => btn.addEventListener("click", handleBackClick));
 }
 
-export function renderWalkInClinicConsentStep({ pet = null, chiefComplaint = "", onBack = null } = {}) {
+export function renderWalkInClinicConsentStep({ pet = null, commonConcerns = [], chiefComplaint = "", onBack = null } = {}) {
   state.pet = pet;
   state.chiefComplaint = chiefComplaint;
+  state.commonConcerns = commonConcerns;
   state.onBack = onBack;
 
   document.title = "Walk-in Clinic — Review & Confirm";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
-  document.body.innerHTML = getMarkup(pet, chiefComplaint);
+  document.body.innerHTML = getMarkup(pet, commonConcerns, chiefComplaint);
 
   refreshElements();
   bindEvents();
@@ -272,11 +277,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const saved = JSON.parse(sessionStorage.getItem("walkInClinicComplaint") || "{}");
     state.pet = saved.pet || null;
     state.chiefComplaint = saved.chiefComplaint || "";
+    state.commonConcerns = saved.commonConcerns || [];
   } catch {
     // ignore
   }
 
-  document.body.innerHTML = getMarkup(state.pet, state.chiefComplaint);
+  document.body.innerHTML = getMarkup(state.pet, state.commonConcerns, state.chiefComplaint);
   refreshElements();
   bindEvents();
   syncSubmitButton();

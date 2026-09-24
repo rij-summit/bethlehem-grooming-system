@@ -20,6 +20,7 @@ class ClinicAppointment extends Model
         'walkin_id',
         'pet_id',
         'chief_complaint',
+        'common_concerns',
         'total_amount',
         'paid',
         'notes',
@@ -30,6 +31,7 @@ class ClinicAppointment extends Model
     ];
 
     protected $casts = [
+        'common_concerns'         => 'array',
         'paid'                    => 'boolean',
         'appointment_date'        => 'date',
         'checked_in_at'           => 'datetime',

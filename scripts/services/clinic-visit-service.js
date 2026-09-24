@@ -28,22 +28,29 @@ export function clearClinicVisitDraft() {
   sessionStorage.removeItem(CLINIC_VISIT_CONFIRMATION_KEY);
 }
 
-export function validateClinicVisitReason(value) {
-  const reason = String(value || "").trim();
+export const CLINIC_CONCERNS = [
+  "Routine check-up", "Vaccination", "Vomiting", "Diarrhea",
+  "Not eating", "Skin / itching", "Ear problem", "Eye problem",
+  "Coughing / sneezing", "Limping / injury", "Other",
+];
 
-  if (!reason) {
-    return "A reason for the clinic visit is required.";
+export function validateClinicVisitReason(concerns, details = "") {
+  if (!Array.isArray(concerns) || concerns.length === 0) {
+    return "Select at least one common concern.";
   }
-
-  if (reason.length < 5) {
-    return "Please provide more detail about the reason for the visit.";
+  if (concerns.some((concern) => !CLINIC_CONCERNS.includes(concern)) ||
+      new Set(concerns).size !== concerns.length) {
+    return "Select valid common concerns.";
   }
-
-  if (reason.length > 1000) {
-    return "The reason for the visit must not exceed 1,000 characters.";
+  if (String(details).trim().length > 1000) {
+    return "Tell us more must not exceed 1,000 characters.";
   }
-
   return "";
+}
+
+export function formatClinicVisitReason(concerns, details = "") {
+  const description = String(details ?? "").trim();
+  return `${concerns.join(", ")}${description ? `\n${description}` : ""}`;
 }
 
 export function formatClinicVisitDate(dateKey) {

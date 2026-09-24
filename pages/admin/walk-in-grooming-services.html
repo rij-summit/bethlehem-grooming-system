@@ -12,11 +12,11 @@
 
   <body class="min-h-screen bg-slate-50 text-slate-800">
     <main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
-      <section class="mb-6">
+      <section>
         <button
           id="walkInServicesBackTopBtn"
           type="button"
-          class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+          class="inline-flex items-center gap-2 text-sm font-medium text-[#315b7e] hover:underline"
         >
           &larr; Back to Pet Information
         </button>
@@ -34,9 +34,9 @@
             <span>Step 3 of 5</span>
             <span>60% Complete</span>
           </div>
-          <div class="h-2 w-full rounded-full bg-slate-200">
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
-              class="h-2 rounded-full bg-[#315b7e]"
+              class="h-full rounded-full bg-[#315b7e]"
               style="width: 60%"
             ></div>
           </div>
@@ -44,30 +44,18 @@
       </section>
 
       <section
-        class="rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
       >
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-[#2f4b66]">Grooming Services</h2>
-        </div>
-
-        <div class="mb-6 grid gap-4 md:grid-cols-2">
-          <div class="rounded-2xl border border-slate-200 bg-white p-4">
-            <p
-              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-            >
-              Pet Summary
-            </p>
-            <p id="petSummaryText" class="mt-2 text-sm text-slate-600">
-              No pet selected yet.
-            </p>
-          </div>
         </div>
 
         <div
           id="serviceNotice"
           class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
         >
-          No grooming service selected yet.
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Service Rules</p>
+          <p class="mt-2">Choose one package, A la Carte services, or both. Items already included in the selected package will be unavailable.</p>
         </div>
 
         <!--

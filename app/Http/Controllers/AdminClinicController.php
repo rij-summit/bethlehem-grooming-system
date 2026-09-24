@@ -408,7 +408,7 @@ class AdminClinicController extends Controller
     public function saveRecord(Request $request, int $id)
     {
         $data = $request->validate([
-            'chief_complaint' => ['nullable', 'string', 'max:1000'],
+            'chief_complaint' => ['nullable', 'string', 'max:1200'],
             'diagnosis' => ['nullable', 'string', 'max:2000'],
             'findings' => ['nullable', 'string', 'max:2000'],
             'treatment_given' => ['nullable', 'string', 'max:2000'],
@@ -651,6 +651,7 @@ class AdminClinicController extends Controller
                 'end_time' => $timeWindow->end_time,
             ] : null,
             'chief_complaint' => $a->chief_complaint,
+            'common_concerns' => $a->common_concerns,
             'total_amount' => $a->total_amount,
             'paid' => $a->paid,
             'notes' => $a->notes,

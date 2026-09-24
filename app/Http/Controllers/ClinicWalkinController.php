@@ -16,6 +16,7 @@ use App\Models\Walkin;
 use App\Services\AvailabilityTimeWindowService;
 use App\Services\ClinicAppointmentSequence;
 use App\Services\CustomerPreRegistrationAccessService;
+use App\Support\ClinicConcerns;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -228,7 +229,8 @@ class ClinicWalkinController extends Controller
                 'user_id' => $user->user_id,
                 'walkin_id' => null,
                 'pet_id' => $pet->pet_id,
-                'chief_complaint' => $data['chief_complaint'],
+                'chief_complaint' => ClinicConcerns::summary($data['common_concerns'], $data['chief_complaint'] ?? null),
+                'common_concerns' => $data['common_concerns'],
                 'total_amount' => 0,
                 'paid' => false,
                 'checked_in_at' => null,
@@ -257,6 +259,7 @@ class ClinicWalkinController extends Controller
                     ],
                     'status' => $appointment->status,
                     'chief_complaint' => $appointment->chief_complaint,
+                    'common_concerns' => $appointment->common_concerns,
                     'owner' => [
                         'name' => trim(($user->first_name ?? '').' '.($user->last_name ?? '')),
                         'email' => $user->email,
@@ -294,7 +297,7 @@ class ClinicWalkinController extends Controller
                 'user_id' => $user?->user_id,
                 ...($unregisteredCustomer ? ['unregistered_customer_id' => $unregisteredCustomer->id] : []),
                 'appointment_type' => 'clinic',
-                'chief_complaint' => $data['chief_complaint'],
+                'chief_complaint' => ClinicConcerns::summary($data['common_concerns'], $data['chief_complaint'] ?? null),
             ]);
 
             $pet = $this->findOrCreatePet($user, $unregisteredCustomer, $data);
@@ -312,7 +315,8 @@ class ClinicWalkinController extends Controller
                 'user_id' => $user?->user_id,
                 'walkin_id' => $walkin->id,
                 'pet_id' => $pet->pet_id,
-                'chief_complaint' => $data['chief_complaint'],
+                'chief_complaint' => $walkin->chief_complaint,
+                'common_concerns' => $data['common_concerns'],
                 'total_amount' => 0,
                 'paid' => false,
                 'consultation_started_at' => now(),
@@ -344,6 +348,7 @@ class ClinicWalkinController extends Controller
                     'breed' => $pet->breed,
                 ],
                 'chief_complaint' => $walkin->chief_complaint,
+                'common_concerns' => $appointment->common_concerns,
                 'returning_customer' => $user !== null || $unregisteredCustomer !== null,
             ], 201);
         });

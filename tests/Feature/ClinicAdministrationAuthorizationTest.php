@@ -101,6 +101,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->unsignedBigInteger('walkin_id')->nullable();
             $table->unsignedInteger('pet_id')->nullable();
             $table->text('chief_complaint')->nullable();
+            $table->json('common_concerns')->nullable();
             $table->decimal('total_amount', 10, 2)->nullable();
             $table->boolean('paid')->default(false);
             $table->text('notes')->nullable();
@@ -473,6 +474,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->authenticateAs('staff');
 
         $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up', 'Vaccination'],
             'fname' => 'Maria',
             'lname' => 'Santos',
             'phone' => '09171234567',
@@ -484,7 +486,39 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('status', 'in_consultation')
             ->assertJsonPath('queue_number', null)
-            ->assertJsonPath('pet.name', 'Bantay');
+            ->assertJsonPath('pet.name', 'Bantay')
+            ->assertJsonPath('common_concerns', ['Routine check-up', 'Vaccination'])
+            ->assertJsonPath('chief_complaint', "Routine check-up, Vaccination\nRoutine consultation");
+
+        $this->assertSame(
+            ['Routine check-up', 'Vaccination'],
+            json_decode(DB::table('clinic_appointments')->value('common_concerns'), true),
+        );
+    }
+
+    public function test_walk_in_requires_valid_distinct_common_concerns(): void
+    {
+        $this->authenticateAs('staff');
+        $payload = [
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'phone' => '09171234567',
+            'pet_name' => 'Bantay',
+            'species' => 'dog',
+            'terms_agreed' => true,
+        ];
+
+        $this->postJson('/api/admin/clinic-walk-in', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('common_concerns');
+        $this->postJson('/api/admin/clinic-walk-in', $payload + ['common_concerns' => ['Other', 'Other']])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('common_concerns.0');
+        $this->postJson('/api/admin/clinic-walk-in', $payload + ['common_concerns' => ['Unknown']])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('common_concerns.0');
+
+        $this->assertDatabaseCount('clinic_appointments', 0);
     }
 
     public function test_clinic_cases_reuse_one_open_case_per_pet_and_finish_with_saved_record(): void
@@ -576,6 +610,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up'],
             'fname' => 'Maria',
             'lname' => 'Santos',
             'email' => 'maria@example.com',
@@ -629,6 +664,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up'],
             'fname' => 'Ana',
             'lname' => 'Reyes',
             'email' => 'ana@example.com',
@@ -673,6 +709,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up'],
             'fname' => 'Jose',
             'lname' => 'Cruz',
             'email' => 'jose@example.com',
@@ -689,6 +726,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonValidationErrors(['breed']);
 
         $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up'],
             'fname' => 'Jose',
             'lname' => 'Cruz',
             'email' => 'jose@example.com',
@@ -742,6 +780,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $response = $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up', 'Vomiting'],
             'appointment_date' => $appointmentDate,
             'window_id' => 1,
             'pet_id' => 101,
@@ -756,7 +795,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('appointment.time_window.window_id', 1)
             ->assertJsonPath('appointment.time_window.window_label', '8:00 AM - 9:00 AM')
             ->assertJsonPath('appointment.pet.pet_id', 101)
-            ->assertJsonPath('appointment.owner.name', 'Customer User');
+            ->assertJsonPath('appointment.owner.name', 'Customer User')
+            ->assertJsonPath('appointment.common_concerns', ['Routine check-up', 'Vomiting'])
+            ->assertJsonPath('appointment.chief_complaint', "Routine check-up, Vomiting\nRoutine wellness consultation");
 
         $this->assertDatabaseHas('clinic_appointments', [
             'appointment_type' => 'pre_registered',
@@ -766,9 +807,43 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'user_id' => 10,
             'walkin_id' => null,
             'pet_id' => 101,
-            'chief_complaint' => 'Routine wellness consultation',
+            'chief_complaint' => "Routine check-up, Vomiting\nRoutine wellness consultation",
         ]);
+        $this->assertSame(
+            ['Routine check-up', 'Vomiting'],
+            json_decode(DB::table('clinic_appointments')->value('common_concerns'), true),
+        );
         $this->assertDatabaseCount('walkins', 0);
+    }
+
+    public function test_pre_registration_requires_common_concerns_and_allows_optional_details(): void
+    {
+        $this->authenticateAs('customer', 10);
+        DB::table('pets')->insert([
+            'pet_id' => 101,
+            'user_id' => 10,
+            'pet_name' => 'Mochi',
+            'species' => 'cat',
+            'is_archived' => false,
+        ]);
+        $payload = [
+            'appointment_date' => now()->addDay()->toDateString(),
+            'window_id' => 1,
+            'pet_id' => 101,
+        ];
+
+        $this->postJson('/api/clinic/pre-register', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('common_concerns');
+        $this->postJson('/api/clinic/pre-register', $payload + ['common_concerns' => ['Unknown']])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('common_concerns.0');
+        $this->postJson('/api/clinic/pre-register', $payload + [
+            'common_concerns' => ['Routine check-up', 'Vaccination'],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('appointment.common_concerns', ['Routine check-up', 'Vaccination'])
+            ->assertJsonPath('appointment.chief_complaint', 'Routine check-up, Vaccination');
     }
 
     public function test_ongoing_grooming_blocks_a_new_clinic_pre_registration(): void
@@ -791,6 +866,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up'],
             'appointment_date' => now()->addDay()->toDateString(),
             'window_id' => 1,
             'pet_id' => 101,
@@ -855,6 +931,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up'],
             'appointment_date' => now()->addDay()->toDateString(),
             'window_id' => 1,
             'pet_id' => 202,
@@ -888,6 +965,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up'],
             'appointment_date' => $appointmentDate,
             'window_id' => 1,
             'pet_id' => 101,
@@ -944,6 +1022,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('windows.0.is_full', true);
 
         $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up'],
             'appointment_date' => $appointmentDate,
             'window_id' => 1,
             'pet_id' => 101,
@@ -1230,6 +1309,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->postJson('/api/clinic/pre-register', [
+            'common_concerns' => ['Routine check-up'],
             'appointment_date' => '2026-07-23',
             'window_id' => 1,
             'pet_id' => 101,

@@ -4,6 +4,7 @@ import {
   CLINIC_VISIT_DRAFT_KEY,
   CLINIC_VISIT_PETS_KEY,
   formatClinicVisitDate,
+  formatClinicVisitReason,
   readClinicVisitDraft,
   requireCustomerSession,
   validateClinicVisitReason,
@@ -31,6 +32,7 @@ async function submitClinicVisit(draft) {
       window_id: Number(draft.windowId),
       pet_id: Number(draft.pet.id),
       chief_complaint: draft.chiefComplaint,
+      common_concerns: draft.commonConcerns,
     });
 
     sessionStorage.setItem(
@@ -64,7 +66,7 @@ function init() {
     return;
   }
 
-  if (validateClinicVisitReason(draft.chiefComplaint)) {
+  if (validateClinicVisitReason(draft.commonConcerns, draft.chiefComplaint)) {
     window.location.replace("./clinic-visit-reason.html");
     return;
   }
@@ -74,7 +76,7 @@ function init() {
     dateLabel: formatClinicVisitDate(draft.appointmentDate),
     timeLabel: draft.windowLabel,
     pet: draft.pet,
-    reason: draft.chiefComplaint,
+    reason: formatClinicVisitReason(draft.commonConcerns, draft.chiefComplaint),
   });
   elements.submit.addEventListener("click", () => submitClinicVisit(draft));
 }
