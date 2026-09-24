@@ -592,6 +592,7 @@ function adminDashboard() {
       amountPaid: 0,
       change: 0,
       paymentMethod: "",
+      notes: "",
       paidAt: "",
       isEarlyPayment: false,
     },
@@ -3204,6 +3205,8 @@ function adminDashboard() {
       const paid = parseFloat(this.paymentModal.amountPaid) || 0;
       return (
         !this.paymentModal.busy &&
+        !this.paymentModal.error &&
+        this.paymentModal.paymentMethod === "cash" &&
         this.paymentModal.petBreakdown.length > 0 &&
         this.paymentTotalDue > 0 &&
         !this.hasMissingPaymentPrices() &&
@@ -3267,6 +3270,7 @@ function adminDashboard() {
 
         return {
           ...pricedPet,
+          isSizeEditing: false,
           lines,
         };
       });
@@ -3627,26 +3631,32 @@ function adminDashboard() {
         return this.buildPaymentReceiptPets(fallbackPets);
       }
 
-      return summary.pets.map((pet, index) => ({
-        id: pet.booking_pet_id ?? `receipt-pet-${index + 1}`,
-        name: this.formatReceiptValue(pet.pet_name, `Pet ${index + 1}`),
-        species: this.formatReceiptValue(pet.pet_species),
-        breed: "Not specified",
-        sizeLabel: "Not specified",
-        lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
-          id: line.booking_service_id ?? `${index}-${lineIndex}`,
-          name: this.formatReceiptValue(line.label, "Grooming Service"),
-          price: Number(line.price_at_booking || 0),
-        })),
-        subtotal: Number(pet.final_pet_charge || 0),
-      }));
+      const bookingPets = this.buildPaymentReceiptPets(fallbackPets);
+      return summary.pets.map((pet, index) => {
+        const bookingPet = bookingPets.find((candidate) => String(candidate.id) === String(pet.booking_pet_id))
+          ?? bookingPets[index];
+        return {
+          id: pet.booking_pet_id ?? `receipt-pet-${index + 1}`,
+          name: this.formatReceiptValue(pet.pet_name, `Pet ${index + 1}`),
+          species: this.formatReceiptValue(pet.pet_species),
+          breed: bookingPet?.breed ?? "Not specified",
+          sizeLabel: bookingPet?.sizeLabel ?? "Not specified",
+          lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
+            id: line.booking_service_id ?? `${index}-${lineIndex}`,
+            name: this.formatReceiptValue(line.label, "Grooming Service"),
+            price: Number(line.price_at_booking || 0),
+          })),
+          subtotal: Number(pet.final_pet_charge || 0),
+        };
+      });
     },
 
     async submitPayment() {
+      if (this.paymentModal.busy || this.paymentModal.paymentMethod !== "cash") return;
       const { booking, isEarlyPayment, amountPaid, notes } = this.paymentModal;
       const fp = Number(this.paymentTotalDue.toFixed(2));
       const ap = parseFloat(amountPaid);
-      const paymentMethod = this.paymentModal.paymentMethod || "cash";
+      const paymentMethod = "cash";
 
       if (this.paymentModal.petBreakdown.length === 0) {
         this.paymentModal.error = "No booked services were found for this payment.";
@@ -3669,7 +3679,7 @@ function adminDashboard() {
         return;
       }
       if (!ap || ap < fp) {
-        this.paymentModal.error = "Amount paid cannot be less than the total amount due.";
+        this.paymentModal.error = "Cash received is less than the amount due.";
         return;
       }
       if (ap > this.paymentMaximumAmount) {
@@ -3730,7 +3740,8 @@ function adminDashboard() {
           finalPrice:    Number(res.final_price ?? fp),
           amountPaid:    Number(res.amount_paid ?? ap),
           change:        res.change ?? (ap - fp),
-          paymentMethod: res.payment_method_label ?? res.payment_method ?? paymentMethod,
+          paymentMethod: res.payment_method_label ?? (res.payment_method === "cash" ? "Cash" : res.payment_method ?? paymentMethod),
+          notes:         notes || "",
           paidAt:        res.paid_at ?? new Date().toLocaleString("en-PH"),
           isEarlyPayment,
         };
@@ -3755,7 +3766,7 @@ function adminDashboard() {
         open: false, bookingReference: "", ownerName: "", contactNumber: "",
         petName: "", serviceLabel: "", appointmentDate: "", appointmentTime: "",
         pets: [], finalPrice: 0, amountPaid: 0, change: 0,
-        paymentMethod: "", paidAt: "", isEarlyPayment: false,
+        paymentMethod: "", notes: "", paidAt: "", isEarlyPayment: false,
       };
     },
 

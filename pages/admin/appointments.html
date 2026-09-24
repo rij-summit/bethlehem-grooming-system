@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Grooming | Bethlehem Animal Clinic</title>
 
-    <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=workflow-reconciliation-20260809" />
+    <link rel="stylesheet" href="../../css/output.css?v=grooming-cash-payment-20260925" />
+    <link rel="stylesheet" href="../../css/custom.css?v=grooming-payment-success-20260925" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1796,13 +1796,17 @@
           >
             <div class="payment-modal-card w-full bg-white shadow-2xl overflow-hidden">
               <!-- Header -->
-              <div class="flex items-center justify-between bg-[#16a34a] px-6 py-4">
+              <div class="flex items-start justify-between border-b border-slate-200 bg-white px-6 py-5">
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70"
-                    x-text="paymentModal.isEarlyPayment ? 'Early Payment' : 'Process Payment'"></p>
-                  <h4 class="text-lg font-bold text-white" x-text="paymentModal.booking?.ownerName ?? '—'"></h4>
+                  <h4 class="text-xl font-bold text-[#2f4b66]">Record Payment</h4>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class="rounded-full bg-[#e8f2fa] px-2.5 py-1 text-xs font-semibold text-[#315b7e]"
+                      x-text="paymentModal.isEarlyPayment ? 'Early Payment' : 'For Payment'"></span>
+                    <span class="font-semibold text-slate-700" x-text="paymentModal.booking?.ownerName ?? '—'"></span>
+                  </div>
+                  <p x-show="paymentModal.isEarlyPayment" class="mt-2 text-sm text-slate-500">Payment is being recorded before grooming is completed.</p>
                 </div>
-                <button type="button" @click="closePaymentModal()" class="text-white/70 hover:text-white">
+                <button type="button" @click="closePaymentModal()" aria-label="Close payment modal" class="text-slate-400 hover:text-[#315b7e]">
                   <i data-lucide="x" class="h-5 w-5"></i>
                 </button>
               </div>
@@ -1830,22 +1834,23 @@
                             <div class="min-w-0">
                               <h5 class="payment-pet-name" x-text="pet.name || ('Pet ' + (petIndex + 1))"></h5>
                               <p class="payment-pet-meta">
-                                <span x-text="'Pet ' + (petIndex + 1)"></span>
-                                <template x-if="pet.breed">
-                                  <span x-text="' | ' + pet.breed"></span>
-                                </template>
+                                <span x-text="[pet.species, pet.breed].filter(Boolean).join(' · ') || 'Species not specified'"></span>
                               </p>
                             </div>
                           </div>
 
-                          <label class="payment-size-select">
-                            <span class="block text-xs text-slate-500">Pet size · Clinic confirmed</span>
-                            <select x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" aria-label="Pet size">
+                          <div class="payment-size-select">
+                            <div class="flex items-center gap-2">
+                              <span class="text-xs text-slate-500" x-text="pet.confirmedSize ? 'Clinic size:' : 'Pet size:'"></span>
+                              <strong class="text-sm text-[#2f4b66]" x-text="pet.sizeLabel || 'Not specified'"></strong>
+                              <button type="button" @click="pet.isSizeEditing = !pet.isSizeEditing" class="text-xs font-semibold text-[#315b7e] hover:underline" x-text="pet.isSizeEditing ? 'Done' : 'Edit'"></button>
+                            </div>
+                            <select x-show="pet.isSizeEditing" x-model="pet.sizeKey" :value="pet.sizeKey" x-effect="$el.value = pet.sizeKey" @change="updatePaymentPetSize(pet)" :aria-label="'Clinic size for ' + pet.name">
                               <template x-for="option in getPaymentSizeOptions(pet)" :key="option.value">
                                 <option :value="option.value" :selected="option.value === pet.sizeKey" x-text="option.label"></option>
                               </template>
                             </select>
-                          </label>
+                          </div>
                         </div>
 
                         <template x-if="pet.lines.length === 0">
@@ -1891,13 +1896,36 @@
                 </section>
 
                 <div class="payment-total-due">
-                  <span>Total Amount Due</span>
+                  <div>
+                    <span class="block text-xs font-bold uppercase tracking-wider">Total Due</span>
+                    <span class="mt-1 block text-xs font-medium" x-text="paymentModal.petBreakdown.length + (paymentModal.petBreakdown.length === 1 ? ' pet' : ' pets') + ' · ' + paymentLineCount + (paymentLineCount === 1 ? ' service' : ' services')"></span>
+                  </div>
                   <strong x-text="formatPeso(paymentTotalDue)"></strong>
                 </div>
 
-                <div x-show="paymentTotalDue > 0">
-                  <label class="mb-1 block text-xs font-semibold text-slate-500">Amount Paid (&#8369;)</label>
+                <section class="space-y-3 border-t border-slate-200 pt-4">
+                  <h5 class="text-xs font-bold uppercase tracking-widest text-[#2f4b66]">Payment</h5>
+                  <div>
+                    <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Payment Method</p>
+                    <div class="space-y-2">
+                      <label class="flex items-center gap-3 rounded-xl border border-[#bad4e8] bg-[#f2f8fc] px-4 py-3 text-sm font-semibold text-[#2f4b66]">
+                        <input type="radio" name="grooming-payment-method" value="cash" checked class="accent-[#315b7e]" />
+                        Cash
+                      </label>
+                      <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-400" aria-disabled="true">
+                        <input type="radio" name="grooming-payment-method" disabled aria-label="QR Ph coming soon" />
+                        <span>QR Ph</span><span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500">Coming soon</span>
+                      </div>
+                      <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-400" aria-disabled="true">
+                        <input type="radio" name="grooming-payment-method" disabled aria-label="Online Payment coming soon" />
+                        <span>Online Payment</span><span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-500">Coming soon</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                  <label for="grooming-cash-received" class="mb-1 block text-xs font-semibold text-slate-600">Cash Received</label>
                   <input
+                    id="grooming-cash-received"
                     type="number"
                     x-model="paymentModal.amountPaid"
                     :min="paymentTotalDue"
@@ -1906,48 +1934,26 @@
                     placeholder="0.00"
                     x-effect="enforcePaymentAmountLimit()"
                     @input="enforcePaymentAmountLimit($event)"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 outline-none focus:border-[#16a34a]"
+                    class="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 outline-none focus:border-[#315b7e]"
                   />
-                </div>
+                  <p x-show="paymentModal.amountPaid !== '' && Number(paymentModal.amountPaid) < paymentTotalDue" class="mt-1 text-xs text-red-600">Cash received is less than the amount due.</p>
+                  </div>
 
-                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  <p class="font-bold">No payment required</p>
-                  <p class="mt-1">This ₱0.00 completion will be recorded without cash tender or change.</p>
-                </div>
-
-                <div class="rounded-xl border px-4 py-3"
-                  :class="paymentChange >= 0 ? 'border-[#86efac] bg-[#f0fdf4]' : 'border-red-200 bg-red-50'">
-                  <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Change</p>
-                  <p class="payment-change-amount text-2xl"
-                    :class="paymentChange >= 0 ? 'text-[#16a34a]' : 'text-red-500'"
-                    x-text="paymentChange >= 0 ? formatPeso(paymentChange) : '-'"></p>
-                </div>
-
-                <div x-show="paymentTotalDue > 0">
-                  <label class="mb-1 block text-xs font-semibold text-slate-500">Payment Method</label>
-                  <select
-                    x-model="paymentModal.paymentMethod"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-[#16a34a] bg-white"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="gcash">GCash</option>
-                    <option value="maya">Maya</option>
-                    <option value="card">Card</option>
-                    <option value="others">Others</option>
-                  </select>
-                </div>
-                <div x-show="paymentTotalDue === 0" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p class="text-xs font-semibold text-slate-500">Completion method</p>
-                  <p class="mt-1 text-sm font-bold text-slate-700">No payment required</p>
-                </div>
+                  <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">Change</p>
+                    <p class="payment-change-amount text-2xl text-[#2f4b66]" x-text="formatPeso(Math.max(0, paymentChange))"></p>
+                  </div>
+                </section>
 
                 <div>
                   <label class="mb-1 block text-xs font-semibold text-slate-500">Notes <span class="font-normal text-slate-400">(optional)</span></label>
                   <input
                     type="text"
                     x-model="paymentModal.notes"
-                    placeholder="e.g. reference number, remarks"
-                    class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 outline-none focus:border-[#16a34a]"
+                    maxlength="500"
+                    @input="clearPaymentError()"
+                    placeholder="Add optional remarks"
+                    class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 outline-none focus:border-[#315b7e]"
                   />
                 </div>
 
@@ -1987,18 +1993,53 @@
             <div class="receipt-modal-card w-full bg-white shadow-2xl overflow-hidden">
               <header class="receipt-success-header">
                 <div class="receipt-success-icon">
-                  <i data-lucide="check-circle-2" class="h-7 w-7"></i>
+                  <i data-lucide="check" class="h-6 w-6"></i>
                 </div>
-                <div class="min-w-0">
-                  <p class="receipt-success-kicker" x-text="receiptModal.isEarlyPayment ? 'Early payment recorded' : 'Ready for pickup'"></p>
-                  <h4 class="receipt-success-title">Payment Successful</h4>
-                  <p class="receipt-success-ref">
-                    Ref: <span x-text="receiptModal.bookingReference"></span>
-                  </p>
-                </div>
+                <h4 class="receipt-success-title">Payment recorded</h4>
+                <p class="receipt-success-amount" x-text="formatPeso(receiptModal.finalPrice)"></p>
+                <p class="receipt-success-context" x-text="[receiptModal.isEarlyPayment ? 'Early payment' : '', receiptModal.ownerName, receiptModal.petName].filter(Boolean).join(' · ')"></p>
               </header>
 
-              <div class="receipt-modal-scroll px-4 py-5 sm:px-5">
+              <div class="receipt-modal-scroll receipt-success-body">
+                <section class="receipt-success-section">
+                  <h5>Payment Details</h5>
+                  <dl class="receipt-success-details">
+                    <div><dt>Payment method</dt><dd x-text="receiptModal.paymentMethod"></dd></div>
+                    <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Cash received</dt><dd x-text="formatPeso(receiptModal.amountPaid)"></dd></div>
+                    <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Change</dt><dd x-text="formatPeso(receiptModal.change)"></dd></div>
+                    <div><dt>Paid at</dt><dd x-text="receiptModal.paidAt"></dd></div>
+                    <div x-show="receiptModal.notes"><dt>Notes</dt><dd x-text="receiptModal.notes"></dd></div>
+                  </dl>
+                </section>
+
+                <section class="receipt-success-section">
+                  <h5>Payment For</h5>
+                  <div class="receipt-success-pets">
+                    <template x-for="pet in receiptModal.pets" :key="'success-' + pet.id">
+                      <div class="receipt-success-pet">
+                        <p class="receipt-success-pet-name" x-text="pet.name"></p>
+                        <template x-for="line in pet.lines" :key="line.id">
+                          <div class="receipt-success-service">
+                            <span x-text="line.name"></span>
+                            <strong x-text="formatPeso(line.price)"></strong>
+                          </div>
+                        </template>
+                        <div x-show="pet.lines.length > 1 || receiptModal.pets.length > 1" class="receipt-success-subtotal">
+                          <span>Subtotal</span><strong x-text="formatPeso(pet.subtotal)"></strong>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </section>
+
+                <div class="receipt-success-reference">
+                  <span>Reference</span>
+                  <strong x-text="receiptModal.bookingReference"></strong>
+                </div>
+              </div>
+
+              <!-- Shared detailed source for the printed receipt in both payment flows. -->
+              <div class="receipt-print-source" aria-hidden="true">
                 <section
                   id="paymentReceiptSummary"
                   class="space-y-4"
@@ -2137,7 +2178,7 @@
                         <div class="receipt-payment-columns">
                           <div class="space-y-4">
                             <div>
-                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Amount Paid</p>
+                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Cash Received</p>
                               <p class="receipt-price mt-2 text-lg" x-text="formatPeso(receiptModal.amountPaid)"></p>
                             </div>
                             <div>
@@ -2155,6 +2196,10 @@
                               <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payment Time</p>
                               <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.paidAt"></p>
                             </div>
+                            <div x-show="receiptModal.notes">
+                              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</p>
+                              <p class="mt-2 text-sm text-slate-700" x-text="receiptModal.notes"></p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2170,7 +2215,7 @@
                   class="receipt-print-button flex-1 rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 flex items-center justify-center gap-2"
                 >
                   <i data-lucide="printer" class="h-4 w-4"></i>
-                  Print
+                  Print Receipt
                 </button>
                 <button
                   type="button"
@@ -2484,6 +2529,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-size-confirmation-20260915"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-payment-success-20260925"></script>
   </body>
 </html>

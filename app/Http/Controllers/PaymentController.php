@@ -25,7 +25,7 @@ class PaymentController extends Controller
         $data = $request->validate([
             'final_price' => 'required|numeric|decimal:0,2|min:0',
             'amount_paid' => 'nullable|numeric|decimal:0,2|min:0',
-            'payment_method' => 'nullable|in:cash,gcash,maya,card,others',
+            'payment_method' => 'nullable|in:cash',
             'notes' => 'nullable|string|max:500',
             'service_prices' => 'nullable|array',
             'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',

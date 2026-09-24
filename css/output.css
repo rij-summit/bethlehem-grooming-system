@@ -600,6 +600,40 @@ video {
   }
 }
 
+.container {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .container {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .container {
+    max-width: 1536px;
+  }
+}
+
 .ph-icon {
   display: inline-block;
   flex: none;
@@ -2128,6 +2162,11 @@ video {
   border-color: rgb(186 208 227 / var(--tw-border-opacity, 1));
 }
 
+.border-\[\#bad4e8\] {
+  --tw-border-opacity: 1;
+  border-color: rgb(186 212 232 / var(--tw-border-opacity, 1));
+}
+
 .border-\[\#bfd2e4\] {
   --tw-border-opacity: 1;
   border-color: rgb(191 210 228 / var(--tw-border-opacity, 1));
@@ -2337,11 +2376,6 @@ video {
   border-color: rgb(255 255 255 / 0.7);
 }
 
-.bg-\[\#16a34a\] {
-  --tw-bg-opacity: 1;
-  background-color: rgb(22 163 74 / var(--tw-bg-opacity, 1));
-}
-
 .bg-\[\#2a3b4c\] {
   --tw-bg-opacity: 1;
   background-color: rgb(42 59 76 / var(--tw-bg-opacity, 1));
@@ -2441,6 +2475,11 @@ video {
   background-color: rgb(229 168 0 / 0.3);
 }
 
+.bg-\[\#e8f2fa\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(232 242 250 / var(--tw-bg-opacity, 1));
+}
+
 .bg-\[\#eaf3fb\] {
   --tw-bg-opacity: 1;
   background-color: rgb(234 243 251 / var(--tw-bg-opacity, 1));
@@ -2471,9 +2510,9 @@ video {
   background-color: rgb(238 247 255 / var(--tw-bg-opacity, 1));
 }
 
-.bg-\[\#f0fdf4\] {
+.bg-\[\#f2f8fc\] {
   --tw-bg-opacity: 1;
-  background-color: rgb(240 253 244 / var(--tw-bg-opacity, 1));
+  background-color: rgb(242 248 252 / var(--tw-bg-opacity, 1));
 }
 
 .bg-\[\#f4f8fb\] {
@@ -3584,11 +3623,6 @@ video {
   color: rgb(4 120 87 / var(--tw-text-opacity, 1));
 }
 
-.text-emerald-800 {
-  --tw-text-opacity: 1;
-  color: rgb(6 95 70 / var(--tw-text-opacity, 1));
-}
-
 .text-gray-400 {
   --tw-text-opacity: 1;
   color: rgb(156 163 175 / var(--tw-text-opacity, 1));
@@ -4406,11 +4440,6 @@ video {
   --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-}
-
-.focus\:border-\[\#16a34a\]:focus {
-  --tw-border-opacity: 1;
-  border-color: rgb(22 163 74 / var(--tw-border-opacity, 1));
 }
 
 .focus\:border-\[\#315b7e\]:focus {

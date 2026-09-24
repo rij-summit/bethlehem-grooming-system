@@ -10,6 +10,38 @@ use Tests\TestCase;
 
 class PaymentAmountValidationTest extends TestCase
 {
+    #[DataProvider('manualOnlineMethods')]
+    public function test_new_grooming_payments_reject_manual_online_methods(
+        string $action,
+        string $method,
+    ): void {
+        $request = Request::create('/api/admin/bookings/1/'.$action, 'POST', [
+            'final_price' => 500,
+            'amount_paid' => 500,
+            'payment_method' => $method,
+        ]);
+
+        try {
+            $controllerMethod = $action === 'pay' ? 'store' : 'payNow';
+            (new PaymentController)->{$controllerMethod}($request, 1);
+            $this->fail('The payment method should have failed validation.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('payment_method', $exception->errors());
+        }
+    }
+
+    public static function manualOnlineMethods(): array
+    {
+        $cases = [];
+        foreach (['pay', 'pay-now'] as $action) {
+            foreach (['gcash', 'maya', 'card', 'others'] as $method) {
+                $cases["{$action} {$method}"] = [$action, $method];
+            }
+        }
+
+        return $cases;
+    }
+
     #[DataProvider('paymentsAboveMaximum')]
     public function test_it_rejects_a_payment_above_the_total_based_maximum(
         float $totalDue,

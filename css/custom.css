@@ -1224,47 +1224,132 @@ body.customer-detail-modal-open {
 
 .receipt-success-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1rem;
   flex: 0 0 auto;
-  background: #16a34a;
-  color: #ffffff;
-  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  text-align: center;
+  padding: 1.5rem 1.5rem 1.25rem;
 }
 
 .receipt-success-icon {
   display: inline-flex;
-  width: 3rem;
-  height: 3rem;
+  width: 2.75rem;
+  height: 2.75rem;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.receipt-success-kicker {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .receipt-success-title {
-  margin-top: 0.15rem;
-  color: #ffffff;
-  font-size: 1.35rem;
+  margin-top: 0.6rem;
+  color: #2f4b66;
+  font-size: 1.25rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
-.receipt-success-ref {
-  margin-top: 0.3rem;
-  color: rgba(255, 255, 255, 0.82);
+.receipt-success-amount {
+  margin-top: 0.4rem;
+  color: #2f4b66;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.receipt-success-context {
+  margin-top: 0.5rem;
+  color: #64748b;
   font-size: 0.85rem;
-  line-height: 1.3;
+  line-height: 1.4;
+}
+
+.receipt-success-body {
+  padding: 0 1.5rem 1.25rem;
+}
+
+.receipt-success-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.receipt-success-section h5 {
+  margin-bottom: 0.7rem;
+  color: #2f4b66;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.receipt-success-details,
+.receipt-success-pets {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.receipt-success-details > div,
+.receipt-success-service,
+.receipt-success-subtotal {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.receipt-success-details dd,
+.receipt-success-service strong,
+.receipt-success-subtotal strong {
+  margin: 0;
+  color: #2f4b66;
+  font-weight: 700;
+  text-align: right;
+}
+
+.receipt-success-pet + .receipt-success-pet {
+  padding-top: 0.7rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.receipt-success-pet-name {
+  margin-bottom: 0.35rem;
+  color: #2f4b66;
+  font-weight: 700;
+}
+
+.receipt-success-service + .receipt-success-service {
+  margin-top: 0.35rem;
+}
+
+.receipt-success-subtotal {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.receipt-success-reference {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1rem;
+  color: #64748b;
+  font-size: 0.83rem;
+}
+
+.receipt-success-reference strong {
+  color: #2f4b66;
+  font-weight: 700;
+  text-align: right;
+}
+
+.receipt-print-source {
+  display: none;
 }
 
 .receipt-detail-card {
@@ -1394,8 +1479,8 @@ body.customer-detail-modal-open {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #dcfce7;
-  color: #15803d;
+  background: #e8f2fa;
+  color: #315b7e;
 }
 
 .payment-pet-name {
@@ -1420,6 +1505,7 @@ body.customer-detail-modal-open {
 }
 
 .payment-size-select select {
+  margin-top: 0.5rem;
   width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -1433,8 +1519,8 @@ body.customer-detail-modal-open {
 
 .payment-size-select select:focus,
 .payment-price-input input:focus {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.16);
+  border-color: #315b7e;
+  box-shadow: 0 0 0 3px rgba(49, 91, 126, 0.16);
 }
 
 .payment-empty-lines {
@@ -1475,7 +1561,7 @@ body.customer-detail-modal-open {
 
 .payment-service-hint {
   margin-top: 0.35rem;
-  color: #15803d;
+  color: #315b7e;
   font-size: 0.76rem;
   font-weight: 700;
 }
@@ -1523,7 +1609,7 @@ body.customer-detail-modal-open {
 }
 
 .payment-pet-subtotal strong {
-  color: #16a34a;
+  color: #2f4b66;
   font-weight: 700;
 }
 
@@ -1533,8 +1619,9 @@ body.customer-detail-modal-open {
   justify-content: space-between;
   gap: 1rem;
   border-radius: 8px;
-  background: #168246;
-  color: #ffffff;
+  border: 1px solid #c7def0;
+  background: #e8f2fa;
+  color: #2f4b66;
   padding: 1rem;
   font-size: 0.95rem;
   font-weight: 700;
@@ -2466,11 +2553,11 @@ body.customer-detail-modal-open {
 
 /* ----- Confirm Payment Button ----- */
 .btn-confirm-payment {
-  background-color: #16a34a;
+  background-color: #315b7e;
   color: #ffffff;
 }
 .btn-confirm-payment:hover {
-  background-color: #15803d;
+  background-color: #284b69;
 }
 
 /* ----- Awaiting Payment Badge ----- */
