@@ -1333,6 +1333,25 @@ body.customer-detail-modal-open {
   border-top: 1px solid #e2e8f0;
 }
 
+.receipt-success-group + .receipt-success-group,
+.receipt-success-summary {
+  margin-top: 1rem;
+}
+
+.receipt-success-summary {
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.receipt-success-total {
+  color: #2f4b66;
+  font-weight: 800;
+}
+
+.receipt-success-total strong {
+  font-weight: 800;
+}
+
 .receipt-success-reference {
   display: flex;
   justify-content: space-between;

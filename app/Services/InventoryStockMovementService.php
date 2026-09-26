@@ -104,7 +104,8 @@ class InventoryStockMovementService
                 abort(422, "Insufficient stock for \"{$item->item_name}\". Available: {$item->quantity_on_hand} {$item->unit}.");
             }
 
-            if ($enforceBatchAvailability && in_array($entry['reason'], ['sold', 'used'], true)) {
+            if ($enforceBatchAvailability && in_array($entry['reason'], ['sold', 'used'], true)
+                && ! in_array($item->category, ['pet_shop', 'miscellaneous'], true)) {
                 $balance = $this->batchBalances->forItem((int) $item->item_id);
 
                 if ((float) $balance['unexpired_quantity'] + 0.00001 < (float) $entry['quantity']) {

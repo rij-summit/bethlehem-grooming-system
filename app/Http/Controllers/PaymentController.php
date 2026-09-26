@@ -10,6 +10,7 @@ use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingPaymentSettlementService;
+use App\Services\GroomingProductSaleService;
 use App\Support\PaymentAmountLimit;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -33,6 +34,9 @@ class PaymentController extends Controller
             'pet_sizes' => 'nullable|array',
             'pet_sizes.*.booking_pet_id' => 'required_with:pet_sizes|integer',
             'pet_sizes.*.size' => 'required_with:pet_sizes|in:small,medium,large,extra_large',
+            'products' => 'nullable|array',
+            'products.*.item_id' => 'required|integer|distinct|exists:inventory_items,item_id',
+            'products.*.quantity' => 'required|integer|min:1|max:99999999',
         ]);
 
         if ((float) $data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
@@ -181,7 +185,10 @@ class PaymentController extends Controller
                 $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
 
                 $summary = $this->paymentReadiness()->summarize($booking, true);
-                $serverTotal = (string) $summary['final_booking_total'];
+                [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
+                $serverTotal = $this->paymentReadiness()->centsToMoney(
+                    $this->paymentReadiness()->moneyToCents($summary['final_booking_total']) + $productCents,
+                );
                 $this->validateSubmittedTotal($data['final_price'], $serverTotal);
                 [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
                     $data,
@@ -195,6 +202,9 @@ class PaymentController extends Controller
                     $notes,
                     $request->user()?->user_id,
                 );
+                if ($productLines !== []) {
+                    $this->productSales()->record($payment, $request->user(), $productLines);
+                }
 
                 $booking->update([
                     'status' => 'released',
@@ -211,7 +221,7 @@ class PaymentController extends Controller
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
 
-                return compact('booking', 'payment', 'summary');
+                return compact('booking', 'payment', 'summary', 'productLines');
             });
         } catch (UniqueConstraintViolationException) {
             return response()->json([
@@ -237,6 +247,7 @@ class PaymentController extends Controller
             'payment_method_label' => ucfirst((string) $payment->payment_method),
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
             'payment_summary' => $result['summary'],
+            'product_addons' => $this->formatProductLines($result['productLines']),
         ]);
     }
 
@@ -283,7 +294,8 @@ class PaymentController extends Controller
                     return $this->transactionError('Pay Now requires a positive booking total.', 422);
                 }
 
-                $serverTotal = $this->paymentReadiness()->centsToMoney($serverTotalCents);
+                [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
+                $serverTotal = $this->paymentReadiness()->centsToMoney($serverTotalCents + $productCents);
                 $this->validateSubmittedTotal($data['final_price'], $serverTotal);
                 [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
                     $data,
@@ -297,6 +309,9 @@ class PaymentController extends Controller
                     $notes,
                     $request->user()?->user_id,
                 );
+                if ($productLines !== []) {
+                    $this->productSales()->record($payment, $request->user(), $productLines);
+                }
                 $allPetsFinished = $bookingPets->isNotEmpty()
                     && $bookingPets->every(fn (BookingPet $pet) => $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED
                         && $pet->grooming_end_time !== null
@@ -320,7 +335,7 @@ class PaymentController extends Controller
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
 
-                return compact('booking', 'payment', 'allPetsFinished', 'remainingPets');
+                return compact('booking', 'payment', 'allPetsFinished', 'remainingPets', 'productLines');
             });
         } catch (UniqueConstraintViolationException) {
             return response()->json([
@@ -348,6 +363,7 @@ class PaymentController extends Controller
             'all_pets_finished' => $result['allPetsFinished'],
             'remaining_pets' => $result['remainingPets'],
             'booking_status' => $result['booking']->status,
+            'product_addons' => $this->formatProductLines($result['productLines']),
         ]);
     }
 
@@ -409,7 +425,7 @@ class PaymentController extends Controller
             return response()->json(['success' => false, 'message' => 'Please provide a valid transaction year.'], 422);
         }
 
-        $query = Payment::with(['booking.user'])
+        $query = Payment::with(['booking.user', 'products'])
             ->where('payment_status', 'paid')
             ->orderBy('paid_at', 'desc');
         $this->applyPeriodFilter($query, $period, $date, $week, $month, $year);
@@ -498,6 +514,7 @@ class PaymentController extends Controller
         $petName = $pets->pluck('pet_name')->filter()->implode(', ') ?: '—';
         $serviceLabel = $pets->flatMap(fn (array $pet) => $pet['service_breakdown'] ?? [])
             ->pluck('label')->filter()->unique()->implode(', ') ?: 'Grooming';
+        $productTotal = (float) $payment->products->sum('subtotal');
 
         return [
             'id' => $payment->getKey(),
@@ -516,11 +533,22 @@ class PaymentController extends Controller
             'paidAtFormatted' => $payment->paid_at?->format('g:i A') ?? '—',
             'dateKey' => $payment->paid_at?->toDateString() ?? 'unknown',
             'paymentSummary' => $summary,
+            'groomingServicesTotal' => round((float) $payment->total_amount - $productTotal, 2),
+            'productAddonsTotal' => $productTotal,
+            'productAddons' => $payment->products->map(fn ($line) => [
+                'itemName' => $line->item_name,
+                'quantity' => $line->quantity,
+                'priceAtSale' => (float) $line->price_at_sale,
+                'subtotal' => (float) $line->subtotal,
+            ])->values(),
         ];
     }
 
     private function validateSubmittedTotal(string|int|float $submitted, string $serverTotal): void
     {
+        if ((float) $serverTotal > PaymentLimitExceededException::MAX_VALUE) {
+            throw new PaymentLimitExceededException('final price');
+        }
         if ($this->paymentReadiness()->moneyToCents($submitted)
             !== $this->paymentReadiness()->moneyToCents($serverTotal)) {
             throw ValidationException::withMessages([
@@ -597,5 +625,19 @@ class PaymentController extends Controller
     private function paymentSettlement(): GroomingPaymentSettlementService
     {
         return app(GroomingPaymentSettlementService::class);
+    }
+
+    private function formatProductLines(array $lines): array
+    {
+        return collect($lines)->map(fn ($line) => [
+            'itemName' => $line['item']->item_name,
+            'quantity' => $line['quantity'],
+            'subtotal' => $line['subtotalCents'] / 100,
+        ])->all();
+    }
+
+    private function productSales(): GroomingProductSaleService
+    {
+        return app(GroomingProductSaleService::class);
     }
 }

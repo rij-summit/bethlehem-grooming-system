@@ -370,6 +370,7 @@ function adminArchive() {
     },
 
     getServicesAvailedTotal(booking = this.detailsBooking) {
+      const productTotal = (booking?.productAddons ?? []).reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
       const paymentTotal = Number(
         booking?.paidAmount ??
         booking?.paid_amount ??
@@ -377,7 +378,7 @@ function adminArchive() {
         booking?.payment?.final_price,
       );
 
-      if (Number.isFinite(paymentTotal) && paymentTotal > 0) return paymentTotal;
+      if (Number.isFinite(paymentTotal) && paymentTotal > 0) return paymentTotal - productTotal;
 
       const services = Array.isArray(booking?.services) ? booking.services : [];
       const serviceAmounts = services

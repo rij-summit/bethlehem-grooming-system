@@ -572,6 +572,13 @@ function adminDashboard() {
       isEarlyPayment: false,
       finalPrice: "",
       petBreakdown: [],
+      products: [],
+      showProductSearch: false,
+      productQuery: "",
+      productResults: [],
+      productSearchError: "",
+      scannerActive: false,
+      _scanner: null,
       amountPaid: "",
       paymentMethod: "cash",
       notes: "",
@@ -588,6 +595,9 @@ function adminDashboard() {
       appointmentDate: "",
       appointmentTime: "",
       pets: [],
+      products: [],
+      groomingSubtotal: 0,
+      productsSubtotal: 0,
       finalPrice: 0,
       amountPaid: 0,
       change: 0,
@@ -3179,10 +3189,18 @@ function adminDashboard() {
     // ── Payment ───────────────────────────────────────────────────────────────
 
     get paymentTotalDue() {
+      return this.paymentServicesTotal + this.paymentProductsTotal;
+    },
+
+    get paymentServicesTotal() {
       return this.paymentModal.petBreakdown.reduce(
         (sum, pet) => sum + this.paymentPetSubtotal(pet),
         0,
       );
+    },
+
+    get paymentProductsTotal() {
+      return this.paymentModal.products.reduce((sum, line) => sum + line.quantity * line.price, 0);
     },
 
     get paymentLineCount() {
@@ -3229,6 +3247,13 @@ function adminDashboard() {
         isEarlyPayment,
         finalPrice: "",
         petBreakdown,
+        products: [],
+        showProductSearch: false,
+        productQuery: "",
+        productResults: [],
+        productSearchError: "",
+        scannerActive: false,
+        _scanner: null,
         amountPaid: "",
         paymentMethod: "cash",
         notes: "",
@@ -3239,10 +3264,106 @@ function adminDashboard() {
     },
 
     closePaymentModal() {
+      this.closePaymentScanner();
       this.paymentModal = {
         open: false, booking: null, isEarlyPayment: false,
-        finalPrice: "", petBreakdown: [], amountPaid: "", paymentMethod: "cash", notes: "", busy: false, error: "",
+        finalPrice: "", petBreakdown: [], products: [], showProductSearch: false,
+        productQuery: "", productResults: [], productSearchError: "", scannerActive: false, _scanner: null,
+        amountPaid: "", paymentMethod: "cash", notes: "", busy: false, error: "",
       };
+    },
+
+    openPaymentScanner() {
+      this.paymentModal.productSearchError = "";
+      ProductForm.openBarcodeScanner(this.paymentModal, "grooming-payment-barcode-reader", (decoded) => {
+        if (!this.paymentModal.scannerActive) return;
+        this.closePaymentScanner();
+        this.scanPaymentBarcode(decoded);
+      });
+    },
+
+    closePaymentScanner() {
+      if (this.paymentModal?._scanner) ProductForm.closeBarcodeScanner(this.paymentModal);
+      if (this.paymentModal) this.paymentModal.scannerActive = false;
+    },
+
+    async scanPaymentBarcode(decoded) {
+      if (!this.paymentModal.open) return;
+      const barcode = ProductForm.normalizeBarcode(decoded);
+      if (!barcode) {
+        this.paymentModal.productSearchError = "No valid barcode was scanned.";
+        return;
+      }
+      this.paymentModal.productQuery = barcode;
+      this.paymentModal.productResults = [];
+      clearTimeout(this._paymentProductSearchTimer);
+      try {
+        const response = await InventoryAPI.findByBarcode(barcode);
+        if (!this.paymentModal.open || this.paymentModal.productQuery !== barcode) return;
+        if (!this.isEligiblePaymentProduct(response.data)) {
+          this.paymentModal.productSearchError = "This product is unavailable for Grooming add-ons.";
+          return;
+        }
+        this.addPaymentProduct(response.data);
+      } catch {
+        if (this.paymentModal.open) this.paymentModal.productSearchError = "No available product matches this barcode.";
+      }
+    },
+
+    isEligiblePaymentProduct(item) {
+      return item?.is_active && !["medicine", "vaccine"].includes(item.category)
+        && item.selling_price !== null && Number(item.saleable_quantity) >= 1;
+    },
+
+    searchPaymentProducts() {
+      const query = this.paymentModal.productQuery.trim();
+      clearTimeout(this._paymentProductSearchTimer);
+      this.paymentModal.productSearchError = "";
+      if (query.length < 2) {
+        this.paymentModal.productResults = [];
+        return;
+      }
+      this._paymentProductSearchTimer = setTimeout(async () => {
+        try {
+          const response = await InventoryAPI.searchItems(query, false, "grooming");
+          if (this.paymentModal.productQuery.trim() !== query || !this.paymentModal.open) return;
+          this.paymentModal.productResults = (response.data || []).filter((item) => this.isEligiblePaymentProduct(item));
+        } catch (error) {
+          this.paymentModal.productResults = [];
+          this.paymentModal.productSearchError = error.message || "Product search failed.";
+        }
+      }, 300);
+    },
+
+    addPaymentProduct(item) {
+      if (!this.isEligiblePaymentProduct(item)) return;
+      const stock = Math.floor(Number(item.saleable_quantity));
+      const existing = this.paymentModal.products.find((line) => line.item_id === item.item_id);
+      if (existing) {
+        existing.stock = stock;
+        if (existing.quantity >= stock) {
+          this.paymentModal.productSearchError = `${item.item_name} has no more available stock.`;
+          return;
+        }
+        existing.quantity += 1;
+      } else {
+        if (stock < 1) return;
+        this.paymentModal.products.push({ item_id: item.item_id, name: item.item_name,
+          unit: item.unit, price: Number(item.selling_price), stock, quantity: 1 });
+      }
+      this.paymentModal.productQuery = "";
+      this.paymentModal.productResults = [];
+      this.paymentModal.error = "";
+    },
+
+    changePaymentProductQuantity(line, change) {
+      line.quantity = Math.max(1, Math.min(line.stock, line.quantity + change));
+      this.paymentModal.error = "";
+    },
+
+    removePaymentProduct(index) {
+      this.paymentModal.products.splice(index, 1);
+      this.paymentModal.error = "";
     },
 
     buildPaymentBreakdown(booking, paymentOptions = {}) {
@@ -3707,6 +3828,7 @@ function adminDashboard() {
           notes:           notes || null,
           service_prices:  servicePrices,
           pet_sizes:       petSizes,
+          products:        this.paymentModal.products.map((line) => ({ item_id: line.item_id, quantity: line.quantity })),
         };
         const res = isEarlyPayment
           ? await API.payNow(booking.id, payload)
@@ -3723,6 +3845,13 @@ function adminDashboard() {
           ),
         ].join(", ");
 
+        const receiptProducts = res.product_addons || [];
+        const finalPrice = Number(res.final_price ?? fp);
+        const productsSubtotal = receiptProducts.reduce(
+          (sum, line) => sum + Math.round(Number(line.subtotal) * 100), 0,
+        ) / 100;
+        const groomingSubtotal = (Math.round(finalPrice * 100) - Math.round(productsSubtotal * 100)) / 100;
+
         this.closePaymentModal();
         this.receiptModal = {
           open: true,
@@ -3737,7 +3866,10 @@ function adminDashboard() {
           appointmentDate: this.formatReceiptValue(booking.appointmentDate, "No date selected"),
           appointmentTime: this.formatReceiptValue(booking.appointmentTime, "No time selected"),
           pets:          receiptPets,
-          finalPrice:    Number(res.final_price ?? fp),
+          products:      receiptProducts,
+          groomingSubtotal,
+          productsSubtotal,
+          finalPrice,
           amountPaid:    Number(res.amount_paid ?? ap),
           change:        res.change ?? (ap - fp),
           paymentMethod: res.payment_method_label ?? (res.payment_method === "cash" ? "Cash" : res.payment_method ?? paymentMethod),
@@ -3765,7 +3897,8 @@ function adminDashboard() {
       this.receiptModal = {
         open: false, bookingReference: "", ownerName: "", contactNumber: "",
         petName: "", serviceLabel: "", appointmentDate: "", appointmentTime: "",
-        pets: [], finalPrice: 0, amountPaid: 0, change: 0,
+        pets: [], products: [], groomingSubtotal: 0, productsSubtotal: 0,
+        finalPrice: 0, amountPaid: 0, change: 0,
         paymentMethod: "", notes: "", paidAt: "", isEarlyPayment: false,
       };
     },

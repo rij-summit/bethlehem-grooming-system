@@ -56,6 +56,9 @@ class InventoryController extends Controller
             'selling_price'    => $item->selling_price,
             'quantity_on_hand' => $item->quantity_on_hand,
             'unexpired_quantity' => $balance['unexpired_quantity'],
+            'saleable_quantity' => in_array($item->category, ['pet_shop', 'miscellaneous'], true)
+                ? $item->quantity_on_hand
+                : min($item->quantity_on_hand, $balance['unexpired_quantity']),
             'expired_quantity' => $balance['expired_quantity'],
             'expiry_unknown_quantity' => $balance['unknown_expiry_quantity'],
             'historically_unsafe_quantity' => $balance['historically_unsafe_stock_out_quantity'],
@@ -138,6 +141,9 @@ class InventoryController extends Controller
             'expiry_date'           => $t->expiry_date?->format('Y-m-d'),
             'reference_type'        => $t->reference_type,
             'reference_id'          => $t->reference_id,
+            'source_label'          => $t->reference_type === 'grooming'
+                ? 'Grooming · '.($t->groomingBooking?->booking_reference ?? $t->reference_id)
+                : ($t->reference_type === 'pos' ? 'POS · #'.$t->reference_id : null),
             'notes'                 => $t->notes,
             'performed_by'          => $t->performed_by,
             'performed_by_name'     => $t->performedBy
@@ -297,23 +303,30 @@ class InventoryController extends Controller
 
         $q = trim($request->query('q', ''));
         $includeInactive = $request->boolean('include_inactive');
+        $forGrooming = $request->query('sale_context') === 'grooming';
 
         if (strlen($q) < 2) {
             return response()->json(['data' => []]);
         }
 
         $items = InventoryItem::query()
-            ->when(! $includeInactive, fn ($query) => $query->where('is_active', 1))
+            ->when($forGrooming || ! $includeInactive, fn ($query) => $query->where('is_active', 1))
+            ->when($forGrooming, fn ($query) => $query->whereNotIn('category', ['medicine', 'vaccine'])
+                ->whereNotNull('selling_price')->where('quantity_on_hand', '>=', 1))
             ->where(function ($query) use ($q) {
                 $query->where('item_name', 'like', "%{$q}%")
                       ->orWhere('barcode', 'like', "%{$q}%");
             })
             ->orderBy('item_name')
-            ->limit(10)
+            ->limit($forGrooming ? 50 : 10)
             ->get();
 
+        $formatted = $this->formatItems($items);
+
         return response()->json([
-            'data' => $this->formatItems($items),
+            'data' => $forGrooming
+                ? $formatted->filter(fn ($item) => (float) $item['saleable_quantity'] >= 1)->take(10)->values()
+                : $formatted,
         ]);
     }
 
@@ -408,7 +421,7 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $query = InventoryTransaction::with(['item', 'performedBy'])
+        $query = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking'])
                      ->orderBy('created_at', 'desc');
 
         if ($request->filled('item_id')) {
@@ -513,7 +526,7 @@ class InventoryController extends Controller
         $expiryCount = $this->currentExpiryAlerts()->count();
 
         $recentTransactionsPage = max(1, $request->integer('page', 1));
-        $recentTransactions = InventoryTransaction::with(['item', 'performedBy'])
+        $recentTransactions = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking'])
             ->orderBy('created_at', 'desc')
             ->paginate(10, ['*'], 'page', $recentTransactionsPage);
 

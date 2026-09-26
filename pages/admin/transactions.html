@@ -349,6 +349,21 @@
                               </span>
                             </template>
                           </div>
+                          <div class="mt-2 text-xs text-slate-600">
+                            <p x-text="'Grooming Services — ' + formatPeso(tx.groomingServicesTotal)"></p>
+                            <p x-show="tx.productAddons?.length" x-text="'Product Add-ons — ' + formatPeso(tx.productAddonsTotal)"></p>
+                          </div>
+                          <details class="mt-2 text-xs text-slate-600">
+                            <summary class="cursor-pointer font-semibold text-[#315b7e]">View payment details</summary>
+                            <div class="mt-2 space-y-2 rounded-xl bg-slate-50 p-3">
+                              <strong class="block text-slate-700">Grooming Services</strong>
+                              <template x-for="pet in tx.paymentSummary?.pets || []" :key="pet.booking_pet_id">
+                                <div><span class="font-semibold" x-text="pet.pet_name"></span><template x-for="line in pet.service_breakdown || []" :key="line.booking_service_id"><p x-text="line.label + ' — ' + formatPeso(line.price_at_booking)"></p></template></div>
+                              </template>
+                              <div x-show="tx.productAddons?.length"><strong class="block text-slate-700">Product Add-ons</strong><template x-for="line in tx.productAddons || []" :key="line.itemName"><p x-text="line.itemName + ' × ' + line.quantity + ' — ' + formatPeso(line.subtotal)"></p></template></div>
+                              <div class="border-t border-slate-200 pt-2"><strong class="block text-slate-700">Payment</strong><p x-text="'Total — ' + formatPeso(tx.finalPrice)"></p><p x-text="'Cash Received — ' + formatPeso(tx.amountPaid)"></p><p x-text="'Change — ' + formatPeso(tx.changeGiven)"></p></div>
+                            </div>
+                          </details>
                         </div>
 
                         <!-- Right: amounts -->

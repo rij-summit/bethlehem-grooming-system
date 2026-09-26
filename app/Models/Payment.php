@@ -68,4 +68,9 @@ class Payment extends Model
     {
         return $this->belongsTo(Booking::class, 'booking_id', 'booking_id');
     }
+
+    public function products()
+    {
+        return $this->hasMany(GroomingPaymentProduct::class, 'payment_id', $this->getKeyName());
+    }
 }

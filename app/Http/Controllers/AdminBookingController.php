@@ -1258,7 +1258,7 @@ class AdminBookingController extends Controller
                 'timeWindow',
                 'bookingPets.pet',
                 'bookingServices.service',
-                'payments' => fn ($q) => $q
+                'payments' => fn ($q) => $q->with('products')
                     ->where('payment_status', 'paid')
                     ->orderBy('paid_at', 'desc'),
             ])
@@ -1330,11 +1330,15 @@ class AdminBookingController extends Controller
             : ((bool) $booking->paid && (float) $booking->total_amount > 0
                 ? (float) $booking->total_amount
                 : null);
+        $productLines = $paidPayment?->products ?? collect();
+        $paidServicesTotal = $paidTotal !== null
+            ? round($paidTotal - (float) $productLines->sum('subtotal'), 2)
+            : null;
         $bookedServicesTotal = round((float) $bookedServices->sum(
             fn ($bs) => (float) ($bs->price_at_booking ?? 0),
         ), 2);
         $canUseSavedServicePrices = ! $paidTotal
-            || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - round($paidTotal, 2)) <= 0.01);
+            || ($bookedServicesTotal > 0 && abs($bookedServicesTotal - $paidServicesTotal) <= 0.01);
         $paymentSummary ??= $this->paymentReadiness()->summarize($booking);
         $paymentPetsById = collect($paymentSummary['pets'])->keyBy('booking_pet_id');
         $ownerAccountDeleted = $this->ownerAccountDeleted($booking);
@@ -1417,6 +1421,12 @@ class AdminBookingController extends Controller
                     : null,
                 'paid_at' => $paidPayment->paid_at,
             ] : null,
+            'productAddons' => $productLines->map(fn ($line) => [
+                'itemName' => $line->item_name,
+                'quantity' => $line->quantity,
+                'priceAtSale' => (float) $line->price_at_sale,
+                'subtotal' => (float) $line->subtotal,
+            ])->values(),
             'pets' => $bpets->values()->map(function ($bp, $petIndex) use ($paymentPetsById) {
                 $pet = $bp->pet;
                 $groomingState = $this->bookingPetGroomingState($bp);
@@ -1461,7 +1471,7 @@ class AdminBookingController extends Controller
                     'grooming_state_label' => $this->groomingStateLabel($groomingState),
                 ];
             })->values(),
-            'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $canUseSavedServicePrices, $bookedServices) {
+            'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $paidServicesTotal, $canUseSavedServicePrices, $bookedServices) {
                 $bookingPet = $bpetsById->get($bs->booking_pet_id);
                 $pet = $bookingPet?->pet;
                 $savedPrice = (float) ($bs->price_at_booking ?? 0);
@@ -1469,7 +1479,7 @@ class AdminBookingController extends Controller
                 $paidPriceSource = null;
 
                 if ($paidTotal && $bookedServices->count() === 1) {
-                    $paidPrice = $paidTotal;
+                    $paidPrice = $paidServicesTotal;
                     $paidPriceSource = 'payment_total';
                 } elseif ($savedPrice > 0 && $canUseSavedServicePrices) {
                     $paidPrice = $savedPrice;
@@ -1596,8 +1606,9 @@ class AdminBookingController extends Controller
             : ((bool) $booking->paid ? (float) $booking->total_amount : null);
         $snapshotTotal = (float) ($booking->bookingServices ?? collect())
             ->sum(fn ($bookingService) => (float) $bookingService->price_at_booking);
+        $productTotal = (float) ($paidPayment?->products ?? collect())->sum('subtotal');
         $hasConsistentSettledTotal = $recordedTotal !== null
-            && abs($recordedTotal - $snapshotTotal) <= 0.01;
+            && abs($recordedTotal - $productTotal - $snapshotTotal) <= 0.01;
 
         return $hasOnlyOrdinaryFinishedPets
             && $hasOnlyPositiveServiceSnapshots
@@ -1670,7 +1681,7 @@ class AdminBookingController extends Controller
         return [
             'payment_ready' => true,
             'payment_blocked_reason' => null,
-            'final_booking_total' => number_format($settledTotal, 2, '.', ''),
+            'final_booking_total' => number_format($settledTotal - (float) ($paidPayment?->products ?? collect())->sum('subtotal'), 2, '.', ''),
             'pets' => $pets->all(),
         ];
     }

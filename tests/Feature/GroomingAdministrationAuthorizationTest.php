@@ -238,6 +238,16 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->dateTime('created_at')->nullable();
         });
 
+        Schema::create('grooming_payment_products', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('payment_id');
+            $table->unsignedInteger('item_id');
+            $table->string('item_name');
+            $table->unsignedInteger('quantity');
+            $table->decimal('price_at_sale', 8, 2);
+            $table->decimal('subtotal', 10, 2);
+        });
+
         Schema::create('notifications', function (Blueprint $table) {
             $table->increments('notification_id');
             $table->string('type');
@@ -273,6 +283,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         Schema::dropIfExists('customer_notifications');
         Schema::dropIfExists('notifications');
+        Schema::dropIfExists('grooming_payment_products');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('services');
@@ -899,7 +910,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $response = $this->getJson('/api/admin/bookings/archived');
 
         $this->assertLessThanOrEqual(
-            10,
+            13,
             $queryCount,
             'Archive queries must not grow with the number of bookings.',
         );

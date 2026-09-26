@@ -53,4 +53,9 @@ class InventoryTransaction extends Model
     {
         return $this->belongsTo(User::class, 'performed_by', 'user_id');
     }
+
+    public function groomingBooking()
+    {
+        return $this->belongsTo(Booking::class, 'reference_id', 'booking_id');
+    }
 }
