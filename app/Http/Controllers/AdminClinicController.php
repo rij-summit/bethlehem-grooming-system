@@ -80,30 +80,48 @@ class AdminClinicController extends Controller
     public function records(Request $request)
     {
         $perPage = 25;
-        $page = Pet::query()
-            ->with(['user:user_id,first_name,last_name,phone,email', 'unregisteredCustomer:id,first_name,last_name,phone,email'])
+        $activePets = fn () => Pet::query()
             ->where('is_archived', false)
             ->where(fn ($q) => $q->whereHas('user', fn ($u) => $u->where('is_archived', false))
-                ->orWhereHas('unregisteredCustomer', fn ($u) => $u->where('is_archived', false)))
-            ->orderByDesc('pet_id')
+                ->orWhereHas('unregisteredCustomer', fn ($u) => $u->where('is_archived', false)));
+
+        // Page over owners (not pets) so each owner appears once with all of their pets.
+        $page = $activePets()
+            ->select('user_id', 'unregistered_customer_id', DB::raw('MAX(pet_id) as latest_pet_id'))
+            ->groupBy('user_id', 'unregistered_customer_id')
+            ->orderByDesc('latest_pet_id')
             ->simplePaginate($perPage);
 
-        $rows = $page->getCollection()->map(function (Pet $pet) {
-            $owner = $pet->user ?? $pet->unregisteredCustomer;
+        $ownerKeys = $page->getCollection();
+        $userIds = $ownerKeys->pluck('user_id')->filter()->values();
+        $unregisteredIds = $ownerKeys->whereNull('user_id')->pluck('unregistered_customer_id')->filter()->values();
+
+        $petsByOwner = $ownerKeys->isEmpty() ? collect() : $activePets()
+            ->with(['user:user_id,first_name,last_name,phone,email', 'unregisteredCustomer:id,first_name,last_name,phone,email'])
+            ->where(fn ($q) => $q->whereIn('user_id', $userIds)
+                ->orWhere(fn ($u) => $u->whereNull('user_id')->whereIn('unregistered_customer_id', $unregisteredIds)))
+            ->orderByDesc('pet_id')
+            ->get()
+            ->groupBy(fn (Pet $pet) => $pet->user_id ? "u:{$pet->user_id}" : "c:{$pet->unregistered_customer_id}");
+
+        $rows = $ownerKeys->map(function ($key) use ($petsByOwner) {
+            $pets = $petsByOwner->get($key->user_id ? "u:{$key->user_id}" : "c:{$key->unregistered_customer_id}", collect());
+            $first = $pets->first();
+            $owner = $first?->user ?? $first?->unregisteredCustomer;
             return [
                 'owner' => [
-                    'id' => $pet->user ? $pet->user->user_id : $owner?->id,
-                    'recordType' => $pet->user ? 'registered' : 'unregistered',
+                    'id' => $first?->user ? $first->user->user_id : $owner?->id,
+                    'recordType' => $first?->user ? 'registered' : 'unregistered',
                     'fullName' => trim(($owner?->first_name ?? '').' '.($owner?->last_name ?? '')),
                     'phone' => $owner?->phone,
                     'email' => $owner?->email,
                 ],
-                'pet' => [
+                'pets' => $pets->map(fn (Pet $pet) => [
                     'id' => $pet->pet_id,
                     'petName' => $pet->pet_name,
                     'species' => $pet->species,
                     'breed' => $pet->breed,
-                ],
+                ])->values(),
             ];
         })->values();
 

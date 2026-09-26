@@ -644,20 +644,45 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     public function test_clinic_records_are_paginated_newest_first(): void
     {
         $this->authenticateAs('staff');
-        DB::table('unregistered_customers')->insert([
-            'id' => 1, 'first_name' => 'Ana', 'last_name' => 'Cruz', 'phone' => '09171234567',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
         foreach (range(1, 30) as $n) {
-            DB::table('pets')->insert(['pet_id' => $n, 'unregistered_customer_id' => 1, 'pet_name' => "Pet{$n}", 'species' => 'Dog']);
+            DB::table('unregistered_customers')->insert([
+                'id' => $n, 'first_name' => "Owner{$n}", 'last_name' => 'Cruz', 'phone' => '09171234567',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('pets')->insert(['pet_id' => $n, 'unregistered_customer_id' => $n, 'pet_name' => "Pet{$n}", 'species' => 'Dog']);
         }
 
         $this->getJson('/api/admin/clinic-records')
             ->assertOk()
             ->assertJsonCount(25, 'rows')
-            ->assertJsonPath('rows.0.pet.petName', 'Pet30')
+            ->assertJsonPath('rows.0.owner.fullName', 'Owner30 Cruz')
+            ->assertJsonPath('rows.0.pets.0.petName', 'Pet30')
             ->assertJsonPath('has_more', true);
         $this->getJson('/api/admin/clinic-records?page=2')->assertJsonCount(5, 'rows')->assertJsonPath('has_more', false);
+    }
+
+    public function test_clinic_records_group_pets_under_one_owner_row(): void
+    {
+        $this->authenticateAs('staff');
+        DB::table('unregistered_customers')->insert([
+            ['id' => 1, 'first_name' => 'Ana', 'last_name' => 'Cruz', 'phone' => '09171234567', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'first_name' => 'Ben', 'last_name' => 'Reyes', 'phone' => '09171234568', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'unregistered_customer_id' => 1, 'pet_name' => 'Coco', 'species' => 'Dog'],
+            ['pet_id' => 2, 'unregistered_customer_id' => 2, 'pet_name' => 'Luna', 'species' => 'Cat'],
+            ['pet_id' => 3, 'unregistered_customer_id' => 1, 'pet_name' => 'Buddy', 'species' => 'Dog'],
+        ]);
+
+        $this->getJson('/api/admin/clinic-records')
+            ->assertOk()
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonPath('rows.0.owner.fullName', 'Ana Cruz')
+            ->assertJsonCount(2, 'rows.0.pets')
+            ->assertJsonPath('rows.0.pets.0.petName', 'Buddy')
+            ->assertJsonPath('rows.0.pets.1.petName', 'Coco')
+            ->assertJsonPath('rows.1.owner.fullName', 'Ben Reyes')
+            ->assertJsonCount(1, 'rows.1.pets');
     }
 
     public function test_staff_can_create_a_clinic_walk_in_for_a_registered_customer_and_saved_pet(): void

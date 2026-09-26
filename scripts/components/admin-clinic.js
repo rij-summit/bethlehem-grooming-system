@@ -916,6 +916,9 @@ function adminClinicPage() {
       records: [],
     },
 
+    // Owner's pet list (opened by View)
+    petPicker: { open: false, owner: null, pets: [] },
+
     // Read-only consultation detail
     detail: { open: false, record: null },
 
@@ -962,7 +965,7 @@ function adminClinicPage() {
         const owner = await API.createUnregisteredCustomer({ first_name: form.first_name, last_name: form.last_name, middle_name: form.middle_name || null, phone: form.phone, email: form.email || null, confirm_similar_name: confirmSimilarName });
         const petResponse = await API.adminAddCustomerPet("unregistered", owner.customer.id, { pet_name: form.pet_name, species: form.species, breed: form.breed || null });
         const pet = petResponse.pet;
-        this.searchRows.unshift({ owner: owner.customer, pet: { id: pet.pet_id, petName: pet.pet_name, species: pet.species, breed: pet.breed } });
+        this.searchRows.unshift({ owner: owner.customer, pets: [{ id: pet.pet_id, petName: pet.pet_name, species: pet.species, breed: pet.breed }] });
         this.noResults = false;
         this.addCustomer.open = false;
         this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
@@ -996,22 +999,22 @@ function adminClinicPage() {
 
     _buildRows(res) {
       const rows = [];
+      const rowsByOwner = new Map();
       const seenPetIds = new Set();
 
       for (const c of (res.customers || [])) {
         const pets = (c.pets || []).filter(p => !p.isArchived);
-        if (pets.length) {
-          for (const p of pets) {
-            seenPetIds.add(String(p.id));
-            rows.push({ owner: c, pet: p });
-          }
-        } else {
-          rows.push({ owner: c, pet: null });
-        }
+        pets.forEach(p => seenPetIds.add(String(p.id)));
+        const row = { owner: c, pets };
+        rowsByOwner.set(`${c.recordType}:${c.id}`, row);
+        rows.push(row);
       }
       for (const p of (res.pets || [])) {
-        if (!seenPetIds.has(String(p.id))) {
-          rows.push({
+        if (seenPetIds.has(String(p.id))) continue;
+        const key = `${p.ownerRecordType}:${p.ownerId}`;
+        let row = rowsByOwner.get(key);
+        if (!row) {
+          row = {
             owner: {
               id: p.ownerId,
               recordType: p.ownerRecordType,
@@ -1019,9 +1022,12 @@ function adminClinicPage() {
               phone: null,
               email: null,
             },
-            pet: p,
-          });
+            pets: [],
+          };
+          rowsByOwner.set(key, row);
+          rows.push(row);
         }
+        row.pets.push(p);
       }
 
       this.searchRows = rows;
@@ -1098,11 +1104,21 @@ function adminClinicPage() {
       this.profile.open = false;
     },
 
+    openPetPicker(row) {
+      if (!row.pets?.length) return;
+      this.petPicker = { open: true, owner: row.owner, pets: row.pets };
+      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+    },
+
+    closePetPicker() {
+      this.petPicker.open = false;
+    },
+
     async openVaccinations() {
       const { pet, owner } = this.profile;
       try {
         const response = await API.createClinicCase({ pet_id: pet.id, case_type: "vaccination" });
-        await this.loadActiveCases(); this.closeProfile(); this.openCase(response.case);
+        await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(response.case);
       } catch (error) { alert(error.message || "Could not open a vaccination case."); }
     },
 
@@ -1114,6 +1130,7 @@ function adminClinicPage() {
         const response = await API.createClinicCase({ pet_id: pet.id, case_type: "consultation" });
         await this.loadActiveCases();
         this.closeProfile();
+        this.closePetPicker();
         this.openCase(response.case);
         return;
       } catch (error) {
