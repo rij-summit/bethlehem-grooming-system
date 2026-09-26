@@ -349,6 +349,26 @@ function adminArchive() {
       return amount ? this.formatPeso(amount) : "Price unavailable";
     },
 
+    servicesForPet(pet, booking = this.detailsBooking) {
+      return (booking?.services ?? []).filter((service) =>
+        String(service.bookingPetId ?? service.booking_pet_id) === String(pet.bookingPetId ?? pet.booking_pet_id),
+      );
+    },
+
+    servicesByKind(services, kind) {
+      return services.filter((service) => (service.serviceKind ?? 'ala_carte') === kind);
+    },
+
+    paymentMethod(booking = this.detailsBooking) {
+      const method = booking?.payment?.paymentMethod ?? booking?.payment?.payment_method;
+      return method ? method.charAt(0).toUpperCase() + method.slice(1) : 'Not recorded';
+    },
+
+    paymentAmount(booking = this.detailsBooking) {
+      const amount = booking?.payment?.finalPrice ?? booking?.payment?.final_price;
+      return amount === null || amount === undefined ? 'Not recorded' : this.formatPeso(amount);
+    },
+
     getServicesAvailedTotal(booking = this.detailsBooking) {
       const paymentTotal = Number(
         booking?.paidAmount ??

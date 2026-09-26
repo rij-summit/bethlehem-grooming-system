@@ -1391,6 +1391,7 @@ class AdminBookingController extends Controller
             'status' => $this->mapStatus($booking->status),
             // Extra fields for the View Details modal
             'bookingReference' => $booking->booking_reference,
+            'bookingType' => $booking->walkin_id !== null ? 'Walk-In' : 'Pre-Register',
             'specialNotes' => $booking->special_notes,
             'numberOfPets' => $booking->number_of_pets,
             'paidAmount' => $paidTotal,
@@ -1494,6 +1495,10 @@ class AdminBookingController extends Controller
                     'service_name' => $bs->service?->service_name ?? 'Grooming Service',
                     'description' => $bs->service?->description,
                     'name' => $bs->service?->service_name ?? '—',
+                    'serviceKind' => $bs->addon_id !== null
+                        ? 'ala_carte'
+                        : (config('grooming_services.services.'.($bs->service?->slug ?? '').'.kind') === 'package'
+                            ? 'package' : 'ala_carte'),
                     'priceAtBooking' => $bs->price_at_booking,
                     'price_at_booking' => $bs->price_at_booking,
                     'durationMinutes' => (int) ($bs->service?->duration_minutes ?? 60),
