@@ -12,13 +12,13 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=grooming-size-confirmation-20260915',
+            'scripts/components/admin-dashboard.js?v=grooming-notes-20260927',
         );
 
         $this->assertNotFalse($dashboardPosition);
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=session-inactivity-20260828',
+            'scripts/api.js?v=grooming-notes-20260927',
             $page,
         );
     }
@@ -112,8 +112,8 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=grooming-size-confirmation-20260915', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?v=grooming-notes-20260927', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=grooming-notes-20260927', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string
