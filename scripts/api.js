@@ -1222,9 +1222,17 @@ var API = (() => {
     return request("GET", `/admin/bookings${query}`, null, getAdminToken());
   }
 
-  async function adminCheckIn(bookingId, petSizes = []) {
+  async function adminCheckIn(bookingId, petSizes = [], internalStaffNote = null) {
     // POST /api/admin/bookings/{id}/check-in  (protected — admin token)
-    return request("POST", `/admin/bookings/${bookingId}/check-in`, { pet_sizes: petSizes }, getAdminToken());
+    return request("POST", `/admin/bookings/${bookingId}/check-in`, { pet_sizes: petSizes, internal_staff_note: internalStaffNote }, getAdminToken());
+  }
+
+  async function adminUpdateInternalStaffNote(bookingId, note) {
+    return request("PATCH", `/admin/bookings/${bookingId}/internal-staff-note`, { internal_staff_note: note }, getAdminToken());
+  }
+
+  async function adminUpdateGroomingVisitNotes(bookingId, bookingPetId, note) {
+    return request("PATCH", `/admin/bookings/${bookingId}/pets/${bookingPetId}/grooming-visit-notes`, { grooming_visit_notes: note }, getAdminToken());
   }
 
   async function adminRecordSedationConsent(bookingId) {
@@ -1961,6 +1969,8 @@ var API = (() => {
     // Admin bookings
     getAdminBookings,
     adminCheckIn,
+    adminUpdateInternalStaffNote,
+    adminUpdateGroomingVisitNotes,
     adminRecordSedationConsent,
     adminRevertCheckIn,
     adminStartGrooming,

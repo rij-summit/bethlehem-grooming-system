@@ -16,10 +16,17 @@ class BookingService extends Model
         'service_id',
         'addon_id',
         'price_at_booking',
+        'price_min_at_booking',
+        'price_max_at_booking',
     ];
 
     public function service()
     {
         return $this->belongsTo(Service::class, 'service_id', 'service_id');
+    }
+
+    public function bookingPet()
+    {
+        return $this->belongsTo(BookingPet::class, 'booking_pet_id', 'booking_pet_id');
     }
 }

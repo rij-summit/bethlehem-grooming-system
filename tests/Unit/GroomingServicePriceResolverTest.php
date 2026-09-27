@@ -44,7 +44,7 @@ class GroomingServicePriceResolverTest extends TestCase
             'bath and go large' => ['bath_and_go', 'large', '650.00'],
             'cat full grooming small' => ['cat_full_grooming', 'small', '500.00'],
             'cat full grooming medium' => ['cat_full_grooming', 'medium', '600.00'],
-            'nail clipping standard snapshot' => ['nail_clipping', null, '75.00'],
+            'nail clipping minimum' => ['nail_clipping', null, '50.00'],
             'ear cleaning' => ['ear_cleaning', null, '150.00'],
             'facial trimming' => ['facial_trimming', null, '150.00'],
             'anal sac draining' => ['anal_sac_draining', null, '150.00'],
@@ -64,5 +64,24 @@ class GroomingServicePriceResolverTest extends TestCase
             app(GroomingServicePriceResolver::class)
                 ->bookingServicePrice($line, 'medium'),
         );
+    }
+
+    public function test_variable_price_bounds_use_the_service_prices_at_booking_time(): void
+    {
+        $resolver = app(GroomingServicePriceResolver::class);
+        $range = new Service([
+            'slug' => 'nail_clipping',
+            'base_price' => '75.00',
+            'price_min' => '60.00',
+            'price_max' => '110.00',
+        ]);
+        $minimum = new Service([
+            'slug' => 'ear_cleaning',
+            'base_price' => '175.00',
+            'is_starting_price' => true,
+        ]);
+
+        $this->assertSame(['min' => '60.00', 'max' => '110.00'], $resolver->bookingPriceBounds($range, null));
+        $this->assertSame(['min' => '175.00', 'max' => null], $resolver->bookingPriceBounds($minimum, null));
     }
 }

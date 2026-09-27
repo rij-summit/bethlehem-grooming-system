@@ -144,6 +144,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/settings/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
             ->middleware(['role:staff', 'throttle:3,10']);
         Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
+        Route::patch('/admin/bookings/{id}/internal-staff-note', [AdminBookingController::class, 'updateInternalStaffNote']);
+        Route::patch('/admin/bookings/{id}/pets/{bookingPetId}/grooming-visit-notes', [AdminBookingController::class, 'updateGroomingVisitNotes']);
         Route::post('/admin/bookings/{id}/sedation-consent', [AdminBookingController::class, 'recordSedationConsent']);
         Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
         Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);

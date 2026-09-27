@@ -24,6 +24,7 @@ class Booking extends Model
         'status',
         'queue_number',
         'special_notes',
+        'internal_staff_note',
         'sedation_consent',
         'sedation_consent_source',
         'sedation_consent_recorded_by',
@@ -38,6 +39,8 @@ class Booking extends Model
         'grooming_finished_at',
         'paid',
     ];
+
+    protected $hidden = ['internal_staff_note'];
 
     protected $casts = [
         'sedation_consent' => 'boolean',

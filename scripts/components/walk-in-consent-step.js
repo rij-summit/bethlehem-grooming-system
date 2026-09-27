@@ -320,7 +320,7 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
       weight:               item.pet.weight   || null,
       size:                 normalizeSizeForApi(item.pet.size),
       medical_conditions:   item.pet.medicalNotes || null,
-      special_instructions: item.selection.specialInstructions || null,
+      special_instructions: item.selection.specialInstructions?.trim() || null,
       services:             item.pricing.lineItems.map((lineItem) => ({
         service_slug: lineItem.serviceId,
       })),

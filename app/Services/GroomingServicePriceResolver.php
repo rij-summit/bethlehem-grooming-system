@@ -8,16 +8,49 @@ use Illuminate\Support\Facades\DB;
 
 class GroomingServicePriceResolver
 {
+    /** Snapshot variable-price limits at booking creation. A null maximum means "from". */
+    public function bookingPriceBounds(Service $service, ?string $petSize): array
+    {
+        $catalog = config("grooming_services.services.{$service->slug}", []);
+        $hasDatabaseBounds = $this->isPositive($service->price_min ?? null)
+            || $this->isPositive($service->price_max ?? null);
+        $minimum = $hasDatabaseBounds ? $service->price_min : ($catalog['minimum'] ?? null);
+        $maximum = $hasDatabaseBounds ? $service->price_max : ($catalog['maximum'] ?? null);
+
+        if ($this->isPositive($minimum) && $this->isPositive($maximum)) {
+            return [
+                'min' => $this->normalizeMoney($minimum),
+                'max' => $this->normalizeMoney($maximum),
+            ];
+        }
+
+        $size = $this->normalizeSize($petSize);
+        if ($this->isPositive($minimum)
+            || $service->is_starting_price
+            || ($catalog['starting_price'] ?? false)
+            || in_array($size, $catalog['starting_sizes'] ?? [], true)) {
+            $price = $this->servicePrice($service, $petSize);
+            return ['min' => $price, 'max' => null];
+        }
+
+        return ['min' => null, 'max' => null];
+    }
+
     /**
-     * Resolve the price that must be snapshotted when a grooming service is
-     * selected. Positive database catalogue prices take precedence, while the
-     * application catalogue safely covers imported zero rows and extra-large
-     * package pricing that the current schema cannot store separately.
+     * Resolve a fixed price or variable-price minimum. Positive database
+     * catalogue prices take precedence, while the application catalogue
+     * covers imported zero rows and extra-large package pricing.
      */
     public function servicePrice(Service $service, ?string $petSize): string
     {
         $size = $this->normalizeSize($petSize);
         $catalog = config("grooming_services.services.{$service->slug}");
+
+        if ($this->isPositive($service->price_min ?? null)
+            || $this->isPositive($catalog['minimum'] ?? null)) {
+            return $this->normalizeMoney($this->isPositive($service->price_min ?? null)
+                ? $service->price_min : $catalog['minimum']);
+        }
 
         if (($catalog['kind'] ?? null) === 'package') {
             $databasePrice = $this->databasePackagePrice($service, $size);
@@ -55,6 +88,14 @@ class GroomingServicePriceResolver
             return [
                 'amount' => $this->normalizeMoney($bookingService->price_at_booking),
                 'source' => 'booking_snapshot',
+            ];
+        }
+
+        if ($this->isPositive($bookingService->price_min_at_booking)
+            && $this->isPositive($bookingService->price_max_at_booking)) {
+            return [
+                'amount' => $this->normalizeMoney($bookingService->price_min_at_booking),
+                'source' => 'unresolved_range_minimum',
             ];
         }
 
