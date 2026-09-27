@@ -475,7 +475,7 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
 
   const pricingType = pricing?.pricingType || "custom";
 
-  return pricingType !== "plus" && pricingType !== "custom";
+  return pricingType === "fixed";
 }
 
 /*
@@ -2563,25 +2563,46 @@ function adminDashboard() {
     },
 
     formatServiceAvailedPrice(service, booking = this.detailsBooking) {
+      const bounds = this.getServiceAvailedBounds(service, booking);
+      return bounds ? this.formatServiceAvailedBounds(bounds) : "Price unavailable";
+    },
+
+    getServiceAvailedBounds(service, booking = this.detailsBooking, pet = null) {
       const bookedAmount = parsePaymentNumber(
         service?.priceAtBooking ?? service?.price_at_booking,
       );
+      if (booking?.paid && bookedAmount > 0) {
+        return { min: bookedAmount, max: bookedAmount };
+      }
 
-      if (Number.isFinite(bookedAmount) && bookedAmount > 0) {
-        return this.formatPeso(bookedAmount);
+      const savedMin = parsePaymentNumber(service?.priceMinAtBooking ?? service?.price_min_at_booking);
+      const savedMax = parsePaymentNumber(service?.priceMaxAtBooking ?? service?.price_max_at_booking);
+      if (savedMin > 0) {
+        return { min: savedMin, max: savedMax > 0 ? savedMax : null };
       }
 
       const serviceDefinition = getPaymentServiceDefinition(service);
       if (!serviceDefinition) {
-        return "Price unavailable";
+        return bookedAmount > 0 ? { min: bookedAmount, max: bookedAmount } : null;
       }
 
-      const petSize = this.getServiceAvailedPetSize(service, booking);
+      const petSize = getPaymentPetSizeCandidate(pet) || this.getServiceAvailedPetSize(service, booking);
       const pricing = getPaymentServicePricing(serviceDefinition, petSize);
+      if (pricing.pricingType === "range" || pricing.pricingType === "plus") {
+        return { min: pricing.minAmount, max: pricing.pricingType === "range" ? pricing.selectedPriceOption?.maxAmount : null };
+      }
 
-      return pricing.displayPrice === "Enter price"
-        ? "Price unavailable"
-        : pricing.displayPrice;
+      return bookedAmount > 0
+        ? { min: bookedAmount, max: bookedAmount }
+        : { min: pricing.minAmount, max: pricing.minAmount };
+    },
+
+    formatServiceAvailedBounds(bounds) {
+      if (!bounds || !Number.isFinite(bounds.min) || bounds.min <= 0) return "Price unavailable";
+      if (bounds.max === null) return `${this.formatPeso(bounds.min)}+`;
+      return bounds.max > bounds.min
+        ? `${formatPaymentAmount(bounds.min)}–${formatPaymentAmount(bounds.max)}`
+        : this.formatPeso(bounds.min);
     },
 
     getServiceAvailedAmount(service, booking = this.detailsBooking, pet = null) {
@@ -2640,11 +2661,14 @@ function adminDashboard() {
     },
 
     formatServicesAvailedTotal(booking = this.detailsBooking) {
-      const total = this.getServicesAvailedTotal(booking);
-
-      return Number.isFinite(total) && total > 0
-        ? this.formatPeso(total)
-        : "Price unavailable";
+      if (booking?.paid) return this.formatServiceAvailedBounds({ min: this.getServicesAvailedTotal(booking), max: this.getServicesAvailedTotal(booking) });
+      const services = booking?.services || [];
+      const bounds = services.map((service) => this.getServiceAvailedBounds(service, booking));
+      if (!bounds.length || bounds.some((item) => !item || item.min <= 0)) return "Price unavailable";
+      return this.formatServiceAvailedBounds({
+        min: bounds.reduce((sum, item) => sum + item.min, 0),
+        max: bounds.some((item) => item.max === null) ? null : bounds.reduce((sum, item) => sum + item.max, 0),
+      });
     },
 
     getDetailsPaymentPet(pet, booking = this.detailsBooking, pets = this.normalizePaymentPets(booking)) {
@@ -2877,11 +2901,17 @@ function adminDashboard() {
     },
 
     formatPetServicesAvailedTotal(pet, booking = this.detailsBooking) {
-      const total = this.getPetServicesAvailedTotal(pet, booking);
-
-      return Number.isFinite(total) && total > 0
-        ? this.formatPeso(total)
-        : "Price unavailable";
+      if (booking?.paid) {
+        const total = this.getPetServicesAvailedTotal(pet, booking);
+        return Number.isFinite(total) && total > 0 ? this.formatPeso(total) : "Price unavailable";
+      }
+      const services = this.getPetServicesAvailed(pet, booking);
+      const bounds = services.map((service) => this.getServiceAvailedBounds(service, booking, pet));
+      if (!bounds.length || bounds.some((item) => !item || item.min <= 0)) return "Price unavailable";
+      return this.formatServiceAvailedBounds({
+        min: bounds.reduce((sum, item) => sum + item.min, 0),
+        max: bounds.some((item) => item.max === null) ? null : bounds.reduce((sum, item) => sum + item.max, 0),
+      });
     },
 
     getServiceAvailedPetSize(service, booking = this.detailsBooking) {
@@ -3513,7 +3543,7 @@ function adminDashboard() {
     normalizePaymentLine(rawService, pet, fallbackId, paymentOptions = {}) {
       const serviceDefinition = getPaymentServiceDefinition(rawService);
       const fallbackAmount = parseFloat(rawService?.priceAtBooking ?? rawService?.price_at_booking ?? 0);
-      const pricing = serviceDefinition
+      let pricing = serviceDefinition
         ? getPaymentServicePricing(serviceDefinition, pet.sizeKey)
         : fallbackAmount > 0
           ? {
@@ -3524,6 +3554,19 @@ function adminDashboard() {
               selectedPriceOption: null,
             }
           : getPaymentServicePricing(null, pet.sizeKey);
+      const savedMin = parsePaymentNumber(rawService?.priceMinAtBooking ?? rawService?.price_min_at_booking);
+      const savedMax = parsePaymentNumber(rawService?.priceMaxAtBooking ?? rawService?.price_max_at_booking);
+      if (savedMin > 0) {
+        const pricingType = savedMax > 0 ? "range" : "plus";
+        pricing = {
+          ...pricing,
+          minAmount: savedMin,
+          maxAmount: savedMax > 0 ? savedMax : null,
+          pricingType,
+          displayPrice: formatPaymentPriceOption({ pricingType, minAmount: savedMin, maxAmount: savedMax }),
+          placeholder: String(savedMin),
+        };
+      }
       const pricingType = pricing.pricingType || "custom";
       const lockFixedPrices = Boolean(paymentOptions.lockFixedPrices);
       const isFixedPriceLocked = shouldLockPaymentPrice(pricing, lockFixedPrices);
@@ -3548,6 +3591,10 @@ function adminDashboard() {
             (serviceDefinition?.kind === "package" ? "Package service" : "A la carte service"),
         ),
         minAmount: pricing.minAmount,
+        maxAmount: pricing.maxAmount ?? pricing.selectedPriceOption?.maxAmount ?? null,
+        savedMinAmount: savedMin > 0 ? savedMin : null,
+        savedMaxAmount: savedMax > 0 ? savedMax : null,
+        originalSizeKey: pet.sizeKey,
         priceHint: pricing.displayPrice,
         placeholder: pricing.placeholder,
         pricingType,
@@ -3563,7 +3610,6 @@ function adminDashboard() {
 
       pet.lines.forEach((line) => {
         this.refreshPaymentLinePricing(pet, line);
-        this.enforcePaymentMinimum(pet, line);
       });
 
       this.paymentModal.error = "";
@@ -3571,9 +3617,22 @@ function adminDashboard() {
 
     refreshPaymentLinePricing(pet, line) {
       const wasFixedPriceLocked = Boolean(line.isFixedPriceLocked);
-      const pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
+      let pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
+      if (line.savedMinAmount !== null &&
+          (line.serviceDefinition?.kind !== "package" || line.originalSizeKey === pet.sizeKey)) {
+        const pricingType = line.savedMaxAmount !== null ? "range" : "plus";
+        pricing = {
+          ...pricing,
+          minAmount: line.savedMinAmount,
+          maxAmount: line.savedMaxAmount,
+          pricingType,
+          displayPrice: formatPaymentPriceOption({ pricingType, minAmount: line.savedMinAmount, maxAmount: line.savedMaxAmount }),
+          placeholder: String(line.savedMinAmount),
+        };
+      }
       const pricingType = pricing.pricingType || "custom";
       line.minAmount = pricing.minAmount;
+      line.maxAmount = pricing.maxAmount ?? pricing.selectedPriceOption?.maxAmount ?? null;
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
       line.pricingType = pricingType;
@@ -3622,22 +3681,18 @@ function adminDashboard() {
       }, 0);
     },
 
-    enforcePaymentMinimum(pet, line) {
-      if (line.amount === "" || line.amount === null || line.amount === undefined) {
-        return;
+    paymentLineError(line) {
+      if (line.amount === "" || line.amount === null || line.amount === undefined) return "";
+      const amount = Number(line.amount);
+      if (Number.isFinite(amount) && amount >= line.minAmount &&
+          (line.maxAmount === null || amount <= line.maxAmount)) {
+        if (/^\d+(?:\.\d{1,2})?$/.test(String(line.amount))) return "";
+        return "Enter an amount with no more than 2 decimal places.";
       }
-
-      const amount = parseFloat(line.amount);
-      const minimum = parseFloat(line.minAmount) || 0.01;
-
-      if (!Number.isFinite(amount)) {
-        line.amount = "";
-        return;
+      if (line.pricingType === "range" && line.maxAmount !== null) {
+        return `Enter an amount from ${formatPaymentAmount(line.minAmount)} to ${formatPaymentAmount(line.maxAmount)}.`;
       }
-
-      if (amount < minimum) {
-        line.amount = minimum.toFixed(2);
-      }
+      return `Enter an amount of at least ${formatPaymentAmount(line.minAmount)}.`;
     },
 
     enforcePaymentAmountLimit(event = null) {
@@ -3668,16 +3723,8 @@ function adminDashboard() {
     getInvalidPaymentLine() {
       for (const pet of this.paymentModal.petBreakdown) {
         for (const line of pet.lines || []) {
-          const amount = parseFloat(line.amount);
-          const minimum = parseFloat(line.minAmount) || 0.01;
-
-          if (!Number.isFinite(amount)) {
-            return { pet, line, reason: "missing" };
-          }
-
-          if (amount < minimum) {
-            return { pet, line, reason: "minimum" };
-          }
+          const message = this.paymentLineError(line);
+          if (message) return { pet, line, message };
         }
       }
 
@@ -3739,7 +3786,7 @@ function adminDashboard() {
 
           servicePrices.push({
             booking_service_id: bookingServiceId,
-            amount: Number(amount.toFixed(2)),
+            amount: Number(line.amount),
           });
         });
       });
@@ -3791,7 +3838,7 @@ function adminDashboard() {
 
       const invalidLine = this.getInvalidPaymentLine();
       if (invalidLine) {
-        this.paymentModal.error = `${invalidLine.line.name} for ${invalidLine.pet.name} cannot be less than ${this.formatPeso(invalidLine.line.minAmount)}.`;
+        this.paymentModal.error = `${invalidLine.line.name} for ${invalidLine.pet.name}: ${invalidLine.message}`;
         return;
       }
 

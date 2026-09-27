@@ -211,6 +211,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->decimal('price_small', 8, 2)->nullable();
             $table->decimal('price_medium', 8, 2)->nullable();
             $table->decimal('price_large', 8, 2)->nullable();
+            $table->decimal('price_min', 8, 2)->nullable();
+            $table->decimal('price_max', 8, 2)->nullable();
+            $table->boolean('is_starting_price')->default(false);
             $table->unsignedSmallInteger('duration_minutes')->default(60);
             $table->boolean('is_active')->default(true);
         });
@@ -222,6 +225,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('service_id')->nullable();
             $table->unsignedInteger('addon_id')->nullable();
             $table->decimal('price_at_booking', 8, 2)->default(0);
+            $table->decimal('price_min_at_booking', 8, 2)->nullable();
+            $table->decimal('price_max_at_booking', 8, 2)->nullable();
         });
 
         Schema::create('payments', function (Blueprint $table) {
@@ -462,6 +467,120 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('pets', ['pet_id' => 3, 'size' => 'small', 'weight' => 12]);
         $this->assertDatabaseHas('booking_pets', ['pet_id' => 3, 'registered_size' => 'small']);
         $this->assertDatabaseHas('booking_services', ['service_id' => 3, 'price_at_booking' => 550]);
+    }
+
+    public function test_customer_and_walk_in_range_prices_stay_unresolved_until_payment(): void
+    {
+        DB::table('services')->insert([
+            'service_id' => 4,
+            'service_name' => 'Nail Clipping',
+            'slug' => 'nail_clipping',
+            'base_price' => 75,
+            'price_min' => 50,
+            'price_max' => 100,
+        ]);
+        DB::table('time_windows')->insert([
+            'window_id' => 1,
+            'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00',
+            'end_time' => '12:00:00',
+            'max_slots' => 4,
+            'is_active' => true,
+        ]);
+
+        $this->authenticateAs('customer');
+        $customerBookingId = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(),
+            'window_id' => 1,
+            'number_of_pets' => 1,
+            'pets' => [[
+                'pet_name' => 'Mochi',
+                'species' => 'cat',
+                'weight' => 4,
+                'services' => ['ala_carte' => ['nail_clipping']],
+            ]],
+        ])->assertCreated()->json('booking.booking_id');
+
+        $this->authenticateAs('staff');
+        $walkinBookingId = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'phone' => '09171234567',
+            'pets' => [[
+                'pet_name' => 'Bantay',
+                'species' => 'dog',
+                'weight' => 8,
+                'services' => [['service_slug' => 'nail_clipping']],
+            ]],
+            'sedation_consent' => false,
+            'terms_agreed' => true,
+        ])->assertCreated()->json('booking_id');
+
+        foreach ([$customerBookingId, $walkinBookingId] as $bookingId) {
+            $this->assertDatabaseHas('booking_services', [
+                'booking_id' => $bookingId,
+                'price_at_booking' => 0,
+                'price_min_at_booking' => 50,
+                'price_max_at_booking' => 100,
+            ]);
+        }
+
+        $listing = $this->getJson('/api/admin/bookings')->assertOk();
+        $incoming = collect($listing->json('incomingList'))->firstWhere('id', $customerBookingId);
+        $queued = collect($listing->json('queuedList'))->firstWhere('id', $walkinBookingId);
+        $this->assertEquals(50, $incoming['services'][0]['priceMinAtBooking']);
+        $this->assertEquals(100, $incoming['services'][0]['priceMaxAtBooking']);
+        $this->assertEquals(0, $incoming['services'][0]['priceAtBooking']);
+        $this->assertEquals(50, $queued['services'][0]['priceMinAtBooking']);
+        $this->assertEquals(100, $queued['services'][0]['priceMaxAtBooking']);
+        $this->assertEquals(0, $queued['services'][0]['priceAtBooking']);
+
+        DB::table('services')->where('service_id', 4)->update(['price_min' => 60, 'price_max' => 70]);
+        $walkinLineId = DB::table('booking_services')->where('booking_id', $walkinBookingId)->value('booking_service_id');
+        $this->postJson("/api/admin/bookings/{$walkinBookingId}/pay-now", [
+            'final_price' => 80,
+            'amount_paid' => 80,
+            'service_prices' => [['booking_service_id' => $walkinLineId, 'amount' => 80]],
+        ])->assertOk();
+        $this->assertDatabaseHas('booking_services', [
+            'booking_service_id' => $walkinLineId,
+            'price_at_booking' => 80,
+            'price_min_at_booking' => 50,
+            'price_max_at_booking' => 100,
+        ]);
+        $this->assertDatabaseHas('payments', ['booking_id' => $walkinBookingId, 'total_amount' => 80]);
+
+        DB::table('bookings')->where('booking_id', $customerBookingId)->update(['status' => 'for_payment']);
+        DB::table('booking_pets')->where('booking_id', $customerBookingId)->update([
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED,
+            'grooming_end_time' => now(),
+        ]);
+        $customerLineId = DB::table('booking_services')->where('booking_id', $customerBookingId)->value('booking_service_id');
+        $this->postJson("/api/admin/bookings/{$customerBookingId}/pay", [
+            'final_price' => 101,
+            'amount_paid' => 101,
+            'service_prices' => [['booking_service_id' => $customerLineId, 'amount' => 101]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('service_prices');
+        $this->assertDatabaseHas('booking_services', ['booking_service_id' => $customerLineId, 'price_at_booking' => 0]);
+
+        $this->postJson("/api/admin/bookings/{$customerBookingId}/pay", [
+            'final_price' => 100,
+            'amount_paid' => 100,
+            'service_prices' => [['booking_service_id' => $customerLineId, 'amount' => 100]],
+        ])->assertOk();
+        $this->assertDatabaseHas('booking_services', [
+            'booking_service_id' => $customerLineId,
+            'price_at_booking' => 100,
+            'price_min_at_booking' => 50,
+            'price_max_at_booking' => 100,
+        ]);
+
+        $paidListing = $this->getJson('/api/admin/bookings')->assertOk();
+        $this->assertEquals(80, collect($paidListing->json('queuedList'))->firstWhere('id', $walkinBookingId)['services'][0]['priceAtBooking']);
+        $this->assertEquals(100, collect($paidListing->json('releasedList'))->firstWhere('id', $customerBookingId)['services'][0]['priceAtBooking']);
+        $transactions = collect($this->getJson('/api/admin/transactions')->assertOk()->json('transactions'));
+        $this->assertEquals(80, $transactions->firstWhere('bookingId', $walkinBookingId)['finalPrice']);
+        $this->assertEquals(100, $transactions->firstWhere('bookingId', $customerBookingId)['finalPrice']);
     }
 
     public function test_staff_can_record_in_person_sedation_consent_before_grooming(): void

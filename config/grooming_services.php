@@ -12,6 +12,7 @@ return [
     'services' => [
         'partial_grooming' => [
             'kind' => 'package',
+            'starting_sizes' => ['large', 'extra_large'],
             'prices' => [
                 'small' => '400.00',
                 'medium' => '500.00',
@@ -22,6 +23,7 @@ return [
         ],
         'regular_dog_grooming' => [
             'kind' => 'package',
+            'starting_sizes' => ['large', 'extra_large'],
             'prices' => [
                 'small' => '550.00',
                 'medium' => '650.00',
@@ -32,6 +34,7 @@ return [
         ],
         'deluxe_dog_grooming' => [
             'kind' => 'package',
+            'starting_sizes' => ['large', 'extra_large'],
             'prices' => [
                 'small' => '650.00',
                 'medium' => '750.00',
@@ -42,6 +45,7 @@ return [
         ],
         'bath_and_go' => [
             'kind' => 'package',
+            'starting_sizes' => ['large', 'extra_large'],
             'prices' => [
                 'small' => '450.00',
                 'medium' => '550.00',
@@ -60,12 +64,13 @@ return [
         ],
         'nail_clipping' => [
             'kind' => 'ala_carte',
-            // Standard snapshot inside the displayed PHP 50-100 range.
-            'default' => '75.00',
+            'minimum' => '50.00',
+            'maximum' => '100.00',
         ],
         'ear_cleaning' => [
             'kind' => 'ala_carte',
             'default' => '150.00',
+            'starting_price' => true,
         ],
         'facial_trimming' => [
             'kind' => 'ala_carte',
@@ -78,6 +83,7 @@ return [
         'tooth_brushing' => [
             'kind' => 'ala_carte',
             'default' => '100.00',
+            'starting_price' => true,
         ],
     ],
 ];

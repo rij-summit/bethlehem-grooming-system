@@ -99,6 +99,8 @@ class WalkinController extends Controller
                         'booking_pet_id' => $bookingPet->booking_pet_id,
                         'service_id' => $svc['service_id'],
                         'price_at_booking' => $svc['price'],
+                        'price_min_at_booking' => $svc['price_min'],
+                        'price_max_at_booking' => $svc['price_max'],
                     ]);
                 }
 
@@ -111,6 +113,8 @@ class WalkinController extends Controller
                     'services' => array_map(fn ($s) => [
                         'name' => $s['name'],
                         'price' => $s['price'],
+                        'price_min' => $s['price_min'],
+                        'price_max' => $s['price_max'],
                     ], $item['services']),
                 ];
             }
@@ -265,14 +269,19 @@ class WalkinController extends Controller
             return [
                 'service_id' => $service->service_id,
                 'name' => $service->service_name,
-                'price' => $this->resolvePrice($service, $size),
+                ...$this->resolvePrice($service, $size),
             ];
         }, $services);
     }
 
-    private function resolvePrice(Service $service, ?string $size): float
+    private function resolvePrice(Service $service, ?string $size): array
     {
-        return (float) $this->servicePrices->servicePrice($service, $size);
+        $bounds = $this->servicePrices->bookingPriceBounds($service, $size);
+        return [
+            'price' => $bounds['max'] !== null ? 0 : (float) $this->servicePrices->servicePrice($service, $size),
+            'price_min' => $bounds['min'],
+            'price_max' => $bounds['max'],
+        ];
     }
 
     private function findOrCreatePet(

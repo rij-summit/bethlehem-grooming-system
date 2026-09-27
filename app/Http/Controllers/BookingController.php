@@ -321,7 +321,10 @@ class BookingController extends Controller
                             continue;
                         }
 
-                        $price = $servicePrices->servicePrice($service, $petSize);
+                        $bounds = $servicePrices->bookingPriceBounds($service, $petSize);
+                        $price = $bounds['max'] !== null
+                            ? '0.00'
+                            : $servicePrices->servicePrice($service, $petSize);
 
                         BookingService::create([
                             'booking_id' => $booking->booking_id,
@@ -329,6 +332,8 @@ class BookingController extends Controller
                             'service_id' => $service->service_id,
                             'addon_id' => null,
                             'price_at_booking' => $price,
+                            'price_min_at_booking' => $bounds['min'],
+                            'price_max_at_booking' => $bounds['max'],
                         ]);
                     }
                 }
@@ -475,6 +480,8 @@ class BookingController extends Controller
                         'service_id' => $bookingService->service_id,
                         'service_name' => $bookingService->service?->service_name,
                         'price_at_booking' => $bookingService->price_at_booking,
+                        'price_min_at_booking' => $bookingService->price_min_at_booking,
+                        'price_max_at_booking' => $bookingService->price_max_at_booking,
                     ])
                     ->values();
 

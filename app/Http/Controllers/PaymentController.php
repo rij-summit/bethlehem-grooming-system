@@ -9,6 +9,7 @@ use App\Models\BookingService;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Services\GroomingPaymentReadinessService;
+use App\Services\GroomingServicePriceResolver;
 use App\Services\GroomingPaymentSettlementService;
 use App\Services\GroomingProductSaleService;
 use App\Support\PaymentAmountLimit;
@@ -70,13 +71,19 @@ class PaymentController extends Controller
         Booking $booking,
         array $servicePrices,
         array $editableBookingPetIds,
+        array $petSizes = [],
     ): void {
-        $editableServiceIds = BookingService::query()
+        $submittedSizes = collect($petSizes)->mapWithKeys(fn ($petSize) => [
+            (int) $petSize['booking_pet_id'] => $petSize['size'],
+        ]);
+        $editableServices = BookingService::query()
             ->where('booking_id', $booking->booking_id)
             ->whereIn('booking_pet_id', $editableBookingPetIds)
+            ->with(['service', 'bookingPet'])
             ->lockForUpdate()
-            ->pluck('booking_service_id')
-            ->map(fn ($id) => (int) $id);
+            ->get()
+            ->keyBy('booking_service_id');
+        $editableServiceIds = $editableServices->keys()->map(fn ($id) => (int) $id);
         $allServiceIds = BookingService::query()
             ->where('booking_id', $booking->booking_id)
             ->pluck('booking_service_id')
@@ -106,11 +113,42 @@ class PaymentController extends Controller
         }
 
         foreach ($submittedPrices as $bookingServiceId => $amount) {
+            $line = $editableServices->get($bookingServiceId);
+            $minimum = $line->price_min_at_booking;
+            $maximum = $line->price_max_at_booking;
+            $bookedSize = $line->bookingPet?->confirmed_size ?? $line->bookingPet?->registered_size;
+            $selectedSize = $submittedSizes->get($line->booking_pet_id, $bookedSize);
+            $sizeChanged = $line->service
+                && config('grooming_services.services.'.$line->service->slug.'.kind') === 'package'
+                && $selectedSize !== $bookedSize;
+            if (($minimum === null || $sizeChanged) && $line->service) {
+                $bounds = app(GroomingServicePriceResolver::class)->bookingPriceBounds(
+                    $line->service,
+                    $selectedSize,
+                );
+                $minimum = $bounds['min'];
+                $maximum = $bounds['max'];
+            }
+
+            $cents = $this->paymentReadiness()->moneyToCents($amount);
+            if (($minimum !== null && $cents < $this->paymentReadiness()->moneyToCents($minimum))
+                || ($maximum !== null && $cents > $this->paymentReadiness()->moneyToCents($maximum))) {
+                $message = $maximum !== null
+                    ? 'Enter an amount from ₱'.$this->formatRuleAmount($minimum).' to ₱'.$this->formatRuleAmount($maximum).'.'
+                    : 'Enter an amount of at least ₱'.$this->formatRuleAmount($minimum).'.';
+                throw ValidationException::withMessages(['service_prices' => $message]);
+            }
+
             BookingService::query()
                 ->where('booking_id', $booking->booking_id)
                 ->where('booking_service_id', $bookingServiceId)
                 ->update(['price_at_booking' => $amount]);
         }
+    }
+
+    private function formatRuleAmount(string|int|float $amount): string
+    {
+        return rtrim(rtrim(number_format((float) $amount, 2), '0'), '.');
     }
 
     private function updateBookingPetConfirmedSizes(Booking $booking, array $petSizes): void
@@ -181,6 +219,7 @@ class PaymentController extends Controller
                     $booking,
                     $data['service_prices'] ?? [],
                     $finishedBookingPetIds,
+                    $data['pet_sizes'] ?? [],
                 );
                 $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
 
@@ -281,6 +320,7 @@ class PaymentController extends Controller
                     $booking,
                     $data['service_prices'] ?? [],
                     $bookingPets->pluck('booking_pet_id')->all(),
+                    $data['pet_sizes'] ?? [],
                 );
                 $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
                 $serverTotalCents = BookingService::query()

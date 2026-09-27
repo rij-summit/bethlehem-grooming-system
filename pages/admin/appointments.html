@@ -1864,25 +1864,29 @@
                               <div class="payment-service-copy">
                                 <p class="payment-service-name" x-text="line.name"></p>
                                 <p class="payment-service-description" x-text="line.description"></p>
-                                <p class="payment-service-hint" x-text="'Minimum: ' + line.priceHint"></p>
+                                <p class="payment-service-hint" x-text="line.pricingType === 'range' ? 'Range: ' + line.priceHint : 'Minimum: ' + line.priceHint"></p>
                               </div>
 
-                              <label class="payment-price-input">
-                                <span>&#8369;</span>
-                                <input
-                                  type="number"
-                                  x-model="line.amount"
-                                  :min="line.minAmount"
-                                  step="0.01"
-                                  :placeholder="line.placeholder"
-                                  :readonly="line.isFixedPriceLocked"
-                                  :disabled="line.isFixedPriceLocked"
-                                  :aria-readonly="line.isFixedPriceLocked ? 'true' : 'false'"
-                                  :class="line.isFixedPriceLocked ? 'cursor-not-allowed bg-slate-50 text-slate-500' : ''"
-                                  @input="clearPaymentError()"
-                                  @blur="enforcePaymentMinimum(pet, line)"
-                                />
-                              </label>
+                              <div>
+                                <label class="payment-price-input">
+                                  <span>&#8369;</span>
+                                  <input
+                                    type="number"
+                                    x-model="line.amount"
+                                    :min="line.minAmount"
+                                    :max="line.maxAmount"
+                                    step="0.01"
+                                    :placeholder="line.placeholder"
+                                    :readonly="line.isFixedPriceLocked"
+                                    :disabled="line.isFixedPriceLocked"
+                                    :aria-readonly="line.isFixedPriceLocked ? 'true' : 'false'"
+                                    :class="line.isFixedPriceLocked ? 'cursor-not-allowed bg-slate-50 text-slate-500' : ''"
+                                    @input="clearPaymentError()"
+                                    :aria-invalid="paymentLineError(line) ? 'true' : 'false'"
+                                  />
+                                </label>
+                                <p x-show="paymentLineError(line)" x-text="paymentLineError(line)" class="mt-1 text-xs font-medium" style="color: #9b4b4b;"></p>
+                              </div>
                             </div>
                           </template>
                         </div>
@@ -2619,6 +2623,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-payment-breakdown-20260926"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-range-entry-20260927"></script>
   </body>
 </html>
