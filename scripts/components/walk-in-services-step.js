@@ -243,15 +243,15 @@ function renderPetSelectionCard(pet, index) {
         <div>
           <div class="mb-3">
             <h4 class="text-base font-semibold text-[#2f4b66]">
-              Grooming Preferences &amp; Special Instructions
+              Grooming &amp; Visit Notes <span class="font-normal text-slate-500">(optional)</span>
             </h4>
           </div>
           <textarea
             data-role="special-instructions"
             data-pet-id="${escapeHtml(pet.id)}"
             rows="4"
-            maxlength="500"
-            placeholder="Add pet-specific notes like haircut preference, sensitivity, or handling instructions."
+            maxlength="1000"
+            placeholder="Add grooming, handling, or owner-specific notes for this visit."
             class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
           >${escapeHtml(selection.specialInstructions || "")}</textarea>
         </div>

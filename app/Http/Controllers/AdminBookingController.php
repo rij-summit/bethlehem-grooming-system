@@ -299,10 +299,11 @@ class AdminBookingController extends Controller
             'pet_sizes' => ['nullable', 'array'],
             'pet_sizes.*.booking_pet_id' => ['required_with:pet_sizes', 'integer'],
             'pet_sizes.*.size' => ['required_with:pet_sizes', 'in:small,medium,large,extra_large'],
+            'internal_staff_note' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ]);
         $selectedSizes = collect($data['pet_sizes'] ?? [])->pluck('size', 'booking_pet_id');
         $queueDate = now()->toDateString();
-        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate, $selectedSizes) {
+        $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate, $selectedSizes, $data) {
             $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])
                 ->whereKey($id)
                 ->lockForUpdate()
@@ -350,11 +351,15 @@ class AdminBookingController extends Controller
                 ->whereNotNull('queue_number')
                 ->max('queue_number')) + 1;
 
-            $booking->update([
+            $bookingUpdates = [
                 'status' => 'checked_in',
                 'queue_number' => $queueNumber,
                 'dropped_off_at' => now(),
-            ]);
+            ];
+            if (array_key_exists('internal_staff_note', $data)) {
+                $bookingUpdates['internal_staff_note'] = trim($data['internal_staff_note'] ?? '') ?: null;
+            }
+            $booking->update($bookingUpdates);
 
             app(DailyPetQueue::class)->assignBookingPets($booking, $queueDate);
 
@@ -373,6 +378,39 @@ class AdminBookingController extends Controller
             'message' => 'Customer checked in successfully.',
             'queue_number' => $result['queue_number'],
         ]);
+    }
+
+    public function updateInternalStaffNote($id)
+    {
+        $data = request()->validate(['internal_staff_note' => ['present', 'nullable', 'string', 'max:5000']]);
+        return DB::transaction(function () use ($id, $data) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+
+            if ($booking->walkin_id !== null || ! in_array($booking->status, ['waiting_to_arrive', 'checked_in', 'in_progress'], true)) {
+                return response()->json(['message' => 'Internal Staff Note is read-only for this booking.'], 422);
+            }
+
+            $booking->update(['internal_staff_note' => trim($data['internal_staff_note'] ?? '') ?: null]);
+
+            return response()->json(['internal_staff_note' => $booking->internal_staff_note]);
+        });
+    }
+
+    public function updateGroomingVisitNotes($id, $bookingPetId)
+    {
+        $data = request()->validate(['grooming_visit_notes' => ['present', 'nullable', 'string', 'max:1000']]);
+        return DB::transaction(function () use ($id, $bookingPetId, $data) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+
+            if ($booking->walkin_id === null || ! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
+                return response()->json(['message' => 'Grooming & Visit Notes are read-only for this booking.'], 422);
+            }
+
+            $bookingPet = BookingPet::where('booking_id', $booking->booking_id)->findOrFail($bookingPetId);
+            $bookingPet->update(['special_instructions' => trim($data['grooming_visit_notes'] ?? '') ?: null]);
+
+            return response()->json(['grooming_visit_notes' => $bookingPet->special_instructions]);
+        });
     }
 
     // Undo check-in completely: restore the pre-arrival booking and release all queue fields.
@@ -1397,6 +1435,7 @@ class AdminBookingController extends Controller
             'bookingReference' => $booking->booking_reference,
             'bookingType' => $booking->walkin_id !== null ? 'Walk-In' : 'Pre-Register',
             'specialNotes' => $booking->special_notes,
+            'internalStaffNote' => $booking->walkin_id === null ? $booking->internal_staff_note : null,
             'numberOfPets' => $booking->number_of_pets,
             'paidAmount' => $paidTotal,
             'paid_amount' => $paidTotal,

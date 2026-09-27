@@ -509,6 +509,7 @@ function adminDashboard() {
     notifTab: "all",
     detailsModalOpen: false,
     detailsBooking: null,
+    noteEditor: { kind: "", bookingPetId: null, value: "", busy: false, error: "" },
     sedationConsentCapture: {
       confirmed: false,
       busy: false,
@@ -682,8 +683,8 @@ function adminDashboard() {
       // Configure action handlers to call the real API
       this.mergeConfig({
         handlers: {
-          checkIn: async ({ booking, petSizes }) => {
-            await API.adminCheckIn(booking.id, petSizes);
+          checkIn: async ({ booking, petSizes, internalStaffNote }) => {
+            await API.adminCheckIn(booking.id, petSizes, internalStaffNote);
             await this.loadAdminBookings();
             this.setTab("queued");
           },
@@ -764,6 +765,7 @@ function adminDashboard() {
           },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
+            this.cancelNoteEdit();
             this.sedationConsentCapture = {
               confirmed: false,
               busy: false,
@@ -1011,6 +1013,7 @@ function adminDashboard() {
         species: pet.species ?? pet.petType,
         size: normalizePaymentSizeForPet(pet.size, pet.species ?? pet.petType),
       }));
+      this.actionConfirmModal.internalStaffNote = booking?.internalStaffNote || "";
     },
 
     formatPaymentSizeLabel(value) {
@@ -1325,6 +1328,7 @@ function adminDashboard() {
         variant,
         cancellationReason: "",
         petSizes: [],
+        internalStaffNote: "",
         busy: false,
         error: "",
       };
@@ -1347,6 +1351,7 @@ function adminDashboard() {
         variant: "primary",
         cancellationReason: "",
         petSizes: [],
+        internalStaffNote: "",
         busy: false,
         error: "",
       };
@@ -1363,7 +1368,7 @@ function adminDashboard() {
 
       try {
         if (action === "checkIn") {
-          await this.checkInBooking(booking, this.actionConfirmModal.petSizes);
+          await this.checkInBooking(booking, this.actionConfirmModal.petSizes, this.actionConfirmModal.internalStaffNote);
         } else if (action === "startGrooming") {
           await this.startGroomingBooking(booking);
         } else if (action === "startPetGrooming") {
@@ -1391,9 +1396,10 @@ function adminDashboard() {
     },
 
     // Starts the Incoming -> Queued transition for a booking.
-    async checkInBooking(booking, petSizes = []) {
+    async checkInBooking(booking, petSizes = [], internalStaffNote = "") {
       await this.runBookingAction("checkIn", booking, {
         petSizes: petSizes.map((pet) => ({ booking_pet_id: pet.bookingPetId, size: pet.size })),
+        internalStaffNote,
       });
     },
 
@@ -1715,6 +1721,20 @@ function adminDashboard() {
 
       if ("releasedList" in nextPayload) {
         this.releasedList = this.filterLocalCancelledBookings(nextPayload.releasedList);
+      }
+
+      if (this.detailsModalOpen && this.detailsBooking) {
+        const current = [
+          ...this.incomingList, ...this.queuedList, ...this.inProgressList,
+          ...this.forPaymentList, ...this.forPickupList, ...this.releasedList,
+        ].find((booking) => String(booking.id) === String(this.detailsBooking.id));
+        if (current) {
+          this.detailsBooking = current;
+          if ((this.noteEditor.kind === "staff" && !this.canEditInternalStaffNote())
+            || (this.noteEditor.kind === "pet" && !this.canEditGroomingVisitNotes())) {
+            this.cancelNoteEdit();
+          }
+        }
       }
 
       this.refreshIcons();
@@ -2810,9 +2830,8 @@ function adminDashboard() {
 
       const petName = pet?.petName ?? pet?.pet_name ?? pet?.name ?? "Pet";
       const groomingInstructions =
-        pet?.specialInstructions ??
-        pet?.special_instructions ??
-        booking?.specialNotes ??
+        pet?.specialInstructions?.trim() ||
+        pet?.special_instructions?.trim() ||
         "None provided";
       const medicalInformation =
         pet?.medicalConditions ??
@@ -2853,11 +2872,12 @@ function adminDashboard() {
           <ul class="pet-grooming-print-services">${serviceItems}</ul>
         </section>
         <section class="pet-grooming-print-section">
-          <h2>Grooming instructions</h2>
+          <h2>${booking?.bookingType === "Walk-In" ? "Grooming & Visit Notes" : "Customer Note"}</h2>
           <p class="pet-grooming-print-notes">${this.escapePrintHtml(groomingInstructions)}</p>
         </section>
+        ${booking?.bookingType === "Walk-In" ? "" : `<section class="pet-grooming-print-section"><h2>Internal Staff Note</h2><p class="pet-grooming-print-notes">${this.escapePrintHtml(booking?.internalStaffNote || "No staff note added.")}</p></section>`}
         <section class="pet-grooming-print-section pet-grooming-print-medical">
-          <h2>Medical information</h2>
+          <h2>Medical Information</h2>
           <p class="pet-grooming-print-notes">${this.escapePrintHtml(medicalInformation)}</p>
         </section>
       `;
@@ -4028,11 +4048,60 @@ function adminDashboard() {
     closeDetailsModal() {
       this.detailsModalOpen = false;
       this.detailsBooking   = null;
+      this.cancelNoteEdit();
       this.sedationConsentCapture = {
         confirmed: false,
         busy: false,
         error: "",
       };
+    },
+
+    canEditInternalStaffNote(booking = this.detailsBooking) {
+      return booking?.bookingType !== "Walk-In" && ["incoming", "queued", "in-progress"].includes(this.normalizeStatus(booking?.status));
+    },
+
+    canEditGroomingVisitNotes(booking = this.detailsBooking) {
+      return booking?.bookingType === "Walk-In" && ["queued", "in-progress"].includes(this.normalizeStatus(booking?.status));
+    },
+
+    beginNoteEdit(kind, pet = null) {
+      if (kind === "staff" && !this.canEditInternalStaffNote()) return;
+      if (kind === "pet" && !this.canEditGroomingVisitNotes()) return;
+      this.noteEditor = {
+        kind,
+        bookingPetId: pet?.bookingPetId ?? null,
+        value: kind === "staff" ? (this.detailsBooking?.internalStaffNote || "") : (pet?.specialInstructions || ""),
+        busy: false,
+        error: "",
+      };
+    },
+
+    cancelNoteEdit() {
+      this.noteEditor = { kind: "", bookingPetId: null, value: "", busy: false, error: "" };
+    },
+
+    async saveNoteEdit() {
+      const { kind, bookingPetId, value } = this.noteEditor;
+      if (this.noteEditor.busy || !this.detailsBooking?.id) return;
+      if (kind === "staff" && !this.canEditInternalStaffNote()) return;
+      if (kind === "pet" && !this.canEditGroomingVisitNotes()) return;
+      this.noteEditor.busy = true;
+      this.noteEditor.error = "";
+      try {
+        if (kind === "staff") {
+          const result = await API.adminUpdateInternalStaffNote(this.detailsBooking.id, value);
+          this.detailsBooking.internalStaffNote = result.internal_staff_note;
+        } else {
+          const result = await API.adminUpdateGroomingVisitNotes(this.detailsBooking.id, bookingPetId, value);
+          const pet = this.detailsBooking.pets.find((item) => item.bookingPetId === bookingPetId);
+          if (pet) pet.specialInstructions = result.grooming_visit_notes;
+        }
+        this.cancelNoteEdit();
+        await this.loadAdminBookings();
+      } catch (error) {
+        this.noteEditor.busy = false;
+        this.noteEditor.error = error.message || "Could not save notes.";
+      }
     },
 
     sedationConsentStatusLabel(booking = this.detailsBooking) {

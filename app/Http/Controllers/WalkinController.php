@@ -90,7 +90,7 @@ class WalkinController extends Controller
                     'pet_id' => $pet->pet_id,
                     'registered_size' => $item['petData']['size'] ?? null,
                     'confirmed_size' => $item['size'],
-                    'special_instructions' => $item['petData']['special_instructions'] ?? null,
+                    'special_instructions' => trim($item['petData']['special_instructions'] ?? '') ?: null,
                 ]);
 
                 foreach ($item['services'] as $svc) {

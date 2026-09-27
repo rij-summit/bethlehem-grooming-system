@@ -273,20 +273,10 @@ function renderPetReviewCard(item, index) {
         ${alaCarteCard}
         ${missingSelectionNotice}
 
-        ${
-          item.selection.specialInstructions.trim()
-            ? `
-              <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Special Instructions
-                </p>
-                <p class="mt-2 text-sm text-slate-600">${escapeHtml(
-                  item.selection.specialInstructions.trim(),
-                )}</p>
-              </div>
-            `
-            : ""
-        }
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Grooming &amp; Visit Notes</p>
+          <p class="mt-2 text-sm text-slate-600">${escapeHtml(item.selection.specialInstructions.trim() || "None provided")}</p>
+        </div>
       </div>
     </article>
   `;

@@ -35,6 +35,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/sedation-consent'],
         ['PATCH', 'api/admin/clinic/settings/groomers-on-duty'],
         ['POST', 'api/admin/bookings/{id}/check-in'],
+        ['PATCH', 'api/admin/bookings/{id}/internal-staff-note'],
+        ['PATCH', 'api/admin/bookings/{id}/pets/{bookingPetId}/grooming-visit-notes'],
         ['POST', 'api/admin/bookings/{id}/revert-check-in'],
         ['POST', 'api/admin/bookings/{id}/start-grooming'],
         ['POST', 'api/admin/bookings/{id}/revert-start-grooming'],
@@ -150,6 +152,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->string('status');
             $table->integer('queue_number')->nullable();
             $table->text('special_notes')->nullable();
+            $table->text('internal_staff_note')->nullable();
             $table->boolean('sedation_consent')->default(false);
             $table->string('sedation_consent_source', 30)->nullable();
             $table->unsignedInteger('sedation_consent_recorded_by')->nullable();
@@ -319,6 +322,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         return [
             'queue listing' => ['GET', '/api/admin/bookings'],
+            'edit internal staff note' => ['PATCH', '/api/admin/bookings/1/internal-staff-note', ['internal_staff_note' => 'private']],
+            'edit grooming visit notes' => ['PATCH', '/api/admin/bookings/1/pets/1/grooming-visit-notes', ['grooming_visit_notes' => 'private']],
             'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
@@ -354,6 +359,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'queue and incoming listing' => ['GET', '/api/admin/bookings'],
             'archived grooming listing' => ['GET', '/api/admin/bookings/archived'],
             'check in booking' => ['POST', '/api/admin/bookings/1/check-in'],
+            'edit internal staff note' => ['PATCH', '/api/admin/bookings/1/internal-staff-note', ['internal_staff_note' => 'private']],
+            'edit grooming visit notes' => ['PATCH', '/api/admin/bookings/1/pets/1/grooming-visit-notes', ['grooming_visit_notes' => 'private']],
             'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'start whole booking' => ['POST', '/api/admin/bookings/1/start-grooming'],
@@ -644,6 +651,76 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_pre_registration_internal_note_updates_one_booking_and_locks_at_payment(): void
+    {
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'STAFF-NOTE-1',
+            'booking_date' => now()->toDateString(),
+            'status' => 'waiting_to_arrive',
+            'special_notes' => 'Customer supplied note',
+        ]);
+        $this->authenticateAs('staff');
+
+        foreach (['waiting_to_arrive', 'checked_in', 'in_progress'] as $status) {
+            DB::table('bookings')->where('booking_id', 1)->update(['status' => $status]);
+            $this->patchJson('/api/admin/bookings/1/internal-staff-note', [
+                'internal_staff_note' => 'Call owner before extra services',
+            ])->assertOk()->assertJsonPath('internal_staff_note', 'Call owner before extra services');
+        }
+
+        foreach (['for_payment', 'for_pickup', 'archived'] as $status) {
+            DB::table('bookings')->where('booking_id', 1)->update(['status' => $status]);
+            $this->patchJson('/api/admin/bookings/1/internal-staff-note', [
+                'internal_staff_note' => 'Changed too late',
+            ])->assertUnprocessable();
+        }
+
+        $this->assertDatabaseHas('bookings', [
+            'booking_id' => 1,
+            'special_notes' => 'Customer supplied note',
+            'internal_staff_note' => 'Call owner before extra services',
+        ]);
+    }
+
+    public function test_walk_in_visit_notes_update_only_the_selected_pet_and_lock_at_payment(): void
+    {
+        DB::table('walkins')->insert([
+            'id' => 1, 'fname' => 'Walk', 'lname' => 'In', 'phone' => '09170000000',
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 1,
+            'booking_reference' => 'WALK-NOTE-1',
+            'walkin_id' => 1,
+            'booking_date' => now()->toDateString(),
+            'status' => 'checked_in',
+        ]);
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 1, 'booking_id' => 1, 'special_instructions' => 'Short trim'],
+            ['booking_pet_id' => 2, 'booking_id' => 1, 'special_instructions' => 'Avoid perfume'],
+        ]);
+        $this->authenticateAs('staff');
+
+        $this->patchJson('/api/admin/bookings/1/pets/1/grooming-visit-notes', [
+            'grooming_visit_notes' => 'Nervous around dryers',
+        ])->assertOk()->assertJsonPath('grooming_visit_notes', 'Nervous around dryers');
+
+        DB::table('bookings')->where('booking_id', 1)->update(['status' => 'in_progress']);
+        $this->patchJson('/api/admin/bookings/1/pets/1/grooming-visit-notes', [
+            'grooming_visit_notes' => 'Short trim, nervous around dryers',
+        ])->assertOk();
+
+        foreach (['for_payment', 'for_pickup', 'archived'] as $status) {
+            DB::table('bookings')->where('booking_id', 1)->update(['status' => $status]);
+            $this->patchJson('/api/admin/bookings/1/pets/1/grooming-visit-notes', [
+                'grooming_visit_notes' => 'Changed too late',
+            ])->assertUnprocessable();
+        }
+
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'special_instructions' => 'Short trim, nervous around dryers']);
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'special_instructions' => 'Avoid perfume']);
+    }
+
     public function test_revert_check_in_restores_admin_and_customer_state_and_allows_check_in_again(): void
     {
         DB::table('users')->insert([
@@ -765,8 +842,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->authenticateAs('staff');
         $this->postJson('/api/admin/bookings/120/check-in', [
             'pet_sizes' => [['booking_pet_id' => 120, 'size' => 'small']],
+            'internal_staff_note' => 'Call owner before extra services',
         ])->assertOk();
 
+        $this->assertDatabaseHas('bookings', ['booking_id' => 120, 'internal_staff_note' => 'Call owner before extra services']);
         $this->assertDatabaseHas('pets', ['pet_id' => 120, 'size' => 'small', 'weight' => 12]);
         $this->assertDatabaseHas('booking_pets', [
             'booking_pet_id' => 120,
@@ -967,6 +1046,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
                 'status' => 'archived',
                 'queue_number' => $id,
                 'special_notes' => 'Use sensitive shampoo.',
+                'internal_staff_note' => $isWalkin ? null : 'Call before extra services',
                 'total_amount' => 500,
                 'paid' => true,
                 'archived_at' => Carbon::parse('2026-07-24 12:00:00')->addMinutes($id),
@@ -1185,6 +1265,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.serviceLabel', 'Basic Grooming')
             ->assertJsonPath('archived.0.numberOfPets', 1)
             ->assertJsonPath('archived.0.specialNotes', 'Use sensitive shampoo.')
+            ->assertJsonPath('archived.0.internalStaffNote', null)
+            ->assertJsonPath('archived.1.internalStaffNote', 'Call before extra services')
             ->assertJsonPath('archived.0.paidAmount', 500)
             ->assertJsonPath('archived.0.paid_amount', 500)
             ->assertJsonPath('archived.0.paid', true)
