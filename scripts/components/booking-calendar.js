@@ -39,10 +39,11 @@ const state = {
     dateOnly: false,
     storageKey: "bookingSchedule",
     dateField: "date",
-    nextPath: "./booking-pet-details.html",
+    nextPath: "./grooming-pre-registration.html?step=pets",
     fetchTimeslots: (dateKey) => API.getTimeslots(dateKey),
     saveSelection: null,
     onDateSelected: null,
+    onNext: null,
   },
 };
 
@@ -366,6 +367,9 @@ function createDateButton({ day, dateKey, disabled, selected }) {
       state.selectedDateKey = dateKey;
       state.selectedSlot    = null;
       state.dayFull         = false;
+      if (!state.options.dateOnly && state.options.storageKey === "bookingSchedule") {
+        sessionStorage.removeItem(state.options.storageKey);
+      }
       state.options.onDateSelected?.(dateKey);
       renderCalendarGrid();
       updateSelectedSchedule();
@@ -593,8 +597,40 @@ function bindEvents() {
 
   elements.nextStepBtn.addEventListener("click", () => {
     if (!state.selectedDateKey || (!state.options.dateOnly && !state.selectedSlot)) return;
-    window.location.href = state.options.nextPath;
+    if (state.options.onNext) state.options.onNext();
+    else window.location.href = state.options.nextPath;
   });
+}
+
+export async function refreshBookingCalendar() {
+  await loadClinicStatus();
+  if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {
+    state.selectedDateKey = null;
+    state.selectedSlot = null;
+    if (!state.options.dateOnly) sessionStorage.removeItem(state.options.storageKey);
+  }
+  if (state.selectedDateKey && !state.options.dateOnly) {
+    state.selectedSlot = null;
+    const ok = await fetchTimeslots(state.selectedDateKey);
+    if (ok) {
+      let saved = null;
+      try {
+        saved = JSON.parse(sessionStorage.getItem(state.options.storageKey) || "null");
+      } catch {
+        sessionStorage.removeItem(state.options.storageKey);
+      }
+      state.selectedSlot = state.timeslots.find((slot) =>
+        slot.window_id === saved?.window_id && !isSlotDisabled(slot)
+      ) || null;
+      if (!state.selectedSlot) sessionStorage.removeItem(state.options.storageKey);
+      renderTimeSlots();
+    }
+  }
+  renderMonthHeader();
+  renderCalendarGrid();
+  updateClinicNotice();
+  updateOperatingHoursText();
+  updateSelectedSchedule();
 }
 
 // =========================
@@ -612,14 +648,16 @@ export async function initBookingCalendar(options = {}) {
   const now = getManilaNowParts();
   state.currentMonth = new Date(now.year, now.month - 1, 1);
 
-  await loadClinicStatus();
-
-  if (state.options.dateOnly) {
+  if (state.options.dateOnly || state.options.storageKey === "bookingSchedule") {
     try {
       const savedDraft = JSON.parse(
         sessionStorage.getItem(state.options.storageKey) || "{}",
       );
       state.selectedDateKey = savedDraft[state.options.dateField] || null;
+      if (state.selectedDateKey) {
+        const selectedDate = dateKeyToLocalDate(state.selectedDateKey);
+        state.currentMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      }
     } catch {
       state.selectedDateKey = null;
     }
@@ -632,9 +670,5 @@ export async function initBookingCalendar(options = {}) {
   }
 
   bindEvents();
-  renderMonthHeader();
-  renderCalendarGrid();
-  updateClinicNotice();
-  updateOperatingHoursText();
-  updateSelectedSchedule();
+  await refreshBookingCalendar();
 }

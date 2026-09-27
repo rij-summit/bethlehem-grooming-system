@@ -8,7 +8,7 @@ class GroomingPetStepPersistenceInterfaceTest extends TestCase
 {
     public function test_customer_and_walk_in_pet_steps_omit_redundant_helper_messages(): void
     {
-        $customerPage = file_get_contents(base_path('pages/client/booking-pet-details.html'));
+        $customerPage = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-pet-details.html'));
         $customerStep = file_get_contents(base_path('scripts/components/booking-pet-step.js'));
         $walkInStep = file_get_contents(base_path('scripts/components/walk-in-pet-step.js'));

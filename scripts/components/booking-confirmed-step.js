@@ -4,7 +4,7 @@ import {
 } from "../services/booking-format-service.js";
 import { escapeHtml } from "../services/booking-draft-service.js";
 
-document.addEventListener("DOMContentLoaded", () => {
+export function initBookingConfirmedStep() {
   const confirmationContext =
     document.body.dataset.confirmationContext || "customer";
   const isWalkInConfirmation = confirmationContext === "walk-in";
@@ -420,4 +420,12 @@ document.addEventListener("DOMContentLoaded", () => {
     window.location.href = "../client/sign-in.html";
     return false;
   }
-});
+}
+
+if (document.body?.dataset.confirmationContext === "walk-in") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initBookingConfirmedStep, { once: true });
+  } else {
+    initBookingConfirmedStep();
+  }
+}

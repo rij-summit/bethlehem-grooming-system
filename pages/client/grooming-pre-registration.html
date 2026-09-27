@@ -1,0 +1,1469 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grooming Pre-Registration</title>
+    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/custom.css" />
+  </head>
+  <body data-grooming-flow="single-page" class="min-h-screen bg-[#f6fafd] text-slate-800">
+    <div data-grooming-step="schedule" class="hidden" hidden>
+<main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- Page Header -->
+      <section class="mb-6">
+        <a
+          href="./dashboard.html"
+          class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+        >
+          &larr; Back to Home
+        </a>
+
+        <div class="mt-4">
+          <h1 class="text-3xl font-bold text-[#2f4b66]">
+            Select your Pet Drop-off Date and Time
+          </h1>
+        </div>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 1 of 4</span>
+            <span>25% Complete</span>
+          </div>
+          <div class="h-2 w-full rounded-full bg-slate-200">
+            <div class="h-2 w-1/4 rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Card -->
+      <section class="rounded-3xl bg-white p-5 shadow-lg md:p-6">
+        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <!-- LEFT: Calendar -->
+          <div class="rounded-3xl bg-[#eaf3fb] p-5">
+            <div class="mb-5 flex items-center justify-between">
+              <button
+                id="prevMonthBtn"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Previous month"
+              >
+                &lt;
+              </button>
+
+              <h2 id="monthLabel" class="text-lg font-bold text-[#2f4b66]">
+                Month Year
+              </h2>
+
+              <button
+                id="nextMonthBtn"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Next month"
+              >
+                &gt;
+              </button>
+            </div>
+
+            <!-- Weekdays -->
+            <div
+              class="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              <div>Su</div>
+              <div>Mo</div>
+              <div>Tu</div>
+              <div>We</div>
+              <div>Th</div>
+              <div>Fr</div>
+              <div>Sa</div>
+            </div>
+
+            <!-- Clinic closure notice (shown by JS when clinic is stopped today) -->
+            <div
+              id="clinicNotice"
+              class="hidden mb-4 rounded-xl border border-[#fcd34d] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]"
+            ></div>
+
+            <!-- Calendar grid -->
+            <div id="calendarGrid" class="grid grid-cols-7 gap-2"></div>
+
+            <!-- Legend / Notes -->
+            <div
+              class="mt-5 rounded-2xl bg-white/80 p-4 text-xs text-slate-500"
+            >
+              <p class="font-semibold text-slate-600">Pre-registration Guidelines:</p>
+              <ul class="mt-2 space-y-1">
+                <li id="operatingHoursText">• Loading pet grooming hours...</li>
+                <li>• Past dates and past time slots are unavailable</li>
+                <li>• 12:00 PM to 1:00 PM is reserved as a break</li>
+                <li>• Pre-registration is limited to the next 3 days only</li>
+                <li class="flex items-center gap-1.5">
+                  <span class="inline-block h-3 w-3 shrink-0 rounded bg-[#fef9c3]"></span>
+                  <span>Amber dates are clinic closures or scheduled breaks</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- RIGHT: Time Slots + Summary -->
+          <div class="rounded-3xl bg-[#d7ebfb] p-5">
+            <div>
+              <h3 class="text-lg font-bold text-[#2f4b66]">
+                Available Time Slots
+              </h3>
+            </div>
+
+            <div
+              id="timeSlots"
+              class="mt-5 grid max-h-80 grid-cols-2 gap-3 overflow-y-auto overscroll-contain pr-1"
+            ></div>
+
+            <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm">
+              <p
+                class="text-xs font-semibold tracking-wide text-slate-400"
+              >
+                Selected Schedule
+              </p>
+              <p id="selectedScheduleText" class="mt-2 text-sm text-slate-600">
+                Please select a date and time.
+              </p>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+              <button
+                id="nextStepBtn"
+                type="button"
+                disabled
+                class="rounded-2xl bg-[#315b7e] px-6 py-3 text-sm font-semibold text-white opacity-50 cursor-not-allowed transition"
+              >
+                Next Step
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    </div>
+    <div data-grooming-step="pets" class="hidden" hidden>
+<main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- ENTER YOUR PET INFORMATION -->
+      <section class="mb-6">
+        <a
+          id="petStepBackLink"
+          href="./dashboard.html"
+          class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+        >
+          &larr; <span id="petStepBackLabel">Back to Home</span>
+        </a>
+
+        <div class="mt-4">
+          <h1 id="petStepPageTitle" class="text-3xl font-bold text-[#2f4b66]">
+            Enter your Pet Information
+          </h1>
+        </div>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 2 of 4</span>
+            <span>50% Complete</span>
+          </div>
+          <div class="h-2 w-full rounded-full bg-slate-200">
+            <div class="h-2 w-1/2 rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Card -->
+      <section class="rounded-3xl bg-[#cfe3f6] p-6 shadow-lg md:p-8">
+        <div class="mx-auto max-w-5xl">
+          <div class="mb-6">
+            <h2 class="text-3xl font-bold text-[#2f4b66]">Pet Information</h2>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="mb-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              id="showExistingPetBtn"
+              type="button"
+              aria-controls="existingPetSection"
+              aria-pressed="false"
+              class="rounded-2xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]"
+            >
+              Select Existing Pet
+            </button>
+
+            <button
+              id="showAddPetBtn"
+              type="button"
+              aria-controls="addPetSection"
+              aria-pressed="false"
+              class="rounded-2xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]"
+            >
+              Add New Pet
+            </button>
+          </div>
+
+          <p
+            id="petStepError"
+            class="mb-6 hidden rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"
+            role="alert"
+          ></p>
+
+          <!-- Existing pets section -->
+          <section
+            id="existingPetSection"
+            class="mb-6 hidden rounded-2xl bg-white/85 p-5 shadow-sm"
+          >
+            <div
+              class="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:justify-between"
+            >
+              <div>
+                <h3 class="text-lg font-bold text-[#2f4b66]">
+                  Your Saved Pets
+                </h3>
+                <p id="savedPetsInstruction" class="mt-1 text-sm text-slate-500">
+                  Select up to 10 pets from your saved pet list.
+                </p>
+              </div>
+              <button
+                  id="selectAllExistingPetsBtn"
+                type="button"
+                class="rounded-xl bg-[#315b7e] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Select All
+              </button>
+            </div>
+
+            <div
+              id="existingPetEmptyState"
+              class="hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500"
+            >
+              <p class="font-semibold text-slate-600">No saved pets yet</p>
+              <p class="mt-1">
+                Add your first pet to continue with the booking.
+              </p>
+            </div>
+
+            <div id="existingPetsLoading" class="hidden py-8 text-center" role="status" aria-live="polite">
+              <svg class="mx-auto h-8 w-8 animate-spin fill-current text-[#315b7e]" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+              <p class="mt-2 text-sm text-slate-500">Loading saved pets...</p>
+            </div>
+            <div id="existingPetList" class="grid gap-4 md:grid-cols-2"></div>
+          </section>
+
+          <!-- Add new pet section -->
+          <section
+            id="addPetSection"
+            class="portal-theme hidden rounded-2xl bg-white/85 p-5 shadow-sm"
+          >
+            <div class="mb-4">
+              <h3 class="text-lg font-bold text-[#2f4b66]">Add New Pet</h3>
+              <p class="mt-1 text-sm text-slate-500">
+                This pet will be added to the current booking and saved to the
+                pet list.
+              </p>
+            </div>
+
+            <form id="addPetForm" class="space-y-5">
+              <div class="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label
+                    for="petName"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Pet Name <span class="text-portal-danger">*</span>
+                  </label>
+                  <input
+                    id="petName"
+                    name="petName"
+                    type="text"
+                    placeholder="e.g. Buddy"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active"
+                    required
+                  />
+                </div>
+                <div>
+                  <label
+                    for="petType"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Species / Pet Type <span class="text-portal-danger">*</span>
+                  </label>
+                  <div id="petTypeCombobox" class="relative">
+                    <div class="relative">
+                      <input
+                        id="petType"
+                        name="petType"
+                        type="text"
+                        placeholder="Select species"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer"
+                        role="combobox"
+                        aria-autocomplete="none"
+                        aria-controls="petTypeOptions"
+                        aria-expanded="false"
+                        aria-invalid="false"
+                        autocomplete="off"
+                        readonly
+                        required
+                      />
+                      <button
+                        id="petTypeDropdownButton"
+                        type="button"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active"
+                        aria-label="Show pet type options"
+                        aria-controls="petTypeOptions"
+                        aria-expanded="false"
+                      >
+                        <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                      </button>
+                    </div>
+                    <div
+                      id="petTypeOptions"
+                      class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                      role="listbox"
+                      aria-label="Pet type options"
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <label for="gender" class="block text-sm font-medium text-portal-text mb-1">Gender</label>
+                  <div id="genderCombobox" class="relative">
+                    <div class="relative">
+                      <input id="gender" name="gender" type="text" placeholder="Select gender"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer"
+                        role="combobox" aria-autocomplete="none" aria-controls="genderOptions"
+                        aria-expanded="false" aria-invalid="false" autocomplete="off" readonly />
+                      <button id="genderDropdownButton" type="button"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active"
+                        aria-label="Show gender options" aria-controls="genderOptions" aria-expanded="false">
+                        <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                      </button>
+                    </div>
+                    <div id="genderOptions"
+                      class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                      role="listbox" aria-label="Gender options"></div>
+                  </div>
+                </div>
+                <div>
+                  <label for="birthdate" class="block text-sm font-medium text-portal-text mb-1">Birthdate</label>
+                  <input id="birthdate" name="birthdate" type="date"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
+                </div>
+                <div>
+                  <label
+                    for="breed"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Breed
+                  </label>
+                  <div id="breedCombobox" class="relative">
+                    <div class="relative">
+                      <input
+                        id="breed"
+                        name="breed"
+                        type="text"
+                        maxlength="100"
+                        placeholder="Select pet type first"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-controls="breedOptions"
+                        aria-expanded="false"
+                        aria-invalid="false"
+                        autocomplete="off"
+                        readonly
+                        disabled
+                      />
+                      <button
+                        id="breedDropdownButton"
+                        type="button"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
+                        aria-label="Show breed options"
+                        aria-controls="breedOptions"
+                        aria-expanded="false"
+                        disabled
+                      >
+                        <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                      </button>
+                    </div>
+                    <div
+                      id="breedOptions"
+                      class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                      role="listbox"
+                      aria-label="Breed options"
+                    ></div>
+                  </div>
+                  <p id="breedError" class="mt-2 hidden text-sm text-red-600"></p>
+                </div>
+                <div>
+                  <label for="color" class="block text-sm font-medium text-portal-text mb-1">Color</label>
+                  <input id="color" name="color" type="text" placeholder="e.g. White"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
+                </div>
+                <div>
+                  <label
+                    for="weight"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Weight (kg)
+                  </label>
+                  <input
+                    id="weight"
+                    name="weight"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="e.g. 12"
+                    aria-invalid="false"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active"
+                  />
+                </div>
+                <div>
+                  <label
+                    for="furType"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Fur Type
+                  </label>
+                  <div id="furTypeCombobox" class="relative">
+                    <div class="relative">
+                      <input
+                        id="furType"
+                        name="furType"
+                        type="text"
+                        placeholder="Select breed first"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        role="combobox"
+                        aria-autocomplete="none"
+                        aria-controls="furTypeOptions"
+                        aria-expanded="false"
+                        aria-invalid="false"
+                        autocomplete="off"
+                        readonly
+                        disabled
+                      />
+                      <button
+                        id="furTypeDropdownButton"
+                        type="button"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
+                        aria-label="Show fur type options"
+                        aria-controls="furTypeOptions"
+                        aria-expanded="false"
+                        disabled
+                      >
+                        <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                      </button>
+                    </div>
+                    <div
+                      id="furTypeOptions"
+                      class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                      role="listbox"
+                      aria-label="Fur type options"
+                    ></div>
+                  </div>
+                  <p id="furTypeError" class="mt-2 hidden text-sm text-red-600"></p>
+                </div>
+                <div>
+                  <label
+                    for="size"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Estimated Size
+                  </label>
+                  <p id="sizeEstimateNote" class="mb-2 text-xs font-medium text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
+                  <div id="sizeCombobox" class="relative">
+                    <div class="relative">
+                      <input
+                        id="size"
+                        name="size"
+                        type="text"
+                        aria-describedby="sizeEstimateNote"
+                        placeholder="Select pet type first"
+                        class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        role="combobox"
+                        aria-autocomplete="none"
+                        aria-controls="sizeOptions"
+                        aria-expanded="false"
+                        aria-invalid="false"
+                        autocomplete="off"
+                        readonly
+                        disabled
+                      />
+                      <button
+                        id="sizeDropdownButton"
+                        type="button"
+                        class="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-portal-muted transition hover:text-portal-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-portal-active disabled:cursor-not-allowed disabled:text-slate-300"
+                        aria-label="Show size options"
+                        aria-controls="sizeOptions"
+                        aria-expanded="false"
+                        disabled
+                      >
+                        <svg class="h-5 w-5 fill-current" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-down"></use></svg>
+                      </button>
+                    </div>
+                    <div
+                      id="sizeOptions"
+                      class="portal-option-list absolute z-30 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-xl border border-portal-border bg-white py-1 shadow-lg"
+                      role="listbox"
+                      aria-label="Size options"
+                    ></div>
+                  </div>
+                  <p id="sizeError" class="mt-2 hidden text-sm text-red-600"></p>
+                </div>
+                <div class="md:col-span-2">
+                  <label
+                    for="medicalNotes"
+                    class="mb-1 block text-sm font-medium text-portal-text"
+                  >
+                    Medical Conditions / Special Needs
+                  </label>
+                  <textarea
+                    id="medicalNotes"
+                    name="medicalNotes"
+                    rows="3"
+                    placeholder="e.g. allergic to certain shampoos, has heart condition..."
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active resize-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="flex justify-end">
+                <button
+                  id="savePetBtn"
+                  type="submit"
+                  class="rounded-2xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274864]"
+                >
+                  Save &amp; Select Pet
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <!-- Selected pets -->
+          <section class="mt-8 rounded-2xl bg-white/90 p-5 shadow-sm">
+            <div
+              class="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <h3 id="selectedPetsTitle" class="text-lg font-bold text-[#2f4b66]">Selected Pets</h3>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  id="removeAllSelectedPetsBtn"
+                  type="button"
+                  class="hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Remove All
+                </button>
+                <div
+                  id="selectedPetCount"
+                  class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]"
+                >
+                  0 / 10 selected
+                </div>
+              </div>
+            </div>
+
+            <div
+              id="selectedPetsEmptyState"
+              class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500"
+            >
+              <p class="font-semibold text-slate-600">No pets selected yet</p>
+              <p class="mt-1">
+                Select an existing pet or add a new pet to continue.
+              </p>
+            </div>
+
+            <div id="selectedPetCards" class="grid gap-3 md:grid-cols-2"></div>
+          </section>
+
+          <!-- Footer buttons -->
+          <div class="mt-8 flex items-center justify-between gap-4">
+            <button
+              id="backBtn"
+              type="button"
+              class="rounded-2xl border border-[#315b7e] px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-[#edf5fc]"
+            >
+              Back
+            </button>
+
+            <button
+              id="nextBtn"
+              type="button"
+              disabled
+              class="cursor-not-allowed rounded-2xl bg-[#315b7e] px-6 py-3 text-sm font-semibold text-white opacity-50 transition"
+            >
+              Next Step
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+    </div>
+    <div data-grooming-step="services" class="hidden" hidden>
+<main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- Back to Home -->
+      <a
+        href="./dashboard.html"
+        class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+      >
+        &larr; Back to Home
+      </a>
+
+      <!-- Header -->
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Select your Grooming Services</h1>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 3 of 4</span>
+            <span>75% Complete</span>
+          </div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full w-[75%] rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Booking card -->
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Grooming Services</h2>
+        </div>
+
+        <!-- Service rules -->
+        <div
+          id="serviceNotice"
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Service Rules
+          </p>
+          <p class="mt-2">
+            Choose one package, A la Carte services, or both. Items already
+            included in the selected package will be unavailable.
+          </p>
+        </div>
+
+        <form id="bookingServicesForm" class="space-y-8">
+          <input type="hidden" name="booking_date" id="bookingDate" />
+          <input type="hidden" name="booking_time" id="bookingTime" />
+          <input type="hidden" name="pet_id" id="petId" />
+          <input type="hidden" name="pet_type" id="servicePetType" />
+          <section>
+            <div class="mb-3">
+              <h3 class="text-base font-semibold text-[#2f4b66]">Service Selection per Pet</h3>
+            </div>
+            <div id="petServiceSelections" class="space-y-6"></div>
+          </section>
+          <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <a href="./grooming-pre-registration.html?step=pets" data-grooming-target="pets" class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white">Back</a>
+            <button id="reviewBookingBtn" type="submit" class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]">Next Step</button>
+          </div>
+        </form>
+      </section>
+    </main>
+    </div>
+    <div data-grooming-step="review" class="hidden" hidden>
+<main class="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8">
+      <a
+        href="./dashboard.html"
+        class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+      >
+        &larr; Back to Home
+      </a>
+
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Review your selected drop-off Schedule</h1>
+      </section>
+
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Schedule Review</h2>
+        </div>
+
+        <div class="mb-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Schedule Summary
+            </p>
+            <p id="scheduleReviewText" class="mt-2 text-sm font-semibold text-slate-700">
+              No schedule selected yet.
+            </p>
+          </div>
+        </div>
+
+        <div
+          id="reviewNotice"
+          class="mb-6 hidden rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          The price is finalized at the clinic.
+        </div>
+
+        <div id="reviewSelections" class="space-y-6"></div>
+
+        <section class="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
+          <p
+            class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+          >
+            Price Summary
+          </p>
+          <h3
+            id="totalPriceHeading"
+            class="mt-3 text-2xl font-bold text-[#2f4b66]"
+          >
+            Total Price
+          </h3>
+          <p id="totalPriceText" class="mt-2 text-3xl font-bold text-[#244764]">
+            ₱0
+          </p>
+          <p id="totalPriceSubtext" class="mt-3 text-sm text-slate-500">
+            Pricing details will appear once services are selected.
+          </p>
+        </section>
+
+        <div
+          id="reviewActionNotice"
+          class="mt-6 hidden rounded-2xl border px-4 py-3 text-sm"
+        ></div>
+
+        <div
+          class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <a
+            href="./grooming-pre-registration.html?step=services" data-grooming-target="services"
+            class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white"
+          >
+            Back
+          </a>
+
+          <button
+            id="confirmBookingBtn"
+            type="button"
+            class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+          >
+            Next Step
+          </button>
+        </div>
+      </section>
+    </main>
+    </div>
+    <div data-grooming-step="consent" class="hidden" hidden>
+<main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <!-- Back to Home -->
+      <a
+        href="./dashboard.html"
+        class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+      >
+        &larr; Back to Home
+      </a>
+
+      <!-- Heading -->
+      <section class="mt-4">
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Consent &amp; Agreement</h1>
+
+        <!-- Progress -->
+        <div class="mt-6">
+          <div
+            class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500"
+          >
+            <span>Step 5 of 5</span>
+            <span>100% Complete</span>
+          </div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full w-full rounded-full bg-[#315b7e]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Card -->
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <!-- Status Message -->
+        <div
+          id="consentStatusMessage"
+          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          Please review the agreement, complete the digital signature, and
+          accept all required checkboxes.
+        </div>
+
+        <form id="bookingConsentForm" class="space-y-6">
+          <!-- Main Grooming Agreement -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Grooming Agreement
+              </h3>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-sm leading-7 text-slate-700">
+                I hereby agree and consent to have my pet groomed at Bethlehem
+                Animal Clinic subject to the following conditions:
+              </p>
+
+              <ul class="mt-4 space-y-3 text-sm leading-7 text-slate-700">
+                <li>
+                  • That I confirm that my pet for grooming is at least / above
+                  six (6) months of age, apparently healthy, vaccinations up to
+                  date, no ongoing medication and/or is fit for grooming.
+                </li>
+                <li>
+                  • That I understand that my pet will be bathed, clipped,
+                  trimmed and given a basic health check.
+                </li>
+                <li>
+                  • That I agree that the clinic shall not be held responsible
+                  for irritations, abrasion, patchiness or hair loss due to
+                  pre-existing skin condition or as a result of dematting,
+                  thinning, stripping or shaving or any mishap caused by
+                  nondisclosure of my pet’s medical condition or behavior.
+                </li>
+                <li>
+                  • That if my pet bites or attempts to bite any person or pets,
+                  a muzzle may be used or other restrictions at the discretion
+                  of the groomer.
+                </li>
+                <li>
+                  • That if my pet harbours parasites or has health concern, I
+                  understand that the grooming will cease and I will be advised
+                  for treatment, collection, or return home.
+                </li>
+                <li>
+                  • That if in my absence, my representative is informed of my
+                  grooming request.
+                </li>
+                <li>
+                  • That I agree and am responsible for the payment of grooming
+                  for my pet.
+                </li>
+              </ul>
+            </div>
+
+            <label
+              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <input
+                id="mainConsentCheckbox"
+                type="checkbox"
+                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+              />
+              <span class="text-sm text-slate-700">
+                I have read and agree to the grooming agreement.
+                <span class="text-red-500">*</span>
+              </span>
+            </label>
+          </section>
+
+          <!-- Sedation Consent -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Consent for Sedation
+              </h3>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-sm leading-7 text-slate-700">
+                I hereby authorize the clinic and its staff to proceed with the
+                sedation as it is deemed necessary for my pet for grooming. I
+                confirm that the procedure was explained and my pet had
+                undergone necessary test / screening prior to sedation and
+                grooming.
+              </p>
+            </div>
+
+            <label
+              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <input
+                id="sedationConsentCheckbox"
+                type="checkbox"
+                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
+              />
+              <span class="text-sm text-slate-700">
+                I have read and agree to the sedation consent.
+              </span>
+            </label>
+          </section>
+
+          <!-- Digital Signature -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Digital Signature
+                <span class="text-red-500">*</span>
+              </h3>
+              <p class="mt-1 text-sm text-slate-500">
+                By typing your name, you are providing a digital confirmation for this pre-registration request.
+              </p>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <label
+                  for="digitalSignature"
+                  class="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Full Name
+                </label>
+                <input
+                  id="digitalSignature"
+                  name="digital_signature"
+                  type="text"
+                  placeholder="Enter your full name"
+                  class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#315b7e] focus:ring-2 focus:ring-[#315b7e]/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="consentDate"
+                  class="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Date
+                </label>
+                <input
+                  id="consentDate"
+                  name="consent_date"
+                  type="text"
+                  readonly
+                  class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+                />
+              </div>
+            </div>
+
+          </section>
+
+          <!-- Buttons -->
+          <div
+            class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <a
+              href="./grooming-pre-registration.html?step=review" data-grooming-target="review"
+              class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-3 text-sm font-medium text-[#315b7e] transition hover:bg-white"
+            >
+              Back
+            </a>
+
+            <button
+              id="submitBookingButton"
+              type="submit"
+              disabled
+              class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white"
+            >
+              Submit Registration
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+<!-- Unchecked Sedation Notice -->
+    <div
+      id="sedationWarningModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sedationWarningTitle"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4"
+    >
+      <div class="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-xl">
+        <h3 id="sedationWarningTitle" class="text-lg font-bold text-[#2f4b66]">
+          Sedation Consent Not Selected
+        </h3>
+        <p class="mt-3 text-sm leading-6 text-slate-600">
+          Sedation may be necessary if a pet becomes too aggressive to groom
+          safely, but it will only be given with <strong>your approval</strong>.
+          Without sedation consent, the clinic may need to
+          <strong>stop grooming</strong> and notify you.
+        </p>
+        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            id="sedationWarningBackButton"
+            type="button"
+            class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-2.5 text-sm font-medium text-[#315b7e] transition hover:bg-slate-50"
+          >
+            Back
+          </button>
+          <button
+            id="sedationWarningUnderstandButton"
+            type="button"
+            class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+          >
+            I Understand
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duplicate Booking Modal -->
+    <div
+      id="duplicateBookingModal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4"
+    >
+      <div class="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-xl">
+        <!-- Default state -->
+        <div id="duplicateModalBody">
+          <div class="mb-4 flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <span class="text-lg">⚠️</span>
+            </div>
+            <h3 class="text-lg font-bold text-[#2f4b66]">Existing Booking Found</h3>
+          </div>
+          <p class="text-sm text-slate-600">
+            You already have a booking on this date
+            (<span id="duplicateBookingRef" class="font-semibold text-[#2f4b66]"></span>).
+          </p>
+          <p class="mt-2 text-sm text-slate-600">
+            Would you like to reschedule it to the new date and time you selected?
+          </p>
+          <p id="duplicateModalError" class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></p>
+          <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              id="duplicateNoBtnModal"
+              type="button"
+              class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] px-5 py-2.5 text-sm font-medium text-[#315b7e] transition hover:bg-slate-50"
+            >
+              No, Go to Dashboard
+            </button>
+            <button
+              id="duplicateYesBtnModal"
+              type="button"
+              class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+            >
+              Yes, Reschedule
+            </button>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="duplicateModalSuccess" class="hidden text-center">
+          <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+            <span class="text-2xl">✓</span>
+          </div>
+          <h3 class="text-lg font-bold text-[#2f4b66]">Rescheduled Successfully!</h3>
+          <p id="duplicateSuccessText" class="mt-2 text-sm text-slate-600"></p>
+          <p class="mt-3 text-xs text-slate-400">Redirecting you to your dashboard...</p>
+        </div>
+      </div>
+    </div>
+    </div>
+    <div data-grooming-step="confirmed" class="hidden" hidden>
+<main class="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8">
+      <a
+        href="./dashboard.html"
+        class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700"
+      >
+        &larr; Back to Home
+      </a>
+
+      <!-- Page header -->
+      <section class="mt-4 text-center">
+        <div
+          class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-700"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-8 w-8"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+
+        <h1 class="mt-4 text-3xl font-bold text-[#2f4b66]">
+          Pet Drop-off Arrival Confirmed
+        </h1>
+        <p class="mt-2 text-sm text-slate-500">
+          Thank you for trusting your pet with Bethlehem Animal Clinic
+        </p>
+      </section>
+
+      <!-- Printable summary -->
+      <section
+        id="printableConfirmation"
+        class="mt-8 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8"
+      >
+        <div
+          class="mb-6 flex flex-col gap-4 border-b border-[#9fb6cb] pb-6 md:flex-row md:items-start md:justify-between"
+        >
+          <div
+            class="brand-lockup"
+            role="img"
+            aria-label="Bethlehem Animal Clinic"
+          >
+            <img
+              src="../../assets/images/clinic/Bethlehem_Logo-256.png"
+              alt=""
+              class="brand-lockup__mark"
+            />
+            <span class="brand-lockup__divider" aria-hidden="true"></span>
+            <span class="brand-lockup__text" aria-hidden="true">
+              <span class="brand-lockup__name">BETHLEHEM</span>
+              <span class="brand-lockup__service">ANIMAL CLINIC</span>
+            </span>
+          </div>
+
+          <div
+            class="rounded-2xl border border-[#91aeca] bg-white px-4 py-3 text-left md:min-w-[240px]"
+          >
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+            >
+              REGISTRATION REF NO.
+            </p>
+            <p
+              id="bookingReferenceNumber"
+              class="mt-2 text-lg font-bold text-[#2f4b66]"
+            >
+              No reference available yet.
+            </p>
+          </div>
+        </div>
+
+        <!-- Only shown when confirmation data is missing or incomplete. -->
+        <div
+          id="confirmationStatus"
+          class="hidden"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+
+        <div class="space-y-6">
+          <!-- Owner Information -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Owner Information
+              </h3>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Full Name
+                </p>
+                <p id="ownerName" class="mt-2 text-sm text-slate-700">
+                  No owner name available.
+                </p>
+              </div>
+
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Contact Number
+                </p>
+                <p id="ownerPhone" class="mt-2 text-sm text-slate-700">
+                  No contact number available.
+                </p>
+              </div>
+
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Email Address
+                </p>
+                <p id="ownerEmail" class="mt-2 text-sm text-slate-700">
+                  Not provided.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Pet Information -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Pet Information
+              </h3>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-slate-700">
+                <thead class="bg-slate-50 text-left">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Pet Name</th>
+                    <th class="px-3 py-2 font-semibold">Pet Type</th>
+                    <th class="px-3 py-2 font-semibold">Breed</th>
+                    <th class="px-3 py-2 font-semibold">Size</th>
+                  </tr>
+                </thead>
+                <tbody id="petInfoTableBody">
+                  <tr>
+                    <td colspan="4" class="px-3 py-3 text-slate-500">
+                      No pet selected.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Service Information -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Service Information
+              </h3>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-slate-700">
+                <thead class="bg-slate-50 text-left">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Pet</th>
+                    <th class="px-3 py-2 font-semibold">Service</th>
+                    <th class="px-3 py-2 font-semibold">A la Carte</th>
+                    <th class="px-3 py-2 font-semibold">Price</th>
+                    <th class="px-3 py-2 font-semibold">Instructions</th>
+                  </tr>
+                </thead>
+                <tbody id="serviceInfoTableBody">
+                  <tr>
+                    <td colspan="5" class="px-3 py-3 text-slate-500">
+                      No service selected.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4"
+            >
+              <div
+                class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p
+                    class="text-xs font-semibold uppercase tracking-wide text-amber-700"
+                  >
+                    Estimated Total Price
+                  </p>
+                  <p
+                    id="estimatedTotalPrice"
+                    class="mt-2 text-lg font-bold text-amber-800"
+                  >
+                    To be confirmed by clinic.
+                  </p>
+                </div>
+
+                <span
+                  class="inline-flex w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700"
+                >
+                  Estimation only
+                </span>
+              </div>
+
+              <p class="mt-2 text-xs text-amber-700">
+                Final price may still change after clinic assessment, coat
+                condition, pet size confirmation, and A la Carte confirmation.
+              </p>
+            </div>
+          </section>
+
+          <!-- Schedule -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Pet Drop-off Schedule
+              </h3>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-3">
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Pet Drop-off date
+                </p>
+                <p id="appointmentDate" class="mt-2 text-sm text-slate-700">
+                  No booking date selected.
+                </p>
+              </div>
+
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Pet Drop-off time
+                </p>
+                <p id="appointmentTime" class="mt-2 text-sm text-slate-700">
+                  No pre-register time selected.
+                </p>
+              </div>
+
+              <div class="booking-submitted-at">
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Submitted At
+                </p>
+                <p id="submittedAt" class="mt-2 text-sm text-slate-700">
+                  Not available.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Consent Information -->
+          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-[#2f4b66]">
+                Consent Confirmation
+              </h3>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <div
+                class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Grooming Consent
+                </p>
+                <p
+                  id="groomingConsentStatus"
+                  class="mt-2 text-sm font-medium text-slate-700"
+                >
+                  Not confirmed.
+                </p>
+              </div>
+
+              <div
+                class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Sedation Consent
+                </p>
+                <p
+                  id="sedationConsentStatus"
+                  class="mt-2 text-sm font-medium text-slate-700"
+                >
+                  Not confirmed.
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Digital Signature
+                </p>
+                <p
+                  id="digitalSignatureValue"
+                  class="mt-2 text-sm text-slate-700"
+                >
+                  No signature available.
+                </p>
+              </div>
+
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  Consent Date
+                </p>
+                <p id="consentDateValue" class="mt-2 text-sm text-slate-700">
+                  No consent date available.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section id="printNextSteps" aria-label="What happens next">
+          <h3>What Happens Next?</h3>
+
+          <div>
+            <p>&bull; Your Pet drop-off request has been recorded.</p>
+            <p>
+              &bull; The clinic may still review the details and estimated
+              pricing.
+            </p>
+            <p>
+              &bull; Please arrive 5-10 minutes early on your scheduled pet
+              drop-off date.
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <!-- Next Steps -->
+      <section
+        class="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm md:p-8"
+      >
+        <h3 class="text-2xl font-bold text-[#2f4b66]">What Happens Next?</h3>
+
+        <div class="mt-5 space-y-3 text-sm text-slate-600">
+          <p>&bull; Your Pet drop-off request has been recorded.</p>
+          <p>
+            &bull; The clinic may still review the details and estimated pricing.
+          </p>
+          <p>
+            &bull; Please arrive 5-10 minutes early on your scheduled pet
+            drop-off date.
+          </p>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div
+        class="booking-confirmed-actions mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center"
+      >
+        <a
+          href="../../pages/client/dashboard.html"
+          class="inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+        >
+          Back to Home
+        </a>
+
+        <button
+          id="printConfirmationButton"
+          type="button"
+          class="inline-flex items-center justify-center rounded-xl border border-[#315b7e] bg-white px-5 py-3 text-sm font-semibold text-[#315b7e] transition hover:bg-slate-50"
+        >
+          Print the Confirmation
+        </button>
+      </div>
+    </main>
+    </div>
+    <script src="../../scripts/api.js?v=chatbot-safety-insights-20260830"></script>
+    <script src="../../scripts/services/app-clock.js"></script>
+    <script type="module" src="../../scripts/components/grooming-pre-registration.js"></script>
+    <script src="../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830&ui=20260914-icon-only" defer></script>
+  </body>
+</html>

@@ -1746,7 +1746,8 @@ body.customer-detail-modal-open {
     -webkit-print-color-adjust: exact;
   }
 
-  body > main {
+  body > main,
+  body[data-grooming-flow="single-page"] > [data-grooming-step="confirmed"] > main {
     width: auto !important;
     height: auto !important;
     max-width: none !important;
@@ -1756,6 +1757,8 @@ body.customer-detail-modal-open {
   }
 
   body > main > section:not(#printableConfirmation),
+  body[data-grooming-flow="single-page"] > [data-grooming-step="confirmed"] > main > a,
+  body[data-grooming-flow="single-page"] > [data-grooming-step="confirmed"] > main > section:not(#printableConfirmation),
   .booking-confirmed-actions {
     display: none !important;
   }

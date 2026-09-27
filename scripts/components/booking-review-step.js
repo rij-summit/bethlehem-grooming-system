@@ -8,13 +8,14 @@ import {
   readSessionJson,
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
+import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
   buildBookingReviewPayload,
   formatAmountRange,
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=plus-price-notice-20260822";
+} from "../services/grooming-service.js";
 
 /**
  * Booking Review Step Controller
@@ -49,14 +50,14 @@ const state = {
   reviewPayload: null,
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+export function refreshBookingReviewStep() {
   state.bookingDraft = getBookingDraft();
 
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
+    state.reviewPayload = null;
     renderEmptyState(
       "No pets were found in the current pre-register draft. Please go back to Step 2 and Step 3 before reviewing.",
     );
-    bindEvents();
     return;
   }
 
@@ -74,8 +75,14 @@ document.addEventListener("DOMContentLoaded", () => {
   renderReviewSelections();
   renderTotalPricing();
   saveReviewDraft();
+  elements.confirmBookingBtn.disabled = false;
+  elements.confirmBookingBtn.classList.remove("opacity-50", "cursor-not-allowed");
+}
+
+export function initBookingReviewStep() {
+  refreshBookingReviewStep();
   bindEvents();
-});
+}
 
 function bindEvents() {
   elements.confirmBookingBtn.addEventListener("click", handleConfirmClick);
@@ -351,5 +358,5 @@ function handleConfirmClick() {
   }
 
   saveReviewDraft();
-  window.location.href = "./booking-consent.html";
+  goToGroomingStep("consent");
 }

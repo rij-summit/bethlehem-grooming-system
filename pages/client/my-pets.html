@@ -376,14 +376,14 @@
           <!-- Size -->
           <div>
             <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
-              Size
+              <span id="petSizeLabel">Estimated Size</span>
               <span id="petSizeVerified"
                 class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
             </label>
-            <p id="petSizeEstimateNote" class="mb-2 text-xs text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
+            <p id="petSizeEstimateNote" class="mb-2 text-xs font-medium text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
             <div id="petSizeCombobox" class="relative">
               <div class="relative">
-                <input id="petSize" name="size" type="text" placeholder="Select species first"
+                <input id="petSize" name="size" type="text" placeholder="Select species first" aria-describedby="petSizeEstimateNote"
                   class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
                   aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />

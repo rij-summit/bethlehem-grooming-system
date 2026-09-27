@@ -65,11 +65,8 @@ class CustomerChatbotAvailabilityInterfaceTest extends TestCase
     {
         foreach ([
             'pre-register.html',
-            'booking.html',
+            'grooming-pre-registration.html',
             'booking-pet-details.html',
-            'booking-services.html',
-            'booking-review.html',
-            'booking-consent.html',
             'clinic-visit-date.html',
             'clinic-visit-reason.html',
             'clinic-visit-summary.html',

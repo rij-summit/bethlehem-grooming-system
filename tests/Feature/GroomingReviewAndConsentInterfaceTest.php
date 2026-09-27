@@ -8,7 +8,7 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
 {
     public function test_review_pages_only_show_the_clinic_price_notice_for_plus_prices(): void
     {
-        $customerPage = file_get_contents(base_path('pages/client/booking-review.html'));
+        $customerPage = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking-review.html'));
         $customerReview = file_get_contents(base_path('scripts/components/booking-review-step.js'));
         $walkInReview = file_get_contents(base_path('scripts/components/walk-in-review-step.js'));
@@ -64,7 +64,7 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
 
     public function test_review_summary_removes_the_duplicate_pet_summary_card(): void
     {
-        $customerPage = file_get_contents(base_path('pages/client/booking-review.html'));
+        $customerPage = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking-review.html'));
         $customerReview = file_get_contents(base_path('scripts/components/booking-review-step.js'));
         $walkInReview = file_get_contents(base_path('scripts/components/walk-in-review-step.js'));
@@ -82,7 +82,8 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
     public function test_time_and_consent_helpers_are_removed_and_step_five_heading_is_unique(): void
     {
         $calendar = file_get_contents(base_path('scripts/components/booking-calendar.js'));
-        $customerConsent = file_get_contents(base_path('pages/client/booking-consent.html'));
+        $customerPage = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
+        $customerConsent = explode('data-grooming-step="confirmed"', explode('data-grooming-step="consent"', $customerPage, 2)[1], 2)[0];
         $walkInConsent = file_get_contents(base_path('pages/admin/walk-in-consent.html'));
         $walkInConsentStep = file_get_contents(base_path('scripts/components/walk-in-consent-step.js'));
 

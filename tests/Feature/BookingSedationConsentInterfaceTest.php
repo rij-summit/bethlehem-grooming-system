@@ -8,7 +8,7 @@ class BookingSedationConsentInterfaceTest extends TestCase
 {
     public function test_customer_sedation_consent_omits_the_optional_helper_text(): void
     {
-        $page = file_get_contents(base_path('pages/client/booking-consent.html'));
+        $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $component = file_get_contents(base_path('scripts/components/booking-consent-step.js'));
 
         $this->assertStringNotContainsString(
@@ -29,7 +29,7 @@ class BookingSedationConsentInterfaceTest extends TestCase
 
     public function test_unchecked_customer_sedation_consent_requires_a_warning_acknowledgment(): void
     {
-        $page = file_get_contents(base_path('pages/client/booking-consent.html'));
+        $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $component = file_get_contents(base_path('scripts/components/booking-consent-step.js'));
 
         foreach ([
