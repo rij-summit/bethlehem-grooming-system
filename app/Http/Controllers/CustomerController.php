@@ -7,7 +7,6 @@ use App\Models\Booking;
 use App\Models\Pet;
 use App\Models\UnregisteredCustomer;
 use App\Models\User;
-use App\Services\CustomerAccountDeletionService;
 use App\Services\CustomerIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -868,69 +867,5 @@ class CustomerController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Customer account unarchived and reactivated.']);
-    }
-
-    // DELETE /api/admin/customers/{id}
-    public function destroy(
-        Request $request,
-        CustomerAccountDeletionService $deletionService,
-        $id,
-    ) {
-        $this->requireAdminOrStaff($request);
-
-        $user = User::registeredCustomer()->where('user_id', $id)->first();
-        if (! $user) {
-            return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
-        }
-
-        $fullName = trim($user->first_name.' '.$user->last_name);
-        $this->validateDeletionConfirmation($request, $fullName);
-        $deletionService->deleteRegisteredCustomer($user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Customer account deleted. Historical owner, pet, grooming, and clinic records were retained.',
-        ]);
-    }
-
-    // DELETE /api/admin/customers/unregistered/{id}
-    public function destroyUnregistered(
-        Request $request,
-        CustomerAccountDeletionService $deletionService,
-        $id,
-    ) {
-        $this->requireAdminOrStaff($request);
-
-        $customer = UnregisteredCustomer::query()->availableCustomer()->find($id);
-        if (! $customer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unregistered customer not found.',
-            ], 404);
-        }
-
-        $this->validateDeletionConfirmation(
-            $request,
-            $this->unregisteredCustomerFullName($customer),
-        );
-        $deletionService->deleteUnregisteredCustomer($customer);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Customer account deleted. Historical owner, pet, grooming, and clinic records were retained.',
-        ]);
-    }
-
-    private function validateDeletionConfirmation(Request $request, string $fullName): void
-    {
-        $validated = $request->validate([
-            'confirmation_name' => ['required', 'string', 'max:255'],
-        ]);
-
-        if (! hash_equals($fullName, $validated['confirmation_name'])) {
-            throw ValidationException::withMessages([
-                'confirmation_name' => 'The name must exactly match '.$fullName.'.',
-            ]);
-        }
     }
 }

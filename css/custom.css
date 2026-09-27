@@ -899,14 +899,6 @@ body.customer-detail-modal-open {
 /* ----- Customer Account Status Actions ----- */
 .btn-deactivate       { border-color: #f2c46d; color: #a16207; background-color: #ffffff; }
 .btn-deactivate:hover { background-color: #fffbeb; }
-.btn-delete-account {
-  border-color: #991b1b;
-  background-color: #b91c1c;
-  color: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 4px 10px rgba(153, 27, 27, 0.2);
-}
-.btn-delete-account:hover { background-color: #991b1b; }
 .btn-reactivate       { background-color: #2563eb; color: #ffffff; }
 .btn-reactivate:hover { background-color: #1d4ed8; }
 
