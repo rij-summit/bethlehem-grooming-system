@@ -639,7 +639,7 @@ class InventorySecurityRegressionTest extends TestCase
                 "{$pageName} must invalidate the old localhost-only inventory client.",
             );
             $this->assertStringContainsString(
-                'scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830',
+                'scripts/components/admin-sidebar.js?v=staff-settings-20260923&chatbot=20260928',
                 $page,
                 "{$pageName} must invalidate stale logout handling.",
             );
@@ -654,7 +654,7 @@ class InventorySecurityRegressionTest extends TestCase
 
         $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryDashboardPage);
         $this->assertStringContainsString('inventory-service.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-sidebar.js?v=chatbot-safety-insights-20260830', $inventoryDashboardPage);
+        $this->assertStringContainsString('admin-sidebar.js?v=staff-settings-20260923&chatbot=20260928', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-dashboard.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
         $this->assertStringContainsString('admin-inventory-items.js?v=product-row-numbers-20260921', $itemsPage);
         $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockInPage);

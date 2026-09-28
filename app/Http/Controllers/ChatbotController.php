@@ -2,25 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChatbotFeedback;
 use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\User;
 use App\Services\ChatbotBookingStatusService;
 use App\Services\ChatbotEmergencyService;
 use App\Services\ChatbotFallbackService;
-use App\Services\ChatbotInsightService;
 use App\Services\ChatbotKnowledgeService;
 use App\Services\ChatbotLanguageNormalizer;
 use App\Services\ChatbotPrivacyService;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -264,7 +259,6 @@ class ChatbotController extends Controller
         ChatbotEmergencyService $emergency,
         ChatbotBookingStatusService $bookingStatus,
         ChatbotFallbackService $fallback,
-        ChatbotInsightService $insights,
         ChatbotKnowledgeService $knowledge,
         ChatbotLanguageNormalizer $languageNormalizer,
     ): JsonResponse {
@@ -306,7 +300,6 @@ class ChatbotController extends Controller
 
         if ($emergency->isActiveEmergency($message)) {
             return $this->chatbotResponse(
-                $message,
                 $emergency->reply($message),
                 'emergency'
             );
@@ -314,7 +307,6 @@ class ChatbotController extends Controller
 
         if ($this->asksAboutAssistantIdentity($message)) {
             return $this->chatbotResponse(
-                $message,
                 self::IDENTITY_REPLY,
                 'deterministic'
             );
@@ -322,17 +314,13 @@ class ChatbotController extends Controller
 
         if ($bookingStatus->isStatusQuestion($intentMessage)) {
             return $this->chatbotResponse(
-                $message,
                 $bookingStatus->answer($customer, $message),
                 'account_status'
             );
         }
 
         if ($privacy->containsPrivateInformation($message)) {
-            $insights->record($message, 'sensitive_information_blocked');
-
             return $this->chatbotResponse(
-                $message,
                 $fallback->privacyReply($message),
                 'privacy_guard'
             );
@@ -342,10 +330,7 @@ class ChatbotController extends Controller
             $clarification = $fallback->clarification($intentMessage);
 
             if ($clarification !== null) {
-                $insights->record($message, 'ambiguous_question');
-
                 return $this->chatbotResponse(
-                    $message,
                     $clarification,
                     'clarification'
                 );
@@ -356,10 +341,7 @@ class ChatbotController extends Controller
             ! $this->isClinicRelatedMessage($intentMessage)
             && ! $this->isContextualFollowUp($message, $conversationHistory)
         ) {
-            $insights->record($message, 'off_topic');
-
             return $this->chatbotResponse(
-                $message,
                 self::OFF_TOPIC_REPLY,
                 'topic_guard'
             );
@@ -369,7 +351,6 @@ class ChatbotController extends Controller
 
         if ($this->asksAboutAllowedSystemContext($intentMessage)) {
             return $this->chatbotResponse(
-                $message,
                 $this->answerAllowedSystemContextQuestion(
                     $message,
                     $allowedSystemContext
@@ -386,10 +367,7 @@ class ChatbotController extends Controller
         );
 
         if (blank($apiKey)) {
-            $insights->record($message, 'groq_not_configured');
-
             return $this->chatbotResponse(
-                $message,
                 $fallback->reply($intentMessage, $allowedSystemContext),
                 'local_fallback'
             );
@@ -452,15 +430,7 @@ class ChatbotController extends Controller
                     'response' => $response->body(),
                 ]);
 
-                $insights->record(
-                    $message,
-                    $response->status() === 429
-                        ? 'groq_rate_limited'
-                        : 'groq_unavailable'
-                );
-
                 return $this->chatbotResponse(
-                    $message,
                     $fallback->reply($intentMessage, $allowedSystemContext),
                     'local_fallback'
                 );
@@ -492,10 +462,7 @@ class ChatbotController extends Controller
                     ),
                 ]);
 
-                $insights->record($message, 'groq_invalid_response');
-
                 return $this->chatbotResponse(
-                    $message,
                     $fallback->reply($intentMessage, $allowedSystemContext),
                     'local_fallback'
                 );
@@ -504,19 +471,16 @@ class ChatbotController extends Controller
             $normalizedReply = $this->normalizeBoldFormatting(trim($reply));
 
             if ($this->replyNeedsHumanHandoff($normalizedReply)) {
-                $insights->record($message, 'needs_human_handoff');
                 $normalizedReply = $this->ensureHumanHandoff($normalizedReply);
             }
 
-            return $this->chatbotResponse($message, $normalizedReply, 'groq');
+            return $this->chatbotResponse($normalizedReply, 'groq');
         } catch (ConnectionException $exception) {
             Log::error('Could not connect to Groq.', [
                 'error' => $exception->getMessage(),
             ]);
-            $insights->record($message, 'groq_unavailable');
 
             return $this->chatbotResponse(
-                $message,
                 $fallback->reply($intentMessage, $allowedSystemContext),
                 'local_fallback'
             );
@@ -524,105 +488,19 @@ class ChatbotController extends Controller
             Log::error('Unexpected chatbot error.', [
                 'error' => $exception->getMessage(),
             ]);
-            $insights->record($message, 'chatbot_error');
 
             return $this->chatbotResponse(
-                $message,
                 $fallback->reply($intentMessage, $allowedSystemContext),
                 'local_fallback'
             );
         }
     }
 
-    public function feedback(
-        Request $request,
-        ChatbotPrivacyService $privacy,
-        ChatbotInsightService $insights,
-    ): JsonResponse {
-        $validated = $request->validate([
-            'feedback_token' => ['required', 'string', 'max:6000'],
-            'helpful' => ['required', 'boolean'],
-        ]);
-
-        try {
-            $payload = json_decode(
-                Crypt::decryptString($validated['feedback_token']),
-                true,
-                16,
-                JSON_THROW_ON_ERROR
-            );
-        } catch (DecryptException|\JsonException) {
-            return response()->json([
-                'message' => 'This feedback request is invalid or expired.',
-            ], 422);
-        }
-
-        if (
-            ! is_array($payload)
-            || ! Str::isUuid($payload['id'] ?? '')
-            || (int) ($payload['expires_at'] ?? 0) < now()->timestamp
-            || ! is_string($payload['question'] ?? null)
-            || ! is_string($payload['answer'] ?? null)
-            || ! is_string($payload['source'] ?? null)
-        ) {
-            return response()->json([
-                'message' => 'This feedback request is invalid or expired.',
-            ], 422);
-        }
-
-        if (! Schema::hasTable('chatbot_feedback')) {
-            return response()->json([
-                'message' => 'Chatbot feedback storage is not available.',
-            ], 503);
-        }
-
-        $feedback = ChatbotFeedback::query()->firstOrCreate(
-            ['response_id' => $payload['id']],
-            [
-                'helpful' => (bool) $validated['helpful'],
-                'question_excerpt' => $privacy->redact($payload['question']),
-                'answer_excerpt' => $privacy->redact($payload['answer'], 800),
-                'answer_source' => Str::limit($payload['source'], 40, ''),
-            ]
-        );
-
-        if (! $feedback->wasRecentlyCreated) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Feedback was already recorded.',
-            ]);
-        }
-
-        if (! $feedback->helpful) {
-            $insights->record($payload['question'], 'unhelpful_answer');
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Thank you for your feedback.',
-        ], 201);
-    }
-
-    private function chatbotResponse(
-        string $question,
-        string $reply,
-        string $source,
-    ): JsonResponse {
-        $privacy = app(ChatbotPrivacyService::class);
-        $payload = [
-            'id' => (string) Str::uuid(),
-            'question' => $privacy->redact($question),
-            'answer' => $privacy->redact($reply, 800),
-            'source' => $source,
-            'expires_at' => now()->addDay()->timestamp,
-        ];
-
+    private function chatbotResponse(string $reply, string $source): JsonResponse
+    {
         return response()->json([
             'reply' => $reply,
             'source' => $source,
-            'feedback_token' => Crypt::encryptString(
-                json_encode($payload, JSON_THROW_ON_ERROR)
-            ),
         ]);
     }
 

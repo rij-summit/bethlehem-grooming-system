@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class ChatbotEnhancementsInterfaceTest extends TestCase
 {
-    public function test_customer_chatbot_persists_safely_and_supports_reset_and_feedback(): void
+    public function test_customer_chatbot_persists_safely_and_supports_reset(): void
     {
         $component = file_get_contents(
             base_path('scripts/components/home-ai-chatbot.js')
@@ -20,8 +20,6 @@ class ChatbotEnhancementsInterfaceTest extends TestCase
             'sessionStorage.removeItem(conversationStorageKey);',
             'function resetConversation()',
             'function containsPrivateInformation(value)',
-            'function appendFeedbackControls(',
-            'window.API.sendChatbotFeedback',
             'id="ai-chat-reset"',
             'renderAssistantResponse(messageEl, text);',
         ] as $requirement) {
@@ -37,45 +35,26 @@ class ChatbotEnhancementsInterfaceTest extends TestCase
             $api
         );
         $this->assertStringContainsString(
-            '.ai-chatbot-message__feedback',
-            $styles
-        );
-        $this->assertStringContainsString(
             '.ai-chatbot-message--bot .ai-chatbot-message__heading',
             $styles
         );
     }
 
-    public function test_admin_chatbot_insights_page_and_sidebar_are_consistent_and_admin_only(): void
+    public function test_insights_management_and_feedback_are_absent(): void
     {
-        $page = file_get_contents(base_path('pages/admin/chatbot-insights.html'));
-        $script = file_get_contents(
-            base_path('scripts/components/admin-chatbot-insights.js')
-        );
-        $sidebar = file_get_contents(
-            base_path('scripts/components/admin-sidebar.js')
-        );
+        $sidebar = file_get_contents(base_path('scripts/components/admin-sidebar.js'));
         $api = file_get_contents(base_path('scripts/api.js'));
+        $component = file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
+        $routes = file_get_contents(base_path('routes/api.php'));
 
-        foreach ([
-            'x-data="adminSidebar()"',
-            'x-data="adminChatbotInsights()"',
-            'Chatbot Insights',
-            'Privacy-filtered',
-            'Recent unhelpful responses',
-            'admin-sidebar-menu',
-            'admin-chatbot-insights.js?v=chatbot-safety-insights-20260830',
-        ] as $requirement) {
-            $this->assertStringContainsStringIgnoringCase($requirement, $page);
-        }
+        $this->assertFileDoesNotExist(base_path('pages/admin/chatbot-insights.html'));
+        $this->assertFileDoesNotExist(base_path('scripts/components/admin-chatbot-insights.js'));
+        $this->assertStringNotContainsString('chatbot-insights', $sidebar.$api.$routes);
+        $this->assertStringNotContainsString('sendChatbotFeedback', $api.$component);
+        $this->assertStringNotContainsString('feedback_token', $component.$routes);
 
-        $this->assertStringNotContainsString('home-ai-chatbot.js', $page);
-        $this->assertStringContainsString('API.getChatbotInsights', $script);
-        $this->assertStringContainsString('API.updateChatbotInsightStatus', $script);
-        $this->assertStringContainsString('Chatbot Insights', $sidebar);
-        $this->assertStringContainsString(
-            '"chatbot-insights.html"',
-            $api
-        );
+        $this->get('/pages/admin/chatbot-insights.html')->assertNotFound();
+        $this->getJson('/api/admin/chatbot-insights')->assertNotFound();
+        $this->postJson('/api/chatbot/feedback', [])->assertNotFound();
     }
 }

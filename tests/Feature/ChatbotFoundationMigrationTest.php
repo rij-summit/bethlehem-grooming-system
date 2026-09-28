@@ -11,7 +11,9 @@ class ChatbotFoundationMigrationTest extends TestCase
 {
     private $pricingMigration;
 
-    private $insightsMigration;
+    private $legacyInsightsMigration;
+
+    private $retirementMigration;
 
     protected function setUp(): void
     {
@@ -37,12 +39,17 @@ class ChatbotFoundationMigrationTest extends TestCase
         $this->pricingMigration = require base_path(
             'database/migrations/2026_08_30_000004_add_live_pricing_fields_to_services_table.php',
         );
-        $this->insightsMigration = require base_path(
+        $this->legacyInsightsMigration = require base_path(
             'database/migrations/2026_08_30_000005_create_chatbot_insights_and_feedback_tables.php',
         );
 
+        $this->retirementMigration = require base_path(
+            'database/migrations/2026_09_28_000001_drop_chatbot_insights_and_feedback_tables.php',
+        );
+
         $this->pricingMigration->up();
-        $this->insightsMigration->up();
+        $this->legacyInsightsMigration->up();
+        $this->retirementMigration->up();
     }
 
     protected function tearDown(): void
@@ -54,7 +61,7 @@ class ChatbotFoundationMigrationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_migrations_create_live_pricing_insight_and_feedback_storage(): void
+    public function test_pricing_remains_and_chatbot_insight_storage_is_retired(): void
     {
         $this->assertTrue(Schema::hasColumns('services', [
             'price_extra_large',
@@ -62,37 +69,25 @@ class ChatbotFoundationMigrationTest extends TestCase
             'price_max',
             'is_starting_price',
         ]));
-        $this->assertTrue(Schema::hasColumns('chatbot_insights', [
-            'question_fingerprint',
-            'question_excerpt',
-            'language',
-            'failure_reason',
-            'occurrence_count',
-            'status',
-            'first_seen_at',
-            'last_seen_at',
-        ]));
-        $this->assertTrue(Schema::hasColumns('chatbot_feedback', [
-            'response_id',
-            'helpful',
-            'question_excerpt',
-            'answer_excerpt',
-            'answer_source',
-        ]));
-
         $this->assertDatabaseHas('services', [
             'slug' => 'regular_dog_grooming',
             'price_extra_large' => 1050,
         ]);
-    }
-
-    public function test_migrations_can_be_rolled_back_cleanly(): void
-    {
-        $this->insightsMigration->down();
-        $this->pricingMigration->down();
-
         $this->assertFalse(Schema::hasTable('chatbot_insights'));
         $this->assertFalse(Schema::hasTable('chatbot_feedback'));
-        $this->assertFalse(Schema::hasColumn('services', 'price_extra_large'));
+    }
+
+    public function test_retirement_migration_can_be_rolled_back_to_empty_tables(): void
+    {
+        $this->retirementMigration->down();
+
+        $this->assertTrue(Schema::hasTable('chatbot_insights'));
+        $this->assertTrue(Schema::hasTable('chatbot_feedback'));
+        $this->assertDatabaseCount('chatbot_insights', 0);
+        $this->assertDatabaseCount('chatbot_feedback', 0);
+
+        $this->retirementMigration->up();
+        $this->assertFalse(Schema::hasTable('chatbot_insights'));
+        $this->assertFalse(Schema::hasTable('chatbot_feedback'));
     }
 }

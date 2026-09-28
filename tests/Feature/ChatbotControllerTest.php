@@ -505,7 +505,7 @@ class ChatbotControllerTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('source', 'emergency')
-            ->assertJsonStructure(['reply', 'feedback_token'])
+            ->assertJsonStructure(['reply', 'source'])
             ->assertJsonFragment([
                 'source' => 'emergency',
             ]);
@@ -675,7 +675,7 @@ class ChatbotControllerTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('source', 'local_fallback')
-            ->assertJsonStructure(['reply', 'feedback_token']);
+            ->assertJsonStructure(['reply', 'source']);
 
         Log::shouldHaveReceived('warning')
             ->once()

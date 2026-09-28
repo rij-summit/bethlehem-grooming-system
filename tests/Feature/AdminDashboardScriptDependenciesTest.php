@@ -37,7 +37,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
             $page,
         );
         $this->assertStringContainsString(
-            'scripts/components/admin-sidebar.js?v=chatbot-safety-insights-20260830',
+            'scripts/components/admin-sidebar.js?v=staff-settings-20260923&chatbot=20260928',
             $page,
         );
         $this->assertStringContainsString('async loadLoggedInIdentity()', $sidebar);

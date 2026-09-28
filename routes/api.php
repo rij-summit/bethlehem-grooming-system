@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AdminBookingController;
-use App\Http\Controllers\AdminChatbotInsightController;
 use App\Http\Controllers\AdminClinicController;
 use App\Http\Controllers\AdminPetProfileController;
 use App\Http\Controllers\AdminSecurityController;
@@ -50,8 +49,6 @@ Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resen
     ->middleware('throttle:3,5');
 Route::post('/chatbot', [ChatbotController::class, 'chat'])
     ->middleware('throttle:chatbot');
-Route::post('/chatbot/feedback', [ChatbotController::class, 'feedback'])
-    ->middleware('throttle:chatbot-feedback');
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots', [BookingController::class,   'getTimeslots']);
@@ -231,9 +228,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Administrator-only clinic availability and closure actions.
     Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/chatbot-insights', [AdminChatbotInsightController::class, 'index']);
-        Route::patch('/admin/chatbot-insights/{chatbotInsight}/status', [AdminChatbotInsightController::class, 'updateStatus']);
-
         Route::get('/admin/security/accounts', [AdminSecurityController::class, 'accounts']);
         Route::post('/admin/security/account/credential-change', [AdminSecurityController::class, 'requestOwnChange'])
             ->middleware('throttle:3,10');

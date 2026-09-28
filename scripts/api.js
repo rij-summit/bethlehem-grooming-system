@@ -68,7 +68,6 @@ var API = (() => {
   const ADMIN_ONLY_PAGE_NAMES = [
     "reports.html",
     "services.html",
-    "chatbot-insights.html",
   ];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
     "sign-in.html",
@@ -1075,13 +1074,6 @@ var API = (() => {
     }, getCustomerToken(), { suppressAuthRedirect: true });
   }
 
-  async function sendChatbotFeedback(feedbackToken, helpful) {
-    return request("POST", "/chatbot/feedback", {
-      feedback_token: feedbackToken,
-      helpful: Boolean(helpful),
-    });
-  }
-
   async function getTimeslots(date) {
     // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
     return request("GET", `/timeslots?date=${date}`);
@@ -1824,38 +1816,6 @@ var API = (() => {
     return request("GET", `/admin/reports/customer-activity${query}`, null, getAdminToken());
   }
 
-  async function getChatbotInsights({
-    status = "all",
-    reason = "",
-    search = "",
-    page = 1,
-    perPage = 25,
-  } = {}) {
-    const params = new URLSearchParams({
-      status,
-      page: String(page),
-      per_page: String(perPage),
-    });
-    if (reason) params.set("reason", reason);
-    if (search) params.set("search", search);
-
-    return request(
-      "GET",
-      `/admin/chatbot-insights?${params.toString()}`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function updateChatbotInsightStatus(insightId, status) {
-    return request(
-      "PATCH",
-      `/admin/chatbot-insights/${insightId}/status`,
-      { status },
-      getAdminToken(),
-    );
-  }
-
   function normalizePhoneLikeIdentifier(value) {
     const digits = String(value || "").replace(/\D/g, "");
 
@@ -1910,7 +1870,6 @@ var API = (() => {
     getMe,
     getSystemClock,
     sendChatbotMessage,
-    sendChatbotFeedback,
     // Timeslots
     getTimeslots,
     getClinicTimeslots,
@@ -2003,8 +1962,6 @@ var API = (() => {
     getTransactions,
     getServicesPerformedReport,
     getCustomerActivityReport,
-    getChatbotInsights,
-    updateChatbotInsightStatus,
     // Walk-in
     submitWalkIn,
     submitClinicWalkIn,

@@ -653,7 +653,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-safety-insights-20260830|clinic-records-20260906|clinic-owner-groups-20260926|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|grooming-notes-20260927)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|chatbot-context-20260830|chatbot-20260928|clinic-records-20260906|clinic-owner-groups-20260926|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|grooming-notes-20260927)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }

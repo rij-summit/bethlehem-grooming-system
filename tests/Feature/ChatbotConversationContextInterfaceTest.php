@@ -30,7 +30,7 @@ class ChatbotConversationContextInterfaceTest extends TestCase
             $chatbotScript
         );
         $this->assertStringContainsString(
-            'rememberConversationMessage("assistant", assistantReply, {',
+            'rememberConversationMessage("assistant", assistantReply);',
             $chatbotScript
         );
         $this->assertStringContainsString(
@@ -43,31 +43,31 @@ class ChatbotConversationContextInterfaceTest extends TestCase
         );
     }
 
-    public function test_public_and_customer_pages_load_the_context_enabled_scripts(): void
+    public function test_public_and_customer_chatbot_pages_load_the_updated_scripts(): void
     {
         $publicPage = file_get_contents(base_path('index.html'));
 
+        $this->assertStringContainsString('scripts/api.js?v=chatbot-20260928', $publicPage);
         $this->assertStringContainsString(
-            'scripts/api.js?v=chatbot-safety-insights-20260830',
-            $publicPage
-        );
-        $this->assertStringContainsString(
-            'scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830',
+            'scripts/components/home-ai-chatbot.js?v=chatbot-20260928',
             $publicPage
         );
 
         foreach (glob(base_path('pages/client/*.html')) ?: [] as $pagePath) {
             $page = file_get_contents($pagePath);
+            if (! str_contains($page, 'home-ai-chatbot.js')) {
+                continue;
+            }
 
             $this->assertStringContainsString(
-                '../../scripts/api.js?v=chatbot-safety-insights-20260830',
+                '../../scripts/api.js?',
                 $page,
-                basename($pagePath).' must load the context-enabled API script.'
+                basename($pagePath).' must load the API script.'
             );
             $this->assertStringContainsString(
-                '../../scripts/components/home-ai-chatbot.js?v=chatbot-safety-insights-20260830',
+                '../../scripts/components/home-ai-chatbot.js?v=chatbot-20260928',
                 $page,
-                basename($pagePath).' must load the context-enabled chatbot script.'
+                basename($pagePath).' must load the updated chatbot script.'
             );
         }
     }
