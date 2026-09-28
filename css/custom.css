@@ -977,14 +977,47 @@ body.customer-detail-modal-open {
   background-color: #284a67;
 }
 
-.admin-appointment-cancel-action {
-  background-color: #fee2e2;
-  border-color: #fca5a5;
-  color: #b91c1c;
+.admin-incoming-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
 }
 
-.admin-appointment-cancel-action:hover:not(:disabled) {
-  background-color: #fecaca;
+.admin-incoming-details-action {
+  min-height: 2.55rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #bfd3e3;
+  border-radius: 0.75rem;
+  color: #315b7e;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.admin-incoming-details-action:hover {
+  background-color: #eff6ff;
+}
+
+.admin-incoming-cancel-action {
+  flex-basis: 100%;
+  color: #b91c1c;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.admin-incoming-cancel-action:hover {
+  text-decoration: underline;
+}
+
+.admin-incoming-details-action:focus-visible,
+.admin-incoming-cancel-action:focus-visible {
+  outline: 2px solid #315b7e;
+  outline-offset: 2px;
 }
 
 .admin-confirm-checkin-button {
