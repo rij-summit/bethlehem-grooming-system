@@ -90,7 +90,7 @@ class ChatbotFallbackService
         }
 
         if (preg_match('/\b(?:password|login|account|sign\s*up|verify|verification)\b/iu', $message) === 1) {
-            return 'For password help, click **"Forgot Password"**, enter the account email, open the emailed reset link, create a new password, and sign in again. Verification and password-reset codes should never be shared in chat.';
+            return 'For password help, click **"Forgot Password"**, enter the account email, enter the emailed verification code, create a new password, and sign in again. Verification and password-reset codes should never be shared in chat.';
         }
 
         if (preg_match('/\b(?:add|update|edit)\b.*\b(?:pet|aso|pusa|alaga)\b/iu', $message) === 1) {

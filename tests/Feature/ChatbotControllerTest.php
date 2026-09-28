@@ -836,7 +836,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $systemPrompt,
-                    'click "Forgot Password", enter the account email, open the emailed password-reset link'
+                    'click "Forgot Password", enter the account email, enter the emailed verification code'
                 )
                 && str_contains(
                     $systemPrompt,

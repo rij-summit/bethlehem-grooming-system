@@ -11,15 +11,19 @@ class PasswordResetRequest extends Model
         'token_hash',
         'expires_at',
         'last_sent_at',
+        'verified_token_hash',
+        'verification_attempts',
     ];
 
     protected $hidden = [
         'token_hash',
+        'verified_token_hash',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'last_sent_at' => 'datetime',
+        'verification_attempts' => 'integer',
     ];
 
     public function user()

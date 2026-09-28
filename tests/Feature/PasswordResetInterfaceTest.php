@@ -6,57 +6,71 @@ use Tests\TestCase;
 
 class PasswordResetInterfaceTest extends TestCase
 {
-    public function test_sign_in_and_password_reset_pages_expose_the_email_link_flow(): void
+    public function test_forgot_password_has_all_three_code_flow_steps_in_one_page(): void
     {
         $signIn = file_get_contents(base_path('pages/client/sign-in.html'));
         $forgot = file_get_contents(base_path('pages/client/forgot-password.html'));
-        $reset = file_get_contents(base_path('pages/client/reset-password.html'));
         $forgotScript = file_get_contents(base_path('scripts/auth/forgot-password.js'));
-        $resetScript = file_get_contents(base_path('scripts/auth/reset-password.js'));
         $api = file_get_contents(base_path('scripts/api.js'));
+        $routes = file_get_contents(base_path('routes/api.php'));
 
         $this->assertStringContainsString('href="./forgot-password.html"', $signIn);
         $this->assertStringNotContainsString('Forgot password?" has no password reset flow', $signIn);
         $this->assertStringContainsString('id="forgotPasswordForm"', $forgot);
         $this->assertStringContainsString('type="email"', $forgot);
-        $this->assertStringContainsString('API.requestPasswordReset(email)', $forgotScript);
+        $this->assertStringContainsString('API.requestPasswordReset(requestedEmail)', $forgotScript);
+        $this->assertStringNotContainsString('min-height: 36rem', $forgot);
+        $this->assertSame(6, substr_count($forgot, 'class="verification-code-cell"'));
+        $this->assertStringContainsString('id="verifyEmail"', $forgot);
+        $this->assertStringContainsString('id="resendCode"', $forgot);
+        $this->assertStringContainsString('id="passwordRequirements"', $forgot);
+        $this->assertStringContainsString('id="newPasswordMessage"', $forgot);
+        $this->assertStringContainsString('id="confirmPasswordMessage"', $forgot);
+        $this->assertStringContainsString('overflow-wrap: anywhere', $forgot);
 
         foreach ([
             'id="resetPasswordForm"',
             'id="newPassword"',
             'id="confirmNewPassword"',
+            'id="verifyCodeForm"',
+            'id="verificationCode"',
+            'inputmode="numeric"',
+            'maxlength="6"',
+            'id="forgotBack"',
+            'id="backToSignIn"',
             'autocomplete="off"',
             'data-lpignore="true"',
             'data-1p-ignore="true"',
             'phosphor.svg#eye-slash',
             'phosphor.svg#eye',
         ] as $control) {
-            $this->assertStringContainsString($control, $reset);
+            $this->assertStringContainsString($control, $forgot);
         }
 
-        $this->assertStringContainsString(
-            'new URLSearchParams(window.location.hash.slice(1))',
-            $resetScript,
-        );
-        $this->assertStringContainsString('cleanUrl.hash = ""', $resetScript);
-        $this->assertLessThan(
-            strpos($resetScript, 'await API.verifyPasswordResetToken(resetToken)'),
-            strpos($resetScript, 'history.replaceState('),
-        );
-        $this->assertStringContainsString('await API.resetPassword(', $resetScript);
-        $this->assertStringContainsString('response.completed_setup', $resetScript);
-        $this->assertStringContainsString('"../admin/dashboard.html"', $resetScript);
-        $this->assertStringContainsString('"./sign-in.html?password_reset=1"', $resetScript);
-        $this->assertStringNotContainsString('one-time-code', $reset);
-        $this->assertStringNotContainsString('6-digit', $reset);
-        $this->assertStringNotContainsString('autocomplete="new-password"', $reset);
+        $this->assertStringContainsString('showStep("code")', $forgotScript);
+        $this->assertStringContainsString('showStep("password")', $forgotScript);
+        $this->assertStringContainsString('"Verify Your Code"', $forgotScript);
+        $this->assertStringContainsString('"Create New Password"', $forgotScript);
+        $this->assertStringContainsString('API.verifyPasswordResetCode(requestedEmail, codeInput.value.trim())', $forgotScript);
+        $this->assertStringContainsString('await API.resetPassword(', $forgotScript);
+        $this->assertStringContainsString('"./sign-in.html?password_reset=1"', $forgotScript);
+        $this->assertStringContainsString('signIn.classList.toggle("hidden", next !== "email")', $forgotScript);
+        $this->assertStringContainsString('back.classList.toggle("hidden", next === "email")', $forgotScript);
+        $this->assertStringContainsString('codeInput.addEventListener("paste"', $forgotScript);
+        $this->assertStringContainsString('startResendCooldown()', $forgotScript);
+        $this->assertStringContainsString('setFieldError(confirmation, confirmPasswordMessage', $forgotScript);
+        $this->assertFileDoesNotExist(base_path('pages/client/reset-password.html'));
+        $this->assertFileDoesNotExist(base_path('scripts/auth/reset-password.js'));
+        $this->assertMatchesRegularExpression("~/password/forgot'.*?throttle:3,10~s", $routes);
+        $this->assertMatchesRegularExpression("~/password/code/verify'.*?throttle:10,1~s", $routes);
+        $this->assertMatchesRegularExpression("~/password/reset'.*?throttle:10,1~s", $routes);
 
         foreach ([
             'requestPasswordReset',
-            'verifyPasswordResetToken',
+            'verifyPasswordResetCode',
             'resetPassword',
             '"/password/forgot"',
-            '"/password/reset/verify"',
+            '"/password/code/verify"',
             '"/password/reset"',
         ] as $apiContract) {
             $this->assertStringContainsString($apiContract, $api);

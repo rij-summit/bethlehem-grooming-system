@@ -784,8 +784,8 @@ class ChatbotController extends Controller
             'ACCOUNT HELP:',
             '- To create an account, click "Sign Up", complete the form, then use the verification link sent by email to activate the account.',
             '- SMS verification is planned but is not currently available. Do not tell a customer that an SMS verification code was sent.',
-            '- To reset a forgotten password, click "Forgot Password", enter the account email, open the emailed password-reset link, create a new password, then log in with the new password.',
-            '- Password reset by phone or SMS code is not currently available. Do not tell a customer to wait for a reset code.',
+            '- To reset a forgotten password, click "Forgot Password", enter the account email, enter the emailed verification code, create a new password, then log in with the new password.',
+            '- Password reset by phone or SMS code is not currently available. The verification code is sent by email only.',
 
             'GROOMING SIZE CLASSIFICATIONS:',
             '- Dog: Small 4-10 kg; Medium 11-25 kg; Large 26-50 kg; Extra Large 51-70 kg.',

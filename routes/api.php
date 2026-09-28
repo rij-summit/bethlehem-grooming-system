@@ -30,9 +30,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in', [AuthController::class, 'signIn']);
-Route::post('/password/forgot', [PasswordResetController::class, 'requestLink'])
+Route::post('/password/forgot', [PasswordResetController::class, 'requestCode'])
     ->middleware('throttle:3,10');
-Route::post('/password/reset/verify', [PasswordResetController::class, 'verifyLink'])
+Route::post('/password/code/verify', [PasswordResetController::class, 'verifyCode'])
     ->middleware('throttle:10,1');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])
     ->middleware('throttle:10,1');

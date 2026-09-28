@@ -182,8 +182,9 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('code', 'password_setup_required');
 
-        $this->postJson('/api/password/reset/verify', [
-            'token' => $plainToken,
+        $this->postJson('/api/password/code/verify', [
+            'email' => $staff->email,
+            'code' => '123456',
         ])->assertUnprocessable();
 
         $this->postJson('/api/staff/password-setup/complete', [
