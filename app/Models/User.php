@@ -75,6 +75,11 @@ class User extends Authenticatable
             );
     }
 
+    public function passwordResetRequest()
+    {
+        return $this->hasOne(PasswordResetRequest::class, 'user_id', 'user_id');
+    }
+
     /**
      * Store account names in a consistent display format.
      */

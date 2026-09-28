@@ -3,10 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\LoginEmailChallenge;
-use App\Models\PendingStaffAccount;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
-use App\Notifications\ConfirmLoginNotification;
 use App\Notifications\SetUpStaffPasswordNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
@@ -141,11 +139,11 @@ class AdminStaffAccountManagementTest extends TestCase
         ]);
         $response
             ->assertCreated()
-            ->assertJsonPath('message', 'Staff account created')
+            ->assertJsonPath('message', 'Account setup email sent')
             ->assertJsonPath('username', 'Clinic_Staff')
             ->assertJsonPath('staff.staff_type', 'clinic')
             ->assertJsonPath('staff.staff_subrole', 'veterinarian')
-            ->assertJsonPath('staff.is_active', true)
+            ->assertJsonPath('staff.is_active', false)
             ->assertJsonMissingPath('token')
             ->assertJsonMissingPath('password');
 
@@ -158,6 +156,8 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertSame('Clinic_Staff', $staff->username);
         $this->assertNull($staff->phone);
         $this->assertTrue($staff->requiresPasswordSetup());
+        $this->assertFalse($staff->is_active);
+        $this->assertNull($staff->email_verified_at);
         $this->assertDatabaseCount('pending_staff_accounts', 0);
 
         $plainToken = $this->staffSetupLinkSentTo($staff);
@@ -198,6 +198,8 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $staff->refresh();
         $this->assertFalse($staff->requiresPasswordSetup());
+        $this->assertTrue($staff->is_active);
+        $this->assertNotNull($staff->email_verified_at);
         $this->assertTrue(Hash::check('CreatedPassword!234', $staff->password_hash));
         $this->assertDatabaseCount('password_reset_requests', 0);
 
@@ -340,29 +342,13 @@ class AdminStaffAccountManagementTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_legacy_pending_staff_account_uses_the_existing_role_label_name(): void
+    public function test_legacy_admin_code_cannot_verify_a_staff_email(): void
     {
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
         Sanctum::actingAs($admin);
-        $pending = PendingStaffAccount::query()->create([
-            'requested_by_user_id' => $admin->user_id,
-            'staff_type' => 'clinic',
-            'username' => 'legacyclinic',
-            'email' => 'legacy.clinic@example.test',
-            'password_hash' => Hash::make('LegacyStaff!234'),
-            'code_hash' => Hash::make('123456'),
-            'failed_attempts' => 0,
-            'expires_at' => now()->addMinutes(10),
-            'last_sent_at' => now(),
-        ]);
-
-        $this->postJson("/api/admin/security/staff-accounts/{$pending->id}/confirm", [
-            'code' => '123456',
-        ])->assertCreated();
-
-        $staff = User::query()->where('email', 'legacy.clinic@example.test')->sole();
-        $this->assertSame('Clinic', $staff->first_name);
-        $this->assertSame('Staff', $staff->last_name);
+        $this->postJson('/api/admin/security/staff-accounts/1/confirm', ['code' => '123456'])
+            ->assertNotFound();
+        $this->assertDatabaseCount('users', 1);
     }
 
     public function test_deactivated_staff_is_retained_and_cannot_sign_in_until_reactivated(): void
@@ -422,10 +408,8 @@ class AdminStaffAccountManagementTest extends TestCase
             'identifier' => 'groomingstaff',
             'password' => 'CurrentStaff!234',
         ])
-            ->assertAccepted()
-            ->assertJsonPath('requires_login_confirmation', true)
-            ->assertJsonPath('email', 'bethlehem.staff.test@gmail.com');
-        Notification::assertSentTo($staff->fresh(), ConfirmLoginNotification::class);
+            ->assertOk()
+            ->assertJsonPath('user.email', 'bethlehem.staff.test@gmail.com');
     }
 
     public function test_staff_cannot_create_or_change_the_status_of_staff_accounts(): void
@@ -444,6 +428,126 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", [
             'active' => false,
         ])->assertForbidden();
+    }
+
+    public function test_pending_setup_can_be_resent_and_only_the_newest_link_works(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => 'Pending',
+            'last_name' => 'Staff',
+            'username' => 'pendingstaff',
+            'email' => 'pending.staff@example.org',
+        ])->assertCreated();
+
+        $staff = User::query()->where('username', 'pendingstaff')->sole();
+        $firstToken = $this->staffSetupLinkSentTo($staff);
+        $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", ['active' => true])
+            ->assertUnprocessable();
+
+        $this->postJson("/api/admin/security/staff/{$staff->user_id}/setup-email")
+            ->assertOk();
+        $notifications = Notification::sent($staff, SetUpStaffPasswordNotification::class);
+        $this->assertCount(2, $notifications);
+        parse_str((string) parse_url($notifications->last()->setupUrl, PHP_URL_FRAGMENT), $fragment);
+        $secondToken = $fragment['token'];
+        $this->assertNotSame($firstToken, $secondToken);
+
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $firstToken])
+            ->assertUnprocessable();
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $firstToken,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable();
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $secondToken])
+            ->assertOk();
+        $this->assertFalse($staff->fresh()->is_active);
+        $this->assertNull($staff->fresh()->email_verified_at);
+    }
+
+    public function test_cancelled_setup_releases_identity_and_invalidates_link(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        Sanctum::actingAs($admin);
+        $payload = [
+            'staff_type' => 'grooming',
+            'first_name' => 'Wrong',
+            'last_name' => 'Email',
+            'username' => 'wrongstaff',
+            'email' => 'wrong.staff@example.ph',
+        ];
+        $this->postJson('/api/admin/security/staff-accounts', $payload)->assertCreated();
+        $staff = User::query()->where('username', 'wrongstaff')->sole();
+        $token = $this->staffSetupLinkSentTo($staff);
+
+        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup")
+            ->assertOk();
+        $this->assertDatabaseMissing('users', ['email' => 'wrong.staff@example.ph']);
+        $this->assertDatabaseCount('password_reset_requests', 0);
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $token])
+            ->assertUnprocessable();
+        $this->travel(11)->minutes();
+        $this->postJson('/api/admin/security/staff-accounts', $payload)->assertCreated();
+    }
+
+    public function test_completed_staff_cannot_be_cancelled_or_resent(): void
+    {
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        $staff = $this->createUser('staff', 'active.staff@example.org', 'activestaff');
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup")
+            ->assertUnprocessable();
+        $this->postJson("/api/admin/security/staff/{$staff->user_id}/setup-email")
+            ->assertNotFound();
+        $this->assertDatabaseHas('users', ['user_id' => $staff->user_id]);
+    }
+
+    public function test_expired_setup_link_keeps_staff_pending_until_setup_completes(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        Sanctum::actingAs($admin);
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => 'Expired',
+            'last_name' => 'Invite',
+            'username' => 'expiredstaff',
+            'email' => 'expired.staff@example.net',
+        ])->assertCreated();
+        $staff = User::query()->where('username', 'expiredstaff')->sole();
+        $token = $this->staffSetupLinkSentTo($staff);
+
+        $this->travel(25)->hours();
+        $this->getJson('/api/admin/security/accounts')
+            ->assertOk()
+            ->assertJsonPath('staff.0.password_setup_required', true)
+            ->assertJsonPath('staff.0.setup_link_expired', true)
+            ->assertJsonPath('staff.0.is_active', false);
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $token])
+            ->assertUnprocessable()
+            ->assertJsonPath('expired', true);
+        $this->assertNull($staff->fresh()->email_verified_at);
+        $this->assertFalse($staff->fresh()->is_active);
+    }
+
+    public function test_invalid_staff_email_is_rejected_before_invitation(): void
+    {
+        Notification::fake();
+        Sanctum::actingAs($this->createUser('admin', 'admin@example.test', 'Admin'));
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => 'Invalid',
+            'last_name' => 'Email',
+            'email' => 'invalid@-example..com',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+        Notification::assertNothingSent();
     }
 
     private function staffSetupLinkSentTo(User $staff): string

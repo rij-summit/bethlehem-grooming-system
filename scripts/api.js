@@ -1514,24 +1514,6 @@ var API = (() => {
     );
   }
 
-  async function confirmStaffAccountEmail(pendingStaffId, code) {
-    return request(
-      "POST",
-      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/confirm`,
-      { code },
-      getAdminToken(),
-    );
-  }
-
-  async function resendStaffAccountEmailCode(pendingStaffId) {
-    return request(
-      "POST",
-      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/resend`,
-      null,
-      getAdminToken(),
-    );
-  }
-
   async function updateStaffAccountStatus(staffId, active) {
     return request(
       "PATCH",
@@ -1539,6 +1521,14 @@ var API = (() => {
       { active },
       getAdminToken(),
     );
+  }
+
+  async function resendStaffSetupEmail(staffId) {
+    return request("POST", `/admin/security/staff/${encodeURIComponent(staffId)}/setup-email`, null, getAdminToken());
+  }
+
+  async function cancelStaffSetup(staffId) {
+    return request("DELETE", `/admin/security/staff/${encodeURIComponent(staffId)}/setup`, null, getAdminToken());
   }
 
   async function confirmSecurityCredentialChange(changeId, code) {
@@ -1994,9 +1984,9 @@ var API = (() => {
     requestStaffPasswordChange,
     requestAdminCredentialChange,
     requestStaffAccount,
-    confirmStaffAccountEmail,
-    resendStaffAccountEmailCode,
     updateStaffAccountStatus,
+    resendStaffSetupEmail,
+    cancelStaffSetup,
     confirmSecurityCredentialChange,
     resendSecurityCredentialChangeCode,
     confirmStaffPasswordChange,

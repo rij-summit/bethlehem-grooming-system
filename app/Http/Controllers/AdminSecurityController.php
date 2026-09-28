@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\LoginEmailChallenge;
-use App\Models\PendingStaffAccount;
+use App\Models\PasswordResetRequest;
 use App\Models\PrivilegedCredentialChange;
 use App\Models\User;
 use App\Services\PendingStaffAccountService;
 use App\Services\PrivilegedCredentialChangeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -22,6 +23,7 @@ class AdminSecurityController extends Controller
     {
         $admin = $request->user();
         $staff = User::query()
+            ->with('passwordResetRequest')
             ->where('role', 'staff')
             ->where('is_archived', false)
             ->orderBy('first_name')
@@ -135,7 +137,12 @@ class AdminSecurityController extends Controller
                 'max:50',
                 'regex:/^[A-Za-z][A-Za-z0-9._-]{2,49}$/',
             ],
-            'email' => ['required', 'email', 'max:150'],
+            'email' => [
+                'required',
+                'email:rfc',
+                'regex:/^[^\s@]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/',
+                'max:150',
+            ],
         ]);
 
         try {
@@ -161,109 +168,23 @@ class AdminSecurityController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Staff account created',
+            'message' => 'Account setup email sent',
             'username' => $result['staff']->username,
             'staff' => $this->accountPayload($result['staff']),
         ], 201);
-    }
-
-    public function confirmStaffAccount(
-        Request $request,
-        PendingStaffAccount $pendingStaff,
-        PendingStaffAccountService $staffAccounts,
-    ) {
-        $data = $request->validate([
-            'code' => ['required', 'string', 'regex:/^\d{6}$/'],
-        ]);
-        $result = $staffAccounts->confirm($request->user(), $pendingStaff, $data['code']);
-
-        if ($result['status'] === 'expired') {
-            return response()->json([
-                'success' => false,
-                'expired' => true,
-                'message' => 'This email verification code has expired. Start again.',
-            ], 422);
-        }
-        if ($result['status'] === 'invalid_code') {
-            return response()->json([
-                'success' => false,
-                'message' => 'The email verification code is incorrect.',
-                'attempts_remaining' => $result['attempts_remaining'],
-            ], 422);
-        }
-        if ($result['status'] === 'locked') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Too many incorrect attempts. Start again.',
-                'attempts_remaining' => 0,
-            ], 422);
-        }
-        if ($result['status'] === 'email_unavailable') {
-            return response()->json([
-                'success' => false,
-                'message' => 'That email address is no longer available.',
-            ], 422);
-        }
-        if ($result['status'] === 'username_unavailable') {
-            return response()->json([
-                'success' => false,
-                'message' => 'That username is no longer available.',
-            ], 422);
-        }
-        if ($result['status'] !== 'created') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This staff email verification is invalid or no longer available.',
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => "{$result['staff_label']} account created.",
-            'staff' => $this->accountPayload($result['staff']),
-        ], 201);
-    }
-
-    public function resendStaffAccountCode(
-        Request $request,
-        PendingStaffAccount $pendingStaff,
-        PendingStaffAccountService $staffAccounts,
-    ) {
-        try {
-            $result = $staffAccounts->resend($request->user(), $pendingStaff);
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'The staff email verification code could not be queued. Please try again.',
-            ], 503);
-        }
-
-        if ($result['status'] === 'cooldown') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please wait before requesting another code.',
-                'retry_after' => $result['retry_after'],
-            ], 429);
-        }
-        if ($result['status'] !== 'resent') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This staff email verification is no longer available.',
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'A new email verification code was sent.',
-        ] + $result);
     }
 
     public function updateStaffStatus(Request $request, User $staff)
     {
         if ($staff->role !== 'staff' || $staff->is_archived) {
             abort(404);
+        }
+
+        if ($staff->requiresPasswordSetup()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pending staff setup cannot be deactivated or reactivated.',
+            ], 422);
         }
 
         $data = $request->validate(['active' => ['required', 'boolean']]);
@@ -287,6 +208,56 @@ class AdminSecurityController extends Controller
                 : 'Staff account deactivated.',
             'staff' => $this->accountPayload($staff->fresh()),
         ]);
+    }
+
+    public function resendStaffSetupEmail(User $staff, \App\Services\PasswordResetService $passwordResets)
+    {
+        if ($staff->role !== 'staff' || $staff->is_archived || ! $staff->requiresPasswordSetup()) {
+            abort(404);
+        }
+
+        try {
+            $result = $passwordResets->resendStaffSetupLink($staff);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The setup email could not be queued. Please try again.',
+            ], 503);
+        }
+
+        if ($result['status'] !== 'sent') {
+            return response()->json(['success' => false, 'message' => 'This setup invitation is no longer available.'], 422);
+        }
+
+        return response()->json(['success' => true, 'message' => 'A new setup email was sent. Previous setup links are no longer valid.']);
+    }
+
+    public function cancelStaffSetup(User $staff)
+    {
+        if ($staff->role !== 'staff' || $staff->is_archived) {
+            abort(404);
+        }
+
+        $cancelled = DB::transaction(function () use ($staff): bool {
+            $pending = User::query()->whereKey($staff->getKey())->lockForUpdate()->first();
+            if (! $pending?->requiresPasswordSetup()) {
+                return false;
+            }
+
+            PasswordResetRequest::query()->where('user_id', $pending->getKey())->delete();
+            $pending->tokens()->delete();
+            $pending->delete();
+
+            return true;
+        });
+
+        if (! $cancelled) {
+            return response()->json(['success' => false, 'message' => 'This setup invitation is no longer available.'], 422);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Account setup cancelled.']);
     }
 
     public function confirm(
@@ -470,6 +441,9 @@ class AdminSecurityController extends Controller
             'is_active' => (bool) $user->is_active,
             'is_archived' => (bool) $user->is_archived,
             'password_setup_required' => $user->requiresPasswordSetup(),
+            'setup_link_expired' => $user->requiresPasswordSetup()
+                && $user->relationLoaded('passwordResetRequest')
+                && ($user->passwordResetRequest === null || now()->isAfter($user->passwordResetRequest->expires_at)),
         ];
     }
 }

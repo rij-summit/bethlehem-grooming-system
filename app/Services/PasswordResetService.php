@@ -199,6 +199,8 @@ class PasswordResetService
             }
 
             $user->password_hash = Hash::make($newPassword);
+            $user->is_active = true;
+            $user->email_verified_at = now();
             $user->save();
             $user->tokens()->delete();
             $request->delete();
@@ -212,13 +214,24 @@ class PasswordResetService
 
     public function resendExpiredStaffSetupLink(string $expiredPlainToken): array
     {
+        return $this->issueStaffSetupLink(null, $expiredPlainToken);
+    }
+
+    public function resendStaffSetupLink(User $staff): array
+    {
+        return $this->issueStaffSetupLink($staff, null);
+    }
+
+    private function issueStaffSetupLink(?User $staff, ?string $expiredPlainToken): array
+    {
         EmailVerificationController::assertMailCanBeDelivered();
 
         $plainToken = Str::random(64);
         $tokenHash = hash('sha256', $plainToken);
-        $result = DB::transaction(function () use ($expiredPlainToken, $tokenHash): array {
+        $result = DB::transaction(function () use ($staff, $expiredPlainToken, $tokenHash): array {
             $request = PasswordResetRequest::query()
-                ->where('token_hash', hash('sha256', $expiredPlainToken))
+                ->when($staff, fn ($query) => $query->where('user_id', $staff->getKey()))
+                ->when($expiredPlainToken, fn ($query) => $query->where('token_hash', hash('sha256', $expiredPlainToken)))
                 ->lockForUpdate()
                 ->first();
             if (! $request) {
@@ -230,7 +243,7 @@ class PasswordResetService
                 return ['status' => 'invalid'];
             }
 
-            if (! now()->isAfter($request->expires_at)) {
+            if ($expiredPlainToken && ! now()->isAfter($request->expires_at)) {
                 return ['status' => 'not_expired'];
             }
 
@@ -283,8 +296,9 @@ class PasswordResetService
 
     private function staffSetupIsEligible(User $user): bool
     {
-        return $this->userIsEligible($user)
-            && $user->role === 'staff'
+        return $user->role === 'staff'
+            && ! $user->is_archived
+            && $user->account_deleted_at === null
             && $user->requiresPasswordSetup();
     }
 
