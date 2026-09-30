@@ -108,7 +108,8 @@ class ChatbotSafetyAndFallbackTest extends TestCase
             'message' => 'Where is your clinic located?',
         ])->assertOk()->assertJsonPath('source', 'local_fallback');
 
-        $this->assertStringContainsString('maps.app.goo.gl', $response->json('reply'));
+        $this->assertStringContainsString('Ortigas Avenue Extension', $response->json('reply'));
+        $this->assertStringNotContainsString('maps.app.goo.gl', $response->json('reply'));
     }
 
     public function test_chatbot_endpoint_is_rate_limited(): void

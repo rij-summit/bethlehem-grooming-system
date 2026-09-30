@@ -110,23 +110,110 @@ class ChatbotAssistantToolsTest extends TestCase
         $this->fakeTool('visit_process', ['language' => 'english']);
         $reply = $this->postJson('/api/chatbot', ['message' => $question])
             ->assertOk()->assertJsonPath('source', 'visit_process')->json('reply');
-        foreach (['accepts walk-ins', 'do not use appointments', 'capacity', 'does not reserve a queue number', 'staff successfully completes check-in'] as $fact) {
+        foreach (['Walk-ins are accepted', 'no reserved service slots', 'capacity', 'does not reserve a queue position', 'successful staff check-in'] as $fact) {
             $this->assertStringContainsString($fact, $reply);
         }
     }
 
-    public function test_short_follow_up_preserves_details_and_redacts_history(): void
+    public function test_short_follow_up_uses_history_without_leaking_private_details(): void
     {
         $this->fakeTool('estimate_grooming_time', ['size' => 'large', 'cut' => 'trim', 'difficult' => false, 'language' => 'english']);
         $history = [
             ['role' => 'user', 'content' => 'How long for Puppy Cut? My email is owner@example.com'],
             ['role' => 'assistant', 'content' => 'What size is your pet?'],
         ];
-        $this->postJson('/api/chatbot', ['message' => 'Large', 'history' => $history])
-            ->assertOk()->assertJsonPath('source', 'grooming_estimate');
+        $reply = $this->postJson('/api/chatbot', ['message' => 'Large', 'history' => $history])
+            ->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+        $this->assertStringContainsString('around 2 hours', $reply);
+        $this->assertStringNotContainsString('owner@example.com', $reply);
+        Http::assertNothingSent();
+    }
+
+    public function test_groq_still_receives_redacted_history_for_other_follow_ups(): void
+    {
+        Http::fake(['*' => Http::response(['choices' => [['message' => [
+            'content' => 'What would you like to know about grooming?',
+        ]]]])]);
+        $this->postJson('/api/chatbot', [
+            'message' => 'What about grooming?',
+            'history' => [
+                ['role' => 'user', 'content' => 'How long for Puppy Cut? My email is owner@example.com'],
+                ['role' => 'assistant', 'content' => 'What size is your pet?'],
+            ],
+        ])->assertOk()->assertJsonPath('source', 'groq');
+
         Http::assertSent(fn ($request) => str_contains($request['messages'][1]['content'], 'Puppy Cut')
             && ! str_contains(json_encode($request['messages']), 'owner@example.com')
-            && $request['messages'][3]['content'] === 'Large');
+            && $request['messages'][3]['content'] === 'What about grooming?');
+    }
+
+    public function test_short_grooming_price_replies_continue_the_active_question(): void
+    {
+        $history = [
+            ['role' => 'user', 'content' => 'What are your grooming prices?'],
+            ['role' => 'assistant', 'content' => 'What type of pet and size?'],
+        ];
+
+        foreach (['dog and medium', 'medium dog'] as $message) {
+            $reply = $this->postJson('/api/chatbot', compact('message', 'history'))
+                ->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+            $this->assertStringContainsString('Medium dog grooming prices', $reply);
+            $this->assertStringContainsString('Regular Dog Grooming: PHP 650', $reply);
+            $this->assertStringNotContainsString('Pre-register', $reply);
+        }
+
+        $dogReply = $this->postJson('/api/chatbot', ['message' => 'dog', 'history' => $history])
+            ->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+        $this->assertStringContainsString('What size is your dog?', $dogReply);
+
+        $history[] = ['role' => 'user', 'content' => 'dog'];
+        $history[] = ['role' => 'assistant', 'content' => $dogReply];
+        $mediumReply = $this->postJson('/api/chatbot', ['message' => 'medium', 'history' => $history])
+            ->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+        $this->assertStringContainsString('Regular Dog Grooming: PHP 650', $mediumReply);
+
+        $corrected = $this->postJson('/api/chatbot', [
+            'message' => 'large',
+            'history' => [
+                ['role' => 'user', 'content' => 'What are the prices for a medium dog grooming?'],
+                ['role' => 'assistant', 'content' => 'Here are the Medium dog prices.'],
+            ],
+        ])->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+        $this->assertStringContainsString('Large dog grooming prices', $corrected);
+        $this->assertStringContainsString('Regular Dog Grooming: PHP 850+', $corrected);
+        Http::assertNothingSent();
+    }
+
+    public function test_local_price_fallback_asks_one_question_before_listing_applicable_prices(): void
+    {
+        config()->set('services.groq.key', null);
+        $first = $this->postJson('/api/chatbot', ['message' => 'What are your grooming prices?'])
+            ->assertOk()->assertJsonPath('source', 'local_fallback')->json('reply');
+        $this->assertStringContainsString('dog or cat', $first);
+        $this->assertStringNotContainsString('Current grooming services', $first);
+
+        $second = $this->postJson('/api/chatbot', [
+            'message' => 'dog and medium',
+            'history' => [
+                ['role' => 'user', 'content' => 'What are your grooming prices?'],
+                ['role' => 'assistant', 'content' => $first],
+            ],
+        ])->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+        $this->assertStringContainsString('Regular Dog Grooming: PHP 650', $second);
+    }
+
+    public function test_short_cut_and_size_replies_continue_grooming_time(): void
+    {
+        $history = [
+            ['role' => 'user', 'content' => 'How long will grooming take for a medium dog?'],
+            ['role' => 'assistant', 'content' => 'Are you planning a short cut or Puppy Cut?'],
+        ];
+        foreach (['kalbo' => 'around 30 minutes', 'puppy cut' => 'around 1 hour and 30 minutes'] as $message => $duration) {
+            $reply = $this->postJson('/api/chatbot', compact('message', 'history'))
+                ->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+            $this->assertStringContainsString($duration, $reply);
+            $this->assertStringNotContainsString('Pre-register', $reply);
+        }
     }
 
     public function test_tomorrow_hours_use_tomorrow_closure_not_todays_status(): void
@@ -141,7 +228,7 @@ class ChatbotAssistantToolsTest extends TestCase
                     ['role' => 'assistant', 'content' => '8:00 AM'],
                 ],
             ])->assertOk()->assertJsonPath('source', 'live_availability')
-                ->assertJsonPath('reply', 'The clinic is **closed on 2026-10-01** according to current closure information.');
+                ->assertJsonPath('reply', "**We're closed on 2026-10-01.**");
         }
     }
 
@@ -151,7 +238,26 @@ class ChatbotAssistantToolsTest extends TestCase
         $reply = $this->postJson('/api/chatbot', ['message' => 'What time do you open today?'])
             ->assertOk()->assertJsonPath('source', 'live_availability')->json('reply');
         $this->assertStringContainsString('8:00 AM', $reply);
+        $this->assertStringNotContainsString('Grooming:', $reply);
+        $this->assertStringNotContainsString('pre-registration cutoff', $reply);
         Http::assertSentCount(1);
+    }
+
+    public function test_hours_only_include_requested_service_and_cutoff(): void
+    {
+        $this->fakeTool('clinic_hours', ['date' => '2026-09-30', 'language' => 'english']);
+        $grooming = $this->postJson('/api/chatbot', ['message' => 'What are your grooming hours?'])
+            ->assertOk()->json('reply');
+        $this->assertStringContainsString('Grooming:', $grooming);
+        $this->assertStringNotContainsString('Clinic:', $grooming);
+        $this->assertStringNotContainsString('cutoff', $grooming);
+
+        $cutoff = $this->postJson('/api/chatbot', ['message' => 'What is the clinic pre-registration cutoff?'])
+            ->assertOk()->json('reply');
+        $this->assertStringContainsString('Clinic:', $cutoff);
+        $this->assertStringContainsString('cutoff: 2:00 PM', $cutoff);
+        $this->assertStringNotContainsString('Grooming:', $cutoff);
+        $this->assertStringNotContainsString('8:00 AM', $cutoff);
     }
 
     public function test_groomer_count_mention_does_not_override_a_finishing_time_question(): void
@@ -173,8 +279,9 @@ class ChatbotAssistantToolsTest extends TestCase
         $reply = $this->postJson('/api/chatbot', ['message' => 'Clinic hours and location tomorrow?'])
             ->assertOk()->json('reply');
         $this->assertStringContainsString('9:30 AM', $reply);
-        $this->assertStringContainsString('No closure is currently listed', $reply);
+        $this->assertStringNotContainsString('No closure is currently listed', $reply);
         $this->assertStringContainsString('Ortigas', $reply);
+        $this->assertStringNotContainsString('pre-registration cutoff', $reply);
     }
 
     public function test_customer_navigation_reaches_ai_instead_of_status_interceptor(): void
@@ -235,7 +342,7 @@ class ChatbotAssistantToolsTest extends TestCase
             ->assertOk()->assertJsonPath('source', 'customer_guide')->json('reply');
         $this->assertStringContainsString('Piliin', $reply);
         $this->assertStringContainsString('Clinic Visit', $reply);
-        $this->assertStringContainsString('Submit Registration', $reply);
+        $this->assertStringContainsString('staff check-in', $reply);
         $this->assertStringNotContainsString('\\n', $reply);
     }
 
@@ -277,7 +384,7 @@ class ChatbotAssistantToolsTest extends TestCase
         config()->set('services.groq.key', null);
         Http::fake();
         $reply = $this->postJson('/api/chatbot', ['message' => 'Do you handle appointments?'])->assertOk()->json('reply');
-        $this->assertStringContainsString('do not use appointments', $reply);
+        $this->assertStringContainsString('no reserved service slots', $reply);
         $reply = $this->postJson('/api/chatbot', ['message' => 'Write my school essay about Philippine history.'])->assertOk()->json('reply');
         $this->assertStringNotContainsString('Grooming History', $reply);
         Http::assertNothingSent();

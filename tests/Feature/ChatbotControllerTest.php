@@ -311,7 +311,7 @@ class ChatbotControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJson([
-                'reply' => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **8:00 AM – 5:00 PM** daily.',
+                'reply' => "**We're currently closed.** Clinic hours: 8:00 AM – 5:00 PM.",
             ]);
 
         Http::assertNothingSent();
@@ -331,7 +331,7 @@ class ChatbotControllerTest extends TestCase
         ])
             ->assertOk()
             ->assertJson([
-                'reply' => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **10:00 AM – 12:30 PM** daily.',
+                'reply' => "**We're currently closed.** Clinic hours: 10:00 AM – 12:30 PM.",
             ]);
 
         Carbon::setTestNow(Carbon::parse('2026-07-16 10:00:00'));
@@ -367,7 +367,7 @@ class ChatbotControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJson([
-                'reply' => 'Bethlehem Animal Clinic is currently **closed** for today.',
+                'reply' => "**We're closed for today.**",
             ]);
 
         Http::assertNothingSent();
@@ -393,7 +393,7 @@ class ChatbotControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJson([
-                'reply' => 'Bethlehem Animal Clinic is **closed** today.',
+                'reply' => "**We're closed for today.**",
             ]);
 
         Http::assertNothingSent();
@@ -792,7 +792,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $verifiedHelp,
-                    'click "Pre-register", then choose "Grooming" or "Clinic Visit"'
+                    '"Pre-register", then choose "Grooming" or "Clinic Visit"'
                 )
                 && str_contains(
                     $systemPrompt,
@@ -840,7 +840,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $verifiedHelp,
-                    'use the verification link sent by email to activate the account.'
+                    'verification link sent by email to activate the account'
                 )
                 && str_contains(
                     $verifiedHelp,

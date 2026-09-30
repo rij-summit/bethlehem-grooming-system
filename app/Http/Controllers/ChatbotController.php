@@ -41,6 +41,8 @@ class ChatbotController extends Controller
         '/^\s*ilang\s+(?:ang\s+)?groomers?(?:\s+(?:ngayon|on\s+duty))?\s*[?.!]*$/iu',
     ];
 
+    private const SHORT_GROOMING_DETAIL_PATTERN = '/^\s*(?:(?:a |my )?(?:dog|cat)|small|medium|large|extra large|giant|puppy cut|regular trim|kalbo|short cut|summer cut|teddy cut)(?:\s+(?:(?:and|with)\s+)?(?:dog|cat|small|medium|large|extra large|giant|puppy cut|regular trim|kalbo|short cut|summer cut|teddy cut))?\s*[?.!]*$/iu';
+
     public function chat(
         Request $request,
         ChatbotPrivacyService $privacy,
@@ -113,6 +115,13 @@ class ChatbotController extends Controller
                 $bookingStatus->answer($customer, $message),
                 'account_status'
             );
+        }
+
+        $contextualReply = $this->shortGroomingFollowUp(
+            $intentMessage, $conversationHistory, $knowledge, $estimates
+        );
+        if ($contextualReply !== null) {
+            return $this->chatbotResponse($contextualReply, 'conversation_context');
         }
 
         if ($conversationHistory === []) {
@@ -206,7 +215,7 @@ class ChatbotController extends Controller
                                 'type' => 'function',
                                 'function' => [
                                     'name' => 'clinic_hours',
-                                    'description' => 'Read clinic and grooming hours, pre-registration cutoffs and known closures for a date. Use for hours/opening questions and contextual follow-ups like tomorrow. Today\'s status or groomer count must not be projected onto another date. Returns the final customer answer.',
+                                    'description' => 'Read clinic and grooming hours, pre-registration cutoffs and known closures for a date. Use for hours/opening questions and contextual follow-ups like tomorrow. The server includes only details asked for in the current question. Today\'s status or groomer count must not be projected onto another date. Returns the final customer answer.',
                                     'parameters' => [
                                         'type' => 'object',
                                         'properties' => [
@@ -276,7 +285,7 @@ class ChatbotController extends Controller
                     'visit_process' => $this->chatbotResponse($knowledge->visitProcess($arguments['language'] ?? 'english'), 'visit_process'),
                     'estimate_grooming_time' => $this->chatbotResponse($estimates->answer($arguments), 'grooming_estimate'),
                     'customer_status' => $this->chatbotResponse($bookingStatus->answer($customer, $message), 'account_status'),
-                    'clinic_hours' => $this->chatbotResponse($this->answerHours($arguments, $allowedSystemContext), 'live_availability'),
+                    'clinic_hours' => $this->chatbotResponse($this->answerHours($arguments, $allowedSystemContext, $message), 'live_availability'),
                     default => $this->chatbotResponse($fallback->handoff(), 'local_fallback'),
                 };
             }
@@ -467,14 +476,15 @@ class ChatbotController extends Controller
             'LANGUAGE AND INTENT:',
             '- Scope includes Bethlehem, pets, grooming, clinic services, account help and the customer website. Recognize meaning, not exact keywords or breed lists.',
             '- If likely in scope but unclear, ask ONE short useful question. How much without context means ask grooming prices or clinic service; How long without context means ask grooming duration, queue waiting or clinic/pre-registration hours. I need grooming means ask whether they need prices, time, services or pre-registration.',
-            '- Use context for tomorrow after hours, Large after a size question, and What about grooming after walk-ins. Do not reject unclear questions as unrelated.',
+            '- Use context for tomorrow after hours, Large after a size question, and What about grooming after walk-ins. A short dog/medium/puppy cut/kalbo reply continues the active grooming price or time question. Do not switch it to pre-registration. Do not reject unclear questions as unrelated.',
             '- Understand the customer by meaning, even with misspellings, shorthand, or different wording.',
             '- Silently interpret minor spelling mistakes, missing letters, repeated letters, and adjacent swapped letters using the surrounding clinic context.',
             '- Understand Filipino-style English loanwords with prefixes, suffixes, or repeated first letters/syllables. Examples: "rereserve", "rreserve", "nag-rereserve", "a-adjust", "aadjust", "nag-aadjust", and "magpa-book". Infer the intended English root from context.',
             '- Do not correct the customer\'s spelling unless clarification is genuinely necessary.',
             '- Answer English questions in English, Tagalog questions in Tagalog, and Taglish questions in natural Taglish.',
             '- Keep interface button and section labels in English and put them in quotation marks.',
-            '- Answer only the question asked. Keep the answer short but informative.',
+            '- Answer the question first in conversational customer-support language. Most normal answers should be about 35-70 words when possible, followed by at most one useful explanation or warning. Avoid repeating related rules that were not asked about.',
+            '- Give only the requested service hours, location, or cutoff. Include a map link or phone number only when requested or needed for an unconfirmed answer.',
 
             'RECENT CONVERSATION CONTEXT:',
             '- Recent user and assistant messages may be included before the current question so you can understand short follow-ups such as "until?", "how much?", "where?", or "what about grooming?".',
@@ -495,14 +505,14 @@ class ChatbotController extends Controller
             '- To look up a personal schedule or grooming progress, call customer_status; never make up a record or repeat private status from history. General navigation questions (how to add my pet, where to see progress) use the customer guide instead.',
 
             'VERIFIED CLINIC DETAILS:',
-            '- Location: along Ortigas Avenue Extension. Map: https://maps.app.goo.gl/GJapKhegkDLDkoNy9',
+            '- Location: along Ortigas Avenue Extension. Detailed address when requested: K20 Ortigas Avenue Extension, Pearl Ave. St., Ortigas, Greenheights Subd., Brgy. San Isidro, Taytay, Rizal. Map: https://maps.app.goo.gl/GJapKhegkDLDkoNy9',
             '- Contact numbers: 7007-3122 and 0917-113-1941.',
             '- Clinic services: surgery, treatment, vaccinations, confinement, X-ray imaging, consultation, laboratory tests, and ultrasonography.',
             '- Walk-in customers are accepted for clinic and grooming services, subject to the clinic being open and daily capacity.',
 
             'VISITS, QUEUE, AND CUSTOMER WEBSITE:',
             '- Bethlehem does NOT use appointments or reserved service slots. Customers can pre-register online or walk in for clinic and grooming while open and capacity is available.',
-            '- Use visit_process for appointment/walk-in/queue-policy questions so every answer includes successful staff check-in and the distinction between pre-registration and reserved service time.',
+            '- Use visit_process for appointment/walk-in/queue-policy questions. The reply states the relevant rules briefly; do not add arrival-window, grooming-start or reservation explanations unless asked.',
             '- Pre-registration sends owner and pet details ahead to avoid filling everything out again on arrival. It reserves NO queue number, grooming start time, appointment or guaranteed service time.',
             '- Check-in adds the pet to the queue; it does NOT guarantee or reserve a service start or finishing time. Never imply that a time becomes guaranteed after check-in.',
             '- A pet is officially added to the clinic or grooming queue only after successful arrival and check-in by staff at the establishment.',
@@ -545,7 +555,7 @@ class ChatbotController extends Controller
             '- Do not claim Bethlehem Animal Clinic provides 24-hour emergency care unless that is verified elsewhere.',
 
             'RESPONSE STYLE:',
-            '- Keep responses polite, simple, concise, and easy to scan: usually 2-4 short paragraphs or a short list.',
+            '- Keep responses polite, simple, concise, and easy to scan: usually a direct answer and one short supporting paragraph.',
             '- Separate different ideas with a blank line so the text is not cramped.',
             '- For numbered instructions, put each step on its own line in the format "1. First step".',
             '- Use double asterisks for only the most important words or action, roughly one short bold phrase per 10 words and never more than 2 bold phrases per message.',
@@ -567,7 +577,7 @@ class ChatbotController extends Controller
             ->exists();
     }
 
-    private function answerHours(array $arguments, array $context): string
+    private function answerHours(array $arguments, array $context, string $message): string
     {
         $arguments = Validator::make($arguments, [
             'date' => ['required', 'date_format:Y-m-d'],
@@ -576,8 +586,16 @@ class ChatbotController extends Controller
         ])->validate();
         $date = $arguments['date'];
         $filipino = $arguments['language'] === 'filipino';
-        $location = ! empty($arguments['include_location'])
-            ? "\n\nLocation: along Ortigas Avenue Extension. Map: https://maps.app.goo.gl/GJapKhegkDLDkoNy9. Contact: 7007-3122 or 0917-113-1941."
+        $wantsLocation = preg_match('/\b(?:location|located|address|where|saan|directions|map)\b/iu', $message) === 1;
+        $wantsCutoff = preg_match('/\b(?:pre[- ]?regist|cutoff|deadline)\b/iu', $message) === 1;
+        $wantsGrooming = preg_match('/\b(?:groom(?:ing)?|paligo|gupit)\b/iu', $message) === 1;
+        $wantsClinic = preg_match('/\b(?:clinic|vet|consult)\b/iu', $message) === 1;
+        $both = $wantsGrooming && $wantsClinic;
+        $location = $wantsLocation
+            ? "\n\n**Location:** ".(preg_match('/\b(?:full|detailed|exact|address)\b/i', $message)
+                ? 'K20 Ortigas Avenue Extension, Pearl Ave. St., Ortigas, Greenheights Subd., Brgy. San Isidro, Taytay, Rizal'
+                : 'Ortigas Avenue Extension')
+                .(preg_match('/\b(?:map|directions)\b/i', $message) ? ' https://maps.app.goo.gl/GJapKhegkDLDkoNy9' : '')
             : '';
         $today = $date === now()->toDateString();
         $closed = $today
@@ -591,18 +609,24 @@ class ChatbotController extends Controller
 
         if ($closed) {
             return ($filipino
-                ? "**Sarado** ang clinic sa {$date} ayon sa kasalukuyang closure information."
-                : "The clinic is **closed on {$date}** according to current closure information.").$location;
+                ? "**Sarado kami sa {$date}.**"
+                : "**We're closed on {$date}.**").$location;
         }
 
-        $hours = "**Clinic:** {$context['clinic_operating_hours']}; same-day pre-registration cutoff: {$context['clinic_pre_registration_cutoff']}.\n\n"
-            ."**Grooming:** {$context['grooming_operating_hours']}; same-day pre-registration cutoff: {$context['grooming_pre_registration_cutoff']}.";
-        $intro = $filipino ? "Configured hours para sa {$date}:" : "Configured hours for {$date}:";
-        $qualification = $today
-            ? ($filipino ? 'Kasalukuyang '.($context['clinic_is_open'] ? 'bukas' : 'sarado').' ang clinic.' : 'The clinic is currently '.$context['clinic_status'].'.')
-            : ($filipino ? 'Walang nakalistang closure sa petsang ito ngayon; maaaring magbago ang availability.' : 'No closure is currently listed for this date; availability may change.');
+        $lines = [];
+        if ($today && ! $context['clinic_is_open'] && (! $wantsGrooming || $wantsClinic)) {
+            $lines[] = $filipino ? '**Kasalukuyang sarado kami.**' : "**We're currently closed.**";
+        } elseif (! $today) {
+            $lines[] = ($filipino ? 'Oras para sa ' : 'Hours for ').$date.':';
+        }
+        if ($both || $wantsClinic || ! $wantsGrooming) {
+            $lines[] = '**Clinic:** '.($wantsCutoff ? 'same-day pre-registration cutoff: '.$context['clinic_pre_registration_cutoff'] : $context['clinic_operating_hours']);
+        }
+        if ($both || $wantsGrooming) {
+            $lines[] = '**Grooming:** '.($wantsCutoff ? 'same-day pre-registration cutoff: '.$context['grooming_pre_registration_cutoff'] : $context['grooming_operating_hours']);
+        }
 
-        return $intro."\n\n".$hours."\n\n".$qualification.$location;
+        return implode("\n", $lines).$location;
     }
 
     private function isBlockedToday(): bool
@@ -673,16 +697,14 @@ class ChatbotController extends Controller
     ): string {
         if ($prefersFilipino) {
             return match ($reason) {
-                'staff_closed_today' => '**Sarado** na ang Bethlehem Animal Clinic ngayong araw.',
-                'blocked_date' => '**Sarado** ang Bethlehem Animal Clinic ngayong araw.',
-                default => '**Sarado** ngayon ang Bethlehem Animal Clinic. Ang normal na oras ay **'.$operatingHours.'** araw-araw.',
+                'staff_closed_today', 'blocked_date' => '**Sarado kami ngayong araw.**',
+                default => '**Sarado kami ngayon.** Oras ng clinic: '.$operatingHours.'.',
             };
         }
 
         return match ($reason) {
-            'staff_closed_today' => 'Bethlehem Animal Clinic is currently **closed** for today.',
-            'blocked_date' => 'Bethlehem Animal Clinic is **closed** today.',
-            default => 'Bethlehem Animal Clinic is currently **closed**; normal operating hours are **'.$operatingHours.'** daily.',
+            'staff_closed_today', 'blocked_date' => "**We're closed for today.**",
+            default => "**We're currently closed.** Clinic hours: ".$operatingHours.'.',
         };
     }
 
@@ -725,6 +747,93 @@ class ChatbotController extends Controller
         }
 
         return $normalized;
+    }
+
+    /** @param array<int, array{role: string, content: string}> $history */
+    private function shortGroomingFollowUp(
+        string $message,
+        array $history,
+        ChatbotKnowledgeService $knowledge,
+        ChatbotGroomingEstimateService $estimates,
+    ): ?string {
+        if ($history === [] || preg_match(self::SHORT_GROOMING_DETAIL_PATTERN, $message) !== 1) {
+            return null;
+        }
+
+        $userMessages = array_values(array_map(
+            fn (array $entry) => $entry['content'],
+            array_filter($history, fn (array $entry) => $entry['role'] === 'user')
+        ));
+        $topic = null;
+        $topicIndex = null;
+        for ($index = count($userMessages) - 1; $index >= 0; $index--) {
+            $previous = $userMessages[$index];
+            if (preg_match('/\b(?:price|prices|cost|how much|magkano|presyo)\b/iu', $previous)
+                && preg_match('/\b(?:groom(?:ing)?|dog|cat|pet|puppy|kalbo)\b/iu', $previous)) {
+                $topic = 'price';
+                $topicIndex = $index;
+                break;
+            }
+            if (preg_match('/\b(?:how long|duration|grooming time|estimate|gaano katagal)\b/iu', $previous)
+                && preg_match('/\b(?:groom(?:ing)?|dog|cat|pet|puppy|kalbo)\b/iu', $previous)) {
+                $topic = 'time';
+                $topicIndex = $index;
+                break;
+            }
+            if (preg_match(self::SHORT_GROOMING_DETAIL_PATTERN, $previous) !== 1) {
+                break;
+            }
+        }
+
+        if ($topic === null) {
+            return null;
+        }
+
+        $parts = array_reverse([...array_slice($userMessages, $topicIndex), $message]);
+        $species = null;
+        $size = 'unknown';
+        $cut = 'unknown';
+        foreach ($parts as $part) {
+            if ($species === null) {
+                $dog = preg_match('/\bdogs?\b/i', $part) === 1;
+                $cat = preg_match('/\bcats?\b/i', $part) === 1;
+                if ($dog !== $cat) {
+                    $species = $dog ? 'dog' : 'cat';
+                }
+            }
+            if ($size === 'unknown') {
+                $size = match (true) {
+                    preg_match('/\bextra large\b/i', $part) === 1 => 'extra_large',
+                    preg_match('/\bgiant\b/i', $part) === 1 => 'giant',
+                    preg_match('/\blarge\b/i', $part) === 1 => 'large',
+                    preg_match('/\bmedium\b/i', $part) === 1 => 'medium',
+                    preg_match('/\bsmall\b/i', $part) === 1 => 'small',
+                    default => 'unknown',
+                };
+            }
+            if ($cut === 'unknown') {
+                $cut = match (true) {
+                    preg_match('/\b(?:kalbo|short cut|summer cut|shave)\b/i', $part) === 1 => 'short',
+                    preg_match('/\b(?:puppy cut|regular trim|trim)\b/i', $part) === 1 => 'trim',
+                    preg_match('/\b(?:teddy cut|styled cut)\b/i', $part) === 1 => 'styled',
+                    default => 'unknown',
+                };
+            }
+        }
+
+        if ($topic === 'price') {
+            if ($species === null || $size === 'unknown') {
+                return $species === null ? 'Is your pet a dog or cat, and what size?' : 'What size is your '.$species.'?';
+            }
+            return $knowledge->packagePricesFor($species, $size);
+        }
+
+        return $estimates->answer([
+            'size' => $size,
+            'cut' => $cut,
+            'difficult' => preg_match('/\b(?:matted|tangled|difficult handling|dense coat)\b/i', implode(' ', $parts)) === 1,
+            'language' => $this->prefersFilipino($message) ? 'filipino' : 'english',
+        ]);
     }
 
     private function normalizeBoldFormatting(string $reply): string

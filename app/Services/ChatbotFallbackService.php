@@ -46,6 +46,12 @@ class ChatbotFallbackService
         $filipino = $this->prefersFilipino($message);
 
         $guides = $this->knowledge->customerGuides();
+        if (preg_match('/\b(?:grooming steps|grooming pre.registration steps)\b/iu', $message) === 1) {
+            return $guides['grooming_steps'];
+        }
+        if (preg_match('/\b(?:clinic visit steps|clinic pre.registration steps)\b/iu', $message) === 1) {
+            return $guides['clinic_steps'];
+        }
         foreach ([
             'changes' => '/\b(?:reschedule|cancel|adjust|kansela)\b/iu',
             'password' => '/\b(?:password|verification\s+code)\b/iu',
@@ -67,32 +73,54 @@ class ChatbotFallbackService
         }
 
         if (preg_match('/\b(?:hours?|open|close|cutoff|oras|bukas|sarado|hanggang)\b/iu', $message) === 1) {
-            return $filipino
-                ? implode("\n\n", [
-                    '**Clinic:** '.$context['clinic_operating_hours'].' araw-araw; same-day pre-registration cutoff: '.$context['clinic_pre_registration_cutoff'].'.',
-                    '**Grooming:** '.$context['grooming_operating_hours'].' araw-araw; same-day pre-registration cutoff: '.$context['grooming_pre_registration_cutoff'].'.',
-                ])
-                : implode("\n\n", [
-                    '**Clinic:** '.$context['clinic_operating_hours'].' daily; same-day pre-registration cutoff: '.$context['clinic_pre_registration_cutoff'].'.',
-                    '**Grooming:** '.$context['grooming_operating_hours'].' daily; same-day pre-registration cutoff: '.$context['grooming_pre_registration_cutoff'].'.',
-                ]);
+            $cutoff = preg_match('/\b(?:cutoff|deadline|pre[- ]?register|preregister)\b/iu', $message) === 1;
+            $grooming = preg_match('/\b(?:groom(?:ing)?|paligo|gupit)\b/iu', $message) === 1;
+            $clinic = preg_match('/\b(?:clinic|vet|consult)\b/iu', $message) === 1;
+            $both = $grooming && $clinic;
+            $lines = [];
+            if ($both || $clinic || ! $grooming) {
+                $lines[] = '**Clinic:** '.($cutoff ? 'same-day pre-registration cutoff: '.$context['clinic_pre_registration_cutoff'] : $context['clinic_operating_hours']);
+            }
+            if ($both || $grooming) {
+                $lines[] = '**Grooming:** '.($cutoff ? 'same-day pre-registration cutoff: '.$context['grooming_pre_registration_cutoff'] : $context['grooming_operating_hours']);
+            }
+            if (preg_match('/\b(?:location|located|address|where|saan)\b/iu', $message) === 1) {
+                $lines[] = '**Location:** '.(preg_match('/\b(?:full|detailed|exact|address)\b/i', $message)
+                    ? 'K20 Ortigas Avenue Extension, Pearl Ave. St., Ortigas, Greenheights Subd., Brgy. San Isidro, Taytay, Rizal'
+                    : 'Ortigas Avenue Extension');
+            }
+
+            if (! $context['clinic_is_open'] && (! $grooming || $clinic)
+                && preg_match('/\b(?:tomorrow|bukas)\b/iu', $message) !== 1) {
+                array_unshift($lines, $filipino ? '**Kasalukuyang sarado kami.**' : "**We're currently closed.**");
+            }
+
+            return implode("\n", $lines);
         }
 
         if (preg_match('/\b(?:pre[- ]?register|preregister|registration|book|schedule)\b/iu', $message) === 1) {
             return $guides['preregister'];
         }
 
-        if (preg_match('/\b(?:location|located|address|directions|contact|phone|lokasyon|numero)\b|\b(?:where|saan)\b.*\b(?:clinic|bethlehem)\b/iu', $message) === 1) {
-            return implode("\n\n", [
-                '**Location:** Along Ortigas Avenue Extension — https://maps.app.goo.gl/GJapKhegkDLDkoNy9',
-                '**Contact:** 7007-3122 or 0917-113-1941.',
-            ]);
+        if (preg_match('/\b(?:location|located|address|directions|map|contact|phone|lokasyon|numero)\b|\b(?:where|saan)\b.*\b(?:clinic|bethlehem)\b/iu', $message) === 1) {
+            if (preg_match('/\b(?:contact|phone|numero)\b/iu', $message) === 1
+                && preg_match('/\b(?:location|located|address|directions|where|saan)\b/iu', $message) !== 1) {
+                return '**Contact:** 7007-3122 or 0917-113-1941.';
+            }
+            $location = preg_match('/\b(?:full|detailed|exact|address)\b/i', $message)
+                ? 'K20 Ortigas Avenue Extension, Pearl Ave. St., Ortigas, Greenheights Subd., Brgy. San Isidro, Taytay, Rizal'
+                : 'Ortigas Avenue Extension';
+            return '**Location:** '.$location
+                .(preg_match('/\b(?:map|directions)\b/iu', $message) === 1 ? "\n\nhttps://maps.app.goo.gl/GJapKhegkDLDkoNy9" : '');
         }
 
-        if (preg_match('/\b(?:price|cost|fee|magkano|presyo|grooming\s+services?)\b/iu', $message) === 1) {
+        if (preg_match('/\b(?:prices?|costs?|fees?|magkano|presyo|grooming\s+services?)\b/iu', $message) === 1) {
+            if (preg_match('/\b(?:all|list|full|available|services|packages|menu)\b/iu', $message) !== 1) {
+                return 'Is your pet a dog or cat, and what size? I can give you the applicable grooming package prices.';
+            }
             return "**Current grooming services and estimates**\n\n"
                 .$this->knowledge->conciseCatalog()
-                ."\n\nTell me whether your pet is a dog or cat and its size or weight for the applicable package price.";
+                ."\n\nTell me your pet's type and size for the applicable package price.";
         }
 
         if (preg_match('/\b(?:sedation|pampatulog|consent|pahintulot)\b/iu', $message) === 1) {

@@ -125,4 +125,20 @@ class ChatbotLiveKnowledgeTest extends TestCase
             )
         );
     }
+
+    public function test_price_follow_up_uses_active_database_amounts(): void
+    {
+        config()->set('services.groq.key', null);
+        $reply = $this->postJson('/api/chatbot', [
+            'message' => 'dog and medium',
+            'history' => [
+                ['role' => 'user', 'content' => 'What are your grooming prices?'],
+                ['role' => 'assistant', 'content' => 'What type of pet and size?'],
+            ],
+        ])->assertOk()->assertJsonPath('source', 'conversation_context')->json('reply');
+
+        $this->assertStringContainsString('Regular Dog Grooming: PHP 777', $reply);
+        $this->assertStringNotContainsString('PHP 650', $reply);
+        $this->assertStringNotContainsString('Retired Package', $reply);
+    }
 }

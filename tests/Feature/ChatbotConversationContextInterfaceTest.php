@@ -49,7 +49,7 @@ class ChatbotConversationContextInterfaceTest extends TestCase
 
         $this->assertStringContainsString('scripts/api.js?v=chatbot-20260928', $publicPage);
         $this->assertStringContainsString(
-            'scripts/components/home-ai-chatbot.js?v=chatbot-20260930',
+            'scripts/components/home-ai-chatbot.js?v=chatbot-20261001',
             $publicPage
         );
 
@@ -65,7 +65,7 @@ class ChatbotConversationContextInterfaceTest extends TestCase
                 basename($pagePath).' must load the API script.'
             );
             $this->assertStringContainsString(
-                '../../scripts/components/home-ai-chatbot.js?v=chatbot-20260930',
+                '../../scripts/components/home-ai-chatbot.js?v=chatbot-20261001',
                 $page,
                 basename($pagePath).' must load the updated chatbot script.'
             );

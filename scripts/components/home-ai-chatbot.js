@@ -98,7 +98,7 @@ function initializeAiChatbot() {
       const assistantReply =
         reply || "Sorry, I could not generate a response.";
 
-      appendMessage("bot", assistantReply);
+      appendMessage("bot", assistantReply, followUpActions(message, response?.source));
       rememberConversationMessage("user", message);
       rememberConversationMessage("assistant", assistantReply);
     } catch (error) {
@@ -125,7 +125,7 @@ function initializeAiChatbot() {
     persistConversation();
   }
 
-  function appendMessage(sender, text) {
+  function appendMessage(sender, text, actions = []) {
     const messageEl = document.createElement("div");
     messageEl.className = [
       "ai-chatbot-message",
@@ -136,12 +136,42 @@ function initializeAiChatbot() {
 
     if (sender === "bot") {
       renderAssistantResponse(messageEl, text);
+      if (actions.length) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "ai-chatbot-message__actions";
+        actions.forEach(([label, prompt]) => {
+          const action = document.createElement("button");
+          action.type = "button";
+          action.className = "ai-chatbot-message__action";
+          action.textContent = label;
+          action.addEventListener("click", () => {
+            if (chatSend.disabled) return;
+            chatInput.value = prompt;
+            chatForm.requestSubmit();
+          });
+          actionRow.appendChild(action);
+        });
+        messageEl.appendChild(actionRow);
+      }
     } else {
       messageEl.textContent = text;
     }
 
     chatMessages.appendChild(messageEl);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function followUpActions(message, source) {
+    if (source === "customer_guide" && /(?:how|paano|steps).*pre[- ]?regist/i.test(message)) {
+      return [
+        ["Grooming steps", "Grooming pre-registration steps"],
+        ["Clinic Visit steps", "Clinic Visit steps"],
+      ];
+    }
+    if (source === "visit_process" && /walk[- ]?in/i.test(message)) {
+      return [["How pre-registration works", "How do I pre-register?"]];
+    }
+    return [];
   }
 
   function loadConversation() {
@@ -466,7 +496,7 @@ function initializeAiChatbot() {
 }
 
 function ensureAiChatbotStyles() {
-  const stylesheetVersion = "chatbot-assistant-20260930";
+  const stylesheetVersion = "chatbot-assistant-20261001";
   const existingStylesheet = Array.from(
     document.querySelectorAll('link[rel~="stylesheet"]'),
   ).find((link) => {

@@ -99,22 +99,22 @@ class ChatbotGroomingEstimateService
         $baselineOnly = $cut === 'short' && ($difficult || $size === 'giant');
         if ($filipino) {
             $primary = $baselineOnly
-                ? "Karaniwang **{$duration}** ang straightforward short/kalbo grooming, pero mas matagal ang aasahan sa kondisyong nabanggit mo; kailangang makita ng groomer ang pet para mas matantiya."
-                : "Estimated grooming time: **{$duration}**. Kasama ang paligo, blow dry, gupit/trimming, at iba pang kasama sa napiling service.";
+                ? "Ang straightforward short/kalbo cut ay **{$duration}**, pero maaaring mas matagal sa kondisyong nabanggit mo. Kailangang makita ng groomer ang pet para mas matantiya."
+                : "Estimated grooming time: **{$duration}** para sa kumpletong service.";
             $qualification = $extendedTrim
-                ? 'Sa mas mahirap na coat o handling, maaari itong umabot nang around 4 hours; hindi iyon ang normal na estimate.'
-                : 'Maaaring mas tumagal kung sobrang kapal o buhol-buhol ang coat, kailangan ng detailed styling, o nahihirapan ang pet sa handling.';
+                ? 'Sa mahirap na coat o handling, maaari itong umabot nang around 4 hours.'
+                : 'Maaaring mas tumagal kung mahirap ang coat o handling.';
 
-            return $primary."\n\n".$qualification."\n\nHiwalay ang waiting time sa queue bago magsimula. Hindi ito garantisadong oras ng pickup.";
+            return $primary."\n\n".$qualification.' Hiwalay ang waiting time sa queue; hindi ito garantisadong oras ng pickup.';
         }
 
         $primary = $baselineOnly
-            ? "A straightforward short/summer cut is usually **{$duration}** for the complete grooming work, but the condition you described may take longer; a groomer needs to assess your pet for a closer estimate."
-            : "Estimated grooming time: **{$duration}**, including bathing, blow drying, haircut/trimming, and the other work included in the selected service.";
+            ? "A straightforward short/summer cut takes **{$duration}**, but the condition you described may take longer. A groomer can assess your pet for a closer estimate."
+            : "Estimated grooming time: **{$duration}** for the complete service.";
         $qualification = $extendedTrim
-            ? 'Especially difficult coats, detailed work, or handling may sometimes take around 4 hours; that is an upper duration, not the normal estimate.'
-            : 'It may take longer if the coat is unusually thick or tangled, needs detailed styling, or your pet needs handling breaks.';
+            ? 'Difficult coats or handling may take around 4 hours in some cases.'
+            : 'Difficult coat or handling conditions may take longer.';
 
-        return $primary."\n\n".$qualification."\n\nQueue waiting time before grooming begins is separate. This is not a guaranteed pickup time.";
+        return $primary."\n\n".$qualification.' Queue waiting time is separate; this is not a guaranteed pickup time.';
     }
 }

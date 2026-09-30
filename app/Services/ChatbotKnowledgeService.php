@@ -12,33 +12,21 @@ class ChatbotKnowledgeService
     public function visitProcess(string $language = 'english'): string
     {
         return $language === 'filipino'
-            ? 'Oo, **tumatanggap ng walk-ins** ang Bethlehem para sa clinic at grooming habang bukas at may capacity. Wala kaming appointments o reserved service slots. Maaari kang mag-pre-register online para maipadala nang maaga ang impormasyon mo at ng alaga mo. Hindi nito nirereserba ang queue number, grooming start time, o guaranteed service time. Sasali lang sa queue ang pet pagkatapos mong dumating at matagumpay na ma-check in ng staff.'
-            : 'We do not use appointments or reserved service slots. Bethlehem **accepts walk-ins** for clinic and grooming while open and capacity is available. You can pre-register online to send your and your pet\'s information ahead. This does not reserve a queue number, grooming start time, or guaranteed service time. Your pet joins the queue only after you arrive and staff successfully completes check-in.';
+            ? '**Oo. Tumatanggap ng walk-ins** para sa clinic at grooming habang bukas at may capacity. Walang reserved service slots. Ipinapadala lang ng pre-registration ang details mo; hindi ito nagrereserba ng puwesto sa queue. Sasali ang pet sa queue pagkatapos ng matagumpay na staff check-in.'
+            : '**Yes. Walk-ins are accepted** for clinic and grooming while Bethlehem is open and capacity is available. There are no reserved service slots. Pre-registration only sends your details ahead; it does not reserve a queue position. Your pet joins the queue after successful staff check-in.';
     }
 
     /** Customer labels and capabilities verified against pages/client and their scripts. */
     public function customerGuides(): array
     {
         return [
-            'account' => implode("\n", [
-                '1. Open "Sign In" from the home page, then "Sign Up".',
-                '2. Enter your first and last name, username, phone number, email, password and password confirmation in the form.',
-                '3. Accept the terms and select "Create Account".',
-                '4. Check your registered email for Bethlehem\'s verification email.',
-                '5. Open and use the verification link sent by email to activate the account.',
-                '6. Return to "Sign In" after verification.',
-                '',
-                'If needed, use "Resend Verification Email" on the verification page. Do not send passwords or verification codes in this chat.',
-            ]),
+            'account' => "From the home page, choose \"Sign In\" → \"Sign Up\". Enter your name, username, phone number, email, password and confirmation, accept the terms, then select \"Create Account\". Use the verification link sent by email to activate the account, then return to \"Sign In\".\n\nNeed another link? Use \"Resend Verification Email\" on the verification page. Keep passwords and verification codes out of this chat.",
             'signin' => 'Open "Sign In" from the home page and sign in with your customer account after email verification.',
             'password' => 'On "Sign In", choose "Forgot password?", enter your account email on that page, enter the emailed verification code there, create a new password, and sign in again. Never share the password or code in chat. Password reset uses email, not SMS.',
             'pet' => 'After signing in, use Dashboard > "Quick Actions" > "Add Pet", or open "My Pets" and select "Add Pet". Complete the pet details in the form and select "Save Pet". Existing pet information is available in "My Pets".',
-            'preregister' => implode("\n\n", [
-                'Sign in, open the Dashboard and click "Pre-register", then choose "Grooming" or "Clinic Visit". Choose an available arrival date/window and your pet.',
-                'For Grooming, choose the services, review the details, complete the required grooming consent and digital signature (sedation consent is optional), then click "Submit Registration".',
-                'For Clinic Visit, provide the reason for the visit, review the summary, and click "Submit Pre-registration".',
-                'This sends your information ahead; it does not reserve a queue number, appointment, grooming start time, or guaranteed service time. Your pet joins the queue only after arrival and successful staff check-in.',
-            ]),
+            'preregister' => "Sign in and go to Dashboard → \"Pre-register\", then choose \"Grooming\" or \"Clinic Visit\". Select your pet and an available arrival window, complete the required details, and submit.\n\nPre-registration sends your information ahead; it does not reserve a queue position. Your pet joins the queue after successful staff check-in.",
+            'grooming_steps' => 'For Grooming, select your pet and arrival window, choose the services, review the details, complete the required grooming consent and digital signature, then select "Submit Registration". Sedation consent is optional. Pre-registration does not reserve a queue position; your pet joins the queue after staff check-in.',
+            'clinic_steps' => 'For Clinic Visit, select your pet and arrival window, enter the reason for the visit, review the summary, then select "Submit Pre-registration". Your pet joins the queue after successful staff check-in.',
             'schedules' => 'Open the Dashboard and find "Schedules" to review upcoming grooming pre-registrations. For a clinic visit record that is not shown there, refer to your clinic visit confirmation or ask clinic staff. I can also check your own schedule when you are signed in.',
             'tracker' => 'After signing in, open the Dashboard and scroll to "Grooming Tracker" to see progress for pets checked in at the clinic, including waiting, grooming, and pickup progress. It is a progress tracker, not a live video feed.',
             'history' => 'Open "Grooming History" from the customer menu to see previous grooming visits. The Dashboard also has a "Grooming History" section.',
@@ -54,7 +42,7 @@ class ChatbotKnowledgeService
             'type' => 'function',
             'function' => [
                 'name' => 'customer_guide',
-                'description' => 'REQUIRED for website/account help. Returns verified steps with actual current labels, not a record lookup. Select topic by meaning: account=create account/Sign Up/email verification; signin=where to sign in; password=forgot/reset password; pet=add/edit pet; preregister=how to pre-register or I do not know how; schedules=where to see pre-registrations; tracker=where to see grooming progress; history=previous grooming; settings=change personal/account information; changes=cancel/reschedule; notifications=find notifications. Do not invent steps or ask which service before providing the preregister guide. Use recent context for follow-ups. Returns the final customer answer.',
+                'description' => 'REQUIRED for website/account help. Returns verified steps with actual current labels, not a record lookup. Select topic by meaning: account=create account/Sign Up/email verification; signin=where to sign in; password=forgot/reset password; pet=add/edit pet; preregister=general how to pre-register; grooming_steps=detailed Grooming pre-registration steps; clinic_steps=detailed Clinic Visit pre-registration steps; schedules=where to see pre-registrations; tracker=where to see grooming progress; history=previous grooming; settings=change personal/account information; changes=cancel/reschedule; notifications=find notifications. Do not invent steps or ask which service before providing the general preregister guide. Use recent context for follow-ups. Returns the final customer answer.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -83,13 +71,11 @@ class ChatbotKnowledgeService
         return match ($arguments['topic']) {
             'account' => 'Buksan ang "Sign In" sa home page, tapos "Sign Up". Ilagay sa form ang first at last name, username, phone number, email, password at password confirmation. Tanggapin ang terms at piliin ang "Create Account". Buksan ang verification link sa email mo para ma-activate ang account, saka bumalik sa "Sign In". Kung kailangan, piliin ang "Resend Verification Email" sa verification page. Huwag ipadala ang password o verification code dito sa chat.',
             'signin' => 'Piliin ang "Sign In" sa home page at gamitin ang customer account mo pagkatapos ng email verification.',
+            'grooming_steps' => 'Para sa Grooming, piliin ang pet at arrival window, services, at kumpletuhin ang required grooming consent at digital signature bago piliin ang "Submit Registration". Optional ang sedation consent. Sasali ang pet sa queue pagkatapos ng staff check-in.',
+            'clinic_steps' => 'Para sa Clinic Visit, piliin ang pet at arrival window, ilagay ang dahilan ng pagbisita, i-review ang summary, at piliin ang "Submit Pre-registration". Sasali ang pet sa queue pagkatapos ng staff check-in.',
             'password' => 'Sa "Sign In", piliin ang "Forgot password?". Ilagay doon ang account email mo, gamitin sa page ang code na ipinadala sa email, gumawa ng bagong password, at mag-sign in ulit. Email ang gamit, hindi SMS. Huwag ibahagi dito ang password o code.',
             'pet' => 'Pagka-sign in, pumunta sa Dashboard > "Quick Actions" > "Add Pet", o buksan ang "My Pets" at piliin ang "Add Pet". Kumpletuhin ang pet details at piliin ang "Save Pet". Makikita rin sa "My Pets" ang existing pet information.',
-            'preregister' => 'Mag-sign in, buksan ang Dashboard, piliin ang "Pre-register", at pumili ng "Grooming" o "Clinic Visit". Piliin ang available arrival date/window at ang pet mo.
-
-Para sa Grooming, piliin ang services, i-review ang details, kumpletuhin ang grooming consent at digital signature (optional ang sedation consent), at piliin ang "Submit Registration". Para sa Clinic Visit, ilagay ang dahilan ng pagbisita, i-review ang summary, at piliin ang "Submit Pre-registration".
-
-Ipinapadala lang nito nang maaga ang impormasyon mo. Hindi nito nirereserba ang queue number o service time. Sasali lang sa queue ang pet matapos kang dumating at matagumpay na ma-check in ng staff.',
+            'preregister' => "Mag-sign in at pumunta sa Dashboard → \"Pre-register\", tapos piliin ang \"Grooming\" o \"Clinic Visit\". Piliin ang pet at available arrival window, kumpletuhin ang mga detalye, at i-submit.\n\nIpinapadala lang nito ang impormasyon mo; hindi ito nagrereserba ng puwesto sa queue. Sasali ang pet pagkatapos ng matagumpay na staff check-in.",
             'schedules' => 'Sa Dashboard, hanapin ang "Schedules" para makita ang upcoming grooming pre-registrations. Kung hindi nakikita roon ang Clinic Visit, tingnan ang clinic visit confirmation o magtanong sa staff. Maaari ko ring i-check ang sarili mong schedule kapag naka-sign in ka.',
             'tracker' => 'Pagka-sign in, buksan ang Dashboard at mag-scroll sa "Grooming Tracker". Makikita roon ang progress ng pets na na-check in na, gaya ng paghihintay, grooming, at pickup. Progress tracker ito, hindi live video.',
             'history' => 'Piliin ang "Grooming History" sa customer menu para makita ang mga nakaraang grooming visit. May "Grooming History" section din sa Dashboard.',
@@ -145,6 +131,31 @@ Ipinapadala lang nito nang maaga ang impormasyon mo. Hindi nito nirereserba ang 
         return collect($this->groomingCatalogPromptLines())
             ->slice(0, -2)
             ->implode("\n");
+    }
+
+    public function packagePricesFor(string $species, string $size): string
+    {
+        $label = str_replace('_', ' ', ucwords($size, '_'));
+        $prices = [];
+
+        foreach ($this->groomingCatalogPromptLines() as $line) {
+            if (preg_match('/^- (.+?) \(([^)]*)\): /', $line, $package) !== 1
+                || ($species === 'cat') !== (preg_match('/\bcat\b/i', $package[1].' '.$package[2]) === 1)
+                || preg_match('/(?:^|; )'.preg_quote($label, '/').' PHP ([\d,]+(?:\.\d+)?\+?)(?:[.;]|$)/', $line, $price) !== 1) {
+                continue;
+            }
+
+            $prices[] = $package[1].': PHP '.$price[1];
+        }
+
+        if ($prices === []) {
+            return 'I cannot confirm a '.$label.' '.$species.' grooming package price. Please contact clinic staff at 7007-3122 or 0917-113-1941.';
+        }
+
+        return '**'.$label.' '.$species.' grooming prices:** '.implode('; ', $prices).'.'
+            .($size === 'large' || $size === 'extra_large'
+                ? ' A + means the starting price; the final price is confirmed at the clinic.'
+                : ' The final applicable size and price are confirmed at the clinic.');
     }
 
     private function packageLine(Service $service): ?string
