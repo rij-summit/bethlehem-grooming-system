@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ClinicSetting;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -169,5 +170,52 @@ class ChatbotAuthenticatedStatusTest extends TestCase
             ]);
 
         Http::assertNothingSent();
+    }
+
+    public function test_semantic_status_tool_cannot_select_another_customer_or_send_records_to_groq(): void
+    {
+        Sanctum::actingAs(User::query()->findOrFail(1));
+        config()->set('services.groq.key', 'fake-key');
+        Schema::create('clinic_settings', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedTinyInteger('groomers_on_duty')->default(2);
+            foreach (ClinicSetting::availabilityDefaults() as $column => $value) {
+                $table->time($column)->default($value);
+            }
+            $table->timestamps();
+        });
+        Schema::create('clinic_closures', function (Blueprint $table) {
+            $table->id();
+            $table->string('type');
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->boolean('is_active')->default(true);
+        });
+        Http::fake(['*' => Http::response(['choices' => [['message' => [
+            'content' => null,
+            'tool_calls' => [['function' => [
+                'name' => 'customer_status',
+                'arguments' => '{"user_id":2,"booking_reference":"GR-OTHER-999"}',
+            ]]],
+        ]]]])]);
+        try {
+            $reply = $this->postJson('/api/chatbot', ['message' => 'Has the groomer started on mine yet?'])
+                ->assertOk()->assertJsonPath('source', 'account_status')->json('reply');
+            $this->assertStringContainsString('GR-OWN-001', $reply);
+            $this->assertStringNotContainsString('GR-OTHER-999', $reply);
+            $this->assertStringNotContainsString('Private Pet', $reply);
+            Http::assertSentCount(1);
+            Http::assertSent(function ($request) {
+                $payload = json_encode($request->data());
+                $this->assertStringNotContainsString('GR-OWN-001', $payload);
+                $this->assertStringNotContainsString('Rigby', $payload);
+                $this->assertStringNotContainsString('gerald@example.com', $payload);
+
+                return true;
+            });
+        } finally {
+            Schema::dropIfExists('clinic_closures');
+            Schema::dropIfExists('clinic_settings');
+        }
     }
 }

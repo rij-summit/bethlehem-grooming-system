@@ -40,7 +40,7 @@ function initializeAiChatbot() {
     return;
   }
 
-  const maxContextMessages = 4;
+  const maxContextMessages = 8;
   const maxContextContentLength = 1200;
   const maxStoredMessages = 12;
   const conversationStorageKey = "bethlehem.chatbot.conversation.v1";
@@ -74,8 +74,9 @@ function initializeAiChatbot() {
     event.preventDefault();
 
     const message = chatInput.value.trim();
-    if (!message) return;
+    if (!message || chatSend.disabled) return;
 
+    chatMessages.querySelector(".ai-chatbot-topics")?.remove();
     appendMessage("user", message);
     chatInput.value = "";
     showError("");
@@ -176,6 +177,11 @@ function initializeAiChatbot() {
   }
 
   function restoreConversation() {
+    chatMessages.replaceChildren();
+    if (conversationHistory.length === 0) {
+      showWelcome();
+      return;
+    }
     conversationHistory.forEach((entry) => {
       appendMessage(entry.role === "user" ? "user" : "bot", entry.content);
     });
@@ -190,12 +196,49 @@ function initializeAiChatbot() {
     }
 
     chatMessages.replaceChildren();
-    appendMessage(
-      "bot",
-      "Hi! I can help with general clinic and grooming questions.",
-    );
+    showWelcome();
     showError("");
     chatInput.focus();
+  }
+
+  function showWelcome() {
+    appendMessage(
+      "bot",
+      "Hi! I'm Bethlehem's AI assistant. I can help with clinic visits, grooming, pre-registration, and using your customer account.\n\nWhat can I help you with?",
+    );
+    const topics = document.createElement("div");
+    topics.className = "ai-chatbot-topics";
+    topics.setAttribute("role", "group");
+    topics.setAttribute("aria-label", "Suggested topics");
+
+    const suggestions = [
+      ["Grooming time estimate", "How long will grooming take?"],
+      ["Grooming prices", "What are your grooming prices?"],
+      ["How pre-registration works", "How do I pre-register?"],
+      ["Walk-ins & queue", "Do you accept walk-ins, and when does my pet join the queue?"],
+      ["Create an account", "How do I create an account?"],
+      ["Clinic hours & location", "What are your clinic hours and location?"],
+    ];
+
+    if (window.API?.getCustomerToken?.()) {
+      suggestions[4] = ["Check my schedule", "Check my schedule"];
+      suggestions[5] = ["Grooming Tracker", "Where can I see my pet's grooming progress?"];
+    }
+
+    suggestions.forEach(([label, message]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ai-chatbot-topic";
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        if (chatSend.disabled) return;
+        chatInput.value = message;
+        chatForm.requestSubmit();
+      });
+      topics.appendChild(button);
+    });
+    chatMessages.appendChild(topics);
+    chatMessages.scrollTop = 0;
   }
 
   function sanitizeForStorage(role, content) {
@@ -423,7 +466,7 @@ function initializeAiChatbot() {
 }
 
 function ensureAiChatbotStyles() {
-  const stylesheetVersion = "chatbot-icon-only-20260914";
+  const stylesheetVersion = "chatbot-assistant-20260930";
   const existingStylesheet = Array.from(
     document.querySelectorAll('link[rel~="stylesheet"]'),
   ).find((link) => {
@@ -465,9 +508,7 @@ function ensureAiChatbotMarkup() {
     return;
   }
 
-  const assistantLabel = document.body.matches(".portal-theme")
-    ? "Bethlehem Assistant"
-    : "AI Chatbot";
+  const assistantLabel = "Bethlehem Assistant";
   const spriteUrl = new URL("../../assets/icons/phosphor.svg", aiChatbotScriptUrl).href;
   const renderIcon = (name, className) =>
     `<svg class="ph-icon ${className}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><use href="${spriteUrl}#${name}"></use></svg>`;
@@ -496,8 +537,8 @@ function ensureAiChatbotMarkup() {
       >
         <header class="ai-chatbot-panel__header">
           <div>
-            <p class="ai-chatbot-panel__eyebrow">Bethlehem Assistant</p>
             <h2 id="ai-chat-title" class="ai-chatbot-panel__title">${assistantLabel}</h2>
+            <p class="ai-chatbot-panel__eyebrow">AI assistant</p>
           </div>
           <div class="ai-chatbot-panel__actions">
             <button
@@ -526,9 +567,6 @@ function ensureAiChatbotMarkup() {
           aria-live="polite"
           aria-relevant="additions"
         >
-          <div class="ai-chatbot-message ai-chatbot-message--bot">
-            Hi! I can help with general clinic and grooming questions.
-          </div>
         </div>
 
         <div id="ai-chat-loading" class="ai-chatbot-loading" role="status" hidden>
@@ -546,10 +584,10 @@ function ensureAiChatbotMarkup() {
             type="text"
             autocomplete="off"
             maxlength="1000"
-            placeholder="Type your question..."
+            placeholder="Ask Bethlehem Assistant..."
             required
           />
-          <button id="ai-chat-send" type="submit" class="ai-chatbot-send">
+          <button id="ai-chat-send" type="submit" class="ai-chatbot-send" aria-label="Send message">
             ${renderIcon("paper-plane-tilt", "ai-chatbot-send__icon")}
             <span>Send</span>
           </button>

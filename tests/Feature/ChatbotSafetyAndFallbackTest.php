@@ -90,7 +90,7 @@ class ChatbotSafetyAndFallbackTest extends TestCase
             ->assertOk()
             ->assertJsonPath('source', 'clarification')
             ->assertJsonFragment([
-                'reply' => "Do you mean **grooming prices** or a clinic service?\n\nFor grooming, tell me whether your pet is a dog or cat and include its size or weight.",
+                'reply' => 'Do you mean **grooming prices** or a clinic service?',
             ]);
 
         Http::assertNothingSent();

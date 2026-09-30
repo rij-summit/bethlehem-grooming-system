@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\ChatbotBookingStatusService;
 use App\Services\ChatbotEmergencyService;
 use App\Services\ChatbotFallbackService;
+use App\Services\ChatbotGroomingEstimateService;
 use App\Services\ChatbotKnowledgeService;
 use App\Services\ChatbotLanguageNormalizer;
 use App\Services\ChatbotPrivacyService;
@@ -16,241 +17,28 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class ChatbotController extends Controller
 {
-    private const IDENTITY_REPLY = 'I am the virtual assistant of Bethlehem Animal Clinic.';
-
-    private const OFF_TOPIC_REPLY = 'I can only answer questions related to Bethlehem Animal Clinic.';
-
-    private const CLINIC_RELATED_TERMS = [
-        'bethlehem',
-        'animal clinic',
-        'clinic',
-        'groom',
-        'grooming',
-        'groomer',
-        'bath',
-        'haircut',
-        'nail',
-        'ear cleaning',
-        'tooth brushing',
-        'service',
-        'schedule',
-        'timeslot',
-        'appointment',
-        'booking',
-        'pre-register',
-        'pre register',
-        'registration',
-        'queue',
-        'check in',
-        'check-in',
-        'drop off',
-        'drop-off',
-        'pickup',
-        'pick up',
-        'pet',
-        'pets',
-        'dog',
-        'dogs',
-        'cat',
-        'cats',
-        'puppy',
-        'kitten',
-        'animal',
-        'vet',
-        'veterinarian',
-        'consultation',
-        'emergency',
-        'health',
-        'sick',
-        'injury',
-        'vaccine',
-        'vaccination',
-        'rabies',
-        'deworm',
-        'contact',
-        'phone',
-        'address',
-        'location',
-        'directions',
-        'price',
-        'cost',
-        'fee',
-        'charge',
-        'payment',
-        'gcash',
-        'cash',
-        'card',
-        'walk-in',
-        'walk in',
-        'visit',
-        'parking',
-        'availability',
-        'cutoff',
-        'account',
-        'sign up',
-        'signup',
-        'register',
-        'verify',
-        'verification',
-        'password',
-        'forgot password',
-        'reset password',
-        'login',
-        'log in',
-        'notification',
-        'tracker',
-        'sedation',
-        'consent',
-        'aggressive',
-        'no-show',
-        'no show',
-        'late arrival',
-        'feeding',
-        'feed',
-        'symptom',
-        'aso',
-        'pusa',
-        'alaga',
-        'beterinaryo',
-        'bakuna',
-        'paligo',
-        'gupit',
-        'kuko',
-        'pila',
-        'presyo',
-        'magkano',
-        'bayad',
-        'singil',
-        'iskedyul',
-        'oras',
-        'bukas',
-        'sarado',
-        'lokasyon',
-        'address',
-        'numero',
-        'kansela',
-        'pampatulog',
-        'pahintulot',
-        'sakit',
-        'sugat',
-        'dugo',
-        'hinga',
-        'suka',
-        'kumain',
-        'kain',
-    ];
-
-    private const CLINIC_RELATED_PATTERNS = [
-        '/\bwhere\s+(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\b/i',
-        '/\b(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\s+(?:open|closed)\b/i',
-        '/\b(?:what|when)\s+(?:time|hours?)\b/i',
-        '/\b(?:open|opens|opening|close|closes|closing|closed)\b/i',
-        '/\b(?:book|reserve|reservation|cancel|reschedule)\b/i',
-        '/\b(?:adjust|confirm)\b.*\b(?:ba|po|kayo|ko|kami|appointment|booking|schedule)\b/iu',
-        '/\b(?:saan|nasaan)\b.*\b(?:clinic|kayo|bethlehem)\b/iu',
-        '/\b(?:magkano|presyo|bayad|singil)\b/iu',
-        '/\b(?:magpa-?book|magpa-?schedule|magpa-?groom)\b/iu',
-    ];
-
-    private const TYPO_TOLERANT_CLINIC_TERMS = [
-        'bethlehem',
-        'animal',
-        'clinic',
-        'groom',
-        'grooming',
-        'groomer',
-        'haircut',
-        'cleaning',
-        'brushing',
-        'service',
-        'schedule',
-        'timeslot',
-        'appointment',
-        'booking',
-        'register',
-        'registration',
-        'queue',
-        'checkin',
-        'pickup',
-        'puppy',
-        'kitten',
-        'veterinarian',
-        'consultation',
-        'emergency',
-        'health',
-        'injury',
-        'vaccine',
-        'vaccination',
-        'rabies',
-        'deworm',
-        'contact',
-        'phone',
-        'address',
-        'location',
-        'directions',
-        'price',
-        'charge',
-        'payment',
-        'gcash',
-        'visit',
-        'parking',
-        'availability',
-        'cutoff',
-        'account',
-        'signup',
-        'verify',
-        'verification',
-        'password',
-        'login',
-        'notification',
-        'tracker',
-        'sedation',
-        'consent',
-        'aggressive',
-        'feeding',
-        'symptom',
-        'beterinaryo',
-        'bakuna',
-        'paligo',
-        'gupit',
-        'presyo',
-        'magkano',
-        'bayad',
-        'singil',
-        'iskedyul',
-        'bukas',
-        'sarado',
-        'lokasyon',
-        'numero',
-        'kansela',
-        'pampatulog',
-        'pahintulot',
-        'sakit',
-        'sugat',
-        'hinga',
-        'kumain',
-    ];
+    private const IDENTITY_REPLY = 'I am Bethlehem Assistant, the AI assistant of Bethlehem Animal Clinic.';
 
     private const CLINIC_OPEN_STATUS_PATTERNS = [
-        '/\b(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\s+(?:open|closed)\b/i',
-        '/\b(?:is\s+)?(?:bethlehem|the\s+clinic|clinic)\s+(?:still\s+)?(?:receiving|accepting)\b/i',
-        '/\b(?:open|closed)\s+(?:now|right\s+now|today|tonight)\b/i',
+        '/^\s*(?:are|is)\s+(?:you|the\s+clinic|bethlehem)\s+(?:open|closed)(?:\s+(?:now|right\s+now|today|tonight))?\s*[?.!]*$/i',
+        '/^\s*(?:is\s+)?(?:bethlehem|the\s+clinic|clinic)\s+(?:still\s+)?(?:receiving|accepting)(?:\s+customers)?(?:\s+(?:now|today))?\s*[?.!]*$/i',
+        '/^\s*(?:open|closed)\s+(?:now|right\s+now|today|tonight)\s*[?.!]*$/i',
         '/\b(?:the\s+clinic|bethlehem)\s+(?:stopped|resumed)\s+(?:receiving|accepting)\b/i',
-        '/\b(?:bukas|sarado)\s+ba\s+(?:kayo|ang\s+clinic|clinic)\b/iu',
-        '/\b(?:open|bukas)\s+pa\s+ba(?:\s+(?:kayo|ang\s+clinic|clinic))?\b/iu',
-        '/\btumatanggap\s+pa\s+ba\s+kayo\b/iu',
+        '/^\s*(?:bukas|sarado)\s+ba\s+(?:kayo|ang\s+clinic|clinic)(?:\s+ngayon)?\s*[?.!]*$/iu',
+        '/^\s*(?:open|bukas)\s+pa\s+ba(?:\s+(?:kayo|ang\s+clinic|clinic))?(?:\s+ngayon)?\s*[?.!]*$/iu',
+        '/^\s*tumatanggap\s+pa\s+ba\s+kayo(?:\s+ngayon)?\s*[?.!]*$/iu',
     ];
 
     private const GROOMERS_ON_DUTY_PATTERNS = [
-        '/\b(?:how\s+many|number\s+of|count\s+of)\s+groomers?\b/i',
-        '/\bgroomers?\s+(?:on\s+duty|present|available|working|there|in\s+today)\b/i',
-        '/\b(?:available|present|current)\s+groomers?\b/i',
-        '/\bilang\s+(?:ang\s+)?groomers?\b/iu',
+        '/^\s*(?:how\s+many|number\s+of|count\s+of)\s+groomers?(?:\s+are)?(?:\s+currently)?(?:\s+(?:on\s+duty|present|available|working|there))?(?:\s+(?:now|right\s+now|today))?\s*[?.!]*$/i',
+        '/^\s*groomers?\s+(?:on\s+duty|present|available|working|there)(?:\s+(?:now|today))?\s*[?.!]*$/i',
+        '/^\s*(?:available|present|current)\s+groomers?\s*[?.!]*$/i',
+        '/^\s*ilang\s+(?:ang\s+)?groomers?(?:\s+(?:ngayon|on\s+duty))?\s*[?.!]*$/iu',
     ];
 
     public function chat(
@@ -260,6 +48,7 @@ class ChatbotController extends Controller
         ChatbotBookingStatusService $bookingStatus,
         ChatbotFallbackService $fallback,
         ChatbotKnowledgeService $knowledge,
+        ChatbotGroomingEstimateService $estimates,
         ChatbotLanguageNormalizer $languageNormalizer,
     ): JsonResponse {
         $validated = $request->validate([
@@ -271,7 +60,7 @@ class ChatbotController extends Controller
             'history' => [
                 'sometimes',
                 'array',
-                'max:4',
+                'max:8',
             ],
             'history.*.role' => [
                 'required',
@@ -312,17 +101,17 @@ class ChatbotController extends Controller
             );
         }
 
-        if ($bookingStatus->isStatusQuestion($intentMessage)) {
-            return $this->chatbotResponse(
-                $bookingStatus->answer($customer, $message),
-                'account_status'
-            );
-        }
-
         if ($privacy->containsPrivateInformation($message)) {
             return $this->chatbotResponse(
                 $fallback->privacyReply($message),
                 'privacy_guard'
+            );
+        }
+
+        if ($bookingStatus->isStatusQuestion($intentMessage)) {
+            return $this->chatbotResponse(
+                $bookingStatus->answer($customer, $message),
+                'account_status'
             );
         }
 
@@ -335,16 +124,6 @@ class ChatbotController extends Controller
                     'clarification'
                 );
             }
-        }
-
-        if (
-            ! $this->isClinicRelatedMessage($intentMessage)
-            && ! $this->isContextualFollowUp($message, $conversationHistory)
-        ) {
-            return $this->chatbotResponse(
-                self::OFF_TOPIC_REPLY,
-                'topic_guard'
-            );
         }
 
         $allowedSystemContext = $this->getAllowedSystemContext();
@@ -399,6 +178,50 @@ class ChatbotController extends Controller
 
                         'temperature' => 0.2,
 
+                        'tools' => [
+                            $estimates->tool(),
+                            $knowledge->customerGuideTool(),
+                            [
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'visit_process',
+                                    'description' => 'Use for whether Bethlehem accepts appointments, reservations or walk-ins (including walkin, walk in, Taglish), how queue entry works, and follow-ups like What about grooming. Returns verified visit policy; do not answer these from general knowledge.',
+                                    'parameters' => [
+                                        'type' => 'object',
+                                        'properties' => ['language' => ['type' => 'string', 'enum' => ['english', 'filipino']]],
+                                        'required' => ['language'],
+                                        'additionalProperties' => false,
+                                    ],
+                                ],
+                            ],
+                            [
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'customer_status',
+                                    'description' => 'Read the signed-in customer\'s own schedule/progress using protected local data. Use for a request to check their actual status, never for how-to/navigation help. No identity or customer ID is accepted. Returns the final customer answer without sending private records to the AI.',
+                                    'parameters' => ['type' => 'object', 'properties' => (object) [], 'additionalProperties' => false],
+                                ],
+                            ],
+                            [
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'clinic_hours',
+                                    'description' => 'Read clinic and grooming hours, pre-registration cutoffs and known closures for a date. Use for hours/opening questions and contextual follow-ups like tomorrow. Today\'s status or groomer count must not be projected onto another date. Returns the final customer answer.',
+                                    'parameters' => [
+                                        'type' => 'object',
+                                        'properties' => [
+                                            'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD in the clinic timezone. Resolve relative dates using the current date in the system prompt.'],
+                                            'language' => ['type' => 'string', 'enum' => ['english', 'filipino']],
+                                            'include_location' => ['type' => 'boolean', 'description' => 'True if the customer also asks for location or contact details.'],
+                                        ],
+                                        'required' => ['date', 'language'],
+                                        'additionalProperties' => false,
+                                    ],
+                                ],
+                            ],
+                        ],
+                        'parallel_tool_calls' => false,
+
                         'max_completion_tokens' => (int) config(
                             'services.groq.max_completion_tokens',
                             1024
@@ -427,13 +250,35 @@ class ChatbotController extends Controller
             if ($response->failed()) {
                 Log::warning('Groq request failed.', [
                     'status' => $response->status(),
-                    'response' => $response->body(),
                 ]);
 
                 return $this->chatbotResponse(
                     $fallback->reply($intentMessage, $allowedSystemContext),
                     'local_fallback'
                 );
+            }
+
+            $toolCalls = $response->json('choices.0.message.tool_calls') ?? [];
+            if ($toolCalls !== []) {
+                if (! is_array($toolCalls) || count($toolCalls) !== 1) {
+                    return $this->chatbotResponse($fallback->handoff(), 'local_fallback');
+                }
+
+                $function = $toolCalls[0]['function'] ?? [];
+                $arguments = json_decode($function['arguments'] ?? '{}', true, 16, JSON_THROW_ON_ERROR);
+                if (! is_array($arguments)) {
+                    return $this->chatbotResponse($fallback->handoff(), 'local_fallback');
+                }
+
+                // Model output selects a bounded read-only handler; it never selects a user or supplies facts.
+                return match ($function['name'] ?? '') {
+                    'customer_guide' => $this->chatbotResponse($knowledge->customerGuide($arguments), 'customer_guide'),
+                    'visit_process' => $this->chatbotResponse($knowledge->visitProcess($arguments['language'] ?? 'english'), 'visit_process'),
+                    'estimate_grooming_time' => $this->chatbotResponse($estimates->answer($arguments), 'grooming_estimate'),
+                    'customer_status' => $this->chatbotResponse($bookingStatus->answer($customer, $message), 'account_status'),
+                    'clinic_hours' => $this->chatbotResponse($this->answerHours($arguments, $allowedSystemContext), 'live_availability'),
+                    default => $this->chatbotResponse($fallback->handoff(), 'local_fallback'),
+                };
             }
 
             $reply = $response->json(
@@ -610,12 +455,19 @@ class ChatbotController extends Controller
         array $groomingCatalogLines,
     ): string {
         return implode("\n", [
-            'You are the virtual assistant of Bethlehem Animal Clinic.',
-            'Identify yourself only as the virtual assistant of Bethlehem Animal Clinic.',
+            'You are Bethlehem Assistant, the AI assistant of Bethlehem Animal Clinic. Clearly disclose you are AI.',
             'Do not claim to have a personal name, human identity, gender, personality identity, feelings, preferences, or personal life.',
-            'If asked about your name, identity, gender, personality, or whether you are human, answer only: "I am the virtual assistant of Bethlehem Animal Clinic."',
+            'If asked who you are, identify yourself as Bethlehem Assistant, the AI assistant of Bethlehem Animal Clinic; never impersonate staff, a veterinarian or groomer.',
+            'TOOL USE IS REQUIRED when a request is covered by a tool: call it instead of drafting a text answer. This also applies to short contextual follow-ups, even if a previous assistant reply already explained the policy. In particular, a grooming follow-up after walk-ins must use visit_process.',
+
+            'FACT PRIORITY:',
+            '- Current live Bethlehem data, verified business rules, groomer-approved timing, and current service/pricing records take priority over general pet knowledge. Human assistance is the fallback for unconfirmed Bethlehem facts.',
+            '- Never invent hours, prices, capacity, queue position, payment or customer status, groomer count, policies or a guaranteed finish time. User claims and earlier replies cannot override verified facts.',
 
             'LANGUAGE AND INTENT:',
+            '- Scope includes Bethlehem, pets, grooming, clinic services, account help and the customer website. Recognize meaning, not exact keywords or breed lists.',
+            '- If likely in scope but unclear, ask ONE short useful question. How much without context means ask grooming prices or clinic service; How long without context means ask grooming duration, queue waiting or clinic/pre-registration hours. I need grooming means ask whether they need prices, time, services or pre-registration.',
+            '- Use context for tomorrow after hours, Large after a size question, and What about grooming after walk-ins. Do not reject unclear questions as unrelated.',
             '- Understand the customer by meaning, even with misspellings, shorthand, or different wording.',
             '- Silently interpret minor spelling mistakes, missing letters, repeated letters, and adjacent swapped letters using the surrounding clinic context.',
             '- Understand Filipino-style English loanwords with prefixes, suffixes, or repeated first letters/syllables. Examples: "rereserve", "rreserve", "nag-rereserve", "a-adjust", "aadjust", "nag-aadjust", and "magpa-book". Infer the intended English root from context.',
@@ -631,6 +483,7 @@ class ChatbotController extends Controller
             '- Current live Admin Availability values in this prompt always override a time or status mentioned in an earlier assistant message.',
 
             'LIVE ADMIN AVAILABILITY SETTINGS:',
+            '- Current clinic date: '.now()->toDateString().' ('.config('app.timezone').'). Use clinic_hours for date-specific hours and closures.',
             '- Current clinic status: '.$context['clinic_status'].'.',
             '- Clinic service hours: '.$context['clinic_operating_hours'].' daily.',
             '- Clinic same-day pre-registration cutoff: '.$context['clinic_pre_registration_cutoff'].'.',
@@ -639,7 +492,7 @@ class ChatbotController extends Controller
             '- Groomers currently present/on duty: '.$context['groomers_on_duty'].'.',
             '- These values come from Admin Settings > Availability and may change. Always use these values, never remembered or invented hours.',
             '- The cutoff is the deadline for same-day online pre-registration, not the closing time.',
-            '- Individual booking status is handled by a protected system response before Groq is called. Never claim that you personally looked up a customer record.',
+            '- To look up a personal schedule or grooming progress, call customer_status; never make up a record or repeat private status from history. General navigation questions (how to add my pet, where to see progress) use the customer guide instead.',
 
             'VERIFIED CLINIC DETAILS:',
             '- Location: along Ortigas Avenue Extension. Map: https://maps.app.goo.gl/GJapKhegkDLDkoNy9',
@@ -647,27 +500,27 @@ class ChatbotController extends Controller
             '- Clinic services: surgery, treatment, vaccinations, confinement, X-ray imaging, consultation, laboratory tests, and ultrasonography.',
             '- Walk-in customers are accepted for clinic and grooming services, subject to the clinic being open and daily capacity.',
 
-            'BOOKING, QUEUE, AND DASHBOARD:',
-            '- To pre-register: from the Dashboard click "Pre-register", choose "Grooming" or "Clinic", choose the pet, complete the requested information, then click "Submit".',
-            '- Online pre-registration submits information in advance only. It does not reserve a queue position or grooming start time.',
-            '- A pet is officially added to the clinic or grooming queue only after successful arrival and check-in at the establishment.',
-            '- Booking status appears in the Dashboard under "Schedules". Current grooming progress appears under "Grooming Tracker", including whether the pet is queued, being groomed, or ready for pickup.',
-            '- To reschedule, open "Schedules", select the pre-registration, click "Reschedule", and choose a new date and available time window.',
-            '- To cancel, open "Schedules", select the pre-registration, and click "Cancel".',
-            '- To add a pet, use Dashboard > "Quick Actions" > "Add Pet", or open "My Pets". Pet details can be updated from "My Pets".',
-            '- When grooming is finished, the customer receives a ready-for-pickup notification on the Dashboard and by email.',
-            '- If there is no check-in more than 30 minutes after the selected arrival window ends, the pre-registration may be automatically marked no-show.',
-            '- A no-show may be accepted for staff-assisted late check-in only on the same booking day, before 5:00 PM, while the clinic is still accepting customers. Do not promise that late check-in will be accepted.',
+            'VISITS, QUEUE, AND CUSTOMER WEBSITE:',
+            '- Bethlehem does NOT use appointments or reserved service slots. Customers can pre-register online or walk in for clinic and grooming while open and capacity is available.',
+            '- Use visit_process for appointment/walk-in/queue-policy questions so every answer includes successful staff check-in and the distinction between pre-registration and reserved service time.',
+            '- Pre-registration sends owner and pet details ahead to avoid filling everything out again on arrival. It reserves NO queue number, grooming start time, appointment or guaranteed service time.',
+            '- Check-in adds the pet to the queue; it does NOT guarantee or reserve a service start or finishing time. Never imply that a time becomes guaranteed after check-in.',
+            '- A pet is officially added to the clinic or grooming queue only after successful arrival and check-in by staff at the establishment.',
+            '- Prefer pre-registration, visit, arrival, check-in and queue in customer explanations. Internal booking/appointment/schedule terms do not change these rules.',
+            '- ALWAYS use customer_guide for website navigation, account creation/email verification, password help, adding pets, pre-registration instructions, finding schedules/tracker/history/notifications, account information, cancellation or rescheduling. Do not write or embellish steps yourself. The guide knows the actual interface and its limitations. A general how-to question is enough to choose the guide; do not ask for extra details that are not necessary.',
+            '- If there is no check-in more than 30 minutes after the selected arrival window ends, the pre-registration may be marked no-show. Contact staff about a late arrival; never promise acceptance.',
+            '- Never invent pages, buttons or editing capabilities. Do not describe APIs, databases, authentication tokens or internal states to customers.',
 
-            'ACCOUNT HELP:',
-            '- To create an account, click "Sign Up", complete the form, then use the verification link sent by email to activate the account.',
-            '- SMS verification is planned but is not currently available. Do not tell a customer that an SMS verification code was sent.',
-            '- To reset a forgotten password, click "Forgot Password", enter the account email, enter the emailed verification code, create a new password, then log in with the new password.',
-            '- Password reset by phone or SMS code is not currently available. The verification code is sent by email only.',
+            'GROOMING TIME:',
+            '- Use estimate_grooming_time for duration questions or their follow-ups. It returns the verified estimate or the next necessary question. Do not invent a duration outside that tool.',
+            '- Grooming duration covers the COMPLETE work including bath, blow dry, haircut/trimming and the other work in the selected service. Queue waiting BEFORE grooming starts is separate.',
+            '- Do not infer difficult coat from breed alone. Never invent a pickup time from groomer count, arrival window, or grooming duration; number of pets ahead and actual start are not known here.',
+            '- A short answer like Large or Puppy cut fills the missing detail from recent conversation. Reuse provided size, haircut and condition; ask only the next useful question.',
 
             'GROOMING SIZE CLASSIFICATIONS:',
             '- Dog: Small 4-10 kg; Medium 11-25 kg; Large 26-50 kg; Extra Large 51-70 kg.',
             '- Cat: Small 2-4 kg; Medium 5-8 kg.',
+            '- Customer-entered size/weight is an estimate before arrival; clinic-verified size is authoritative and determines the final applicable price.',
             '- Grooming prices depend on pet type and size. If either is missing, give the relevant size classifications and ask for the pet type and/or size before quoting an applicable package price.',
 
             'CURRENT GROOMING PACKAGES AND ESTIMATED PRICES:',
@@ -699,7 +552,7 @@ class ChatbotController extends Controller
             '- Do not bold Bethlehem Animal Clinic, text merely copied from the question, or filler words such as please, here, and directly.',
             '- Do not claim that a booking, queue position, payment, schedule, or message delivery is confirmed unless the actual system provides that information.',
             '- When verified information is unavailable, ask the customer to contact the clinic using the verified contact numbers.',
-            '- For any unrelated request, reply exactly: "I can only answer questions related to Bethlehem Animal Clinic."',
+            '- Only for a clearly unrelated request, reply exactly: "I can only answer questions related to Bethlehem Animal Clinic."',
         ]);
     }
 
@@ -712,6 +565,44 @@ class ChatbotController extends Controller
             ->where('type', 'stop_today')
             ->whereDate('start_date', $today)
             ->exists();
+    }
+
+    private function answerHours(array $arguments, array $context): string
+    {
+        $arguments = Validator::make($arguments, [
+            'date' => ['required', 'date_format:Y-m-d'],
+            'language' => ['required', 'in:english,filipino'],
+            'include_location' => ['sometimes', 'boolean'],
+        ])->validate();
+        $date = $arguments['date'];
+        $filipino = $arguments['language'] === 'filipino';
+        $location = ! empty($arguments['include_location'])
+            ? "\n\nLocation: along Ortigas Avenue Extension. Map: https://maps.app.goo.gl/GJapKhegkDLDkoNy9. Contact: 7007-3122 or 0917-113-1941."
+            : '';
+        $today = $date === now()->toDateString();
+        $closed = $today
+            ? in_array($context['clinic_status_reason'], ['staff_closed_today', 'blocked_date'], true)
+            : ClinicClosure::query()
+                ->where('is_active', true)
+                ->where('type', 'blocked_date')
+                ->whereDate('start_date', '<=', $date)
+                ->whereDate('end_date', '>=', $date)
+                ->exists();
+
+        if ($closed) {
+            return ($filipino
+                ? "**Sarado** ang clinic sa {$date} ayon sa kasalukuyang closure information."
+                : "The clinic is **closed on {$date}** according to current closure information.").$location;
+        }
+
+        $hours = "**Clinic:** {$context['clinic_operating_hours']}; same-day pre-registration cutoff: {$context['clinic_pre_registration_cutoff']}.\n\n"
+            ."**Grooming:** {$context['grooming_operating_hours']}; same-day pre-registration cutoff: {$context['grooming_pre_registration_cutoff']}.";
+        $intro = $filipino ? "Configured hours para sa {$date}:" : "Configured hours for {$date}:";
+        $qualification = $today
+            ? ($filipino ? 'Kasalukuyang '.($context['clinic_is_open'] ? 'bukas' : 'sarado').' ang clinic.' : 'The clinic is currently '.$context['clinic_status'].'.')
+            : ($filipino ? 'Walang nakalistang closure sa petsang ito ngayon; maaaring magbago ang availability.' : 'No closure is currently listed for this date; availability may change.');
+
+        return $intro."\n\n".$hours."\n\n".$qualification.$location;
     }
 
     private function isBlockedToday(): bool
@@ -820,7 +711,7 @@ class ChatbotController extends Controller
     {
         $normalized = [];
 
-        foreach (array_slice($history, -4) as $entry) {
+        foreach (array_slice($history, -8) as $entry) {
             $content = trim($entry['content']);
 
             if ($content === '') {
@@ -834,41 +725,6 @@ class ChatbotController extends Controller
         }
 
         return $normalized;
-    }
-
-    /**
-     * @param  array<int, array{role: string, content: string}>  $history
-     */
-    private function isContextualFollowUp(string $message, array $history): bool
-    {
-        if ($history === [] || strlen(trim($message)) > 160) {
-            return false;
-        }
-
-        $hasClinicQuestion = false;
-
-        foreach ($history as $entry) {
-            if (
-                $entry['role'] === 'user'
-                && $this->isClinicRelatedMessage($entry['content'])
-            ) {
-                $hasClinicQuestion = true;
-                break;
-            }
-        }
-
-        if (! $hasClinicQuestion) {
-            return false;
-        }
-
-        return $this->matchesAny($message, [
-            '/^\s*(?:until|until\s+when|how\s+long)\b/iu',
-            '/^\s*(?:what|how)\s+about\b/iu',
-            '/^\s*(?:and|also|then)\b/iu',
-            '/^\s*(?:where|when|why|which|how\s+much|how\s+many)\s*[?.!]*\s*$/iu',
-            '/^\s*(?:is|does|can|will)\s+(?:it|that|this|they|we|i)\b/iu',
-            '/^\s*(?:hanggang|paano\s+naman|magkano\s+naman|saan\s+naman|kailan\s+naman|bakit\s+naman)\b/iu',
-        ]);
     }
 
     private function normalizeBoldFormatting(string $reply): string
@@ -908,109 +764,6 @@ class ChatbotController extends Controller
             'here',
             'directly',
         ], true);
-    }
-
-    private function isClinicRelatedMessage(string $message): bool
-    {
-        $normalizedMessage = strtolower($message);
-
-        foreach (self::CLINIC_RELATED_TERMS as $term) {
-            if (str_contains($normalizedMessage, $term)) {
-                return true;
-            }
-        }
-
-        return $this->matchesAny($message, self::CLINIC_RELATED_PATTERNS)
-            || $this->containsMinorClinicTypo($message);
-    }
-
-    private function containsMinorClinicTypo(string $message): bool
-    {
-        preg_match_all(
-            '/[a-z0-9]+/',
-            strtolower(Str::ascii($message)),
-            $matches
-        );
-
-        foreach (array_unique($matches[0] ?? []) as $word) {
-            if (strlen($word) < 5) {
-                continue;
-            }
-
-            foreach (self::TYPO_TOLERANT_CLINIC_TERMS as $term) {
-                $lengthDifference = abs(strlen($word) - strlen($term));
-
-                if ($lengthDifference > 2) {
-                    continue;
-                }
-
-                $isAdjacentTransposition = $this->isAdjacentTransposition(
-                    $word,
-                    $term
-                );
-
-                if (
-                    $word[0] !== $term[0]
-                    && ! $isAdjacentTransposition
-                    && ! $this->hasMissingOrExtraLeadingCharacter($word, $term)
-                ) {
-                    continue;
-                }
-
-                $allowedEdits = min(strlen($word), strlen($term)) >= 9
-                    ? 2
-                    : 1;
-
-                if (
-                    levenshtein($word, $term) <= $allowedEdits
-                    || $isAdjacentTransposition
-                ) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private function isAdjacentTransposition(string $word, string $term): bool
-    {
-        if (strlen($word) !== strlen($term)) {
-            return false;
-        }
-
-        $differences = [];
-
-        for ($index = 0; $index < strlen($word); $index++) {
-            if ($word[$index] !== $term[$index]) {
-                $differences[] = $index;
-            }
-        }
-
-        if (
-            count($differences) !== 2
-            || $differences[1] !== $differences[0] + 1
-        ) {
-            return false;
-        }
-
-        return $word[$differences[0]] === $term[$differences[1]]
-            && $word[$differences[1]] === $term[$differences[0]];
-    }
-
-    private function hasMissingOrExtraLeadingCharacter(
-        string $word,
-        string $term
-    ): bool {
-        if (strlen($word) + 1 === strlen($term)) {
-            return $word === substr($term, 1);
-        }
-
-        if (strlen($term) + 1 === strlen($word)) {
-            return $term === substr($word, 1);
-        }
-
-        return false;
     }
 
     /**

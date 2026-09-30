@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\ChatbotKnowledgeService;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -59,9 +60,12 @@ class ChatbotControllerTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_off_topic_questions_return_a_short_clinic_only_reply_without_calling_groq(): void
+    public function test_off_topic_questions_are_interpreted_by_groq(): void
     {
-        Http::fake();
+        config()->set('services.groq.key', 'fake-groq-key');
+        Http::fake(['*' => Http::response([
+            'choices' => [['message' => ['content' => 'I can only answer questions related to Bethlehem Animal Clinic.']]],
+        ])]);
 
         $response = $this->postJson('/api/chatbot', [
             'message' => 'Write a JavaScript function for sorting numbers.',
@@ -73,7 +77,7 @@ class ChatbotControllerTest extends TestCase
                 'reply' => 'I can only answer questions related to Bethlehem Animal Clinic.',
             ]);
 
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
     }
 
     public function test_filipino_english_reduplication_and_affixes_reach_groq(): void
@@ -130,7 +134,7 @@ class ChatbotControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('source', 'local_fallback');
 
-        $this->assertStringContainsString('How to pre-register', $response->json('reply'));
+        $this->assertStringContainsString('queue', $response->json('reply'));
         Http::assertNothingSent();
     }
 
@@ -192,7 +196,7 @@ class ChatbotControllerTest extends TestCase
         });
     }
 
-    public function test_short_follow_up_without_clinic_history_remains_off_topic(): void
+    public function test_short_follow_up_without_history_asks_for_clarification(): void
     {
         Http::fake();
 
@@ -201,7 +205,7 @@ class ChatbotControllerTest extends TestCase
         ])
             ->assertOk()
             ->assertJson([
-                'reply' => 'I can only answer questions related to Bethlehem Animal Clinic.',
+                'reply' => 'Do you mean grooming duration, queue waiting time, or clinic/pre-registration hours?',
             ]);
 
         Http::assertNothingSent();
@@ -239,7 +243,7 @@ class ChatbotControllerTest extends TestCase
     {
         $this->postJson('/api/chatbot', [
             'message' => 'until?',
-            'history' => array_fill(0, 5, [
+            'history' => array_fill(0, 9, [
                 'role' => 'user',
                 'content' => 'Is the clinic open?',
             ]),
@@ -271,7 +275,7 @@ class ChatbotControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJson([
-                'reply' => 'I am the virtual assistant of Bethlehem Animal Clinic.',
+                'reply' => 'I am Bethlehem Assistant, the AI assistant of Bethlehem Animal Clinic.',
             ]);
 
         Http::assertNothingSent();
@@ -547,9 +551,12 @@ class ChatbotControllerTest extends TestCase
         Http::assertSentCount(5);
     }
 
-    public function test_minor_typo_matching_does_not_accept_unrelated_questions(): void
+    public function test_semantic_scope_rejection_does_not_depend_on_keyword_matching(): void
     {
-        Http::fake();
+        config()->set('services.groq.key', 'fake-groq-key');
+        Http::fake(['*' => Http::response([
+            'choices' => [['message' => ['content' => 'I can only answer questions related to Bethlehem Animal Clinic.']]],
+        ])]);
 
         foreach ([
             'Write a sorting algorthm for me.',
@@ -565,7 +572,7 @@ class ChatbotControllerTest extends TestCase
             ]);
         }
 
-        Http::assertNothingSent();
+        Http::assertSentCount(5);
     }
 
     public function test_taglish_open_status_question_gets_a_localized_live_answer(): void
@@ -732,11 +739,12 @@ class ChatbotControllerTest extends TestCase
         Http::assertSent(function ($request) {
             $payload = $request->data();
             $systemPrompt = $payload['messages'][0]['content'] ?? '';
+            $verifiedHelp = implode(' ', app(ChatbotKnowledgeService::class)->customerGuides());
 
             return ($payload['model'] ?? null) === 'fake-groq-model'
                 && str_contains(
                     $systemPrompt,
-                    'Identify yourself only as the virtual assistant of Bethlehem Animal Clinic.'
+                    'You are Bethlehem Assistant, the AI assistant of Bethlehem Animal Clinic.'
                 )
                 && str_contains(
                     $systemPrompt,
@@ -744,7 +752,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $systemPrompt,
-                    'For any unrelated request, reply exactly: "I can only answer questions related to Bethlehem Animal Clinic."'
+                    'Only for a clearly unrelated request, reply exactly: "I can only answer questions related to Bethlehem Animal Clinic."'
                 )
                 && str_contains(
                     $systemPrompt,
@@ -772,7 +780,7 @@ class ChatbotControllerTest extends TestCase
                 )
                 && str_contains(
                     $systemPrompt,
-                    'Individual booking status is handled by a protected system response before Groq is called.'
+                    'call customer_status; never make up a record'
                 )
                 && str_contains(
                     $systemPrompt,
@@ -783,8 +791,8 @@ class ChatbotControllerTest extends TestCase
                     'Answer English questions in English, Tagalog questions in Tagalog, and Taglish questions in natural Taglish.'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'To pre-register: from the Dashboard click "Pre-register", choose "Grooming" or "Clinic"'
+                    $verifiedHelp,
+                    'click "Pre-register", then choose "Grooming" or "Clinic Visit"'
                 )
                 && str_contains(
                     $systemPrompt,
@@ -819,32 +827,32 @@ class ChatbotControllerTest extends TestCase
                     'officially added to the clinic or grooming queue only after successful arrival and check-in'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'Booking status appears in the Dashboard under "Schedules". Current grooming progress appears under "Grooming Tracker"'
+                    $verifiedHelp,
+                    'open the Dashboard and scroll to "Grooming Tracker"'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'To reschedule, open "Schedules"'
+                    $verifiedHelp,
+                    '"Confirm Reschedule"'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'To cancel, open "Schedules"'
+                    $verifiedHelp,
+                    '"Cancel Pre-registration"'
                 )
                 && str_contains(
-                    $systemPrompt,
+                    $verifiedHelp,
                     'use the verification link sent by email to activate the account.'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'click "Forgot Password", enter the account email, enter the emailed verification code'
+                    $verifiedHelp,
+                    'choose "Forgot password?", enter your account email on that page, enter the emailed verification code'
                 )
                 && str_contains(
-                    $systemPrompt,
+                    $verifiedHelp,
                     'Dashboard > "Quick Actions" > "Add Pet", or open "My Pets"'
                 )
                 && str_contains(
-                    $systemPrompt,
-                    'ready-for-pickup notification on the Dashboard and by email.'
+                    $verifiedHelp,
+                    'ready-for-pickup notification is also sent by email.'
                 )
                 && str_contains(
                     $systemPrompt,

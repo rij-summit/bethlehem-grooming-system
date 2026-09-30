@@ -121,6 +121,7 @@
 }
 
 .ai-chatbot-panel__eyebrow {
+  margin-top: 0.35rem;
   color: rgba(255, 255, 255, 0.76);
   font-size: 0.66rem;
   letter-spacing: 0.08em;
@@ -191,6 +192,36 @@
   overflow-y: auto;
   background: #f8fbfe;
   padding: 1rem;
+}
+
+.ai-chatbot-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ai-chatbot-topic {
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--portal-border, #c9dce8);
+  border-radius: 1rem;
+  background: var(--portal-surface-soft, #eef6fa);
+  color: var(--portal-primary, #124a78);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.ai-chatbot-topic:hover {
+  background: var(--portal-active, #d9edf5);
+}
+
+.ai-chatbot-topic:focus-visible {
+  outline: 2px solid var(--portal-primary, #124a78);
+  outline-offset: 2px;
 }
 
 .ai-chatbot-message {

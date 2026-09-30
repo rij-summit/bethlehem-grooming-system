@@ -14,8 +14,17 @@ class ChatbotBookingStatusService
 {
     public function isStatusQuestion(string $message): bool
     {
+        // How-to questions belong to the customer guide, even when they mention "my pet".
+        if (preg_match('/\b(?:how\s+(?:do|can|to)|where\s+(?:can|do)|paano|saan)\b/iu', $message) === 1) {
+            return false;
+        }
+
+        if (preg_match('/^\s*(?:booking|appointment|schedule)\s+ko\s*[?.!]*$/iu', $message) === 1) {
+            return true;
+        }
+
         return preg_match(
-            '/\b(?:(?:my|our)\s+(?:booking|appointment|schedule|pre-?registration|pet)|(?:booking|appointment|schedule|pet)\s+status|where\s+is\s+my\s+(?:pet|booking)|status\s+(?:ng|of)\s+(?:booking|appointment|alaga)|(?:booking|appointment|schedule)\s+ko|nasaan\s+(?:ang\s+)?alaga\s+ko)\b/iu',
+            '/\b(?:(?:check|show)\s+(?:my|our)\s+(?:booking|appointment|schedule|pre-?registration)|(?:my|our)\s+(?:booking|appointment|schedule|pre-?registration|pet)\s+status|where\s+is\s+my\s+(?:pet|booking)|status\s+(?:ng|of)\s+(?:(?:my|our|ang)\s+)?(?:booking|appointment|schedule|alaga)|nasaan\s+(?:ang\s+)?alaga\s+ko)\b/iu',
             $message
         ) === 1;
     }
