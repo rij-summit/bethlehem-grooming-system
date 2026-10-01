@@ -19,11 +19,7 @@ use Throwable;
 class AdminClinicController extends Controller
 {
     private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show'];
-    private const CLINICAL_CONTENT_EDITABLE_STATUSES = [
-        'checked_in',
-        'in_consultation',
-        'for_payment',
-    ];
+    private const CLINICAL_CONTENT_EDITABLE_STATUSES = ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES;
 
     // ── Queue index ──────────────────────────────────────────────────────────
 
@@ -161,11 +157,15 @@ class AdminClinicController extends Controller
                 ->first();
 
             if ($existing) {
-                if ($existing->status === 'waiting_to_arrive') {
-                    $existing->update(['status' => 'in_consultation', 'queue_number' => null, 'consultation_started_at' => now()]);
-                }
+                $case = $this->formatAppointment($existing);
+                $label = ['online_request' => 'online request', 'vaccination' => 'vaccination'][$case['case_type']] ?? 'consultation';
 
-                return response()->json(['success' => true, 'created' => false, 'case' => $this->formatAppointment($existing)]);
+                return response()->json([
+                    'success' => false,
+                    'code' => 'active_case_exists',
+                    'message' => "{$pet->pet_name} already has an ongoing {$label} case ({$existing->appointment_reference}).",
+                    'case' => $case,
+                ], 409);
             }
 
             $reserved = $sequence->reserve(now()->toDateString(), false);

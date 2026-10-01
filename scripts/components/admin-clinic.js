@@ -252,7 +252,7 @@ function adminClinicPage() {
       try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
       catch (error) { alert(error.message || "Could not cancel this case."); }
     },
-    openCase(item) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: item.case_type === "vaccination" ? "vaccinations" : "medical" } })); },
+    openCase(item, section) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } })); },
     async startCase(item) {
       try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
       catch (error) { alert(error.message || "Could not start this case."); }
@@ -417,29 +417,36 @@ function adminClinicPage() {
       this.petPicker.open = false;
     },
 
-    async openVaccinations() {
-      const { pet, owner } = this.profile;
+    // One ongoing case per pet: a consultation and a vaccination share the same
+    // case through its Medical Record and Vaccinations tabs.
+    async openOrResumeCase(caseType) {
+      const section = caseType === "vaccination" ? "vaccinations" : "medical";
       try {
-        const response = await API.createClinicCase({ pet_id: pet.id, case_type: "vaccination" });
-        await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(response.case);
-      } catch (error) { alert(error.message || "Could not open a vaccination case."); }
+        let caseItem;
+        try {
+          caseItem = (await API.createClinicCase({ pet_id: this.profile.pet.id, case_type: caseType })).case;
+        } catch (error) {
+          if (error.code !== "active_case_exists" || !error.data?.case) throw error;
+          const tabName = section === "vaccinations" ? "Vaccinations" : "Medical Record";
+          if (!window.confirm(`${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`)) return;
+          caseItem = error.data.case;
+          if (caseItem.status === "waiting_to_arrive") caseItem = (await API.startClinicCase(caseItem.id)).case;
+        }
+        await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(caseItem, section);
+      } catch (error) { alert(error.message || `Could not open a ${caseType} case.`); }
+    },
+
+    async openVaccinations() {
+      if (!this.profile.pet?.id) return;
+      await this.openOrResumeCase("vaccination");
     },
 
     async newConsultation() {
       const { pet, owner } = this.profile;
       if (!pet?.id || !owner) return;
 
-      try {
-        const response = await API.createClinicCase({ pet_id: pet.id, case_type: "consultation" });
-        await this.loadActiveCases();
-        this.closeProfile();
-        this.closePetPicker();
-        this.openCase(response.case);
-        return;
-      } catch (error) {
-        alert(error.message || "Could not open a consultation case.");
-        return;
-      }
+      await this.openOrResumeCase("consultation");
+      return;
 
       // Build the owner draft in exactly the same format that walk-in-owner-step.js
       // saveOwnerDraft() produces, so the pet step can read it without modification.

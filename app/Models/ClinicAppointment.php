@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClinicAppointment extends Model
 {
+    public const CLINICAL_CONTENT_EDITABLE_STATUSES = [
+        'checked_in',
+        'in_consultation',
+        'for_payment',
+    ];
+
     protected $table = 'clinic_appointments';
 
     protected $fillable = [

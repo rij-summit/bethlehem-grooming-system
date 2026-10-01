@@ -608,9 +608,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('case.queue_number', null)
             ->json('case.id');
         $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'vaccination'])
-            ->assertOk()
-            ->assertJsonPath('created', false)
-            ->assertJsonPath('case.id', $caseId);
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'active_case_exists')
+            ->assertJsonPath('case.id', $caseId)
+            ->assertJsonPath('case.case_type', 'consultation');
         $this->assertSame(1, DB::table('clinic_appointments')->count());
 
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases');
@@ -634,6 +635,18 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('cases.0.case_type', 'online_request')
             ->assertJsonPath('cases.0.queue_number', null);
+
+        DB::table('unregistered_customers')->insert([
+            'id' => 1, 'first_name' => 'Ana', 'last_name' => 'Cruz', 'phone' => '09171234567',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('pets')->insert(['pet_id' => 1, 'unregistered_customer_id' => 1, 'pet_name' => 'Mochi', 'species' => 'Dog']);
+        DB::table('clinic_appointments')->where('id', 1)->update(['pet_id' => 1]);
+        $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'vaccination'])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'active_case_exists')
+            ->assertJsonPath('case.id', 1);
+        $this->assertSame('waiting_to_arrive', DB::table('clinic_appointments')->where('id', 1)->value('status'));
 
         $this->postJson('/api/admin/clinic-cases/1/start')
             ->assertOk()
