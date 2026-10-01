@@ -1,0 +1,147 @@
+<!-- Page header -->
+<section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
+  <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+    <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div>
+        <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Inventory History</h2>
+        <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674]">
+          Stock movement records · <span x-text="total"></span> record(s)
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Filters -->
+<div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+  <select x-model="filterType" @change="applyFilters()"
+    class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+    <option value="">All Directions</option>
+    <option value="stock_in">Stock In</option>
+    <option value="stock_out">Stock Out</option>
+  </select>
+  <select x-model="filterCategory" @change="applyFilters()"
+    class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+    <option value="">All Categories</option>
+    <option value="medicine">Medicine</option>
+    <option value="vaccine">Vaccine</option>
+    <option value="food">Food</option>
+    <option value="grooming_supply">Grooming Supply</option>
+    <option value="pet_shop">Pet Shop</option>
+    <option value="miscellaneous">Miscellaneous</option>
+  </select>
+  <input x-model="filterDateFrom" @change="applyFilters()" type="date"
+    class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"
+    title="From date" />
+  <input x-model="filterDateTo" @change="applyFilters()" type="date"
+    class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"
+    title="To date" />
+</div>
+<div class="mt-2 flex justify-end">
+  <button type="button" @click="clearFilters()" class="text-xs text-slate-400 hover:text-slate-600 hover:underline">
+    Clear filters
+  </button>
+</div>
+
+<!-- Error -->
+<div x-show="error" style="display:none" class="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700" x-text="error"></div>
+
+<!-- Loading skeleton -->
+<div x-show="loading" style="display:none" class="mt-4 space-y-2">
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+</div>
+
+<!-- Table -->
+<div x-show="!loading" class="mt-4 overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+          <th class="px-4 py-3">Item</th>
+          <th class="px-4 py-3">Reason</th>
+          <th class="px-4 py-3">Qty</th>
+          <th class="px-4 py-3 hidden sm:table-cell">Category</th>
+          <th class="px-4 py-3 hidden lg:table-cell">Batch</th>
+          <th class="px-4 py-3 hidden lg:table-cell">Expiry</th>
+          <th class="px-4 py-3 hidden xl:table-cell">Processed By</th>
+          <th class="px-4 py-3">Date &amp; Time</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[#e6eef7]">
+        <template x-if="transactions.length === 0">
+          <tr><td colspan="8" class="px-4 py-10 text-center text-sm text-slate-400">No transactions found.</td></tr>
+        </template>
+        <template x-for="tx in transactions" :key="tx.transaction_id">
+          <tr class="hover:bg-[#f5f8fb] transition">
+
+            <!-- Item + #ID -->
+            <td class="px-4 py-3">
+              <p class="font-semibold text-slate-800" x-text="tx.item_name ?? '—'"></p>
+              <p class="mt-0.5 text-xs text-slate-400">
+                #<span x-text="tx.transaction_id"></span>
+              </p>
+              <p x-show="tx.source_label" class="mt-0.5 text-xs font-semibold text-[#315b7e]" x-text="tx.source_label"></p>
+            </td>
+
+            <!-- Reason badge (always visible) -->
+            <td class="px-4 py-3">
+              <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                :style="reasonStyle(tx.reason)"
+                x-text="reasonLabel(tx.reason)"></span>
+            </td>
+
+            <!-- Qty with +/- direction color -->
+            <td class="px-4 py-3" :style="qtyStyle(tx.type)">
+              <span x-text="(tx.type === 'stock_in' ? '+' : '-') + fmtQty(tx.quantity)"></span>
+              <span class="ml-0.5 text-xs font-normal text-slate-400" x-text="tx.unit ?? ''"></span>
+            </td>
+
+            <!-- Category (hidden on mobile) -->
+            <td class="hidden px-4 py-3 sm:table-cell">
+              <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style="background-color:#e0f2fe;color:#0369a1"
+                x-text="categoryLabel(tx.category)"></span>
+            </td>
+
+            <!-- Batch (hidden on mobile/tablet) -->
+            <td class="hidden px-4 py-3 lg:table-cell">
+              <span class="font-mono text-xs text-slate-500" x-text="tx.batch_number || '—'"></span>
+            </td>
+
+            <!-- Expiry (hidden on mobile/tablet) -->
+            <td class="hidden px-4 py-3 lg:table-cell text-xs text-slate-500" x-text="tx.expiry_date || '—'"></td>
+
+            <!-- Performed By (hidden on smaller desktop) -->
+            <td class="hidden px-4 py-3 xl:table-cell text-xs text-slate-400" x-text="tx.performed_by_name ?? '—'"></td>
+
+            <!-- Date & Time (always visible) -->
+            <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" x-text="fmtDate(tx.created_at)"></td>
+
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="lastPage > 1" style="display:none"
+    class="flex items-center justify-between border-t border-[#e6eef7] px-4 py-3">
+    <p class="text-xs text-slate-500">
+      Page <span x-text="currentPage"></span> of <span x-text="lastPage"></span>
+      &nbsp;·&nbsp; <span x-text="total"></span> records
+    </p>
+    <div class="flex gap-2">
+      <button type="button" @click="prevPage()" :disabled="currentPage === 1"
+        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+        Previous
+      </button>
+      <button type="button" @click="nextPage()" :disabled="currentPage === lastPage"
+        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+        Next
+      </button>
+    </div>
+  </div>
+</div>

@@ -70,10 +70,57 @@ function revealStaffSettingsSidebarLink() {
   });
 }
 
+const adminInventoryLinks = { overview: "Overview", products: "Products", "stock-in": "Stock In", "stock-out": "Stock Out", history: "History" };
+
+function getAdminInventorySection() {
+  if (!String(window.location.pathname || "").endsWith("/inventory.html")) return "";
+  const section = String(window.location.hash || "").slice(1).split("?")[0];
+  return Object.hasOwn(adminInventoryLinks, section) ? section : "overview";
+}
+
+function installAdminInventoryNavigation() {
+  const link = document.querySelector('.admin-sidebar-menu a[href*="inventory.html"]');
+  if (!link) return;
+  const url = new URL("inventory.html", link.href);
+  const group = document.createElement("div");
+  group.className = "admin-inventory-navigation";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `${link.className} w-full`;
+  button.setAttribute(":class", link.getAttribute(":class") || "''");
+  button.setAttribute("@click", "inventoryExpanded = activePage === 'inventory' || !inventoryExpanded");
+  button.setAttribute(":aria-expanded", "inventoryExpanded");
+  button.setAttribute("aria-controls", "inventory-submenu");
+  button.innerHTML = `${link.innerHTML}<span class="ml-auto text-xs" aria-hidden="true" x-text="inventoryExpanded ? '▾' : '▸'"></span>`;
+  const submenu = document.createElement("div");
+  submenu.id = "inventory-submenu";
+  submenu.setAttribute("x-show", "inventoryExpanded");
+  submenu.setAttribute("x-cloak", "");
+  submenu.className = "admin-inventory-submenu";
+  for (const [section, label] of Object.entries(adminInventoryLinks)) {
+    const child = document.createElement("a");
+    child.href = `${url.pathname}#${section}`;
+    child.textContent = label;
+    child.setAttribute(":class", `activePage === 'inventory' && inventorySection === '${section}' ? 'is-active' : ''`);
+    child.setAttribute(":aria-current", `activePage === 'inventory' && inventorySection === '${section}' ? 'page' : null`);
+    child.setAttribute("@click", "sidebarOpen = false");
+    submenu.appendChild(child);
+  }
+  group.append(button, submenu);
+  link.replaceWith(group);
+}
+
+// Build the shared group before Alpine walks the sidebar. Replacing a live
+// Alpine link can leave its queued effects detached from their parent scope.
+if (typeof document !== "undefined" && document.querySelector) installAdminInventoryNavigation();
+
 function adminSidebar() {
   return {
     sidebarOpen: false,
     activePage: getAdminSidebarActivePage(),
+    inventoryExpanded: getAdminSidebarActivePage() === "inventory",
+    inventorySection: getAdminInventorySection(),
+    _inventoryNavigationListener: null,
     isAdmin: false,
     staffDisplayName: "Staff",
     staffInitials: "ST",
@@ -107,6 +154,11 @@ function adminSidebar() {
 
     async init() {
       this.detectActivePage();
+      this._inventoryNavigationListener = () => {
+        this.inventorySection = getAdminInventorySection();
+        if (this.activePage === "inventory") this.inventoryExpanded = true;
+      };
+      window.addEventListener("hashchange", this._inventoryNavigationListener);
       this.isAdmin = API.getUserRole() === "admin";
       if (API.enforceAdminPageAccess && !API.enforceAdminPageAccess()) return;
 
@@ -132,6 +184,7 @@ function adminSidebar() {
     },
 
     destroy() {
+      window.removeEventListener("hashchange", this._inventoryNavigationListener);
       if (this._incomingAppointmentInterval) {
         clearInterval(this._incomingAppointmentInterval);
       }

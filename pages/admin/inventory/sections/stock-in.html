@@ -1,0 +1,420 @@
+<!-- Page header -->
+<section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
+  <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Stock In</h2>
+        <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674]">Record received inventory</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Error alert -->
+<div class="mt-4 max-w-2xl space-y-3">
+  <div x-show="error" style="display:none"
+    class="flex items-start gap-3 rounded-2xl p-4 text-sm"
+    style="background-color:#fee2e2;color:#b91c1c">
+
+    <span x-text="error"></span>
+  </div>
+</div>
+
+<div class="mt-4 max-w-2xl space-y-4">
+
+  <!-- ── Step 1: Search item ─────────────────────────────────────── -->
+  <div class="rounded-2xl border border-[#e6eef7] bg-white shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-[#e6eef7]" style="background-color:#f8fafc">
+      <p class="text-sm font-bold text-slate-700">Search Item</p>
+    </div>
+    <div class="p-5">
+
+      <!-- Search bar (hidden once item selected) -->
+      <div x-show="!selected" style="display:block">
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+
+            <input
+              x-model="searchQuery"
+              @input="onSearchInput()"
+              @keyup.enter="onSearchEnter()"
+              type="search"
+              placeholder="Item name or barcode…"
+              class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"
+            />
+          </div>
+          <button
+            type="button" aria-label="Scan barcode"
+            @click="openScanner()"
+            title="Scan with camera"
+            class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-500 transition hover:border-[#315b7e] hover:text-[#315b7e]"
+          >
+            <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#barcode"></use></svg>
+          </button>
+        </div>
+        <p class="mt-1.5 text-xs text-slate-400">Press Enter to search by barcode, or choose Scan barcode to use the camera.</p>
+
+        <!-- Dropdown results -->
+        <div x-show="searchResults.length > 0" style="display:none"
+          class="mt-1 overflow-hidden rounded-2xl border border-[#d7e3ef] bg-white shadow-lg">
+          <template x-for="item in searchResults" :key="item.item_id">
+            <div>
+              <template x-if="item.is_active">
+                <button type="button" @click="pickItem(item)"
+                  class="flex w-full items-center justify-between px-4 py-3 text-sm transition hover:bg-[#eaf4fb]">
+                  <div class="min-w-0 text-left">
+                    <p class="truncate font-semibold text-slate-800" x-text="item.item_name"></p>
+                    <p class="text-xs capitalize text-slate-400" x-text="item.category?.replace('_',' ')"></p>
+                  </div>
+                  <span class="ml-3 shrink-0 text-xs text-slate-500">
+                    <span x-text="Math.trunc(Number(item.quantity_on_hand ?? 0))"></span> <span x-text="item.unit"></span>
+                  </span>
+                </button>
+              </template>
+              <template x-if="!item.is_active">
+                <div class="flex items-center justify-between rounded-xl border border-[#D4DAE1] bg-[#F3F5F7] px-4 py-3 text-sm">
+                  <div class="min-w-0 text-left">
+                    <p class="truncate font-semibold text-[#687482]" x-text="item.item_name"></p>
+                    <p class="text-xs text-[#A6B3C2]">This product cannot receive stock.</p>
+                  </div>
+                  <span class="ml-3 shrink-0 rounded-full bg-[#E8EBEF] px-3 py-1 text-xs font-semibold text-[#596572]">Deactivated</span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- No results notice -->
+        <div x-show="noResults && searchQuery.length >= 2 && !showCreateForm" style="display:none"
+          class="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center">
+          <p class="text-sm text-slate-500">
+            No product found for "<span class="font-semibold text-slate-700" x-text="searchQuery"></span>".
+          </p>
+          <button type="button" @click="openCreateForm()"
+            class="mt-2.5 inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition"
+            style="background-color:#315b7e">
+
+            Create new product
+          </button>
+        </div>
+
+        <!-- Inline create-product form -->
+        <div x-show="showCreateForm" style="display:none"
+          class="mt-3 overflow-hidden rounded-2xl border border-[#d7e3ef]">
+          <div class="flex items-center justify-between border-b border-[#e6eef7] px-4 py-3" style="background-color:#f0fdf4">
+            <p class="flex items-center gap-2 text-sm font-bold" style="color:#15803d">
+
+              New Product
+            </p>
+            <button type="button" @click="cancelCreate()"
+              class="rounded-full p-1 text-slate-400 transition hover:bg-white hover:text-red-500">
+
+            Close</button>
+          </div>
+          <div class="space-y-3 bg-white p-4">
+
+            <!-- Name + Barcode -->
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">
+                  Product Name <span style="color:#ef4444" class="font-bold">*</span>
+                </label>
+                <input x-model="createForm.item_name" type="text" placeholder="e.g. Amoxicillin 500mg"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">Barcode <span class="font-normal text-slate-400">(optional)</span></label>
+                <div class="relative">
+                  <input :value="createForm.barcode" @input="handleCreateBarcodeInput($event)" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="13" placeholder="Scan or type barcode"
+                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                  <button type="button" aria-label="Scan barcode" @click="openCreateBarcodeScanner()" title="Scan with camera"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#315b7e]">
+                    <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#barcode"></use></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">Description <span class="font-normal text-slate-400">(optional)</span></label>
+              <input x-model="createForm.description" type="text" placeholder="e.g. 0.67ml, for dogs 10–20kg"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+            </div>
+
+            <!-- Category + Unit -->
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">
+                  Category <span style="color:#ef4444" class="font-bold">*</span>
+                </label>
+                <select x-model="createForm.category"
+                  style="appearance: none; -webkit-appearance: none;"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                  <option value="">Select category ▾</option>
+                  <template x-for="categoryOption in ProductForm.categoryOptions" :key="categoryOption.value">
+                    <option :value="categoryOption.value" x-text="categoryOption.label"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">
+                  Unit <span style="color:#ef4444" class="font-bold">*</span>
+                </label>
+                <select x-model="createForm.unit" required
+                  style="appearance: none; -webkit-appearance: none;"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                  <option value="">Select unit ▾</option>
+                  <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value">
+                    <option :value="unitOption.value" x-text="unitOption.label"></option>
+                  </template>
+                </select>
+                <div x-show="createForm.unit === 'other'" x-cloak class="mt-2">
+                  <label class="mb-1 block text-xs font-semibold text-slate-600">Custom unit *</label>
+                  <input x-model="createForm.customUnit" type="text" :required="createForm.unit === 'other'"
+                    placeholder="Enter custom unit"
+                    class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Unit Cost + Selling Price + Min Stock -->
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">Unit Cost (₱)</label>
+                <input x-model="createForm.unit_cost" type="number" step="0.01" min="0.01" required placeholder="0.00"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">Selling Price (₱)</label>
+                <input x-model="createForm.selling_price" type="number" step="0.01" min="0.01" required placeholder="0.00"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-slate-600">Min. Stock</label>
+                <input x-model="createForm.reorder_level" type="number" step="1" min="0" required placeholder="0"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+              </div>
+            </div>
+
+            <!-- Error -->
+            <p x-show="createError" style="display:none"
+              class="text-xs font-semibold" style="color:#b91c1c" x-text="createError"></p>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 pt-1">
+              <button type="button" @click="createAndSelect()" :disabled="createBusy"
+                class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition"
+                style="background-color:#315b7e"
+                :style="createBusy ? 'opacity:0.6;cursor:not-allowed;background-color:#315b7e' : 'background-color:#315b7e'">
+
+                <span x-text="createBusy ? 'Creating…' : 'Create & Select'"></span>
+              </button>
+              <button type="button" @click="cancelCreate()"
+                class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selected item chip -->
+      <div x-show="selected" style="display:none">
+        <div class="flex items-center gap-3 rounded-xl p-3"
+          :style="selected?._newly_created ? 'background-color:#f0fdf4' : 'background-color:#eaf4fb'">
+
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="font-semibold text-[#1f3850] truncate" x-text="selected?.item_name"></p>
+              <span x-show="selected?._newly_created" style="display:none"
+                class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold"
+                style="background-color:#bbf7d0;color:#15803d">NEW</span>
+            </div>
+            <p class="text-xs text-slate-500">
+              Current stock:
+              <span class="font-semibold" x-text="Math.trunc(Number(selected?.quantity_on_hand ?? 0))"></span>
+              <span x-text="selected?.unit"></span>
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-0.5">
+            <!-- Undo creation: removes product from DB entirely -->
+            <button x-show="selected?._newly_created" style="display:none"
+              type="button" @click="undoSelected()"
+              title="Undo — delete this product from the system"
+              class="rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-amber-500">
+
+            Undo creation</button>
+            <!-- X: just deselects, product stays in DB -->
+            <button type="button" @click="clearSelected()"
+              class="rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-red-500">
+
+            Clear</button>
+          </div>
+        </div>
+
+        <!-- Entry fields -->
+        <div class="mt-4 space-y-4">
+          <!-- Row 1: Qty / Cost / Reason -->
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">
+                Quantity <span style="color:#ef4444" class="font-bold">*</span>
+              </label>
+              <input x-model="qty" data-qty-input type="number" step="1" min="1" inputmode="numeric" placeholder="0"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">Unit Cost (₱)</label>
+              <input x-model="unitCost" type="number" step="0.01" min="0" placeholder="0.00"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">Reason</label>
+              <select x-model="reason"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+                <option value="purchase">New Stock</option>
+                <option value="return">Returned Item</option>
+                <option value="adjustment">Adjustment</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 2: Batch / Expiry -->
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">
+                Batch Number
+                <span class="font-normal text-slate-400">(optional)</span>
+              </label>
+              <input x-model="batchNumber" type="text" placeholder="e.g. BT-2024-001"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+            </div>
+            <div x-show="needsExpiry" x-cloak>
+              <label class="mb-1 block text-xs font-semibold text-slate-600">
+                Expiry Date <span style="color:#ef4444" class="font-bold">*</span>
+              </label>
+              <input x-model="expiryDate" type="date" :min="today"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+            </div>
+          </div>
+
+          <!-- Row 3: Notes -->
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-slate-600">
+              Notes
+              <span class="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input x-model="notes" type="text" placeholder="Any additional info…"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </div>
+
+          <!-- Error -->
+          <p x-show="entryError" style="display:none;color:#b91c1c" class="text-xs font-semibold" x-text="entryError"></p>
+
+          <!-- Add button -->
+          <button type="button" @click="addToPending()"
+            class="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition"
+            style="background-color:#315b7e">
+
+            <span>Add to List</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Pending list ─────────────────────────────────────────────── -->
+  <div x-show="pending.length > 0" style="display:none"
+    class="overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+    <div class="flex items-center justify-between border-b border-[#e6eef7] px-5 py-4" style="background-color:#f8fafc">
+      <p class="text-sm font-bold text-slate-700">Items to Stock In</p>
+      <span class="rounded-full px-2.5 py-0.5 text-xs font-bold"
+        style="background-color:#fef3c7;color:#92400e"
+        x-text="pending.length + ' item(s)'"></span>
+    </div>
+    <ul class="divide-y divide-[#e6eef7]">
+      <template x-for="(p, idx) in pending" :key="idx">
+        <li class="flex items-center gap-3 px-5 py-3.5">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="truncate text-sm font-semibold text-slate-800" x-text="p.item_name"></p>
+              <span x-show="p._newly_created" style="display:none"
+                class="shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold"
+                style="background-color:#bbf7d0;color:#15803d">NEW</span>
+            </div>
+            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+              <span>
+                <span x-text="p.quantity"></span>
+                <span x-text="p.unit"></span>
+              </span>
+              <span x-show="p.unit_cost" style="display:none">
+                · ₱<span x-text="parseFloat(p.unit_cost).toFixed(2)"></span>/unit
+              </span>
+              <span class="capitalize" x-text="'· ' + p.reason"></span>
+              <span x-show="p.batch_number" style="display:none" x-text="'· Batch: ' + p.batch_number"></span>
+              <span x-show="p.expiry_date" style="display:none" x-text="'· Exp: ' + p.expiry_date"></span>
+            </div>
+          </div>
+          <div class="flex shrink-0 items-center gap-0.5">
+            <!-- Undo creation: removes from list AND deactivates the product -->
+            <button x-show="p._newly_created" style="display:none"
+              type="button" @click="undoCreatedItem(idx)"
+              title="Undo creation — remove from list and delete product"
+              class="rounded-lg p-1.5 text-slate-400 transition inv-undo-btn">
+
+            Undo creation</button>
+            <!-- Trash: only removes from list, product stays -->
+            <button type="button" @click="removePending(idx)"
+              class="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500">
+
+            Remove</button>
+          </div>
+        </li>
+      </template>
+    </ul>
+  </div>
+
+</div><!-- /max-w-2xl -->
+
+<!-- ── Camera Scanner Modal ─────────────────────────────────────────── -->
+<div x-cloak x-show="scannerActive" style="display:none;z-index:60;background-color:rgba(15,23,42,0.8)" x-transition
+  class="fixed inset-0 flex items-center justify-center px-4">
+  <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <h4 class="font-bold text-slate-800">Scan Barcode</h4>
+      <button type="button" @click="closeScanner()" class="text-slate-400 transition hover:text-red-500">
+
+      Close</button>
+    </div>
+    <div class="p-4">
+      <div id="stockin-qr-reader" class="w-full overflow-hidden rounded-xl"></div>
+      <p class="mt-3 text-center text-xs text-slate-400">Point camera at barcode or QR code</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sticky submit bar ────────────────────────────────────────────── -->
+<div class="fixed bottom-0 left-0 right-0 z-40 border-t border-[#d7e3ef] bg-white px-4 py-3 shadow-lg lg:left-[280px]">
+  <div class="mx-auto flex max-w-2xl items-center justify-between gap-4">
+    <div class="min-w-0">
+      <p x-show="!pending.length" class="text-sm text-slate-400">Add at least one item above, then submit.</p>
+      <p x-show="pending.length > 0" style="display:none" class="text-sm font-semibold text-slate-700">
+        <span x-text="pending.length"></span> item(s) ready to record
+      </p>
+    </div>
+    <button
+      type="button"
+      @click="submit()"
+      :disabled="submitting || !pending.length"
+      class="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition"
+      style="background-color:#d97706"
+      :style="(submitting || !pending.length) ? 'background-color:#d97706;opacity:0.5;cursor:not-allowed' : 'background-color:#d97706'"
+    >
+
+      <span>Record Stock In</span>
+    </button>
+  </div>
+</div>

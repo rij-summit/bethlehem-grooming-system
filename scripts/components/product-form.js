@@ -88,10 +88,15 @@ window.ProductForm = (() => {
 
     owner.scannerActive = true;
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!owner.scannerActive) return;
       const config = { fps: 10, qrbox: { width: 260, height: 120 } };
       const start = (constraints) => {
+        if (!owner.scannerActive) return Promise.resolve();
         owner._scanner = new Html5Qrcode(readerId);
-        return owner._scanner.start(constraints, config, onDecoded, () => {});
+        const scanner = owner._scanner;
+        return scanner.start(constraints, config, onDecoded, () => {}).then(() => {
+          if (!owner.scannerActive || owner._scanner !== scanner) return scanner.stop().catch(() => {});
+        });
       };
 
       start({
@@ -106,7 +111,8 @@ window.ProductForm = (() => {
 
   function closeBarcodeScanner(owner) {
     if (owner._scanner) {
-      owner._scanner.stop().catch(() => {});
+      // Navigation may close the scanner before camera startup has completed.
+      try { owner._scanner.stop().catch(() => {}); } catch { /* startup will stop on completion */ }
       owner._scanner = null;
     }
     owner.scannerActive = false;

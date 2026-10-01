@@ -9,6 +9,8 @@ function adminInventoryItems() {
     q: "",
     category: "",
     showInactive: false,
+    alertFilter: "",
+    expiryItems: [],
     currentPage: 1,
     lastPage: 1,
     total: 0,
@@ -45,12 +47,15 @@ function adminInventoryItems() {
       this.loading = true;
       this.error = "";
       try {
-        const res = await InventoryAPI.getItems({ q: this.q, category: this.category, inactive_only: this.showInactive, page });
-        this.items       = res.data;
+        const res = this.alertFilter === "expiry"
+          ? await InventoryAPI.getExpiryAlerts({ page })
+          : await InventoryAPI.getItems({ q: this.q, category: this.category, low_stock: this.alertFilter === "low-stock", inactive_only: this.showInactive, page });
+        if (this.alertFilter === "expiry") this.expiryItems = res.data;
+        else this.items = res.data;
         this.currentPage = res.page;
         this.lastPage    = res.last_page;
         this.total       = res.total;
-        if (this.items.length === 0 && page > this.lastPage) {
+        if (res.data.length === 0 && page > this.lastPage) {
           await this.load(this.lastPage);
           return;
         }
@@ -72,6 +77,10 @@ function adminInventoryItems() {
       if (!this.q.trim()) return;
       try {
         const res = await InventoryAPI.findByBarcode(this.q.trim(), this.showInactive);
+        if (this.alertFilter === "low-stock" && !res.data.low_stock) {
+          await this.load(1);
+          return;
+        }
         // Found exact match — replace list with single result
         this.items = [res.data];
         this.currentPage = 1;
@@ -201,6 +210,9 @@ function adminInventoryItems() {
     },
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    expiryStyle(item) { return InventoryAlerts.expiryStyle(item); },
+    expiryLabel(item) { return InventoryAlerts.expiryLabel(item); },
 
     categoryLabel(cat) {
       return {

@@ -276,6 +276,41 @@ body.customer-detail-modal-open {
   margin-top: auto;
 }
 
+.admin-inventory-navigation > button:hover {
+  background-color: rgb(255 255 255 / 40%);
+}
+
+.admin-inventory-navigation > button[aria-expanded="true"].bg-\[\#315b7e\]:hover {
+  background-color: #315b7e;
+}
+
+.admin-inventory-submenu {
+  margin: 6px 0 0 24px;
+  padding-left: 12px;
+  border-left: 1px solid rgb(49 91 126 / 22%);
+}
+
+.admin-inventory-submenu a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  color: #2f4b66;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-inventory-submenu a:hover {
+  background-color: rgb(255 255 255 / 30%);
+}
+
+.admin-inventory-submenu a.is-active {
+  background-color: rgb(255 255 255 / 65%);
+  color: #1f3850;
+  font-weight: 800;
+}
+
 .client-sidebar {
   overflow-y: auto;
   transition:

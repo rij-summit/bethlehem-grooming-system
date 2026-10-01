@@ -614,12 +614,8 @@ class InventorySecurityRegressionTest extends TestCase
         $this->assertStringNotContainsString('127.0.0.1:8000', $service);
 
         foreach ([
-            'inventory-dashboard.html',
-            'inventory-items.html',
-            'inventory-transactions.html',
+            'inventory.html',
             'pos.html',
-            'stock-in.html',
-            'stock-out.html',
         ] as $pageName) {
             $page = file_get_contents(base_path("pages/admin/inventory/{$pageName}"));
 
@@ -629,8 +625,7 @@ class InventorySecurityRegressionTest extends TestCase
                 "{$pageName} must load the compatible shared API client.",
             );
             $expectedInventoryServiceVersion = match ($pageName) {
-                'inventory-dashboard.html' => 'scripts/services/inventory-service.js?v=dashboard-pagination-20260919',
-                'stock-in.html' => 'scripts/services/inventory-service.js?v=inventory-search-inactive-20260920',
+                'inventory.html' => 'scripts/services/inventory-service.js?v=unified-inventory-20261001b',
                 default => 'scripts/services/inventory-service.js?v=inventory-security-20260816',
             };
             $this->assertStringContainsString(
@@ -639,30 +634,31 @@ class InventorySecurityRegressionTest extends TestCase
                 "{$pageName} must invalidate the old localhost-only inventory client.",
             );
             $this->assertStringContainsString(
-                'scripts/components/admin-sidebar.js?v=staff-settings-20260923',
+                'scripts/components/admin-sidebar.js?v=unified-inventory-20261001b',
                 $page,
                 "{$pageName} must invalidate stale logout handling.",
             );
         }
 
-        $inventoryDashboardPage = file_get_contents(base_path('pages/admin/inventory/inventory-dashboard.html'));
-        $itemsPage = file_get_contents(base_path('pages/admin/inventory/inventory-items.html'));
+        $inventoryPage = file_get_contents(base_path('pages/admin/inventory/inventory.html'));
+        $inventoryLoader = file_get_contents(base_path('scripts/components/admin-inventory.js'));
         $posPage = file_get_contents(base_path('pages/admin/inventory/pos.html'));
-        $stockInPage = file_get_contents(base_path('pages/admin/inventory/stock-in.html'));
-        $stockOutPage = file_get_contents(base_path('pages/admin/inventory/stock-out.html'));
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
-        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $inventoryDashboardPage);
-        $this->assertStringContainsString('inventory-service.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-sidebar.js?v=staff-settings-20260923', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-inventory-dashboard.js?v=dashboard-pagination-20260919', $inventoryDashboardPage);
-        $this->assertStringContainsString('admin-inventory-items.js?v=product-row-numbers-20260921', $itemsPage);
-        $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockInPage);
-        $this->assertStringContainsString('inventory-service.js?v=inventory-search-inactive-20260920', $stockInPage);
-        $this->assertStringContainsString('admin-stock-in.js?v=stock-in-category-expiry-20260920', $stockInPage);
+        $this->assertStringContainsString('admin-inventory.js?v=inventory-icons-20261002', $inventoryPage);
+        $this->assertStringContainsString('components/${name}?v=unified-inventory-20261001b', $inventoryLoader);
+        foreach ([
+            'overview' => 'admin-inventory-dashboard.js',
+            'products' => 'admin-inventory-items.js',
+            'stock-in' => 'admin-stock-in.js',
+            'stock-out' => 'admin-stock-out.js',
+            'history' => 'admin-inventory-transactions.js',
+        ] as $section => $script) {
+            $this->assertFileExists(base_path("pages/admin/inventory/sections/{$section}.html"));
+            $this->assertStringContainsString($script, $inventoryLoader);
+        }
+        $this->assertStringContainsString('"success-toast.js"', $inventoryLoader);
         $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
-        $this->assertStringContainsString('success-toast.js?v=success-toast-20260920', $stockOutPage);
-        $this->assertStringContainsString('admin-stock-out.js?v=stock-out-selling-price-readonly-20260920', $stockOutPage);
         $this->assertStringContainsString(
             'p.item_id === this.selected.item_id && p.reason === this.reason',
             $stockOutScript,

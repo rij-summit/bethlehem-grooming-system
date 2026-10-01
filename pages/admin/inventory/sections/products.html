@@ -1,0 +1,347 @@
+<!-- Page header -->
+<section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
+  <div class="rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:px-6 lg:py-6">
+    <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div>
+        <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Products</h2>
+        <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674]">
+          <span x-text="total"></span> <span x-text="alertFilter === 'expiry' ? 'expiry alert(s)' : 'matching product(s)'"></span>
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+
+        <button type="button" @click="openAdd()" class="inline-flex items-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">
+          <span>Add Product</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="mt-6">
+  <label for="inventory-product-view" class="mr-2 text-sm font-semibold text-slate-600">Show</label>
+  <select id="inventory-product-view" :value="alertFilter" @change="window.location.hash = $event.target.value ? 'products?filter=' + $event.target.value : 'products'" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+    <option value="">Products</option>
+    <option value="low-stock">Low-stock products</option>
+    <option value="expiry">Expiry alerts</option>
+  </select>
+</div>
+<!-- Filters -->
+<div x-show="alertFilter !== 'expiry'" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+  <div class="flex flex-1 gap-2">
+    <div class="relative flex-1">
+
+      <input x-model="q" @input="onSearchInput()" @keyup.enter="onSearchEnter()" type="text"
+        placeholder="Search name or scan barcode…"
+        class="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+    </div>
+    <button type="button" aria-label="Scan barcode" @click="openScanner('search')" title="Scan barcode with camera"
+      class="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-500 transition hover:border-[#315b7e] hover:text-[#315b7e]">
+      <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#barcode"></use></svg>
+    </button>
+  </div>
+  <select x-model="category" @change="load(1)"
+    class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+    <option value="">All Categories</option>
+    <option value="medicine">Medicine</option>
+    <option value="vaccine">Vaccine</option>
+    <option value="food">Food</option>
+    <option value="grooming_supply">Grooming Supply</option>
+    <option value="pet_shop">Pet Shop</option>
+    <option value="miscellaneous">Miscellaneous</option>
+  </select>
+  <label class="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
+    <input type="checkbox" x-model="showInactive" @change="load(1)" class="h-4 w-4 rounded" style="accent-color:#315b7e" />
+    <span>Show deactivated</span>
+  </label>
+</div>
+
+<!-- Error -->
+<div x-show="error" style="display:none" class="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700" x-text="error"></div>
+
+<!-- Loading skeleton -->
+<div x-show="loading" style="display:none" class="mt-4 space-y-2">
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+  <div class="h-12 rounded-xl bg-slate-100 animate-pulse"></div>
+</div>
+
+<!-- Table -->
+<div x-show="!loading" class="mt-4 overflow-hidden rounded-2xl border border-[#e6eef7] bg-white shadow-sm">
+  <div x-show="alertFilter !== 'expiry'" class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+          <th class="w-12 px-3 py-3 text-center font-medium text-slate-400">#</th>
+          <th class="px-4 py-3">Item</th>
+          <th class="px-4 py-3 hidden sm:table-cell">Category</th>
+          <th class="px-4 py-3 hidden md:table-cell">Barcode</th>
+          <th class="px-4 py-3 hidden lg:table-cell">Unit Cost</th>
+          <th class="px-4 py-3 hidden lg:table-cell">Selling Price</th>
+          <th class="px-4 py-3">Stock</th>
+          <th class="px-4 py-3 hidden md:table-cell">Min Stock</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[#e6eef7]">
+        <template x-if="items.length === 0">
+          <tr><td colspan="10" class="px-4 py-10 text-center text-sm text-slate-400">No items found.</td></tr>
+        </template>
+        <template x-for="(item, index) in items" :key="item.item_id">
+          <tr class="hover:bg-[#f5f8fb] transition">
+            <td class="w-12 px-3 py-3 text-center text-xs font-medium tabular-nums text-slate-400" x-text="rowNumber(index)"></td>
+            <td class="px-4 py-3">
+              <p class="font-semibold text-slate-800" x-text="item.item_name"></p>
+              <p x-show="item.description" style="display:none" class="text-xs text-slate-400 mt-0.5 truncate max-w-[180px]" x-text="item.description"></p>
+            </td>
+            <td class="px-4 py-3 hidden sm:table-cell">
+              <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="categoryColor(item.category)" x-text="categoryLabel(item.category)"></span>
+            </td>
+            <td class="px-4 py-3 hidden md:table-cell text-slate-500 font-mono text-xs" x-text="item.barcode || '—'"></td>
+            <td class="px-4 py-3 hidden lg:table-cell text-slate-600" x-text="'₱' + parseFloat(item.unit_cost || 0).toFixed(2)"></td>
+            <td class="px-4 py-3 hidden lg:table-cell text-slate-600" x-text="item.selling_price ? '₱' + parseFloat(item.selling_price).toFixed(2) : '—'"></td>
+            <td class="px-4 py-3 font-semibold text-slate-800">
+              <span x-text="fmtQty(item.quantity_on_hand)"></span>
+              <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
+            </td>
+            <td class="px-4 py-3 hidden md:table-cell text-slate-500">
+              <span x-text="fmtQty(item.reorder_level)"></span>
+              <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
+            </td>
+            <td class="px-4 py-3">
+              <span x-show="item.is_active" class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="stockStyle(item)" x-text="stockLabel(item)"></span>
+              <span x-show="!item.is_active" style="display:none;background-color:#f1f5f9;color:#64748b" class="rounded-full px-2.5 py-0.5 text-xs font-semibold">Deactivated</span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center justify-end gap-2">
+                <button x-show="item.is_active" type="button" aria-label="Edit" @click="openEdit(item)" title="Edit"
+                  class="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-[#eaf4fb] hover:text-[#315b7e] transition">
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#pencil-simple"></use></svg>
+                </button>
+                <button x-show="item.is_active" type="button" aria-label="Deactivate" @click="confirmDeactivate(item)" title="Deactivate"
+                  class="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition">
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#x-circle"></use></svg>
+                </button>
+                <button x-show="!item.is_active" style="display:none" type="button" aria-label="Reactivate" @click="doReactivate(item)" title="Reactivate"
+                  class="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600 transition">
+                  <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#arrow-counter-clockwise"></use></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div x-show="alertFilter === 'expiry'" class="overflow-x-auto">
+    <p class="px-4 py-3 text-sm text-slate-500">Expired and upcoming batches, ordered by urgency.</p>
+    <p x-show="expiryItems.length === 0" class="px-4 py-8 text-center text-sm text-slate-400">No items expiring within 30 days.</p>
+<table x-show="expiryItems.length > 0" class="w-full text-sm">
+        <thead><tr class="border-b border-[#e6eef7] bg-[#f5f8fb] text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+          <th class="px-4 py-3">Item</th>
+          <th class="px-4 py-3 hidden sm:table-cell">Batch</th>
+          <th class="px-4 py-3">Expiry Date</th>
+          <th class="px-4 py-3">Status</th>
+        </tr></thead>
+        <tbody class="divide-y divide-[#e6eef7]">
+          <template x-for="(item, index) in expiryItems" :key="item.item_id + '-' + index">
+            <tr class="hover:bg-[#f5f8fb] transition">
+              <td class="px-4 py-3 font-semibold text-slate-800" x-text="item.item_name"></td>
+              <td class="px-4 py-3 hidden sm:table-cell text-slate-500 font-mono text-xs" x-text="item.batch_number || '—'"></td>
+              <td class="px-4 py-3 text-slate-600" x-text="item.earliest_expiry || '—'"></td>
+              <td class="px-4 py-3">
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :style="expiryStyle(item)" x-text="expiryLabel(item)"></span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+  </div>
+
+  <!-- Pagination -->
+  <div x-show="lastPage > 1" style="display:none"
+    class="flex items-center justify-between border-t border-[#e6eef7] px-4 py-3">
+    <p class="text-xs text-slate-500">
+      Page <span x-text="currentPage"></span> of <span x-text="lastPage"></span>
+      &nbsp;·&nbsp; <span x-text="total"></span> items
+    </p>
+    <div class="flex gap-2">
+      <button type="button" @click="prevPage()" :disabled="currentPage === 1"
+        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+        Previous
+      </button>
+      <button type="button" @click="nextPage()" :disabled="currentPage === lastPage"
+        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+        Next
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add / Edit Modal ────────────────────────────────────────── -->
+<div x-cloak x-show="modal.open" style="display:none" x-transition
+  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+  <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden" @click.stop>
+    <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+      <h4 class="text-lg font-bold text-slate-800" x-text="form.item_id ? 'Edit Product' : 'Add Product'"></h4>
+      <button type="button" @click="modal.open=false" class="text-slate-400 hover:text-red-500">
+
+      Close</button>
+    </div>
+    <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+      <!-- Name -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+          Item Name <span style="color:#ef4444" class="font-bold">*</span>
+        </label>
+        <input x-model="form.item_name" type="text" placeholder="e.g. Frontline Plus Spot-On"
+          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+      </div>
+      <!-- Category + Unit -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+            Category <span style="color:#ef4444" class="font-bold">*</span>
+          </label>
+          <select x-model="form.category"
+            style="appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:none;"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+            <option value="">Select category ▾</option>
+            <template x-for="categoryOption in ProductForm.categoryOptions" :key="categoryOption.value">
+              <option :value="categoryOption.value" x-text="categoryOption.label"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">
+            Unit <span style="color:#ef4444" class="font-bold">*</span>
+          </label>
+          <select x-model="form.unit" required
+            style="appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:none;"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+            <option value="">Select unit ▾</option>
+            <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value">
+              <option :value="unitOption.value" x-text="unitOption.label"></option>
+            </template>
+          </select>
+          <div x-show="form.unit === 'other'" x-cloak class="mt-2">
+            <label class="mb-1 block text-xs font-semibold text-slate-600">Custom unit *</label>
+            <input x-model="form.customUnit" type="text" :required="form.unit === 'other'"
+              placeholder="Enter custom unit"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </div>
+        </div>
+      </div>
+      <!-- Barcode -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Barcode <span class="font-normal text-slate-400">(optional)</span></label>
+        <div class="relative">
+          <input :value="form.barcode" @input="handleBarcodeInput($event)" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="13" placeholder="Scan or type barcode"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          <button type="button" aria-label="Scan barcode" @click="openScanner('form')" title="Scan with camera"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#315b7e]">
+            <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#barcode"></use></svg>
+          </button>
+        </div>
+      </div>
+      <!-- Description -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Description <span class="font-normal text-slate-400">(optional)</span></label>
+        <input x-model="form.description" type="text" placeholder="e.g. 0.67ml, for dogs 10–20kg"
+          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+      </div>
+      <!-- Prices -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Unit Cost</label>
+          <div class="relative">
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">₱</span>
+            <input x-model="form.unit_cost" type="number" step="0.01" min="0.01" required placeholder="0.00"
+              class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Selling Price</label>
+          <div class="relative">
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">₱</span>
+            <input x-model="form.selling_price" type="number" step="0.01" min="0.01" required placeholder="0.00"
+              class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </div>
+        </div>
+      </div>
+      <!-- Reorder level -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Minimum Stock <span class="font-normal text-slate-400">(reorder level)</span></label>
+        <input x-model="form.reorder_level" type="number" step="1" min="0" required placeholder="0"
+          class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+      </div>
+      <!-- Error -->
+      <p x-show="modal.error" style="display:none" class="text-sm text-red-600" x-text="modal.error"></p>
+    </div>
+    <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+      <button type="button" @click="modal.open=false"
+        class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        Cancel
+      </button>
+      <button type="button" @click="submitForm()" :disabled="modal.busy"
+        class="flex-1 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#284a67] disabled:opacity-50">
+        <span x-text="modal.busy ? 'Saving…' : (form.item_id ? 'Save Changes' : 'Add Product')">Add Product</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Deactivate Confirm Modal ────────────────────────────────── -->
+<div x-cloak x-show="deactivateModal.open" style="display:none" x-transition
+  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+  <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-6 py-5">
+      <h4 class="text-lg font-bold text-slate-800">Deactivate Product?</h4>
+      <p class="mt-2 text-sm text-slate-600">
+        "<span class="font-semibold" x-text="deactivateTarget?.item_name"></span>" will be hidden from all lists. Stock records are kept.
+      </p>
+      <p x-show="deactivateModal.error" style="display:none" class="mt-2 text-sm text-red-600" x-text="deactivateModal.error"></p>
+    </div>
+    <div class="flex gap-3 px-6 py-4">
+      <button type="button" @click="deactivateModal.open=false"
+        class="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        Cancel
+      </button>
+      <button type="button" @click="doDeactivate()" :disabled="deactivateModal.busy"
+        class="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+        <span x-text="deactivateModal.busy ? 'Removing…' : 'Deactivate'">Deactivate</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Camera Scanner Modal ───────────────────────────────────── -->
+<div x-cloak x-show="scannerActive" style="display:none;z-index:60;background-color:rgba(15,23,42,0.8)" x-transition
+  class="fixed inset-0 flex items-center justify-center px-4">
+  <div class="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h4 class="font-bold text-slate-800">Scan Barcode</h4>
+      <button type="button" @click="closeScanner()" class="text-slate-400 hover:text-red-500">
+
+      Close</button>
+    </div>
+    <div class="p-4">
+      <div id="inv-qr-reader" class="w-full rounded-xl overflow-hidden"></div>
+      <p class="mt-3 text-center text-xs text-slate-400">Point camera at barcode or QR code</p>
+    </div>
+  </div>
+</div>
+
+<!-- Reusable success toast -->
+<div x-show="toast.show" x-transition
+  class="app-success-toast"
+  :class="{ 'is-visible': toast.show }"
+  role="status" aria-live="polite">
+
+  <span class="app-success-toast__message" x-text="toast.msg"></span>
+  <span class="app-success-toast__progress" aria-hidden="true">
+    <span class="app-success-toast__progress-fill"></span>
+  </span>
+</div>

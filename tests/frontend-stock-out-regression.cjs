@@ -9,7 +9,7 @@ const source = fs.readFileSync(
   "utf8",
 );
 const stockOutPage = fs.readFileSync(
-  path.join(projectRoot, "pages/admin/inventory/stock-out.html"),
+  path.join(projectRoot, "pages/admin/inventory/sections/stock-out.html"),
   "utf8",
 );
 

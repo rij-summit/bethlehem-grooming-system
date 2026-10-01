@@ -17,7 +17,7 @@ const productFormSource = fs.readFileSync(
   "utf8",
 );
 const stockInPage = fs.readFileSync(
-  path.join(projectRoot, "pages/admin/inventory/stock-in.html"),
+  path.join(projectRoot, "pages/admin/inventory/sections/stock-in.html"),
   "utf8",
 );
 
@@ -157,8 +157,8 @@ function testNewProductBarcodeScannerUsesTheSharedScanner() {
 function testDeactivatedSearchResultIsRenderedAsAnInertNotice() {
   assert.match(stockInPage, /<template x-if="item\.is_active">/);
   assert.match(stockInPage, /<template x-if="!item\.is_active">/);
-  assert.match(stockInPage, /This product is deactivated and cannot receive stock\./);
-  assert.match(stockInPage, />DEACTIVATED<\/span>/);
+  assert.match(stockInPage, /This product cannot receive stock\./);
+  assert.match(stockInPage, />Deactivated<\/span>/);
 }
 
 async function testNewProductUnitOptionsAndCustomUnit() {
@@ -204,7 +204,7 @@ async function testNewProductUsesSharedValidationMessages() {
 
   await page.createAndSelect();
 
-  assert.equal(page.createError, "Selling price is required and must be at least ₱0.01 with no more than 2 decimal places.");
+  assert.equal(page.createError, "Selling price must be a valid amount");
 }
 
 async function testSuccessfulStockInUsesSupplierFreePayloadAndShowsToast() {

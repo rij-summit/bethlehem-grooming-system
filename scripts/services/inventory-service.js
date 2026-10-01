@@ -7,7 +7,12 @@ var InventoryAPI = (() => {
       throw new Error("The shared admin API client is unavailable.");
     }
 
-    return API.adminRequest(method, endpoint, body);
+    return API.adminRequest(method, endpoint, body).then((response) => {
+      if (method !== "GET" && endpoint.startsWith("/inventory/") && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent("inventory:changed"));
+      }
+      return response;
+    });
   }
 
   // ── Items ─────────────────────────────────────────────────────────────────

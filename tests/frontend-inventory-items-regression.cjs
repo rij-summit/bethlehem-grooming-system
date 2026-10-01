@@ -53,10 +53,10 @@ function validForm(overrides = {}) {
 async function testClientRejectsInvalidProductFormValuesWithoutSubmitting() {
   const invalidForms = [
     [validForm({ barcode: "01234567890123" }), /Barcode must contain 1 to 13 digits/],
-    [validForm({ unit_cost: "" }), /Unit cost is required/],
-    [validForm({ selling_price: "0" }), /Selling price is required/],
-    [validForm({ reorder_level: "1.5" }), /Minimum stock is required/],
-    [validForm({ reorder_level: "" }), /Minimum stock is required/],
+    [validForm({ unit_cost: "" }), /Unit cost must be a valid amount/],
+    [validForm({ selling_price: "0" }), /Selling price must be a valid amount/],
+    [validForm({ reorder_level: "1.5" }), /Minimum stock must be a whole number/],
+    [validForm({ reorder_level: "" }), /Minimum stock must be a whole number/],
   ];
 
   for (const [form, expectedError] of invalidForms) {
