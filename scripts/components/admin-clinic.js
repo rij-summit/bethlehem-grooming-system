@@ -1,3 +1,46 @@
+// ── Shared attachment helpers ─────────────────────────────────────────────────
+
+function formatClinicFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return "Size unavailable";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function downloadClinicAttachment(apptId, attachment) {
+  const result = await API.clinicDownloadAttachment(apptId, attachment.id);
+  const objectUrl = URL.createObjectURL(result.blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = result.fileName || attachment.file_name || "clinic-attachment";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+async function viewClinicAttachment(apptId, attachment) {
+  // Open the tab before awaiting so popup blockers treat it as user-initiated.
+  const win = window.open("", "_blank");
+  try {
+    const result = await API.clinicDownloadAttachment(apptId, attachment.id);
+    const type = result.blob.type || result.contentType || "";
+    if (!win || !(type.startsWith("image/") || type === "application/pdf")) {
+      // Browsers can't render DICOM; fall back to a download.
+      win?.close();
+      await downloadClinicAttachment(apptId, attachment);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(result.blob);
+    win.location.href = objectUrl;
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  } catch (error) {
+    win?.close();
+    throw error;
+  }
+}
+
 function clinicLocalDate(d) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -97,13 +140,7 @@ function adminClinicModal() {
       this.attachmentError = "";
     },
 
-    formatFileSize(bytes) {
-      const size = Number(bytes);
-      if (!Number.isFinite(size) || size < 0) return "Size unavailable";
-      if (size < 1024) return `${size} B`;
-      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-    },
+    formatFileSize: formatClinicFileSize,
 
     async uploadAttachment() {
       if (!this.attachmentFile) {
@@ -132,28 +169,20 @@ function adminClinicModal() {
       }
     },
 
-    async downloadAttachment(attachment) {
+    async viewAttachment(attachment) {
       this.attachmentBusyId = attachment.id;
       this.attachmentError = "";
       try {
-        const result = await API.clinicDownloadAttachment(this.apptId, attachment.id);
-        const objectUrl = URL.createObjectURL(result.blob);
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = result.fileName || attachment.file_name || "clinic-attachment";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        await viewClinicAttachment(this.apptId, attachment);
       } catch (error) {
-        this.attachmentError = error.message || "Failed to download attachment.";
+        this.attachmentError = error.message || "Failed to open attachment.";
       } finally {
         this.attachmentBusyId = null;
       }
     },
 
     async deleteAttachment(attachment) {
-      if (!window.confirm(`Delete ${attachment.file_name}? This cannot be undone.`)) return;
+      if (!window.confirm(`Remove ${attachment.file_name}? This cannot be undone.`)) return;
 
       this.attachmentBusyId = attachment.id;
       this.attachmentError = "";
@@ -161,7 +190,7 @@ function adminClinicModal() {
         await API.clinicDeleteAttachment(this.apptId, attachment.id);
         this.attachments = this.attachments.filter((item) => item.id !== attachment.id);
       } catch (error) {
-        this.attachmentError = error.message || "Failed to delete attachment.";
+        this.attachmentError = error.message || "Failed to remove attachment.";
       } finally {
         this.attachmentBusyId = null;
       }
@@ -254,6 +283,8 @@ function adminClinicPage() {
 
     // Read-only consultation detail
     detail: { open: false, record: null },
+    detailAttachmentBusyId: null,
+    detailAttachmentError: "",
 
     init() {
       const token = API.getAdminToken?.();
@@ -514,7 +545,22 @@ function adminClinicPage() {
 
     viewDetail(record) {
       this.detail = { open: true, record };
+      this.detailAttachmentError = "";
       this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+    },
+
+    formatFileSize: formatClinicFileSize,
+
+    async downloadDetailAttachment(attachment) {
+      this.detailAttachmentBusyId = attachment.id;
+      this.detailAttachmentError = "";
+      try {
+        await downloadClinicAttachment(this.detail.record.appointment_id, attachment);
+      } catch (error) {
+        this.detailAttachmentError = error.message || "Failed to download attachment.";
+      } finally {
+        this.detailAttachmentBusyId = null;
+      }
     },
 
     petAge(pet) {

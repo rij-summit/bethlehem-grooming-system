@@ -69,9 +69,21 @@ class AdminPetProfileTest extends TestCase
             $table->unsignedBigInteger('clinic_appointment_id');
             $table->text('chief_complaint')->nullable();
             $table->text('diagnosis')->nullable();
+            $table->text('findings')->nullable();
             $table->text('treatment_given')->nullable();
+            $table->text('vet_notes')->nullable();
             $table->date('follow_up_date')->nullable();
             $table->text('follow_up_notes')->nullable();
+        });
+        Schema::create('clinic_attachments', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_record_id');
+            $table->string('file_name');
+            $table->string('file_path');
+            $table->string('file_type')->nullable();
+            $table->unsignedInteger('file_size_bytes')->nullable();
+            $table->string('label')->nullable();
+            $table->timestamps();
         });
         Schema::create('clinic_vitals', function (Blueprint $table) {
             $table->id();
@@ -118,6 +130,7 @@ class AdminPetProfileTest extends TestCase
     {
         foreach ([
             'vaccination_records',
+            'clinic_attachments',
             'clinic_medications',
             'clinic_vitals',
             'clinic_records',
@@ -189,7 +202,19 @@ class AdminPetProfileTest extends TestCase
             'clinic_appointment_id' => 701,
             'chief_complaint' => 'Itchy skin',
             'diagnosis' => 'Dermatitis',
+            'findings' => 'Erythema on flanks',
             'treatment_given' => 'Medicated bath',
+            'vet_notes' => 'Monitor for recurrence',
+        ]);
+        DB::table('clinic_attachments')->insert([
+            'clinic_record_id' => $clinicRecordId,
+            'file_name' => 'skin-scrape.pdf',
+            'file_path' => 'clinic/attachments/701/skin-scrape.pdf',
+            'file_type' => 'application/pdf',
+            'file_size_bytes' => 2048,
+            'label' => 'Skin scrape result',
+            'created_at' => '2026-08-02 12:00:00',
+            'updated_at' => '2026-08-02 12:00:00',
         ]);
         DB::table('clinic_medications')->insert([
             'clinic_record_id' => $clinicRecordId,
@@ -211,7 +236,12 @@ class AdminPetProfileTest extends TestCase
             ->assertJsonPath('grooming_records.0.booking_reference', 'BAC-301')
             ->assertJsonPath('grooming_records.0.services.0', 'Full Groom')
             ->assertJsonPath('medical_records.0.appointment_reference', 'CL-701')
+            ->assertJsonPath('medical_records.0.appointment_id', 701)
             ->assertJsonPath('medical_records.0.diagnosis', 'Dermatitis')
+            ->assertJsonPath('medical_records.0.findings', 'Erythema on flanks')
+            ->assertJsonPath('medical_records.0.vet_notes', 'Monitor for recurrence')
+            ->assertJsonPath('medical_records.0.attachments.0.file_name', 'skin-scrape.pdf')
+            ->assertJsonPath('medical_records.0.attachments.0.label', 'Skin scrape result')
             ->assertJsonPath('medical_records.0.medications.0.drug_name', 'Skin Care Medicine')
             ->assertJsonPath('vaccinations.0.vaccine_name', 'Rabies')
             ->assertJsonPath('vaccinations.0.administering_provider', 'Dr. Reyes');

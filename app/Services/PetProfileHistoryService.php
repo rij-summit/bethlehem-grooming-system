@@ -75,8 +75,9 @@ class PetProfileHistoryService
             ->whereHas('record')
             ->with([
                 'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',
-                'record:id,clinic_appointment_id,chief_complaint,diagnosis,treatment_given,follow_up_date,follow_up_notes',
+                'record:id,clinic_appointment_id,chief_complaint,diagnosis,findings,treatment_given,vet_notes,follow_up_date,follow_up_notes',
                 'record.medications:id,clinic_record_id,drug_name,dosage,frequency,duration,instructions',
+                'record.attachments:id,clinic_record_id,file_name,file_type,file_size_bytes,label,created_at',
             ])
             ->orderByDesc('appointment_date')
             ->orderByDesc('id')
@@ -119,12 +120,15 @@ class PetProfileHistoryService
         $vitals = $appointment->vitals;
 
         return [
+            'appointment_id' => $appointment->id,
             'appointment_reference' => $appointment->appointment_reference,
             'appointment_date' => $appointment->appointment_date?->toDateString(),
             'status' => $appointment->status,
             'chief_complaint' => $record->chief_complaint ?? $appointment->chief_complaint,
+            'findings' => $record->findings,
             'diagnosis' => $record->diagnosis,
             'treatment_given' => $record->treatment_given,
+            'vet_notes' => $record->vet_notes,
             'follow_up_date' => $record->follow_up_date?->toDateString(),
             'follow_up_notes' => $record->follow_up_notes,
             'vitals' => $vitals ? [
@@ -140,6 +144,14 @@ class PetProfileHistoryService
                 'frequency' => $medication->frequency,
                 'duration' => $medication->duration,
                 'instructions' => $medication->instructions,
+            ])->values(),
+            'attachments' => $record->attachments->map(fn ($attachment) => [
+                'id' => $attachment->id,
+                'file_name' => $attachment->file_name,
+                'file_type' => $attachment->file_type,
+                'file_size_bytes' => $attachment->file_size_bytes,
+                'label' => $attachment->label,
+                'uploaded_at' => $attachment->created_at?->toIso8601String(),
             ])->values(),
         ];
     }

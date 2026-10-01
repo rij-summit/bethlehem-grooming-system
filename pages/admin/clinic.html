@@ -484,18 +484,24 @@
               </button>
             </div>
 
-            <div x-show="detail.record" class="space-y-5 px-6 py-5">
+            <div x-show="detail.record" class="space-y-6 px-6 py-6">
               <!-- Chief Complaint -->
               <div>
-                <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Chief Complaint</p>
-                <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.chief_complaint || '—'"></p>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Chief Complaint</p>
+                <p class="text-sm text-slate-700 leading-7" x-text="detail.record?.chief_complaint || '—'"></p>
+              </div>
+
+              <!-- Findings -->
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Findings</p>
+                <p class="text-sm text-slate-700 leading-7 whitespace-pre-wrap" x-text="detail.record?.findings || '—'"></p>
               </div>
 
               <!-- Vitals -->
               <template x-if="detail.record?.vitals">
                 <div>
                   <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Vital Signs</p>
-                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
                     <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
                       <p class="text-xs text-slate-400">Temp</p>
                       <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.temperature_c ? detail.record.vitals.temperature_c + ' °C' : '—'"></p>
@@ -512,20 +518,30 @@
                       <p class="text-xs text-slate-400">Weight</p>
                       <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.weight_kg ? detail.record.vitals.weight_kg + ' kg' : '—'"></p>
                     </div>
+                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                      <p class="text-xs text-slate-400">BCS</p>
+                      <p class="mt-0.5 font-semibold text-slate-700" x-text="detail.record.vitals?.body_condition_score ? detail.record.vitals.body_condition_score + ' / 9' : '—'"></p>
+                    </div>
                   </div>
                 </div>
               </template>
 
               <!-- Diagnosis & Treatment -->
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Diagnosis</p>
-                  <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.diagnosis || '—'"></p>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Diagnosis</p>
+                  <p class="text-sm text-slate-700 leading-7" x-text="detail.record?.diagnosis || '—'"></p>
                 </div>
                 <div>
-                  <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Treatment Given</p>
-                  <p class="text-sm text-slate-700 leading-relaxed" x-text="detail.record?.treatment_given || '—'"></p>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Treatment Given</p>
+                  <p class="text-sm text-slate-700 leading-7" x-text="detail.record?.treatment_given || '—'"></p>
                 </div>
+              </div>
+
+              <!-- Vet Notes -->
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Vet Notes</p>
+                <p class="text-sm text-slate-700 leading-7 whitespace-pre-wrap" x-text="detail.record?.vet_notes || '—'"></p>
               </div>
 
               <!-- Medications -->
@@ -543,6 +559,29 @@
                   </div>
                 </div>
               </template>
+
+              <!-- Attachments -->
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Attachments</p>
+                <div class="space-y-2">
+                  <template x-if="!detail.record?.attachments?.length">
+                    <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No attachments uploaded.</p>
+                  </template>
+                  <template x-for="attachment in (detail.record?.attachments || [])" :key="attachment.id">
+                    <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold text-[#2f4b66]" x-text="attachment.label || attachment.file_name"></p>
+                        <p class="mt-0.5 truncate text-xs text-slate-400">
+                          <span x-text="attachment.file_name"></span> · <span x-text="formatFileSize(attachment.file_size_bytes)"></span>
+                        </p>
+                      </div>
+                      <button type="button" @click="downloadDetailAttachment(attachment)" :disabled="detailAttachmentBusyId === attachment.id"
+                        class="shrink-0 rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Download</button>
+                    </div>
+                  </template>
+                </div>
+                <p x-show="detailAttachmentError" class="mt-2 text-sm text-red-600" x-text="detailAttachmentError"></p>
+              </div>
 
               <!-- Follow-up -->
               <template x-if="detail.record?.follow_up_date">
@@ -678,7 +717,7 @@
           <section>
             <div class="mb-3">
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Attachments</h3>
-              <p class="mt-1 text-xs text-slate-400">Medical files are downloaded through the authenticated clinic API.</p>
+              <p class="mt-1 text-xs text-slate-400">Medical files are opened through the authenticated clinic API.</p>
             </div>
             <div class="space-y-2">
               <template x-if="attachments.length === 0">
@@ -693,10 +732,10 @@
                     </p>
                   </div>
                   <div class="flex shrink-0 gap-2">
-                    <button type="button" @click="downloadAttachment(attachment)" :disabled="attachmentBusyId === attachment.id"
-                      class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Download</button>
+                    <button type="button" @click="viewAttachment(attachment)" :disabled="attachmentBusyId === attachment.id"
+                      class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">View</button>
                     <button type="button" @click="deleteAttachment(attachment)" :disabled="attachmentBusyId === attachment.id"
-                      class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50">Delete</button>
+                      class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50">Remove</button>
                   </div>
                 </div>
               </template>
@@ -1042,7 +1081,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-settings-20260923"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-owner-groups-20260926"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-attachment-view-20261001"></script>
     <script src="../../scripts/components/admin-vaccinations.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
