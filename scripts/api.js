@@ -1685,10 +1685,6 @@ var API = (() => {
     return request("POST", "/admin/clinic-walk-in", payload, getAdminToken());
   }
 
-  async function getClinicAppointments() {
-    return request("GET", "/admin/clinic-appointments", null, getAdminToken());
-  }
-
   async function getClinicRecords(page = 1) {
     return request("GET", `/admin/clinic-records?page=${page}`, null, getAdminToken());
   }
@@ -1707,22 +1703,6 @@ var API = (() => {
 
   async function finishClinicCase(id) {
     return request("POST", `/admin/clinic-cases/${id}/finish`, {}, getAdminToken());
-  }
-
-  async function clinicCheckIn(id) {
-    return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
-  }
-
-  async function clinicStartConsultation(id) {
-    return request("POST", `/admin/clinic-appointments/${id}/start-consultation`, {}, getAdminToken());
-  }
-
-  async function clinicFinishConsultation(id) {
-    return request("POST", `/admin/clinic-appointments/${id}/finish-consultation`, {}, getAdminToken());
-  }
-
-  async function clinicMarkPaid(id, payload) {
-    return request("POST", `/admin/clinic-appointments/${id}/pay`, payload, getAdminToken());
   }
 
   async function clinicCancel(id) {
@@ -2049,11 +2029,6 @@ var API = (() => {
     startClinicCase,
     finishClinicCase,
     // Clinic queue
-    getClinicAppointments,
-    clinicCheckIn,
-    clinicStartConsultation,
-    clinicFinishConsultation,
-    clinicMarkPaid,
     clinicCancel,
     clinicSaveRecord,
     clinicUploadAttachment,
