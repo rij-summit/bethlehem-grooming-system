@@ -373,6 +373,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", [
             'active' => false,
+            'current_password' => 'CurrentAdmin!234',
         ])
             ->assertOk()
             ->assertJsonPath('message', 'Staff account deactivated.')
@@ -399,6 +400,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", [
             'active' => true,
+            'current_password' => 'CurrentAdmin!234',
         ])
             ->assertOk()
             ->assertJsonPath('message', 'Staff account reactivated.')
@@ -411,6 +413,68 @@ class AdminStaffAccountManagementTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('user.email', 'bethlehem.staff.test@gmail.com');
+    }
+
+    public function test_status_changes_require_the_signed_in_admin_current_password(): void
+    {
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'clinic');
+        $staff->createToken('staff_token');
+        Sanctum::actingAs($admin);
+        $url = "/api/admin/security/staff/{$staff->user_id}/status";
+
+        // A password change must take effect immediately for confirmations.
+        $admin->password_hash = Hash::make('UpdatedAdmin!234');
+        $admin->save();
+
+        foreach ([false, true] as $active) {
+            $staff->is_active = ! $active;
+            $staff->save();
+
+            $this->patchJson($url, ['active' => $active])
+                ->assertUnprocessable()->assertJsonValidationErrors('current_password');
+
+            foreach (['incorrect', 'CurrentStaff!234', 'CurrentAdmin!234'] as $password) {
+                $this->patchJson($url, ['active' => $active, 'current_password' => $password])
+                    ->assertUnprocessable()
+                    ->assertJsonPath('errors.current_password.0', 'The admin password is incorrect.');
+                $this->assertSame(! $active, $staff->fresh()->is_active);
+                $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $staff->user_id]);
+            }
+
+            $this->patchJson($url, ['active' => $active, 'current_password' => 'UpdatedAdmin!234'])
+                ->assertOk()->assertJsonPath('staff.is_active', $active);
+            if (! $active) {
+                $staff->createToken('staff_token');
+            }
+        }
+    }
+
+    public function test_cancel_setup_requires_admin_password_and_preserves_link_on_rejection(): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        Sanctum::actingAs($admin);
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => 'Pending',
+            'last_name' => 'Staff',
+            'email' => 'pending@example.test',
+        ])->assertCreated();
+        $staff = User::query()->where('email', 'pending@example.test')->firstOrFail();
+        $url = "/api/admin/security/staff/{$staff->user_id}/setup";
+        $reset = PasswordResetRequest::query()->where('user_id', $staff->user_id)->firstOrFail();
+
+        $this->deleteJson($url)->assertUnprocessable()->assertJsonValidationErrors('current_password');
+        $this->deleteJson($url, ['current_password' => 'CurrentStaff!234'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.current_password.0', 'The admin password is incorrect.');
+        $this->assertDatabaseHas('users', ['user_id' => $staff->user_id]);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => $reset->token_hash]);
+
+        $this->deleteJson($url, ['current_password' => 'CurrentAdmin!234'])->assertOk();
+        $this->assertDatabaseMissing('users', ['user_id' => $staff->user_id]);
+        $this->assertDatabaseMissing('password_reset_requests', ['token_hash' => $reset->token_hash]);
     }
 
     public function test_staff_cannot_create_or_change_the_status_of_staff_accounts(): void
@@ -487,7 +551,9 @@ class AdminStaffAccountManagementTest extends TestCase
         $staff = User::query()->where('username', 'wrongstaff')->sole();
         $token = $this->staffSetupLinkSentTo($staff);
 
-        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup")
+        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup", [
+            'current_password' => 'CurrentAdmin!234',
+        ])
             ->assertOk();
         $this->assertDatabaseMissing('users', ['email' => 'wrong.staff@example.ph']);
         $this->assertDatabaseCount('password_reset_requests', 0);
@@ -503,7 +569,9 @@ class AdminStaffAccountManagementTest extends TestCase
         $staff = $this->createUser('staff', 'active.staff@example.org', 'activestaff');
         Sanctum::actingAs($admin);
 
-        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup")
+        $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup", [
+            'current_password' => 'CurrentAdmin!234',
+        ])
             ->assertUnprocessable();
         $this->postJson("/api/admin/security/staff/{$staff->user_id}/setup-email")
             ->assertNotFound();

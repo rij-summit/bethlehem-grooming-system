@@ -92,10 +92,12 @@ function adminSettings() {
       open: false,
       staff: null,
       targetActive: false,
+      password: "",
+      showPassword: false,
       busy: false,
       error: "",
     },
-    staffSetupModal: { open: false, staff: null, busy: false, error: "" },
+    staffSetupModal: { open: false, staff: null, password: "", showPassword: false, busy: false, error: "" },
     staffSetupBusyId: null,
     staffDetailsModal: {
       open: false,
@@ -588,10 +590,13 @@ function adminSettings() {
         open: true,
         staff,
         targetActive: !staff.active,
+        password: "",
+        showPassword: false,
         busy: false,
         error: "",
       };
       this.refreshSecurityIcons();
+      this.$nextTick(() => document.getElementById("staffStatusAdminPassword")?.focus());
     },
 
     openStaffDetails(staff) {
@@ -611,6 +616,8 @@ function adminSettings() {
         open: false,
         staff: null,
         targetActive: false,
+        password: "",
+        showPassword: false,
         busy: false,
         error: "",
       };
@@ -618,15 +625,24 @@ function adminSettings() {
 
     async updateStaffStatus() {
       const { staff, targetActive } = this.staffStatusModal;
-      if (!staff) return;
+      if (!staff || this.staffStatusModal.busy) return;
 
       this.staffStatusModal.error = "";
+      if (!this.staffStatusModal.password) {
+        this.staffStatusModal.error = "Enter your admin password to confirm.";
+        return;
+      }
       this.staffStatusModal.busy = true;
       try {
-        const response = await API.updateStaffAccountStatus(staff.id, targetActive);
+        await API.updateStaffAccountStatus(staff.id, targetActive, this.staffStatusModal.password);
         this.staffStatusModal.busy = false;
         this.closeStaffStatusModal();
-        this.staffNotice = response.message;
+        const staffName = staff.fullName && staff.fullName !== "Staff account"
+          ? staff.fullName
+          : staff.subroleLabel || staff.roleLabel || "Staff account";
+        this.showStaffActionToast(targetActive
+          ? `${staffName} was reactivated and can sign in again.`
+          : `${staffName} was deactivated and signed out.`);
         await this.loadSecurityAccounts();
       } catch (error) {
         this.staffStatusModal.error = this.firstApiError(error);
@@ -656,29 +672,41 @@ function adminSettings() {
     openStaffSetupModal(staff) {
       if (!staff?.setupRequired) return;
       this.closeStaffDetails();
-      this.staffSetupModal = { open: true, staff, busy: false, error: "" };
+      this.staffSetupModal = { open: true, staff, password: "", showPassword: false, busy: false, error: "" };
+      this.refreshSecurityIcons();
     },
 
     closeStaffSetupModal() {
       if (this.staffSetupModal.busy) return;
-      this.staffSetupModal = { open: false, staff: null, busy: false, error: "" };
+      this.staffSetupModal = { open: false, staff: null, password: "", showPassword: false, busy: false, error: "" };
     },
 
     async cancelStaffSetup() {
       const staff = this.staffSetupModal.staff;
       if (!staff || this.staffSetupModal.busy) return;
-      this.staffSetupModal.busy = true;
       this.staffSetupModal.error = "";
+      if (!this.staffSetupModal.password) {
+        this.staffSetupModal.error = "Enter your admin password to confirm.";
+        return;
+      }
+      this.staffSetupModal.busy = true;
       try {
-        const response = await API.cancelStaffSetup(staff.id);
+        const response = await API.cancelStaffSetup(staff.id, this.staffSetupModal.password);
         this.staffSetupModal.busy = false;
         this.closeStaffSetupModal();
-        this.staffNotice = response.message;
+        this.showStaffActionToast(response.message);
         await this.loadSecurityAccounts();
       } catch (error) {
         this.staffSetupModal.error = this.firstApiError(error);
         this.staffSetupModal.busy = false;
       }
+    },
+
+    showStaffActionToast(message) {
+      this.$nextTick(() => {
+        // Allow the existing modal's 150ms closing transition to finish.
+        setTimeout(() => window.showSuccessToast(message), 200);
+      });
     },
 
     closeSecurityModals() {

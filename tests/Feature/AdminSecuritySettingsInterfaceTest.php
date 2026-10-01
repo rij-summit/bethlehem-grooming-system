@@ -77,8 +77,8 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('Change credentials', $security);
         $this->assertStringNotContainsString('resetStaffModal', $security);
         $this->assertStringNotContainsString('6-digit email verification code', $security);
-        $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
-        $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye"'));
+        $this->assertSame(5, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
+        $this->assertSame(5, substr_count($adminSecurity, 'data-lucide="eye"'));
         $this->assertStringContainsString(
             'admin-settings.js?v=staff-settings-20260928',
             $page,
@@ -118,7 +118,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null',
             'this.addStaffModal.createdUsername = response.username',
             'this.addStaffModal.step = "success"',
-            'API.updateStaffAccountStatus(staff.id, targetActive)',
+            'API.updateStaffAccountStatus(staff.id, targetActive, this.staffStatusModal.password)',
             '? API.confirmStaffPasswordChange',
             ': API.confirmSecurityCredentialChange',
             '? API.resendStaffPasswordChangeCode',
@@ -153,9 +153,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('autocomplete="current-password"', $adminSecurity);
         $this->assertStringNotContainsString('autocomplete="new-password"', $adminSecurity);
-        $this->assertSame(8, substr_count($adminSecurity, 'data-lpignore="true"'));
-        $this->assertSame(8, substr_count($adminSecurity, 'data-1p-ignore'));
-        $this->assertSame(8, substr_count($adminSecurity, 'data-bwignore'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-lpignore="true"'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-1p-ignore'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);

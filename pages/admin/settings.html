@@ -7,6 +7,7 @@
     <title>Settings | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css?v=security-ui-20260827" />
     <link rel="stylesheet" href="../../css/custom.css?v=staff-sidebar-20260719&release=20261001" />
+    <link rel="stylesheet" href="../../css/components/toast.css" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1201,31 +1202,41 @@
                   x-cloak
                   x-show="staffStatusModal.open"
                   x-transition.opacity
+                  x-transition:leave.duration.150ms
                   class="fixed inset-0 flex items-center justify-center px-4 py-6"
                   style="z-index: 10000; background-color: rgba(15, 23, 42, 0.65)"
                   @click.self="closeStaffStatusModal()"
                 >
                   <div class="w-full max-w-md overflow-hidden rounded-[24px] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="staffStatusTitle">
-                    <div class="flex items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-5 sm:px-6">
+                    <div class="flex items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-4 sm:px-6">
                       <div>
                         <h3 id="staffStatusTitle" class="text-xl font-bold text-[#1f3850]" x-text="staffStatusModal.targetActive ? 'Reactivate staff account' : 'Deactivate staff account'"></h3>
-                        <p class="mt-1 text-sm font-semibold text-slate-500" x-text="staffStatusModal.staff?.fullName"></p>
                       </div>
-                      <button type="button" @click="closeStaffStatusModal()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close staff status confirmation">
+                      <button type="button" @click="closeStaffStatusModal()" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close staff status confirmation">
                         <i data-lucide="x" class="h-5 w-5"></i>
                       </button>
                     </div>
-                    <div class="px-5 py-5 sm:px-6">
-                      <div class="flex items-center gap-3 rounded-xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3">
+                    <div class="px-5 py-4 sm:px-6">
+                      <p class="mb-3 text-sm leading-5 text-slate-600" x-text="staffStatusModal.targetActive ? 'This staff member will regain access and can sign in again.' : 'This staff member will be signed out and unable to sign in until reactivated.'"></p>
+                      <div class="flex items-center gap-3 rounded-xl border border-[#d7e3ef] bg-[#f8fbfe] px-3 py-2.5">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dceaf5] text-sm font-bold text-[#315b7e]" x-text="staffStatusModal.staff?.initials"></span>
                         <div class="min-w-0">
-                          <p class="truncate text-sm font-bold text-[#1f3850]" x-text="staffStatusModal.staff?.roleLabel"></p>
-                          <p class="truncate text-sm text-slate-500" x-text="staffStatusModal.staff?.email"></p>
+                          <p class="break-words text-sm font-bold text-[#1f3850]" x-text="staffStatusModal.staff?.fullName"></p>
+                          <p class="text-sm text-slate-600" x-text="staffStatusModal.staff?.subroleLabel || staffStatusModal.staff?.roleLabel"></p>
+                          <p class="break-all text-xs text-slate-500" x-text="staffStatusModal.staff?.email"></p>
                         </div>
                       </div>
-                      <p x-show="staffStatusModal.error" x-text="staffStatusModal.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                      <label for="staffStatusAdminPassword" class="mt-3 mb-1.5 block text-sm font-semibold text-slate-600">Admin password</label>
+                      <div class="relative">
+                        <input id="staffStatusAdminPassword" :type="staffStatusModal.showPassword ? 'text' : 'password'" x-model="staffStatusModal.password" @keydown.enter.prevent="updateStaffStatus()" :disabled="staffStatusModal.busy" :aria-invalid="Boolean(staffStatusModal.error)" aria-describedby="staffStatusError" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-3 py-2.5 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                        <button type="button" @click="staffStatusModal.showPassword = !staffStatusModal.showPassword" :aria-label="staffStatusModal.showPassword ? 'Hide admin password' : 'Show admin password'" :aria-pressed="staffStatusModal.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]">
+                          <i x-show="!staffStatusModal.showPassword" data-lucide="eye-closed" class="h-5 w-5"></i>
+                          <i x-show="staffStatusModal.showPassword" data-lucide="eye" class="h-5 w-5"></i>
+                        </button>
+                      </div>
+                      <p id="staffStatusError" x-show="staffStatusModal.error" x-text="staffStatusModal.error" class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600" role="alert"></p>
                     </div>
-                    <div class="flex flex-col-reverse gap-3 border-t border-[#e8f0f8] px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+                    <div class="flex justify-end gap-3 border-t border-[#e8f0f8] px-5 py-3 sm:px-6">
                       <button type="button" @click="closeStaffStatusModal()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Cancel</button>
                       <button type="button" @click="updateStaffStatus()" :disabled="staffStatusModal.busy" class="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-70" :class="staffStatusModal.targetActive ? 'bg-[#315b7e] hover:bg-[#284a67]' : 'bg-red-600 hover:bg-red-700'">
                         <i :data-lucide="staffStatusModal.targetActive ? 'user-round-check' : 'user-round-x'" class="h-4 w-4"></i>
@@ -1270,11 +1281,19 @@
               </template>
 
               <template x-teleport="body">
-                <div x-cloak x-show="staffSetupModal.open" x-transition.opacity class="fixed inset-0 flex items-center justify-center px-4 py-6" style="z-index: 10001; background-color: rgba(15, 23, 42, 0.65)" @click.self="closeStaffSetupModal()">
+                <div x-cloak x-show="staffSetupModal.open" x-transition.opacity x-transition:leave.duration.150ms class="fixed inset-0 flex items-center justify-center px-4 py-6" style="z-index: 10001; background-color: rgba(15, 23, 42, 0.65)" @click.self="closeStaffSetupModal()">
                   <div class="w-full max-w-md rounded-[24px] bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="cancelStaffSetupTitle">
                     <h3 id="cancelStaffSetupTitle" class="text-xl font-bold text-[#1f3850]">Cancel Account Setup?</h3>
                     <p class="mt-3 text-sm leading-6 text-slate-600">This will cancel the invitation for <span class="font-semibold" x-text="staffSetupModal.staff?.fullName"></span>. Their setup link will stop working and they will not be able to complete this account.</p>
-                    <p x-show="staffSetupModal.error" x-text="staffSetupModal.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
+                    <label for="staffSetupAdminPassword" class="mt-4 mb-1.5 block text-sm font-semibold text-slate-600">Enter your admin password to confirm</label>
+                    <div class="relative">
+                      <input id="staffSetupAdminPassword" :type="staffSetupModal.showPassword ? 'text' : 'password'" x-model="staffSetupModal.password" @keydown.enter.prevent="cancelStaffSetup()" :disabled="staffSetupModal.busy" :aria-invalid="Boolean(staffSetupModal.error)" aria-describedby="staffSetupError" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
+                      <button type="button" @click="staffSetupModal.showPassword = !staffSetupModal.showPassword" :aria-label="staffSetupModal.showPassword ? 'Hide admin password' : 'Show admin password'" :aria-pressed="staffSetupModal.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]">
+                        <i x-show="!staffSetupModal.showPassword" data-lucide="eye-closed" class="h-5 w-5"></i>
+                        <i x-show="staffSetupModal.showPassword" data-lucide="eye" class="h-5 w-5"></i>
+                      </button>
+                    </div>
+                    <p id="staffSetupError" x-show="staffSetupModal.error" x-text="staffSetupModal.error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" role="alert"></p>
                     <div class="mt-6 flex justify-end gap-2">
                       <button type="button" @click="closeStaffSetupModal()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600">Keep</button>
                       <button type="button" @click="cancelStaffSetup()" :disabled="staffSetupModal.busy" class="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" x-text="staffSetupModal.busy ? 'Cancelling...' : 'Cancel'"></button>
@@ -1438,8 +1457,9 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=staff-settings-20260928&release=20261001"></script>
+    <script src="../../scripts/api.js?v=staff-settings-20260928&release=staff-confirmation-20261001"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=staff-settings-20260923"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928"></script>
+    <script src="../../scripts/components/success-toast.js"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=staff-confirmation-compact-20261001"></script>
   </body>
 </html>

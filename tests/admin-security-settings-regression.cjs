@@ -10,10 +10,22 @@ const componentSource = fs.readFileSync(
 );
 
 const calls = [];
-global.window = { lucide: null };
+const toasts = [];
+let settings;
+let statusRequest;
+let cancelRequest;
+const focusedFields = [];
+global.window = {
+  lucide: null,
+  showSuccessToast(message) {
+    assert.equal(settings.staffStatusModal.open, false);
+    assert.equal(settings.staffSetupModal.open, false);
+    toasts.push(message);
+  },
+};
 global.document = {
-  getElementById() {
-    return { focus() {} };
+  getElementById(id) {
+    return { focus() { focusedFields.push(id); } };
   },
 };
 global.API = {
@@ -98,8 +110,12 @@ global.API = {
       username: "JohnSmith",
     };
   },
-  async updateStaffAccountStatus(staffId, active) {
-    calls.push(["staff-status", staffId, active]);
+  async updateStaffAccountStatus(staffId, active, password) {
+    calls.push(["staff-status", staffId, active, password]);
+    if (statusRequest) return statusRequest;
+    if (password !== "CurrentAdmin!234") {
+      throw { errors: { current_password: ["The admin password is incorrect."] } };
+    }
     return {
       message: active ? "Staff account reactivated." : "Staff account deactivated.",
     };
@@ -108,8 +124,12 @@ global.API = {
     calls.push(["staff-resend", staffId]);
     return { message: "A new setup email was sent." };
   },
-  async cancelStaffSetup(staffId) {
-    calls.push(["staff-cancel", staffId]);
+  async cancelStaffSetup(staffId, password) {
+    calls.push(["staff-cancel", staffId, password]);
+    if (cancelRequest) return cancelRequest;
+    if (password !== "CurrentAdmin!234") {
+      throw { errors: { current_password: ["The admin password is incorrect."] } };
+    }
     return { message: "Account setup cancelled." };
   },
   clearAuthState() {},
@@ -121,7 +141,7 @@ vm.runInThisContext(componentSource, {
 });
 
 (async () => {
-  const settings = adminSettings();
+  settings = adminSettings();
   settings.$nextTick = (callback) => callback();
 
   await settings.loadSecurityAccounts();
@@ -208,13 +228,60 @@ vm.runInThisContext(componentSource, {
   ]);
 
   settings.openStaffStatusModal(settings.staffAccounts[0]);
+  assert.equal(focusedFields.at(-1), "staffStatusAdminPassword");
   await settings.updateStaffStatus();
+  assert.equal(calls.some((call) => call[0] === "staff-status"), false);
+  assert.equal(settings.staffStatusModal.open, true);
+  settings.staffStatusModal.password = "CurrentStaff!234";
+  await settings.updateStaffStatus();
+  assert.equal(settings.staffStatusModal.open, true);
+  assert.equal(settings.staffStatusModal.error, "The admin password is incorrect.");
+  settings.staffStatusModal.password = "CurrentAdmin!234";
+  let finishStatus;
+  statusRequest = new Promise((resolve) => { finishStatus = resolve; });
+  const updating = settings.updateStaffStatus();
+  const statusCalls = calls.filter((call) => call[0] === "staff-status").length;
+  await settings.updateStaffStatus();
+  assert.equal(calls.filter((call) => call[0] === "staff-status").length, statusCalls);
+  assert.equal(settings.staffStatusModal.busy, true);
+  finishStatus({ message: "Staff account deactivated." });
+  await updating;
+  statusRequest = null;
   assert.deepEqual(
-    calls.find((call) => call[0] === "staff-status"),
-    ["staff-status", 2, false],
+    calls.filter((call) => call[0] === "staff-status").at(-1),
+    ["staff-status", 2, false, "CurrentAdmin!234"],
   );
   assert.equal(settings.staffStatusModal.open, false);
-  assert.equal(settings.staffNotice, "Staff account deactivated.");
+  assert.equal(settings.staffStatusModal.password, "");
+  assert.equal(settings.staffStatusModal.error, "");
+  assert.equal(toasts.length, 0);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(toasts.at(-1), "Grooming Staff was deactivated and signed out.");
+
+  settings.openStaffStatusModal(settings.staffAccounts[2]);
+  assert.equal(focusedFields.at(-1), "staffStatusAdminPassword");
+  settings.staffStatusModal.password = "CurrentAdmin!234";
+  await settings.updateStaffStatus();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(toasts.at(-1), "Former Staff was reactivated and can sign in again.");
+
+  settings.openStaffStatusModal(settings.staffAccounts[0]);
+  settings.staffStatusModal.password = "discard";
+  settings.staffStatusModal.showPassword = true;
+  settings.staffStatusModal.error = "The admin password is incorrect.";
+  settings.closeStaffStatusModal();
+  assert.equal(settings.staffStatusModal.password, "");
+  assert.equal(settings.staffStatusModal.showPassword, false);
+  assert.equal(settings.staffStatusModal.error, "");
+
+  settings.openStaffStatusModal({
+    ...settings.staffAccounts[2],
+    fullName: "Staff account",
+  });
+  settings.staffStatusModal.password = "CurrentAdmin!234";
+  await settings.updateStaffStatus();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(toasts.at(-1), "Clinic Receptionist was reactivated and can sign in again.");
 
   const pending = settings.staffAccounts[1];
   await settings.resendStaffSetup(pending);
@@ -222,8 +289,32 @@ vm.runInThisContext(componentSource, {
   settings.openStaffSetupModal(pending);
   assert.equal(settings.staffSetupModal.open, true);
   await settings.cancelStaffSetup();
-  assert.deepEqual(calls.find((call) => call[0] === "staff-cancel"), ["staff-cancel", 3]);
+  assert.equal(calls.some((call) => call[0] === "staff-cancel"), false);
+  settings.staffSetupModal.password = "wrong";
+  await settings.cancelStaffSetup();
+  assert.equal(settings.staffSetupModal.open, true);
+  assert.equal(settings.staffSetupModal.error, "The admin password is incorrect.");
+  settings.staffSetupModal.password = "CurrentAdmin!234";
+  let finishCancel;
+  cancelRequest = new Promise((resolve) => { finishCancel = resolve; });
+  const cancelling = settings.cancelStaffSetup();
+  const cancelCalls = calls.filter((call) => call[0] === "staff-cancel").length;
+  await settings.cancelStaffSetup();
+  assert.equal(calls.filter((call) => call[0] === "staff-cancel").length, cancelCalls);
+  assert.equal(settings.staffSetupModal.busy, true);
+  finishCancel({ message: "Account setup cancelled." });
+  await cancelling;
+  assert.deepEqual(calls.filter((call) => call[0] === "staff-cancel").at(-1), ["staff-cancel", 3, "CurrentAdmin!234"]);
   assert.equal(settings.staffSetupModal.open, false);
+  assert.equal(settings.staffSetupModal.password, "");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(toasts.at(-1), "Account setup cancelled.");
+  settings.openStaffSetupModal(pending);
+  settings.staffSetupModal.password = "discard";
+  settings.staffSetupModal.showPassword = true;
+  settings.closeStaffSetupModal();
+  assert.equal(settings.staffSetupModal.password, "");
+  assert.equal(settings.staffSetupModal.showPassword, false);
 
   console.log("Admin security settings regression tests passed.");
 })().catch((error) => {

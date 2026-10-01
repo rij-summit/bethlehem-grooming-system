@@ -1492,11 +1492,11 @@ var API = (() => {
     );
   }
 
-  async function updateStaffAccountStatus(staffId, active) {
+  async function updateStaffAccountStatus(staffId, active, currentPassword) {
     return request(
       "PATCH",
       `/admin/security/staff/${encodeURIComponent(staffId)}/status`,
-      { active },
+      { active, current_password: currentPassword },
       getAdminToken(),
     );
   }
@@ -1505,8 +1505,8 @@ var API = (() => {
     return request("POST", `/admin/security/staff/${encodeURIComponent(staffId)}/setup-email`, null, getAdminToken());
   }
 
-  async function cancelStaffSetup(staffId) {
-    return request("DELETE", `/admin/security/staff/${encodeURIComponent(staffId)}/setup`, null, getAdminToken());
+  async function cancelStaffSetup(staffId, currentPassword) {
+    return request("DELETE", `/admin/security/staff/${encodeURIComponent(staffId)}/setup`, { current_password: currentPassword }, getAdminToken());
   }
 
   async function confirmSecurityCredentialChange(changeId, code) {

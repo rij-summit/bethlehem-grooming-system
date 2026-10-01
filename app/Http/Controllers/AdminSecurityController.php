@@ -188,6 +188,7 @@ class AdminSecurityController extends Controller
         }
 
         $data = $request->validate(['active' => ['required', 'boolean']]);
+        $this->verifyAdminPassword($request);
         $active = (bool) $data['active'];
         $staff->is_active = $active;
         $staff->save();
@@ -234,11 +235,13 @@ class AdminSecurityController extends Controller
         return response()->json(['success' => true, 'message' => 'A new setup email was sent. Previous setup links are no longer valid.']);
     }
 
-    public function cancelStaffSetup(User $staff)
+    public function cancelStaffSetup(Request $request, User $staff)
     {
         if ($staff->role !== 'staff' || $staff->is_archived) {
             abort(404);
         }
+
+        $this->verifyAdminPassword($request);
 
         $cancelled = DB::transaction(function () use ($staff): bool {
             $pending = User::query()->whereKey($staff->getKey())->lockForUpdate()->first();
@@ -365,6 +368,21 @@ class AdminSecurityController extends Controller
             'confirmation_email' => $result['confirmation_email'],
             'expires_at' => $result['expires_at'],
         ]);
+    }
+
+    private function verifyAdminPassword(Request $request): void
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+        ], [
+            'current_password.required' => 'Enter your admin password to confirm.',
+        ]);
+
+        if (! Hash::check($data['current_password'], $request->user()->password_hash)) {
+            throw ValidationException::withMessages([
+                'current_password' => 'The admin password is incorrect.',
+            ]);
+        }
     }
 
     private function requestChange(
