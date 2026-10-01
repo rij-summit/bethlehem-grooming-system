@@ -100,6 +100,7 @@ function adminClinicVaccinations() {
       this.appointment = {
         id: appt.id,
         appointment_reference: appt.appointment_reference,
+        status: appt.status,
       };
       this.petNotFound = false;
       this.error = "";
@@ -187,8 +188,14 @@ function adminClinicVaccinations() {
       }
     },
 
+    // New vaccinations can only be added while the linked case is ongoing.
+    caseOngoing() {
+      return !this.appointment?.id
+        || ["checked_in", "in_consultation", "for_payment"].includes(this.appointment.status);
+    },
+
     openCreateForm() {
-      if (!this.pet?.id) return;
+      if (!this.pet?.id || !this.caseOngoing()) return;
 
       this.form = emptyVaccinationDraftForm();
       this.form.clinic_appointment_id = this.appointment?.id

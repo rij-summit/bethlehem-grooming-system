@@ -38,11 +38,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('@click="loadVaccinations()"', $this->clinicPage);
 
         $this->assertStringContainsString(
-            'detail: { appt, section: "vaccinations" }',
-            $this->clinicComponent,
-        );
-        $this->assertStringContainsString(
-            'if (appt.pet?.id)',
+            'section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical")',
             $this->clinicComponent,
         );
         $this->assertStringContainsString(

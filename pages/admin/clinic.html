@@ -769,11 +769,12 @@
                 </p>
               </div>
             </div>
-            <button type="button" @click="openCreateForm()" :disabled="loading || petNotFound || !pet?.id"
+            <button type="button" @click="openCreateForm()" :disabled="loading || petNotFound || !pet?.id || !caseOngoing()"
               class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50">
               <i data-lucide="plus" class="h-4 w-4"></i> Add Vaccination Record
             </button>
           </div>
+          <p x-show="pet?.id && !caseOngoing()" class="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">This case is no longer ongoing. Start a new case to add vaccinations.</p>
 
           <div x-show="loading" class="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center" aria-live="polite">
             <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>

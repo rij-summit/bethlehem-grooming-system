@@ -41,6 +41,7 @@ class AdminVaccinationApiTest extends TestCase
             $table->id();
             $table->unsignedInteger('pet_id')->nullable();
             $table->string('appointment_reference');
+            $table->string('status')->default('in_consultation');
         });
 
         Schema::create('inventory_items', function (Blueprint $table) {
@@ -338,6 +339,31 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertSame('20', (string) DB::table('inventory_items')
             ->where('item_id', 301)
             ->value('quantity_on_hand'));
+    }
+
+    public function test_new_drafts_can_only_be_linked_to_an_ongoing_case(): void
+    {
+        $this->authenticateAs('staff', 2);
+        $this->insertPet(101, 'Mochi', 'cat');
+        $this->insertAppointment(201, 101, 'completed');
+        $this->insertAppointment(202, 101, 'cancelled');
+        $this->insertAppointment(203, 101, 'waiting_to_arrive');
+        $this->insertAppointment(204, 101, 'in_consultation');
+
+        $valid = [
+            'vaccine_name' => 'Rabies',
+            'administered_date' => '2026-07-23',
+        ];
+
+        foreach ([201, 202, 203] as $closedCaseId) {
+            $this->postJson('/api/admin/pets/101/vaccinations', [...$valid, 'clinic_appointment_id' => $closedCaseId])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('clinic_appointment_id');
+        }
+        $this->assertDatabaseCount('vaccination_records', 0);
+
+        $this->postJson('/api/admin/pets/101/vaccinations', [...$valid, 'clinic_appointment_id' => 204])
+            ->assertCreated();
     }
 
     public function test_clinical_field_and_date_sequence_validation_is_enforced(): void
@@ -651,12 +677,13 @@ class AdminVaccinationApiTest extends TestCase
         ]);
     }
 
-    private function insertAppointment(int $appointmentId, int $petId): void
+    private function insertAppointment(int $appointmentId, int $petId, string $status = 'in_consultation'): void
     {
         DB::table('clinic_appointments')->insert([
             'id' => $appointmentId,
             'pet_id' => $petId,
             'appointment_reference' => "CL-{$appointmentId}",
+            'status' => $status,
         ]);
     }
 

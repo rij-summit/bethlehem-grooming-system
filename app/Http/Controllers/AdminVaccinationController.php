@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicAppointment;
 use App\Models\Pet;
 use App\Models\User;
 use App\Models\VaccinationRecord;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator as LaravelValidator;
 
 class AdminVaccinationController extends Controller
@@ -51,6 +53,15 @@ class AdminVaccinationController extends Controller
         $pet = $this->findPet($petId);
         $data = $this->validateClinicalData($request, $pet->pet_id);
         $data = $this->addProviderSnapshot($data);
+
+        if (! empty($data['clinic_appointment_id'])) {
+            $caseStatus = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->value('status');
+            if (! in_array($caseStatus, ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES, true)) {
+                throw ValidationException::withMessages([
+                    'clinic_appointment_id' => 'This case is no longer ongoing. Start a new case to add a vaccination.',
+                ]);
+            }
+        }
 
         $record = VaccinationRecord::create([
             ...$data,
