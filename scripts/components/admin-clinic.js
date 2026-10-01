@@ -1,3 +1,8 @@
+function clinicLocalDate(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // ── Medical Record Modal ──────────────────────────────────────────────────────
 
 function adminClinicModal() {
@@ -25,6 +30,16 @@ function adminClinicModal() {
 
     init() {
       window.addEventListener("clinic-open-modal", (e) => this.openModal(e.detail));
+    },
+
+    get followUpMinDate() {
+      return clinicLocalDate(new Date());
+    },
+
+    get followUpMaxDate() {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 3);
+      return clinicLocalDate(d);
     },
 
     openModal({ appt, section = "medical" } = {}) {
@@ -161,6 +176,21 @@ function adminClinicModal() {
     },
 
     async saveRecord(finishCase = false) {
+      if (finishCase) {
+        const missing = [["weight_kg", "Weight"], ["temperature_c", "Temperature"],
+          ["heart_rate_bpm", "Heart Rate"], ["respiratory_rate_bpm", "Respiratory Rate"]]
+          .filter(([key]) => String(this.form[key] ?? "").trim() === "")
+          .map(([, label]) => label);
+        if (missing.length) {
+          this.modalError = `Fill in the vitals before finishing the case: ${missing.join(", ")}.`;
+          return;
+        }
+      }
+      const followUp = this.form.follow_up_date;
+      if (followUp && (followUp < this.followUpMinDate || followUp > this.followUpMaxDate)) {
+        this.modalError = "Follow-up date must be between today and 3 months from today.";
+        return;
+      }
       this.saving     = true;
       this.modalError = "";
       try {

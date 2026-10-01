@@ -726,7 +726,7 @@
             <div class="grid gap-3 md:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-medium text-slate-600">Follow-up Date</label>
-                <input type="date" x-model="form.follow_up_date" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                <input type="date" x-model="form.follow_up_date" :min="followUpMinDate" :max="followUpMaxDate" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-slate-600">Follow-up Notes</label>

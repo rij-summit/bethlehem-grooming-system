@@ -617,7 +617,28 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases');
 
         $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
-            'diagnosis' => 'Healthy', 'finish_case' => true,
+            'diagnosis' => 'Healthy', 'finish_case' => true, 'weight_kg' => 4.5,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm'])
+            ->assertJsonMissingValidationErrors(['weight_kg', 'body_condition_score']);
+        $this->assertNotSame('completed', DB::table('clinic_appointments')->where('id', $caseId)->value('status'));
+
+        $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
+            'diagnosis' => 'Healthy', 'follow_up_date' => now()->addMonths(3)->addDay()->toDateString(),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['follow_up_date']);
+
+        $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
+            'diagnosis' => 'Healthy', 'follow_up_date' => now()->subDay()->toDateString(),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['follow_up_date']);
+
+        $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
+            'diagnosis' => 'Healthy', 'finish_case' => true, 'follow_up_date' => now()->addMonths(3)->toDateString(),
+            'weight_kg' => 4.5, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20,
         ])->assertOk();
 
         $this->assertSame('completed', DB::table('clinic_appointments')->where('id', $caseId)->value('status'));

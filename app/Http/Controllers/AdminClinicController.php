@@ -430,16 +430,16 @@ class AdminClinicController extends Controller
             'diagnosis' => ['nullable', 'string', 'max:2000'],
             'findings' => ['nullable', 'string', 'max:2000'],
             'treatment_given' => ['nullable', 'string', 'max:2000'],
-            'follow_up_date' => ['nullable', 'date'],
+            'follow_up_date' => ['nullable', 'date', 'after_or_equal:today', 'before_or_equal:'.now()->addMonths(3)->toDateString()],
             'follow_up_notes' => ['nullable', 'string', 'max:1000'],
             'vet_notes' => ['nullable', 'string', 'max:2000'],
             'finish_case' => ['sometimes', 'boolean'],
 
             // Vitals
-            'weight_kg' => ['nullable', 'numeric', 'min:0'],
-            'temperature_c' => ['nullable', 'numeric', 'min:0'],
-            'heart_rate_bpm' => ['nullable', 'integer', 'min:0'],
-            'respiratory_rate_bpm' => ['nullable', 'integer', 'min:0'],
+            'weight_kg' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
+            'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
+            'heart_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
+            'respiratory_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
             'body_condition_score' => ['nullable', 'integer', 'min:1', 'max:9'],
 
             // Medications
@@ -449,6 +449,9 @@ class AdminClinicController extends Controller
             'medications.*.frequency' => ['nullable', 'string', 'max:100'],
             'medications.*.duration' => ['nullable', 'string', 'max:100'],
             'medications.*.instructions' => ['nullable', 'string', 'max:500'],
+        ], [
+            'follow_up_date.after_or_equal' => 'The follow-up date cannot be in the past.',
+            'follow_up_date.before_or_equal' => 'The follow-up date must be within 3 months from today.',
         ]);
 
         return DB::transaction(function () use ($data, $id) {
