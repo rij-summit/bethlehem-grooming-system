@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Http\Controllers\EmailVerificationController;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
-use App\Notifications\PasswordResetLinkNotification;
+use App\Notifications\PasswordResetCodeNotification;
 use App\Notifications\SetUpStaffPasswordNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -14,7 +14,7 @@ use Throwable;
 
 class PasswordResetService
 {
-    public function sendLink(string $email): void
+    public function sendCode(string $email): void
     {
         $user = User::query()
             ->whereRaw('LOWER(email) = ?', [Str::lower($email)])
@@ -26,8 +26,8 @@ class PasswordResetService
 
         EmailVerificationController::assertMailCanBeDelivered();
 
-        $plainToken = Str::random(64);
-        $tokenHash = hash('sha256', $plainToken);
+        $code = (string) random_int(100000, 999999);
+        $tokenHash = Hash::make($code);
         $previous = DB::transaction(function () use ($user, $tokenHash): ?array {
             $lockedUser = User::query()->whereKey($user->getKey())->lockForUpdate()->first();
             if (! $lockedUser || ! $this->userIsEligible($lockedUser) || $lockedUser->requiresPasswordSetup()) {
@@ -42,6 +42,8 @@ class PasswordResetService
                 'token_hash',
                 'expires_at',
                 'last_sent_at',
+                'verified_token_hash',
+                'verification_attempts',
             ]);
 
             PasswordResetRequest::query()->updateOrCreate(
@@ -50,6 +52,8 @@ class PasswordResetService
                     'token_hash' => $tokenHash,
                     'expires_at' => now()->addMinutes($this->ttlMinutes()),
                     'last_sent_at' => now(),
+                    'verified_token_hash' => null,
+                    'verification_attempts' => 0,
                 ],
             );
 
@@ -63,12 +67,8 @@ class PasswordResetService
             return;
         }
 
-        $frontendUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-        $resetUrl = $frontendUrl
-            .'/pages/client/reset-password.html#token='.rawurlencode($plainToken);
-
         try {
-            $user->notify(new PasswordResetLinkNotification($resetUrl));
+            $user->notify(new PasswordResetCodeNotification($code));
         } catch (Throwable $exception) {
             DB::transaction(function () use ($user, $tokenHash, $previous): void {
                 $request = PasswordResetRequest::query()
@@ -90,32 +90,42 @@ class PasswordResetService
         }
     }
 
-    public function inspect(string $plainToken): array
+    public function verifyCode(string $email, string $code): array
     {
-        $request = PasswordResetRequest::query()
-            ->where('token_hash', hash('sha256', $plainToken))
-            ->first();
-        $user = $request?->user;
+        return DB::transaction(function () use ($email, $code): array {
+            $user = User::query()->whereRaw('LOWER(email) = ?', [Str::lower($email)])->first();
+            if (! $user || ! $this->userIsEligible($user) || $user->requiresPasswordSetup()) {
+                return ['status' => 'invalid'];
+            }
 
-        if (! $request
-            || now()->isAfter($request->expires_at)
-            || ! $user
-            || ! $this->userIsEligible($user)
-            || $user->requiresPasswordSetup()) {
-            return ['status' => 'invalid'];
-        }
+            $request = PasswordResetRequest::query()->where('user_id', $user->getKey())->lockForUpdate()->first();
+            if (! $request
+                || now()->isAfter($request->expires_at)
+                || $request->verification_attempts >= 5
+                || $request->verified_token_hash !== null
+                || password_get_info($request->token_hash)['algoName'] === 'unknown') {
+                return ['status' => 'invalid'];
+            }
 
-        return [
-            'status' => 'valid',
-            'email' => $this->maskEmail($user->email),
-        ];
+            if (! Hash::check($code, $request->token_hash)) {
+                $request->increment('verification_attempts');
+                return ['status' => 'invalid'];
+            }
+
+            $grant = Str::random(64);
+            $request->update([
+                'token_hash' => Hash::make(Str::random(64)),
+                'verified_token_hash' => hash('sha256', $grant),
+            ]);
+            return ['status' => 'valid', 'token' => $grant];
+        });
     }
 
     public function reset(string $plainToken, string $newPassword): array
     {
         return DB::transaction(function () use ($plainToken, $newPassword): array {
             $request = PasswordResetRequest::query()
-                ->where('token_hash', hash('sha256', $plainToken))
+                ->where('verified_token_hash', hash('sha256', $plainToken))
                 ->lockForUpdate()
                 ->first();
 
@@ -151,8 +161,6 @@ class PasswordResetService
 
             return [
                 'status' => 'reset',
-                'completed_setup' => false,
-                'user' => $user,
             ];
         });
     }
@@ -199,6 +207,8 @@ class PasswordResetService
             }
 
             $user->password_hash = Hash::make($newPassword);
+            $user->is_active = true;
+            $user->email_verified_at = now();
             $user->save();
             $user->tokens()->delete();
             $request->delete();
@@ -212,13 +222,24 @@ class PasswordResetService
 
     public function resendExpiredStaffSetupLink(string $expiredPlainToken): array
     {
+        return $this->issueStaffSetupLink(null, $expiredPlainToken);
+    }
+
+    public function resendStaffSetupLink(User $staff): array
+    {
+        return $this->issueStaffSetupLink($staff, null);
+    }
+
+    private function issueStaffSetupLink(?User $staff, ?string $expiredPlainToken): array
+    {
         EmailVerificationController::assertMailCanBeDelivered();
 
         $plainToken = Str::random(64);
         $tokenHash = hash('sha256', $plainToken);
-        $result = DB::transaction(function () use ($expiredPlainToken, $tokenHash): array {
+        $result = DB::transaction(function () use ($staff, $expiredPlainToken, $tokenHash): array {
             $request = PasswordResetRequest::query()
-                ->where('token_hash', hash('sha256', $expiredPlainToken))
+                ->when($staff, fn ($query) => $query->where('user_id', $staff->getKey()))
+                ->when($expiredPlainToken, fn ($query) => $query->where('token_hash', hash('sha256', $expiredPlainToken)))
                 ->lockForUpdate()
                 ->first();
             if (! $request) {
@@ -230,7 +251,7 @@ class PasswordResetService
                 return ['status' => 'invalid'];
             }
 
-            if (! now()->isAfter($request->expires_at)) {
+            if ($expiredPlainToken && ! now()->isAfter($request->expires_at)) {
                 return ['status' => 'not_expired'];
             }
 
@@ -278,13 +299,15 @@ class PasswordResetService
         return (bool) $user->is_active
             && ! (bool) $user->is_archived
             && $user->account_deleted_at === null
+            && password_get_info((string) $user->password_hash)['algoName'] !== 'unknown'
             && in_array($user->role, ['customer', 'staff', 'admin'], true);
     }
 
     private function staffSetupIsEligible(User $user): bool
     {
-        return $this->userIsEligible($user)
-            && $user->role === 'staff'
+        return $user->role === 'staff'
+            && ! $user->is_archived
+            && $user->account_deleted_at === null
             && $user->requiresPasswordSetup();
     }
 

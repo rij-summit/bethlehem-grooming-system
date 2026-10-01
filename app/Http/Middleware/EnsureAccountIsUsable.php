@@ -21,16 +21,6 @@ class EnsureAccountIsUsable
         $isArchived = array_key_exists('is_archived', $attributes)
             && (bool) $attributes['is_archived'];
 
-        if ($isInactive || $isArchived) {
-            $this->revokeCurrentToken($user);
-
-            return new JsonResponse([
-                'success' => false,
-                'code' => 'account_disabled',
-                'message' => 'This account is disabled. Please contact the clinic.',
-            ], 403);
-        }
-
         if ($user?->requiresPasswordSetup()) {
             $this->revokeCurrentToken($user);
 
@@ -38,6 +28,16 @@ class EnsureAccountIsUsable
                 'success' => false,
                 'code' => 'password_setup_required',
                 'message' => 'This staff account requires password setup.',
+            ], 403);
+        }
+
+        if ($isInactive || $isArchived) {
+            $this->revokeCurrentToken($user);
+
+            return new JsonResponse([
+                'success' => false,
+                'code' => 'account_disabled',
+                'message' => 'This account is disabled. Please contact the clinic.',
             ], 403);
         }
 

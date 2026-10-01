@@ -44,7 +44,7 @@ class CustomerPreRegistrationAccessInterfaceTest extends TestCase
 
     public function test_both_direct_entry_pages_recheck_server_access(): void
     {
-        $groomingFlow = file_get_contents(base_path('scripts/components/booking-flow.js'));
+        $groomingFlow = file_get_contents(base_path('scripts/components/grooming-pre-registration.js'));
         $clinicFlow = file_get_contents(base_path('scripts/components/clinic-visit-date.js'));
 
         $this->assertStringContainsString('await initBookingFormAccessGuard', $groomingFlow);

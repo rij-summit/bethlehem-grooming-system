@@ -68,14 +68,12 @@ var API = (() => {
   const ADMIN_ONLY_PAGE_NAMES = [
     "reports.html",
     "services.html",
-    "chatbot-insights.html",
   ];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
     "sign-in.html",
     "signup.html",
     "verify-email.html",
     "forgot-password.html",
-    "reset-password.html",
     "set-up-password.html",
   ]);
   const INVALID_SESSION_CODES = new Set([
@@ -755,7 +753,7 @@ var API = (() => {
     if (response.status === 429) {
       const error = new Error(data.message || "Too many attempts. Please wait before trying again.");
       error.status = 429;
-      error.retryAfter = data.retry_after ?? null;
+      error.retryAfter = Number(response.headers.get("Retry-After")) || data.retry_after || null;
       error.errors = null;
       throw error;
     }
@@ -854,8 +852,8 @@ var API = (() => {
     return request("POST", "/password/forgot", { email });
   }
 
-  async function verifyPasswordResetToken(token) {
-    return request("POST", "/password/reset/verify", { token });
+  async function verifyPasswordResetCode(email, code) {
+    return request("POST", "/password/code/verify", { email, code });
   }
 
   async function resetPassword(token, password, passwordConfirmation) {
@@ -864,10 +862,6 @@ var API = (() => {
       password,
       password_confirmation: passwordConfirmation,
     });
-
-    if (data?.completed_setup && data?.token && data?.user?.role === "staff") {
-      setAuthSession(data.token, "staff", true);
-    }
 
     return data;
   }
@@ -1078,13 +1072,6 @@ var API = (() => {
       message,
       history: Array.isArray(history) ? history : [],
     }, getCustomerToken(), { suppressAuthRedirect: true });
-  }
-
-  async function sendChatbotFeedback(feedbackToken, helpful) {
-    return request("POST", "/chatbot/feedback", {
-      feedback_token: feedbackToken,
-      helpful: Boolean(helpful),
-    });
   }
 
   async function getTimeslots(date) {
@@ -1357,15 +1344,6 @@ var API = (() => {
     return request("POST", `/admin/customers/unregistered/${customerId}/archive`, null, getAdminToken());
   }
 
-  async function deleteUnregisteredCustomer(customerId, confirmationName) {
-    return request(
-      "DELETE",
-      `/admin/customers/unregistered/${customerId}`,
-      { confirmation_name: confirmationName },
-      getAdminToken(),
-    );
-  }
-
   async function searchWalkInCustomers(search = "") {
     const params = new URLSearchParams({ q: String(search).trim() });
     return request("GET", `/admin/walk-in/customers?${params.toString()}`, null, getAdminToken());
@@ -1398,15 +1376,6 @@ var API = (() => {
   async function unarchiveCustomer(customerId) {
     // POST /api/admin/customers/{id}/unarchive  (protected — admin token)
     return request("POST", `/admin/customers/${customerId}/unarchive`, null, getAdminToken());
-  }
-
-  async function deleteCustomer(customerId, confirmationName) {
-    return request(
-      "DELETE",
-      `/admin/customers/${customerId}`,
-      { confirmation_name: confirmationName },
-      getAdminToken(),
-    );
   }
 
   async function adminArchiveBooking(bookingId) {
@@ -1532,24 +1501,6 @@ var API = (() => {
     );
   }
 
-  async function confirmStaffAccountEmail(pendingStaffId, code) {
-    return request(
-      "POST",
-      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/confirm`,
-      { code },
-      getAdminToken(),
-    );
-  }
-
-  async function resendStaffAccountEmailCode(pendingStaffId) {
-    return request(
-      "POST",
-      `/admin/security/staff-accounts/${encodeURIComponent(pendingStaffId)}/resend`,
-      null,
-      getAdminToken(),
-    );
-  }
-
   async function updateStaffAccountStatus(staffId, active) {
     return request(
       "PATCH",
@@ -1557,6 +1508,14 @@ var API = (() => {
       { active },
       getAdminToken(),
     );
+  }
+
+  async function resendStaffSetupEmail(staffId) {
+    return request("POST", `/admin/security/staff/${encodeURIComponent(staffId)}/setup-email`, null, getAdminToken());
+  }
+
+  async function cancelStaffSetup(staffId) {
+    return request("DELETE", `/admin/security/staff/${encodeURIComponent(staffId)}/setup`, null, getAdminToken());
   }
 
   async function confirmSecurityCredentialChange(changeId, code) {
@@ -1837,38 +1796,6 @@ var API = (() => {
     return request("GET", `/admin/reports/customer-activity${query}`, null, getAdminToken());
   }
 
-  async function getChatbotInsights({
-    status = "all",
-    reason = "",
-    search = "",
-    page = 1,
-    perPage = 25,
-  } = {}) {
-    const params = new URLSearchParams({
-      status,
-      page: String(page),
-      per_page: String(perPage),
-    });
-    if (reason) params.set("reason", reason);
-    if (search) params.set("search", search);
-
-    return request(
-      "GET",
-      `/admin/chatbot-insights?${params.toString()}`,
-      null,
-      getAdminToken(),
-    );
-  }
-
-  async function updateChatbotInsightStatus(insightId, status) {
-    return request(
-      "PATCH",
-      `/admin/chatbot-insights/${insightId}/status`,
-      { status },
-      getAdminToken(),
-    );
-  }
-
   function normalizePhoneLikeIdentifier(value) {
     const digits = String(value || "").replace(/\D/g, "");
 
@@ -1914,7 +1841,7 @@ var API = (() => {
     register,
     signIn,
     requestPasswordReset,
-    verifyPasswordResetToken,
+    verifyPasswordResetCode,
     resetPassword,
     verifyStaffPasswordSetupToken,
     completeStaffPasswordSetup,
@@ -1923,7 +1850,6 @@ var API = (() => {
     getMe,
     getSystemClock,
     sendChatbotMessage,
-    sendChatbotFeedback,
     // Timeslots
     getTimeslots,
     getClinicTimeslots,
@@ -1966,14 +1892,12 @@ var API = (() => {
     createUnregisteredCustomer,
     getUnregisteredCustomerDetails,
     archiveUnregisteredCustomer,
-    deleteUnregisteredCustomer,
     searchWalkInCustomers,
     validateWalkInNewOwner,
     deactivateCustomer,
     reactivateCustomer,
     archiveCustomer,
     unarchiveCustomer,
-    deleteCustomer,
     // Admin archive
     adminArchiveBooking,
     getArchivedBookings,
@@ -1994,9 +1918,9 @@ var API = (() => {
     requestStaffPasswordChange,
     requestAdminCredentialChange,
     requestStaffAccount,
-    confirmStaffAccountEmail,
-    resendStaffAccountEmailCode,
     updateStaffAccountStatus,
+    resendStaffSetupEmail,
+    cancelStaffSetup,
     confirmSecurityCredentialChange,
     resendSecurityCredentialChangeCode,
     confirmStaffPasswordChange,
@@ -2018,8 +1942,6 @@ var API = (() => {
     getTransactions,
     getServicesPerformedReport,
     getCustomerActivityReport,
-    getChatbotInsights,
-    updateChatbotInsightStatus,
     // Walk-in
     submitWalkIn,
     submitClinicWalkIn,

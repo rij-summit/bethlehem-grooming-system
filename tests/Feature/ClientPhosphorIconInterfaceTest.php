@@ -23,7 +23,7 @@ class ClientPhosphorIconInterfaceTest extends TestCase
 
         foreach ([
             'scripts/auth/sign-in.js',
-            'scripts/auth/reset-password.js',
+            'scripts/auth/forgot-password.js',
             'scripts/auth/client/signup.js',
             'scripts/auth/client/verify-email.js',
             'scripts/components/client-dashboard.js',

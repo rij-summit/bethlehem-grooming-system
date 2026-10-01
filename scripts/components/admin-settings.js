@@ -95,6 +95,8 @@ function adminSettings() {
       busy: false,
       error: "",
     },
+    staffSetupModal: { open: false, staff: null, busy: false, error: "" },
+    staffSetupBusyId: null,
     staffDetailsModal: {
       open: false,
       staff: null,
@@ -121,21 +123,19 @@ function adminSettings() {
     },
 
     get activeStaffCount() {
-      return this.staffAccounts.filter((staff) => staff.active).length;
+      return this.staffAccounts.filter((staff) => staff.state === "active").length;
     },
 
-    get inactiveStaffCount() {
-      return this.staffAccounts.filter((staff) => !staff.active).length;
+    get pendingStaffCount() {
+      return this.staffAccounts.filter((staff) => staff.state === "pending").length;
+    },
+
+    get deactivatedStaffCount() {
+      return this.staffAccounts.filter((staff) => staff.state === "deactivated").length;
     },
 
     get filteredStaffAccounts() {
-      return this.staffAccounts.filter((staff) => {
-        return (
-          this.staffFilter === "all" ||
-          (this.staffFilter === "active" && staff.active) ||
-          (this.staffFilter === "inactive" && !staff.active)
-        );
-      });
+      return this.staffAccounts.filter((staff) => this.staffFilter === "all" || staff.state === this.staffFilter);
     },
 
     get securityCodeComplete() {
@@ -254,8 +254,9 @@ function adminSettings() {
             : staff.staff_subrole === "clinic_receptionist"
               ? "Clinic Receptionist"
               : "";
-          const active = Boolean(staff.is_active) && !Boolean(staff.is_archived);
           const setupRequired = Boolean(staff.password_setup_required);
+          const state = setupRequired ? "pending" : staff.is_active && !staff.is_archived ? "active" : "deactivated";
+          const active = state === "active";
           return {
             id: staff.user_id,
             fullName,
@@ -268,17 +269,11 @@ function adminSettings() {
             subroleLabel,
             detailRoleLabel: subroleLabel ? `${subroleLabel} (${roleLabel})` : roleLabel,
             active,
+            state,
             setupRequired,
-            statusLabel: !active
-              ? "Deactivated"
-              : setupRequired
-                ? "Setup Required"
-                : "Active",
-            statusClass: !active
-              ? "bg-slate-100 text-slate-500"
-              : setupRequired
-                ? "bg-amber-50 text-amber-700"
-                : "bg-emerald-50 text-emerald-700",
+            setupLinkExpired: Boolean(staff.setup_link_expired),
+            statusLabel: state === "pending" ? "Pending setup" : state === "active" ? "Active" : "Deactivated",
+            statusClass: state === "pending" ? "bg-amber-50 text-amber-700" : state === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500",
           };
         });
       } catch (error) {
@@ -561,6 +556,10 @@ function adminSettings() {
         this.addStaffModal.error = "Enter the staff email address.";
         return;
       }
+      if (!/^[^\s@]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(email)) {
+        this.addStaffModal.error = "Enter a valid email address, such as name@example.com.";
+        return;
+      }
 
       this.addStaffModal.submitting = true;
       try {
@@ -584,6 +583,7 @@ function adminSettings() {
     },
 
     openStaffStatusModal(staff) {
+      if (staff.setupRequired) return;
       this.staffStatusModal = {
         open: true,
         staff,
@@ -634,10 +634,58 @@ function adminSettings() {
       }
     },
 
+    async resendStaffSetup(staff) {
+      if (!staff?.setupRequired || this.staffSetupBusyId) return;
+      this.staffSetupBusyId = staff.id;
+      this.staffNotice = "";
+      this.staffError = "";
+      try {
+        const response = await API.resendStaffSetupEmail(staff.id);
+        this.staffNotice = response.message;
+        await this.loadSecurityAccounts();
+        if (this.staffDetailsModal.open) {
+          this.staffDetailsModal.staff = this.staffAccounts.find((account) => account.id === staff.id) || null;
+        }
+      } catch (error) {
+        this.staffNotice = this.firstApiError(error);
+      } finally {
+        this.staffSetupBusyId = null;
+      }
+    },
+
+    openStaffSetupModal(staff) {
+      if (!staff?.setupRequired) return;
+      this.closeStaffDetails();
+      this.staffSetupModal = { open: true, staff, busy: false, error: "" };
+    },
+
+    closeStaffSetupModal() {
+      if (this.staffSetupModal.busy) return;
+      this.staffSetupModal = { open: false, staff: null, busy: false, error: "" };
+    },
+
+    async cancelStaffSetup() {
+      const staff = this.staffSetupModal.staff;
+      if (!staff || this.staffSetupModal.busy) return;
+      this.staffSetupModal.busy = true;
+      this.staffSetupModal.error = "";
+      try {
+        const response = await API.cancelStaffSetup(staff.id);
+        this.staffSetupModal.busy = false;
+        this.closeStaffSetupModal();
+        this.staffNotice = response.message;
+        await this.loadSecurityAccounts();
+      } catch (error) {
+        this.staffSetupModal.error = this.firstApiError(error);
+        this.staffSetupModal.busy = false;
+      }
+    },
+
     closeSecurityModals() {
       if (this.staffDetailsModal.open) this.closeStaffDetails();
       if (this.addStaffModal.open) this.closeAddStaffAccount();
       if (this.staffStatusModal.open) this.closeStaffStatusModal();
+      if (this.staffSetupModal.open) this.closeStaffSetupModal();
       if (this.securityVerification.open) this.closeSecurityVerification();
     },
 

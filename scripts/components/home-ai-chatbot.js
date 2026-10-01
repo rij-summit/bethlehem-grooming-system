@@ -40,7 +40,7 @@ function initializeAiChatbot() {
     return;
   }
 
-  const maxContextMessages = 4;
+  const maxContextMessages = 8;
   const maxContextContentLength = 1200;
   const maxStoredMessages = 12;
   const conversationStorageKey = "bethlehem.chatbot.conversation.v1";
@@ -74,8 +74,9 @@ function initializeAiChatbot() {
     event.preventDefault();
 
     const message = chatInput.value.trim();
-    if (!message) return;
+    if (!message || chatSend.disabled) return;
 
+    chatMessages.querySelector(".ai-chatbot-topics")?.remove();
     appendMessage("user", message);
     chatInput.value = "";
     showError("");
@@ -97,13 +98,9 @@ function initializeAiChatbot() {
       const assistantReply =
         reply || "Sorry, I could not generate a response.";
 
-      appendMessage("bot", assistantReply, {
-        feedbackToken: String(response?.feedback_token || ""),
-      });
+      appendMessage("bot", assistantReply, followUpActions(message, response?.source));
       rememberConversationMessage("user", message);
-      rememberConversationMessage("assistant", assistantReply, {
-        feedbackToken: String(response?.feedback_token || ""),
-      });
+      rememberConversationMessage("assistant", assistantReply);
     } catch (error) {
       showError(error?.message || "Unable to send your message.");
     } finally {
@@ -112,12 +109,10 @@ function initializeAiChatbot() {
     }
   }
 
-  function rememberConversationMessage(role, content, options = {}) {
+  function rememberConversationMessage(role, content) {
     conversationHistory.push({
       role,
       content: sanitizeForStorage(role, content),
-      feedbackToken: String(options.feedbackToken || ""),
-      feedbackSubmitted: Boolean(options.feedbackSubmitted),
     });
 
     if (conversationHistory.length > maxStoredMessages) {
@@ -130,7 +125,7 @@ function initializeAiChatbot() {
     persistConversation();
   }
 
-  function appendMessage(sender, text, options = {}) {
+  function appendMessage(sender, text, actions = []) {
     const messageEl = document.createElement("div");
     messageEl.className = [
       "ai-chatbot-message",
@@ -141,10 +136,22 @@ function initializeAiChatbot() {
 
     if (sender === "bot") {
       renderAssistantResponse(messageEl, text);
-      if (options.feedbackToken) {
-        appendFeedbackControls(messageEl, options.feedbackToken, {
-          submitted: Boolean(options.feedbackSubmitted),
+      if (actions.length) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "ai-chatbot-message__actions";
+        actions.forEach(([label, prompt]) => {
+          const action = document.createElement("button");
+          action.type = "button";
+          action.className = "ai-chatbot-message__action";
+          action.textContent = label;
+          action.addEventListener("click", () => {
+            if (chatSend.disabled) return;
+            chatInput.value = prompt;
+            chatForm.requestSubmit();
+          });
+          actionRow.appendChild(action);
         });
+        messageEl.appendChild(actionRow);
       }
     } else {
       messageEl.textContent = text;
@@ -154,69 +161,17 @@ function initializeAiChatbot() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function appendFeedbackControls(messageEl, feedbackToken, options = {}) {
-    const feedbackEl = document.createElement("div");
-    feedbackEl.className = "ai-chatbot-message__feedback";
-
-    const promptEl = document.createElement("span");
-    promptEl.className = "ai-chatbot-message__feedback-prompt";
-    promptEl.textContent = options.submitted ? "Thanks for your feedback." : "Helpful?";
-    feedbackEl.appendChild(promptEl);
-
-    if (!options.submitted) {
-      [
-        { helpful: true, label: "Yes" },
-        { helpful: false, label: "No" },
-      ].forEach(({ helpful, label }) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "ai-chatbot-message__feedback-button";
-        button.textContent = label;
-        button.setAttribute(
-          "aria-label",
-          helpful ? "Mark response helpful" : "Mark response not helpful",
-        );
-        button.addEventListener("click", () =>
-          submitFeedback(feedbackEl, feedbackToken, helpful),
-        );
-        feedbackEl.appendChild(button);
-      });
+  function followUpActions(message, source) {
+    if (source === "customer_guide" && /(?:how|paano|steps).*pre[- ]?regist/i.test(message)) {
+      return [
+        ["Grooming steps", "Grooming pre-registration steps"],
+        ["Clinic Visit steps", "Clinic Visit steps"],
+      ];
     }
-
-    messageEl.appendChild(feedbackEl);
-  }
-
-  async function submitFeedback(feedbackEl, feedbackToken, helpful) {
-    const buttons = Array.from(feedbackEl.querySelectorAll("button"));
-    buttons.forEach((button) => { button.disabled = true; });
-
-    try {
-      if (!window.API?.sendChatbotFeedback) {
-        throw new Error("Feedback is not available yet.");
-      }
-
-      await window.API.sendChatbotFeedback(feedbackToken, helpful);
-      feedbackEl.replaceChildren();
-
-      const thanksEl = document.createElement("span");
-      thanksEl.className = "ai-chatbot-message__feedback-prompt";
-      thanksEl.textContent = "Thanks for your feedback.";
-      feedbackEl.appendChild(thanksEl);
-      markFeedbackSubmitted(feedbackToken);
-    } catch (error) {
-      buttons.forEach((button) => { button.disabled = false; });
-      showError(error?.message || "Unable to save feedback.");
+    if (source === "visit_process" && /walk[- ]?in/i.test(message)) {
+      return [["How pre-registration works", "How do I pre-register?"]];
     }
-  }
-
-  function markFeedbackSubmitted(feedbackToken) {
-    const entry = conversationHistory.find(
-      (message) => message.feedbackToken === feedbackToken,
-    );
-    if (!entry) return;
-
-    entry.feedbackSubmitted = true;
-    persistConversation();
+    return [];
   }
 
   function loadConversation() {
@@ -234,8 +189,6 @@ function initializeAiChatbot() {
         .map((entry) => ({
           role: entry.role,
           content: entry.content.slice(0, maxContextContentLength),
-          feedbackToken: String(entry.feedbackToken || ""),
-          feedbackSubmitted: Boolean(entry.feedbackSubmitted),
         }));
     } catch {
       return [];
@@ -254,11 +207,13 @@ function initializeAiChatbot() {
   }
 
   function restoreConversation() {
+    chatMessages.replaceChildren();
+    if (conversationHistory.length === 0) {
+      showWelcome();
+      return;
+    }
     conversationHistory.forEach((entry) => {
-      appendMessage(entry.role === "user" ? "user" : "bot", entry.content, {
-        feedbackToken: entry.feedbackToken,
-        feedbackSubmitted: entry.feedbackSubmitted,
-      });
+      appendMessage(entry.role === "user" ? "user" : "bot", entry.content);
     });
   }
 
@@ -271,12 +226,49 @@ function initializeAiChatbot() {
     }
 
     chatMessages.replaceChildren();
-    appendMessage(
-      "bot",
-      "Hi! I can help with general clinic and grooming questions.",
-    );
+    showWelcome();
     showError("");
     chatInput.focus();
+  }
+
+  function showWelcome() {
+    appendMessage(
+      "bot",
+      "Hi! I'm Bethlehem's AI assistant. I can help with clinic visits, grooming, pre-registration, and using your customer account.\n\nWhat can I help you with?",
+    );
+    const topics = document.createElement("div");
+    topics.className = "ai-chatbot-topics";
+    topics.setAttribute("role", "group");
+    topics.setAttribute("aria-label", "Suggested topics");
+
+    const suggestions = [
+      ["Grooming time estimate", "How long will grooming take?"],
+      ["Grooming prices", "What are your grooming prices?"],
+      ["How pre-registration works", "How do I pre-register?"],
+      ["Walk-ins & queue", "Do you accept walk-ins, and when does my pet join the queue?"],
+      ["Create an account", "How do I create an account?"],
+      ["Clinic hours & location", "What are your clinic hours and location?"],
+    ];
+
+    if (window.API?.getCustomerToken?.()) {
+      suggestions[4] = ["Check my schedule", "Check my schedule"];
+      suggestions[5] = ["Grooming Tracker", "Where can I see my pet's grooming progress?"];
+    }
+
+    suggestions.forEach(([label, message]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ai-chatbot-topic";
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        if (chatSend.disabled) return;
+        chatInput.value = message;
+        chatForm.requestSubmit();
+      });
+      topics.appendChild(button);
+    });
+    chatMessages.appendChild(topics);
+    chatMessages.scrollTop = 0;
   }
 
   function sanitizeForStorage(role, content) {
@@ -504,7 +496,7 @@ function initializeAiChatbot() {
 }
 
 function ensureAiChatbotStyles() {
-  const stylesheetVersion = "chatbot-icon-only-20260914";
+  const stylesheetVersion = "chatbot-assistant-20261001";
   const existingStylesheet = Array.from(
     document.querySelectorAll('link[rel~="stylesheet"]'),
   ).find((link) => {
@@ -546,9 +538,7 @@ function ensureAiChatbotMarkup() {
     return;
   }
 
-  const assistantLabel = document.body.matches(".portal-theme")
-    ? "Bethlehem Assistant"
-    : "AI Chatbot";
+  const assistantLabel = "Bethlehem Assistant";
   const spriteUrl = new URL("../../assets/icons/phosphor.svg", aiChatbotScriptUrl).href;
   const renderIcon = (name, className) =>
     `<svg class="ph-icon ${className}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><use href="${spriteUrl}#${name}"></use></svg>`;
@@ -577,8 +567,8 @@ function ensureAiChatbotMarkup() {
       >
         <header class="ai-chatbot-panel__header">
           <div>
-            <p class="ai-chatbot-panel__eyebrow">Bethlehem Assistant</p>
             <h2 id="ai-chat-title" class="ai-chatbot-panel__title">${assistantLabel}</h2>
+            <p class="ai-chatbot-panel__eyebrow">AI assistant</p>
           </div>
           <div class="ai-chatbot-panel__actions">
             <button
@@ -607,9 +597,6 @@ function ensureAiChatbotMarkup() {
           aria-live="polite"
           aria-relevant="additions"
         >
-          <div class="ai-chatbot-message ai-chatbot-message--bot">
-            Hi! I can help with general clinic and grooming questions.
-          </div>
         </div>
 
         <div id="ai-chat-loading" class="ai-chatbot-loading" role="status" hidden>
@@ -627,10 +614,10 @@ function ensureAiChatbotMarkup() {
             type="text"
             autocomplete="off"
             maxlength="1000"
-            placeholder="Type your question..."
+            placeholder="Ask Bethlehem Assistant..."
             required
           />
-          <button id="ai-chat-send" type="submit" class="ai-chatbot-send">
+          <button id="ai-chat-send" type="submit" class="ai-chatbot-send" aria-label="Send message">
             ${renderIcon("paper-plane-tilt", "ai-chatbot-send__icon")}
             <span>Send</span>
           </button>

@@ -807,6 +807,7 @@ document.addEventListener("DOMContentLoaded", () => {
       indicator?.classList.toggle("hidden", !isClinicVerified(pet, field));
     });
     document.getElementById("petSizeEstimateNote")?.classList.toggle("hidden", isClinicVerified(pet, "size"));
+    document.getElementById("petSizeLabel").textContent = isClinicVerified(pet, "size") ? "Size" : "Estimated Size";
   }
 
   function getChangedVerifiedFieldLabels(pet, payload) {

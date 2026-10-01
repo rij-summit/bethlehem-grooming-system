@@ -94,7 +94,7 @@ global.API = {
   async requestStaffAccount(payload) {
     calls.push(["add-staff", payload]);
     return {
-      message: "Staff account created",
+      message: "Account setup email sent",
       username: "JohnSmith",
     };
   },
@@ -103,6 +103,14 @@ global.API = {
     return {
       message: active ? "Staff account reactivated." : "Staff account deactivated.",
     };
+  },
+  async resendStaffSetupEmail(staffId) {
+    calls.push(["staff-resend", staffId]);
+    return { message: "A new setup email was sent." };
+  },
+  async cancelStaffSetup(staffId) {
+    calls.push(["staff-cancel", staffId]);
+    return { message: "Account setup cancelled." };
   },
   clearAuthState() {},
   redirectToSignIn() {},
@@ -123,7 +131,10 @@ vm.runInThisContext(componentSource, {
   assert.equal(settings.staffAccounts[0].email, "bethlehem.staff.test@gmail.com");
   assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
   assert.equal(settings.staffAccounts[0].statusLabel, "Active");
-  assert.equal(settings.staffAccounts[1].statusLabel, "Setup Required");
+  assert.equal(settings.staffAccounts[1].statusLabel, "Pending setup");
+  assert.equal(settings.activeStaffCount, 1);
+  assert.equal(settings.pendingStaffCount, 1);
+  assert.equal(settings.deactivatedStaffCount, 1);
   assert.equal(settings.staffAccounts[2].statusLabel, "Deactivated");
 
   settings.adminPassword.current = "CurrentAdmin!234";
@@ -176,6 +187,10 @@ vm.runInThisContext(componentSource, {
   assert.equal(settings.addStaffModal.staffSubrole, "veterinarian");
   settings.addStaffModal.firstName = "John";
   settings.addStaffModal.lastName = "Smith";
+  settings.addStaffModal.email = "invalid@-example..com";
+  await settings.requestNewStaffAccount();
+  assert.match(settings.addStaffModal.error, /valid email address/);
+  assert.equal(calls.some((call) => call[0] === "add-staff"), false);
   settings.addStaffModal.email = "clinic.staff@example.test";
   await settings.requestNewStaffAccount();
   assert.equal(settings.addStaffModal.step, "success");
@@ -200,6 +215,15 @@ vm.runInThisContext(componentSource, {
   );
   assert.equal(settings.staffStatusModal.open, false);
   assert.equal(settings.staffNotice, "Staff account deactivated.");
+
+  const pending = settings.staffAccounts[1];
+  await settings.resendStaffSetup(pending);
+  assert.deepEqual(calls.find((call) => call[0] === "staff-resend"), ["staff-resend", 3]);
+  settings.openStaffSetupModal(pending);
+  assert.equal(settings.staffSetupModal.open, true);
+  await settings.cancelStaffSetup();
+  assert.deepEqual(calls.find((call) => call[0] === "staff-cancel"), ["staff-cancel", 3]);
+  assert.equal(settings.staffSetupModal.open, false);
 
   console.log("Admin security settings regression tests passed.");
 })().catch((error) => {

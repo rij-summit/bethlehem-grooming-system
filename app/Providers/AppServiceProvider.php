@@ -35,10 +35,6 @@ class AppServiceProvider extends ServiceProvider
                 ], 429, $headers));
         });
 
-        RateLimiter::for('chatbot-feedback', function (Request $request) {
-            return Limit::perMinute(30)->by('chatbot-feedback:'.$request->ip());
-        });
-
         $testNow = config('app.test_now');
 
         if (! $this->app->environment(['local', 'testing']) || blank($testNow)) {

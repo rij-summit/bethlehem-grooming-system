@@ -102,8 +102,6 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             "confirmAction('archive', detailModal.customer)",
             "confirmAction('reactivate', detailModal.customer)",
             "confirmAction('unarchive', detailModal.customer)",
-            "confirmAction('delete', detailModal.customer)",
-            "confirmAction('delete_unregistered', detailModal.customer)",
         ] as $action) {
             $this->assertStringContainsString($action, $detailsModal);
         }
@@ -123,62 +121,38 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $archivePosition = strpos($registeredActions, "confirmAction('archive', detailModal.customer)");
         $deactivatePosition = strpos($registeredActions, "confirmAction('deactivate', detailModal.customer)");
         $resetPosition = strpos($registeredActions, 'openResetPassword(detailModal.customer)');
-        $deletePosition = strpos($registeredActions, "confirmAction('delete', detailModal.customer)");
 
-        foreach ([$archivePosition, $deactivatePosition, $resetPosition, $deletePosition] as $position) {
+        foreach ([$archivePosition, $deactivatePosition, $resetPosition] as $position) {
             $this->assertNotFalse($position);
         }
         $this->assertLessThan($deactivatePosition, $archivePosition);
         $this->assertLessThan($resetPosition, $deactivatePosition);
-        $this->assertLessThan($deletePosition, $resetPosition);
-        $this->assertStringContainsString('btn-delete-account', $registeredActions);
+        $this->assertStringNotContainsString('Delete Account', $detailsModal);
 
         $styles = file_get_contents(base_path('css/custom.css'));
         $this->assertStringContainsString('.btn-deactivate       { border-color: #f2c46d;', $styles);
-        $this->assertStringContainsString('.btn-delete-account {', $styles);
-        $this->assertStringContainsString('background-color: #b91c1c;', $styles);
-        $this->assertStringContainsString('font-weight: 700;', $styles);
+        $this->assertStringNotContainsString('.btn-delete-account {', $styles);
 
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
 
         $this->assertStringContainsString('if (this.detailModal.open) this.closeCustomerDetails();', $component);
-        $this->assertStringContainsString('admin-customers.js?v=customer-account-delete-20260819', $page);
+        $this->assertStringContainsString('admin-customers.js?v=customer-actions-20260927', $page);
     }
 
-    public function test_delete_account_requires_the_owner_full_name_before_submission(): void
+    public function test_customer_delete_action_is_absent_from_frontend(): void
     {
         $page = file_get_contents(base_path('pages/admin/clients.html'));
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
         $api = file_get_contents(base_path('scripts/api.js'));
-        $confirmationModal = $this->sourceBetween(
-            $page,
-            'x-show="confirmModal.open"',
-            '<!-- Add Customer Modal -->',
-        );
 
-        foreach ([
-            'x-model="confirmModal.typedName"',
-            ':disabled="busyId !== null || !deleteConfirmationMatches"',
-            "['delete', 'delete_unregistered'].includes(confirmModal.action)",
-        ] as $confirmationControl) {
-            $this->assertStringContainsString($confirmationControl, $confirmationModal);
-        }
-
-        foreach ([
-            'get deleteConfirmationMatches()',
-            'confirmLabel: "Delete Account"',
-            '=== String(this.confirmModal.customer?.fullName || "")',
-            'API.deleteCustomer(customer.id, this.confirmModal.typedName)',
-            'API.deleteUnregisteredCustomer(customer.id, this.confirmModal.typedName)',
-        ] as $behavior) {
-            $this->assertStringContainsString($behavior, $component);
-        }
-
-        $this->assertStringContainsString('async function deleteCustomer(customerId, confirmationName)', $api);
-        $this->assertStringContainsString('async function deleteUnregisteredCustomer(customerId, confirmationName)', $api);
-        $this->assertStringContainsString('{ confirmation_name: confirmationName }', $api);
-        $this->assertStringContainsString('api.js?v=session-inactivity-20260828', $page);
-        $this->assertStringNotContainsString('deleteCustomerConfirmationHelp', $confirmationModal);
+        $this->assertStringNotContainsString('Delete Account', $page);
+        $this->assertStringNotContainsString("confirmAction('delete'", $page);
+        $this->assertStringNotContainsString("confirmAction('delete_unregistered'", $page);
+        $this->assertStringNotContainsString('deleteConfirmationMatches', $component);
+        $this->assertStringNotContainsString('API.deleteCustomer(', $component);
+        $this->assertStringNotContainsString('API.deleteUnregisteredCustomer(', $component);
+        $this->assertStringNotContainsString('function deleteCustomer(', $api);
+        $this->assertStringNotContainsString('function deleteUnregisteredCustomer(', $api);
     }
 
     public function test_customer_search_separates_pet_results_and_opens_the_matching_pet_details(): void

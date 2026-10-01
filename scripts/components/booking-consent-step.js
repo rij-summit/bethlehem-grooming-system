@@ -1,4 +1,6 @@
-document.addEventListener("DOMContentLoaded", () => {
+import { goToGroomingStep } from "./grooming-flow-navigation.js";
+
+export function initBookingConsentStep() {
   const form = document.getElementById("bookingConsentForm");
   const mainConsentCheckbox = document.getElementById("mainConsentCheckbox");
   const sedationConsentCheckbox = document.getElementById(
@@ -26,8 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
     - database draft booking record
     - API fetch for booking draft
   */
-
-  const bookingStep3 = getStoredData("bookingStep3");
 
   setCurrentDate();
   restoreConsentDraft();
@@ -79,7 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Map frontend pet format → backend field names
-    const step3Selections = (bookingStep3?.petSelections) || [];
+    const step3Selections = (getStoredData("bookingStep3")?.petSelections) || [];
 
     const petsPayload = bookingPets.map((pet) => {
       // Find special instructions for this pet from the review data
@@ -136,7 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
         consent: consentPayload,
       }));
 
-      window.location.href = "./booking-confirmed.html";
+      goToGroomingStep("confirmed");
     } catch (error) {
       submitBookingButton.disabled = false;
       submitBookingButton.textContent = "Submit Registration";
@@ -319,4 +319,4 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-});
+}

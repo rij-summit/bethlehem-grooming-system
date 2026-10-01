@@ -23,6 +23,7 @@ import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 import { canSelectAllSavedPets, showPetSelectionSection } from "./pet-selection-tabs.js";
+import { goToGroomingStep, isGroomingSinglePage } from "./grooming-flow-navigation.js";
 import {
   getEnteredWeight,
   getSizeForWeight,
@@ -116,7 +117,10 @@ const elements = {
   addPetForm: document.getElementById("addPetForm"),
   petType: document.getElementById("petType"),
   petName: document.getElementById("petName"),
+  gender: document.getElementById("gender"),
+  birthdate: document.getElementById("birthdate"),
   breed: document.getElementById("breed"),
+  color: document.getElementById("color"),
   weight: document.getElementById("weight"),
   furType: document.getElementById("furType"),
   size: document.getElementById("size"),
@@ -138,11 +142,24 @@ const petTypeCombobox = createFixedOptionCombobox({
   input: elements.petType,
   listbox: document.getElementById("petTypeOptions"),
   toggleButton: document.getElementById("petTypeDropdownButton"),
-  placeholder: "Select pet type",
+  placeholder: "Select species",
   options: [
     { value: "Dog", label: "Dog" },
     { value: "Cat", label: "Cat" },
   ],
+});
+
+const genderCombobox = createFixedOptionCombobox({
+  root: document.getElementById("genderCombobox"),
+  input: elements.gender,
+  listbox: document.getElementById("genderOptions"),
+  toggleButton: document.getElementById("genderDropdownButton"),
+  placeholder: "Select gender",
+  options: [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+  ],
+  displaySelectedLabel: true,
 });
 
 const breedCombobox = createBreedCombobox({
@@ -543,7 +560,10 @@ function getFormValues(form) {
   return {
     petType: form.petType.value,
     petName: form.petName.value,
+    gender: genderCombobox.getValue(),
+    birthdate: elements.birthdate.value,
     breed: form.breed.value,
+    color: elements.color.value,
     weight: getEnteredWeight(elements.weight),
     furType: form.furType.value,
     size: sizeCombobox.getValue(),
@@ -570,7 +590,10 @@ function restoreAddPetFormDraft() {
   petTypeCombobox.setValue(values.petType || "");
   breedCombobox.setDisabled(!values.petType);
   elements.petName.value = values.petName || "";
+  genderCombobox.setValue(values.gender || "");
+  elements.birthdate.value = values.birthdate || "";
   elements.breed.value = values.petType ? values.breed || "" : "";
+  elements.color.value = values.color || "";
 
   if (values.weight) {
     resetWeightFieldForEntry(elements.weight);
@@ -630,6 +653,7 @@ function validatePetForm(values) {
 function resetAddPetForm() {
   elements.addPetForm.reset();
   petTypeCombobox.reset();
+  genderCombobox.reset();
   breedCombobox.reset();
   breedCombobox.setDisabled(true);
   breedCoatCombobox.reset();
@@ -668,7 +692,10 @@ async function handleAddPetSubmit(event) {
       const response = await API.addPet({
         pet_name: formValues.petName.trim(),
         species: formValues.petType,
+        gender: formValues.gender || null,
+        birthdate: formValues.birthdate || null,
         breed: formValues.breed.trim() || null,
+        color: formValues.color.trim() || null,
         weight: formValues.weight || null,
         fur_type: formValues.furType || null,
         size: normalizePetSize(formValues.size) || null,
@@ -696,9 +723,13 @@ async function handleAddPetSubmit(event) {
 }
 
 function handleBack() {
+  if (!IS_CLINIC_VISIT && isGroomingSinglePage()) {
+    goToGroomingStep("schedule");
+    return;
+  }
   window.location.href = IS_CLINIC_VISIT
     ? "./clinic-visit-date.html"
-    : "./booking.html";
+    : "./grooming-pre-registration.html";
 }
 
 function handleNext() {
@@ -730,9 +761,13 @@ function handleNext() {
 
   clearStepError();
   saveStepTwoDraft();
+  if (!IS_CLINIC_VISIT && isGroomingSinglePage()) {
+    goToGroomingStep("services");
+    return;
+  }
   window.location.href = IS_CLINIC_VISIT
     ? "./clinic-visit-reason.html"
-    : "./booking-services.html";
+    : "./grooming-pre-registration.html?step=services";
 }
 
 function setFieldError(input, errorElement, message) {
@@ -851,6 +886,13 @@ async function initStepState() {
   showExistingPetSection();
 
   // Sync pets from the backend into localStorage before rendering the list
+  await syncSavedPets();
+
+  if (getSavedPets().length === 0) showAddPetSection();
+  else showExistingPetSection();
+}
+
+async function syncSavedPets() {
   await loadPetsFromApi();
   savedPetsLoading = false;
   const savedPetsById = new Map(getSavedPets().map((pet) => [pet.id, pet]));
@@ -861,8 +903,7 @@ async function initStepState() {
     renderSelectedPets();
   }
 
-  if (getSavedPets().length === 0) showAddPetSection();
-  else showExistingPetSection();
+  renderExistingPets();
 }
 
 function configurePageForFlow() {
@@ -879,18 +920,28 @@ function configurePageForFlow() {
   elements.selectedPetsTitle.textContent = "Selected Pet";
 }
 
-function initBookingPetStep() {
+export async function initBookingPetStep() {
   if (IS_CLINIC_VISIT && !requireCustomerSession("./sign-in.html")) {
     return;
   }
 
   configurePageForFlow();
   bindEvents();
-  initStepState();
+  await initStepState();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initBookingPetStep, { once: true });
-} else {
-  initBookingPetStep();
+export async function refreshBookingPetStep() {
+  renderScheduleSummary();
+  renderSelectedPets();
+  savedPetsLoading = true;
+  renderExistingPets();
+  await syncSavedPets();
+}
+
+if (!isGroomingSinglePage()) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initBookingPetStep, { once: true });
+  } else {
+    initBookingPetStep();
+  }
 }

@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\PasswordResetRequest;
 use App\Models\User;
-use App\Notifications\PasswordResetLinkNotification;
+use App\Notifications\PasswordResetCodeNotification;
 use App\Notifications\SetUpStaffPasswordNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
@@ -38,6 +38,8 @@ class PasswordResetTest extends TestCase
             $table->id();
             $table->unsignedInteger('user_id')->unique();
             $table->string('token_hash', 64)->unique();
+            $table->string('verified_token_hash', 64)->nullable()->unique();
+            $table->unsignedTinyInteger('verification_attempts')->default(0);
             $table->timestamp('expires_at');
             $table->timestamp('last_sent_at');
             $table->timestamps();
@@ -66,7 +68,7 @@ class PasswordResetTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_active_user_receives_a_one_time_password_reset_link_and_can_set_a_new_password(): void
+    public function test_active_user_receives_a_one_time_password_reset_code_and_can_set_a_new_password(): void
     {
         Notification::fake();
         $user = $this->createUser('customer');
@@ -78,13 +80,13 @@ class PasswordResetTest extends TestCase
             ->assertAccepted()
             ->assertJsonPath(
                 'message',
-                'Password reset link has been sent.',
+                'If eligible, a verification code has been sent.',
             );
 
-        $plainToken = $this->resetTokenSentTo($user);
+        $code = $this->resetCodeSentTo($user);
         $resetRequest = PasswordResetRequest::query()->sole();
-        $this->assertSame(hash('sha256', $plainToken), $resetRequest->token_hash);
-        $this->assertNotSame($plainToken, $resetRequest->token_hash);
+        $this->assertTrue(Hash::check($code, $resetRequest->token_hash));
+        $this->assertNotSame($code, $resetRequest->token_hash);
         $this->assertTrue(
             $resetRequest->expires_at->between(
                 now()->addMinutes(14),
@@ -92,14 +94,18 @@ class PasswordResetTest extends TestCase
             ),
         );
 
-        $this->postJson('/api/password/reset/verify', [
-            'token' => $plainToken,
-        ])
-            ->assertOk()
-            ->assertJsonPath('email', 'c*******@example.test');
+        $grant = $this->postJson('/api/password/code/verify', [
+            'email' => 'CUSTOMER@EXAMPLE.TEST',
+            'code' => $code,
+        ])->assertOk()->json('token');
+        $this->assertSame(64, strlen($grant));
+        $this->postJson('/api/password/code/verify', [
+            'email' => $user->email,
+            'code' => $code,
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
 
         $this->postJson('/api/password/reset', [
-            'token' => $plainToken,
+            'token' => $grant,
             'password' => 'CurrentPass!234',
             'password_confirmation' => 'CurrentPass!234',
         ])
@@ -110,7 +116,7 @@ class PasswordResetTest extends TestCase
             );
 
         $this->postJson('/api/password/reset', [
-            'token' => $plainToken,
+            'token' => $grant,
             'password' => 'UpdatedPass!234',
             'password_confirmation' => 'UpdatedPass!234',
         ])
@@ -122,7 +128,7 @@ class PasswordResetTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
 
         $this->postJson('/api/password/reset', [
-            'token' => $plainToken,
+            'token' => $grant,
             'password' => 'AnotherPass!234',
             'password_confirmation' => 'AnotherPass!234',
         ])->assertUnprocessable();
@@ -132,22 +138,81 @@ class PasswordResetTest extends TestCase
     {
         Notification::fake();
         $disabled = $this->createUser('admin', 'disabled@example.test', false);
+        $archived = $this->createUser('customer', 'archived@example.test');
+        $archived->update(['is_archived' => true]);
 
-        foreach (['missing@example.test', 'disabled@example.test'] as $email) {
+        foreach (['missing@example.test', 'disabled@example.test', 'archived@example.test'] as $email) {
             $this->postJson('/api/password/forgot', ['email' => $email])
                 ->assertAccepted()
                 ->assertJsonPath(
                     'message',
-                    'Password reset link has been sent.',
+                    'If eligible, a verification code has been sent.',
                 );
         }
 
         Notification::assertNothingSent();
         $this->assertDatabaseCount('password_reset_requests', 0);
         $this->assertFalse($disabled->is_active);
+        $this->postJson('/api/password/code/verify', [
+            'email' => 'missing@example.test',
+            'code' => '123456',
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
+        $this->postJson('/api/password/code/verify', [
+            'email' => 'missing@example.test',
+            'code' => 'abc',
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
     }
 
-    public function test_expired_password_reset_link_cannot_change_the_password(): void
+    public function test_deleted_account_receives_no_code(): void
+    {
+        Notification::fake();
+        $deleted = $this->createUser('customer', 'deleted@example.test');
+        $deleted->update(['account_deleted_at' => now()]);
+        $this->postJson('/api/password/forgot', ['email' => $deleted->email])
+            ->assertAccepted()
+            ->assertJsonPath('message', 'If eligible, a verification code has been sent.');
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('password_reset_requests', 0);
+    }
+
+    public function test_account_without_an_established_password_receives_no_code(): void
+    {
+        Notification::fake();
+        $user = $this->createUser('customer');
+        $user->update(['password_hash' => '']);
+        $this->postJson('/api/password/forgot', ['email' => $user->email])->assertAccepted();
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('password_reset_requests', 0);
+    }
+
+    public function test_wrong_or_other_account_code_cannot_continue_and_five_failures_lock_the_request(): void
+    {
+        Notification::fake();
+        $user = $this->createUser('customer');
+        $other = $this->createUser('customer', 'other@example.test');
+        $this->postJson('/api/password/forgot', ['email' => $user->email])->assertAccepted();
+        $code = $this->resetCodeSentTo($user);
+
+        $this->postJson('/api/password/code/verify', [
+            'email' => $other->email,
+            'code' => $code,
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
+
+        $wrong = $code === '000000' ? '000001' : '000000';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/password/code/verify', [
+                'email' => $user->email,
+                'code' => $wrong,
+            ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
+        }
+        $this->assertSame(5, PasswordResetRequest::query()->sole()->verification_attempts);
+        $this->postJson('/api/password/code/verify', [
+            'email' => $user->email,
+            'code' => $code,
+        ])->assertUnprocessable();
+    }
+
+    public function test_expired_password_reset_code_cannot_change_the_password(): void
     {
         Notification::fake();
         $user = $this->createUser('staff', 'staff@example.test');
@@ -155,15 +220,20 @@ class PasswordResetTest extends TestCase
         $this->postJson('/api/password/forgot', [
             'email' => $user->email,
         ])->assertAccepted();
-        $plainToken = $this->resetTokenSentTo($user);
+        $code = $this->resetCodeSentTo($user);
+        $grant = $this->postJson('/api/password/code/verify', [
+            'email' => $user->email,
+            'code' => $code,
+        ])->assertOk()->json('token');
         PasswordResetRequest::query()->update(['expires_at' => now()->subMinute()]);
 
-        $this->postJson('/api/password/reset/verify', [
-            'token' => $plainToken,
-        ])->assertUnprocessable();
+        $this->postJson('/api/password/code/verify', [
+            'email' => $user->email,
+            'code' => $code,
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
 
         $this->postJson('/api/password/reset', [
-            'token' => $plainToken,
+            'token' => $grant,
             'password' => 'UpdatedPass!234',
             'password_confirmation' => 'UpdatedPass!234',
         ])
@@ -185,7 +255,7 @@ class PasswordResetTest extends TestCase
             ->assertJsonValidationErrors('password');
     }
 
-    public function test_forgot_password_does_not_send_a_reset_link_or_replace_a_valid_staff_setup_link(): void
+    public function test_forgot_password_does_not_send_a_code_or_replace_a_valid_staff_setup_link(): void
     {
         Notification::fake();
         $staff = $this->createUser('staff', 'setup.staff@example.test');
@@ -202,9 +272,13 @@ class PasswordResetTest extends TestCase
             'email' => $staff->email,
         ])
             ->assertAccepted()
-            ->assertJsonPath('message', 'Password reset link has been sent.');
+            ->assertJsonPath('message', 'If eligible, a verification code has been sent.');
 
-        Notification::assertNotSentTo($staff, PasswordResetLinkNotification::class);
+        Notification::assertNotSentTo($staff, PasswordResetCodeNotification::class);
+        $this->postJson('/api/password/code/verify', [
+            'email' => $staff->email,
+            'code' => '123456',
+        ])->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
         $this->assertDatabaseHas('password_reset_requests', [
             'token_hash' => hash('sha256', $oldToken),
         ]);
@@ -296,44 +370,34 @@ class PasswordResetTest extends TestCase
         return $plainToken;
     }
 
-    private function resetTokenSentTo(User $user): string
+    private function resetCodeSentTo(User $user): string
     {
-        $plainToken = null;
+        $code = null;
 
         Notification::assertSentTo(
             $user,
-            PasswordResetLinkNotification::class,
-            function (PasswordResetLinkNotification $notification) use ($user, &$plainToken): bool {
+            PasswordResetCodeNotification::class,
+            function (PasswordResetCodeNotification $notification) use ($user, &$code): bool {
                 $message = $notification->toMail($user);
                 $this->assertSame(
                     'Reset Your Password - Bethlehem Animal Clinic',
                     $message->subject,
                 );
-                $this->assertSame('Reset Password', $message->actionText);
+                $this->assertNull($message->actionText);
                 $this->assertStringContainsString(
                     'expires in 15 minutes',
                     implode(' ', [...$message->introLines, ...$message->outroLines]),
                 );
                 $this->assertStringContainsString(
-                    '/pages/client/reset-password.html#token=',
-                    $notification->resetUrl,
+                    "Your verification code is: {$notification->code}",
+                    implode(' ', $message->introLines),
                 );
-                $this->assertStringNotContainsString(
-                    'six-digit',
-                    strtolower(implode(' ', $message->introLines)),
-                );
-
-                parse_str(
-                    (string) parse_url($notification->resetUrl, PHP_URL_FRAGMENT),
-                    $fragment,
-                );
-                $plainToken = $fragment['token'] ?? null;
-
-                return is_string($plainToken) && strlen($plainToken) === 64;
+                $code = $notification->code;
+                return preg_match('/^[0-9]{6}$/', $code) === 1;
             },
         );
 
-        return $plainToken;
+        return $code;
     }
 
     private function createUser(
@@ -344,7 +408,7 @@ class PasswordResetTest extends TestCase
         return User::query()->create([
             'first_name' => ucfirst($role),
             'last_name' => 'Bethlehem',
-            'username' => ucfirst($role),
+            'username' => strtok($email, '@'),
             'email' => $email,
             'phone' => '09'.random_int(100000000, 999999999),
             'password_hash' => Hash::make('CurrentPass!234'),

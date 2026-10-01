@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AdminBookingController;
-use App\Http\Controllers\AdminChatbotInsightController;
 use App\Http\Controllers\AdminClinicController;
 use App\Http\Controllers\AdminPetProfileController;
 use App\Http\Controllers\AdminSecurityController;
@@ -30,9 +29,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in', [AuthController::class, 'signIn']);
-Route::post('/password/forgot', [PasswordResetController::class, 'requestLink'])
+Route::post('/password/forgot', [PasswordResetController::class, 'requestCode'])
     ->middleware('throttle:3,10');
-Route::post('/password/reset/verify', [PasswordResetController::class, 'verifyLink'])
+Route::post('/password/code/verify', [PasswordResetController::class, 'verifyCode'])
     ->middleware('throttle:10,1');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])
     ->middleware('throttle:10,1');
@@ -50,8 +49,6 @@ Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resen
     ->middleware('throttle:3,5');
 Route::post('/chatbot', [ChatbotController::class, 'chat'])
     ->middleware('throttle:chatbot');
-Route::post('/chatbot/feedback', [ChatbotController::class, 'feedback'])
-    ->middleware('throttle:chatbot-feedback');
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots', [BookingController::class,   'getTimeslots']);
@@ -109,7 +106,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::post('/admin/customers/unregistered', [CustomerController::class, 'storeUnregistered']);
     Route::get('/admin/customers/unregistered/{id}', [CustomerController::class, 'showUnregistered']);
     Route::post('/admin/customers/unregistered/{id}/archive', [CustomerController::class, 'archiveUnregistered']);
-    Route::delete('/admin/customers/unregistered/{id}', [CustomerController::class, 'destroyUnregistered']);
     Route::get('/admin/walk-in/customers', [CustomerController::class, 'walkInSearch']);
     Route::post('/admin/walk-in/customers/validate-new-owner', [CustomerController::class, 'validateWalkInOwner']);
     Route::post('/admin/customer-pets/{ownerType}/{ownerId}', [PetController::class, 'adminStore']);
@@ -118,7 +114,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::post('/admin/customers/{id}/reactivate', [CustomerController::class, 'reactivate']);
     Route::post('/admin/customers/{id}/archive', [CustomerController::class, 'archive']);
     Route::post('/admin/customers/{id}/unarchive', [CustomerController::class, 'unarchive']);
-    Route::delete('/admin/customers/{id}', [CustomerController::class, 'destroy']);
 
     // Customer — Notifications
     Route::get('/customer/notifications', [CustomerNotificationController::class, 'index']);
@@ -233,19 +228,16 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Administrator-only clinic availability and closure actions.
     Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/chatbot-insights', [AdminChatbotInsightController::class, 'index']);
-        Route::patch('/admin/chatbot-insights/{chatbotInsight}/status', [AdminChatbotInsightController::class, 'updateStatus']);
-
         Route::get('/admin/security/accounts', [AdminSecurityController::class, 'accounts']);
         Route::post('/admin/security/account/credential-change', [AdminSecurityController::class, 'requestOwnChange'])
             ->middleware('throttle:3,10');
         Route::post('/admin/security/staff-accounts', [AdminSecurityController::class, 'requestStaffAccount'])
             ->middleware('throttle:3,10');
-        Route::post('/admin/security/staff-accounts/{pendingStaff}/confirm', [AdminSecurityController::class, 'confirmStaffAccount'])
-            ->middleware('throttle:10,1');
-        Route::post('/admin/security/staff-accounts/{pendingStaff}/resend', [AdminSecurityController::class, 'resendStaffAccountCode'])
-            ->middleware('throttle:3,10');
         Route::patch('/admin/security/staff/{staff}/status', [AdminSecurityController::class, 'updateStaffStatus'])
+            ->middleware('throttle:10,1');
+        Route::post('/admin/security/staff/{staff}/setup-email', [AdminSecurityController::class, 'resendStaffSetupEmail'])
+            ->middleware('throttle:3,10');
+        Route::delete('/admin/security/staff/{staff}/setup', [AdminSecurityController::class, 'cancelStaffSetup'])
             ->middleware('throttle:10,1');
         Route::post('/admin/security/credential-changes/{change}/confirm', [AdminSecurityController::class, 'confirm'])
             ->middleware('throttle:10,1');

@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Grooming | Bethlehem Animal Clinic</title>
 
-    <link rel="stylesheet" href="../../css/output.css?v=grooming-cash-payment-20260925" />
-    <link rel="stylesheet" href="../../css/custom.css?v=grooming-payment-breakdown-20260926" />
+    <link rel="stylesheet" href="../../css/output.css?v=grooming-incoming-cards-20260928" />
+    <link rel="stylesheet" href="../../css/custom.css?v=grooming-incoming-cards-20260928" />
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -833,13 +833,10 @@
             EXPECTED OBJECT FORMAT:
             {
               id: number|string,
-              queueNumber: number,
               ownerName: string,
               contactNumber: string,
-              petName: string,
-              petType: "Dog" | "Cat",
-              breed: string,
-              serviceLabel: string,
+              pets: [{ bookingPetId: number|string, petName: string, species: string, breed: string }],
+              services: [{ bookingPetId: number|string, serviceName: string }],
               appointmentDate: string,
               appointmentTime: string,
               status: "incoming"
@@ -851,9 +848,8 @@
             - Then future dates
 
             NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - serviceLabel comes from client booking selection
-            - petType must be Dog or Cat
+            - queue numbers are assigned after check-in
+            - services are matched to each pet by bookingPetId
             -->
 
             <!-- ===================================================================================== -->
@@ -866,104 +862,51 @@
                 <div class="flex items-center gap-3 pt-2">
                   <span
                     class="whitespace-nowrap text-sm font-bold uppercase tracking-wide"
-                    :class="group.isToday ? 'text-[#e5a800]' : 'text-slate-400'"
+                    :class="group.isToday ? 'text-[#315b7e]' : 'text-slate-400'"
                     x-text="group.label"
                   ></span>
-                  <div class="h-px flex-1" :class="group.isToday ? 'bg-[#e5a800]/30' : 'bg-slate-200'"></div>
+                  <div class="h-px flex-1 bg-slate-200"></div>
                 </div>
 
                 <!-- Cards for this date -->
                 <template x-for="booking in group.bookings" :key="booking.id">
-                  <article
-                    class="rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
-                  >
-                    <div
-                      class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
-                    >
-                      <!-- LEFT SIDE -->
-                      <div
-                        class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5"
-                      >
-                        <!-- Queue Number placeholder (not assigned yet) -->
-                        <div class="text-4xl font-extrabold text-slate-300">—</div>
-
-                        <!-- Info -->
-                        <div class="min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <h4
-                              class="text-2xl font-medium text-black lg:text-3xl"
-                              x-text="booking.ownerName"
-                            ></h4>
-                            <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
-                            <!-- Status badge -->
-                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                              <i data-lucide="clock" class="h-3 w-3"></i>
-                              Scheduled
-                            </span>
-                          </div>
-
-                          <p
-                            class="text-sm text-slate-500"
-                            x-text="formatMobileNumber(booking.contactNumber)"
-                          ></p>
-
-                          <div
-                            class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5"
-                          >
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="paw-print" class="h-4 w-4"></i>
-                              <span
-                                x-text="booking.petName + ' (' + booking.breed + ')'"
-                              ></span>
-                            </p>
-
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="badge-info" class="h-4 w-4"></i>
-                              <span x-text="'Type: ' + booking.petType"></span>
-                            </p>
-
-                            <p class="flex items-center gap-2">
-                              <i data-lucide="clock-3" class="h-4 w-4"></i>
-                              <span x-text="booking.appointmentTime"></span>
-                            </p>
-                          </div>
-                          <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
+                  <article class="rounded-[24px] border border-[#bfd3e3] bg-white px-4 py-5 shadow-sm sm:px-6">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
+                        <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
+                        <div x-show="getIncomingPets(booking).length > 1 || (booking.bookingType !== 'Walk-In' && booking.internalStaffNote)" class="mt-2 flex flex-wrap items-center gap-2">
+                          <span x-show="getIncomingPets(booking).length > 1" class="text-sm font-semibold text-[#315b7e]" x-text="getIncomingPets(booking).length + ' pets'"></span>
+                          <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-[#315b7e]">Staff note</span>
                         </div>
                       </div>
+                      <p class="shrink-0 text-base font-semibold text-[#1f3850]" x-text="booking.appointmentTime"></p>
+                    </div>
 
-                      <!-- RIGHT SIDE -->
-                      <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                    <div class="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                      <template x-for="(pet, petIndex) in getIncomingPets(booking).slice(0, 2)" :key="pet.bookingPetId ?? pet.booking_pet_id ?? pet.id ?? petIndex">
+                        <div class="min-w-0">
+                          <p class="font-semibold text-[#1f3850]" x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></p>
+                          <p class="text-sm text-slate-500" x-text="formatIncomingPetBreedType(pet)"></p>
+                          <p class="mt-1 text-sm font-medium text-[#315b7e]" x-text="formatIncomingPetServices(pet, booking)"></p>
+                        </div>
+                      </template>
+                      <p x-show="getIncomingPets(booking).length > 2" class="text-sm font-semibold text-slate-500" x-text="'+' + (getIncomingPets(booking).length - 2) + ' more pets'"></p>
+                    </div>
 
-                        <button
-                          type="button"
-                          @click="confirmCheckInBooking(booking)"
-                          :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate"
-                          class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
-                          :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate) ? 'cursor-not-allowed opacity-40' : ''"
-                          :title="booking.appointmentDate !== todayDate ? 'Check-in is only allowed on the day of the appointment' : ''"
-                        >
-                          <span
-                            x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"
-                          ></span>
-                        </button>
-
-                        <!-- Frontend-only cancellation. Backend should replace this with a real cancel status/API when ready. -->
-                        <button
-                          type="button"
-                          @click="confirmCancelBooking(booking)"
-                          class="admin-appointment-action admin-appointment-cancel-action rounded-xl text-base font-semibold transition"
-                        >
-                          Cancel
-                        </button>
-
-                        <button
-                          type="button"
-                          @click="viewBookingDetails(booking)"
-                          class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                        >
-                          View Details
-                        </button>
-                      </div>
+                    <div class="admin-incoming-actions">
+                      <button type="button" @click="viewBookingDetails(booking)" class="admin-incoming-details-action">View Details</button>
+                      <button
+                        type="button"
+                        @click="confirmCheckInBooking(booking)"
+                        :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate"
+                        class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
+                        :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate) ? 'cursor-not-allowed opacity-40' : ''"
+                        :title="booking.appointmentDate !== todayDate ? 'Check-in is only allowed on the day of the appointment' : ''"
+                      >
+                        <span x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"></span>
+                      </button>
+                      <button type="button" @click="confirmCancelBooking(booking)" class="admin-incoming-cancel-action">Cancel</button>
                     </div>
                   </article>
                 </template>
@@ -974,7 +917,7 @@
 
           <!-- Queued -->
           <section x-show="activeTab === 'queued'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#e5a800]">
+            <div class="flex items-center gap-2 text-[#b98525]">
               <i data-lucide="clock-3" class="h-5 w-5"></i>
               <h3 class="text-2xl font-semibold text-black lg:text-3xl">
                 Queued
@@ -1059,7 +1002,7 @@
             <!-- Toggleable owner booking card with one actionable card per pet. -->
             <template x-for="booking in queuedList" :key="booking.id">
               <article
-                class="admin-queued-booking-card rounded-[24px] border-2 border-[#e5a800] bg-white px-4 py-5 shadow-sm sm:px-6"
+                class="admin-queued-booking-card rounded-[24px] border border-[#bfd3e3] bg-white px-4 py-5 shadow-sm sm:px-6"
               >
                 <button
                   type="button"
@@ -1069,7 +1012,7 @@
                 >
                   <div class="admin-queued-owner-summary">
                     <div
-                      class="text-4xl font-extrabold text-[#e5a800]"
+                      class="text-4xl font-extrabold text-[#b98525]"
                       x-text="'#' + booking.queueNumber"
                     ></div>
 
@@ -1082,7 +1025,7 @@
                         <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
                         <!-- Status badge -->
                         <span
-                          class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700"
+                          class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
                         >
                           <i data-lucide="hourglass" class="h-3 w-3"></i>
                           <span>Waiting</span>
@@ -1098,9 +1041,9 @@
                       </p>
                       <!-- Queue ETA badge -->
                       <template x-if="getBookingETA(booking)">
-                        <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#c48a00]">
-                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
-                          Est. ready: ~<span x-text="getBookingETA(booking)"></span>
+                        <p class="mt-1 flex items-center gap-1 text-sm text-[#1f3850]">
+                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0 text-[#b98525]"></i>
+                          Est. ready: <span class="font-semibold" x-text="'~' + getBookingETA(booking)"></span>
                         </p>
                       </template>
                     </div>
@@ -1944,7 +1887,7 @@
                 <div class="payment-total-due">
                   <div>
                     <span class="block text-xs font-medium" x-text="'Grooming Services · ' + formatPeso(paymentServicesTotal)"></span>
-                    <span class="mt-1 block text-xs font-medium" x-text="'Product Add-ons · ' + formatPeso(paymentProductsTotal)"></span>
+                    <span x-show="paymentModal.products.length > 0" class="mt-1 block text-xs font-medium" x-text="'Product Add-ons · ' + formatPeso(paymentProductsTotal)"></span>
                     <span class="mt-2 block text-xs font-bold uppercase tracking-wider">Total Due</span>
                   </div>
                   <strong x-text="formatPeso(paymentTotalDue)"></strong>
@@ -2087,14 +2030,11 @@
                               <strong x-text="formatPeso(line.price)"></strong>
                             </div>
                           </template>
-                          <div class="receipt-success-subtotal">
+                          <div x-show="pet.lines.length > 1" class="receipt-success-subtotal">
                             <span>Subtotal</span><strong x-text="formatPeso(pet.subtotal)"></strong>
                           </div>
                         </div>
                       </template>
-                    </div>
-                    <div class="receipt-success-subtotal">
-                      <span>Grooming Subtotal</span><strong x-text="formatPeso(receiptModal.groomingSubtotal)"></strong>
                     </div>
                   </div>
                   <div x-show="receiptModal.products.length" class="receipt-success-group">
@@ -2105,13 +2045,10 @@
                         <strong x-text="formatPeso(line.subtotal)"></strong>
                       </div>
                     </template>
-                    <div class="receipt-success-subtotal">
-                      <span>Add-ons Subtotal</span><strong x-text="formatPeso(receiptModal.productsSubtotal)"></strong>
-                    </div>
                   </div>
                   <div class="receipt-success-summary">
                     <div class="receipt-success-service">
-                      <span>Grooming Subtotal</span><strong x-text="formatPeso(receiptModal.groomingSubtotal)"></strong>
+                      <span>Grooming Services</span><strong x-text="formatPeso(receiptModal.groomingSubtotal)"></strong>
                     </div>
                     <div x-show="receiptModal.products.length" class="receipt-success-service">
                       <span>Product Add-ons</span><strong x-text="formatPeso(receiptModal.productsSubtotal)"></strong>
@@ -2647,7 +2584,7 @@
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
 
     <!-- Existing sidebar script -->
-    <script src="../../scripts/components/admin-sidebar.js?v=staff-settings-20260923"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=staff-settings-20260923&chatbot=20260928"></script>
 
     <script>
       window.ADMIN_DASHBOARD_CONFIG = {
@@ -2657,6 +2594,6 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-notes-20260927"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-incoming-cards-20260928"></script>
   </body>
 </html>

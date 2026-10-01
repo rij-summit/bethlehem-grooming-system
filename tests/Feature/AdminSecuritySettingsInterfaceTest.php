@@ -43,9 +43,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             '>Grooming Receptionist</span>',
             'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
-            '>Staff account created</h3>',
+            '>Account setup email sent</h3>',
             'Username: <span class="text-[#1f3850]" x-text="addStaffModal.createdUsername"></span>',
-            "A Set Up Your Password link has been sent to the staff member's email address.",
+            "A Set Up Your Password link was sent to the staff member's email address. Their account will become active after they complete setup.",
             'Update Changes',
             'x-for="staff in filteredStaffAccounts"',
             "staffAccounts.length === 0 ? 'No staff accounts yet' : 'No staff accounts in this category'",
@@ -80,7 +80,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
         $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-settings-20260923',
+            'admin-settings.js?v=staff-settings-20260928',
             $page,
         );
     }

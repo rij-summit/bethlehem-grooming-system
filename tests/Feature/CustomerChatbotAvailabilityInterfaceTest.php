@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class CustomerChatbotAvailabilityInterfaceTest extends TestCase
 {
-    public function test_every_public_and_customer_page_loads_the_chatbot_once(): void
+    public function test_every_public_and_customer_chat_page_loads_the_chatbot_once(): void
     {
         $publicPage = file_get_contents(base_path('index.html'));
         $publicApiPosition = strpos($publicPage, 'scripts/api.js');
@@ -24,6 +24,11 @@ class CustomerChatbotAvailabilityInterfaceTest extends TestCase
         $this->assertNotEmpty($customerPages);
 
         foreach ($customerPages as $customerPage) {
+            // This client-hosted page handles staff password setup.
+            if (basename($customerPage) === 'set-up-password.html') {
+                continue;
+            }
+
             $page = file_get_contents($customerPage);
             $apiPosition = strpos($page, 'scripts/api.js');
             $chatbotPosition = strpos($page, 'home-ai-chatbot.js');
@@ -65,11 +70,8 @@ class CustomerChatbotAvailabilityInterfaceTest extends TestCase
     {
         foreach ([
             'pre-register.html',
-            'booking.html',
+            'grooming-pre-registration.html',
             'booking-pet-details.html',
-            'booking-services.html',
-            'booking-review.html',
-            'booking-consent.html',
             'clinic-visit-date.html',
             'clinic-visit-reason.html',
             'clinic-visit-summary.html',

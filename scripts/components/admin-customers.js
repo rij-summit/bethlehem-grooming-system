@@ -56,12 +56,11 @@ function adminCustomers() {
 
     confirmModal: {
       open:         false,
-      action:       "",   // deactivate | reactivate | archive | unarchive | delete
+      action:       "",   // deactivate | reactivate | archive | unarchive
       customer:     null,
       title:        "",
       message:      "",
       confirmLabel: "",
-      typedName:    "",
       error:        "",
     },
 
@@ -130,13 +129,6 @@ function adminCustomers() {
 
     get isAdmin() {
       return API.getUserRole?.() === "admin";
-    },
-
-    get deleteConfirmationMatches() {
-      if (!["delete", "delete_unregistered"].includes(this.confirmModal.action)) return true;
-
-      return String(this.confirmModal.typedName || "")
-        === String(this.confirmModal.customer?.fullName || "");
     },
 
     // ── Load ─────────────────────────────────────────────
@@ -283,7 +275,7 @@ function adminCustomers() {
     // ── Confirm modal ─────────────────────────────────────
 
     confirmAction(action, customer) {
-      const staffAllowedActions = ["archive_unregistered", "delete", "delete_unregistered"];
+      const staffAllowedActions = ["archive_unregistered"];
       if (!this.isAdmin && !staffAllowedActions.includes(action)) return;
 
       const labels = {
@@ -292,8 +284,6 @@ function adminCustomers() {
         archive:     { title: "Archive Account",     confirmLabel: "Archive",     color: "slate"  },
         archive_unregistered: { title: "Archive Customer", confirmLabel: "Archive", color: "slate" },
         unarchive:   { title: "Unarchive Account",   confirmLabel: "Unarchive",   color: "green"  },
-        delete:      { title: "Delete Account",      confirmLabel: "Delete Account", color: "red" },
-        delete_unregistered: { title: "Delete Account", confirmLabel: "Delete Account", color: "red" },
       };
 
       const messages = {
@@ -302,8 +292,6 @@ function adminCustomers() {
         archive:    `This will permanently move ${customer.fullName} to the archive. They will not be able to log in.`,
         archive_unregistered: `This will move ${customer.fullName} and their pet records to the archive.`,
         unarchive:  `This will restore ${customer.fullName}'s account and reactivate their access.`,
-        delete:     `This permanently removes ${customer.fullName}'s sign-in access and reusable contact details. Their owner profile, pets, and grooming or clinic history remain in service records with a deleted-account indicator.`,
-        delete_unregistered: `This permanently removes ${customer.fullName} from customer account records and releases their contact details. Their owner profile, pets, and grooming or clinic history remain in service records with a deleted-account indicator.`,
       };
 
       const meta = labels[action] || {};
@@ -315,7 +303,6 @@ function adminCustomers() {
         title:        meta.title        || action,
         message:      messages[action]  || "",
         confirmLabel: meta.confirmLabel || action,
-        typedName:    "",
         error:        "",
       };
 
@@ -328,10 +315,9 @@ function adminCustomers() {
 
     async executeAction() {
       const { action, customer } = this.confirmModal;
-      const staffAllowedActions = ["archive_unregistered", "delete", "delete_unregistered"];
+      const staffAllowedActions = ["archive_unregistered"];
       if (!this.isAdmin && !staffAllowedActions.includes(action)) return;
       if (!customer) return;
-      if (["delete", "delete_unregistered"].includes(action) && !this.deleteConfirmationMatches) return;
 
       this.busyId              = customer.id;
       this.confirmModal.error  = "";
@@ -342,8 +328,6 @@ function adminCustomers() {
         archive:    () => API.archiveCustomer(customer.id),
         archive_unregistered: () => API.archiveUnregisteredCustomer(customer.id),
         unarchive:  () => API.unarchiveCustomer(customer.id),
-        delete:     () => API.deleteCustomer(customer.id, this.confirmModal.typedName),
-        delete_unregistered: () => API.deleteUnregisteredCustomer(customer.id, this.confirmModal.typedName),
       };
 
       try {

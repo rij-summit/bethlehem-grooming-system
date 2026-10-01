@@ -2802,6 +2802,30 @@ function adminDashboard() {
       return names.length > 0 ? names.join(", ") : "No selected services recorded";
     },
 
+    getIncomingPets(booking) {
+      return Array.isArray(booking?.pets) && booking.pets.length > 0
+        ? booking.pets
+        : [{ petName: booking?.petName, breed: booking?.breed, species: booking?.petType }];
+    },
+
+    formatIncomingPetBreedType(pet) {
+      return [pet?.breed, pet?.species ?? pet?.petType ?? pet?.pet_type]
+        .map((value) => this.formatPetCardValue(value, ""))
+        .filter(Boolean)
+        .join(" · ");
+    },
+
+    formatIncomingPetServices(pet, booking) {
+      const names = this.getPetServicesAvailed(pet, booking)
+        .map((service) => service?.name ?? service?.serviceName ?? service?.service_name)
+        .filter(Boolean);
+      return names.length > 0
+        ? names.join(" · ")
+        : this.getIncomingPets(booking).length === 1
+          ? booking?.serviceLabel || "No selected services recorded"
+          : "No selected services recorded";
+    },
+
     formatPetCardValue(value, fallback = "Not provided") {
       const text = String(value ?? "").trim();
       if (!text || text === "—") {

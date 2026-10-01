@@ -7,6 +7,7 @@ import {
   readSessionJson,
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
+import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
   buildStepThreeDraftPayload,
   calculatePetSelectionPricing,
@@ -43,7 +44,7 @@ const elements = {
   bookingDateInput: document.getElementById("bookingDate"),
   bookingTimeInput: document.getElementById("bookingTime"),
   petIdInput: document.getElementById("petId"),
-  petTypeInput: document.getElementById("petType"),
+  petTypeInput: document.getElementById("servicePetType"),
   petServiceSelections: document.getElementById("petServiceSelections"),
   nextButton:
     document.getElementById("reviewBookingBtn") ||
@@ -55,16 +56,14 @@ const state = {
   petSelections: [],
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+export function refreshBookingServicesStep() {
   state.bookingDraft = getBookingDraft();
 
-  hydrateServiceStepLayout();
   populateHiddenInputs(state.bookingDraft);
   populateSummary(state.bookingDraft);
 
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
     renderMissingPetState();
-    bindEvents();
     return;
   }
 
@@ -75,57 +74,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderPetServiceSelections();
   updateServiceNotice();
+}
+
+export function initBookingServicesStep() {
+  refreshBookingServicesStep();
   bindEvents();
-});
+}
 
 function bindEvents() {
   elements.petServiceSelections.addEventListener("click", handleSelectionClick);
   elements.petServiceSelections.addEventListener("change", handleSelectionChange);
   elements.petServiceSelections.addEventListener("input", handleSelectionInput);
   elements.form.addEventListener("submit", handleSubmit);
-}
-
-function hydrateServiceStepLayout() {
-  if (elements.nextButton) {
-    elements.nextButton.id = "reviewBookingBtn";
-    elements.nextButton.textContent = "Next step";
-  }
-
-  if (elements.petServiceSelections) {
-    return;
-  }
-
-  const buttonsRow = elements.nextButton?.parentElement || null;
-  const hiddenInputs = new Set(
-    Array.from(elements.form.querySelectorAll('input[type="hidden"]')),
-  );
-
-  Array.from(elements.form.children).forEach((child) => {
-    if (child === buttonsRow || hiddenInputs.has(child)) {
-      return;
-    }
-
-    child.remove();
-  });
-
-  const section = document.createElement("section");
-  section.innerHTML = `
-    <div class="mb-3">
-      <h3 class="text-base font-semibold text-[#2f4b66]">
-        Service Selection per Pet
-      </h3>
-    </div>
-
-    <div id="petServiceSelections" class="space-y-6"></div>
-  `;
-
-  if (buttonsRow) {
-    elements.form.insertBefore(section, buttonsRow);
-  } else {
-    elements.form.appendChild(section);
-  }
-
-  elements.petServiceSelections = section.querySelector("#petServiceSelections");
 }
 
 function populateHiddenInputs(data) {
@@ -661,7 +621,7 @@ function handleSubmit(event) {
   }
 
   saveCurrentStepDraft();
-  window.location.href = "./booking-review.html";
+  goToGroomingStep("review");
 }
 
 function saveCurrentStepDraft() {

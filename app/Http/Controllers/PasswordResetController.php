@@ -10,7 +10,7 @@ use Throwable;
 
 class PasswordResetController extends Controller
 {
-    public function requestLink(Request $request, PasswordResetService $passwordResets)
+    public function requestCode(Request $request, PasswordResetService $passwordResets)
     {
         $request->merge([
             'email' => Str::lower(trim((string) $request->input('email'))),
@@ -20,39 +20,42 @@ class PasswordResetController extends Controller
         ]);
 
         try {
-            $passwordResets->sendLink($data['email']);
+            $passwordResets->sendCode($data['email']);
         } catch (Throwable $exception) {
             report($exception);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'The password reset email could not be queued. Please try again.',
-            ], 503);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Password reset link has been sent.',
+            'message' => 'If eligible, a verification code has been sent.',
         ], 202);
     }
 
-    public function verifyLink(Request $request, PasswordResetService $passwordResets)
+    public function verifyCode(Request $request, PasswordResetService $passwordResets)
     {
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $data = $request->validate([
-            'token' => ['required', 'string', 'size:64'],
+            'email' => ['required', 'email', 'max:150'],
         ]);
-        $result = $passwordResets->inspect($data['token']);
+        $code = trim((string) $request->input('code'));
+        if (! preg_match('/^[0-9]{6}$/', $code)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired verification code.',
+            ], 422);
+        }
+        $result = $passwordResets->verifyCode($data['email'], $code);
 
         if ($result['status'] !== 'valid') {
             return response()->json([
                 'success' => false,
-                'message' => 'This password reset link is invalid or has expired.',
+                'message' => 'Invalid or expired verification code.',
             ], 422);
         }
 
         return response()->json([
             'success' => true,
-            'email' => $result['email'],
+            'token' => $result['token'],
         ]);
     }
 
@@ -134,39 +137,21 @@ class PasswordResetController extends Controller
             return response()->json([
                 'success' => false,
                 'expired' => true,
-                'message' => 'This password reset link has expired. Request a new one.',
+                'message' => 'Invalid or expired verification code.',
             ], 422);
         }
 
         if ($result['status'] !== 'reset') {
             return response()->json([
                 'success' => false,
-                'message' => 'This password reset link is invalid or has already been used.',
+                'message' => 'Invalid or expired verification code.',
             ], 422);
         }
 
-        $response = [
+        return response()->json([
             'success' => true,
-            'message' => $result['completed_setup']
-                ? 'Your staff account is ready.'
-                : 'Your password has been reset successfully.',
-            'completed_setup' => $result['completed_setup'],
-        ];
-
-        if ($result['completed_setup']) {
-            $user = $result['user'];
-            $response['token'] = $user->createToken('admin_token')->plainTextToken;
-            $response['user'] = [
-                'user_id' => $user->user_id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'role' => $user->role,
-            ];
-        }
-
-        return response()->json($response);
+            'message' => 'Your password has been reset successfully.',
+        ]);
     }
 
     public function completeStaffSetup(Request $request, PasswordResetService $passwordResets)
