@@ -266,6 +266,7 @@ function adminClinicPage() {
     hasMoreRecords: false,
     activeCases: [],
     activeCasesLoading: false,
+    tab: "records",
     addCustomer: { open: false, saving: false, error: "", form: {} },
 
     // Patient profile panel
@@ -293,6 +294,7 @@ function adminClinicPage() {
         API.redirectToSignIn?.();
         return;
       }
+      if (new URLSearchParams(window.location.search).get("tab") === "active-cases") this.tab = "active-cases";
       this.loadAllRecords();
       this.loadActiveCases();
       window.addEventListener("clinic-case-updated", () => this.loadActiveCases());
@@ -303,6 +305,16 @@ function adminClinicPage() {
       try { this.activeCases = (await API.getActiveClinicCases()).cases || []; }
       catch { this.activeCases = []; }
       finally { this.activeCasesLoading = false; }
+    },
+
+    get visibleActiveCases() {
+      return this.tab === "active-cases" ? this.activeCases : this.activeCases.slice(0, 3);
+    },
+    setTab(tab) {
+      this.tab = tab;
+      window.history.replaceState(null, "", tab === "active-cases" ? "?tab=active-cases" : window.location.pathname);
+      window.scrollTo(0, 0);
+      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
     },
 
     caseLabel(item) { return ({ online_request: "Online request", consultation: "Consultation", vaccination: "Vaccination" })[item.case_type] || "Clinic case"; },
