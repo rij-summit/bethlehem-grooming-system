@@ -579,6 +579,86 @@ async function testLoginCodeResendCooldownAndLimit() {
   assert.match(page.elements.get("loginCodeMessage").textContent, /Too many resend attempts/);
 }
 
+async function testPasswordResetEmailHandoff() {
+  const key = "pendingPasswordResetEmail";
+  const storage = new MemoryStorage();
+  const requests = [];
+  function loadPage(script) {
+    const elements = new Map();
+    const getElement = (id) => {
+      if (!elements.has(id)) {
+        elements.set(id, {
+          value: "", textContent: "", innerHTML: "", disabled: false,
+          classList: { toggle() {} },
+          handlers: {},
+          addEventListener(name, handler) { this.handlers[name] = handler; },
+          setAttribute() {}, focus() {},
+        });
+      }
+      return elements.get(id);
+    };
+    const location = { search: "", href: "http://localhost/pages/client/sign-in.html" };
+    const context = {
+      URLSearchParams,
+      sessionStorage: storage,
+      window: { location, setInterval: () => 1, clearInterval() {} },
+      API: {
+        async signIn() { throw { message: "Invalid credentials", status: 401 }; },
+        async requestPasswordReset(email) { requests.push(email); },
+      },
+      document: {
+        getElementById: getElement,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        createElement: () => ({
+          value: "",
+          // Stand-in for the browser's native email constraint validation.
+          checkValidity() { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.value); },
+        }),
+        addEventListener(name, handler) { if (name === "DOMContentLoaded") handler(); },
+      },
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(projectRoot, script), "utf8"), context);
+    return { getElement, location };
+  }
+
+  const signIn = loadPage("scripts/auth/sign-in.js");
+  const identifier = signIn.getElement("identifier");
+  const clickForgot = () => signIn.getElement("forgotPasswordLink").handlers.click();
+  const openForgot = () => loadPage("scripts/auth/forgot-password.js");
+  identifier.value = "  Customer@example.com  ";
+  clickForgot();
+  assert.equal(storage.getItem(key), "Customer@example.com");
+  const forgot = openForgot();
+  assert.equal(forgot.getElement("resetEmail").value, "Customer@example.com");
+  assert.equal(storage.getItem(key), null, "Prefill must be consumed immediately");
+  assert.deepEqual(requests, [], "Prefilling must not send a code");
+  assert.equal(openForgot().getElement("resetEmail").value, "", "Reload must not reuse the email");
+  await forgot.getElement("forgotPasswordForm").handlers.submit({ preventDefault() {} });
+  assert.deepEqual(requests, ["customer@example.com"], "Send Code still submits normally");
+
+  signIn.getElement("password").value = "wrong-password";
+  await signIn.getElement("signin").handlers.submit({ preventDefault() {} });
+  assert.equal(signIn.getElement("sharedSignInMessage").textContent, "Invalid credentials");
+  clickForgot();
+  assert.equal(openForgot().getElement("resetEmail").value, "Customer@example.com",
+    "The entered email must still carry over after Invalid credentials");
+  identifier.value = "updated@example.com";
+  clickForgot();
+  assert.equal(openForgot().getElement("resetEmail").value, "updated@example.com",
+    "Use the current identifier after a failed sign-in");
+  for (const value of ["customer", "09171234567", "invalid@", "a@@example.com", ""]) {
+    storage.setItem(key, "stale@example.com");
+    identifier.value = value;
+    clickForgot();
+    assert.equal(storage.getItem(key), null);
+    assert.equal(openForgot().getElement("resetEmail").value, "");
+  }
+  assert.equal(signIn.location.href, "http://localhost/pages/client/sign-in.html");
+  const html = fs.readFileSync(path.join(projectRoot, "pages/client/sign-in.html"), "utf8");
+  assert.match(html, /id="forgotPasswordLink" href="\.\/forgot-password\.html"/);
+}
+
 function testStaticAuthContracts() {
   const signIn = fs.readFileSync(
     path.join(projectRoot, "scripts/auth/sign-in.js"),
@@ -677,6 +757,7 @@ function testStaticAuthContracts() {
   testVerificationCredentialsAreScrubbedBeforeUse();
   await testLoginCodeIsEnteredOnTheOriginalTab();
   await testLoginCodeResendCooldownAndLimit();
+  await testPasswordResetEmailHandoff();
   testStaticAuthContracts();
   console.log("frontend auth/session regression checks passed");
 })().catch((error) => {

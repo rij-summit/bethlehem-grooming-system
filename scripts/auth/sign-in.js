@@ -37,6 +37,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!signInForm || !identifierInput || !passwordInput) return;
 
+  document.getElementById("forgotPasswordLink")?.addEventListener("click", () => {
+    const email = document.createElement("input");
+    email.type = "email";
+    email.required = true;
+    email.value = identifierInput.value.trim();
+    try {
+      sessionStorage.removeItem("pendingPasswordResetEmail");
+      if (email.checkValidity()) {
+        sessionStorage.setItem("pendingPasswordResetEmail", email.value);
+      }
+    } catch { /* storage unavailable; continue to Forgot Password */ }
+  });
+
   const passwordIconClosed = document.querySelector(".shared-password-icon-closed");
   const passwordIconOpen   = document.querySelector(".shared-password-icon-open");
 

@@ -23,6 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const passwordMessage = document.getElementById("resetPasswordMessage");
   if (!emailForm || !codeForm || !passwordForm) return;
 
+  try {
+    const email = sessionStorage.getItem("pendingPasswordResetEmail");
+    sessionStorage.removeItem("pendingPasswordResetEmail");
+    if (email) emailInput.value = email;
+  } catch { /* storage unavailable; leave the email field empty */ }
+
   let step = "email";
   let requestedEmail = "";
   let resetGrant = "";
