@@ -93,7 +93,6 @@ class CustomerPageLoadingPerformanceInterfaceTest extends TestCase
         $preRegistration = file_get_contents(
             base_path('scripts/components/customer-pre-registration-button.js'),
         );
-        $chatbot = file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
 
         foreach ([
             'let accessRequest = null;',
@@ -102,29 +101,5 @@ class CustomerPageLoadingPerformanceInterfaceTest extends TestCase
         ] as $optimization) {
             $this->assertStringContainsString($optimization, $preRegistration);
         }
-
-        $submitHandler = $this->sourceBetween(
-            $chatbot,
-            'async function handleChatSubmit(event)',
-            'function rememberConversationMessage',
-        );
-        $this->assertStringContainsString('API.sendChatbotMessage(', $submitHandler);
-        $this->assertStringContainsString('chatSend.disabled = isLoading;', $chatbot);
-        $this->assertStringNotContainsString('API.sendChatbotMessage(', substr(
-            $chatbot,
-            0,
-            strpos($chatbot, 'async function handleChatSubmit(event)'),
-        ));
-    }
-
-    private function sourceBetween(string $source, string $start, string $end): string
-    {
-        $startPosition = strpos($source, $start);
-        $endPosition = strpos($source, $end, $startPosition ?: 0);
-
-        $this->assertNotFalse($startPosition);
-        $this->assertNotFalse($endPosition);
-
-        return substr($source, $startPosition, $endPosition - $startPosition);
     }
 }

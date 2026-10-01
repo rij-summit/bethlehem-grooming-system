@@ -105,7 +105,6 @@ class PasswordResetInterfaceTest extends TestCase
             'Forgot password?',
             "Don't have an account?",
             '>Home</a>',
-            'home-ai-chatbot.js',
         ] as $excluded) {
             $this->assertStringNotContainsString($excluded, $page);
         }

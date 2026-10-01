@@ -8,7 +8,7 @@
 
     <!-- Compiled Tailwind CSS-->
     <link rel="stylesheet" href="css/output.css" />
-    <link rel="stylesheet" href="css/custom.css?v=ai-chatbot-highlight-soft-20260716" />
+    <link rel="stylesheet" href="css/custom.css?v=site-assets-20261001&release=20261001" />
 
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
@@ -199,108 +199,6 @@
       </p>
     </footer>
 
-    <button
-      id="ai-chat-button"
-      type="button"
-      class="ai-chatbot-button ai-chatbot-button--icon-only"
-      aria-label="Open Bethlehem Assistant"
-      aria-controls="ai-chat-panel"
-      aria-expanded="false"
-      data-ai-chatbot-launcher
-    >
-      <svg class="ph-icon ai-chatbot-button__icon" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><use href="assets/icons/phosphor.svg#chat-circle"></use></svg>
-    </button>
-
-    <section
-      id="ai-chat-panel"
-      class="ai-chatbot-panel"
-      role="dialog"
-      aria-labelledby="ai-chat-title"
-      hidden
-    >
-      <header class="ai-chatbot-panel__header">
-        <div>
-          <h2 id="ai-chat-title" class="ai-chatbot-panel__title">
-            Bethlehem Assistant
-          </h2>
-          <p class="ai-chatbot-panel__eyebrow">AI assistant</p>
-        </div>
-        <div class="ai-chatbot-panel__actions">
-          <button
-            id="ai-chat-reset"
-            type="button"
-            class="ai-chatbot-reset"
-            aria-label="Start a new chatbot conversation"
-            title="New chat"
-          >
-            <svg class="ph-icon ai-chatbot-reset__icon" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><use href="assets/icons/phosphor.svg#arrow-counter-clockwise"></use></svg>
-          </button>
-          <button
-            id="ai-chat-close"
-            type="button"
-            class="ai-chatbot-close"
-            aria-label="Close Bethlehem Assistant"
-          >
-            <svg class="ph-icon ai-chatbot-close__icon" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><use href="assets/icons/phosphor.svg#x"></use></svg>
-          </button>
-        </div>
-      </header>
-
-      <div
-        id="ai-chat-messages"
-        class="ai-chatbot-messages"
-        aria-live="polite"
-        aria-relevant="additions"
-      >
-        <div class="ai-chatbot-message ai-chatbot-message--bot">
-          Hi! I'm Bethlehem's AI assistant. I can help with clinic visits, grooming, pre-registration, and using your customer account.
-        </div>
-      </div>
-
-      <div
-        id="ai-chat-loading"
-        class="ai-chatbot-loading"
-        role="status"
-        hidden
-      >
-        Bethlehem Assistant is typing...
-      </div>
-
-      <p
-        id="ai-chat-error"
-        class="ai-chatbot-error"
-        role="alert"
-        hidden
-      ></p>
-
-      <form id="ai-chat-form" class="ai-chatbot-form">
-        <label for="ai-chat-input" class="ai-chatbot-sr-only">
-          Message
-        </label>
-        <input
-          id="ai-chat-input"
-          class="ai-chatbot-input"
-          name="message"
-          type="text"
-          autocomplete="off"
-          maxlength="1000"
-          placeholder="Ask Bethlehem Assistant..."
-          required
-        />
-        <button
-          id="ai-chat-send"
-          type="submit"
-          class="ai-chatbot-send"
-          aria-label="Send message"
-          aria-label="Send message"
-        >
-          <svg class="ph-icon ai-chatbot-send__icon" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><use href="assets/icons/phosphor.svg#paper-plane-tilt"></use></svg>
-          <span>Send</span>
-        </button>
-      </form>
-    </section>
-
-    <script src="scripts/api.js?v=chatbot-20260928"></script>
-    <script src="scripts/components/home-ai-chatbot.js?v=chatbot-20261001"></script>
+    <script src="scripts/api.js?v=site-assets-20261001&release=20261001"></script>
   </body>
 </html>

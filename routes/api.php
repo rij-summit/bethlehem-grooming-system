@@ -7,7 +7,6 @@ use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminVaccinationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
-use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\ClinicClosureController;
 use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicWalkinController;
@@ -47,8 +46,6 @@ Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'conf
     ->middleware('throttle:10,1');
 Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resend'])
     ->middleware('throttle:3,5');
-Route::post('/chatbot', [ChatbotController::class, 'chat'])
-    ->middleware('throttle:chatbot');
 
 // ── PUBLIC ROUTES ─────────────────────────────────────
 Route::get('/timeslots', [BookingController::class,   'getTimeslots']);

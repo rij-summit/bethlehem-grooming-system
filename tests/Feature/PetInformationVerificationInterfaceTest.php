@@ -140,7 +140,6 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'function buildCard(pet)',
             'function openAddModal()',
         );
-        $chatbot = file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
 
         foreach ([
             'placeholder="Search pet name..."',
@@ -157,8 +156,6 @@ class PetInformationVerificationInterfaceTest extends TestCase
         $this->assertStringContainsString('flex items-start justify-between gap-4 text-sm', $petCard);
         $this->assertStringContainsString('class="grid grid-cols-2 gap-2', $petCard);
         $this->assertStringContainsString('View profile', $petCard);
-        $this->assertStringNotContainsString('Pet Care Assistant', $chatbot);
-        $this->assertStringContainsString('ai-chatbot-button--icon-only', $chatbot);
     }
 
     public function test_pet_profile_keeps_the_my_pets_shell_and_removes_the_extra_hero(): void

@@ -13,8 +13,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Rollback restores empty tables; removed insight and feedback data cannot be recovered.
-        $legacyMigration = require __DIR__.'/2026_08_30_000005_create_chatbot_insights_and_feedback_tables.php';
-        $legacyMigration->up();
+        // Retirement is permanent; rollback must not recreate removed storage.
     }
 };

@@ -12,13 +12,11 @@ adding a stylesheet per page. The current design, logo and Phosphor icons are re
 | `tailwind.config.js` | Exposes utilities such as `bg-portal-sidebar`, `text-portal-muted`, `border-portal-border`, `rounded-portal` and `shadow-portal`. |
 | `css/input.css` | Imports the shared theme and declares Tailwind layers. |
 | `css/output.css` | Generated CSS for the HTML pages. Never edit it manually. |
-| `css/custom.css` | Existing shared widgets and special CSS, including opt-in theme colors for the assistant and pickup popup. |
+| `css/custom.css` | Existing shared widgets and special CSS, including opt-in theme colors for the pickup popup. |
 | HTML and component templates | Page layout, spacing, responsive variants and dynamic status utility classes. |
 
 Only `output.css` and `custom.css` are linked by the dashboard. The previous
 `css/customer-dashboard.css` and top-level `css/portal-theme.css` are removed.
-The assistant uses Phosphor and portal styling on pages with `portal-theme`
-and `data-icon-library="phosphor"` on the body.
 
 ## Build and development
 
@@ -43,8 +41,8 @@ the named `portal-*` color utilities and ordinary Tailwind layout utilities.
 The theme is opt-in, so existing pages keep their current appearance.
 
 Use the soft blue palette in `css/themes/portal.css` as the shared visual
-reference for future sections. Primary buttons, profile initials and the
-assistant use `portal-primary`; the sidebar selection uses `portal-active`
+reference for future sections. Primary buttons and profile initials
+use `portal-primary`; the sidebar selection uses `portal-active`
 with a `portal-accent` line; the upcoming-schedule banner uses `portal-reminder`.
 Keep white cards and lightly blue-tinted surrounding surfaces.
 
@@ -79,7 +77,7 @@ disabled states, API calls and business rules when adopting the theme elsewhere.
 
 ## Phosphor icons
 
-`assets/icons/phosphor.svg` contains 27 regular-weight icons from the official
+`assets/icons/phosphor.svg` contains 35 regular-weight icons from the official
 `@phosphor-icons/core` 2.1.1 package: https://github.com/phosphor-icons/core.
 The MIT license is in `assets/icons/PHOSPHOR-LICENSE.txt`.
 
@@ -92,14 +90,13 @@ The MIT license is in `assets/icons/PHOSPHOR-LICENSE.txt`.
 
 Use the correct relative path for the page, give icon-only controls accessible
 labels, and keep regular weight consistent. Other pages retain Lucide until
-their own migration. Assistant messaging, feedback, history, reset and API
-behavior remain unchanged.
+their own migration.
 
 ## Verification scope
 
 Check desktop/mobile layout, sidebar selection and drawer controls, notifications,
 loading/empty/error/populated panels, long names, booking dialogs, disabled
-pre-registration and the assistant when extending the design.
+pre-registration when extending the design.
 
 The Dashboard search field already had no filtering handler; its behavior is preserved.
 My Pets retains its existing name search, Active/Archived filters, profile links,

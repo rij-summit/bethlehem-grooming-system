@@ -107,7 +107,6 @@ var API = (() => {
     "clinicVisitDraft",
     "clinicVisitPets",
     "clinicVisitConfirmation",
-    "bethlehem.chatbot.conversation.v1",
   ];
   const BOOKING_LOCAL_KEYS = [
     "bethlehem.bookingFormLock",
@@ -1066,14 +1065,6 @@ var API = (() => {
     return request("GET", "/system/clock");
   }
 
-  async function sendChatbotMessage(message, history = []) {
-    // POST /api/chatbot  (public)
-    return request("POST", "/chatbot", {
-      message,
-      history: Array.isArray(history) ? history : [],
-    }, getCustomerToken(), { suppressAuthRedirect: true });
-  }
-
   async function getTimeslots(date) {
     // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
     return request("GET", `/timeslots?date=${date}`);
@@ -1849,7 +1840,6 @@ var API = (() => {
     logout,
     getMe,
     getSystemClock,
-    sendChatbotMessage,
     // Timeslots
     getTimeslots,
     getClinicTimeslots,

@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class GroomingSinglePageInterfaceTest extends TestCase
 {
-    public function test_all_grooming_steps_share_one_page_and_one_chatbot(): void
+    public function test_all_grooming_steps_share_one_page(): void
     {
         $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
 
@@ -14,7 +14,6 @@ class GroomingSinglePageInterfaceTest extends TestCase
             $this->assertStringContainsString('data-grooming-step="'.$step.'"', $page);
         }
 
-        $this->assertSame(1, substr_count($page, 'home-ai-chatbot.js'));
         $this->assertSame(1, substr_count($page, 'grooming-pre-registration.js'));
         $this->assertStringContainsString('id="bookingConsentForm"', $page);
         $this->assertStringContainsString('id="printableConfirmation"', $page);

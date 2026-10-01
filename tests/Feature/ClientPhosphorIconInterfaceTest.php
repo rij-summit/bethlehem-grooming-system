@@ -30,7 +30,6 @@ class ClientPhosphorIconInterfaceTest extends TestCase
             'scripts/components/client-settings.js',
             'scripts/components/customer-header-notifications.js',
             'scripts/components/customer-pre-registration-button.js',
-            'scripts/components/home-ai-chatbot.js',
             'scripts/components/my-pets.js',
             'scripts/components/pet-details.js',
         ] as $relativePath) {
@@ -94,7 +93,6 @@ class ClientPhosphorIconInterfaceTest extends TestCase
         foreach (glob(base_path('pages/client/*.html')) as $page) {
             $sources .= file_get_contents($page);
         }
-        $sources .= file_get_contents(base_path('scripts/components/home-ai-chatbot.js'));
 
         preg_match_all('/phosphor\.svg#([a-z0-9-]+)/', $sources, $usedMatches);
         foreach (array_unique($usedMatches[1]) as $icon) {
