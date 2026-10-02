@@ -57,6 +57,7 @@ class InventoryStockMovementService
                 'item_id' => $item->item_id,
                 'item_name' => $item->item_name,
                 'quantity_added' => $entry['quantity'],
+                'stock_in_reference' => $transaction->stock_in_reference,
                 'quantity_on_hand' => $item->quantity_on_hand,
                 'unexpired_quantity' => $this->batchBalances
                     ->forItem((int) $item->item_id)['unexpired_quantity'],

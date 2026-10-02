@@ -179,6 +179,117 @@ function testRowNumbersFollowTheCurrentPaginationAndResetWithFilters() {
   assert.equal(page.rowNumber(0), 1);
 }
 
+async function testDetailsLoadsFreshInformationAndUsesTheExistingEditForm() {
+  let resolveDetails;
+  let calls = 0;
+  const page = createPage({ getItem: async (id) => {
+    assert.equal(id, 7);
+    calls += 1;
+    return new Promise(resolve => { resolveDetails = resolve; });
+  } });
+  const row = { item_id: 7, item_name: 'Old product name', quantity_on_hand: '20.00' };
+  let restored = 0, focused = 0;
+  page.$refs = { detailsClose: { focus: () => focused++ } };
+  const loading = page.openDetails(row, { currentTarget: { focus: () => restored++ } });
+  assert.equal(page.details.open, true);
+  assert.equal(page.details.loading, true);
+  assert.equal(page.details.item, null);
+  assert.equal(focused, 1);
+  const fresh = { ...validForm({ item_id: 7 }), item_name: 'Fresh product name', quantity_on_hand: '17.00', saleable_quantity: 14, current_batches: [] };
+  resolveDetails({ data: fresh });
+  await loading;
+  assert.equal(page.details.loading, false);
+  assert.equal(page.details.item, fresh);
+  assert.equal(page.details.name, 'Fresh product name');
+  page.editDetails();
+  assert.equal(page.details.open, false);
+  assert.equal(page.modal.open, true);
+  assert.equal(page.form.item_name, 'Fresh product name');
+  assert.equal(restored, 0);
+  page.modal.open = false;
+  const reopening = page.openDetails(row);
+  resolveDetails({ data: fresh });
+  await reopening;
+  page.closeDetails();
+  assert.equal(calls, 2);
+  assert.equal(restored, 1);
+}
+
+async function testDetailsIgnoresClosedAndSupersededRequests() {
+  const responses = [];
+  const page = createPage({ getItem: () => new Promise(resolve => responses.push(resolve)) });
+  const first = page.openDetails({ item_id: 1, item_name: 'First' });
+  page.closeDetails();
+  responses[0]({ data: { item_id: 1 } });
+  await first;
+  assert.equal(page.details.open, false);
+  assert.equal(page.details.item, null);
+  const slow = page.openDetails({ item_id: 1, item_name: 'First' });
+  const fast = page.openDetails({ item_id: 2, item_name: 'Second' });
+  responses[2]({ data: { item_id: 2, item_name: 'Second fresh' } });
+  await fast;
+  responses[1]({ data: { item_id: 1, item_name: 'First stale' } });
+  await slow;
+  assert.equal(page.details.item.item_id, 2);
+  assert.equal(page.details.name, 'Second fresh');
+}
+
+async function testDetailsFailureCanBeRetriedAndEscapeRestoresFocus() {
+  let fail = true, restored = 0;
+  const page = createPage({ getItem: async () => {
+    if (fail) throw new Error('Unavailable');
+    return { data: { item_id: 1, item_name: 'Recovered' } };
+  } });
+  const row = { item_id: 1, item_name: 'Product' };
+  await page.openDetails(row, { currentTarget: { focus: () => restored++ } });
+  assert.equal(page.details.error, 'Unavailable');
+  assert.equal(page.details.loading, false);
+  fail = false;
+  await page.openDetails(row);
+  assert.equal(page.details.error, '');
+  assert.equal(page.details.item.item_name, 'Recovered');
+  let prevented = false;
+  page.detailsKeydown({ key: 'Escape', preventDefault: () => { prevented = true; } });
+  assert.equal(page.details.open, false);
+  assert.equal(prevented, true);
+  assert.equal(restored, 1);
+}
+
+function testDetailsTrapsKeyboardFocus() {
+  const page = createPage();
+  let firstFocus = 0, lastFocus = 0, prevented = 0;
+  const first = { focus: () => firstFocus++, getClientRects: () => [1] };
+  const last = { focus: () => lastFocus++, getClientRects: () => [1] };
+  page.$refs = { detailsDialog: { querySelectorAll: () => [first, last] } };
+  page.detailsKeydown({ key: 'Tab', target: last, preventDefault: () => prevented++ });
+  page.detailsKeydown({ key: 'Tab', target: first, shiftKey: true, preventDefault: () => prevented++ });
+  assert.equal(firstFocus, 1);
+  assert.equal(lastFocus, 1);
+  assert.equal(prevented, 2);
+}
+
+async function testReactivateRefreshesDetailsAndKeepsFocusInsideTheModal() {
+  let focused = 0, reactivated = 0;
+  const fresh = { item_id: 1, item_name: 'Active product', is_active: true };
+  const page = createPage({
+    reactivateItem: async id => { assert.equal(id, 1); reactivated++; return { data: fresh }; },
+    getItems: async () => ({ data: [], page: 1, last_page: 1, total: 0 }),
+  });
+  page.showToast = () => {};
+  page.$refs = { detailsClose: { focus: () => focused++ } };
+  page.details = { open: true, busy: false, item: { item_id: 1, is_active: false } };
+  await page.doReactivate(page.details.item);
+  assert.equal(reactivated, 1);
+  assert.equal(page.details.item.is_active, true);
+  assert.equal(page.details.item.item_name, fresh.item_name);
+  assert.equal(page.details.busy, false);
+  assert.equal(focused, 1);
+  page._detailsTrigger = { isConnected: false };
+  page.$refs.productsAdd = { focus: () => focused++ };
+  page.closeDetails();
+  assert.equal(focused, 2);
+}
+
 (async () => {
   await testClientRejectsInvalidProductFormValuesWithoutSubmitting();
   testBarcodeInputKeepsOnlyThirteenDigits();
@@ -186,6 +297,11 @@ function testRowNumbersFollowTheCurrentPaginationAndResetWithFilters() {
   await testClientPreservesLeadingZeroBarcodeAndReloadsTheLastValidPage();
   await testPageRecoveryKeepsLoadingUntilTheFallbackResponseArrives();
   testRowNumbersFollowTheCurrentPaginationAndResetWithFilters();
+  await testDetailsLoadsFreshInformationAndUsesTheExistingEditForm();
+  await testDetailsIgnoresClosedAndSupersededRequests();
+  await testDetailsFailureCanBeRetriedAndEscapeRestoresFocus();
+  testDetailsTrapsKeyboardFocus();
+  await testReactivateRefreshesDetailsAndKeepsFocusInsideTheModal();
   console.log("frontend inventory item regression checks passed");
 })().catch((error) => {
   console.error(error);

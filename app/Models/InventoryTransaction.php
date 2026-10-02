@@ -44,6 +44,18 @@ class InventoryTransaction extends Model
 
     // ── Relationships ──────────────────────────────────────────────────────────
 
+    // The saved receipt id is unique even when no manufacturer batch is supplied.
+    // Deriving the reference also gives historical receipts an identifier without
+    // rewriting the inventory ledger.
+    public function getStockInReferenceAttribute(): ?string
+    {
+        if ($this->type !== 'stock_in') {
+            return null;
+        }
+
+        return sprintf('SI-%s-%05d', $this->created_at?->format('Y') ?? '0000', $this->transaction_id);
+    }
+
     public function item()
     {
         return $this->belongsTo(InventoryItem::class, 'item_id', 'item_id');

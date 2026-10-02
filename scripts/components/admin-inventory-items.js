@@ -17,6 +17,10 @@ function adminInventoryItems() {
     perPage: 10,
     _searchTimer: null,
 
+    details: { open: false, loading: false, busy: false, error: "", item: null, name: "", itemId: null },
+    _detailsRequest: 0,
+    _detailsTrigger: null,
+
     // Add / edit modal
     modal: { open: false, busy: false, error: "" },
     form: {
@@ -105,6 +109,73 @@ function adminInventoryItems() {
       event.target.value = barcode;
     },
 
+    async openDetails(item, event) {
+      const request = ++this._detailsRequest;
+      if (event) this._detailsTrigger = event.currentTarget;
+      this.details = { open: true, loading: true, busy: false, error: "", item: null, name: item.item_name, itemId: item.item_id };
+      this.$nextTick(() => this.$refs?.detailsClose?.focus());
+      try {
+        const res = await InventoryAPI.getItem(item.item_id);
+        if (request !== this._detailsRequest) return;
+        this.details.item = res.data;
+        this.details.name = res.data.item_name;
+      } catch (err) {
+        if (request === this._detailsRequest) this.details.error = err.message || "Failed to load product details.";
+      } finally {
+        if (request === this._detailsRequest) this.details.loading = false;
+      }
+    },
+
+    closeDetails(restoreFocus = true) {
+      ++this._detailsRequest;
+      this.details.open = false;
+      if (restoreFocus) this.$nextTick(() => {
+        if (this._detailsTrigger?.isConnected === false) this.$refs?.productsAdd?.focus();
+        else this._detailsTrigger?.focus();
+      });
+    },
+
+    editDetails() {
+      const item = this.details.item;
+      if (!item) return;
+      this.closeDetails(false);
+      this.openEdit(item);
+      this.$nextTick(() => this.$refs?.productForm?.querySelector("input")?.focus());
+    },
+
+    detailsKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeDetails();
+      } else if (event.key === "Tab") {
+        const buttons = Array.from(this.$refs.detailsDialog.querySelectorAll("button:not(:disabled)"))
+          .filter(button => button.getClientRects().length > 0);
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && event.target === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && event.target === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    },
+
+    fmtMoney(value) {
+      return value === null || value === undefined || value === "" ? "—" : "₱" + Number(value).toFixed(2);
+    },
+
+    fmtExpiry(value) {
+      if (!value) return "—";
+      return new Date(value + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+    },
+
+    batchStatusStyle(status) {
+      if (status === "Expired") return "background-color:#fee2e2;color:#b91c1c";
+      if (status === "Expiring Soon" || status === "Expiry unknown") return "background-color:#fef3c7;color:#92400e";
+      return "background-color:#dcfce7;color:#166534";
+    },
+
     // ── Add / Edit modal ────────────────────────────────────────────────────
 
     openAdd() {
@@ -179,12 +250,24 @@ function adminInventoryItems() {
     },
 
     async doReactivate(item) {
+      const inDetails = this.details.open && this.details.item?.item_id === item.item_id;
+      const detailsRequest = this._detailsRequest;
+      if (inDetails) this.details.busy = true;
       try {
-        await InventoryAPI.reactivateItem(item.item_id);
+        const res = await InventoryAPI.reactivateItem(item.item_id);
         this.showToast("Item reactivated");
+        if (inDetails && this.details.open && detailsRequest === this._detailsRequest) {
+          this.details.item = { ...this.details.item, ...res.data };
+          this.details.name = res.data.item_name;
+        }
         await this.load(this.currentPage);
       } catch (err) {
         this.showToast(err.message || "Failed to reactivate.", false);
+      } finally {
+        if (inDetails && detailsRequest === this._detailsRequest) {
+          this.details.busy = false;
+          if (this.details.open) this.$nextTick(() => this.$refs?.detailsClose?.focus());
+        }
       }
     },
 

@@ -712,8 +712,8 @@ class InventorySecurityRegressionTest extends TestCase
         $posPage = file_get_contents(base_path('pages/admin/inventory/pos.html'));
         $stockOutScript = file_get_contents(base_path('scripts/components/admin-stock-out.js'));
 
-        $this->assertStringContainsString('admin-inventory.js?v=inventory-icons-20261002', $inventoryPage);
-        $this->assertStringContainsString('components/${name}?v=unified-inventory-20261001b', $inventoryLoader);
+        $this->assertStringContainsString('admin-inventory.js?v=product-details-20261002', $inventoryPage);
+        $this->assertStringContainsString('components/${name}?v=product-details-20261002', $inventoryLoader);
         foreach ([
             'overview' => 'admin-inventory-dashboard.js',
             'products' => 'admin-inventory-items.js',
@@ -1180,6 +1180,116 @@ class InventorySecurityRegressionTest extends TestCase
             'reason' => 'damaged',
             'quantity' => 3,
         ]);
+    }
+
+    public function test_product_details_uses_fefo_balances_and_keeps_expired_receipts_visible(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000030'));
+        $itemId = $this->createInventoryItem('Mixed expiry vaccine', 17, 150);
+        $exhausted = $this->recordInventoryTransaction($itemId, 'stock_in', 10, [
+            'expiry_date' => now()->addDay()->toDateString(),
+        ]);
+        $expired = $this->recordInventoryTransaction($itemId, 'stock_in', 3, [
+            'batch_number' => 'LOT-X731',
+            'expiry_date' => now()->subDay()->toDateString(),
+        ]);
+        $soon = $this->recordInventoryTransaction($itemId, 'stock_in', 8, [
+            'expiry_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $valid = $this->recordInventoryTransaction($itemId, 'stock_in', 6, [
+            'expiry_date' => now()->addDays(31)->toDateString(),
+        ]);
+        $this->recordInventoryTransaction($itemId, 'stock_out', 10, ['reason' => 'sold']);
+
+        $details = $this->getJson("/api/inventory/items/{$itemId}")
+            ->assertOk()
+            ->assertJsonPath('data.tracks_expiry', true)
+            ->assertJsonPath('data.quantity_on_hand', '17.00')
+            ->assertJsonPath('data.saleable_quantity', 14)
+            ->assertJsonPath('data.expired_quantity', 3)
+            ->assertJsonCount(3, 'data.current_batches')
+            ->assertJsonPath('data.current_batches.0.transaction_id', $expired)
+            ->assertJsonPath('data.current_batches.0.expiry_status', 'Expired')
+            ->assertJsonPath('data.current_batches.0.batch_number', 'LOT-X731')
+            ->assertJsonPath('data.current_batches.1.transaction_id', $soon)
+            ->assertJsonPath('data.current_batches.1.expiry_status', 'Expiring Soon')
+            ->assertJsonPath('data.current_batches.1.batch_number', null)
+            ->assertJsonPath('data.current_batches.2.transaction_id', $valid)
+            ->assertJsonPath('data.current_batches.2.expiry_status', 'Valid');
+
+        foreach ($details->json('data.current_batches') as $batch) {
+            $this->assertSame(sprintf('SI-%s-%05d', now()->format('Y'), $batch['transaction_id']), $batch['stock_in_reference']);
+        }
+        $this->getJson("/api/inventory/transactions?item_id={$itemId}")
+            ->assertOk()->assertJsonFragment(['transaction_id' => $exhausted]);
+
+        $this->postJson('/api/inventory/stock-out', ['items' => [[
+            'item_id' => $itemId, 'quantity' => 2, 'reason' => 'sold',
+        ]]])->assertCreated();
+        $this->getJson("/api/inventory/items/{$itemId}")
+            ->assertOk()
+            ->assertJsonPath('data.quantity_on_hand', '15.00')
+            ->assertJsonPath('data.saleable_quantity', 12)
+            ->assertJsonPath('data.current_batches.1.remaining_quantity', 6);
+    }
+
+    public function test_stock_in_references_are_automatic_and_independent_of_optional_batch_numbers(): void
+    {
+        Sanctum::actingAs($this->createUser('admin', '09170000031'));
+        $itemId = $this->createInventoryItem('Vaccine without manufacturer lot', 0, 150);
+        $entry = ['item_id' => $itemId, 'quantity' => 20, 'reason' => 'purchase'];
+        $receipts = $this->postJson('/api/inventory/stock-in', ['items' => [
+            [...$entry, 'expiry_date' => now()->addMonths(5)->toDateString()],
+            [...$entry, 'quantity' => 15, 'expiry_date' => now()->addMonths(10)->toDateString()],
+            [...$entry, 'quantity' => 2, 'expiry_date' => now()->addMonths(10)->toDateString(), 'batch_number' => 'ABR240912'],
+        ]])->assertCreated()->json('data');
+
+        $references = array_column($receipts, 'stock_in_reference');
+        $this->assertCount(3, array_unique($references));
+        foreach ($receipts as $receipt) {
+            $this->assertSame(sprintf('SI-%s-%05d', now()->format('Y'), $receipt['transaction_id']), $receipt['stock_in_reference']);
+        }
+        $this->assertDatabaseHas('inventory_transactions', ['transaction_id' => $receipts[0]['transaction_id'], 'batch_number' => null]);
+        $this->assertDatabaseHas('inventory_transactions', ['transaction_id' => $receipts[2]['transaction_id'], 'batch_number' => 'ABR240912']);
+        $this->getJson("/api/inventory/items/{$itemId}")->assertOk()->assertJsonCount(3, 'data.current_batches');
+        $history = $this->getJson("/api/inventory/transactions?item_id={$itemId}")->assertOk();
+        foreach ($references as $reference) {
+            $history->assertJsonFragment(['stock_in_reference' => $reference]);
+        }
+
+        $this->travel(1)->years();
+        $this->getJson("/api/inventory/items/{$itemId}")->assertOk()
+            ->assertJsonPath('data.current_batches.0.stock_in_reference', $references[0]);
+        $this->travelBack();
+    }
+
+    public function test_details_preserves_non_expiring_categories_and_deactivated_products(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000032'));
+        foreach (['pet_shop', 'miscellaneous'] as $category) {
+            $itemId = $this->createInventoryItem("Non-expiring {$category}", 4, 50);
+            DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => $category]);
+            $this->getJson("/api/inventory/items/{$itemId}")->assertOk()
+                ->assertJsonPath('data.tracks_expiry', false)
+                ->assertJsonPath('data.saleable_quantity', '4.00')
+                ->assertJsonCount(0, 'data.current_batches');
+        }
+        $itemId = $this->createInventoryItem('Deactivated product', 0, 50);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['is_active' => false]);
+        $this->getJson("/api/inventory/items/{$itemId}")->assertOk()->assertJsonPath('data.is_active', false);
+        $this->postJson("/api/inventory/items/{$itemId}/reactivate")->assertOk();
+        $this->getJson("/api/inventory/items/{$itemId}")->assertOk()->assertJsonPath('data.is_active', true);
+    }
+
+    public function test_legacy_receipts_without_expiry_are_not_marked_valid_in_details(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000033'));
+        $itemId = $this->createInventoryItem('Legacy medicine', 4, 50);
+        $this->recordInventoryTransaction($itemId, 'stock_in', 4);
+        $this->getJson("/api/inventory/items/{$itemId}")->assertOk()
+            ->assertJsonPath('data.saleable_quantity', 0)
+            ->assertJsonPath('data.expiry_unknown_quantity', 4)
+            ->assertJsonPath('data.current_batches.0.expiry_status', 'Expiry unknown');
     }
 
     private function createUser(string $role, string $phone): User

@@ -33,6 +33,7 @@ function adminStockIn() {
     // ── Submit state ──────────────────────────────────────────────────────────
     submitting: false,
     error: "",
+    receipts: [],
 
     // ── Camera scanner ────────────────────────────────────────────────────────
     scannerActive: false,
@@ -241,7 +242,7 @@ function adminStockIn() {
 
       this.submitting = true;
       try {
-        await InventoryAPI.stockIn(this.pending.map(p => ({
+        const res = await InventoryAPI.stockIn(this.pending.map(p => ({
           item_id:      p.item_id,
           quantity:     p.quantity,
           reason:       p.reason,
@@ -250,6 +251,7 @@ function adminStockIn() {
           expiry_date:  p.expiry_date,
           notes:        p.notes,
         })));
+        this.receipts = res?.data ?? [];
         window.showSuccessToast("Stock-in recorded successfully.");
         this.pending    = [];
         this.clearSelected();

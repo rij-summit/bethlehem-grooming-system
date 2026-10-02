@@ -1538,6 +1538,10 @@ video {
   min-width: 1.25rem;
 }
 
+.min-w-\[580px\] {
+  min-width: 580px;
+}
+
 .min-w-full {
   min-width: 100%;
 }
@@ -1616,6 +1620,10 @@ video {
 
 .shrink-0 {
   flex-shrink: 0;
+}
+
+.table-fixed {
+  table-layout: fixed;
 }
 
 .-translate-x-full {
@@ -4519,6 +4527,11 @@ video {
 
 .focus\:ring-white\/70:focus {
   --tw-ring-color: rgb(255 255 255 / 0.7);
+}
+
+.focus-visible\:bg-\[\#eaf4fb\]:focus-visible {
+  --tw-bg-opacity: 1;
+  background-color: rgb(234 244 251 / var(--tw-bg-opacity, 1));
 }
 
 .focus-visible\:\!outline-none:focus-visible {

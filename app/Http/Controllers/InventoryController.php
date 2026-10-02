@@ -128,6 +128,7 @@ class InventoryController extends Controller
     {
         return [
             'transaction_id'        => $t->transaction_id,
+            'stock_in_reference'    => $t->stock_in_reference,
             'item_id'               => $t->item_id,
             'item_name'             => $t->item?->item_name,
             'category'              => $t->item?->category,
@@ -226,8 +227,26 @@ class InventoryController extends Controller
         $this->requireAuth();
 
         $item = InventoryItem::findOrFail($itemId);
+        $balance = $this->batchBalances->forItem($itemId);
+        $tracksExpiry = ! in_array($item->category, ['pet_shop', 'miscellaneous'], true);
+        $cutoff = now()->startOfDay()->addDays(30)->toDateString();
+        $batches = $tracksExpiry
+            ? collect($balance['batches'])
+                ->filter(fn (array $batch) => $batch['remaining_quantity'] > 0)
+                ->sortBy(fn (array $batch) => [$batch['expiry_date'] ?? '9999-12-31', $batch['transaction_id']])
+                ->map(fn (array $batch) => [
+                    ...$batch,
+                    'expiry_status' => $batch['is_expired'] ? 'Expired'
+                        : ($batch['expiry_date'] === null ? 'Expiry unknown'
+                            : ($batch['expiry_date'] <= $cutoff ? 'Expiring Soon' : 'Valid')),
+                ])->values()->all()
+            : [];
 
-        return response()->json(['data' => $this->formatItem($item)]);
+        return response()->json(['data' => [
+            ...$this->formatItem($item, $balance),
+            'tracks_expiry' => $tracksExpiry,
+            'current_batches' => $batches,
+        ]]);
     }
 
     public function update(Request $request, int $itemId): JsonResponse

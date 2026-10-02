@@ -62,6 +62,7 @@ class InventoryBatchBalanceService
                     $stockInQuantity += $quantity;
                     $batches[] = [
                         'transaction_id' => (int) $transaction->transaction_id,
+                        'stock_in_reference' => $transaction->stock_in_reference,
                         'batch_number' => $transaction->batch_number,
                         'expiry_date' => $transaction->expiry_date?->format('Y-m-d'),
                         'received_quantity' => $quantity,

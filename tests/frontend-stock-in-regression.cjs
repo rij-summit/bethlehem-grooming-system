@@ -247,6 +247,28 @@ async function testFailedStockInDoesNotShowSuccessToast() {
   assert.equal(page.error, "Stock In failed");
 }
 
+async function testStockInWithoutManufacturerBatchKeepsDistinctExpiriesAndShowsReferences() {
+  let payload;
+  const receipts = [
+    { transaction_id: 152, stock_in_reference: 'SI-2026-00152', item_name: 'Vaccine' },
+    { transaction_id: 187, stock_in_reference: 'SI-2026-00187', item_name: 'Vaccine' },
+  ];
+  const page = createPage({ stockIn: async items => { payload = items; return { data: receipts }; } });
+  for (const expiry of ['2030-03-15', '2030-08-20']) {
+    page.selected = { item_id: 1, item_name: 'Vaccine', category: 'vaccine', unit: 'vial' };
+    page.qty = '2';
+    page.expiryDate = expiry;
+    page.addToPending();
+  }
+  assert.equal(page.pending.length, 2);
+  await page.submit();
+  assert.equal(payload.length, 2);
+  assert.equal(payload[0].batch_number, null);
+  assert.equal(payload[1].batch_number, null);
+  assert.notEqual(payload[0].expiry_date, payload[1].expiry_date);
+  assert.equal(page.receipts, receipts);
+}
+
 (async () => {
   testClientRejectsDecimalStockInQuantity();
   testExpiryDateIsRequired();
@@ -259,6 +281,7 @@ async function testFailedStockInDoesNotShowSuccessToast() {
   await testNewProductUsesSharedValidationMessages();
   await testSuccessfulStockInUsesSupplierFreePayloadAndShowsToast();
   await testFailedStockInDoesNotShowSuccessToast();
+  await testStockInWithoutManufacturerBatchKeepsDistinctExpiriesAndShowsReferences();
   console.log("frontend stock-in regression checks passed");
 })().catch((error) => {
   console.error(error);
