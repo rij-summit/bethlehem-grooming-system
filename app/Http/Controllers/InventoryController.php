@@ -310,13 +310,14 @@ class InventoryController extends Controller
         }
 
         $items = InventoryItem::query()
-            ->when($forGrooming || ! $includeInactive, fn ($query) => $query->where('is_active', 1))
+            ->when(! $includeInactive, fn ($query) => $query->where('is_active', 1))
             ->when($forGrooming, fn ($query) => $query->whereNotIn('category', ['medicine', 'vaccine'])
-                ->whereNotNull('selling_price')->where('quantity_on_hand', '>=', 1))
+                ->whereNotNull('selling_price'))
             ->where(function ($query) use ($q) {
                 $query->where('item_name', 'like', "%{$q}%")
                       ->orWhere('barcode', 'like', "%{$q}%");
             })
+            ->when($forGrooming, fn ($query) => $query->orderByRaw('CASE WHEN is_active = 1 AND quantity_on_hand >= 1 THEN 0 ELSE 1 END'))
             ->orderBy('item_name')
             ->limit($forGrooming ? 50 : 10)
             ->get();
@@ -325,7 +326,10 @@ class InventoryController extends Controller
 
         return response()->json([
             'data' => $forGrooming
-                ? $formatted->filter(fn ($item) => (float) $item['saleable_quantity'] >= 1)->take(10)->values()
+                ? $formatted->sortBy(fn ($item) => [
+                    $item['is_active'] && (float) $item['saleable_quantity'] >= 1 ? 0 : 1,
+                    $item['item_name'],
+                ])->take(10)->values()
                 : $formatted,
         ]);
     }

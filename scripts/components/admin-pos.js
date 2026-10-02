@@ -26,7 +26,7 @@ function adminPos() {
       this._searchTimer = setTimeout(async () => {
         try {
           const res = await InventoryAPI.searchItems(q);
-          this.searchResults = res.data;
+          this.searchResults = res.data.sort((a, b) => Number(this.hasProductStock(b)) - Number(this.hasProductStock(a)));
         } catch { this.searchResults = []; }
       }, 300);
     },
@@ -43,10 +43,18 @@ function adminPos() {
       }
     },
 
+    productAvailability(item) {
+      return Number(item.saleable_quantity ?? 0);
+    },
+
+    hasProductStock(item) {
+      return this.productAvailability(item) > 0;
+    },
+
     addToCart(item) {
-      const available = parseFloat(item.unexpired_quantity ?? 0);
+      const available = this.productAvailability(item);
       if (available <= 0) {
-        this.error = `No unexpired stock is available for ${item.item_name}.`;
+        this.error = `No sellable stock is available for ${item.item_name}.`;
         return;
       }
 
@@ -61,9 +69,9 @@ function adminPos() {
           item_name: item.item_name,
           unit:      item.unit,
           stock:     available,
-          quantity:  1,
+          quantity:  Math.min(1, available),
           price:     parseFloat(item.selling_price ?? 0),
-          subtotal:  parseFloat(item.selling_price ?? 0),
+          subtotal:  parseFloat((Math.min(1, available) * parseFloat(item.selling_price ?? 0)).toFixed(2)),
         });
       }
       this.searchQuery = "";
@@ -109,7 +117,7 @@ function adminPos() {
       for (const line of this.cart) {
         const qty = parseFloat(line.quantity) || 0;
         if (qty <= 0) { this.error = `Invalid quantity for ${line.item_name}.`; return; }
-        if (qty > line.stock) { this.error = `Insufficient unexpired stock for ${line.item_name}. Available: ${line.stock} ${line.unit}.`; return; }
+        if (qty > line.stock) { this.error = `Insufficient sellable stock for ${line.item_name}. Available: ${line.stock} ${line.unit}.`; return; }
       }
 
       this.submitting = true;

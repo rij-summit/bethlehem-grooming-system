@@ -125,6 +125,42 @@ class GroomingProductSaleTest extends TestCase
         $this->assertSame(0, Payment::count());
     }
 
+    public function test_stock_is_checked_again_after_a_product_was_available(): void
+    {
+        $item = $this->item('Dog Treats', 'pet_shop', 1, '80.00');
+        $sale = app(GroomingProductSaleService::class);
+        $sale->prepare([['item_id' => $item->item_id, 'quantity' => 1]]);
+        $item->update(['quantity_on_hand' => 0]);
+
+        try {
+            $sale->prepare([['item_id' => $item->item_id, 'quantity' => 1]]);
+            $this->fail('Stock lost after searching must stop payment confirmation.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('products', $exception->errors());
+        }
+
+        $this->assertSame(0, Payment::count());
+        $this->assertSame(0, GroomingPaymentProduct::count());
+        $this->assertSame(0, InventoryTransaction::count());
+    }
+
+    public function test_expired_or_unknown_expiry_stock_cannot_be_added_to_a_payment(): void
+    {
+        $item = $this->item('Pet Shampoo', 'grooming_supply', 3, '250.00');
+        InventoryTransaction::create([
+            'item_id' => $item->item_id, 'type' => 'stock_in', 'quantity' => 2,
+            'reason' => 'purchase', 'reference_type' => 'manual',
+            'expiry_date' => now()->subDay()->toDateString(),
+        ]);
+        InventoryTransaction::create([
+            'item_id' => $item->item_id, 'type' => 'stock_in', 'quantity' => 1,
+            'reason' => 'purchase', 'reference_type' => 'manual',
+        ]);
+
+        $this->expectException(ValidationException::class);
+        app(GroomingProductSaleService::class)->prepare([['item_id' => $item->item_id, 'quantity' => 1]]);
+    }
+
     public function test_nonexpiring_pet_shop_products_can_be_sold_against_physical_stock(): void
     {
         $item = $this->item('Dog Treats', 'pet_shop', 2, '80.00');

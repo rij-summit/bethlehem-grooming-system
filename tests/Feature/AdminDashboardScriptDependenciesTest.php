@@ -12,7 +12,7 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=grooming-notes-20260927',
+            'scripts/components/admin-dashboard.js?v=product-search-stock-20261002b',
         );
 
         $this->assertNotFalse($dashboardPosition);

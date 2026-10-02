@@ -432,6 +432,73 @@ class InventorySecurityRegressionTest extends TestCase
         }
     }
 
+    public function test_grooming_search_keeps_only_eligible_products_including_those_without_sellable_stock(): void
+    {
+        $create = function (string $name, string $category, float $stock, ?float $price = 250, bool $active = true): int {
+            $id = $this->createInventoryItem($name, $stock, $price);
+            DB::table('inventory_items')->where('item_id', $id)->update([
+                'category' => $category, 'is_active' => $active,
+            ]);
+
+            return $id;
+        };
+
+        $empty = $create('Search A Empty Shampoo', 'grooming_supply', 0);
+        $expired = $create('Search B Expired Shampoo', 'grooming_supply', 4);
+        $this->recordInventoryTransaction($expired, 'stock_in', 4, ['expiry_date' => now()->subDay()->toDateString()]);
+        $unknown = $create('Search C Unknown Expiry Food', 'food', 3);
+        $mixed = $create('Search D Mixed Shampoo', 'grooming_supply', 6);
+        $this->recordInventoryTransaction($mixed, 'stock_in', 4, ['expiry_date' => now()->subDay()->toDateString()]);
+        $this->recordInventoryTransaction($mixed, 'stock_in', 2, ['expiry_date' => now()->toDateString()]);
+        $physical = $create('Search E Physical Limit Food', 'food', 1);
+        DB::table('inventory_items')->where('item_id', $physical)->update(['reorder_level' => 15]);
+        $this->recordInventoryTransaction($physical, 'stock_in', 5, ['expiry_date' => now()->addYear()->toDateString()]);
+        $shop = $create('Search F Pet Shop', 'pet_shop', 3);
+        $misc = $create('Search G Miscellaneous', 'miscellaneous', 2);
+        $depleted = $create('Search H Depleted Food', 'food', 2);
+        $this->recordInventoryTransaction($depleted, 'stock_in', 2, ['expiry_date' => now()->addYear()->toDateString()]);
+        $this->recordInventoryTransaction($depleted, 'stock_out', 2, ['reason' => 'sold']);
+        $create('Search Medicine', 'medicine', 4);
+        $create('Search Vaccine', 'vaccine', 4);
+        $inactive = $create('Search Inactive', 'pet_shop', 4, 250, false);
+        $create('Search Unpriced', 'pet_shop', 4, null);
+        $create('Unrelated Product', 'pet_shop', 4);
+
+        foreach (['admin', 'staff'] as $role) {
+            Sanctum::actingAs($this->createUser($role, $role === 'admin' ? '09170000019' : '09170000020'));
+            $data = $this->getJson('/api/inventory/search?q=Search&sale_context=grooming&include_inactive=1')
+                ->assertOk()->assertJsonCount(9, 'data')->json('data');
+
+            $this->assertSame([$mixed, $physical, $shop, $misc, $empty, $expired, $unknown, $depleted, $inactive], array_column($data, 'item_id'));
+            $this->assertEquals([2, 1, 3, 2, 0, 0, 0, 0, 4], array_column($data, 'saleable_quantity'));
+            $this->assertEquals(250, $data[0]['selling_price']);
+            $this->assertTrue($data[1]['low_stock']);
+            $this->assertEquals(1, $data[1]['quantity_on_hand']);
+            $this->assertEquals(4, $data[5]['expired_quantity']);
+            $this->assertFalse($data[8]['is_active']);
+            $activeResults = $this->getJson('/api/inventory/search?q=Search&sale_context=grooming')
+                ->assertOk()->assertJsonCount(8, 'data')->json('data');
+            $this->assertNotContains($inactive, array_column($activeResults, 'item_id'));
+            $this->getJson('/api/inventory/search?q=DoesNotExist&sale_context=grooming')
+                ->assertOk()->assertJsonCount(0, 'data');
+        }
+    }
+
+    public function test_grooming_search_prioritizes_available_products_before_the_result_limit(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000021'));
+        foreach (range(1, 60) as $number) {
+            $id = $this->createInventoryItem(sprintf('Search A Empty %02d', $number), 0, 50);
+            DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        }
+        $available = $this->createInventoryItem('Search Z Available', 3, 50);
+        DB::table('inventory_items')->where('item_id', $available)->update(['category' => 'pet_shop']);
+
+        $this->getJson('/api/inventory/search?q=Search&sale_context=grooming')
+            ->assertOk()->assertJsonCount(10, 'data')
+            ->assertJsonPath('data.0.item_id', $available);
+    }
+
     public function test_product_crud_requires_positive_prices_a_numeric_barcode_and_an_integer_minimum_stock(): void
     {
         Sanctum::actingAs($this->createUser('admin', '09170000017'));
@@ -658,7 +725,7 @@ class InventorySecurityRegressionTest extends TestCase
             $this->assertStringContainsString($script, $inventoryLoader);
         }
         $this->assertStringContainsString('"success-toast.js"', $inventoryLoader);
-        $this->assertStringContainsString('admin-pos.js?v=fefo-expiry-20260816', $posPage);
+        $this->assertStringContainsString('admin-pos.js?v=product-search-stock-20261002', $posPage);
         $this->assertStringContainsString(
             'p.item_id === this.selected.item_id && p.reason === this.reason',
             $stockOutScript,

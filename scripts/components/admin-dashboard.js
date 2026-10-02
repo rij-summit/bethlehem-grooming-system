@@ -3374,7 +3374,7 @@ function adminDashboard() {
       try {
         const response = await InventoryAPI.findByBarcode(barcode);
         if (!this.paymentModal.open || this.paymentModal.productQuery !== barcode) return;
-        if (!this.isEligiblePaymentProduct(response.data)) {
+        if (!this.hasPaymentProductStock(response.data)) {
           this.paymentModal.productSearchError = "This product is unavailable for Grooming add-ons.";
           return;
         }
@@ -3384,9 +3384,24 @@ function adminDashboard() {
       }
     },
 
+    isPaymentProductSearchResult(item) {
+      return item && !["medicine", "vaccine"].includes(item.category)
+        && item.selling_price != null;
+    },
+
     isEligiblePaymentProduct(item) {
-      return item?.is_active && !["medicine", "vaccine"].includes(item.category)
-        && item.selling_price !== null && Number(item.saleable_quantity) >= 1;
+      return item?.is_active && this.isPaymentProductSearchResult(item);
+    },
+
+    hasPaymentProductStock(item) {
+      return this.isEligiblePaymentProduct(item) && Number(item.saleable_quantity) >= 1;
+    },
+
+    paymentProductStockLabel(item) {
+      if (!item.is_active) return "Deactivated";
+      if (Number(item.quantity_on_hand) <= 0) return "Out of stock";
+      if (Number(item.expired_quantity) > 0) return "Expired stock";
+      return "Unavailable stock";
     },
 
     searchPaymentProducts() {
@@ -3399,9 +3414,11 @@ function adminDashboard() {
       }
       this._paymentProductSearchTimer = setTimeout(async () => {
         try {
-          const response = await InventoryAPI.searchItems(query, false, "grooming");
+          const response = await InventoryAPI.searchItems(query, true, "grooming");
           if (this.paymentModal.productQuery.trim() !== query || !this.paymentModal.open) return;
-          this.paymentModal.productResults = (response.data || []).filter((item) => this.isEligiblePaymentProduct(item));
+          this.paymentModal.productResults = (response.data || [])
+            .filter((item) => this.isPaymentProductSearchResult(item))
+            .sort((a, b) => Number(this.hasPaymentProductStock(b)) - Number(this.hasPaymentProductStock(a)));
         } catch (error) {
           this.paymentModal.productResults = [];
           this.paymentModal.productSearchError = error.message || "Product search failed.";
@@ -3410,7 +3427,7 @@ function adminDashboard() {
     },
 
     addPaymentProduct(item) {
-      if (!this.isEligiblePaymentProduct(item)) return;
+      if (!this.hasPaymentProductStock(item)) return;
       const stock = Math.floor(Number(item.saleable_quantity));
       const existing = this.paymentModal.products.find((line) => line.item_id === item.item_id);
       if (existing) {
