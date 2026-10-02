@@ -36,6 +36,55 @@ class GroomingServicePriceResolver
         return ['min' => null, 'max' => null];
     }
 
+    /** Payment-only limits; do not save safety caps as advertised booking ranges. */
+    public function paymentPriceRules(BookingService $line, ?string $petSize): array
+    {
+        $service = $line->service;
+        $catalog = $service ? config("grooming_services.services.{$service->slug}", []) : [];
+        $size = $this->normalizeSize($petSize);
+        $bookedSize = $this->normalizeSize($line->bookingPet?->confirmed_size ?? $line->bookingPet?->registered_size);
+        $sizeChanged = ($catalog['kind'] ?? null) === 'package' && $size !== $bookedSize;
+        $minimum = $line->price_min_at_booking;
+        $maximum = $line->price_max_at_booking;
+        if (($minimum === null || $sizeChanged) && $service) {
+            $bounds = $this->bookingPriceBounds($service, $size);
+            $minimum = $bounds['min'];
+            $maximum = $bounds['max'];
+        }
+
+        $pricingType = $minimum !== null ? ($maximum !== null ? 'range' : 'plus') : 'custom';
+        if ($minimum !== null && $maximum !== null && (float) $minimum === (float) $maximum) {
+            $pricingType = 'fixed';
+        } elseif ($minimum === null && $service) {
+            $minimum = $sizeChanged ? $this->servicePrice($service, $size)
+                : $this->bookingServicePrice($line, $size)['amount'];
+            $maximum = $minimum;
+            $pricingType = 'fixed';
+        }
+
+        $safetyMaximum = null;
+        $reviewThreshold = null;
+        if ($pricingType === 'plus') {
+            if (($catalog['kind'] ?? null) === 'package'
+                && in_array($size, $catalog['starting_sizes'] ?? [], true)) {
+                $safetyMaximum = $this->normalizeMoney((float) $minimum + 500);
+                if ($size === 'large') {
+                    $reviewThreshold = $this->servicePrice($service, 'extra_large');
+                }
+            } elseif (in_array($service?->slug, ['ear_cleaning', 'tooth_brushing'], true)) {
+                $safetyMaximum = $this->normalizeMoney((float) $minimum + 200);
+            }
+        }
+
+        return [
+            'min' => $minimum,
+            'max' => $maximum,
+            'pricing_type' => $pricingType,
+            'safety_max' => $safetyMaximum,
+            'review_threshold' => $reviewThreshold,
+        ];
+    }
+
     /**
      * Resolve a fixed price or variable-price minimum. Positive database
      * catalogue prices take precedence, while the application catalogue

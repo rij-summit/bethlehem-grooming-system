@@ -478,6 +478,23 @@ function shouldLockPaymentPrice(pricing, lockFixedPrices) {
   return pricingType === "fixed";
 }
 
+function getPaymentPriceSafetyRules(pricing, serviceDefinition, petSize) {
+  const rules = { safetyMaxAmount: null, reviewThreshold: null };
+  if (pricing.pricingType !== "plus" || !serviceDefinition) return rules;
+
+  if (serviceDefinition.kind === "package" && ["large", "extra_large"].includes(petSize)) {
+    rules.safetyMaxAmount = pricing.minAmount + 500;
+    if (petSize === "large") {
+      rules.reviewThreshold = serviceDefinition.priceOptions.find(
+        (option) => option.sizeKey === "extra_large",
+      )?.minAmount ?? null;
+    }
+  } else if (["ear_cleaning", "tooth_brushing"].includes(serviceDefinition.id)) {
+    rules.safetyMaxAmount = pricing.minAmount + 200;
+  }
+  return rules;
+}
+
 /*
  * Backend integration contract:
  * - Optional preload config: window.ADMIN_DASHBOARD_CONFIG = { bootstrap, endpoints, handlers, ... }
@@ -3525,6 +3542,8 @@ function adminDashboard() {
           sizeKey,
           sizeLabel: formatPaymentSizeLabel(sizeKey),
           confirmedSize: pet?.confirmedSize ?? pet?.confirmed_size ?? null,
+          verifiedSizeKey: normalizePaymentSize(pet?.confirmedSize ?? pet?.confirmed_size)
+            || (pet?.sizeVerified ? normalizePaymentSize(sizeCandidate) : ""),
           services: Array.isArray(pet?.services) ? pet.services : [],
           groomingState: pet?.groomingState ?? pet?.grooming_state ?? "not_started",
         };
@@ -3618,7 +3637,7 @@ function adminDashboard() {
       const savedMin = parsePaymentNumber(rawService?.priceMinAtBooking ?? rawService?.price_min_at_booking);
       const savedMax = parsePaymentNumber(rawService?.priceMaxAtBooking ?? rawService?.price_max_at_booking);
       if (savedMin > 0) {
-        const pricingType = savedMax > 0 ? "range" : "plus";
+        const pricingType = savedMax > 0 ? (savedMax === savedMin ? "fixed" : "range") : "plus";
         pricing = {
           ...pricing,
           minAmount: savedMin,
@@ -3653,6 +3672,7 @@ function adminDashboard() {
         ),
         minAmount: pricing.minAmount,
         maxAmount: pricing.maxAmount ?? pricing.selectedPriceOption?.maxAmount ?? null,
+        ...getPaymentPriceSafetyRules(pricing, serviceDefinition, pet.sizeKey),
         savedMinAmount: savedMin > 0 ? savedMin : null,
         savedMaxAmount: savedMax > 0 ? savedMax : null,
         originalSizeKey: pet.sizeKey,
@@ -3661,6 +3681,7 @@ function adminDashboard() {
         pricingType,
         lockFixedPrices,
         isFixedPriceLocked,
+        priceTouched: false,
         amount: isFixedPriceLocked ? Number(pricing.minAmount).toFixed(2) : "",
       };
     },
@@ -3681,7 +3702,8 @@ function adminDashboard() {
       let pricing = getPaymentServicePricing(line.serviceDefinition, pet.sizeKey);
       if (line.savedMinAmount !== null &&
           (line.serviceDefinition?.kind !== "package" || line.originalSizeKey === pet.sizeKey)) {
-        const pricingType = line.savedMaxAmount !== null ? "range" : "plus";
+        const pricingType = line.savedMaxAmount !== null
+          ? (line.savedMaxAmount === line.savedMinAmount ? "fixed" : "range") : "plus";
         pricing = {
           ...pricing,
           minAmount: line.savedMinAmount,
@@ -3694,6 +3716,7 @@ function adminDashboard() {
       const pricingType = pricing.pricingType || "custom";
       line.minAmount = pricing.minAmount;
       line.maxAmount = pricing.maxAmount ?? pricing.selectedPriceOption?.maxAmount ?? null;
+      Object.assign(line, getPaymentPriceSafetyRules(pricing, line.serviceDefinition, pet.sizeKey));
       line.priceHint = pricing.displayPrice;
       line.placeholder = pricing.placeholder;
       line.pricingType = pricingType;
@@ -3703,6 +3726,7 @@ function adminDashboard() {
         line.amount = Number(pricing.minAmount).toFixed(2);
       } else if (wasFixedPriceLocked) {
         line.amount = "";
+        line.priceTouched = false;
       }
     },
 
@@ -3743,17 +3767,37 @@ function adminDashboard() {
     },
 
     paymentLineError(line) {
-      if (line.amount === "" || line.amount === null || line.amount === undefined) return "";
-      const amount = Number(line.amount);
-      if (Number.isFinite(amount) && amount >= line.minAmount &&
-          (line.maxAmount === null || amount <= line.maxAmount)) {
-        if (/^\d+(?:\.\d{1,2})?$/.test(String(line.amount))) return "";
+      if (line.amount === "" || line.amount === null || line.amount === undefined) return "Enter a price for this service.";
+      if (!/^\d+(?:\.\d+)?$/.test(String(line.amount))) {
+        return "Enter a valid amount without signs or scientific notation.";
+      }
+      if (!/^\d+(?:\.\d{1,2})?$/.test(String(line.amount))) {
         return "Enter an amount with no more than 2 decimal places.";
+      }
+      const amount = Number(line.amount);
+      if (!Number.isFinite(amount)) return "Enter a valid amount.";
+      if (line.pricingType === "fixed" && amount !== line.minAmount) {
+        return `This service has a fixed price of ${formatPaymentAmount(line.minAmount)}.`;
+      }
+      if (line.safetyMaxAmount !== null && line.safetyMaxAmount !== undefined && amount > line.safetyMaxAmount) {
+        return `Enter ${formatPaymentAmount(line.safetyMaxAmount)} or less for this service.`;
+      }
+      if (amount >= line.minAmount &&
+          (line.maxAmount === null || amount <= line.maxAmount)) {
+        return "";
       }
       if (line.pricingType === "range" && line.maxAmount !== null) {
         return `Enter an amount from ${formatPaymentAmount(line.minAmount)} to ${formatPaymentAmount(line.maxAmount)}.`;
       }
       return `Enter an amount of at least ${formatPaymentAmount(line.minAmount)}.`;
+    },
+
+    paymentLineWarning(line) {
+      if (this.paymentLineError(line) || line.reviewThreshold === null || line.reviewThreshold === undefined) return "";
+      const amount = Number(line.amount);
+      if (amount < line.reviewThreshold) return "";
+      const comparison = amount === line.reviewThreshold ? "at" : "above";
+      return `This amount is ${comparison} the Extra Large starting price of ${formatPaymentAmount(line.reviewThreshold)}. Confirm the pet's size and final charge.`;
     },
 
     enforcePaymentAmountLimit(event = null) {

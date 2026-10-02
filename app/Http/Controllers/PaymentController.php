@@ -31,7 +31,7 @@ class PaymentController extends Controller
             'notes' => 'nullable|string|max:500',
             'service_prices' => 'nullable|array',
             'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',
-            'service_prices.*.amount' => 'required_with:service_prices|numeric|decimal:0,2|min:0.01',
+            'service_prices.*.amount' => ['required_with:service_prices', 'numeric', 'decimal:0,2', 'min:0.01', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
             'pet_sizes' => 'nullable|array',
             'pet_sizes.*.booking_pet_id' => 'required_with:pet_sizes|integer',
             'pet_sizes.*.size' => 'required_with:pet_sizes|in:small,medium,large,extra_large',
@@ -72,7 +72,7 @@ class PaymentController extends Controller
         array $servicePrices,
         array $editableBookingPetIds,
         array $petSizes = [],
-    ): void {
+    ): array {
         $submittedSizes = collect($petSizes)->mapWithKeys(fn ($petSize) => [
             (int) $petSize['booking_pet_id'] => $petSize['size'],
         ]);
@@ -112,31 +112,44 @@ class PaymentController extends Controller
             ]);
         }
 
+        $warnings = [];
         foreach ($submittedPrices as $bookingServiceId => $amount) {
             $line = $editableServices->get($bookingServiceId);
-            $minimum = $line->price_min_at_booking;
-            $maximum = $line->price_max_at_booking;
             $bookedSize = $line->bookingPet?->confirmed_size ?? $line->bookingPet?->registered_size;
             $selectedSize = $submittedSizes->get($line->booking_pet_id, $bookedSize);
-            $sizeChanged = $line->service
-                && config('grooming_services.services.'.$line->service->slug.'.kind') === 'package'
-                && $selectedSize !== $bookedSize;
-            if (($minimum === null || $sizeChanged) && $line->service) {
-                $bounds = app(GroomingServicePriceResolver::class)->bookingPriceBounds(
-                    $line->service,
-                    $selectedSize,
-                );
-                $minimum = $bounds['min'];
-                $maximum = $bounds['max'];
-            }
+            $rules = app(GroomingServicePriceResolver::class)->paymentPriceRules($line, $selectedSize);
+            $minimum = $rules['min'];
+            $maximum = $rules['max'];
 
             $cents = $this->paymentReadiness()->moneyToCents($amount);
+            if ($rules['safety_max'] !== null
+                && $cents > $this->paymentReadiness()->moneyToCents($rules['safety_max'])) {
+                throw ValidationException::withMessages([
+                    'service_prices' => 'Enter ₱'.$this->formatRuleAmount($rules['safety_max']).' or less for this service.',
+                ]);
+            }
             if (($minimum !== null && $cents < $this->paymentReadiness()->moneyToCents($minimum))
                 || ($maximum !== null && $cents > $this->paymentReadiness()->moneyToCents($maximum))) {
-                $message = $maximum !== null
-                    ? 'Enter an amount from ₱'.$this->formatRuleAmount($minimum).' to ₱'.$this->formatRuleAmount($maximum).'.'
-                    : 'Enter an amount of at least ₱'.$this->formatRuleAmount($minimum).'.';
+                if ($rules['pricing_type'] === 'fixed') {
+                    $message = 'This service has a fixed price of ₱'.$this->formatRuleAmount($minimum).'.';
+                } elseif ($maximum !== null) {
+                    $message = 'Enter an amount from ₱'.$this->formatRuleAmount($minimum).' to ₱'.$this->formatRuleAmount($maximum).'.';
+                } else {
+                    $message = 'Enter an amount of at least ₱'.$this->formatRuleAmount($minimum).'.';
+                }
                 throw ValidationException::withMessages(['service_prices' => $message]);
+            }
+
+            if ($rules['review_threshold'] !== null) {
+                $thresholdCents = $this->paymentReadiness()->moneyToCents($rules['review_threshold']);
+                if ($cents >= $thresholdCents) {
+                    $comparison = $cents === $thresholdCents ? 'at' : 'above';
+                    $warnings[] = [
+                        'booking_service_id' => $bookingServiceId,
+                        'message' => 'This amount is '.$comparison.' the Extra Large starting price of ₱'
+                            .$this->formatRuleAmount($rules['review_threshold']).". Confirm the pet's size and final charge.",
+                    ];
+                }
             }
 
             BookingService::query()
@@ -144,6 +157,8 @@ class PaymentController extends Controller
                 ->where('booking_service_id', $bookingServiceId)
                 ->update(['price_at_booking' => $amount]);
         }
+
+        return $warnings;
     }
 
     private function formatRuleAmount(string|int|float $amount): string
@@ -215,7 +230,7 @@ class PaymentController extends Controller
                     ->where('payment_kind', 'finished')
                     ->pluck('booking_pet_id')
                     ->all();
-                $this->updateBookingServicePrices(
+                $servicePriceWarnings = $this->updateBookingServicePrices(
                     $booking,
                     $data['service_prices'] ?? [],
                     $finishedBookingPetIds,
@@ -260,7 +275,7 @@ class PaymentController extends Controller
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
 
-                return compact('booking', 'payment', 'summary', 'productLines');
+                return compact('booking', 'payment', 'summary', 'productLines', 'servicePriceWarnings');
             });
         } catch (UniqueConstraintViolationException) {
             return response()->json([
@@ -287,6 +302,7 @@ class PaymentController extends Controller
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
             'payment_summary' => $result['summary'],
             'product_addons' => $this->formatProductLines($result['productLines']),
+            'service_price_warnings' => $result['servicePriceWarnings'],
         ]);
     }
 
@@ -316,7 +332,7 @@ class PaymentController extends Controller
                     ->with('pet:pet_id,pet_name')
                     ->lockForUpdate()
                     ->get();
-                $this->updateBookingServicePrices(
+                $servicePriceWarnings = $this->updateBookingServicePrices(
                     $booking,
                     $data['service_prices'] ?? [],
                     $bookingPets->pluck('booking_pet_id')->all(),
@@ -375,7 +391,7 @@ class PaymentController extends Controller
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
 
-                return compact('booking', 'payment', 'allPetsFinished', 'remainingPets', 'productLines');
+                return compact('booking', 'payment', 'allPetsFinished', 'remainingPets', 'productLines', 'servicePriceWarnings');
             });
         } catch (UniqueConstraintViolationException) {
             return response()->json([
@@ -404,6 +420,7 @@ class PaymentController extends Controller
             'remaining_pets' => $result['remainingPets'],
             'booking_status' => $result['booking']->status,
             'product_addons' => $this->formatProductLines($result['productLines']),
+            'service_price_warnings' => $result['servicePriceWarnings'],
         ]);
     }
 
