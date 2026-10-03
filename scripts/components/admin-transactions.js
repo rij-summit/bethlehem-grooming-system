@@ -20,7 +20,22 @@ function adminTransactions() {
     previousBodyOverflow: "",
 
     async init() {
+      const params = new URLSearchParams(window.location.search);
+      const paymentId = params.get("payment");
+      const reference = params.get("reference");
+      if (paymentId || reference) this.searchQuery = reference || "";
       await this.loadTransactions();
+      if (paymentId || reference) {
+        const tx = this.transactions.find((record) => paymentId
+          ? String(record.id) === paymentId
+          : record.reference === reference);
+        if (tx) {
+          this.openDetails(tx, null);
+          this.$nextTick(() => { this.detailsTrigger = document.querySelector(`[data-transaction-id="${tx.id}"]`); });
+        } else if (!this.errorMessage) {
+          this.errorMessage = "The linked transaction could not be found.";
+        }
+      }
       this.refreshIcons();
     },
 
@@ -180,8 +195,9 @@ function adminTransactions() {
       this.previousBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       this.$nextTick(() => {
+        if (!this.selectedTransaction) return;
         this.$refs.detailsDialog.showModal();
-        this.$refs.detailsBody.scrollTop = 0;
+        this.$refs.detailsDialog.querySelector('.transaction-dialog-body').scrollTop = 0;
       });
     },
 

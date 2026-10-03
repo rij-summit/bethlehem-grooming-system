@@ -5,6 +5,16 @@
   display: none !important;
 }
 
+/* Transactions defines the shared record typography for admin history. */
+.transactions-page,
+.history-page {
+  --admin-record-text-size: 14px;
+  --admin-record-secondary-size: 12px;
+  --admin-record-amount-size: 17px;
+  --admin-record-button-size: 13px;
+  --admin-record-emphasis-weight: 700;
+}
+
 /* ----- Admin Activity Status Indicators ----- */
 .admin-activity-dot-pickup {
   background-color: #0e7490;

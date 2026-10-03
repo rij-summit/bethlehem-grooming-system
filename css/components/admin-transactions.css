@@ -16,19 +16,19 @@
 .transaction-dialog .ph-icon { width: 1.125rem; height: 1.125rem; }
 .transaction-list { border: 1px solid var(--tx-border); border-radius: 14px; background: var(--tx-surface); overflow: hidden; }
 .transaction-columns { display: none; }
-.transaction-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 16px 20px; font-size: 14px; }
+.transaction-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 16px 20px; font-size: var(--admin-record-text-size); }
 .transaction-row + .transaction-row { border-top: 1px solid var(--tx-border); }
 .transaction-row:hover { background: var(--tx-soft); }
 .transaction-row p { margin: 0; min-width: 0; }
-.transaction-time { grid-column: 1 / -1; color: var(--tx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.transaction-time { grid-column: 1 / -1; color: var(--tx-muted); font-size: var(--admin-record-secondary-size); font-variant-numeric: tabular-nums; }
 .transaction-owner { min-width: 0; }
-.transaction-owner-name { color: var(--tx-ink); font-weight: 700; overflow-wrap: anywhere; }
-.transaction-reference { margin-top: 3px !important; font-size: 12px; color: var(--tx-muted); overflow-wrap: anywhere; }
+.transaction-owner-name { color: var(--tx-ink); font-weight: var(--admin-record-emphasis-weight); overflow-wrap: anywhere; }
+.transaction-reference { margin-top: 3px !important; font-size: var(--admin-record-secondary-size); color: var(--tx-muted); overflow-wrap: anywhere; }
 .transaction-pets { grid-column: 1 / -1; color: var(--tx-muted); overflow-wrap: anywhere; }
 .transaction-method { display: inline-flex; width: fit-content; align-items: center; border: 1px solid var(--tx-border); border-radius: 6px; padding: 3px 8px; background: var(--tx-soft); color: var(--tx-ink); font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
-.transaction-total { grid-column: 2; grid-row: 2; text-align: right; color: var(--tx-ink); font-size: 17px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.transaction-total { grid-column: 2; grid-row: 2; text-align: right; color: var(--tx-ink); font-size: var(--admin-record-amount-size); font-weight: var(--admin-record-emphasis-weight); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .transaction-view { grid-column: 2; }
-.transaction-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 40px; border: 1px solid var(--tx-border); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.transaction-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 40px; border: 1px solid var(--tx-border); border-radius: 9px; padding: 8px 14px; font-size: var(--admin-record-button-size); font-weight: var(--admin-record-emphasis-weight); white-space: nowrap; cursor: pointer; }
 .transaction-button-secondary { background: var(--tx-surface); color: var(--tx-blue); }
 .transaction-button-secondary:hover { background: var(--tx-soft); border-color: var(--tx-blue); }
 .transaction-button-primary { background: var(--tx-blue); color: var(--tx-surface); border-color: var(--tx-blue); }
@@ -36,7 +36,7 @@
 .transactions-page :is(button, input, select, [tabindex]):focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 3px; }
 .transaction-button:active { transform: translateY(1px); }
 .transaction-date-heading { flex-wrap: wrap; }
-.transaction-date-heading > span:first-child { font-size: 12px; }
+.transaction-date-heading > span:first-child { font-size: var(--admin-record-secondary-size); }
 .transaction-dialog { width: calc(100% - 32px); max-width: 768px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--tx-border); border-radius: 18px; background: var(--tx-surface); color: var(--tx-ink); box-shadow: var(--tx-shadow); overflow: hidden; }
 .transaction-dialog::backdrop { background: var(--tx-overlay); }
 .transaction-dialog-layout { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }

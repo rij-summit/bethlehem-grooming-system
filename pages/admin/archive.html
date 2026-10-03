@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>History | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css?v=grooming-record-20260926" />
-    <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../css/custom.css?v=history-typography-20261003&release=20261001" />
     <style>
       /* Grooming history follows the existing Bethlehem palette and typography. */
       .grooming-history {
@@ -19,61 +19,86 @@
         --history-hover: #eef5fb;
       }
 
-      .grooming-history .history-banner { border-radius: 18px; padding: 1rem; }
-      .grooming-history .history-controls { gap: 1rem; }
-      .grooming-history .history-controls h2 { font-size: 1.75rem; line-height: 1.2; }
-      .grooming-history .history-controls h2 + p { display: none; }
-      .grooming-history .history-filters { gap: 0.5rem; }
-      .grooming-history .history-filters input { padding-block: 0.625rem; }
-      .grooming-history .history-filters label { min-width: 0; }
-      .grooming-history .history-filters select { min-width: 0; max-width: 100%; }
-      .grooming-history .history-stats { margin-top: 0.75rem; gap: 0.5rem; }
-      .grooming-history .history-stats > div:not([role]) { background: transparent; padding: 0; margin-right: 0.75rem; }
+      .history-page { min-width: 0; }
+      .history-controls > div:first-child { min-width: 0; }
+      .history-switch { margin-left: auto; flex-shrink: 0; }
+      .history-switch button { min-height: 36px; white-space: nowrap; }
+      .history-filters > div { min-width: 0; max-width: 100%; }
+      .history-filters select { min-width: 0; max-width: 100%; }
+      .history-toolbar :is(button, input, select):focus-visible { outline: 2px solid #315b7e; outline-offset: 3px; }
+      @media (max-width: 1279px) {
+        .history-filters label { flex-basis: 100%; }
+      }
+      @media (max-width: 639px) {
+        .history-controls > div:first-child { flex-basis: 100%; }
+      }
       .grooming-history .history-groups { margin-top: 1rem; }
       .grooming-history .history-groups > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem; }
       .grooming-history .history-date { margin-bottom: 0.625rem; }
       .grooming-history .history-date > div { display: none; }
-      .grooming-history .history-date > span { border: 0; background: transparent; padding: 0; }
+      .grooming-history .history-date > span { border: 0; background: transparent; padding: 0; font-size: var(--admin-record-secondary-size); font-weight: var(--admin-record-emphasis-weight); }
       .grooming-history .history-records { overflow: hidden; border: 1px solid var(--history-border); border-radius: 14px; background: var(--history-paper); }
       .grooming-history .history-records > :not([hidden]) ~ :not([hidden]) { margin-top: 0; }
       .grooming-history .history-records > div + div { border-top: 1px solid var(--history-border); }
-      .grooming-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 0.875rem 1rem; padding: 1rem; font-size: 0.875rem; line-height: 1.4; color: var(--history-ink); }
+      .grooming-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 0.875rem 1rem; padding: 1rem; font-size: var(--admin-record-text-size); line-height: 1.4; color: var(--history-ink); }
       .grooming-row > * { min-width: 0; overflow-wrap: anywhere; }
       .grooming-row:hover { background: var(--history-soft); }
       .grooming-owner, .grooming-pets, .grooming-services { grid-column: 1 / -1; }
-      .grooming-owner h4 { font-size: 1rem; font-weight: 600; }
-      .grooming-reference { margin-top: 0.25rem; font-size: 0.75rem; color: var(--history-muted); }
+      .grooming-owner h4 { font-size: var(--admin-record-text-size); font-weight: var(--admin-record-emphasis-weight); }
+      .grooming-reference { margin-top: 0.25rem; font-size: var(--admin-record-secondary-size); color: var(--history-muted); }
       .history-label { color: var(--history-muted); font-size: 0.75rem; font-weight: 400; line-height: 1.5; }
-      .history-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
-      .history-details-button { grid-column: 1 / -1; justify-self: start; border: 1px solid var(--history-border); border-radius: 8px; background: var(--history-paper); padding: 0.625rem 0.875rem; color: var(--history-accent); font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
+      .grooming-row .history-label { font-size: var(--admin-record-secondary-size); }
+      .history-amount { font-size: var(--admin-record-amount-size); font-weight: var(--admin-record-emphasis-weight); font-variant-numeric: tabular-nums; }
+      .history-details-button { grid-column: 1 / -1; justify-self: start; border: 1px solid var(--history-border); border-radius: 9px; background: var(--history-paper); min-height: 40px; padding: 8px 14px; color: var(--history-accent); font-size: var(--admin-record-button-size); font-weight: var(--admin-record-emphasis-weight); white-space: nowrap; }
       .history-details-button:hover { border-color: var(--history-accent); background: var(--history-hover); }
       .history-details-button:active { background: var(--history-soft); }
       .history-details-button:focus-visible, .grooming-record-dialog button:focus-visible { outline: 2px solid var(--history-accent); outline-offset: 3px; }
       .grooming-record-dialog button:focus-visible { outline-color: var(--history-paper); }
       .grooming-record-dialog { color: var(--history-ink); overflow-wrap: anywhere; }
       .history-record-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
-      .history-pet-record { border: 1px solid var(--history-border); border-radius: 14px; overflow: hidden; }
-      .history-pet-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; background: var(--history-soft); border-bottom: 1px solid var(--history-border); }
+      .history-record-body { display: flex; flex-direction: column; gap: 1.25rem; }
+      .history-record-section + .history-record-section { border-top: 1px solid var(--history-border); padding-top: 1.25rem; }
+      .history-record-section h5 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
+      .history-record-fields, .history-pet-profile, .history-notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
+      .history-record-body dt, .history-note-label { color: var(--history-muted); font-size: 0.75rem; }
+      .history-record-body dd { font-size: 0.875rem; font-weight: 500; margin-top: 0.125rem; }
+      .history-pet-record { padding: 1rem 0; }
+      .history-pet-record + .history-pet-record { border-top: 1px solid var(--history-border); }
+      .history-pet-record:last-child { padding-bottom: 0; }
+      .history-pet-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
       .history-pet-heading h6 { font-size: 1rem; font-weight: 600; }
-      .history-pet-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
-      .history-pet-profile, .history-pet-timeline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
-      .history-pet-body dt { color: var(--history-muted); font-size: 0.75rem; }
-      .history-pet-body dd { font-size: 0.875rem; font-weight: 500; margin-top: 0.125rem; }
-      .history-pet-services { margin-top: 1rem; }
-      .history-service-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; font-size: 0.875rem; border-bottom: 1px solid var(--history-border); }
-      .history-service-line > span { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .history-service-line:last-child { border-bottom: 0; }
+      .history-pet-body { display: flex; flex-direction: column; gap: 0.75rem; }
+      .history-pet-timing { border-top: 1px solid var(--history-border); padding-top: 0.75rem; }
+      .history-pet-subheading { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; }
+      .history-pet-timeline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem 1rem; }
+      .history-service-line, .history-product-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.375rem 0; font-size: 0.875rem; }
+      .history-service-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.125rem 0.625rem; }
+      .history-service-line > span, .history-product-line > span { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .history-pet-note, .history-medical, .history-notes p { font-size: 0.875rem; white-space: pre-wrap; }
+      .history-payment-totals > div { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.5rem; }
+      .history-payment-totals dt { font-size: 0.875rem; color: var(--history-ink); }
+      .history-payment-totals dd { font-variant-numeric: tabular-nums; }
+      .history-payment-totals .history-paid-total { border-top: 1px solid var(--history-border); padding-top: 0.75rem; margin-top: 0.75rem; margin-bottom: 1rem; }
+      .history-paid-total dt, .history-paid-total dd { font-size: 1.125rem; font-weight: 700; }
+      .history-transaction-link { display: inline-block; margin-top: 1rem; font-size: 0.875rem; font-weight: 600; color: var(--history-accent); border-radius: 3px; }
+      .history-transaction-link:hover { text-decoration: underline; }
+      .history-transaction-link:focus-visible, .history-record-body:focus-visible { outline: 2px solid var(--history-accent); outline-offset: 3px; }
+      .history-notes { grid-template-columns: minmax(0, 1fr); }
+      .history-notes p { margin-top: 0.25rem; }
 
       @media (min-width: 640px) {
+        .history-pet-timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .grooming-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .grooming-owner { grid-column: 1; }
         .grooming-pets { grid-column: 2; }
         .grooming-services { grid-column: 3; }
         .history-details-button { grid-column: auto; }
-        .grooming-history .history-filters label { min-width: 280px; }
       }
       @media (min-width: 768px) {
-        .history-pet-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
+        .history-record-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .history-pet-profile { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .history-payment-context { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .history-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       @media (min-width: 1280px) {
         .grooming-row { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 0.7fr) auto; }
@@ -310,110 +335,28 @@
         <main
           x-data="adminArchive()"
           :class="archiveType === 'grooming' && 'grooming-history'"
-          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
+          class="history-page flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
 
           <!-- History header -->
           <section class="history-toolbar lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-4 lg:backdrop-blur">
             <div class="history-banner rounded-[24px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-4 lg:px-6 lg:py-4">
-              <div class="history-controls flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div class="history-controls flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h2 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">History</h2>
-                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">
-                    BETHLEHEM ANIMAL CLINIC &amp; GROOMING
-                  </p>
-                </div>
-
-                <!-- Filters -->
-                <div class="history-filters flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-
-                  <!-- Search -->
-                  <label class="relative block min-w-0 flex-1 sm:min-w-[280px]">
-                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      <i data-lucide="search" class="h-5 w-5"></i>
-                    </span>
-                    <input
-                      type="text"
-                      x-model="searchQuery"
-                      @input.debounce.400ms="onSearchChange()"
-                      aria-label="Search history"
-                      placeholder="Search owner, pet, or reference..."
-                      class="w-full rounded-xl border border-transparent bg-white px-11 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
-                    />
-                  </label>
-
-                  <!-- Year filter -->
-                  <div x-show="availableYears.length > 0" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
-                    <i data-lucide="calendar-range" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
-                    <select
-                      aria-label="Year"
-                      x-model="selectedYear"
-                      @change="onYearChange()"
-                      class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
-                    >
-                      <option value="">All years</option>
-                      <template x-for="y in availableYears" :key="y">
-                        <option :value="y" x-text="y"></option>
-                      </template>
-                    </select>
+                  <h2 class="text-2xl font-extrabold text-[#1f3850] lg:text-3xl">History</h2>
+                  <div class="history-stats mt-2 flex flex-wrap items-center gap-4 text-sm font-semibold text-[#1f3850]">
+                    <div class="flex items-center gap-2">
+                      <i data-lucide="archive" class="h-4 w-4 text-[#315b7e]"></i>
+                      <span x-text="filteredCount + ' record' + (filteredCount !== 1 ? 's' : '')"></span>
+                    </div>
+                    <div x-show="selectedYear" class="flex items-center gap-2">
+                      <i data-lucide="calendar-check" class="h-4 w-4 text-[#315b7e]"></i>
+                      <span x-text="selectedMonth ? (availableMonths.find(m => m.value === selectedMonth)?.label ?? selectedMonth) + ' ' + selectedYear : selectedYear"></span>
+                    </div>
                   </div>
-
-                  <!-- Month filter (only shown when a year is selected and has multiple months) -->
-                  <div x-show="selectedYear && availableMonths.length > 1" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
-                    <i data-lucide="calendar" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
-                    <select
-                      aria-label="Month"
-                      x-model="selectedMonth"
-                      class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
-                    >
-                      <option value="">All months</option>
-                      <template x-for="m in availableMonths" :key="m.value">
-                        <option :value="m.value" x-text="m.label"></option>
-                      </template>
-                    </select>
-                  </div>
-
-                  <!-- Sort -->
-                  <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2">
-                    <i data-lucide="arrow-up-down" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
-                    <select
-                      aria-label="Sort records"
-                      x-model="sortOrder"
-                      class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
-                    >
-                      <option value="newest">Newest first</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="az">Name A → Z</option>
-                      <option value="za">Name Z → A</option>
-                    </select>
-                  </div>
-
-                  <!-- Clear filters -->
-                  <button
-                    type="button"
-                    x-show="hasActiveFilters"
-                    @click="clearFilters()"
-                    class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-slate-50"
-                  >
-                    <i data-lucide="x" class="h-4 w-4"></i>
-                    <span>Clear</span>
-                  </button>
-
-                </div>
-              </div>
-
-              <!-- Stats row -->
-              <div class="history-stats mt-4 flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
-                  <i data-lucide="archive" class="h-4 w-4 text-[#315b7e]"></i>
-                  <span x-text="filteredCount + ' record' + (filteredCount !== 1 ? 's' : '')"></span>
-                </div>
-                <div x-show="selectedYear" class="flex items-center gap-2 rounded-xl bg-white/60 px-4 py-2 text-sm font-semibold text-[#1f3850]">
-                  <i data-lucide="calendar-check" class="h-4 w-4 text-[#315b7e]"></i>
-                  <span x-text="selectedMonth ? (availableMonths.find(m => m.value === selectedMonth)?.label ?? selectedMonth) + ' ' + selectedYear : selectedYear"></span>
                 </div>
 
-                <div class="ml-auto inline-flex rounded-xl border border-white/70 bg-white/55 p-1 shadow-sm" role="group" aria-label="History type">
+                <div class="history-switch inline-flex rounded-xl border border-white/70 bg-white/55 p-1 shadow-sm" role="group" aria-label="History type">
                   <button
                     type="button"
                     @click="selectArchiveType('grooming')"
@@ -433,6 +376,83 @@
                     Clinic
                   </button>
                 </div>
+              </div>
+
+              <!-- Filters -->
+              <div class="history-filters mt-4 flex flex-wrap items-center gap-3">
+
+                <!-- Search -->
+                <label class="relative block min-w-0 flex-1 sm:min-w-[280px]">
+                  <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    <i data-lucide="search" class="h-4 w-4"></i>
+                  </span>
+                  <input
+                    type="text"
+                    x-model="searchQuery"
+                    @input.debounce.400ms="onSearchChange()"
+                    aria-label="Search history"
+                    placeholder="Search owner, pet, or reference..."
+                    class="w-full rounded-xl border border-transparent bg-white px-10 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
+                  />
+                </label>
+
+                <!-- Year filter -->
+                <div x-show="availableYears.length > 0" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2.5">
+                  <i data-lucide="calendar-range" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                  <select
+                    aria-label="Year"
+                    x-model="selectedYear"
+                    @change="onYearChange()"
+                    class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
+                  >
+                    <option value="">All years</option>
+                    <template x-for="y in availableYears" :key="y">
+                      <option :value="y" x-text="y"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <!-- Month filter (only shown when a year is selected and has multiple months) -->
+                <div x-show="selectedYear && availableMonths.length > 1" class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2.5">
+                  <i data-lucide="calendar" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                  <select
+                    aria-label="Month"
+                    x-model="selectedMonth"
+                    class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
+                  >
+                    <option value="">All months</option>
+                    <template x-for="m in availableMonths" :key="m.value">
+                      <option :value="m.value" x-text="m.label"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <!-- Sort -->
+                <div class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-3 py-2.5">
+                  <i data-lucide="arrow-up-down" class="h-4 w-4 shrink-0 text-[#315b7e]"></i>
+                  <select
+                    aria-label="Sort records"
+                    x-model="sortOrder"
+                    class="bg-transparent text-sm font-semibold text-[#1f3850] outline-none cursor-pointer"
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="az">Name A → Z</option>
+                    <option value="za">Name Z → A</option>
+                  </select>
+                </div>
+
+                <!-- Clear filters -->
+                <button
+                  type="button"
+                  x-show="hasActiveFilters"
+                  @click="clearFilters()"
+                  class="flex items-center gap-2 rounded-xl border border-[#c9d9e8] bg-white px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-slate-50"
+                >
+                  <i data-lucide="x" class="h-4 w-4"></i>
+                  <span>Clear</span>
+                </button>
+
               </div>
             </div>
           </section>
@@ -496,7 +516,7 @@
                       <div class="grooming-services"><p class="history-label">Services</p><p x-text="serviceSummary(booking)"></p></div>
                       <div><p class="history-label">Session time</p><p x-text="sessionTime(booking)"></p></div>
                       <div class="grooming-payment"><p class="history-label">Amount paid</p><p class="history-amount" x-text="paymentAmount(booking)"></p><p class="history-label" x-text="paymentMethod(booking)"></p></div>
-                      <button type="button" @click="viewDetails(booking, $event.currentTarget)" :aria-label="'View Details for ' + booking.bookingReference" class="history-details-button">View Details</button>
+                      <button type="button" @click="viewDetails(booking, $event.currentTarget)" :data-history-booking="booking.id" :aria-label="'View Details for ' + booking.bookingReference" class="history-details-button">View Details</button>
                     </article>
                     </template>
 
@@ -582,7 +602,7 @@
             @click.self="closeDetails()"
             @keydown.escape.window="closeDetails()"
           >
-            <div role="dialog" aria-modal="true" aria-labelledby="grooming-record-title" @keydown.tab="trapDetailsFocus($event)" class="grooming-record-dialog flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div x-ref="groomingRecordDialog" role="dialog" aria-modal="true" aria-labelledby="grooming-record-title" @keydown.tab="trapDetailsFocus($event)" class="grooming-record-dialog flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
 
               <!-- Header -->
               <div class="flex shrink-0 items-start justify-between gap-4 bg-[#315b7e] px-5 py-4 sm:px-7">
@@ -605,99 +625,89 @@
               </div>
 
               <!-- Body -->
-              <div x-ref="groomingRecordBody" tabindex="0" role="region" aria-label="Grooming record details" class="min-h-0 space-y-5 overflow-y-auto bg-white px-5 py-5 sm:px-7" x-show="detailsBooking">
-                <div class="grid gap-4 lg:grid-cols-2">
-                  <section class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <h5 class="font-bold text-[#1f3850]">Session Information</h5>
-                    <dl class="mt-3 grid gap-4 sm:grid-cols-2">
-                      <div><dt class="text-xs font-semibold text-slate-500" x-text="(detailsBooking?.bookingType ?? 'Pre-Register') + ' Date'"></dt><dd class="mt-1 text-sm font-semibold text-slate-800" x-text="formatAppointmentDate(detailsBooking?.appointmentDate)"></dd></div>
-                      <div><dt class="text-xs font-semibold text-slate-500">Queue Number</dt><dd class="mt-1 text-sm font-semibold text-slate-800" x-text="detailsBooking?.queueNumber || 'Not recorded'"></dd></div>
-                      <div x-show="detailsBooking?.bookingType !== 'Walk-In'"><dt class="text-xs font-semibold text-slate-500">Arrival Window</dt><dd class="mt-1 text-sm font-semibold text-slate-800" x-text="displayArchiveValue(detailsBooking?.appointmentTime)"></dd></div>
-                    </dl>
-                  </section>
-                  <section class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <h5 class="font-bold text-[#1f3850]">Grooming Timeline</h5>
-                    <ol class="relative mt-3 grid gap-3 sm:grid-cols-3 sm:gap-2">
-                      <li class="relative border-l-2 border-[#b7ccdd] pl-4 sm:border-l-0 sm:pl-0 sm:pt-4"><span class="absolute -left-[5px] top-0.5 h-2.5 w-2.5 rounded-full bg-[#315b7e] sm:left-0 sm:top-0"></span><span class="absolute hidden sm:block sm:left-2 sm:right-0 sm:top-1 sm:h-0.5 sm:bg-[#b7ccdd]"></span><p class="text-xs font-semibold text-slate-500">Dropped Off</p><p class="mt-1 text-sm font-semibold text-slate-800" x-text="detailsBooking?.dropOffAtIso ? formatDateTime(detailsBooking.dropOffAtIso) : displayArchiveValue(detailsBooking?.dropOffTime, 'Not recorded')"></p></li>
-                      <li class="relative border-l-2 border-[#b7ccdd] pl-4 sm:border-l-0 sm:pl-0 sm:pt-4"><span class="absolute -left-[5px] top-0.5 h-2.5 w-2.5 rounded-full bg-[#315b7e] sm:left-0 sm:top-0"></span><span class="absolute hidden sm:block sm:left-2 sm:right-0 sm:top-1 sm:h-0.5 sm:bg-[#b7ccdd]"></span><p class="text-xs font-semibold text-slate-500">Grooming Started</p><p class="mt-1 text-sm font-semibold text-slate-800" x-text="detailsBooking?.startedAtIso ? formatDateTime(detailsBooking.startedAtIso) : displayArchiveValue(detailsBooking?.startedAt, 'Not recorded')"></p></li>
-                      <li class="relative border-l-2 border-[#b7ccdd] pl-4 sm:border-l-0 sm:pl-0 sm:pt-4"><span class="absolute -left-[5px] top-0.5 h-2.5 w-2.5 rounded-full bg-[#315b7e] sm:left-0 sm:top-0"></span><p class="text-xs font-semibold text-slate-500">Finished</p><p class="mt-1 text-sm font-semibold text-slate-800" x-text="detailsBooking?.completedAtIso ? formatDateTime(detailsBooking.completedAtIso) : displayArchiveValue(detailsBooking?.completedAt, 'Not recorded')"></p></li>
-                    </ol>
-                  </section>
-                </div>
+              <div x-ref="groomingRecordBody" tabindex="0" role="region" aria-label="Grooming record details" class="history-record-body min-h-0 overflow-y-auto bg-white px-5 py-5 sm:px-7" x-show="detailsBooking">
+                <section class="history-record-section" aria-labelledby="history-session-title">
+                  <h5 id="history-session-title">Session Details</h5>
+                  <dl class="history-record-fields">
+                    <div><dt x-text="(detailsBooking?.bookingType ?? 'Pre-Register') + ' Date'"></dt><dd x-text="formatAppointmentDate(detailsBooking?.appointmentDate)"></dd></div>
+                    <div x-show="detailsBooking?.bookingType !== 'Walk-In'"><dt>Arrival Window</dt><dd x-text="displayArchiveValue(detailsBooking?.appointmentTime, 'Not recorded')"></dd></div>
+                    <div><dt>Queue Number</dt><dd x-text="detailsBooking?.queueNumber || 'Not recorded'"></dd></div>
+                    <div><dt>Dropped Off</dt><dd x-text="detailsBooking?.dropOffAtIso ? formatDateTime(detailsBooking.dropOffAtIso) : displayArchiveValue(detailsBooking?.dropOffTime, 'Not recorded')"></dd></div>
+                    <div x-show="showSessionTime('start')"><dt>Session Grooming Started</dt><dd x-text="detailsBooking?.startedAtIso ? formatDateTime(detailsBooking.startedAtIso) : displayArchiveValue(detailsBooking?.startedAt, 'Not recorded')"></dd></div>
+                    <div x-show="showSessionTime('finish')"><dt>Session Finished</dt><dd x-text="detailsBooking?.completedAtIso ? formatDateTime(detailsBooking.completedAtIso) : displayArchiveValue(detailsBooking?.completedAt, 'Not recorded')"></dd></div>
+                  </dl>
+                </section>
 
-                <section>
-                  <h5 class="mb-3 font-bold text-[#1f3850]">Pets &amp; Services <span class="text-sm font-medium text-slate-500" x-text="'(' + (detailsBooking?.pets?.length ?? 0) + ')'"></span></h5>
-                  <div class="space-y-4">
+                <section class="history-record-section" aria-labelledby="history-pets-title">
+                  <h5 id="history-pets-title">Pets &amp; Services <span class="history-label" x-text="'(' + (detailsBooking?.pets?.length ?? 0) + ')'"></span></h5>
+                  <p class="history-label">Service prices are the recorded prices for this grooming session.</p>
+                  <div>
                     <template x-for="pet in (detailsBooking?.pets ?? [])" :key="pet.bookingPetId">
                       <article class="history-pet-record">
                         <div class="history-pet-heading"><h6 x-text="pet.petName"></h6><span class="history-label" x-text="displayArchiveValue(pet.groomingStateLabel, 'Status not recorded')"></span></div>
                         <div class="history-pet-body">
-                          <div>
-                            <dl class="history-pet-profile">
-                              <div><dt>Species</dt><dd x-text="displayArchiveValue(pet.species, 'Not recorded')"></dd></div>
-                              <div><dt>Breed</dt><dd x-text="displayArchiveValue(pet.breed, 'Not recorded')"></dd></div>
-                              <div><dt>Confirmed Size</dt><dd class="capitalize" x-text="displayArchiveValue(pet.confirmedSize, 'Not recorded')"></dd></div>
-                              <div><dt>Registered Size</dt><dd class="capitalize" x-text="displayArchiveValue(pet.registeredSize, 'Not recorded')"></dd></div>
-                              <div><dt>Weight</dt><dd x-text="displayArchiveValue(pet.weight, 'Not recorded')"></dd></div>
-                              <div><dt>Fur Type</dt><dd x-text="displayArchiveValue(pet.furType, 'Not recorded')"></dd></div>
-                            </dl>
-                            <p x-show="!pet.confirmedSize && !pet.registeredSize" class="mt-3 text-sm text-slate-500">Pet profile size: <span class="capitalize" x-text="displayArchiveValue(pet.size, 'Not recorded')"></span> (session size not recorded)</p>
-                            <p x-show="pet.medicalConditions" class="mt-3 whitespace-pre-wrap text-sm text-slate-700"><span class="font-semibold">Medical Information:</span> <span x-text="pet.medicalConditions"></span></p>
-                            <p class="mt-3 whitespace-pre-wrap text-sm text-slate-700"><span class="font-semibold" x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Grooming & Visit Notes:' : 'Pet Instructions:'"></span> <span x-text="pet.specialInstructions || 'None provided'"></span></p>
-                          </div>
-                          <div>
+                          <dl class="history-pet-profile">
+                            <div><dt>Species</dt><dd x-text="displayArchiveValue(pet.species, 'Not recorded')"></dd></div>
+                            <div><dt>Breed</dt><dd x-text="displayArchiveValue(pet.breed, 'Not recorded')"></dd></div>
+                            <div><dt>Size</dt><dd x-text="petSize(pet)"></dd></div>
+                            <div><dt>Weight</dt><dd x-text="displayArchiveValue(pet.weight, 'Not recorded')"></dd></div>
+                            <div><dt>Fur Type</dt><dd x-text="displayArchiveValue(pet.furType, 'Not recorded')"></dd></div>
+                          </dl>
+                          <p x-show="pet.medicalConditions" class="history-medical"><span class="history-note-label">Medical Information: </span><span x-text="pet.medicalConditions"></span></p>
+                          <div class="history-pet-timing">
+                            <h6 class="history-pet-subheading">Grooming Timeline</h6>
                             <dl class="history-pet-timeline">
-                              <div><dt>Grooming Started</dt><dd x-text="pet.groomingStartedAtIso ? formatDateTime(pet.groomingStartedAtIso) : displayArchiveValue(pet.groomingStartedAt, 'Not recorded')"></dd></div>
+                              <div><dt>Started</dt><dd x-text="pet.groomingStartedAtIso ? formatDateTime(pet.groomingStartedAtIso) : displayArchiveValue(pet.groomingStartedAt, 'Not recorded')"></dd></div>
                               <div><dt>Finished</dt><dd x-text="pet.groomingFinishedAtIso ? formatDateTime(pet.groomingFinishedAtIso) : displayArchiveValue(pet.groomingFinishedAt, 'Not recorded')"></dd></div>
                             </dl>
-                            <div class="history-pet-services">
-                              <p class="history-label">Services · Recorded prices</p>
-                              <template x-for="svc in servicesForPet(pet)" :key="svc.id">
-                                <div class="history-service-line"><div><p x-text="svc.name"></p><p class="history-label" x-text="svc.serviceKind === 'package' ? 'Main service' : 'À la carte'"></p></div><span x-text="formatServiceAvailedPrice(svc)"></span></div>
-                              </template>
-                              <p x-show="!servicesForPet(pet).length" class="mt-2 text-sm text-slate-500">Service details not recorded.</p>
-                            </div>
                           </div>
+                          <div>
+                            <h6 class="history-pet-subheading">Services</h6>
+                            <template x-for="svc in servicesForPet(pet)" :key="svc.id">
+                              <div class="history-service-line"><div class="history-service-name"><span x-text="svc.name"></span><span class="history-label" x-text="svc.serviceKind === 'package' ? 'Main service' : 'À la carte'"></span></div><span x-text="formatServiceAvailedPrice(svc)"></span></div>
+                            </template>
+                            <p x-show="!servicesForPet(pet).length" class="history-label">Service details not recorded.</p>
+                          </div>
+                          <p class="history-pet-note"><span class="history-note-label" x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Grooming &amp; Visit Notes: ' : 'Pet Instructions: '"></span><span x-text="pet.specialInstructions || 'None provided'"></span></p>
                         </div>
                       </article>
                     </template>
-                    <p x-show="!detailsBooking?.pets?.length" class="text-sm text-slate-500">Pet information not recorded.</p>
-                  </div>
-                  <div class="mt-3 flex justify-between gap-4 text-sm font-semibold text-[#1f3850]"><span>Grooming Total</span><span x-text="formatServicesAvailedTotal(detailsBooking)"></span></div>
-                </section>
-
-                <section x-show="detailsBooking?.productAddons?.length" class="border-t border-slate-200 pt-5">
-                  <h5 class="font-bold text-[#1f3850]">Product Add-ons</h5>
-                  <div class="mt-3 space-y-2">
-                    <template x-for="(line, index) in detailsBooking?.productAddons ?? []" :key="index">
-                      <div class="flex justify-between gap-4 text-sm"><span><span x-text="line.itemName + ' × ' + line.quantity"></span><span class="block text-xs text-slate-500" x-text="formatPeso(line.priceAtSale) + ' each'"></span></span><span class="font-semibold" x-text="formatPeso(line.subtotal)"></span></div>
-                    </template>
-                    <div class="flex justify-between border-t border-slate-200 pt-3 font-bold text-[#1f3850]"><span>Add-ons Total</span><span x-text="formatPeso((detailsBooking?.productAddons ?? []).reduce((sum, line) => sum + Number(line.subtotal || 0), 0))"></span></div>
+                    <p x-show="!detailsBooking?.pets?.length" class="history-label">Pet information not recorded.</p>
                   </div>
                 </section>
 
-                <section class="border-t border-slate-200 pt-5">
-                  <h5 class="font-bold text-[#1f3850]">Payment</h5>
-                  <dl class="mt-3 grid gap-4 text-sm sm:grid-cols-3">
-                    <div><dt class="text-xs text-slate-500">Payment Record ID</dt><dd class="mt-1 font-semibold text-slate-800" x-text="displayArchiveValue(detailsBooking?.payment?.id, 'Not recorded')"></dd></div>
-                    <div><dt class="text-xs text-slate-500">Payment Method</dt><dd class="mt-1 font-semibold text-slate-800" x-text="paymentMethod(detailsBooking)"></dd></div>
-                    <div><dt class="text-xs text-slate-500">Amount Paid</dt><dd class="mt-1 font-semibold text-slate-800" x-text="paymentAmount(detailsBooking)"></dd></div>
-                    <div><dt class="text-xs text-slate-500">Payment Time</dt><dd class="mt-1 font-semibold text-slate-800" x-text="displayArchiveValue(detailsBooking?.payment?.paidAt ?? detailsBooking?.payment?.paid_at, 'Not recorded')"></dd></div>
-                    <div x-show="detailsBooking?.payment?.amountPaid != null"><dt class="text-xs text-slate-500">Amount Tendered</dt><dd class="mt-1 font-semibold text-slate-800" x-text="formatPeso(detailsBooking?.payment?.amountPaid)"></dd></div>
-                    <div x-show="detailsBooking?.payment?.changeAmount != null"><dt class="text-xs text-slate-500">Change</dt><dd class="mt-1 font-semibold text-slate-800" x-text="formatPeso(detailsBooking?.payment?.changeAmount)"></dd></div>
+                <section x-show="detailsBooking?.productAddons?.length" class="history-record-section" aria-labelledby="history-products-title">
+                  <h5 id="history-products-title">Product Add-ons</h5>
+                  <template x-for="(line, index) in detailsBooking?.productAddons ?? []" :key="index">
+                    <div class="history-product-line">
+                      <div><p x-text="line.itemName"></p><p x-show="showProductSubtotal(line)" class="history-label" x-text="formatPeso(line.priceAtSale) + ' × ' + line.quantity"></p></div>
+                      <span x-text="formatPeso(showProductSubtotal(line) ? line.subtotal : line.priceAtSale)"></span>
+                    </div>
+                  </template>
+                </section>
+
+                <section class="history-record-section" aria-labelledby="history-payment-title">
+                  <h5 id="history-payment-title">Payment Summary</h5>
+                  <dl class="history-payment-totals">
+                    <div><dt>Grooming services</dt><dd x-text="formatServicesAvailedTotal(detailsBooking)"></dd></div>
+                    <div x-show="detailsBooking?.productAddons?.length"><dt>Product add-ons</dt><dd x-text="formatPeso(productAddonsTotal())"></dd></div>
+                    <div class="history-paid-total"><dt>Total paid</dt><dd x-text="paymentAmount(detailsBooking)"></dd></div>
                   </dl>
-                  <p x-show="detailsBooking?.payment?.notes" class="mt-3 whitespace-pre-wrap text-sm text-slate-700"><span class="font-semibold">Payment Note:</span> <span x-text="detailsBooking?.payment?.notes"></span></p>
+                  <dl class="history-record-fields history-payment-context">
+                    <div><dt>Payment Method</dt><dd x-text="paymentMethod(detailsBooking)"></dd></div>
+                    <div><dt>Payment Time</dt><dd x-text="detailsBooking?.payment?.paid_at || detailsBooking?.payment?.paidAt ? formatDateTime(detailsBooking.payment.paid_at || detailsBooking.payment.paidAt) : 'Not recorded'"></dd></div>
+                    <div><dt>Payment Reference</dt><dd x-text="displayArchiveValue(detailsBooking?.payment?.id, 'Not recorded')"></dd></div>
+                  </dl>
+                  <a x-show="transactionUrl()" :href="transactionUrl()" @click="rememberHistoryContext($event)" class="history-transaction-link">View Full Transaction →</a>
                 </section>
 
-                <section class="border-t border-slate-200 pt-5">
-                  <h5 class="font-bold text-[#1f3850]">Customer Note</h5>
-                  <p class="mt-2 whitespace-pre-wrap text-sm text-slate-700" x-text="detailsBooking?.specialNotes || 'None provided'"></p>
-                  <div class="mt-4">
-                    <h5 class="font-bold text-[#1f3850]">Internal Staff Note</h5>
-                    <p class="mt-2 whitespace-pre-wrap text-sm text-slate-700" x-text="detailsBooking?.internalStaffNote || 'No staff note added.'"></p>
+                <section class="history-record-section" aria-labelledby="history-notes-title">
+                  <h5 id="history-notes-title">Notes</h5>
+                  <div class="history-notes">
+                    <div><h6 class="history-note-label">Customer Note</h6><p x-text="detailsBooking?.specialNotes || 'None provided'"></p></div>
+                    <div><h6 class="history-note-label">Internal Staff Note</h6><p x-text="detailsBooking?.internalStaffNote || 'No staff note added.'"></p></div>
                   </div>
                 </section>
-
               </div>
             </div>
           </div>
@@ -1002,6 +1012,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=history-20261003"></script>
-    <script src="../../scripts/components/admin-archive.js?v=grooming-history-20261003c"></script>
+    <script src="../../scripts/components/admin-archive.js?v=grooming-record-summary-20261003g"></script>
   </body>
 </html>

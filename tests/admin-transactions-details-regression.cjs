@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const context = { window: {}, Date, Intl };
+const context = { window: {}, Date, Intl, URLSearchParams };
 for (const file of ["payment-invoice.js", "admin-transactions.js"]) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../scripts/components", file), "utf8"), context);
 }
@@ -30,7 +30,7 @@ assert.equal(ui.compactPetNames({ petName: "stale", paymentSummary: { pets: [{ p
 
 let opened = 0, closed = 0, focused = 0, printed = 0;
 ui.$nextTick = (callback) => callback();
-ui.$refs = { detailsDialog: { showModal: () => opened++, close: () => closed++ }, detailsBody: { scrollTop: 99 } };
+ui.$refs = { detailsDialog: { showModal: () => opened++, close: () => closed++, querySelector: () => ui.$refs.detailsBody }, detailsBody: { scrollTop: 99 } };
 context.document = { body: { style: { overflow: "auto" } } };
 ui.openDetails(tx, { focus: () => focused++ });
 assert.equal(opened, 1);
@@ -75,4 +75,34 @@ for (const field of ["amountPaid", "changeGiven", "groomingServicesTotal", "prod
 assert.ok(html.includes('x-html="window.PaymentInvoice.template"'));
 assert.ok(html.includes('selectedTransaction.productAddons.length > 1'));
 assert.ok(!html.split('<!-- Transactions Content -->')[1].includes('data-lucide'));
-console.log("Admin transaction details regression tests passed.");
+(async () => {
+  let request;
+  context.API = { getTransactions: async (query) => { request = query; return { transactions: [tx, noProducts] }; } };
+  context.document.querySelector = () => ({ focus() {} });
+  const createPage = (search) => {
+    context.window.location = { search };
+    const page = context.adminTransactions();
+    page.$nextTick = (callback) => callback(); page.$refs = ui.$refs;
+    return page;
+  };
+  const direct = createPage('');
+  await direct.init();
+  assert.equal(request.search, '');
+  assert.equal(request.period, 'day');
+  assert.equal(direct.selectedTransaction, null, 'Sidebar navigation does not open a modal');
+  const linked = createPage('?payment=2&reference=BAC-20261002-0002');
+  await linked.init();
+  assert.equal(request.search, noProducts.reference);
+  assert.equal(request.date, '', 'Older payments must not be restricted to today');
+  assert.equal(linked.selectedTransaction.id, 2);
+  linked.closeDetails();
+  const byReference = createPage('?reference=BAC-20261003-0002');
+  await byReference.init();
+  assert.equal(byReference.selectedTransaction.id, 1);
+  byReference.closeDetails();
+  const missingId = createPage('?payment=999&reference=BAC-20261003-0002');
+  await missingId.init();
+  assert.equal(missingId.selectedTransaction, null, 'A different payment with the same reference must not be substituted');
+  assert.equal(missingId.errorMessage, 'The linked transaction could not be found.');
+  console.log('Admin transaction details regression tests passed.');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

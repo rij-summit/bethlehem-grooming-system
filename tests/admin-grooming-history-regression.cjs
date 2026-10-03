@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const context = { Date, Intl, window: {} };
+const modalBody = { scrollTop: 0 };
+const dialog = { querySelector: (selector) => selector.includes('Close') ? { focus() {} } : modalBody };
+const context = { Date, Intl, URLSearchParams, window: {}, document: { querySelector: () => dialog } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/admin-archive.js'), 'utf8'), context);
 const ui = context.adminArchive();
 ui.$nextTick = (callback) => callback();
@@ -78,4 +80,81 @@ assert.equal(ui.filteredList[0].id, 1);
 ui.sortOrder = 'newest';
 assert.equal(ui.filteredList[0].id, 2);
 assert.equal(JSON.stringify([session, repeat]), original, 'Displaying history must never mutate stored records');
-console.log('Grooming history regression tests passed.');
+
+const single = {
+  startedAtIso: '2026-10-03T08:00:00+08:00', completedAtIso: '2026-10-03T09:00:00+08:00',
+  pets: [{ groomingStartedAtIso: '2026-10-03T00:00:00.000Z', groomingFinishedAtIso: '2026-10-03T01:00:00.000Z' }],
+};
+assert.equal(ui.showSessionTime('start', single), false, 'The same event in different timezone notation appears once');
+assert.equal(ui.showSessionTime('finish', single), false);
+const staggered = { ...single, pets: [...single.pets, { groomingStartedAtIso: '2026-10-03T00:30:00Z', groomingFinishedAtIso: '2026-10-03T02:00:00Z' }] };
+assert.equal(ui.showSessionTime('start', staggered), false);
+assert.equal(ui.showSessionTime('finish', { ...staggered, completedAtIso: '2026-10-03T11:00:00+08:00' }), true, 'A distinct session event is retained');
+assert.equal(ui.showSessionTime('finish', { ...single, completedAtIso: '2026-10-04T09:00:00+08:00' }), true, 'Equal clock times on different days are different events');
+assert.equal(ui.showSessionTime('start', { startedAt: '8:00 AM', pets: [{ groomingStartedAt: '8:00 AM' }] }), false);
+assert.equal(ui.showSessionTime('start', {}), false);
+assert.equal(ui.petSize({ confirmedSize: 'medium', registeredSize: 'small' }), 'Medium · Clinic verified');
+assert.equal(ui.petSize({ registeredSize: 'small', size: 'large', sizeVerified: true }), 'Small', 'Current profile verification must not relabel a legacy session');
+assert.equal(ui.petSize({ size: 'large', sizeVerified: true }), 'Large · Profile size (session size not recorded)');
+assert.equal(ui.petSize({}), 'Not recorded');
+assert.equal(ui.showProductSubtotal({ quantity: 1, priceAtSale: '75.00', subtotal: 75 }), false);
+assert.equal(ui.showProductSubtotal({ quantity: 2, priceAtSale: 75, subtotal: 120 }), true, 'Retain the recorded subtotal instead of multiplying current prices');
+assert.equal(ui.showProductSubtotal({ quantity: 1, priceAtSale: 75, subtotal: 50 }), true);
+assert.equal(ui.productAddonsTotal(session), 150);
+assert.equal(ui.productAddonsTotal(repeat), 0);
+assert.equal(ui.transactionUrl(session), './transactions.html?payment=10&reference=BAC-20261003-0001');
+assert.equal(ui.transactionUrl({ ...session, payment: {} }), './transactions.html?reference=BAC-20261003-0001');
+assert.equal(ui.transactionUrl({}), '');
+
+let lastFocus;
+const focusTarget = (name) => ({ focus: () => { lastFocus = name; }, getClientRects: () => [1] });
+const close = focusTarget('close'), body = focusTarget('body'), link = focusTarget('link');
+ui.$refs.groomingRecordDialog = { querySelectorAll: () => [close, body, link] };
+let prevented = 0;
+ui.trapDetailsFocus({ target: close, shiftKey: true, preventDefault: () => prevented++ });
+assert.equal(lastFocus, 'link');
+ui.trapDetailsFocus({ target: link, shiftKey: false, preventDefault: () => prevented++ });
+assert.equal(lastFocus, 'close');
+ui.trapDetailsFocus({ target: body, shiftKey: false, preventDefault: () => prevented++ });
+assert.equal(prevented, 2, 'Tab can reach the transaction link normally');
+
+(async () => {
+  let saved, restoredScroll, focused = 0;
+  context.window.history = { state: { otherState: 'preserved' }, replaceState: (state) => { saved = state; context.window.history.state = state; } };
+  context.window.scrollY = 420;
+  context.window.addEventListener = () => {};
+  context.window.removeEventListener = () => {};
+  context.window.scrollTo = (x, y) => { restoredScroll = y; };
+  context.document = { querySelector: (selector) => selector.includes('data-history-booking') ? { focus: () => focused++ } : dialog };
+  context.API = { getArchivedBookings: async (query) => {
+    assert.equal(query.search, 'Owner');
+    return { archived: [session, repeat], total: 2 };
+  } };
+  ui.viewDetails(session);
+  ui.searchQuery = 'Owner'; ui.sortOrder = 'oldest'; ui.selectedYear = '2026'; ui.selectedMonth = '2026-10';
+  ui.$refs.groomingRecordBody = { scrollTop: 300 };
+  ui.rememberHistoryContext({ button: 0, ctrlKey: true });
+  assert.equal(saved, undefined, 'Opening a new tab does not change this History entry');
+  ui.rememberHistoryContext({ button: 0 });
+  assert.equal(saved.otherState, 'preserved');
+  assert.equal(saved.groomingHistory.modalScroll, 300);
+  const restored = context.adminArchive();
+  restored.$nextTick = (callback) => callback();
+  restored.$refs = { groomingRecordBody: modalBody, groomingRecordClose: { focus() {} } };
+  await restored.init();
+  assert.equal(restored.searchQuery, 'Owner');
+  assert.equal(restored.sortOrder, 'oldest');
+  assert.equal(restored.selectedMonth, '2026-10');
+  assert.equal(restored.detailsBooking.id, 1);
+  assert.equal(restored.detailsModalOpen, true);
+  assert.equal(restoredScroll, 420);
+  assert.equal(restored.$refs.groomingRecordBody.scrollTop, 300);
+  restored.closeDetails();
+  assert.equal(focused, 1, 'Restored modal returns focus to its original record');
+  // A page restored from the browser's back/forward cache does not run init again.
+  context.window.history.state = { groomingHistory: { searchQuery: 'Owner', sortOrder: 'oldest', selectedYear: '2026', selectedMonth: '2026-10', bookingId: 1, scrollY: 420, modalScroll: 300 } };
+  restored._restoreOnPageShow({ persisted: true });
+  assert.equal(restored.detailsModalOpen, true);
+  assert.equal(restored.$refs.groomingRecordBody.scrollTop, 300);
+  console.log('Grooming history regression tests passed.');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

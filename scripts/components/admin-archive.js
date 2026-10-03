@@ -20,8 +20,35 @@ function adminArchive() {
     detailsClinicRecord: null,
 
     async init() {
+      this._restoreOnPageShow = (event) => {
+        if (event.persisted) this.restoreHistoryContext(window.history.state?.groomingHistory);
+      };
+      window.addEventListener("pageshow", this._restoreOnPageShow);
+      const context = window.history.state?.groomingHistory;
+      if (context) this.searchQuery = context.searchQuery;
       await this.loadArchive();
+      this.restoreHistoryContext(context);
       this.refreshIcons();
+    },
+
+    destroy() {
+      window.removeEventListener("pageshow", this._restoreOnPageShow);
+    },
+
+    restoreHistoryContext(context) {
+      if (context) {
+        this.searchQuery = context.searchQuery;
+        this.sortOrder = context.sortOrder;
+        this.selectedYear = context.selectedYear;
+        this.selectedMonth = context.selectedMonth;
+        const booking = this.filteredList.find((record) => String(record.id) === String(context.bookingId));
+        if (booking) this.viewDetails(booking, null, context.modalScroll);
+        this.$nextTick(() => {
+          window.scrollTo(0, context.scrollY);
+          if (booking) this._detailsTrigger = document.querySelector(`[data-history-booking="${booking.id}"]`);
+        });
+        window.history.replaceState({ ...window.history.state, groomingHistory: null }, "");
+      }
     },
 
     async selectArchiveType(type) {
@@ -200,11 +227,16 @@ function adminArchive() {
         : "Completed grooming sessions will appear here after staff add them to history.";
     },
 
-    viewDetails(booking, trigger = null) {
+    viewDetails(booking, trigger = null, scrollTop = 0) {
       this._detailsTrigger = trigger;
       this.detailsBooking = booking;
       this.detailsModalOpen = true;
-      this.$nextTick(() => this.$refs?.groomingRecordClose?.focus());
+      this.$nextTick(() => {
+        // Resolve the rendered dialog after startup/Back, as well as a row click.
+        const dialog = document.querySelector('[aria-labelledby="grooming-record-title"]');
+        dialog.querySelector('[aria-label="Close grooming record"]').focus({ preventScroll: true });
+        dialog.querySelector('[aria-label="Grooming record details"]').scrollTop = scrollTop;
+      });
       this.refreshIcons();
     },
 
@@ -217,15 +249,66 @@ function adminArchive() {
     },
 
     trapDetailsFocus(event) {
-      const close = this.$refs.groomingRecordClose;
-      const body = this.$refs.groomingRecordBody;
-      if (event.shiftKey && event.target === close) {
+      const targets = [...this.$refs.groomingRecordDialog.querySelectorAll('button, a[href], [tabindex="0"]')]
+        .filter((element) => !element.disabled && element.getClientRects().length);
+      const first = targets[0];
+      const last = targets[targets.length - 1];
+      if (event.shiftKey && event.target === first) {
         event.preventDefault();
-        body.focus();
-      } else if (!event.shiftKey && event.target === body) {
+        last.focus();
+      } else if (!event.shiftKey && event.target === last) {
         event.preventDefault();
-        close.focus();
+        first.focus();
       }
+    },
+
+    showSessionTime(kind, booking = this.detailsBooking) {
+      const start = kind === "start";
+      const iso = booking?.[start ? "startedAtIso" : "completedAtIso"];
+      const time = booking?.[start ? "startedAt" : "completedAt"];
+      if (this.isArchiveValueMissing(iso) && this.isArchiveValueMissing(time)) return false;
+      return !(booking?.pets || []).some((pet) => {
+        const petIso = pet[start ? "groomingStartedAtIso" : "groomingFinishedAtIso"];
+        const petTime = pet[start ? "groomingStartedAt" : "groomingFinishedAt"];
+        if (iso && petIso) return Number.isFinite(Date.parse(iso)) && Date.parse(iso) === Date.parse(petIso);
+        return !iso && !petIso && !this.isArchiveValueMissing(time) && time === petTime;
+      });
+    },
+
+    petSize(pet) {
+      // Verification belongs to this booking, not the pet's current profile.
+      const confirmed = !this.isArchiveValueMissing(pet.confirmedSize);
+      const registered = !this.isArchiveValueMissing(pet.registeredSize);
+      const value = confirmed ? pet.confirmedSize : registered ? pet.registeredSize : pet.size;
+      if (this.isArchiveValueMissing(value)) return "Not recorded";
+      const label = String(value).charAt(0).toUpperCase() + String(value).slice(1);
+      return label + (confirmed ? " · Clinic verified" : registered ? "" : " · Profile size (session size not recorded)");
+    },
+
+    productAddonsTotal(booking = this.detailsBooking) {
+      return (booking?.productAddons || []).reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+    },
+
+    showProductSubtotal(line) {
+      return Number(line.quantity) > 1 || Number(line.subtotal) !== Number(line.priceAtSale);
+    },
+
+    transactionUrl(booking = this.detailsBooking) {
+      if (!booking?.payment) return "";
+      const params = new URLSearchParams();
+      if (booking.payment.id != null) params.set("payment", booking.payment.id);
+      if (booking.bookingReference) params.set("reference", booking.bookingReference);
+      return params.size ? `./transactions.html?${params}` : "";
+    },
+
+    rememberHistoryContext(event) {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      window.history.replaceState({ ...window.history.state, groomingHistory: {
+        searchQuery: this.searchQuery, sortOrder: this.sortOrder,
+        selectedYear: this.selectedYear, selectedMonth: this.selectedMonth,
+        bookingId: this.detailsBooking.id, scrollY: window.scrollY,
+        modalScroll: this.$refs.groomingRecordBody.scrollTop,
+      } }, "");
     },
 
     viewClinicRecord(record) {
@@ -416,7 +499,7 @@ function adminArchive() {
     },
 
     getServicesAvailedTotal(booking = this.detailsBooking) {
-      const productTotal = (booking?.productAddons ?? []).reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+      const productTotal = this.productAddonsTotal(booking);
       const recordedTotal =
         booking?.payment?.finalPrice ??
         booking?.payment?.final_price ??

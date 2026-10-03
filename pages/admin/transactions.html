@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transactions | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
-    <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
-    <link rel="stylesheet" href="../../css/components/admin-transactions.css?v=details-20261003b" />
+    <link rel="stylesheet" href="../../css/custom.css?v=history-typography-20261003&release=20261001" />
+    <link rel="stylesheet" href="../../css/components/admin-transactions.css?v=history-typography-20261003" />
     <link rel="stylesheet" href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -333,7 +333,7 @@
                         <span class="transaction-method" x-text="tx.paymentMethodLabel || tx.paymentMethod || '—'"></span>
                         <p class="transaction-total" x-text="formatInvoicePeso(tx.finalPrice)"></p>
                         <button type="button" class="transaction-button transaction-button-secondary transaction-view"
-                          @click="openDetails(tx, $el)" aria-haspopup="dialog" :aria-label="'View Details for ' + tx.reference">View Details</button>
+                          :data-transaction-id="tx.id" @click="openDetails(tx, $el)" aria-haspopup="dialog" :aria-label="'View Details for ' + tx.reference">View Details</button>
                       </article>
                     </template>
                   </div>
@@ -429,6 +429,6 @@
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=unified-inventory-20261001b"></script>
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
-    <script src="../../scripts/components/admin-transactions.js?v=details-20261003"></script>
+    <script src="../../scripts/components/admin-transactions.js?v=history-navigation-20261003d"></script>
   </body>
 </html>
