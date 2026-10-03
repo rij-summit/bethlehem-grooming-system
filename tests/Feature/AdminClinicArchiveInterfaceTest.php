@@ -15,7 +15,7 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringContainsString("selectArchiveType('grooming')", $page);
         $this->assertStringContainsString("selectArchiveType('clinic')", $page);
         $this->assertStringContainsString('View Full Record', $page);
-        $this->assertStringContainsString('Full Archived Clinic Record', $page);
+        $this->assertStringContainsString('Full Clinic Record', $page);
         $this->assertStringContainsString('Visit date and time', $page);
         $this->assertStringContainsString('Patient', $page);
         $this->assertStringContainsString('Owner and Pet Information', $page);
@@ -38,7 +38,7 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringContainsString('text-sm font-medium', $page);
         $this->assertStringContainsString('text-xs font-bold uppercase', $page);
 
-        $this->assertStringContainsString('No clinic archive data is currently available.', $script);
+        $this->assertStringContainsString('No clinic history data is currently available.', $script);
         $this->assertStringContainsString('Data is currently unavailable.', $script);
         $this->assertStringContainsString('API.getArchivedClinicAppointments', $script);
         $this->assertStringContainsString('/admin/clinic-appointments/archived', $api);

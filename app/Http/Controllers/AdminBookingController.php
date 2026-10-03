@@ -1617,6 +1617,17 @@ class AdminBookingController extends Controller
         $formatted['archivedAt'] = $booking->archived_at
             ? Carbon::parse($booking->archived_at)->format('M j, Y g:i A')
             : '—';
+        $formatted['dropOffAtIso'] = $booking->dropped_off_at
+            ? Carbon::parse($booking->dropped_off_at)->toIso8601String() : null;
+        $formatted['startedAtIso'] = $booking->grooming_started_at
+            ? Carbon::parse($booking->grooming_started_at)->toIso8601String() : null;
+        $formatted['completedAtIso'] = $booking->grooming_finished_at
+            ? Carbon::parse($booking->grooming_finished_at)->toIso8601String() : null;
+        $paidPayment = $this->paidPaymentForBooking($booking);
+        if ($paidPayment) {
+            $formatted['payment']['notes'] = $paidPayment->notes;
+            $formatted['payment']['changeAmount'] = $paidPayment->change_amount;
+        }
         return $formatted;
     }
 

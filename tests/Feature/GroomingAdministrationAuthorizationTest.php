@@ -1305,6 +1305,96 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
     }
 
+    public function test_grooming_history_keeps_repeat_visits_and_transaction_snapshots_independent(): void
+    {
+        $this->authenticateAs('staff');
+        $this->seedMultiPetBooking();
+        DB::table('users')->insert(['user_id' => 10, 'first_name' => 'Jamie', 'last_name' => 'Santos', 'role' => 'customer']);
+        DB::table('walkins')->insert(['id' => 20, 'fname' => 'Jamie', 'lname' => 'Santos', 'phone' => '09171234567']);
+        DB::table('bookings')->where('booking_id', 1)->update([
+            'user_id' => 10, 'status' => 'archived', 'paid' => true, 'total_amount' => 725,
+            'archived_at' => '2026-07-24 10:30:00', 'grooming_started_at' => '2026-07-24 09:00:00',
+            'grooming_finished_at' => '2026-07-24 10:00:00', 'special_notes' => 'First visit customer note',
+            'internal_staff_note' => 'First visit staff note',
+        ]);
+        DB::table('booking_pets')->where('booking_id', 1)->update([
+            'registered_size' => 'small', 'confirmed_size' => 'medium',
+            'grooming_start_time' => '2026-07-24 09:00:00', 'grooming_end_time' => '2026-07-24 10:00:00',
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED, 'special_instructions' => 'First visit instructions',
+        ]);
+        DB::table('booking_services')->insert([
+            'booking_service_id' => 3, 'booking_id' => 1, 'booking_pet_id' => 1,
+            'service_id' => 1, 'price_at_booking' => 75,
+        ]);
+        DB::table('bookings')->insert([
+            'booking_id' => 2, 'booking_reference' => 'WI-REPEAT-VISIT', 'walkin_id' => 20,
+            'booking_date' => '2026-07-25', 'status' => 'archived', 'paid' => true, 'total_amount' => 400,
+            'archived_at' => '2026-07-26 01:05:00', 'grooming_started_at' => '2026-07-25 23:30:00',
+            'grooming_finished_at' => '2026-07-26 01:00:00', 'special_notes' => 'Repeat walk-in note',
+        ]);
+        DB::table('booking_pets')->insert([
+            'booking_pet_id' => 3, 'booking_id' => 2, 'pet_id' => 1, 'confirmed_size' => 'large',
+            'grooming_start_time' => '2026-07-25 23:30:00', 'grooming_end_time' => '2026-07-26 01:00:00',
+            'grooming_state' => BookingPet::GROOMING_STATE_FINISHED, 'special_instructions' => 'Repeat visit instructions',
+        ]);
+        DB::table('booking_services')->insert([
+            'booking_service_id' => 4, 'booking_id' => 2, 'booking_pet_id' => 3,
+            'service_id' => 1, 'price_at_booking' => 400,
+        ]);
+        DB::table('payments')->insert([
+            ['payment_id' => 1, 'booking_id' => 1, 'total_amount' => 725, 'amount_tendered' => 1000,
+                'change_amount' => 275, 'payment_method' => 'cash', 'payment_status' => 'paid',
+                'paid_at' => '2026-07-24 10:15:00', 'notes' => 'First payment note'],
+            ['payment_id' => 2, 'booking_id' => 2, 'total_amount' => 400, 'amount_tendered' => 400,
+                'change_amount' => 0, 'payment_method' => 'gcash', 'payment_status' => 'paid',
+                'paid_at' => '2026-07-26 01:02:00', 'notes' => 'Recorded transfer reference 123456'],
+        ]);
+        DB::table('grooming_payment_products')->insert([
+            'payment_id' => 1, 'item_id' => 1, 'item_name' => 'Historical shampoo',
+            'quantity' => 2, 'price_at_sale' => 75, 'subtotal' => 150,
+        ]);
+        // A changed live catalogue and pet profile cannot replace session snapshots.
+        DB::table('services')->where('service_id', 1)->update(['base_price' => 9999, 'price_medium' => 9999, 'price_large' => 9999]);
+        DB::table('pets')->where('pet_id', 1)->update(['size' => 'extra_large']);
+
+        $response = $this->getJson('/api/admin/bookings/archived')->assertOk()->assertJsonPath('total', 2);
+        $records = collect($response->json('archived'))->keyBy('id');
+        $first = $records[1];
+        $repeat = $records[2];
+        $this->assertSame('MULTI-PET-SECURITY', $first['bookingReference']);
+        $this->assertSame('Pre-Register', $first['bookingType']);
+        $this->assertCount(2, $first['pets']);
+        $this->assertSame(['medium', 'medium'], array_column($first['pets'], 'confirmedSize'));
+        $this->assertSame([1, 2, 1], array_column($first['services'], 'bookingPetId'));
+        $this->assertEquals([250, 250, 75], array_column($first['services'], 'paidPrice'));
+        $this->assertSame('First visit instructions', $first['pets'][0]['specialInstructions']);
+        $this->assertSame('First visit customer note', $first['specialNotes']);
+        $this->assertSame('First visit staff note', $first['internalStaffNote']);
+        $this->assertEquals(725, $first['payment']['finalPrice']);
+        $this->assertSame('cash', $first['payment']['paymentMethod']);
+        $this->assertSame('First payment note', $first['payment']['notes']);
+        $this->assertEquals(275, $first['payment']['changeAmount']);
+        $this->assertEquals(75, $first['productAddons'][0]['priceAtSale']);
+        $this->assertEquals(150, $first['productAddons'][0]['subtotal']);
+        $this->assertSame('WI-REPEAT-VISIT', $repeat['bookingReference']);
+        $this->assertSame('Walk-In', $repeat['bookingType']);
+        $this->assertCount(1, $repeat['pets']);
+        $this->assertSame(1, $repeat['pets'][0]['petId']);
+        $this->assertSame(3, $repeat['pets'][0]['bookingPetId']);
+        $this->assertSame('large', $repeat['pets'][0]['confirmedSize']);
+        $this->assertSame('Repeat visit instructions', $repeat['pets'][0]['specialInstructions']);
+        $this->assertSame('Repeat walk-in note', $repeat['specialNotes']);
+        $this->assertSame('gcash', $repeat['payment']['paymentMethod']);
+        $this->assertSame('Recorded transfer reference 123456', $repeat['payment']['notes']);
+        $this->assertEquals(400, $repeat['payment']['finalPrice']);
+        $this->assertEquals(400, $repeat['services'][0]['paidPrice']);
+        $this->assertSame([], $repeat['productAddons']);
+        $this->assertStringStartsWith('2026-07-25T23:30:00', $repeat['startedAtIso']);
+        $this->assertStringStartsWith('2026-07-26T01:00:00', $repeat['completedAtIso']);
+        $this->assertSame('2026-07-26 01:00:00', Carbon::parse($repeat['pets'][0]['groomingFinishedAtIso'])->timezone('Asia/Manila')->format('Y-m-d H:i:s'));
+        $this->assertDatabaseHas('booking_services', ['booking_service_id' => 1, 'price_at_booking' => 250]);
+    }
+
     #[DataProvider('authorizedGroomingRoles')]
     public function test_staff_and_admin_can_complete_the_existing_core_grooming_workflow(
         string $role,

@@ -57,7 +57,7 @@ function adminArchive() {
         }
         this.selectAvailableYear();
       } catch (error) {
-        this.errorMessage = error.message || "Failed to load archive. Please try again.";
+        this.errorMessage = error.message || "Failed to load history. Please try again.";
         if (this.archiveType === "clinic") {
           this.clinicArchivedList = [];
           this.clinicTotalCount = 0;
@@ -189,26 +189,43 @@ function adminArchive() {
     get emptyStateTitle() {
       if (this.hasActiveFilters) return "No records match your filters.";
       return this.archiveType === "clinic"
-        ? "No clinic archive data is currently available."
-        : "No archived records yet.";
+        ? "No clinic history data is currently available."
+        : "No grooming history yet.";
     },
 
     get emptyStateMessage() {
       if (this.hasActiveFilters) return "Try adjusting your search or clearing the filters.";
       return this.archiveType === "clinic"
         ? "Completed, cancelled, and no-show clinic visits will appear here."
-        : "Completed grooming sessions will appear here after they are archived from the dashboard.";
+        : "Completed grooming sessions will appear here after staff add them to history.";
     },
 
-    viewDetails(booking) {
+    viewDetails(booking, trigger = null) {
+      this._detailsTrigger = trigger;
       this.detailsBooking = booking;
       this.detailsModalOpen = true;
+      this.$nextTick(() => this.$refs?.groomingRecordClose?.focus());
       this.refreshIcons();
     },
 
     closeDetails() {
+      if (!this.detailsModalOpen) return;
       this.detailsModalOpen = false;
       this.detailsBooking = null;
+      this._detailsTrigger?.focus();
+      this._detailsTrigger = null;
+    },
+
+    trapDetailsFocus(event) {
+      const close = this.$refs.groomingRecordClose;
+      const body = this.$refs.groomingRecordBody;
+      if (event.shiftKey && event.target === close) {
+        event.preventDefault();
+        body.focus();
+      } else if (!event.shiftKey && event.target === body) {
+        event.preventDefault();
+        close.focus();
+      }
     },
 
     viewClinicRecord(record) {
@@ -333,30 +350,58 @@ function adminArchive() {
       return `\u20b1${Number(amount || 0).toFixed(2)}`;
     },
 
+    petSummary(booking) {
+      const pets = booking?.pets ?? [];
+      if (!pets.length) return this.displayArchiveValue(booking?.petName, 'Pets not recorded');
+      const names = pets.slice(0, 2).map((pet) => this.displayArchiveValue(pet.petName, 'Unnamed pet'));
+      const remaining = pets.length - names.length;
+      return names.join(', ') + (remaining ? ` +${remaining} pet${remaining === 1 ? '' : 's'}` : '');
+    },
+
+    serviceSummary(booking) {
+      const names = [...new Set((booking?.services ?? []).map((service) => service.name).filter(Boolean))];
+      if (!names.length) return this.displayArchiveValue(booking?.serviceLabel, 'Services not recorded');
+      return names[0] + (names.length > 1 ? ` +${names.length - 1} more` : '');
+    },
+
+    sessionTime(booking) {
+      if (booking?.startedAt && booking?.completedAt) {
+        const crossesDate = booking.startedAtIso && booking.completedAtIso
+          && booking.startedAtIso.slice(0, 10) !== booking.completedAtIso.slice(0, 10);
+        const finishDate = crossesDate ? ` (${this.formatAppointmentDate(booking.completedAtIso.slice(0, 10))})` : '';
+        return `${booking.startedAt} – ${booking.completedAt}${finishDate}`;
+      }
+      if (booking?.startedAt) return `Started ${booking.startedAt}`;
+      if (booking?.completedAt) return `Finished ${booking.completedAt}`;
+      if (booking?.dropOffTime) return `Dropped off ${booking.dropOffTime}`;
+      return 'Time not recorded';
+    },
+
     getServiceAvailedAmount(service) {
-      const amount = Number(
+      const recorded =
         service?.paidPrice ??
         service?.paid_price ??
         service?.finalPrice ??
-        service?.final_price,
-      );
+        service?.final_price ??
+        service?.priceAtBooking ??
+        service?.price_at_booking;
+      if (recorded === null || recorded === undefined || recorded === '') return null;
+      const amount = Number(recorded);
 
-      return Number.isFinite(amount) && amount > 0 ? amount : null;
+      return Number.isFinite(amount) && amount >= 0 ? amount : null;
     },
 
     formatServiceAvailedPrice(service) {
       const amount = this.getServiceAvailedAmount(service);
-      return amount ? this.formatPeso(amount) : "Price unavailable";
+      return amount !== null ? this.formatPeso(amount) : "Price unavailable";
     },
 
     servicesForPet(pet, booking = this.detailsBooking) {
+      const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id;
+      if (bookingPetId === null || bookingPetId === undefined) return [];
       return (booking?.services ?? []).filter((service) =>
-        String(service.bookingPetId ?? service.booking_pet_id) === String(pet.bookingPetId ?? pet.booking_pet_id),
+        String(service.bookingPetId ?? service.booking_pet_id) === String(bookingPetId),
       );
-    },
-
-    servicesByKind(services, kind) {
-      return services.filter((service) => (service.serviceKind ?? 'ala_carte') === kind);
     },
 
     paymentMethod(booking = this.detailsBooking) {
@@ -365,34 +410,34 @@ function adminArchive() {
     },
 
     paymentAmount(booking = this.detailsBooking) {
-      const amount = booking?.payment?.finalPrice ?? booking?.payment?.final_price;
-      return amount === null || amount === undefined ? 'Not recorded' : this.formatPeso(amount);
+      const amount = booking?.payment?.finalPrice ?? booking?.payment?.final_price
+        ?? booking?.paidAmount ?? booking?.paid_amount;
+      return amount === null || amount === undefined || amount === '' ? 'Not recorded' : this.formatPeso(amount);
     },
 
     getServicesAvailedTotal(booking = this.detailsBooking) {
       const productTotal = (booking?.productAddons ?? []).reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
-      const paymentTotal = Number(
-        booking?.paidAmount ??
-        booking?.paid_amount ??
+      const recordedTotal =
         booking?.payment?.finalPrice ??
-        booking?.payment?.final_price,
-      );
+        booking?.payment?.final_price ??
+        booking?.paidAmount ??
+        booking?.paid_amount;
+      const paymentTotal = recordedTotal === null || recordedTotal === undefined || recordedTotal === ''
+        ? NaN : Number(recordedTotal);
 
-      if (Number.isFinite(paymentTotal) && paymentTotal > 0) return paymentTotal - productTotal;
+      if (Number.isFinite(paymentTotal) && paymentTotal >= 0) return paymentTotal - productTotal;
 
       const services = Array.isArray(booking?.services) ? booking.services : [];
-      const serviceAmounts = services
-        .map((service) => this.getServiceAvailedAmount(service))
-        .filter((amount) => Number.isFinite(amount) && amount > 0);
+      const serviceAmounts = services.map((service) => this.getServiceAvailedAmount(service));
 
-      return serviceAmounts.length > 0
+      return serviceAmounts.length > 0 && serviceAmounts.every((amount) => amount !== null)
         ? serviceAmounts.reduce((sum, amount) => sum + amount, 0)
         : null;
     },
 
     formatServicesAvailedTotal(booking = this.detailsBooking) {
       const total = this.getServicesAvailedTotal(booking);
-      return Number.isFinite(total) && total > 0
+      return Number.isFinite(total) && total >= 0
         ? this.formatPeso(total)
         : "Price unavailable";
     },

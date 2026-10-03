@@ -112,7 +112,12 @@ function installAdminInventoryNavigation() {
 
 // Build the shared group before Alpine walks the sidebar. Replacing a live
 // Alpine link can leave its queued effects detached from their parent scope.
-if (typeof document !== "undefined" && document.querySelector) installAdminInventoryNavigation();
+if (typeof document !== "undefined" && document.querySelector) {
+  installAdminInventoryNavigation();
+  document.querySelectorAll('.admin-sidebar-menu a[href$="archive.html"] span').forEach((label) => {
+    if (label.textContent.trim() === "Archive") label.textContent = "History";
+  });
+}
 
 function adminSidebar() {
   return {
