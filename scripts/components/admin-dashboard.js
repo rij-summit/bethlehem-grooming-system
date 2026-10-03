@@ -2880,64 +2880,68 @@ function adminDashboard() {
             const serviceName = service?.name ?? service?.serviceName ?? service?.service_name ?? "Grooming service";
             return `<li>${this.escapePrintHtml(serviceName)}</li>`;
           }).join("")
-        : "<li>No selected services recorded</li>";
+        : "";
 
       const petName = pet?.petName ?? pet?.pet_name ?? pet?.name ?? "Pet";
       const groomingInstructions =
         pet?.specialInstructions?.trim() ||
         pet?.special_instructions?.trim() ||
-        "None provided";
-      const medicalInformation =
+        "";
+      const staffNote = String(booking?.internalStaffNote ?? "").trim();
+      const medicalInformation = String(
         pet?.medicalConditions ??
         pet?.medical_conditions ??
-        "None provided";
-      const contactNumber = this.toStringValue(booking?.contactNumber).trim();
-      const formattedContactNumber = contactNumber
-        ? this.formatMobileNumber(contactNumber)
-        : "Not provided";
+        "",
+      ).trim();
+      const breed = this.formatPetCardValue(pet?.breed, "");
+      const breedOrSpecies = breed || this.formatPetCardValue(
+        pet?.species ?? pet?.petType ?? pet?.pet_type,
+        "",
+      );
+      const size = this.formatPetCardValue(pet?.size ?? pet?.petSize ?? pet?.pet_size, "");
+      const petDescription = [breedOrSpecies, size].filter(Boolean).join(" · ");
       const printRoot = document.createElement("section");
+      // Override the shared page size only for this pet's print operation.
+      const pageStyle = document.createElement("style");
+      pageStyle.media = "print";
+      pageStyle.textContent = "@page { size: 105mm 148mm; margin: 0; }";
       const previousTitle = document.title;
       let cleanupTimer = null;
 
       printRoot.className = "pet-grooming-print-clone";
       printRoot.innerHTML = `
         <header class="pet-grooming-print-header">
-          <div>
-            <p class="pet-grooming-print-clinic">Bethlehem Animal Clinic</p>
-            <p class="pet-grooming-print-subtitle">Individual Pet Grooming Card</p>
-          </div>
+          <p class="pet-grooming-print-label">Queue number</p>
           <strong class="pet-grooming-print-queue">${this.escapePrintHtml(this.formatPetQueueNumber(pet, petIndex))}</strong>
+          <h1 class="pet-grooming-print-name">${this.escapePrintHtml(petName)}</h1>
+          ${petDescription ? `<p class="pet-grooming-print-description">${this.escapePrintHtml(petDescription)}</p>` : ""}
+          <p class="pet-grooming-print-owner"><span>Owner</span> ${this.escapePrintHtml(booking?.ownerName || "Not provided")}</p>
         </header>
-        <section class="pet-grooming-print-section">
-          <h1>${this.escapePrintHtml(petName)}</h1>
-          <div class="pet-grooming-print-grid">
-            <p><span>Owner</span>${this.escapePrintHtml(booking?.ownerName || "Not provided")}</p>
-            <p><span>Phone number</span>${this.escapePrintHtml(formattedContactNumber)}</p>
-            <p><span>Species</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.species ?? pet?.petType ?? pet?.pet_type))}</p>
-            <p><span>Breed</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.breed))}</p>
-            <p><span>Size</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.size ?? pet?.petSize ?? pet?.pet_size))}</p>
-            <p><span>Fur type</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.furType ?? pet?.fur_type))}</p>
-            <p><span>Weight</span>${this.escapePrintHtml(this.formatPetCardValue(pet?.weight))}</p>
-            <p><span>Dropped off</span>${this.escapePrintHtml(booking?.dropOffTime || "Not recorded")}</p>
-          </div>
-        </section>
+        ${serviceItems ? `
         <section class="pet-grooming-print-section">
           <h2>Selected services</h2>
           <ul class="pet-grooming-print-services">${serviceItems}</ul>
-        </section>
+        </section>` : ""}
+        ${groomingInstructions ? `
         <section class="pet-grooming-print-section">
           <h2>${booking?.bookingType === "Walk-In" ? "Grooming & Visit Notes" : "Customer Note"}</h2>
           <p class="pet-grooming-print-notes">${this.escapePrintHtml(groomingInstructions)}</p>
-        </section>
-        ${booking?.bookingType === "Walk-In" ? "" : `<section class="pet-grooming-print-section"><h2>Internal Staff Note</h2><p class="pet-grooming-print-notes">${this.escapePrintHtml(booking?.internalStaffNote || "No staff note added.")}</p></section>`}
+        </section>` : ""}
+        ${staffNote ? `<section class="pet-grooming-print-section"><h2>Staff Note</h2><p class="pet-grooming-print-notes">${this.escapePrintHtml(staffNote)}</p></section>` : ""}
+        ${medicalInformation ? `
         <section class="pet-grooming-print-section pet-grooming-print-medical">
-          <h2>Medical Information</h2>
+          <h2>Medical Alert</h2>
           <p class="pet-grooming-print-notes">${this.escapePrintHtml(medicalInformation)}</p>
-        </section>
+        </section>` : ""}
+        <footer class="pet-grooming-print-brand">
+          <p class="pet-grooming-print-subtitle">Grooming Cage Slip</p>
+          <p class="pet-grooming-print-clinic">Bethlehem Animal Clinic</p>
+        </footer>
       `;
 
       const cleanup = () => {
         printRoot.remove();
+        pageStyle.remove();
         document.body.classList.remove("pet-grooming-card-printing");
         document.title = previousTitle;
         window.removeEventListener("afterprint", cleanup);
@@ -2947,12 +2951,18 @@ function adminDashboard() {
         }
       };
 
+      document.head.appendChild(pageStyle);
       document.body.appendChild(printRoot);
       document.body.classList.add("pet-grooming-card-printing");
       document.title = `${this.formatPetQueueNumber(pet, petIndex)} ${petName}`;
       window.addEventListener("afterprint", cleanup);
       cleanupTimer = window.setTimeout(cleanup, 60000);
-      window.print();
+      try {
+        window.print();
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
     },
 
     getPetServicesAvailedTotal(pet, booking = this.detailsBooking) {

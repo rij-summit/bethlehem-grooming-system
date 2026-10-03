@@ -1,8 +1,36 @@
+/* =========================================================
+   GROOMING INVOICE PRINT
+   ========================================================= */
 /* Admin Grooming payment invoices only. The source stays hidden on screen. */
 @media print {
   @page grooming-invoice {
     size: A4 portrait;
     margin: 12mm;
+
+    /* Suppress the browser's automatic title, date, URL, and page count. */
+    @top-left {
+      content: "";
+    }
+
+    @top-center {
+      content: "";
+    }
+
+    @top-right {
+      content: "";
+    }
+
+    @bottom-left {
+      content: "";
+    }
+
+    @bottom-center {
+      content: "";
+    }
+
+    @bottom-right {
+      content: "";
+    }
   }
 
   body.payment-invoice-printing {
@@ -276,5 +304,140 @@
   body.payment-invoice-printing .payment-invoice-notes p:last-child {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+}
+
+/* =========================================================
+   PER-PET GROOMING CAGE SLIP PRINT
+   ========================================================= */
+/* The generated slip is hidden on screen and is the only printable node. */
+.pet-grooming-print-clone {
+  display: none;
+}
+
+@media print {
+  body.pet-grooming-card-printing > :not(.pet-grooming-print-clone) {
+    display: none !important;
+  }
+
+  body.pet-grooming-card-printing .pet-grooming-print-clone {
+    display: flex !important;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 105mm !important;
+    max-width: 100% !important;
+    min-height: 148mm;
+    margin: 0 !important;
+    padding: 2.5mm !important;
+    border: 0.75pt solid #94a3b8;
+    color: #172033 !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 9pt;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .pet-grooming-print-clone * {
+    box-sizing: border-box;
+  }
+
+  .pet-grooming-print-clone > * {
+    flex-shrink: 0;
+  }
+
+  .pet-grooming-print-clone :is(h1, h2, p, ul) {
+    margin: 0;
+  }
+
+  .pet-grooming-print-header {
+    break-inside: avoid;
+  }
+
+  .pet-grooming-print-label,
+  .pet-grooming-print-section h2 {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pet-grooming-print-queue {
+    display: block;
+    font-size: 32pt;
+    font-weight: 800;
+    line-height: 1.05;
+  }
+
+  .pet-grooming-print-name {
+    padding-top: 1.5mm;
+    font-size: 22pt;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .pet-grooming-print-description {
+    padding-top: 1.5mm;
+    font-weight: 600;
+  }
+
+  .pet-grooming-print-owner {
+    padding-top: 1mm;
+  }
+
+  .pet-grooming-print-owner span {
+    color: #475569;
+  }
+
+  .pet-grooming-print-section,
+  .pet-grooming-print-brand {
+    margin-top: 1.25mm;
+    padding-top: 1.25mm;
+    border-top: 0.5pt solid #cbd5e1;
+    break-inside: avoid;
+  }
+
+  .pet-grooming-print-section h2 {
+    margin-bottom: 0.75mm;
+    break-after: avoid;
+  }
+
+  .pet-grooming-print-services {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5mm 4mm;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pet-grooming-print-services li {
+    max-width: 100%;
+  }
+
+  .pet-grooming-print-notes {
+    white-space: pre-wrap;
+  }
+
+  .pet-grooming-print-medical {
+    padding: 1.25mm;
+    border: 1.5pt solid #172033;
+  }
+
+  .pet-grooming-print-medical h2 {
+    font-size: 9pt;
+    font-weight: 800;
+  }
+
+  .pet-grooming-print-brand {
+    margin-top: auto;
+    color: #475569;
+    font-size: 7pt;
+    line-height: 1.25;
+  }
+
+  .pet-grooming-print-subtitle {
+    font-weight: 700;
   }
 }
