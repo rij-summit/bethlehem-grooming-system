@@ -2,7 +2,9 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-*Tradeoff:* These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+*Tradeoff:* These guidelines bias toward caution over speed.
+
+- No features beyond what was asked.
 
 ## 1. Think Before Coding
 
@@ -105,7 +107,41 @@ When investigating performance:
 - Verify that the affected feature still works after optimization.
 - Compare performance before and after the change when possible.
 
-## 7. Goal-Driven Execution
+## 7. UI/UX Design Skill
+
+For tasks that materially create, redesign, review, audit, or improve frontend UI/UX,
+use the Hallmark skill as a supporting design guide when relevant.
+
+This includes:
+
+- page and component redesigns
+- forms and modals
+- dashboards and management interfaces
+- customer-facing interfaces
+- visual hierarchy, spacing, typography, layout, and information density
+- UI audits and design-quality reviews
+- requests to make the interface feel less generic or AI-generated
+
+Do not invoke Hallmark for changes that are purely backend, database,
+business logic, validation, routing, infrastructure, or other non-visual implementation work.
+
+Hallmark is advisory. Existing Bethlehem UI conventions, accessibility,
+workflow requirements, business rules, functionality, and project-specific
+instructions take precedence.
+
+Do not introduce visual novelty solely to satisfy Hallmark.
+
+Prefer practical, consistent, accessible, and task-focused improvements
+over flashy, decorative, or unconventional design.
+
+For existing interfaces, preserve and extend the established Bethlehem
+design language rather than independently redesigning each screen.
+
+If a Hallmark recommendation conflicts with an established project pattern,
+only depart from the existing pattern when there is a clear usability,
+accessibility, consistency, or workflow reason to do so.
+
+## 8. Goal-Driven Execution
 
 *Define success criteria. Loop until verified.*
 
