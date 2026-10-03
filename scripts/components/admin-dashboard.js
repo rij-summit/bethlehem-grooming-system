@@ -7,6 +7,19 @@ const PAYMENT_SIZE_OPTIONS = [
 
 const PAYMENT_BILL_DENOMINATION = 1000;
 
+const GROOMING_INVOICE_CURRENCY_FORMATTER = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const GROOMING_INVOICE_DATE_FORMATTER = new Intl.DateTimeFormat("en-PH", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
 function maximumPaymentAmount(totalDue) {
   const amount = Number(totalDue);
 
@@ -3844,6 +3857,26 @@ function adminDashboard() {
       return `\u20b1${Number(amount || 0).toFixed(2)}`;
     },
 
+    formatInvoicePeso(amount) {
+      return GROOMING_INVOICE_CURRENCY_FORMATTER.format(Number(amount || 0));
+    },
+
+    formatInvoiceDate(value) {
+      const recordedValue = this.toStringValue(value).trim();
+      const date = new Date(recordedValue);
+      return Number.isNaN(date.getTime())
+        ? recordedValue
+        : GROOMING_INVOICE_DATE_FORMATTER.format(date);
+    },
+
+    formatInvoiceProductUnitPrice(line) {
+      const quantity = Number(line.quantity);
+      const subtotal = Number(line.subtotal);
+      return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(subtotal)
+        ? this.formatInvoicePeso(subtotal / quantity)
+        : "—";
+    },
+
     formatReceiptValue(value, fallbackValue = "Not specified") {
       const text = this.toStringValue(value).trim();
       return text ? text : fallbackValue;
@@ -4056,9 +4089,9 @@ function adminDashboard() {
     },
 
     printReceipt() {
-      const printClass = "payment-receipt-printing";
-      const receiptSummary = document.getElementById("paymentReceiptSummary");
-      const printClone = receiptSummary?.cloneNode(true) ?? null;
+      const printClass = "payment-invoice-printing";
+      const invoice = document.getElementById("paymentInvoice");
+      const printClone = invoice?.cloneNode(true) ?? null;
       let classRestored = false;
 
       function restorePrintClass() {
@@ -4073,7 +4106,9 @@ function adminDashboard() {
       }
 
       if (printClone) {
-        printClone.classList.add("payment-print-clone");
+        // Keep the rendered payment snapshot outside Alpine's component lifecycle.
+        printClone.setAttribute("x-ignore", "");
+        printClone.classList.add("payment-invoice-print-clone");
         document.body.appendChild(printClone);
       }
 

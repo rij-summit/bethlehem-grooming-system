@@ -1,0 +1,280 @@
+/* Admin Grooming payment invoices only. The source stays hidden on screen. */
+@media print {
+  @page grooming-invoice {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  body.payment-invoice-printing {
+    background: #fff !important;
+    color: #334155;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.payment-invoice-printing > :not(.payment-invoice-print-clone) {
+    display: none !important;
+  }
+
+  body.payment-invoice-printing #paymentInvoice {
+    page: grooming-invoice;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.3;
+    color: #334155;
+  }
+
+  body.payment-invoice-printing #paymentInvoice * {
+    box-sizing: border-box;
+  }
+
+  body.payment-invoice-printing #paymentInvoice :is(h1, h2, h3, p, dl, dd) {
+    margin: 0;
+  }
+
+  body.payment-invoice-printing .payment-invoice-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 1pt solid #cbd5e1;
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-brand {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    color: #2f4b66;
+  }
+
+  body.payment-invoice-printing .payment-invoice-logo {
+    width: 14mm;
+    height: auto;
+  }
+
+  body.payment-invoice-printing .payment-invoice-brand strong,
+  body.payment-invoice-printing .payment-invoice-brand span {
+    display: block;
+  }
+
+  body.payment-invoice-printing .payment-invoice-brand strong {
+    font-size: 14pt;
+    letter-spacing: 0.04em;
+  }
+
+  body.payment-invoice-printing .payment-invoice-brand span {
+    font-size: 9pt;
+    letter-spacing: 0.1em;
+  }
+
+  body.payment-invoice-printing .payment-invoice-heading {
+    text-align: right;
+  }
+
+  body.payment-invoice-printing .payment-invoice-heading h1 {
+    color: #2f4b66;
+    font-size: 23pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  body.payment-invoice-printing .payment-invoice-status {
+    display: inline-block;
+    margin-top: 1mm;
+    padding: 0.5mm 2mm;
+    border: 0.75pt solid #15803d;
+    border-radius: 1mm;
+    color: #15803d;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  body.payment-invoice-printing .payment-invoice-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8mm;
+    padding: 3mm 0;
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-meta dt {
+    color: #64748b;
+    font-size: 9pt;
+  }
+
+  body.payment-invoice-printing .payment-invoice-meta dd {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  body.payment-invoice-printing .payment-invoice-meta > div:last-child {
+    text-align: right;
+  }
+
+  body.payment-invoice-printing .payment-invoice-section {
+    margin-top: 3mm;
+  }
+
+  body.payment-invoice-printing .payment-invoice-section h2 {
+    margin-bottom: 1.5mm !important;
+    color: #2f4b66;
+    font-size: 11pt;
+    font-weight: 700;
+    break-after: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-customer {
+    padding-bottom: 3mm;
+    border-bottom: 0.5pt solid #e2e8f0;
+    overflow-wrap: anywhere;
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-customer-name {
+    color: #2f4b66;
+    font-weight: 600;
+  }
+
+  body.payment-invoice-printing .payment-invoice-pet + .payment-invoice-pet {
+    margin-top: 3mm;
+  }
+
+  body.payment-invoice-printing .payment-invoice-pet-header {
+    margin-bottom: 1mm;
+    overflow-wrap: anywhere;
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-pet-header h3 {
+    color: #2f4b66;
+    font-size: 10.5pt;
+    font-weight: 700;
+  }
+
+  body.payment-invoice-printing .payment-invoice-pet-header p {
+    color: #64748b;
+    font-size: 9pt;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: inherit;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table thead {
+    display: table-header-group;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table tr {
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table :is(th, td) {
+    padding: 1mm 1.5mm;
+    border-bottom: 0.5pt solid #e2e8f0;
+    vertical-align: top;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table th {
+    color: #64748b;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table :is(th, td):first-child {
+    width: 54%;
+    padding-left: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table :is(th, td):nth-child(2) {
+    width: 8%;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table :is(th, td):nth-child(n + 3) {
+    width: 19%;
+    white-space: nowrap;
+  }
+
+  body.payment-invoice-printing .payment-invoice-table :is(th, td):last-child {
+    padding-right: 0;
+  }
+
+  body.payment-invoice-printing .payment-invoice-category-total {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8mm;
+    margin-top: 1.5mm;
+    color: #2f4b66;
+    font-weight: 600;
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-totals {
+    width: 82mm;
+    margin: 5mm 0 0 auto !important;
+    padding: 2mm 0;
+    border-top: 1pt solid #94a3b8;
+    border-bottom: 1pt solid #94a3b8;
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+    padding: 0.5mm 0;
+  }
+
+  body.payment-invoice-printing .payment-invoice-totals > div:first-child {
+    color: #2f4b66;
+    font-size: 12pt;
+    font-weight: 700;
+  }
+
+  body.payment-invoice-printing .payment-invoice-totals dd {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  body.payment-invoice-printing .payment-invoice-details-summary {
+    break-inside: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-details dl > div {
+    display: grid;
+    grid-template-columns: 35mm minmax(0, 1fr);
+    gap: 4mm;
+    padding: 0.25mm 0;
+  }
+
+  body.payment-invoice-printing .payment-invoice-details dt,
+  body.payment-invoice-printing .payment-invoice-notes-label {
+    color: #64748b;
+  }
+
+  body.payment-invoice-printing .payment-invoice-notes {
+    margin-top: 2mm;
+  }
+
+  body.payment-invoice-printing .payment-invoice-notes-label {
+    break-after: avoid;
+  }
+
+  body.payment-invoice-printing .payment-invoice-notes p:last-child {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
