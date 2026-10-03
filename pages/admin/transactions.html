@@ -7,6 +7,8 @@
     <title>Transactions | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../css/components/admin-transactions.css?v=details-20261003b" />
+    <link rel="stylesheet" href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -158,14 +160,14 @@
             <h2 class="text-lg font-extrabold text-[#1f3850]">Transactions</h2>
           </div>
           <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen = true">
-            <i data-lucide="menu" class="h-5 w-5"></i>
+            <svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#list"></use></svg>
           </button>
         </header>
 
         <!-- Transactions Content -->
         <main
           x-data="adminTransactions()"
-          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
+          class="transactions-page flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
           <!-- Top Banner -->
           <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-4 lg:backdrop-blur">
@@ -187,23 +189,25 @@
               <!-- Filters -->
               <div class="mt-4 flex flex-wrap items-center gap-3">
                 <!-- Search -->
-                <label class="relative block min-w-0 flex-1 sm:min-w-[280px]">
+                <label class="transaction-search relative block min-w-0 flex-1 sm:min-w-[280px]">
                   <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <i data-lucide="search" class="h-4 w-4"></i>
+                    <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
                   </span>
                   <input
-                    type="text"
+                    type="search"
+                    aria-label="Search transactions by owner, pet, or reference"
                     x-model="searchQuery"
                     @input.debounce.400ms="onSearchChange()"
-                    placeholder="Search by owner or pet..."
+                    placeholder="Search by owner, pet, or reference..."
                     class="w-full rounded-xl border border-transparent bg-white px-10 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
                   />
                 </label>
 
                 <!-- Period filter -->
                 <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
-                  <i data-lucide="calendar-range" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
+                  <svg class="ph-icon h-4 w-4 text-[#315b7e] shrink-0" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
                   <select
+                    aria-label="Transaction period"
                     x-model="transactionPeriod"
                     @change="onPeriodChange()"
                     class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
@@ -216,10 +220,11 @@
 
                 <!-- Period value filter -->
                 <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
-                  <i data-lucide="calendar" class="h-4 w-4 text-[#315b7e] shrink-0"></i>
+                  <svg class="ph-icon h-4 w-4 text-[#315b7e] shrink-0" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
                   <input
                     x-show="transactionPeriod === 'day'"
                     type="date"
+                    aria-label="Transaction date"
                     x-model="filterDate"
                     @change="onPeriodValueChange()"
                     class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
@@ -227,6 +232,7 @@
                   <input
                     x-show="transactionPeriod === 'month'"
                     type="month"
+                    aria-label="Transaction month"
                     x-model="filterMonth"
                     @change="onPeriodValueChange()"
                     class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
@@ -237,6 +243,7 @@
                     min="2000"
                     max="2100"
                     step="1"
+                    aria-label="Transaction year"
                     x-model="filterYear"
                     @change="onPeriodValueChange()"
                     class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer"
@@ -250,7 +257,7 @@
                     @click="clearFilters()"
                     class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                   >
-                    <i data-lucide="x" class="h-4 w-4"></i>
+                    <svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
                     Clear Filters
                   </button>
                 </template>
@@ -266,7 +273,7 @@
           <!-- Loading -->
           <template x-if="loading">
             <div class="mt-6 py-16 text-center text-slate-400">
-              <i data-lucide="loader-2" class="mx-auto h-8 w-8 animate-spin"></i>
+              <svg class="ph-icon mx-auto h-8 w-8 animate-spin" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
               <p class="mt-3 text-sm">Loading transactions...</p>
             </div>
           </template>
@@ -282,7 +289,7 @@
           <template x-if="!loading && !errorMessage && transactions.length === 0">
             <div class="mt-6 rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-10 text-center">
               <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a]">
-                <i data-lucide="receipt" class="h-8 w-8"></i>
+                <svg class="ph-icon h-8 w-8" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               </div>
               <p class="mt-4 text-lg font-bold text-[#2f4b66]">No transactions yet</p>
               <p class="mt-2 text-sm text-slate-500">Payment records will appear here once payments are processed.</p>
@@ -295,10 +302,10 @@
               <template x-for="group in groupedTransactions" :key="group.dateKey">
                 <div>
                   <!-- Date group header -->
-                  <div class="mb-3 flex items-center gap-3">
+                  <div class="transaction-date-heading mb-3 flex items-center gap-3">
                     <span
-                      class="whitespace-nowrap text-sm font-bold uppercase tracking-wide"
-                      :class="group.isToday ? 'text-[#16a34a]' : 'text-slate-400'"
+                      class="min-w-0 text-sm font-bold uppercase tracking-wide"
+                      :class="group.isToday ? 'text-[#16a34a]' : 'text-slate-600'"
                       x-text="group.isToday ? 'Today — ' + group.label : group.label"
                     ></span>
                     <div class="h-px flex-1" :class="group.isToday ? 'bg-[#86efac]' : 'bg-slate-200'"></div>
@@ -310,84 +317,108 @@
                     ></span>
                   </div>
 
-                  <!-- Transaction rows -->
-                  <div class="rounded-2xl border border-[#d7e3ef] bg-white overflow-hidden shadow-sm">
-                    <template x-for="(tx, index) in group.items" :key="tx.id">
-                      <div
-                        class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-                        :class="index > 0 ? 'border-t border-slate-100' : ''"
-                      >
-                        <!-- Left: info -->
-                        <div class="flex flex-col gap-0.5 min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <p class="font-semibold text-slate-800" x-text="tx.ownerName"></p>
-                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500" x-text="tx.reference"></span>
-                          </div>
-                          <p class="text-sm text-slate-500">
-                            <span x-text="tx.petName"></span>
-                            &nbsp;&middot;&nbsp;
-                            <span x-text="tx.serviceLabel"></span>
-                          </p>
-                          <p class="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                            <i data-lucide="clock" class="h-3 w-3"></i>
-                            <span x-text="formatTime(tx.paidAt)"></span>
-                            <template x-if="tx.notes">
-                              <span class="ml-2 text-slate-300">&middot;</span>
-                            </template>
-                            <template x-if="tx.notes">
-                              <span x-text="tx.notes"></span>
-                            </template>
-                            <template x-if="tx.paymentMethod">
-                              <span class="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500" x-text="tx.paymentMethod"></span>
-                            </template>
-                          </p>
-                          <div x-show="tx.paymentSummary?.pets?.length" class="mt-2 flex flex-wrap gap-2">
-                            <template x-for="pet in tx.paymentSummary?.pets || []" :key="pet.booking_pet_id">
-                              <span class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
-                                <strong x-text="pet.pet_name"></strong>
-                                <span x-text="' · ' + formatPeso(pet.final_pet_charge)"></span>
-                              </span>
-                            </template>
-                          </div>
-                          <div class="mt-2 text-xs text-slate-600">
-                            <p x-text="'Grooming Services — ' + formatPeso(tx.groomingServicesTotal)"></p>
-                            <p x-show="tx.productAddons?.length" x-text="'Product Add-ons — ' + formatPeso(tx.productAddonsTotal)"></p>
-                          </div>
-                          <details class="mt-2 text-xs text-slate-600">
-                            <summary class="cursor-pointer font-semibold text-[#315b7e]">View payment details</summary>
-                            <div class="mt-2 space-y-2 rounded-xl bg-slate-50 p-3">
-                              <strong class="block text-slate-700">Grooming Services</strong>
-                              <template x-for="pet in tx.paymentSummary?.pets || []" :key="pet.booking_pet_id">
-                                <div><span class="font-semibold" x-text="pet.pet_name"></span><template x-for="line in pet.service_breakdown || []" :key="line.booking_service_id"><p x-text="line.label + ' — ' + formatPeso(line.price_at_booking)"></p></template></div>
-                              </template>
-                              <div x-show="tx.productAddons?.length"><strong class="block text-slate-700">Product Add-ons</strong><template x-for="line in tx.productAddons || []" :key="line.itemName"><p x-text="line.itemName + ' × ' + line.quantity + ' — ' + formatPeso(line.subtotal)"></p></template></div>
-                              <div class="border-t border-slate-200 pt-2"><strong class="block text-slate-700">Payment</strong><p x-text="'Total — ' + formatPeso(tx.finalPrice)"></p><p x-text="'Cash Received — ' + formatPeso(tx.amountPaid)"></p><p x-text="'Change — ' + formatPeso(tx.changeGiven)"></p></div>
-                            </div>
-                          </details>
+                  <!-- Compact history: identify the transaction, then inspect its details. -->
+                  <div class="transaction-list">
+                    <div class="transaction-columns" aria-hidden="true">
+                      <span>Time</span><span>Pet Owner / Reference</span><span>Pet</span><span>Payment</span><span class="transaction-money">Total</span><span></span>
+                    </div>
+                    <template x-for="tx in group.items" :key="tx.id">
+                      <article class="transaction-row">
+                        <p class="transaction-time" x-text="formatTime(tx.paidAt)"></p>
+                        <div class="transaction-owner">
+                          <p class="transaction-owner-name" x-text="tx.ownerName || '—'"></p>
+                          <p class="transaction-reference" x-text="tx.reference"></p>
                         </div>
-
-                        <!-- Right: amounts -->
-                        <div class="flex shrink-0 items-center gap-6 text-right">
-                          <div>
-                            <p class="text-xs text-slate-400">Paid</p>
-                            <p class="font-bold text-slate-700" x-text="formatPeso(tx.amountPaid)"></p>
-                          </div>
-                          <div>
-                            <p class="text-xs text-slate-400">Change</p>
-                            <p class="font-bold text-slate-500" x-text="formatPeso(tx.changeGiven)"></p>
-                          </div>
-                          <div>
-                            <p class="text-xs text-slate-400">Total</p>
-                            <p class="text-lg font-bold text-[#16a34a]" x-text="formatPeso(tx.finalPrice)"></p>
-                          </div>
-                        </div>
-                      </div>
+                        <p class="transaction-pets" :title="petNames(tx).join(', ')" x-text="compactPetNames(tx)"></p>
+                        <span class="transaction-method" x-text="tx.paymentMethodLabel || tx.paymentMethod || '—'"></span>
+                        <p class="transaction-total" x-text="formatInvoicePeso(tx.finalPrice)"></p>
+                        <button type="button" class="transaction-button transaction-button-secondary transaction-view"
+                          @click="openDetails(tx, $el)" aria-haspopup="dialog" :aria-label="'View Details for ' + tx.reference">View Details</button>
+                      </article>
                     </template>
                   </div>
                 </div>
               </template>
             </div>
           </template>
+
+          <dialog x-ref="detailsDialog" class="transaction-dialog" aria-labelledby="transaction-details-title"
+            @cancel.prevent="closeDetails()" @click="if ($event.target === $el) closeDetails()">
+            <template x-if="selectedTransaction">
+              <div class="transaction-dialog-layout">
+                <header class="transaction-dialog-header">
+                  <div class="transaction-dialog-title-row">
+                    <h2 id="transaction-details-title">Transaction Details</h2>
+                    <button type="button" class="transaction-close" aria-label="Close Transaction Details" @click="closeDetails()" autofocus>
+                      <svg class="ph-icon" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
+                    </button>
+                  </div>
+                  <div class="transaction-dialog-subtitle">
+                    <span class="transaction-reference" x-text="selectedTransaction.reference"></span>
+                    <span x-text="formatTransactionDate(selectedTransaction)"></span>
+                    <span class="transaction-method" x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></span>
+                  </div>
+                </header>
+                <div x-ref="detailsBody" class="transaction-dialog-body" tabindex="0" aria-label="Transaction details content">
+                  <section class="transaction-detail-section" aria-labelledby="transaction-information-title">
+                    <h3 id="transaction-information-title">Transaction Information</h3>
+                    <dl class="transaction-metadata">
+                      <div><dt>Pet Owner</dt><dd x-text="selectedTransaction.ownerName || '—'"></dd></div>
+                      <div><dt>Pet</dt><dd x-text="petNames(selectedTransaction).join(', ') || '—'"></dd></div>
+                      <div><dt>Reference</dt><dd x-text="selectedTransaction.reference"></dd></div>
+                      <div><dt>Transaction Date</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
+                      <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
+                    </dl>
+                  </section>
+                  <section class="transaction-detail-section" aria-labelledby="transaction-breakdown-title">
+                    <h3 id="transaction-breakdown-title">Payment Breakdown</h3>
+                    <h4 class="transaction-category-title">Grooming Services</h4>
+                    <template x-for="(pet, petIndex) in selectedTransaction.paymentSummary?.pets || []" :key="pet.booking_pet_id ?? petIndex">
+                      <div class="transaction-pet-services">
+                        <h5 x-text="pet.pet_name"></h5>
+                        <dl class="transaction-line-items">
+                          <template x-for="(line, lineIndex) in pet.service_breakdown || []" :key="line.booking_service_id ?? lineIndex">
+                            <div><dt x-text="line.label"></dt><dd x-text="formatInvoicePeso(line.price_at_booking)"></dd></div>
+                          </template>
+                        </dl>
+                      </div>
+                    </template>
+                    <div class="transaction-category-total"><span>Grooming Services</span><strong x-text="formatInvoicePeso(selectedTransaction.groomingServicesTotal)"></strong></div>
+                    <template x-if="selectedTransaction.productAddons?.length">
+                      <div class="transaction-products">
+                        <h4 class="transaction-category-title">Product Add-ons</h4>
+                        <dl class="transaction-line-items">
+                          <template x-for="(line, index) in selectedTransaction.productAddons" :key="index">
+                            <div><dt><span x-text="line.itemName"></span><small x-text="'Qty ' + line.quantity"></small></dt><dd x-text="formatInvoicePeso(line.subtotal)"></dd></div>
+                          </template>
+                        </dl>
+                        <div x-show="selectedTransaction.productAddons.length > 1" class="transaction-category-total"><span>Product Add-ons</span><strong x-text="formatInvoicePeso(selectedTransaction.productAddonsTotal)"></strong></div>
+                      </div>
+                    </template>
+                  </section>
+                  <section class="transaction-detail-section" aria-labelledby="transaction-payment-title">
+                    <h3 id="transaction-payment-title">Payment Details</h3>
+                    <dl class="transaction-line-items transaction-payment">
+                      <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
+                      <div><dt>Amount Due</dt><dd x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></dd></div>
+                      <div><dt>Cash Received</dt><dd x-text="formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
+                      <div><dt>Change</dt><dd x-text="formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
+                    </dl>
+                    <div class="transaction-paid-total"><span>Total Paid</span><strong x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></strong></div>
+                    <div x-show="selectedTransaction.notes" class="transaction-notes"><h4>Notes</h4><p x-text="selectedTransaction.notes"></p></div>
+                  </section>
+                </div>
+                <div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.template"></div>
+                <footer class="transaction-dialog-footer">
+                  <button type="button" class="transaction-button transaction-button-secondary" @click="closeDetails()">Close</button>
+                  <button type="button" class="transaction-button transaction-button-primary" @click="printInvoice()">
+                    <svg class="ph-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M64 80V40h128v40M64 176H40a16 16 0 0 1-16-16v-64a16 16 0 0 1 16-16h176a16 16 0 0 1 16 16v64a16 16 0 0 1-16 16h-24M64 144h128v72H64Z" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><circle cx="188" cy="112" r="12" fill="currentColor"/></svg>
+                    Print Invoice
+                  </button>
+                </footer>
+              </div>
+            </template>
+          </dialog>
 
         </main>
       </div>
@@ -397,6 +428,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=unified-inventory-20261001b"></script>
-    <script src="../../scripts/components/admin-transactions.js"></script>
+    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
+    <script src="../../scripts/components/admin-transactions.js?v=details-20261003"></script>
   </body>
 </html>

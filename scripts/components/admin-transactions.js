@@ -14,6 +14,10 @@ function adminTransactions() {
     filterYear: "",
     loading: false,
     errorMessage: "",
+    selectedTransaction: null,
+    receiptModal: null,
+    detailsTrigger: null,
+    previousBodyOverflow: "",
 
     async init() {
       await this.loadTransactions();
@@ -133,6 +137,85 @@ function adminTransactions() {
       }
 
       return this.filterDate ? `${this.formatShortDate(this.filterDate)} Collection` : "Collection";
+    },
+
+    petNames(tx) {
+      const names = (tx.paymentSummary?.pets || []).map(pet => pet.pet_name).filter(Boolean);
+      return names.length ? names : (tx.petName || "").split(",").map(name => name.trim()).filter(Boolean);
+    },
+
+    compactPetNames(tx) {
+      const names = this.petNames(tx);
+      return names.length > 3 ? `${names.slice(0, 2).join(", ")} +${names.length - 2} more` : names.join(", ") || "—";
+    },
+
+    openDetails(tx, trigger) {
+      this.selectedTransaction = tx;
+      // Build the invoice once from the transaction being inspected.
+      this.receiptModal = {
+        bookingReference: tx.reference,
+        ownerName: tx.ownerName,
+        pets: (tx.paymentSummary?.pets || []).map((pet, index) => ({
+          id: pet.booking_pet_id ?? index,
+          name: pet.pet_name,
+          species: pet.pet_species,
+          lines: (pet.service_breakdown || []).map((line, lineIndex) => ({
+            id: line.booking_service_id ?? lineIndex,
+            name: line.label,
+            price: line.price_at_booking,
+          })),
+          subtotal: pet.final_pet_charge ?? pet.original_pet_subtotal,
+        })),
+        products: tx.productAddons || [],
+        groomingSubtotal: tx.groomingServicesTotal,
+        productsSubtotal: tx.productAddonsTotal,
+        finalPrice: tx.finalPrice,
+        amountPaid: tx.amountPaid,
+        change: tx.changeGiven,
+        paymentMethod: tx.paymentMethodLabel || tx.paymentMethod,
+        notes: tx.notes,
+        paidAt: tx.paidAt,
+      };
+      this.detailsTrigger = trigger;
+      this.previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      this.$nextTick(() => {
+        this.$refs.detailsDialog.showModal();
+        this.$refs.detailsBody.scrollTop = 0;
+      });
+    },
+
+    closeDetails() {
+      this.$refs.detailsDialog.close();
+      document.body.style.overflow = this.previousBodyOverflow;
+      this.selectedTransaction = null;
+      this.receiptModal = null;
+      this.detailsTrigger?.focus();
+      this.detailsTrigger = null;
+    },
+
+    destroy() {
+      if (this.selectedTransaction) document.body.style.overflow = this.previousBodyOverflow;
+    },
+
+    formatTransactionDate(tx) {
+      return `${this.formatShortDate(tx.dateKey)} · ${this.formatTime(tx.paidAt)}`;
+    },
+
+    formatInvoicePeso(amount) {
+      return window.PaymentInvoice.formatPeso(amount);
+    },
+
+    formatInvoiceDate(value) {
+      return window.PaymentInvoice.formatDate(value);
+    },
+
+    formatInvoiceProductUnitPrice(line) {
+      return window.PaymentInvoice.formatProductUnitPrice(line);
+    },
+
+    printInvoice() {
+      if (this.selectedTransaction) window.PaymentInvoice.print();
     },
 
     formatGroupDate(dateStr) {

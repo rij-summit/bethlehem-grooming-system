@@ -1,0 +1,99 @@
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · Bethlehem admin history */
+.transactions-page {
+  --tx-ink: #1f3850;
+  --tx-muted: #52677c;
+  --tx-blue: #315b7e;
+  --tx-blue-hover: #244966;
+  --tx-border: #d7e3ef;
+  --tx-surface: #fff;
+  --tx-soft: #f5f8fb;
+  --tx-paid: #15803d;
+  --tx-overlay: rgb(15 23 42 / 55%);
+  --tx-shadow: 0 24px 64px rgb(15 23 42 / 22%);
+  min-width: 0;
+}
+.transactions-page .ph-icon { flex-shrink: 0; }
+.transaction-dialog .ph-icon { width: 1.125rem; height: 1.125rem; }
+.transaction-list { border: 1px solid var(--tx-border); border-radius: 14px; background: var(--tx-surface); overflow: hidden; }
+.transaction-columns { display: none; }
+.transaction-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 16px 20px; font-size: 14px; }
+.transaction-row + .transaction-row { border-top: 1px solid var(--tx-border); }
+.transaction-row:hover { background: var(--tx-soft); }
+.transaction-row p { margin: 0; min-width: 0; }
+.transaction-time { grid-column: 1 / -1; color: var(--tx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.transaction-owner { min-width: 0; }
+.transaction-owner-name { color: var(--tx-ink); font-weight: 700; overflow-wrap: anywhere; }
+.transaction-reference { margin-top: 3px !important; font-size: 12px; color: var(--tx-muted); overflow-wrap: anywhere; }
+.transaction-pets { grid-column: 1 / -1; color: var(--tx-muted); overflow-wrap: anywhere; }
+.transaction-method { display: inline-flex; width: fit-content; align-items: center; border: 1px solid var(--tx-border); border-radius: 6px; padding: 3px 8px; background: var(--tx-soft); color: var(--tx-ink); font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+.transaction-total { grid-column: 2; grid-row: 2; text-align: right; color: var(--tx-ink); font-size: 17px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.transaction-view { grid-column: 2; }
+.transaction-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 40px; border: 1px solid var(--tx-border); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.transaction-button-secondary { background: var(--tx-surface); color: var(--tx-blue); }
+.transaction-button-secondary:hover { background: var(--tx-soft); border-color: var(--tx-blue); }
+.transaction-button-primary { background: var(--tx-blue); color: var(--tx-surface); border-color: var(--tx-blue); }
+.transaction-button-primary:hover { background: var(--tx-blue-hover); }
+.transactions-page :is(button, input, select, [tabindex]):focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 3px; }
+.transaction-button:active { transform: translateY(1px); }
+.transaction-date-heading { flex-wrap: wrap; }
+.transaction-date-heading > span:first-child { font-size: 12px; }
+.transaction-dialog { width: calc(100% - 32px); max-width: 768px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--tx-border); border-radius: 18px; background: var(--tx-surface); color: var(--tx-ink); box-shadow: var(--tx-shadow); overflow: hidden; }
+.transaction-dialog::backdrop { background: var(--tx-overlay); }
+.transaction-dialog-layout { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+.transaction-dialog-header { flex-shrink: 0; padding: 20px 24px 16px; border-bottom: 1px solid var(--tx-border); }
+.transaction-dialog-title-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.transaction-dialog h2 { margin: 0; font-size: 22px; font-weight: 700; }
+.transaction-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border: 1px solid var(--tx-border); border-radius: 9px; color: var(--tx-muted); background: var(--tx-surface); cursor: pointer; }
+.transaction-close:hover { color: var(--tx-ink); background: var(--tx-soft); }
+.transaction-dialog-subtitle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; color: var(--tx-muted); font-size: 12px; }
+.transaction-dialog-subtitle .transaction-reference { margin: 0 !important; font-weight: 600; }
+.transaction-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px; }
+.transaction-detail-section { padding: 20px 0; }
+.transaction-detail-section + .transaction-detail-section { border-top: 1px solid var(--tx-border); }
+.transaction-detail-section h3 { margin: 0 0 16px; font-size: 15px; font-weight: 700; }
+.transaction-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin: 0; }
+.transaction-metadata dt { color: var(--tx-muted); font-size: 12px; }
+.transaction-metadata dd { margin: 3px 0 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.transaction-category-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--tx-blue); }
+.transaction-pet-services + .transaction-pet-services { margin-top: 16px; }
+.transaction-pet-services h5 { margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.transaction-line-items { margin: 0; font-size: 14px; }
+.transaction-line-items > div { display: flex; justify-content: space-between; gap: 20px; padding: 5px 0; }
+.transaction-line-items dt { min-width: 0; color: var(--tx-muted); overflow-wrap: anywhere; }
+.transaction-line-items dd { margin: 0; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.transaction-line-items small { display: block; margin-top: 3px; font-size: 12px; }
+.transaction-category-total { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; border-top: 1px solid var(--tx-border); padding-top: 10px; font-size: 13px; }
+.transaction-category-total strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.transaction-products { margin-top: 24px; }
+.transaction-paid-total { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 14px 16px; border-radius: 10px; background: var(--tx-soft); font-size: 15px; font-weight: 700; }
+.transaction-paid-total strong { font-size: 22px; color: var(--tx-paid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.transaction-notes { margin-top: 16px; font-size: 13px; }
+.transaction-notes h4 { margin-bottom: 4px; font-weight: 600; }
+.transaction-notes p { color: var(--tx-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.transaction-dialog-footer { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--tx-border); background: var(--tx-surface); }
+@media (min-width: 1280px) {
+  .transaction-columns, .transaction-row { grid-template-columns: 80px minmax(160px, 1.4fr) minmax(100px, 1fr) 86px 110px 118px; gap: 18px; }
+  .transaction-columns { display: grid; padding: 10px 20px; border-bottom: 1px solid var(--tx-border); background: var(--tx-soft); color: var(--tx-muted); font-size: 11px; font-weight: 600; }
+  .transaction-row { min-height: 78px; padding-top: 12px; padding-bottom: 12px; }
+  .transaction-time, .transaction-pets, .transaction-total, .transaction-view { grid-column: auto; grid-row: auto; }
+  .transaction-money { text-align: right; }
+}
+@media (max-width: 479px) {
+  .transaction-row { padding: 14px; gap: 8px 10px; }
+  .transaction-owner { grid-column: 1 / -1; }
+  .transaction-total { grid-row: 4; }
+  .transaction-method { grid-row: 4; }
+  .transaction-view { grid-row: 5; }
+  .transaction-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); border-radius: 14px; }
+  .transaction-dialog-layout { max-height: calc(100dvh - 18px); }
+  .transaction-dialog-header { padding: 14px 16px; }
+  .transaction-dialog h2 { font-size: 19px; }
+  .transaction-dialog-body { padding: 0 16px; }
+  .transaction-metadata { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .transaction-dialog-footer { padding: 12px 16px; }
+  .transaction-paid-total { padding: 12px; }
+  .transaction-paid-total strong { font-size: 19px; }
+}
+@media (max-width: 639px) {
+  .transaction-search { flex-basis: 100%; }
+}

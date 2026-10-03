@@ -7,19 +7,6 @@ const PAYMENT_SIZE_OPTIONS = [
 
 const PAYMENT_BILL_DENOMINATION = 1000;
 
-const GROOMING_INVOICE_CURRENCY_FORMATTER = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const GROOMING_INVOICE_DATE_FORMATTER = new Intl.DateTimeFormat("en-PH", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
 function maximumPaymentAmount(totalDue) {
   const amount = Number(totalDue);
 
@@ -3868,23 +3855,15 @@ function adminDashboard() {
     },
 
     formatInvoicePeso(amount) {
-      return GROOMING_INVOICE_CURRENCY_FORMATTER.format(Number(amount || 0));
+      return window.PaymentInvoice.formatPeso(amount);
     },
 
     formatInvoiceDate(value) {
-      const recordedValue = this.toStringValue(value).trim();
-      const date = new Date(recordedValue);
-      return Number.isNaN(date.getTime())
-        ? recordedValue
-        : GROOMING_INVOICE_DATE_FORMATTER.format(date);
+      return window.PaymentInvoice.formatDate(value);
     },
 
     formatInvoiceProductUnitPrice(line) {
-      const quantity = Number(line.quantity);
-      const subtotal = Number(line.subtotal);
-      return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(subtotal)
-        ? this.formatInvoicePeso(subtotal / quantity)
-        : "—";
+      return window.PaymentInvoice.formatProductUnitPrice(line);
     },
 
     formatReceiptValue(value, fallbackValue = "Not specified") {
@@ -4099,33 +4078,7 @@ function adminDashboard() {
     },
 
     printReceipt() {
-      const printClass = "payment-invoice-printing";
-      const invoice = document.getElementById("paymentInvoice");
-      const printClone = invoice?.cloneNode(true) ?? null;
-      let classRestored = false;
-
-      function restorePrintClass() {
-        if (classRestored) {
-          return;
-        }
-
-        classRestored = true;
-        printClone?.remove();
-        document.body.classList.remove(printClass);
-        window.removeEventListener("afterprint", restorePrintClass);
-      }
-
-      if (printClone) {
-        // Keep the rendered payment snapshot outside Alpine's component lifecycle.
-        printClone.setAttribute("x-ignore", "");
-        printClone.classList.add("payment-invoice-print-clone");
-        document.body.appendChild(printClone);
-      }
-
-      document.body.classList.add(printClass);
-      window.addEventListener("afterprint", restorePrintClass);
-      window.print();
-      window.setTimeout(restorePrintClass, 1000);
+      window.PaymentInvoice.print();
     },
 
     async releaseBooking(booking) {

@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../scripts/components/admin-dashboard.js"), "utf8");
 const context = { window: { AppClock: { todayKey: () => "2026-10-03" } }, console, Date, Intl };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../scripts/components/payment-invoice.js"), "utf8"), context);
 vm.runInNewContext(source, context);
 const ui = context.adminDashboard();
 
@@ -26,7 +27,8 @@ for (const quantity of [0, -1, "invalid", Infinity, undefined]) {
 assert.equal(JSON.stringify(product), originalProduct, "Unit price formatting must not mutate product records");
 
 const html = fs.readFileSync(path.join(__dirname, "../pages/admin/appointments.html"), "utf8");
-const invoice = html.split('<section id="paymentInvoice">')[1].split('<div class="receipt-modal-actions')[0];
+assert.ok(html.includes('x-html="window.PaymentInvoice.template"'), "Grooming uses the shared invoice template");
+const invoice = context.window.PaymentInvoice.template;
 const settledPayment = { finalPrice: 850, amountPaid: 1000, change: 150 };
 for (const [label, expected] of [
   ["Invoice total", "₱850.00"],

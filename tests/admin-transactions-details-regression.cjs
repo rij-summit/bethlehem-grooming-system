@@ -1,0 +1,78 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const context = { window: {}, Date, Intl };
+for (const file of ["payment-invoice.js", "admin-transactions.js"]) {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../scripts/components", file), "utf8"), context);
+}
+const ui = context.adminTransactions();
+const tx = {
+  id: 1, reference: "BAC-20261003-0002", ownerName: "Gerald Senining", petName: "Ocon",
+  dateKey: "2026-10-03", paidAt: "2026-10-03 11:47:00", paymentMethod: "cash", paymentMethodLabel: "Cash",
+  finalPrice: 2010, amountPaid: 3000, changeGiven: 990, groomingServicesTotal: 850, productAddonsTotal: 1160,
+  productAddons: [{ itemName: "Royal Canin", quantity: 1, subtotal: 1160, priceAtSale: 1160 }],
+  paymentSummary: { pets: [{ booking_pet_id: 11, pet_name: "Ocon", pet_species: "dog",
+    final_pet_charge: null, original_pet_subtotal: 850,
+    service_breakdown: [{ booking_service_id: 12, label: "Regular Dog Grooming", price_at_booking: 550 },
+      { booking_service_id: 13, label: "Facial Trimming", price_at_booking: 150 },
+      { booking_service_id: 14, label: "Anal Sac Draining", price_at_booking: 150 }],
+  }] },
+};
+const before = JSON.stringify(tx);
+assert.equal(ui.compactPetNames(tx), "Ocon");
+assert.equal(ui.compactPetNames({ petName: "Hopper, Rigby, Ocon" }), "Hopper, Rigby, Ocon");
+assert.equal(ui.compactPetNames({ petName: "Hopper, Rigby, Ocon, Buddy" }), "Hopper, Rigby +2 more");
+assert.equal(ui.compactPetNames({}), "—");
+// The payment summary is authoritative; duplicate names can belong to different pets.
+assert.equal(ui.compactPetNames({ petName: "stale", paymentSummary: { pets: [{ pet_name: "Max" }, { pet_name: "Max" }] } }), "Max, Max");
+
+let opened = 0, closed = 0, focused = 0, printed = 0;
+ui.$nextTick = (callback) => callback();
+ui.$refs = { detailsDialog: { showModal: () => opened++, close: () => closed++ }, detailsBody: { scrollTop: 99 } };
+context.document = { body: { style: { overflow: "auto" } } };
+ui.openDetails(tx, { focus: () => focused++ });
+assert.equal(opened, 1);
+assert.equal(ui.$refs.detailsBody.scrollTop, 0);
+assert.equal(context.document.body.style.overflow, "hidden");
+assert.equal(ui.receiptModal.finalPrice, 2010, "Invoice total uses the recorded charge, not cash tendered");
+assert.equal(ui.receiptModal.amountPaid, 3000);
+assert.equal(ui.receiptModal.change, 990);
+assert.equal(ui.receiptModal.pets[0].subtotal, 850, "Unfinished early-payment pet uses the existing service subtotal");
+assert.equal(ui.receiptModal.pets[0].lines[0].price, 550);
+assert.equal(ui.receiptModal.products[0].subtotal, 1160);
+assert.equal(ui.receiptModal.bookingReference, tx.reference);
+assert.equal(ui.receiptModal.contactNumber, undefined, "Do not invent missing contact information");
+assert.equal(ui.formatInvoicePeso(tx.finalPrice), "₱2,010.00");
+context.window.PaymentInvoice.print = () => { assert.equal(ui.selectedTransaction, tx); printed++; };
+ui.printInvoice();
+assert.equal(printed, 1);
+assert.equal(JSON.stringify(tx), before, "Inspecting and printing must not mutate transaction data");
+ui.closeDetails();
+assert.equal(closed, 1);
+assert.equal(focused, 1);
+assert.equal(context.document.body.style.overflow, "auto");
+assert.equal(ui.selectedTransaction, null);
+ui.printInvoice();
+assert.equal(printed, 1, "Printing requires a selected transaction");
+const noProducts = { ...tx, id: 2, reference: "BAC-20261002-0002", dateKey: "2026-10-02", productAddons: [], finalPrice: 700 };
+ui.openDetails(noProducts, { focus() {} });
+assert.equal(ui.receiptModal.products.length, 0);
+assert.equal(ui.receiptModal.bookingReference, noProducts.reference, "Opening another record replaces the invoice source");
+ui.closeDetails();
+ui.transactions = [tx, noProducts];
+assert.equal(ui.collectionTotal, 2710);
+assert.equal(ui.groupedTransactions[0].dateKey, "2026-10-03");
+assert.equal(ui.groupedTransactions[0].total, 2010);
+assert.equal(ui.groupedTransactions[1].total, 700);
+
+const html = fs.readFileSync(path.join(__dirname, "../pages/admin/transactions.html"), "utf8");
+const history = html.split('<!-- Compact history:')[1].split('</main>')[0].split('<dialog')[0];
+for (const field of ["amountPaid", "changeGiven", "groomingServicesTotal", "productAddonsTotal", "service_breakdown", "<details"]) {
+  assert.ok(!history.includes(field), `${field} must stay out of history rows`);
+}
+assert.ok(html.includes('x-html="window.PaymentInvoice.template"'));
+assert.ok(html.includes('selectedTransaction.productAddons.length > 1'));
+assert.ok(!html.split('<!-- Transactions Content -->')[1].includes('data-lucide'));
+console.log("Admin transaction details regression tests passed.");
