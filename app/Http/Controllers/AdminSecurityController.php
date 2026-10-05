@@ -110,13 +110,11 @@ class AdminSecurityController extends Controller
     ) {
         $firstName = $request->input('first_name');
         $lastName = $request->input('last_name');
-        $username = trim((string) $request->input('username'));
         $staffSubrole = trim((string) $request->input('staff_subrole'));
         $request->merge([
             'first_name' => is_string($firstName) ? User::normalizeName($firstName) : $firstName,
             'last_name' => is_string($lastName) ? User::normalizeName($lastName) : $lastName,
             'email' => Str::lower(trim((string) $request->input('email'))),
-            'username' => $username === '' ? null : $username,
             'staff_subrole' => $staffSubrole === '' ? null : $staffSubrole,
         ]);
         $data = $request->validate([
@@ -130,13 +128,6 @@ class AdminSecurityController extends Controller
             ],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'username' => [
-                'nullable',
-                'string',
-                'min:3',
-                'max:50',
-                'regex:/^[A-Za-z][A-Za-z0-9._-]{2,49}$/',
-            ],
             'email' => [
                 'required',
                 'email:rfc',
@@ -152,7 +143,6 @@ class AdminSecurityController extends Controller
                 $data['staff_subrole'],
                 $data['first_name'],
                 $data['last_name'],
-                $data['username'],
                 $data['email'],
             );
         } catch (ValidationException $exception) {
@@ -169,7 +159,6 @@ class AdminSecurityController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Account setup email sent',
-            'username' => $result['staff']->username,
             'staff' => $this->accountPayload($result['staff']),
         ], 201);
     }

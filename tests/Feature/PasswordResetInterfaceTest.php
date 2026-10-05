@@ -22,6 +22,8 @@ class PasswordResetInterfaceTest extends TestCase
         $this->assertStringNotContainsString('min-height: 36rem', $forgot);
         $this->assertSame(6, substr_count($forgot, 'class="verification-code-cell"'));
         $this->assertStringContainsString('id="verifyEmail"', $forgot);
+        $this->assertStringNotContainsString('verifyEmail.textContent = requestedEmail', $forgotScript);
+        $this->assertStringContainsString('verifyEmail.textContent = maskedEmail', $forgotScript);
         $this->assertStringContainsString('id="resendCode"', $forgot);
         $this->assertStringContainsString('id="passwordRequirements"', $forgot);
         $this->assertStringContainsString('id="newPasswordMessage"', $forgot);
@@ -87,7 +89,10 @@ class PasswordResetInterfaceTest extends TestCase
         foreach ([
             'Bethlehem Animal Clinic Logo',
             '>Set Up Your Password</h1>',
-            '>Create a password to secure your account</p>',
+            'id="setupAccountDescription" class="hidden mt-4 text-sm leading-6 text-slate-500">Create a password to secure the account linked to <strong id="setupAccountEmail" class="break-all"></strong>.</p>',
+            '>Username (optional)</label>',
+            'placeholder="Enter a username"',
+            'aria-describedby="setupUsernameMessage"',
             '>New password</label>',
             '>Confirm new password</label>',
             'autocomplete="new-password"',
@@ -111,7 +116,14 @@ class PasswordResetInterfaceTest extends TestCase
         }
 
         $this->assertSame(2, substr_count($page, 'autocomplete="new-password"'));
+        $this->assertLessThan(strpos($page, 'for="setupNewPassword"'), strpos($page, 'for="setupUsername"'));
+        $this->assertMatchesRegularExpression('/id="setupUsername"(?:(?!required)[\s\S])*?\/>/', $page);
+        $this->assertStringContainsString('username.value.trim() || null', $script);
+        $this->assertStringContainsString('setUsernameError(error.errors.username[0])', $script);
+        $this->assertStringNotContainsString('name="username"', file_get_contents(base_path('pages/client/forgot-password.html')));
         $this->assertStringContainsString('await API.verifyStaffPasswordSetupToken(setupToken)', $script);
+        $this->assertStringContainsString('accountEmail.textContent = response.email', $script);
+        $this->assertStringContainsString('accountDescription.classList.remove("hidden")', $script);
         $this->assertStringContainsString('await API.completeStaffPasswordSetup(', $script);
         $this->assertStringContainsString('API.requestNewStaffPasswordSetupLink(setupToken)', $script);
         $this->assertStringContainsString('password.disabled = true', $script);

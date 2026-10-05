@@ -57,7 +57,7 @@ global.API = {
           user_id: 3,
           first_name: "Clinic",
           last_name: "Staff",
-          username: "clinicstaff",
+          username: null,
           email: "clinic.staff.test@gmail.com",
           staff_type: "clinic",
           staff_subrole: "veterinarian",
@@ -107,7 +107,7 @@ global.API = {
     calls.push(["add-staff", payload]);
     return {
       message: "Account setup email sent",
-      username: "JohnSmith",
+      staff: { username: null },
     };
   },
   async updateStaffAccountStatus(staffId, active, password) {
@@ -152,6 +152,7 @@ vm.runInThisContext(componentSource, {
   assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
   assert.equal(settings.staffAccounts[0].statusLabel, "Active");
   assert.equal(settings.staffAccounts[1].statusLabel, "Pending setup");
+  assert.equal(settings.staffAccounts[1].username, "");
   assert.equal(settings.activeStaffCount, 1);
   assert.equal(settings.pendingStaffCount, 1);
   assert.equal(settings.deactivatedStaffCount, 1);
@@ -214,7 +215,8 @@ vm.runInThisContext(componentSource, {
   settings.addStaffModal.email = "clinic.staff@example.test";
   await settings.requestNewStaffAccount();
   assert.equal(settings.addStaffModal.step, "success");
-  assert.equal(settings.addStaffModal.createdUsername, "JohnSmith");
+  assert.equal("createdUsername" in settings.addStaffModal, false);
+  assert.equal("username" in settings.addStaffModal, false);
   assert.deepEqual(calls.find((call) => call[0] === "add-staff"), [
     "add-staff",
     {
@@ -222,7 +224,6 @@ vm.runInThisContext(componentSource, {
       staff_subrole: "veterinarian",
       first_name: "John",
       last_name: "Smith",
-      username: null,
       email: "clinic.staff@example.test",
     },
   ]);

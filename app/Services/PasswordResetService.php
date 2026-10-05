@@ -4,12 +4,18 @@ namespace App\Services;
 
 use App\Http\Controllers\EmailVerificationController;
 use App\Models\PasswordResetRequest;
+use App\Models\PendingCustomerRegistration;
+use App\Models\PendingStaffAccount;
 use App\Models\User;
 use App\Notifications\PasswordResetCodeNotification;
 use App\Notifications\SetUpStaffPasswordNotification;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class PasswordResetService
@@ -186,38 +192,113 @@ class PasswordResetService
         ];
     }
 
-    public function completeStaffSetup(string $plainToken, string $newPassword): array
+    public function completeStaffSetup(string $plainToken, string $newPassword, ?string $username = null): array
     {
-        return DB::transaction(function () use ($plainToken, $newPassword): array {
-            $request = PasswordResetRequest::query()
-                ->where('token_hash', hash('sha256', $plainToken))
-                ->lockForUpdate()
-                ->first();
-            if (! $request) {
-                return ['status' => 'invalid'];
+        $username = trim($username ?? '');
+        while (true) {
+            $selectedUsername = null;
+            $staff = null;
+            try {
+                return DB::transaction(function () use ($plainToken, $newPassword, $username, &$selectedUsername, &$staff): array {
+                    $request = PasswordResetRequest::query()
+                        ->where('token_hash', hash('sha256', $plainToken))
+                        ->lockForUpdate()
+                        ->first();
+                    if (! $request) {
+                        return ['status' => 'invalid'];
+                    }
+
+                    $user = User::query()->whereKey($request->user_id)->lockForUpdate()->first();
+                    if (! $user || ! $this->staffSetupIsEligible($user)) {
+                        return ['status' => 'invalid'];
+                    }
+
+                    if (now()->isAfter($request->expires_at)) {
+                        return ['status' => 'expired'];
+                    }
+
+                    $staff = $user;
+                    if ($username !== '') {
+                        $this->validateStaffUsername($username);
+                        if (! $this->staffUsernameIsAvailable($username, $user)) {
+                            throw ValidationException::withMessages([
+                                'username' => 'That username is already in use.',
+                            ]);
+                        }
+                        $selectedUsername = $username;
+                    } else {
+                        $selectedUsername = $this->generateStaffUsername($user);
+                    }
+
+                    $user->username = $selectedUsername;
+                    $user->password_hash = Hash::make($newPassword);
+                    $user->is_active = true;
+                    $user->email_verified_at = now();
+                    $user->save();
+                    $user->tokens()->delete();
+                    $request->delete();
+
+                    return [
+                        'status' => 'completed',
+                        'user' => $user,
+                    ];
+                }, 3);
+            } catch (UniqueConstraintViolationException $exception) {
+                // Retry the whole transaction so a concurrent username claim is visible.
+                if (! $selectedUsername || ! $staff || $this->staffUsernameIsAvailable($selectedUsername, $staff)) {
+                    throw $exception;
+                }
+                if ($username !== '') {
+                    throw ValidationException::withMessages([
+                        'username' => 'That username is already in use.',
+                    ]);
+                }
             }
+        }
+    }
 
-            $user = User::query()->whereKey($request->user_id)->lockForUpdate()->first();
-            if (! $user || ! $this->staffSetupIsEligible($user)) {
-                return ['status' => 'invalid'];
-            }
+    private function validateStaffUsername(string $username): void
+    {
+        Validator::make(['username' => $username], [
+            'username' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z][A-Za-z0-9._-]{2,49}$/'],
+        ], [
+            'username.regex' => 'Use letters, numbers, periods, underscores, or hyphens, beginning with a letter.',
+        ])->validate();
+    }
 
-            if (now()->isAfter($request->expires_at)) {
-                return ['status' => 'expired'];
-            }
+    private function staffUsernameIsAvailable(string $username, User $staff): bool
+    {
+        $normalized = Str::lower($username);
+        if (User::query()->whereRaw('LOWER(username) = ?', [$normalized])
+            ->whereKeyNot($staff->getKey())->lockForUpdate()->exists()) {
+            return false;
+        }
 
-            $user->password_hash = Hash::make($newPassword);
-            $user->is_active = true;
-            $user->email_verified_at = now();
-            $user->save();
-            $user->tokens()->delete();
-            $request->delete();
+        if (Schema::hasTable('pending_customer_registrations')
+            && PendingCustomerRegistration::query()->whereRaw('LOWER(username) = ?', [$normalized])
+                ->lockForUpdate()->exists()) {
+            return false;
+        }
 
-            return [
-                'status' => 'completed',
-                'user' => $user,
-            ];
-        });
+        return ! (Schema::hasTable('pending_staff_accounts')
+            && PendingStaffAccount::query()->whereRaw('LOWER(username) = ?', [$normalized])
+                ->whereRaw('LOWER(email) <> ?', [Str::lower($staff->email)])
+                ->lockForUpdate()->exists());
+    }
+
+    private function generateStaffUsername(User $staff): string
+    {
+        $asciiName = Str::ascii(User::normalizeName($staff->first_name).User::normalizeName($staff->last_name));
+        $base = preg_replace('/[^A-Za-z0-9._-]/', '', $asciiName) ?? '';
+        $base = preg_replace('/^[^A-Za-z]+/', '', $base) ?? '';
+        $base = substr(str_pad($base === '' ? 'Staff' : $base, 3, '0'), 0, 50);
+        $username = $base;
+        for ($suffix = 2; ! $this->staffUsernameIsAvailable($username, $staff); $suffix++) {
+            $username = substr($base, 0, 50 - strlen((string) $suffix)).$suffix;
+        }
+        $this->validateStaffUsername($username);
+
+        return $username;
     }
 
     public function resendExpiredStaffSetupLink(string $expiredPlainToken): array
@@ -316,7 +397,7 @@ class PasswordResetService
         return max(1, (int) config('auth.passwords.users.expire', 15));
     }
 
-    private function maskEmail(string $email): string
+    public function maskEmail(string $email): string
     {
         [$localPart, $domain] = array_pad(explode('@', $email, 2), 2, '');
         if ($domain === '') {
@@ -324,8 +405,7 @@ class PasswordResetService
         }
 
         $visible = mb_substr($localPart, 0, 1);
-        $maskedLength = max(3, mb_strlen($localPart) - 1);
 
-        return $visible.str_repeat('*', $maskedLength).'@'.$domain;
+        return $visible.'***@'.$domain;
     }
 }

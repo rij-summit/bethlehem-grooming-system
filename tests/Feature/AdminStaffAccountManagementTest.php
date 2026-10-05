@@ -6,11 +6,15 @@ use App\Models\LoginEmailChallenge;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\SetUpStaffPasswordNotification;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AdminStaffAccountManagementTest extends TestCase
@@ -134,13 +138,12 @@ class AdminStaffAccountManagementTest extends TestCase
             'staff_subrole' => 'veterinarian',
             'first_name' => 'jOhN',
             'last_name' => 'sMiTh',
-            'username' => 'Clinic_Staff',
             'email' => 'NEW.CLINIC.STAFF@example.test',
         ]);
         $response
             ->assertCreated()
             ->assertJsonPath('message', 'Account setup email sent')
-            ->assertJsonPath('username', 'Clinic_Staff')
+            ->assertJsonPath('staff.username', null)
             ->assertJsonPath('staff.staff_type', 'clinic')
             ->assertJsonPath('staff.staff_subrole', 'veterinarian')
             ->assertJsonPath('staff.is_active', false)
@@ -153,7 +156,7 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertSame('staff', $staff->role);
         $this->assertSame('clinic', $staff->staff_type);
         $this->assertSame('veterinarian', $staff->staff_subrole);
-        $this->assertSame('Clinic_Staff', $staff->username);
+        $this->assertNull($staff->username);
         $this->assertNull($staff->phone);
         $this->assertTrue($staff->requiresPasswordSetup());
         $this->assertFalse($staff->is_active);
@@ -171,7 +174,7 @@ class AdminStaffAccountManagementTest extends TestCase
         );
 
         $this->postJson('/api/sign-in', [
-            'identifier' => 'Clinic_Staff',
+            'identifier' => $staff->email,
             'password' => 'AnyPassword!234',
         ])
             ->assertForbidden()
@@ -189,20 +192,27 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/staff/password-setup/complete', [
             'token' => $plainToken,
+            'username' => '  Clinic_Staff  ',
             'password' => 'CreatedPassword!234',
             'password_confirmation' => 'CreatedPassword!234',
         ])
             ->assertOk()
             ->assertJsonPath('completed_setup', true)
             ->assertJsonPath('user.role', 'staff')
+            ->assertJsonPath('user.username', 'Clinic_Staff')
             ->assertJsonStructure(['token']);
 
         $staff->refresh();
         $this->assertFalse($staff->requiresPasswordSetup());
+        $this->assertSame('Clinic_Staff', $staff->username);
         $this->assertTrue($staff->is_active);
         $this->assertNotNull($staff->email_verified_at);
         $this->assertTrue(Hash::check('CreatedPassword!234', $staff->password_hash));
         $this->assertDatabaseCount('password_reset_requests', 0);
+        $this->postJson('/api/sign-in', [
+            'identifier' => 'Clinic_Staff',
+            'password' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.role', 'staff');
 
         $this->postJson('/api/staff/password-setup/complete', [
             'token' => $plainToken,
@@ -248,7 +258,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ]);
     }
 
-    public function test_existing_username_cannot_create_a_duplicate_staff_account(): void
+    public function test_invitation_ignores_admin_username_without_reserving_or_validating_it(): void
     {
         Notification::fake();
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
@@ -263,15 +273,17 @@ class AdminStaffAccountManagementTest extends TestCase
             'username' => 'clinicstaff',
             'email' => 'different.staff@example.test',
         ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('username');
+            ->assertCreated()
+            ->assertJsonPath('staff.username', null);
 
-        $this->assertDatabaseCount('users', 2);
+        $staff = User::query()->where('email', 'different.staff@example.test')->sole();
+        $this->assertNull($staff->username);
+        $this->assertDatabaseCount('users', 3);
         $this->assertDatabaseCount('pending_staff_accounts', 0);
-        Notification::assertNothingSent();
+        $this->staffSetupLinkSentTo($staff);
     }
 
-    public function test_blank_username_is_generated_from_normalized_staff_names(): void
+    public function test_username_is_generated_from_normalized_staff_names_only_at_setup_completion(): void
     {
         Notification::fake();
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
@@ -279,38 +291,56 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
-            'first_name' => 'jOhN',
-            'last_name' => 'sMiTh',
+            'first_name' => 'jUaN',
+            'last_name' => 'dElA  cRuZ',
             'email' => 'generated.staff@example.test',
         ])->assertCreated();
 
         $staff = User::query()->where('email', 'generated.staff@example.test')->sole();
-        $this->assertSame('John', $staff->first_name);
-        $this->assertSame('Smith', $staff->last_name);
+        $this->assertSame('Juan', $staff->first_name);
+        $this->assertSame('Dela Cruz', $staff->last_name);
         $this->assertNull($staff->staff_subrole);
-        $this->assertSame('JohnSmith', $staff->username);
+        $this->assertNull($staff->username);
         $this->assertTrue($staff->requiresPasswordSetup());
+        $token = $this->staffSetupLinkSentTo($staff);
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $token])->assertOk();
+        $this->assertNull($staff->fresh()->username);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => '   ',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.username', 'JuanDelaCruz');
+        $this->assertSame('JuanDelaCruz', $staff->fresh()->username);
+        $this->assertTrue($staff->fresh()->is_active);
     }
 
-    public function test_generated_username_must_be_unique(): void
+    public function test_generated_username_uses_the_next_available_case_insensitive_suffix(): void
     {
         Notification::fake();
         $admin = $this->createUser('admin', 'bethlehem.admin.test@gmail.com', 'Admin');
-        $this->createUser('staff', 'existing.staff@example.test', 'JohnSmith');
+        $this->createUser('staff', 'existing.staff@example.test', 'juandelacruz');
+        $this->createUser('staff', 'second.staff@example.test', 'JUANDELACRUZ2');
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'clinic',
             'staff_subrole' => 'veterinarian',
-            'first_name' => 'john',
-            'last_name' => 'smith',
+            'first_name' => 'Juan',
+            'last_name' => 'Dela Cruz',
             'email' => 'different.staff@example.test',
         ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('username');
+            ->assertCreated()
+            ->assertJsonPath('staff.username', null);
 
+        $staff = User::query()->where('email', 'different.staff@example.test')->sole();
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $this->staffSetupLinkSentTo($staff),
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.username', 'JuanDelaCruz3');
+        $this->assertSame('JuanDelaCruz3', $staff->fresh()->username);
         $this->assertDatabaseCount('pending_staff_accounts', 0);
-        Notification::assertNothingSent();
     }
 
     public function test_staff_subrole_must_match_the_selected_staff_type(): void
@@ -341,6 +371,256 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->assertDatabaseCount('pending_staff_accounts', 0);
         Notification::assertNothingSent();
+    }
+
+    public function test_duplicate_chosen_username_keeps_setup_pending_and_the_same_token_can_be_reused(): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        $this->createUser('staff', 'existing@example.test', 'Chosen.Staff');
+        $placeholder = $staff->password_hash;
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => '  chosen.STAFF  ',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable()->assertJsonPath('errors.username.0', 'That username is already in use.');
+
+        $staff->refresh();
+        $this->assertNull($staff->username);
+        $this->assertFalse($staff->is_active);
+        $this->assertNull($staff->email_verified_at);
+        $this->assertSame($placeholder, $staff->password_hash);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $token)]);
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $token])->assertOk();
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => 'Chosen.Staff-2',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.username', 'Chosen.Staff-2');
+        $this->assertTrue($staff->fresh()->is_active);
+        $this->assertDatabaseCount('password_reset_requests', 0);
+    }
+
+    #[DataProvider('invalidUsernames')]
+    public function test_invalid_username_does_not_activate_staff_or_consume_setup_token(mixed $username): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => $username,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable()->assertJsonValidationErrors('username');
+        $this->assertNull($staff->fresh()->username);
+        $this->assertFalse($staff->fresh()->is_active);
+        $this->assertTrue($staff->fresh()->requiresPasswordSetup());
+        $this->assertNull($staff->fresh()->email_verified_at);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $token)]);
+    }
+
+    public static function invalidUsernames(): array
+    {
+        return [
+            'too short' => ['ab'],
+            'too long' => [str_repeat('a', 51)],
+            'starts with number' => ['1Staff'],
+            'starts with punctuation' => ['_Staff'],
+            'contains spaces' => ['Staff Member'],
+            'contains unsupported symbol' => ['Staff@Clinic'],
+            'wrong type' => [['Staff']],
+        ];
+    }
+
+    public function test_generated_username_reserves_room_for_suffix_within_fifty_characters(): void
+    {
+        $firstName = str_repeat('a', 60);
+        $base = ucfirst(str_repeat('a', 50));
+        [$staff, $token] = $this->inviteStaff($firstName, 'Smith');
+        $this->createUser('staff', 'existing@example.test', $base);
+        $this->createUser('staff', 'second@example.test', substr($base, 0, 49).'2');
+
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => null,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.username', substr($base, 0, 49).'3');
+        $this->assertSame(50, strlen($staff->fresh()->username));
+    }
+
+    #[DataProvider('fallbackNames')]
+    public function test_generated_username_always_complies_with_existing_format(string $firstName, string $lastName): void
+    {
+        [$staff, $token] = $this->inviteStaff($firstName, $lastName);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk();
+        $this->assertMatchesRegularExpression('/^[A-Za-z][A-Za-z0-9._-]{2,49}$/', $staff->fresh()->username);
+    }
+
+    public static function fallbackNames(): array
+    {
+        return [
+            'accents and punctuation' => ['José', "D'Ávila"],
+            'leading numbers' => ['123Juan', 'Cruz'],
+            'short names' => ['A', 'B'],
+            'no usable letters' => ['---', '123'],
+        ];
+    }
+
+    public function test_staff_setup_respects_pending_customer_username_reservations(): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        DB::table('pending_customer_registrations')->insert([
+            'first_name' => 'Juan',
+            'last_name' => 'Dela Cruz',
+            'username' => 'JUANDELACRUZ',
+            'email' => 'pending.customer@example.test',
+            'phone' => '09170003001',
+            'password_hash' => Hash::make('CreatedPassword!234'),
+        ]);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => 'JuanDelaCruz',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable()->assertJsonPath('errors.username.0', 'That username is already in use.');
+        $this->assertNull($staff->fresh()->username);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertOk()->assertJsonPath('user.username', 'JuanDelaCruz2');
+    }
+
+    public function test_failed_password_validation_does_not_assign_a_fallback_username(): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'password' => 'weak',
+            'password_confirmation' => 'weak',
+        ])->assertUnprocessable()->assertJsonValidationErrors('password');
+        $this->assertNull($staff->fresh()->username);
+        $this->assertFalse($staff->fresh()->is_active);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $token)]);
+    }
+
+    #[DataProvider('racingUsernames')]
+    public function test_username_claimed_between_validation_and_save_is_handled(?string $username): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        $other = $this->createUser('staff', 'other@example.test', 'OtherStaff');
+        $raced = false;
+        $updatingEvent = 'eloquent.updating: '.User::class;
+        Event::listen($updatingEvent, function (User $saving) use ($staff, $other, &$raced): void {
+            if ($saving->getKey() === $staff->getKey() && ! $raced) {
+                $raced = true;
+                // Claim the selected name after validation to exercise the real unique constraint.
+                DB::table('users')->where('user_id', $other->getKey())->update(['username' => $saving->username]);
+            }
+        });
+        Event::listen(TransactionRolledBack::class, function () use ($other, &$raced): void {
+            if ($raced) {
+                // Persist the winner after rollback, as a competing committed transaction would.
+                DB::table('users')->where('user_id', $other->getKey())->update(['username' => 'JuanDelaCruz']);
+            }
+        });
+
+        try {
+            $response = $this->postJson('/api/staff/password-setup/complete', [
+                'token' => $token,
+                'username' => $username,
+                'password' => 'CreatedPassword!234',
+                'password_confirmation' => 'CreatedPassword!234',
+            ]);
+            $this->assertTrue($raced);
+            if ($username === null) {
+                $response->assertOk()->assertJsonPath('user.username', 'JuanDelaCruz2');
+                $this->assertTrue($staff->fresh()->is_active);
+                $this->assertDatabaseCount('password_reset_requests', 0);
+            } else {
+                $response->assertUnprocessable()->assertJsonPath('errors.username.0', 'That username is already in use.');
+                $this->assertNull($staff->fresh()->username);
+                $this->assertFalse($staff->fresh()->is_active);
+                $this->assertTrue($staff->fresh()->requiresPasswordSetup());
+                $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $token)]);
+            }
+        } finally {
+            Event::forget($updatingEvent);
+            Event::forget(TransactionRolledBack::class);
+        }
+    }
+
+    public static function racingUsernames(): array
+    {
+        return ['automatic fallback retries' => [null], 'chosen username is rejected' => ['JuanDelaCruz']];
+    }
+
+    public function test_setup_rolls_back_username_password_activation_and_tokens_if_completion_fails(): void
+    {
+        [$staff, $token] = $this->inviteStaff();
+        $placeholder = $staff->password_hash;
+        $staff->createToken('old_staff_token');
+        $event = 'eloquent.deleting: '.PasswordResetRequest::class;
+        Event::listen($event, function (): void {
+            throw new \RuntimeException('Setup request could not be consumed.');
+        });
+        try {
+            app(\App\Services\PasswordResetService::class)->completeStaffSetup($token, 'CreatedPassword!234', 'ChosenStaff');
+            $this->fail('Expected setup completion to fail.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Setup request could not be consumed.', $exception->getMessage());
+        } finally {
+            Event::forget($event);
+        }
+        $staff->refresh();
+        $this->assertNull($staff->username);
+        $this->assertSame($placeholder, $staff->password_hash);
+        $this->assertFalse($staff->is_active);
+        $this->assertNull($staff->email_verified_at);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $token)]);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
+    public function test_active_staff_cannot_complete_setup_even_with_a_remaining_request(): void
+    {
+        $staff = $this->createUser('staff', 'active@example.test', 'ActiveStaff');
+        $token = str_repeat('a', 64);
+        PasswordResetRequest::query()->create([
+            'user_id' => $staff->getKey(),
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addHours(24),
+            'last_sent_at' => now(),
+        ]);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => 'AnotherStaff',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable()->assertJsonPath('message', 'This setup link is no longer valid.');
+        $this->assertSame('ActiveStaff', $staff->fresh()->username);
+        $this->assertTrue(Hash::check('CurrentStaff!234', $staff->fresh()->password_hash));
+    }
+
+    private function inviteStaff(string $firstName = 'Juan', string $lastName = 'Dela Cruz'): array
+    {
+        Notification::fake();
+        Sanctum::actingAs($this->createUser('admin', 'admin@example.test', 'Admin'));
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => 'grooming',
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'email' => 'invited.staff@example.test',
+        ])->assertCreated()->assertJsonPath('staff.username', null);
+        $staff = User::query()->where('email', 'invited.staff@example.test')->sole();
+
+        return [$staff, $this->staffSetupLinkSentTo($staff)];
     }
 
     public function test_legacy_admin_code_cannot_verify_a_staff_email(): void
@@ -509,7 +789,7 @@ class AdminStaffAccountManagementTest extends TestCase
             'email' => 'pending.staff@example.org',
         ])->assertCreated();
 
-        $staff = User::query()->where('username', 'pendingstaff')->sole();
+        $staff = User::query()->where('email', 'pending.staff@example.org')->sole();
         $firstToken = $this->staffSetupLinkSentTo($staff);
         $this->patchJson("/api/admin/security/staff/{$staff->user_id}/status", ['active' => true])
             ->assertUnprocessable();
@@ -548,7 +828,7 @@ class AdminStaffAccountManagementTest extends TestCase
             'email' => 'wrong.staff@example.ph',
         ];
         $this->postJson('/api/admin/security/staff-accounts', $payload)->assertCreated();
-        $staff = User::query()->where('username', 'wrongstaff')->sole();
+        $staff = User::query()->where('email', 'wrong.staff@example.ph')->sole();
         $token = $this->staffSetupLinkSentTo($staff);
 
         $this->deleteJson("/api/admin/security/staff/{$staff->user_id}/setup", [
@@ -590,7 +870,7 @@ class AdminStaffAccountManagementTest extends TestCase
             'username' => 'expiredstaff',
             'email' => 'expired.staff@example.net',
         ])->assertCreated();
-        $staff = User::query()->where('username', 'expiredstaff')->sole();
+        $staff = User::query()->where('email', 'expired.staff@example.net')->sole();
         $token = $this->staffSetupLinkSentTo($staff);
 
         $this->travel(25)->hours();
@@ -602,6 +882,13 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->postJson('/api/staff/password-setup/verify', ['token' => $token])
             ->assertUnprocessable()
             ->assertJsonPath('expired', true);
+        $this->postJson('/api/staff/password-setup/complete', [
+            'token' => $token,
+            'username' => 'ChosenStaff',
+            'password' => 'CreatedPassword!234',
+            'password_confirmation' => 'CreatedPassword!234',
+        ])->assertUnprocessable()->assertJsonPath('expired', true);
+        $this->assertNull($staff->fresh()->username);
         $this->assertNull($staff->fresh()->email_verified_at);
         $this->assertFalse($staff->fresh()->is_active);
     }

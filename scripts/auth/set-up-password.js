@@ -4,13 +4,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const invalidLink = document.getElementById("setupInvalidLink");
   const expiredMessage = document.getElementById("setupExpiredLinkMessage");
   const requestNewLink = document.getElementById("requestNewSetupLink");
+  const username = document.getElementById("setupUsername");
+  const usernameMessage = document.getElementById("setupUsernameMessage");
   const password = document.getElementById("setupNewPassword");
   const confirmation = document.getElementById("setupConfirmPassword");
   const message = document.getElementById("setupPasswordMessage");
   const submit = document.getElementById("setupPasswordSubmit");
   const submitLabel = document.getElementById("setupPasswordSubmitLabel");
+  const accountEmail = document.getElementById("setupAccountEmail");
+  const accountDescription = document.getElementById("setupAccountDescription");
 
-  if (!form || !expiredLink || !invalidLink || !password || !confirmation || !message || !submit || !requestNewLink) return;
+  if (!form || !expiredLink || !invalidLink || !username || !usernameMessage || !password || !confirmation || !message || !submit || !requestNewLink) return;
 
   installVisibilityToggle(
     "toggleSetupPassword",
@@ -39,9 +43,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   try {
-    await API.verifyStaffPasswordSetupToken(setupToken);
+    const response = await API.verifyStaffPasswordSetupToken(setupToken);
+    if (accountEmail && accountDescription && response?.email) {
+      accountEmail.textContent = response.email;
+      accountDescription.classList.remove("hidden");
+    }
     form.classList.remove("hidden");
-    password.focus();
+    username.focus();
   } catch (error) {
     if (error?.expired) {
       showExpiredLink();
@@ -50,6 +58,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     return;
   }
+
+  username.addEventListener("input", () => {
+    setUsernameError();
+    updateSubmitState();
+  });
+  username.addEventListener("blur", () => setUsernameError(usernameValidationError()));
 
   [password, confirmation].forEach((input) => {
     input.addEventListener("input", () => {
@@ -64,6 +78,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const usernameError = usernameValidationError();
+    setUsernameError(usernameError);
+    if (usernameError) {
+      username.focus();
+      return;
+    }
     const error = validationError();
     if (error) {
       setMessage("error", error);
@@ -78,12 +98,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         setupToken,
         password.value,
         confirmation.value,
+        username.value.trim() || null,
       );
       if (!response.completed_setup || response.user?.role !== "staff") {
         throw new Error("This setup link has expired or is no longer valid.");
       }
       window.location.replace("../admin/dashboard.html");
     } catch (error) {
+      if (error?.errors?.username?.[0]) {
+        setUsernameError(error.errors.username[0]);
+        setBusy(false);
+        username.focus();
+        return;
+      }
       if (error?.expired) {
         showExpiredLink();
         return;
@@ -96,6 +123,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       setBusy(false);
     }
   });
+
+  function usernameValidationError() {
+    const value = username.value.trim();
+    return value && !/^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(value)
+      ? "Use 3–50 characters: letters, numbers, periods, underscores, or hyphens, beginning with a letter."
+      : "";
+  }
+
+  function setUsernameError(text = "") {
+    usernameMessage.className = text ? "mt-2 text-sm text-red-700" : "hidden";
+    usernameMessage.textContent = text;
+    username.setAttribute("aria-invalid", text ? "true" : "false");
+  }
 
   function validationError() {
     if (!password.value || !confirmation.value) return "Complete both password fields.";
@@ -140,7 +180,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   function showExpiredLink() {
+    accountDescription?.classList.add("hidden");
     form.classList.add("hidden");
+    username.disabled = true;
     password.disabled = true;
     confirmation.disabled = true;
     submit.disabled = true;
@@ -149,7 +191,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function showInvalidLink() {
+    accountDescription?.classList.add("hidden");
     form.classList.add("hidden");
+    username.disabled = true;
     password.disabled = true;
     confirmation.disabled = true;
     submit.disabled = true;

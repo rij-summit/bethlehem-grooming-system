@@ -21,20 +21,14 @@ class PendingStaffAccountService
         ?string $staffSubrole,
         string $firstName,
         string $lastName,
-        ?string $username,
         string $email,
     ): array {
         $this->assertAdminIsEligible($requester);
         $this->assertStaffSubroleIsValid($staffType, $staffSubrole);
         $normalizedFirstName = User::normalizeName($firstName);
         $normalizedLastName = User::normalizeName($lastName);
-        $normalizedUsername = filled($username)
-            ? trim((string) $username)
-            : $this->generateUsername($normalizedFirstName, $normalizedLastName);
         $normalizedEmail = Str::lower(trim($email));
-        $this->assertUsernameIsValid($normalizedUsername);
         $this->assertEmailIsAvailable($normalizedEmail);
-        $this->assertUsernameIsAvailable($normalizedUsername, $normalizedEmail);
         EmailVerificationController::assertMailCanBeDelivered();
 
         $plainToken = Str::random(64);
@@ -44,7 +38,6 @@ class PendingStaffAccountService
             $staffSubrole,
             $normalizedFirstName,
             $normalizedLastName,
-            $normalizedUsername,
             $normalizedEmail,
             $tokenHash,
         ): User {
@@ -55,7 +48,7 @@ class PendingStaffAccountService
             $staff = User::query()->create([
                 'first_name' => $normalizedFirstName,
                 'last_name' => $normalizedLastName,
-                'username' => $normalizedUsername,
+                'username' => null,
                 'email' => $normalizedEmail,
                 'phone' => null,
                 'password_hash' => User::passwordSetupPlaceholder(),
@@ -118,43 +111,6 @@ class PendingStaffAccountService
         }
     }
 
-    private function assertUsernameIsAvailable(string $username, string $email): void
-    {
-        if (! $this->usernameIsAvailable($username, $email)) {
-            throw ValidationException::withMessages([
-                'username' => 'That username is already in use.',
-            ]);
-        }
-    }
-
-    private function assertUsernameIsValid(string $username): void
-    {
-        if (! preg_match('/^[A-Za-z][A-Za-z0-9._-]{2,49}$/', $username)) {
-            throw ValidationException::withMessages([
-                'username' => 'The generated username must use letters, numbers, periods, underscores, or hyphens, beginning with a letter.',
-            ]);
-        }
-    }
-
-    private function usernameIsAvailable(string $username, string $email): bool
-    {
-        $normalizedUsername = Str::lower($username);
-        if (User::query()->whereRaw('LOWER(username) = ?', [$normalizedUsername])->exists()) {
-            return false;
-        }
-
-        if (PendingCustomerRegistration::query()
-            ->whereRaw('LOWER(username) = ?', [$normalizedUsername])
-            ->exists()) {
-            return false;
-        }
-
-        return ! PendingStaffAccount::query()
-            ->whereRaw('LOWER(username) = ?', [$normalizedUsername])
-            ->whereRaw('LOWER(email) <> ?', [Str::lower($email)])
-            ->exists();
-    }
-
     private function emailIsAvailable(string $email): bool
     {
         if (User::query()->whereRaw('LOWER(email) = ?', [Str::lower($email)])->exists()) {
@@ -200,13 +156,5 @@ class PendingStaffAccountService
                 'staff_subrole' => 'Grooming Receptionist does not use a sub-role.',
             ]);
         }
-    }
-
-    private function generateUsername(string $firstName, string $lastName): string
-    {
-        $asciiName = Str::ascii($firstName.$lastName);
-        $username = preg_replace('/[^A-Za-z0-9._-]/', '', $asciiName) ?? '';
-
-        return mb_substr($username, 0, 50);
     }
 }

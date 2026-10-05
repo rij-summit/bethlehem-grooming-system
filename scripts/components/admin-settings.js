@@ -82,9 +82,7 @@ function adminSettings() {
       staffSubrole: "",
       firstName: "",
       lastName: "",
-      username: "",
       email: "",
-      createdUsername: "",
       submitting: false,
       error: "",
     },
@@ -263,7 +261,7 @@ function adminSettings() {
             id: staff.user_id,
             fullName,
             initials: `${staff.first_name?.charAt(0) || "S"}${staff.last_name?.charAt(0) || ""}`.toUpperCase(),
-            username: staff.username || "",
+            username: setupRequired ? "" : staff.username || "",
             email: staff.email || "",
             staffType: staff.staff_type || "",
             staffSubrole: staff.staff_subrole || "",
@@ -461,9 +459,7 @@ function adminSettings() {
         staffSubrole: "",
         firstName: "",
         lastName: "",
-        username: "",
         email: "",
-        createdUsername: "",
         submitting: false,
         error: "",
       };
@@ -547,12 +543,6 @@ function adminSettings() {
         return;
       }
 
-      const username = this.addStaffModal.username.trim();
-      if (username && !/^[A-Za-z][A-Za-z0-9._-]{2,49}$/.test(username)) {
-        this.addStaffModal.error = "Enter a valid username.";
-        return;
-      }
-
       const email = this.addStaffModal.email.trim().toLowerCase();
       if (!email) {
         this.addStaffModal.error = "Enter the staff email address.";
@@ -565,15 +555,13 @@ function adminSettings() {
 
       this.addStaffModal.submitting = true;
       try {
-        const response = await API.requestStaffAccount({
+        await API.requestStaffAccount({
           staff_type: this.addStaffModal.staffType,
           staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null,
           first_name: firstName,
           last_name: lastName,
-          username: username || null,
           email,
         });
-        this.addStaffModal.createdUsername = response.username;
         this.addStaffModal.step = "success";
         await this.loadSecurityAccounts();
         this.refreshSecurityIcons();

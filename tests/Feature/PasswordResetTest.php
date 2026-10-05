@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -68,16 +69,19 @@ class PasswordResetTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_active_user_receives_a_one_time_password_reset_code_and_can_set_a_new_password(): void
+    #[DataProvider('passwordResetRoles')]
+    public function test_active_user_receives_a_one_time_password_reset_code_and_can_set_a_new_password(string $role): void
     {
         Notification::fake();
-        $user = $this->createUser('customer');
+        $user = $this->createUser($role);
+        $username = $user->username;
         $user->createToken('auth_token');
 
         $this->postJson('/api/password/forgot', [
             'email' => ' CUSTOMER@EXAMPLE.TEST ',
         ])
             ->assertAccepted()
+            ->assertJsonPath('email', 'c***@example.test')
             ->assertJsonPath(
                 'message',
                 'If eligible, a verification code has been sent.',
@@ -124,6 +128,7 @@ class PasswordResetTest extends TestCase
             ->assertJsonPath('message', 'Your password has been reset successfully.');
 
         $this->assertTrue(Hash::check('UpdatedPass!234', $user->fresh()->password_hash));
+        $this->assertSame($username, $user->fresh()->username);
         $this->assertDatabaseCount('password_reset_requests', 0);
         $this->assertDatabaseCount('personal_access_tokens', 0);
 
@@ -134,6 +139,11 @@ class PasswordResetTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public static function passwordResetRoles(): array
+    {
+        return [['customer'], ['admin']];
+    }
+
     public function test_unknown_and_disabled_accounts_receive_the_same_generic_response_without_email(): void
     {
         Notification::fake();
@@ -142,12 +152,14 @@ class PasswordResetTest extends TestCase
         $archived->update(['is_archived' => true]);
 
         foreach (['missing@example.test', 'disabled@example.test', 'archived@example.test'] as $email) {
-            $this->postJson('/api/password/forgot', ['email' => $email])
+            $response = $this->postJson('/api/password/forgot', ['email' => $email])
                 ->assertAccepted()
+                ->assertJsonPath('email', $email[0].'***@example.test')
                 ->assertJsonPath(
                     'message',
                     'If eligible, a verification code has been sent.',
                 );
+            $this->assertStringNotContainsString($email, $response->getContent());
         }
 
         Notification::assertNothingSent();
@@ -347,6 +359,39 @@ class PasswordResetTest extends TestCase
         $this->assertFalse($staff->requiresPasswordSetup());
         $this->assertTrue(Hash::check('SetupComplete!234', $staff->password_hash));
         $this->assertDatabaseCount('password_reset_requests', 0);
+    }
+
+    #[DataProvider('maskedEmails')]
+    public function test_staff_setup_inspection_returns_only_a_short_fixed_email_mask(string $email, string $masked): void
+    {
+        $staff = $this->createUser('staff', $email, false);
+        $staff->update(['password_hash' => User::passwordSetupPlaceholder()]);
+        $token = str_repeat('a', 64);
+        $request = PasswordResetRequest::query()->create([
+            'user_id' => $staff->getKey(),
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addHours(24),
+            'last_sent_at' => now(),
+        ]);
+        $response = $this->postJson('/api/staff/password-setup/verify', ['token' => $token])
+            ->assertOk()->assertJsonPath('email', $masked);
+        $this->assertStringNotContainsString($email, $response->getContent());
+
+        $request->update(['expires_at' => now()->subMinute()]);
+        $this->postJson('/api/staff/password-setup/verify', ['token' => $token])
+            ->assertUnprocessable()->assertJsonPath('expired', true)->assertJsonMissingPath('email');
+        $this->postJson('/api/staff/password-setup/verify', ['token' => str_repeat('b', 64)])
+            ->assertUnprocessable()->assertJsonMissingPath('email');
+    }
+
+    public static function maskedEmails(): array
+    {
+        return [
+            ['yolanda@gmail.com', 'y***@gmail.com'],
+            ['gerald.santos@gmail.com', 'g***@gmail.com'],
+            ['y@gmail.com', 'y***@gmail.com'],
+            ['gerald.santos@clinic.example.com', 'g***@clinic.example.com'],
+        ];
     }
 
     private function setupTokenSentTo(User $user): string

@@ -41,10 +41,8 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             '>Veterinarian</span>',
             '>Clinic Receptionist</span>',
             '>Grooming Receptionist</span>',
-            'Username <span class="font-normal text-slate-400">(optional)</span>',
             'x-model="addStaffModal.email" required',
             '>Account setup email sent</h3>',
-            'Username: <span class="text-[#1f3850]" x-text="addStaffModal.createdUsername"></span>',
             "A Set Up Your Password link was sent to the staff member's email address. Their account will become active after they complete setup.",
             'Update Changes',
             'x-for="staff in filteredStaffAccounts"',
@@ -74,6 +72,11 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('>Sub-role</span>', $security);
         $this->assertStringNotContainsString('x-model="addStaffModal.password"', $security);
         $this->assertStringNotContainsString('x-model="addStaffModal.confirmation"', $security);
+        $this->assertStringNotContainsString('newStaffUsername', $security);
+        $this->assertStringNotContainsString('addStaffModal.createdUsername', $security);
+        $this->assertStringNotContainsString('No username', $security);
+        $this->assertStringContainsString('x-show="!staff.setupRequired && staff.username"', $security);
+        $this->assertStringContainsString('x-show="!staffDetailsModal.staff?.setupRequired && staffDetailsModal.staff?.username"', $security);
         $this->assertStringNotContainsString('Change credentials', $security);
         $this->assertStringNotContainsString('resetStaffModal', $security);
         $this->assertStringNotContainsString('6-digit email verification code', $security);
@@ -116,7 +119,6 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'API.requestAdminCredentialChange({',
             'API.requestStaffAccount({',
             'staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null',
-            'this.addStaffModal.createdUsername = response.username',
             'this.addStaffModal.step = "success"',
             'API.updateStaffAccountStatus(staff.id, targetActive, this.staffStatusModal.password)',
             '? API.confirmStaffPasswordChange',
@@ -134,6 +136,8 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('staffSearch', $component);
         $this->assertStringNotContainsString('resetStaffModal', $component);
         $this->assertStringNotContainsString('requestStaffCredentialChange', $component);
+        $this->assertStringNotContainsString('addStaffModal.username', $component);
+        $this->assertStringNotContainsString('createdUsername', $component);
     }
 
     public function test_security_password_controls_are_not_presented_as_login_forms(): void
@@ -153,9 +157,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('autocomplete="current-password"', $adminSecurity);
         $this->assertStringNotContainsString('autocomplete="new-password"', $adminSecurity);
-        $this->assertSame(10, substr_count($adminSecurity, 'data-lpignore="true"'));
-        $this->assertSame(10, substr_count($adminSecurity, 'data-1p-ignore'));
-        $this->assertSame(10, substr_count($adminSecurity, 'data-bwignore'));
+        $this->assertSame(9, substr_count($adminSecurity, 'data-lpignore="true"'));
+        $this->assertSame(9, substr_count($adminSecurity, 'data-1p-ignore'));
+        $this->assertSame(9, substr_count($adminSecurity, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);

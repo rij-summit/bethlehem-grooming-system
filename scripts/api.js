@@ -1048,9 +1048,10 @@ var API = (() => {
     return request("POST", "/staff/password-setup/verify", { token });
   }
 
-  async function completeStaffPasswordSetup(token, password, passwordConfirmation) {
+  async function completeStaffPasswordSetup(token, password, passwordConfirmation, username = null) {
     const data = await request("POST", "/staff/password-setup/complete", {
       token,
+      username,
       password,
       password_confirmation: passwordConfirmation,
     });

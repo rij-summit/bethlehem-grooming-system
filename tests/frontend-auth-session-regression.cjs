@@ -584,6 +584,8 @@ async function testPasswordResetEmailHandoff() {
   const key = "pendingPasswordResetEmail";
   const storage = new MemoryStorage();
   const requests = [];
+  let resetRequestError = null;
+  let maskedResponse = "c***@example.com";
   function loadPage(script) {
     const elements = new Map();
     const getElement = (id) => {
@@ -605,7 +607,11 @@ async function testPasswordResetEmailHandoff() {
       window: { location, setInterval: () => 1, clearInterval() {} },
       API: {
         async signIn() { throw { message: "Invalid credentials", status: 401 }; },
-        async requestPasswordReset(email) { requests.push(email); },
+        async requestPasswordReset(email) {
+          requests.push(email);
+          if (resetRequestError) throw resetRequestError;
+          return { email: maskedResponse };
+        },
       },
       document: {
         getElementById: getElement,
@@ -638,6 +644,7 @@ async function testPasswordResetEmailHandoff() {
   assert.equal(openForgot().getElement("resetEmail").value, "", "Reload must not reuse the email");
   await forgot.getElement("forgotPasswordForm").handlers.submit({ preventDefault() {} });
   assert.deepEqual(requests, ["customer@example.com"], "Send Code still submits normally");
+  assert.equal(forgot.getElement("verifyEmail").textContent, "c***@example.com");
 
   signIn.getElement("password").value = "wrong-password";
   await signIn.getElement("signin").handlers.submit({ preventDefault() {} });
@@ -659,6 +666,18 @@ async function testPasswordResetEmailHandoff() {
   assert.equal(signIn.location.href, "http://localhost/pages/client/sign-in.html");
   const html = fs.readFileSync(path.join(projectRoot, "pages/client/sign-in.html"), "utf8");
   assert.match(html, /id="forgotPasswordLink" href="\.\/forgot-password\.html"/);
+  resetRequestError = { status: 429 };
+  const throttled = openForgot();
+  throttled.getElement("resetEmail").value = "unknown@example.com";
+  await throttled.getElement("forgotPasswordForm").handlers.submit({ preventDefault() {} });
+  assert.equal(throttled.getElement("verifyEmail").textContent, "your email address",
+    "A failed request must never fall back to displaying the full email");
+  resetRequestError = null;
+  maskedResponse = "u***@example.com";
+  throttled.getElement("resendCode").disabled = false;
+  await throttled.getElement("resendCode").handlers.click();
+  assert.equal(throttled.getElement("verifyEmail").textContent, "u***@example.com");
+  assert.equal(requests.at(-1), "unknown@example.com", "Masking must not alter the reset request identity");
 }
 
 function testStaticAuthContracts() {
@@ -757,7 +776,152 @@ async function testInitialCustomerBrowserSessionMarker() {
   assert.equal(returning.document.cookie, undefined, "Normal returning sign-in must not create an initial-session marker.");
 }
 
+async function testStaffSetupUsernameAndResetApiContracts() {
+  const requests = [];
+  let duplicate = true;
+  const browser = createBrowser({
+    pathname: "/pages/client/set-up-password.html",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      if (url.endsWith("/staff/password-setup/complete")) {
+        if (duplicate) return jsonResponse(422, { errors: { username: ["That username is already in use."] } });
+        return jsonResponse(200, { completed_setup: true, token: "staff-token", user: { role: "staff" } });
+      }
+      return jsonResponse(200, { success: true });
+    },
+  });
+  await assert.rejects(() => browser.API.completeStaffPasswordSetup("setup-token", "Password!2345", "Password!2345", "Chosen.Staff"));
+  assert.equal(browser.API.getAdminToken(), null, "Validation errors must not establish a session");
+  duplicate = false;
+  await browser.API.completeStaffPasswordSetup("setup-token", "Password!2345", "Password!2345", "Chosen.Staff");
+  assert.equal(requests.at(-1).body.username, "Chosen.Staff");
+  assert.equal(browser.API.getAdminToken(), "staff-token");
+  assert.equal(browser.API.getUserRole(), "staff");
+  await browser.API.completeStaffPasswordSetup("setup-token", "Password!2345", "Password!2345");
+  assert.equal(requests.at(-1).body.username, null);
+  await browser.API.resetPassword("reset-token", "Password!2345", "Password!2345");
+  assert.deepEqual(requests.at(-1), {
+    url: "http://127.0.0.1:8000/api/password/reset",
+    body: { token: "reset-token", password: "Password!2345", password_confirmation: "Password!2345" },
+  });
+}
+
+async function testStaffSetupUsernameForm() {
+  const source = fs.readFileSync(path.join(projectRoot, "scripts/auth/set-up-password.js"), "utf8");
+  async function loadPage({ verificationError = null, completionError = null } = {}) {
+    const elements = new Map();
+    const getElement = (id) => {
+      if (!elements.has(id)) {
+        const classes = new Set(["hidden"]);
+        const attrs = new Map();
+        elements.set(id, {
+          value: "", textContent: "", className: "", disabled: false, dataset: {}, focused: false,
+          handlers: {},
+          classList: {
+            add(name) { classes.add(name); }, remove(name) { classes.delete(name); },
+            contains(name) { return classes.has(name); },
+          },
+          addEventListener(name, handler) { this.handlers[name] = handler; },
+          setAttribute(name, value) { attrs.set(name, value); },
+          getAttribute(name) { return attrs.get(name); },
+          focus() { this.focused = true; },
+        });
+      }
+      return elements.get(id);
+    };
+    const requests = [];
+    const redirects = [];
+    let onReady;
+    let error = completionError;
+    let scrubbed = false;
+    const token = "a".repeat(64);
+    vm.runInNewContext(source, {
+      URL, URLSearchParams,
+      window: { location: {
+        hash: `#token=${token}`, href: `http://localhost/pages/client/set-up-password.html#token=${token}`,
+        replace(url) { redirects.push(url); },
+      } },
+      history: { replaceState() { scrubbed = true; } },
+      document: {
+        getElementById: getElement, querySelector: () => null,
+        addEventListener(name, handler) { if (name === "DOMContentLoaded") onReady = handler; },
+      },
+      API: {
+        async verifyStaffPasswordSetupToken(value) {
+          assert.equal(scrubbed, true, "Scrub the setup token before inspecting it");
+          assert.equal(value, token);
+          assert.equal(getElement("setupAccountDescription").classList.contains("hidden"), true);
+          assert.equal(getElement("setupAccountEmail").textContent, "");
+          if (verificationError) throw verificationError;
+          return { email: "e***@gmail.com" };
+        },
+        async completeStaffPasswordSetup(...args) {
+          requests.push(args);
+          if (error) throw error;
+          return { completed_setup: true, user: { role: "staff" } };
+        },
+      },
+    });
+    await onReady();
+    return {
+      getElement, requests, redirects, token,
+      setCompletionError(value) { error = value; },
+      async submit(username) {
+        getElement("setupUsername").value = username;
+        getElement("setupNewPassword").value = "CreatedPassword!234";
+        getElement("setupConfirmPassword").value = "CreatedPassword!234";
+        getElement("setupUsername").handlers.input();
+        await getElement("setupPasswordForm").handlers.submit({ preventDefault() {} });
+      },
+    };
+  }
+
+  const page = await loadPage({ completionError: { errors: { username: ["That username is already in use."] } } });
+  assert.equal(page.getElement("setupAccountEmail").textContent, "e***@gmail.com");
+  assert.equal(page.getElement("setupAccountDescription").classList.contains("hidden"), false);
+  assert.equal(page.getElement("setupUsername").focused, true);
+  await page.submit("  Chosen.Staff  ");
+  assert.equal(page.requests[0][3], "Chosen.Staff");
+  assert.equal(page.getElement("setupUsernameMessage").textContent, "That username is already in use.");
+  assert.equal(page.getElement("setupUsername").getAttribute("aria-invalid"), "true");
+  assert.equal(page.getElement("setupPasswordForm").classList.contains("hidden"), false);
+  assert.equal(page.getElement("setupPasswordSubmit").disabled, false);
+  assert.deepEqual(page.redirects, []);
+  page.setCompletionError(null);
+  await page.submit("Other_Staff-2");
+  assert.equal(page.getElement("setupUsernameMessage").textContent, "");
+  assert.equal(page.getElement("setupUsername").getAttribute("aria-invalid"), "false");
+  assert.equal(page.requests[1][0], page.token, "Retry uses the same setup token");
+  assert.equal(page.requests[1][3], "Other_Staff-2");
+  assert.deepEqual(page.redirects, ["../admin/dashboard.html"]);
+
+  const blank = await loadPage();
+  await blank.submit("   ");
+  assert.equal(blank.requests[0][3], null);
+  const invalid = await loadPage();
+  await invalid.submit("1bad username");
+  assert.equal(invalid.requests.length, 0);
+  assert.match(invalid.getElement("setupUsernameMessage").textContent, /beginning with a letter/);
+  assert.equal(invalid.getElement("setupUsername").getAttribute("aria-invalid"), "true");
+
+  for (const expired of [true, false]) {
+    const unavailable = await loadPage({ verificationError: { expired } });
+    assert.equal(unavailable.getElement("setupAccountDescription").classList.contains("hidden"), true);
+    assert.equal(unavailable.getElement("setupAccountEmail").textContent, "");
+    assert.equal(unavailable.getElement("setupUsername").disabled, true);
+    assert.equal(unavailable.getElement("setupPasswordForm").classList.contains("hidden"), true);
+    assert.equal(unavailable.getElement(expired ? "setupExpiredLink" : "setupInvalidLink").classList.contains("hidden"), false);
+  }
+}
+
 (async () => {
+  await testStaffSetupUsernameAndResetApiContracts();
+  await testStaffSetupUsernameForm();
+  if (process.argv.includes("--staff-setup")) {
+    await testPasswordResetEmailHandoff();
+    console.log("Staff setup username and password-reset API regression checks passed");
+    return;
+  }
   await testInitialCustomerBrowserSessionMarker();
   await testLoginCodeHonorsRememberMeStorage();
   await testProfileNameLivesAndDiesWithTheSession();

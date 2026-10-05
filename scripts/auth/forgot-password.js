@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let step = "email";
   let requestedEmail = "";
+  let maskedEmail = "";
   let resetGrant = "";
   let verifiedCode = "";
   let resendUntil = 0;
@@ -51,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     description.textContent = content[1];
     description.classList.toggle("hidden", next === "code");
     verifyDescription.classList.toggle("hidden", next !== "code");
-    if (next === "code") verifyEmail.textContent = requestedEmail;
+    if (next === "code") verifyEmail.textContent = maskedEmail || "your email address";
     emailForm.classList.toggle("hidden", next !== "email");
     codeForm.classList.toggle("hidden", next !== "code");
     passwordForm.classList.toggle("hidden", next !== "password");
@@ -97,11 +98,13 @@ document.addEventListener("DOMContentLoaded", () => {
   emailForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     requestedEmail = emailInput.value.trim().toLowerCase();
+    maskedEmail = "";
     if (!requestedEmail) return;
     emailSubmit.disabled = true;
     document.getElementById("forgotPasswordSubmitLabel").textContent = "Sending...";
     try {
-      await API.requestPasswordReset(requestedEmail);
+      const response = await API.requestPasswordReset(requestedEmail);
+      maskedEmail = response?.email || "";
       resetGrant = "";
       verifiedCode = "";
       codeInput.value = "";
@@ -127,7 +130,9 @@ document.addEventListener("DOMContentLoaded", () => {
     resendBusy = true;
     updateResend();
     try {
-      await API.requestPasswordReset(requestedEmail);
+      const response = await API.requestPasswordReset(requestedEmail);
+      maskedEmail = response?.email || maskedEmail;
+      verifyEmail.textContent = maskedEmail || "your email address";
       resetGrant = "";
       verifiedCode = "";
       codeInput.value = "";

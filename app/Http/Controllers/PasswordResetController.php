@@ -28,6 +28,7 @@ class PasswordResetController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'If eligible, a verification code has been sent.',
+            'email' => $passwordResets->maskEmail($data['email']),
         ], 202);
     }
 
@@ -158,6 +159,7 @@ class PasswordResetController extends Controller
     {
         $data = $request->validate([
             'token' => ['required', 'string', 'size:64'],
+            'username' => ['nullable', 'string'],
             'password' => [
                 'required',
                 'string',
@@ -166,7 +168,7 @@ class PasswordResetController extends Controller
             ],
             'password_confirmation' => ['required', 'string'],
         ]);
-        $result = $passwordResets->completeStaffSetup($data['token'], $data['password']);
+        $result = $passwordResets->completeStaffSetup($data['token'], $data['password'], $data['username'] ?? null);
 
         if ($result['status'] === 'expired') {
             return response()->json([

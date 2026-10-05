@@ -1018,8 +1018,10 @@
                             <span x-show="staff.setupLinkExpired" class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">Setup link expired</span>
                           </div>
                           <p class="mt-1 truncate text-sm text-slate-500">
-                            <span x-text="staff.username || 'No username'"></span>
-                            <span aria-hidden="true"> &middot; </span>
+                            <span x-show="!staff.setupRequired && staff.username">
+                              <span x-text="staff.username"></span>
+                              <span aria-hidden="true"> &middot; </span>
+                            </span>
                             <span x-text="staff.email"></span>
                           </p>
                         </div>
@@ -1160,10 +1162,6 @@
                           </label>
                         </div>
                         <label class="block">
-                          <span class="mb-1.5 block text-sm font-semibold text-slate-600">Username <span class="font-normal text-slate-400">(optional)</span></span>
-                          <input id="newStaffUsername" type="text" x-model="addStaffModal.username" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="Enter username" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
-                        </label>
-                        <label class="block">
                           <span class="mb-1.5 block text-sm font-semibold text-slate-600">Email address</span>
                           <input id="newStaffEmail" type="email" x-model="addStaffModal.email" required autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore placeholder="name@example.com" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400 transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10" />
                         </label>
@@ -1185,9 +1183,6 @@
                           <i data-lucide="circle-check-big" class="h-7 w-7"></i>
                         </span>
                         <h3 id="staffAccountCreatedTitle" class="mt-4 text-xl font-bold text-[#1f3850]">Account setup email sent</h3>
-                        <p class="mt-4 text-sm font-semibold text-slate-600">
-                          Username: <span class="text-[#1f3850]" x-text="addStaffModal.createdUsername"></span>
-                        </p>
                         <p class="mt-3 text-sm leading-6 text-slate-500">A Set Up Your Password link was sent to the staff member's email address. Their account will become active after they complete setup.</p>
                         <button type="button" @click="closeAddStaffAccount()" class="mt-6 w-full rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#284a67]">Done</button>
                       </div>
@@ -1260,7 +1255,7 @@
                     </div>
                     <dl class="space-y-4 px-5 py-5 sm:px-6">
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Staff name</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.fullName"></dd></div>
-                      <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Username</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.username || 'No username'"></dd></div>
+                      <div x-show="!staffDetailsModal.staff?.setupRequired && staffDetailsModal.staff?.username"><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Username</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.username || ''"></dd></div>
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Email</dt><dd class="mt-1 break-all text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.email"></dd></div>
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Role</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.detailRoleLabel"></dd></div>
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</dt><dd class="mt-2"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="staffDetailsModal.staff?.statusClass" x-text="staffDetailsModal.staff?.statusLabel"></span></dd></div>
@@ -1460,6 +1455,6 @@
     <script src="../../scripts/api.js?v=staff-settings-20260928&release=staff-confirmation-20261001"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005"></script>
     <script src="../../scripts/components/success-toast.js"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=staff-confirmation-compact-20261001"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=staff-username-setup-20261005"></script>
   </body>
 </html>
