@@ -111,6 +111,14 @@ function scheduleCustomerDashboardAfterPaint(task) {
       const firstName = user.first_name || "";
       const lastName = user.last_name || "";
 
+      const greeting = document.getElementById("dashboardGreeting");
+      if (greeting) {
+        const initialSession = String(document.cookie || "").split(";").some((cookie) =>
+          cookie.trim() === `bethlehem_customer_initial_session_${encodeURIComponent(user.user_id)}=1`
+        );
+        greeting.textContent = `${initialSession ? "Welcome" : "Welcome back"}${firstName ? `, ${firstName}` : ""}`;
+      }
+
       if (profileName) {
         profileName.textContent = `${firstName} ${lastName}`.trim() || "Customer";
       }
@@ -528,22 +536,25 @@ function scheduleCustomerDashboardAfterPaint(task) {
     : scheduleDashboardDataIdle;
   const appointmentsList         = document.getElementById("appointmentsList");
   const groomingTrackerEl        = document.getElementById("groomingTracker");
-  const groomingLiveBadgeEl      = document.getElementById("groomingLiveBadge");
+  const groomingTrackerMetadataEl = document.getElementById("groomingTrackerMetadata");
   const groomingHistoryEl        = document.getElementById("groomingHistory");
-  const myPetsCountEl            = document.getElementById("myPetsCount");
-  const myPetsSummaryEl          = document.getElementById("myPetsSummary");
-  const upcomingAppointmentsCountEl   = document.getElementById("upcomingAppointmentsCount");
-  const upcomingAppointmentsSummaryEl = document.getElementById("upcomingAppointmentsSummary");
-  const groomingQueueCountEl          = document.getElementById("groomingQueueCount");
-  const groomingQueueSummaryEl        = document.getElementById("groomingQueueSummary");
-  const groomingCapacityBadgeEl       = document.getElementById("groomingCapacityBadge");
-  const groomingCapacityBarEl         = document.getElementById("groomingCapacityBar");
-  const groomingCapacityTextEl        = document.getElementById("groomingCapacityText");
-  const upcomingReminderKickerEl      = document.getElementById("upcomingReminderKicker");
-  const upcomingReminderTitleEl       = document.getElementById("upcomingReminderTitle");
-  const upcomingReminderTextEl        = document.getElementById("upcomingReminderText");
-  const pastGroomingCountEl      = document.getElementById("pastGroomingCount");
-  const pastGroomingSummaryEl    = document.getElementById("pastGroomingSummary");
+  const myPetsPreviewEl = document.getElementById("myPetsPreview");
+  const trackerSection = document.getElementById("trackerSection");
+  const upcomingSection = document.getElementById("upcomingSection");
+  const groomingQueueLoadingEl = document.getElementById("groomingQueueLoading");
+  const groomingQueueDetailsEl = document.getElementById("groomingQueueDetails");
+  const groomingQueueSummaryEl = document.getElementById("groomingQueueSummary");
+  const groomingCapacityBadgeEl = document.getElementById("groomingCapacityBadge");
+  const groomingCapacityTextEl = document.getElementById("groomingCapacityText");
+  const groomingStatusAnnouncement = document.getElementById("groomingStatusAnnouncement");
+  let dashboardPets = [];
+  let dashboardBookings = [];
+  let lastGroomingAnnouncement = "";
+  let lastAppointmentsMarkup = "";
+  let lastTrackerMarkup = "";
+  let lastTrackerMetadataMarkup = "";
+  let lastPetsMarkup = "";
+  let lastHistoryMarkup = "";
   const rescheduleModal          = document.getElementById("rescheduleModal");
   const closeRescheduleModal     = document.getElementById("closeRescheduleModal");
   const rescheduleBookingRef     = document.getElementById("rescheduleBookingRef");
@@ -601,7 +612,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
       renderMyPetsSummary(data.pets || []);
       dashboardPetsLoadState = "loaded";
     } catch {
-      renderMyPetsSummary([]);
+      renderDashboardPanelError(myPetsPreviewEl, "Failed to load pets. Please refresh.");
       dashboardPetsLoadState = "error";
     }
   }
@@ -612,13 +623,13 @@ function scheduleCustomerDashboardAfterPaint(task) {
     let data;
 
     try {
-      data = await API.getBookingHistory({ historyLimit: 6 });
+      data = await API.getBookingHistory({ historyLimit: 3 });
     } catch (error) {
       renderDashboardPanelError(appointmentsList, "Failed to load schedule. Please try again.");
       renderDashboardPanelError(groomingTrackerEl, "Failed to load grooming status. Please try again.");
       renderDashboardPanelError(groomingHistoryEl, "Failed to load grooming history. Please try again.");
-      renderUpcomingAppointmentsSummary([]);
-      renderPastGroomingSummary([], 0);
+      trackerSection?.classList.remove("hidden");
+      upcomingSection?.classList.remove("hidden");
       return;
     } finally {
       appointmentsLoading = false;
@@ -626,24 +637,24 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
     const active = Array.isArray(data?.bookings) ? data.bookings : [];
     const history = Array.isArray(data?.history) ? data.history : [];
-    const historyTotal = Number.isFinite(Number(data?.history_total))
-      ? Number(data.history_total)
-      : history.length;
     const scheduled = active.filter(isUpcomingAppointment);
     const atClinic = active.filter(b =>
       ["checked_in", "in_progress", "for_payment", "released"].includes(b?.status)
     ).filter(b => b.show_grooming_tracker !== false);
 
+    dashboardBookings = active;
+    const visibleGrooming = atClinic.filter((booking) => trackerPets(booking).length);
+    setDashboardHierarchy(visibleGrooming.length > 0, scheduled.length > 0);
+    if (dashboardPetsLoadState === "loaded") renderMyPetsPreview();
+
     renderDashboardPanel(appointmentsList, "schedule", () => {
       renderAppointments(scheduled);
-      renderUpcomingAppointmentsSummary(scheduled);
     });
     renderDashboardPanel(groomingTrackerEl, "grooming status", () => {
-      renderGroomingTracker(atClinic);
+      renderGroomingTracker(visibleGrooming);
     });
     renderDashboardPanel(groomingHistoryEl, "grooming history", () => {
       renderGroomingHistory(history);
-      renderPastGroomingSummary(history, historyTotal);
     });
   }
 
@@ -658,7 +669,14 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function renderDashboardPanelError(target, message) {
     if (!target) return;
-    if (target === groomingTrackerEl) groomingLiveBadgeEl?.classList.add("hidden");
+    if (target === appointmentsList) lastAppointmentsMarkup = "";
+    if (target === groomingTrackerEl) lastTrackerMarkup = "";
+    if (target === myPetsPreviewEl) lastPetsMarkup = "";
+    if (target === groomingHistoryEl) lastHistoryMarkup = "";
+    if (target === groomingTrackerEl) {
+      if (groomingTrackerMetadataEl) groomingTrackerMetadataEl.innerHTML = "";
+      lastTrackerMetadataMarkup = "";
+    }
 
     target.innerHTML = `
       <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center" role="alert">
@@ -715,75 +733,121 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   function renderMyPetsSummary(pets) {
-    const count = Array.isArray(pets) ? pets.length : 0;
+    dashboardPets = Array.isArray(pets) ? pets : [];
+    renderMyPetsPreview();
+  }
 
-    if (myPetsCountEl) {
-      myPetsCountEl.textContent = String(count);
-    }
+  function petIcon(pet, classes = "h-6 w-6") {
+    const icon = String(pet?.species || "").toLowerCase() === "cat" ? "cat" : "dog";
+    return `<svg class="ph-icon ${classes}" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#${icon}"></use></svg>`;
+  }
 
-    if (myPetsSummaryEl) {
-      myPetsSummaryEl.textContent = count
-        ? `${count} active pet${count === 1 ? "" : "s"}`
-        : "No pets yet";
+  function petAge(birthdate) {
+    if (!birthdate) return "";
+    const birth = String(birthdate).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) return "";
+    const [year, month, day] = birth.split("-").map(Number);
+    const [todayYear, todayMonth, todayDay] = getRescheduleTodayKey().split("-").map(Number);
+    if (birth > getRescheduleTodayKey()) return "";
+    const years = todayYear - year - (todayMonth < month || (todayMonth === month && todayDay < day) ? 1 : 0);
+    return years > 0 ? `${years} year${years === 1 ? "" : "s"}` : "Under 1 year";
+  }
+
+  function renderMyPetsPreview() {
+    if (!myPetsPreviewEl) return;
+    if (!dashboardPets.length) {
+      myPetsPreviewEl.innerHTML = '<p class="py-4 text-sm text-portal-muted">No pets registered yet.</p>';
+      return;
     }
+    const markup = dashboardPets.slice(0, 3).map((pet) => {
+      const breed = pet.breed && !["—", "-"].includes(pet.breed) ? pet.breed : "";
+      const details = [breed, petAge(pet.birthdate)].filter(Boolean).join(" · ");
+      const matching = dashboardBookings.filter((booking) =>
+        (booking.pets || []).some((record) => String(record.pet_id) === String(pet.pet_id))
+      );
+      const booking = matching.find((booking) => ["checked_in", "in_progress", "for_payment", "released"].includes(booking.status) && booking.show_grooming_tracker !== false)
+        || matching.find(isUpcomingAppointment);
+      const bookingPet = booking?.pets?.find((record) => String(record.pet_id) === String(pet.pet_id));
+      const status = bookingPet?.clinic_referred === true ? null : booking ? getPetGroomingStatus(bookingPet, booking) : null;
+      const label = booking && isUpcomingAppointment(booking) ? "Upcoming visit" : status ? getStatusConfig(status).label : "No visits scheduled";
+      const tone = status ? getStatusConfig(status).textClass : "text-portal-muted";
+      return `<div class="flex flex-wrap items-center gap-3 border-b border-portal-border py-4 first:pt-0 last:border-0 last:pb-0">
+        <div class="portal-icon-tile h-11 w-11 rounded-full">${petIcon(pet)}</div>
+        <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <p class="font-semibold text-portal-text">${escapeDashboardHtml(pet.pet_name)}</p>
+          ${details ? `<p class="mt-1 text-sm text-portal-muted">${escapeDashboardHtml(details)}</p>` : ""}
+        </div>
+        <span class="text-xs ${tone}">${escapeDashboardHtml(label)}</span>
+      </div>`;
+    }).join("");
+    if (markup !== lastPetsMarkup) {
+      myPetsPreviewEl.innerHTML = markup;
+      lastPetsMarkup = markup;
+    }
+  }
+
+  function setDashboardHierarchy(hasGrooming, hasSchedule) {
+    upcomingSection?.classList.toggle("hidden", !hasGrooming && !hasSchedule);
   }
 
   function renderAppointments(bookings) {
-    if (!bookings.length) {
-      appointmentsList.innerHTML = `
-        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-x"></use></svg>
-          <p class="mt-3 text-portal-muted text-sm">No upcoming schedule.</p>
-        </div>`;
-      return;
-    }
-
-    appointmentsList.innerHTML = bookings.map(b => buildBookingCard(b)).join("");
-
-    bookings.forEach(b => {
-      const rescheduleBtn = document.getElementById(`reschedule-${b.booking_id}`);
-      const cancelBtn     = document.getElementById(`cancel-${b.booking_id}`);
-      if (rescheduleBtn) rescheduleBtn.addEventListener("click", () => openRescheduleModal(b));
-      if (cancelBtn)     cancelBtn.addEventListener("click",     () => handleCancel(b));
+    const preview = [...bookings].sort((a, b) =>
+      String(a.booking_date || "").localeCompare(String(b.booking_date || "")) ||
+      scheduleStartMinutes(a) - scheduleStartMinutes(b)
+    ).slice(0, 3);
+    const markup = preview.length ? preview.map(buildBookingCard).join("") : `
+      <div class="w-full rounded-[14px] border border-portal-border bg-portal-record px-5 py-6 text-center">
+        <p class="text-sm font-semibold text-portal-text">No upcoming grooming scheduled</p>
+        <p class="mt-2 text-sm leading-relaxed text-portal-muted">Your next grooming visit will appear here once scheduled.</p>
+      </div>`;
+    // Polls with unchanged schedules must not replace focused action buttons.
+    if (lastAppointmentsMarkup === markup) return;
+    appointmentsList.innerHTML = markup;
+    lastAppointmentsMarkup = markup;
+    preview.forEach((booking) => {
+      const currentBooking = () => dashboardBookings.find((record) => record.booking_id === booking.booking_id) || booking;
+      document.getElementById(`reschedule-${booking.booking_id}`)?.addEventListener("click", () => openRescheduleModal(currentBooking()));
+      document.getElementById(`cancel-${booking.booking_id}`)?.addEventListener("click", () => handleCancel(currentBooking()));
     });
-
   }
 
-  function buildBookingCard(b) {
-    const statusConfig  = getStatusConfig(b.status);
-    const timeLabel     = b.time_window?.window_label ?? "—";
-    const isActionable  = b.status === "waiting_to_arrive";
-    const rescheduleAttrs = `id="reschedule-${b.booking_id}" class="flex-1 rounded-xl border border-[#315b7e] px-3 py-2 text-xs font-semibold text-portal-primary hover:bg-[#315b7e] hover:text-white transition"`;
-    const cancelAttrs     = `id="cancel-${b.booking_id}" class="flex-1 rounded-xl border border-red-300 px-3 py-2 text-xs font-semibold text-portal-danger hover:bg-red-50 transition"`;
-    const rescheduleLabel = "Reschedule";
-    const cancelLabel     = "Cancel";
+  function scheduleStartMinutes(booking) {
+    const match = String(booking.time_window?.window_label || "").match(/^(\d{1,2}):(\d{2})\s*([AP]M)/i);
+    if (!match) return 24 * 60;
+    return (Number(match[1]) % 12 + (match[3].toUpperCase() === "PM" ? 12 : 0)) * 60 + Number(match[2]);
+  }
 
-    const buttons = isActionable
-      ? `<div class="flex gap-2 mt-3">
-           <button type="button" ${rescheduleAttrs}>${rescheduleLabel}</button>
-           <button type="button" ${cancelAttrs}>${cancelLabel}</button>
-         </div>`
-      : "";
+  function serviceLabel(booking) {
+    return [...new Set((booking.pets || []).flatMap((pet) =>
+      (pet.services || []).map((service) => service.service_name).filter(Boolean)
+    ))].join(", ") || "Grooming";
+  }
 
-    return `
-      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0 mb-4">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <div>
-            <p class="text-sm font-semibold text-portal-text">${b.booking_reference}</p>
-            <p class="text-xs text-portal-muted mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
-          </div>
-          <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${statusConfig.classes}">
-            ${statusConfig.label}
-          </span>
-        </div>
-        <p class="text-xs text-portal-muted">${b.number_of_pets} pet${b.number_of_pets > 1 ? "s" : ""}</p>
-        ${buttons}
-      </div>`;
+  function buildBookingCard(booking) {
+    const status = getStatusConfig(booking.status);
+    const actionable = booking.status === "waiting_to_arrive";
+    const names = getPetNamesLabel(booking);
+    return `<article class="flex flex-wrap items-center gap-4 rounded-[14px] bg-portal-surface-soft p-4 [overflow-wrap:anywhere] mb-3 last:mb-0">
+      <div class="portal-icon-tile h-11 w-11 rounded-full">${petIcon(booking.pets?.[0])}</div>
+      <div class="min-w-0 flex-1">
+        <p class="text-base font-semibold text-portal-text">${escapeDashboardHtml(names)}</p>
+        <p class="mt-1 text-sm text-portal-text">${escapeDashboardHtml(serviceLabel(booking))}</p>
+        <p class="mt-1 text-sm text-portal-muted">${formatDate(booking.booking_date)} · ${escapeDashboardHtml(booking.time_window?.window_label || "Time to be confirmed")}</p>
+        <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.classes}">${escapeDashboardHtml(status.label)}</span>
+      </div>
+      ${actionable ? `<div class="flex flex-wrap gap-2 max-[639px]:basis-full">
+        <button type="button" id="reschedule-${escapeDashboardHtml(booking.booking_id)}" class="portal-button-secondary min-h-10 whitespace-nowrap px-3 py-2 text-xs" aria-label="Reschedule ${escapeDashboardHtml(names)}">Reschedule</button>
+        <button type="button" id="cancel-${escapeDashboardHtml(booking.booking_id)}" class="min-h-10 whitespace-nowrap rounded-2xl border border-portal-border px-3 py-2 text-xs font-semibold text-portal-danger transition-colors hover:bg-portal-danger-soft" aria-label="Cancel ${escapeDashboardHtml(names)}">Cancel</button>
+      </div>` : ""}
+    </article>`;
   }
 
   // ── Grooming Tracker section ───────────────────────────────────────────────
 
   function renderGroomingCapacity(data) {
+    groomingQueueLoadingEl?.classList.add("hidden");
+    groomingQueueDetailsEl?.classList.remove("hidden");
+    groomingQueueDetailsEl?.classList.add("flex");
     const capacity = data?.capacity || {};
     const queue = data?.queue || {};
     const max = toNumber(capacity.max) || 20;
@@ -797,96 +861,29 @@ function scheduleCustomerDashboardAfterPaint(task) {
     const isBusy = !isFull && percent >= 80;
 
     if (!data) {
-      if (groomingQueueCountEl) groomingQueueCountEl.textContent = "--";
-      if (groomingQueueSummaryEl) groomingQueueSummaryEl.textContent = "Unable to load live queue";
-      if (groomingCapacityTextEl) groomingCapacityTextEl.textContent = "Capacity unavailable";
-      if (groomingCapacityBarEl) {
-        groomingCapacityBarEl.style.width = "0%";
-        groomingCapacityBarEl.className = "h-full rounded-full bg-slate-300 transition-all duration-300";
-      }
-      if (groomingCapacityBadgeEl) {
-        groomingCapacityBadgeEl.textContent = "Offline";
-        groomingCapacityBadgeEl.className = "rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600";
-      }
+      groomingQueueSummaryEl.textContent = "Unable to load today’s queue";
+      groomingCapacityTextEl.textContent = "Please refresh to check grooming availability.";
+      groomingCapacityBadgeEl.textContent = "Unavailable";
+      groomingCapacityBadgeEl.className = "inline-flex self-start rounded-full bg-portal-active px-3 py-1 text-xs font-semibold text-portal-muted";
       return;
     }
 
-    if (groomingQueueCountEl) groomingQueueCountEl.textContent = String(active);
-    if (groomingQueueSummaryEl) {
-      groomingQueueSummaryEl.textContent = `${inProgress} in progress`;
-      groomingQueueSummaryEl.className = "text-sm text-portal-muted mt-1";
-    }
-    if (groomingCapacityTextEl) {
-      groomingCapacityTextEl.textContent = isFull
-        ? `${used} / ${max} daily capacity - max reached`
-        : `${used} / ${max} daily capacity - ${remaining} left`;
-    }
-    if (groomingCapacityBarEl) {
-      groomingCapacityBarEl.style.width = `${percent}%`;
-      groomingCapacityBarEl.className = "h-full rounded-full bg-portal-accent transition-all duration-300";
-    }
-    if (groomingCapacityBadgeEl) {
-      groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Busy" : "Open";
-      groomingCapacityBadgeEl.className = isFull
-        ? "rounded-full bg-portal-danger-soft px-2.5 py-1 text-[11px] font-semibold text-portal-danger"
-        : isBusy
-          ? "rounded-full bg-portal-warning-soft px-2.5 py-1 text-[11px] font-semibold text-portal-warning"
-          : "rounded-full bg-portal-success-soft px-2.5 py-1 text-[11px] font-semibold text-portal-success";
-    }
+    groomingQueueSummaryEl.textContent = active
+      ? `${active} pet${active === 1 ? "" : "s"} currently in the grooming queue`
+      : "No pets in the grooming queue right now";
+    groomingCapacityTextEl.textContent = isFull
+      ? "Today’s grooming slots are full."
+      : `${remaining} grooming slot${remaining === 1 ? "" : "s"} still available today.`;
+    groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Nearly Full" : "Open";
+    groomingCapacityBadgeEl.className = `inline-flex self-start rounded-full px-3 py-1 text-xs font-semibold ${isFull
+      ? "bg-portal-danger-soft text-portal-danger"
+      : isBusy ? "bg-portal-warning-soft text-portal-warning"
+      : "bg-portal-success-soft text-portal-success"}`;
   }
 
   function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
-  }
-
-  function renderUpcomingAppointmentsSummary(bookings) {
-    const records = Array.isArray(bookings) ? bookings : [];
-    const count = records.length;
-
-    if (upcomingAppointmentsCountEl) {
-      upcomingAppointmentsCountEl.textContent = String(count);
-    }
-
-    if (upcomingAppointmentsSummaryEl) {
-      upcomingAppointmentsSummaryEl.textContent = count
-        ? `${count} active schedule`
-        : "No upcoming schedule";
-      upcomingAppointmentsSummaryEl.className = count
-        ? "text-sm text-portal-muted mt-1"
-        : "text-sm text-portal-muted mt-1";
-    }
-
-    renderUpcomingReminder(records);
-  }
-
-  function renderUpcomingReminder(bookings) {
-    const nextBooking = getNextUpcomingBooking(bookings);
-
-    if (!nextBooking) {
-      if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "UPCOMING SCHEDULE";
-      if (upcomingReminderTitleEl) upcomingReminderTitleEl.textContent = "You don't have any scheduled grooming yet";
-      if (upcomingReminderTextEl) upcomingReminderTextEl.textContent = "Start by pre-registering your first grooming session for your pet.";
-      return;
-    }
-
-    const timeLabel = nextBooking.time_window?.window_label ?? "Time to be confirmed";
-    const petNames = getPetNamesLabel(nextBooking);
-
-    if (upcomingReminderKickerEl) upcomingReminderKickerEl.textContent = "UPCOMING SCHEDULE";
-    if (upcomingReminderTitleEl) {
-      upcomingReminderTitleEl.textContent =
-        `${nextBooking.booking_reference} on ${formatDate(nextBooking.booking_date)}`;
-    }
-    if (upcomingReminderTextEl) {
-      upcomingReminderTextEl.textContent = `${petNames} - ${timeLabel}`;
-    }
-  }
-
-  function getNextUpcomingBooking(bookings) {
-    return [...bookings]
-      .filter(isUpcomingAppointment)
-      .sort((a, b) => String(a.booking_date || "").localeCompare(String(b.booking_date || "")))[0] || null;
   }
 
   function isUpcomingAppointment(booking) {
@@ -905,150 +902,124 @@ function scheduleCustomerDashboardAfterPaint(task) {
     return count ? `${count} pet${count === 1 ? "" : "s"}` : "Your pet";
   }
 
+  function getPetGroomingStatus(pet, booking) {
+    // Pickup readiness remains booking-controlled, even if one pet has finished.
+    if (["for_payment", "released"].includes(booking.status)) return booking.status;
+    return pet?.grooming_status || booking.status;
+  }
+
+  function trackerPets(booking) {
+    return (booking.pets || []).filter((pet) => pet.clinic_referred !== true);
+  }
+
   function renderGroomingTracker(bookings) {
-    if (!bookings.length) {
-      groomingLiveBadgeEl?.classList.add("hidden");
-      groomingTrackerEl.innerHTML = `
-        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
-          <p class="mt-3 text-portal-muted text-sm">No pets at the clinic right now.</p>
-        </div>`;
-      return;
+    const metadataMarkup = bookings.length ? buildTrackerMetadata(bookings[0]) : "";
+    if (metadataMarkup !== lastTrackerMetadataMarkup) {
+      if (groomingTrackerMetadataEl) groomingTrackerMetadataEl.innerHTML = metadataMarkup;
+      lastTrackerMetadataMarkup = metadataMarkup;
     }
-
-    groomingTrackerEl.innerHTML = bookings.map(b => buildTrackerCard(b)).join("");
-    groomingLiveBadgeEl?.classList.toggle("hidden", !bookings.some(hasQueuedOrGroomingPet));
-  }
-
-  function hasQueuedOrGroomingPet(booking) {
-    const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-    return pets.some(pet =>
-      pet.clinic_referred !== true
-      && pet.active_in_grooming !== false
-      && ["checked_in", "in_progress"].includes(
-        String(pet.grooming_status ?? booking.status ?? "").toLowerCase(),
-      )
-    );
-  }
-
-  function buildTrackerCard(b) {
-    const timeLabel  = b.time_window?.window_label ?? "—";
-    const trackerPets = (b.pets || []).filter(p => p.clinic_referred !== true);
-    const petNames   = trackerPets.map(p => p.pet_name).filter(Boolean).join(", ") || "—";
-    const petCount   = trackerPets.length;
-    const prePaid    = b.paid
-      ? `<span class="ml-2 rounded-full bg-portal-success-soft px-2 py-0.5 text-[11px] font-semibold text-portal-success">Pre-Paid ✓</span>`
-      : "";
-
-    const steps = [
-      { key: "checked_in",  label: "Checked In"       },
-      { key: "in_progress", label: "Being Groomed"     },
-      { key: "for_payment", label: "Ready for Pickup"  },
-    ];
-    const stepOrder  = { checked_in: 0, in_progress: 1, for_payment: 2, released: 2 };
-    const current    = stepOrder[b.status] ?? 0;
-    const stepThemes = {
-      checked_in:  { color: "var(--portal-warning, #806a40)" },
-      in_progress: { color: "var(--portal-primary, #486780)" },
-      for_payment: { color: "var(--portal-success, #476857)" },
-      released:    { color: "var(--portal-success, #476857)" },
-    };
-
-    const stepCircles = steps.map((step, i) => {
-      const active = i === current;
-      const stepTheme = stepThemes[step.key];
-      const circleClass = active
-        ? "text-white"
-        : "bg-white text-portal-muted border-slate-300";
-      const circleStyle = active
-        ? `style="background-color: ${stepTheme.color}; border-color: ${stepTheme.color};"`
-        : "";
-      const labelClass  = active
-        ? "font-semibold"
-        : "text-portal-muted";
-      const labelStyle = active
-        ? `style="color: ${stepTheme.color};"`
-        : "";
-      return `
-        <div class="flex flex-col items-center z-10">
-          <div class="w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-bold ${circleClass}" ${circleStyle}>
-            ${i + 1}
-          </div>
-          <p class="mt-2 text-[11px] text-center ${labelClass} leading-tight max-w-[5rem]" ${labelStyle}>${step.label}</p>
-        </div>`;
-    }).join("");
-
-    return `
-      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0 mb-4">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <div>
-            <p class="text-sm font-semibold text-portal-text">${b.booking_reference}${prePaid}</p>
-            <p class="text-xs text-portal-muted mt-0.5">${formatDate(b.booking_date)} &middot; ${timeLabel}</p>
-          </div>
-        </div>
-        <p class="text-xs text-portal-muted mb-5">${petNames} &middot; ${petCount} pet${petCount > 1 ? "s" : ""}</p>
-        <div class="relative flex justify-between items-start px-4">
-          <!-- background track -->
-          <div class="absolute top-[1.0625rem] left-4 right-4 h-1 bg-slate-200 rounded-full"></div>
-          ${stepCircles}
-        </div>
+    const markup = bookings.length ? bookings.map(buildTrackerCard).join("") : `
+      <div class="flex min-h-[160px] flex-1 flex-col items-center justify-center rounded-[14px] border border-portal-border bg-portal-record px-5 py-6 text-center">
+        <p class="text-sm font-semibold text-portal-text">No grooming in progress</p>
+        <p class="mt-2 text-sm leading-relaxed text-portal-muted">Your pet’s status will appear here after clinic check-in.</p>
       </div>`;
+    if (lastTrackerMarkup !== markup) {
+      groomingTrackerEl.innerHTML = markup;
+      lastTrackerMarkup = markup;
+    }
+    const announcement = bookings.flatMap((booking) => trackerPets(booking).map((pet) =>
+      `${pet.pet_name}: ${getStatusConfig(getPetGroomingStatus(pet, booking)).label}`
+    )).join(". ") || "No pets at the clinic right now.";
+    if (announcement !== lastGroomingAnnouncement) {
+      if (groomingStatusAnnouncement) groomingStatusAnnouncement.textContent = announcement;
+      lastGroomingAnnouncement = announcement;
+    }
   }
 
-  // ── Grooming History section ───────────────────────────────────────────────
+  function buildTrackerMetadata(booking) {
+    const paidAt = booking.payment_summary?.paid_at;
+    const finishedAt = booking.grooming_finished_timestamp;
+    const prePaid = paidAt && finishedAt
+      ? new Date(paidAt) < new Date(finishedAt)
+      : ["checked_in", "in_progress"].includes(booking.status);
+    return `<div class="flex flex-col items-end gap-1.5 text-xs text-portal-muted">
+      ${booking.paid ? `<span class="rounded-full bg-portal-success-soft px-2.5 py-1 font-semibold text-portal-success">${prePaid ? "Pre-Paid" : "Paid"}</span>` : ""}
+      <span class="[overflow-wrap:anywhere]">Ref. ${escapeDashboardHtml(booking.booking_reference || "")}</span>
+    </div>`;
+  }
+
+  function buildTrackerCard(booking, index) {
+    const groups = new Map();
+    trackerPets(booking).forEach((pet) => {
+      const status = getPetGroomingStatus(pet, booking);
+      if (!groups.has(status)) groups.set(status, []);
+      groups.get(status).push(pet);
+    });
+    const progressGroups = groups.size > 1 ? [[booking.status, trackerPets(booking)]] : [...groups];
+    const petStatuses = groups.size > 1 ? `<div class="mt-4 grid gap-2 sm:grid-cols-2">${[...groups].map(([status, pets]) => {
+      const config = getStatusConfig(status);
+      return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-portal-record px-3 py-2 text-xs">
+        <span class="min-w-0 font-semibold [overflow-wrap:anywhere]">${escapeDashboardHtml(pets.map((pet) => pet.pet_name).join(", "))}</span>
+        <span class="inline-flex items-center gap-2 ${config.textClass}"><span class="h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true"></span>${escapeDashboardHtml(config.label)}</span>
+      </div>`;
+    }).join("")}</div>` : "";
+    const groupsMarkup = progressGroups.map(([status, pets]) => {
+      const names = pets.map((pet) => pet.pet_name).filter(Boolean).join(", ") || "Your pet";
+      const current = { checked_in: 0, in_progress: 1, grooming_finished: 1, for_payment: 2, released: 2 }[status] ?? 0;
+      const config = getStatusConfig(status);
+      const steps = ["Checked In", "Grooming in Progress", "Ready for Pickup"].map((label, index) => {
+        const done = index < current || (status === "grooming_finished" && index === 1);
+        const circle = done ? "border-portal-success bg-portal-success text-white"
+          : index === current ? "border-portal-primary bg-portal-primary text-white"
+          : "border-portal-border bg-portal-surface text-portal-muted";
+        const line = index < current ? "bg-portal-success" : "bg-portal-border";
+        return `<li class="relative min-w-0 text-center" ${index === current ? 'aria-current="step"' : ""}>
+          ${index < 2 ? `<span class="absolute left-1/2 top-5 h-0.5 w-full ${line}" aria-hidden="true"></span>` : ""}
+          <span class="relative mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${circle}" aria-hidden="true">${done
+            ? '<svg class="ph-icon h-5 w-5" viewBox="0 0 256 256"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>'
+            : index + 1}</span>
+          <span class="relative mt-2 block px-1 text-xs leading-snug ${index === current ? "font-semibold text-portal-text" : "text-portal-muted"}">${label}<span class="sr-only">${done ? ", complete" : index === current ? ", current" : ", upcoming"}</span></span>
+        </li>`;
+      }).join("");
+      return `<div class="mb-6 last:mb-0">
+        <div class="flex items-center gap-4">
+          <div class="portal-icon-tile h-14 w-14 rounded-full">${petIcon(pets[0], "h-8 w-8")}</div>
+          <div class="min-w-0 [overflow-wrap:anywhere]">
+            <h4 class="text-[28px] font-semibold leading-tight text-portal-text max-[639px]:text-2xl">${escapeDashboardHtml(names)}</h4>
+            <span class="mt-2 inline-flex items-center gap-2 text-sm font-semibold ${config.textClass}"><span class="h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true"></span>${escapeDashboardHtml(config.label)}</span>
+          </div>
+        </div>
+        ${petStatuses}
+        <ol class="mt-6 grid grid-cols-3" aria-label="Grooming progress for ${escapeDashboardHtml(names)}">${steps}</ol>
+      </div>`;
+    }).join("");
+    return `<article class="border-b border-portal-border pb-5 mb-5 last:border-0 last:pb-0 last:mb-0">
+      ${index > 0 ? `<div class="mb-4 flex justify-end">${buildTrackerMetadata(booking)}</div>` : ""}
+      ${groupsMarkup}
+    </article>`;
+  }
 
   function renderGroomingHistory(history) {
-    if (!history.length) {
-      groomingHistoryEl.innerHTML = `
-        <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-          <svg class="ph-icon w-10 h-10 mx-auto text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clock-counter-clockwise"></use></svg>
-          <p class="mt-3 text-portal-muted text-sm">No grooming history yet.</p>
-        </div>`;
-      return;
-    }
-
-    groomingHistoryEl.innerHTML = `
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        ${history.map(b => buildHistoryCard(b)).join("")}
-      </div>`;
-  }
-
-  function renderPastGroomingSummary(history, totalCount = null) {
-    const count = Number.isFinite(Number(totalCount))
-      ? Number(totalCount)
-      : (Array.isArray(history) ? history.length : 0);
-
-    if (pastGroomingCountEl) {
-      pastGroomingCountEl.textContent = String(count);
-    }
-
-    if (pastGroomingSummaryEl) {
-      pastGroomingSummaryEl.textContent = count
-        ? `${count} completed session${count === 1 ? "" : "s"}`
-        : "No grooming history yet";
+    const markup = history.length
+      ? history.slice(0, 3).map(buildHistoryCard).join("")
+      : '<p class="py-4 text-sm text-portal-muted">No grooming visits yet.</p>';
+    if (markup !== lastHistoryMarkup) {
+      groomingHistoryEl.innerHTML = markup;
+      lastHistoryMarkup = markup;
     }
   }
 
-  function buildHistoryCard(b) {
-    const timeLabel = b?.time_window?.window_label ?? "—";
-    const pets = Array.isArray(b?.pets) ? b.pets : [];
-    const petNames = pets.map(p => p?.pet_name).filter(Boolean).join(", ") || "—";
-    const walkInBadge = b?.booking_type === "walk_in"
-      ? `<span class="rounded-full bg-portal-active px-2 py-0.5 text-[11px] font-semibold text-portal-primary">Walk-in</span>`
-      : "";
-    const paidBadge = b?.paid
-      ? `<span class="rounded-full bg-portal-success-soft px-2 py-0.5 text-[11px] font-semibold text-portal-success">Paid ✓</span>`
-      : "";
-
-    return `
-      <div class="rounded-[13px] border border-portal-border bg-portal-record p-4 [overflow-wrap:anywhere] [&>.flex]:flex-wrap last:mb-0">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <p class="text-sm font-semibold text-portal-text">${escapeDashboardHtml(b?.booking_reference || "Booking")}</p>
-          <div class="flex flex-wrap justify-end gap-1.5">${walkInBadge}${paidBadge}</div>
-        </div>
-        <p class="text-xs text-portal-muted mb-1">${formatDate(b?.booking_date)} &middot; ${escapeDashboardHtml(timeLabel)}</p>
-        <p class="text-xs text-portal-muted">${escapeDashboardHtml(petNames)}</p>
-      </div>`;
+  function buildHistoryCard(booking) {
+    const badge = booking.paid ? { label: "Paid", classes: "bg-portal-success-soft text-portal-success" }
+      : getStatusConfig(booking.status || "archived");
+    return `<article class="mb-3 flex flex-wrap items-center gap-3 rounded-[14px] bg-portal-surface-soft p-3 last:mb-0 [overflow-wrap:anywhere]">
+      <div class="portal-icon-tile h-10 w-10 rounded-[13px] bg-portal-surface"><svg class="ph-icon h-6 w-6" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg></div>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold text-portal-text">${escapeDashboardHtml(getPetNamesLabel(booking))} · ${escapeDashboardHtml(serviceLabel(booking))}</p>
+        <p class="mt-1 text-xs text-portal-muted">${formatDate(booking.booking_date)}</p>
+      </div>
+      <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold ${badge.classes}">${escapeDashboardHtml(badge.label)}</span>
+    </article>`;
   }
 
   function escapeDashboardHtml(value) {
@@ -1066,15 +1037,18 @@ function scheduleCustomerDashboardAfterPaint(task) {
   function getStatusConfig(status) {
     const map = {
       waiting_to_arrive: { label: "Waiting",           classes: "bg-portal-active text-portal-primary" },
+      waiting:           { label: "Waiting", classes: "bg-portal-active text-portal-primary" },
+      grooming_finished: { label: "Grooming finished", classes: "bg-portal-success-soft text-portal-success" },
       checked_in:        { label: "Checked In",         classes: "bg-portal-warning-soft text-portal-warning" },
-      in_progress:       { label: "In Progress",        classes: "bg-portal-active text-portal-primary" },
+      in_progress:       { label: "Grooming in Progress",        classes: "bg-portal-warning-soft text-portal-warning" },
       for_payment:       { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
       released:          { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
       cancelled:         { label: "Cancelled",          classes: "bg-portal-danger-soft text-portal-danger" },
       no_show:           { label: "No Show",            classes: "bg-portal-warning-soft text-portal-warning" },
       archived:          { label: "Completed",          classes: "bg-portal-success-soft text-portal-success" },
     };
-    return map[status] || { label: status, classes: "bg-slate-100 text-slate-600" };
+    const config = map[status] || { label: status, classes: "bg-portal-active text-portal-muted" };
+    return { ...config, textClass: config.classes.split(" ").find((className) => className.startsWith("text-")) };
   }
 
   // ── Reschedule modal ───────────────────────────────────────────────────────

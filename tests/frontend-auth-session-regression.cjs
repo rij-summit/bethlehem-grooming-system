@@ -88,6 +88,7 @@ function createBrowser({
 
   return {
     API: context.API,
+    document: context.document,
     localStorage,
     sessionStorage,
     location,
@@ -741,7 +742,22 @@ function testStaticAuthContracts() {
   }
 }
 
+async function testInitialCustomerBrowserSessionMarker() {
+  const user = { user_id: 7, role: "customer", first_name: "Gerald", last_name: "Senining" };
+  const browser = createBrowser({ fetchImpl: async () => jsonResponse(200, { token: "session-token", user }) });
+  await browser.API.verifyEmail("verification-token");
+  assert.equal(browser.document.cookie, "bethlehem_customer_initial_session_7=1; Path=/; SameSite=Lax");
+  assert.doesNotMatch(browser.document.cookie, /Expires|Max-Age/i, "The greeting marker must end with the browser session.");
+  await browser.API.logout("customer");
+  await browser.API.signIn("customer@example.com", "existing-password");
+  assert.match(browser.document.cookie, /initial_session_7=1/, "Same-session sign-in must not turn the initial greeting into Welcome back.");
+  const returning = createBrowser({ fetchImpl: async () => jsonResponse(200, { token: "later-token", user }) });
+  await returning.API.signIn("customer@example.com", "existing-password");
+  assert.equal(returning.document.cookie, undefined, "Normal returning sign-in must not create an initial-session marker.");
+}
+
 (async () => {
+  await testInitialCustomerBrowserSessionMarker();
   await testLoginCodeHonorsRememberMeStorage();
   await testProfileNameLivesAndDiesWithTheSession();
   testProfileNameIsAppliedWithoutWaitingForDomContentLoaded();

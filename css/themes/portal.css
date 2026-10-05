@@ -30,6 +30,13 @@
     --portal-shadow: 0 2px 5px rgb(44 62 80 / 4%), 0 8px 22px rgb(44 62 80 / 2%);
   }
 
+  /* Dashboard status accents follow the customer reference; other pages keep their theme. */
+  .customer-dashboard {
+    --portal-success: #2c8060;
+    --portal-success-soft: #e5f4ec;
+    --portal-warning: #a86212;
+  }
+
   .portal-theme :is(a, button, input, [tabindex]):focus-visible {
     outline: 2px solid var(--portal-accent);
     outline-offset: 3px;

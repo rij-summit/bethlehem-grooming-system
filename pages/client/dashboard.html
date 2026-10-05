@@ -7,7 +7,7 @@
     <title>Client Dashboard | Bethlehem Animal Clinic</title>
 
     <!-- Tailwind output -->
-    <link rel="stylesheet" href="../../css/output.css?v=20260915-grooming-live&notif=20260915-client-notifications" />
+    <link rel="stylesheet" href="../../css/output.css?v=20261005-dashboard-loading-v1&notif=20260915-client-notifications" />
     <link rel="stylesheet" href="../../css/custom.css?v=20260806-reschedule-availability&ui=20260915-client-notifications&release=20261001" />
 
   </head>
@@ -159,7 +159,7 @@
       <!-- ===================================================== -->
       <main class="ml-64 min-w-0 flex-1 min-h-screen transition-[margin-left] duration-[240ms] ease-[ease] max-[1180px]:!ml-0 max-[1180px]:w-full">
         <!-- Top Header -->
-        <!-- Backend note: notifications and search can be connected later -->
+        <!-- Customer greeting and existing portal actions -->
         <header
           class="sticky top-0 z-30 backdrop-blur border-b border-portal-border bg-white/[0.96]"
         >
@@ -167,26 +167,13 @@
             class="flex flex-col gap-5 px-6 py-5 min-[1181px]:flex-row min-[1181px]:items-center lg:justify-between min-[1181px]:max-[1420px]:flex-wrap max-[1180px]:pl-20 max-[639px]:gap-[18px] max-[639px]:px-4 max-[639px]:py-[18px]"
           >
             <div class="min-w-0 max-[639px]:pl-[62px]">
-              <h2 class="text-3xl font-bold text-portal-text max-[639px]:text-[26px]">Dashboard</h2>
+              <h2 id="dashboardGreeting" class="text-3xl font-bold text-portal-text [overflow-wrap:anywhere] max-[639px]:text-[26px]">Welcome</h2>
               <p class="text-portal-muted mt-1 text-[14px] max-[639px]:leading-[1.5]">
-                Here's a quick overview of your pets and grooming schedules
+                Here’s what’s happening with your pets today.
               </p>
             </div>
 
             <div class="flex items-center flex-none gap-4 min-[1181px]:max-[1420px]:ml-auto max-[1180px]:flex-wrap max-[639px]:gap-2.5">
-              <!-- Search -->
-              <div
-                class="flex min-h-[46px] w-[clamp(210px,18vw,300px)] items-center gap-2.5 rounded-full border border-portal-border bg-portal-surface-soft px-[15px] py-[11px] text-portal-primary focus-within:border-portal-accent max-[1180px]:w-auto max-[1180px]:flex-1 max-[639px]:order-3 max-[639px]:basis-full"
-              >
-                <svg class="ph-icon w-4 h-4 text-portal-muted" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#magnifying-glass"></use></svg>
-                <input
-                  type="text"
-                  placeholder="Search schedules or pet name..."
-                  aria-label="Search schedules or pet name"
-                  class="w-full bg-transparent outline-none text-sm min-w-0 text-portal-text placeholder:text-portal-muted focus-visible:!outline-none"
-                />
-              </div>
-
               <!-- Notification Bell -->
               <div class="relative" id="notifBellWrapper">
                 <button
@@ -235,223 +222,58 @@
           </div>
         </header>
 
-        <!-- Dashboard Content -->
-        <section class="space-y-[22px] p-6 pb-[104px] max-[639px]:space-y-4 max-[639px]:p-4 max-[639px]:pb-[100px]">
-          <!-- ===================================================== -->
-          <!-- SUMMARY CARDS -->
-          <!-- Backend note: these values should come from database -->
-          <!-- Example: total pets, upcoming appointments, grooming history -->
-          <!-- ===================================================== -->
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-[22px] max-[639px]:gap-4">
-            <div
-              class="portal-card max-[639px]:p-5 min-h-[168px] max-[639px]:min-h-[156px]"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-portal-text">My Pets</p>
-                  <h3 id="myPetsCount" class="text-3xl font-bold text-portal-text mt-1"><span class="block h-9 w-10 animate-pulse rounded-lg bg-portal-active" aria-label="Loading"></span></h3>
-                  <p id="myPetsSummary" class="text-sm mt-1 text-portal-muted">Loading...</p>
-                  <p class="text-sm mt-1 text-portal-muted">
-                    Registered under your account
-                  </p>
+        <!-- Pet-owner home: now, next, then helpful actions. -->
+        <section class="p-6 pb-[104px] max-[639px]:p-4 max-[639px]:pb-[100px]" aria-label="Your pets today">
+          <div class="grid grid-cols-1 items-stretch gap-[22px] xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] max-[639px]:gap-4">
+            <section id="trackerSection" class="portal-card order-1 flex min-h-[264px] flex-col max-[639px]:p-5" aria-labelledby="trackerHeading">
+              <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 id="trackerHeading" class="text-[22px] font-bold leading-[1.3]">Grooming Tracker</h3>
+                  <p class="mt-1 text-sm text-portal-muted">Follow your pet’s grooming progress</p>
                 </div>
-                <div
-                  class="portal-icon-tile"
-                >
-                  <svg class="ph-icon w-6 h-6" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
-                </div>
+                <div id="groomingTrackerMetadata" class="ml-auto text-right text-xs text-portal-muted"></div>
               </div>
-            </div>
+              <div id="groomingTracker" class="flex min-h-[160px] flex-1 flex-col"><div class="flex min-h-[160px] flex-1 flex-col items-center justify-center py-6 text-center" role="status" aria-live="polite"><svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg><p class="mt-3 text-sm text-portal-muted">Loading...</p></div></div>
+            </section>
 
-            <div
-              class="portal-card max-[639px]:p-5 min-h-[168px] max-[639px]:min-h-[156px]"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-portal-text">
-                    Upcoming Schedule
-                  </p>
-                  <h3 id="upcomingAppointmentsCount" class="text-3xl font-bold text-portal-text mt-1"><span class="block h-9 w-10 animate-pulse rounded-lg bg-portal-active" aria-label="Loading"></span></h3>
-                  <p id="upcomingAppointmentsSummary" class="text-sm mt-1 text-portal-muted">
-                    Loading...
-                  </p>
-                </div>
-                <div
-                  class="portal-icon-tile"
-                >
-                  <svg class="ph-icon w-6 h-6" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
-                </div>
-              </div>
-            </div>
+            <section id="upcomingSection" class="portal-card order-2 flex flex-col xl:col-span-2 max-[639px]:p-5" aria-labelledby="upcomingHeading">
+              <h3 id="upcomingHeading" class="mb-5 flex items-center gap-3 text-[22px] font-bold leading-[1.3]"><svg class="ph-icon h-6 w-6 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>Upcoming Schedule</h3>
+              <div id="appointmentsList" class="flex min-h-[160px] flex-1 flex-col"><div class="flex min-h-[160px] flex-1 flex-col items-center justify-center py-6 text-center" role="status" aria-live="polite"><svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg><p class="mt-3 text-sm text-portal-muted">Loading...</p></div></div>
+            </section>
 
-            <div
-              class="portal-card max-[639px]:p-5 min-h-[168px] max-[639px]:min-h-[156px]"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-portal-text">
-                    Past Grooming Sessions
-                  </p>
-                  <h3 id="pastGroomingCount" class="text-3xl font-bold text-portal-text mt-1"><span class="block h-9 w-10 animate-pulse rounded-lg bg-portal-active" aria-label="Loading"></span></h3>
-                  <p id="pastGroomingSummary" class="text-sm mt-1 text-portal-muted">
-                    Loading...
-                  </p>
-                </div>
-                <div
-                  class="portal-icon-tile"
-                >
-                  <svg class="ph-icon w-6 h-6" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="portal-card max-[639px]:p-5 min-h-[168px] max-[639px]:min-h-[156px]"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="text-sm font-medium text-portal-text">
-                      Grooming Queue
-                    </p>
-                    <span
-                      id="groomingCapacityBadge"
-                      class="rounded-full bg-portal-success-soft px-2.5 py-1 text-[11px] font-semibold text-portal-success"
-                    >
-                      Open
-                    </span>
-                  </div>
-                  <h3 id="groomingQueueCount" class="text-3xl font-bold text-portal-text mt-1"><span class="block h-9 w-10 animate-pulse rounded-lg bg-portal-active" aria-label="Loading"></span></h3>
-                  <p id="groomingQueueSummary" class="text-sm mt-1 text-portal-muted">
-                    Loading...
-                  </p>
-                </div>
-                <div
-                  class="portal-icon-tile"
-                >
-                  <svg class="ph-icon w-6 h-6" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
-                </div>
-              </div>
-              <div class="h-2 rounded-full overflow-hidden gap-3 mt-2.5 bg-portal-active">
-                <div
-                  id="groomingCapacityBar"
-                  class="h-full rounded-full transition-all duration-300 min-w-0 flex-1 bg-portal-accent"
-                  style="width: 0%"
-                ></div>
-              </div>
-              <p id="groomingCapacityText" class="text-xs font-semibold mt-2 text-portal-muted">
-                0 / 20 daily capacity
-              </p>
-            </div>
-          </div>
-
-          <!-- ===================================================== -->
-          <!-- FEATURE ROW -->
-          <!-- Left: upcoming reminder -->
-          <!-- Right: quick actions -->
-          <!-- ===================================================== -->
-          <div class="grid grid-cols-1 xl:grid-cols-3 gap-[22px] min-[768px]:max-[1279px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] max-[639px]:gap-4">
-            <!-- Upcoming Reminder -->
-            <!-- Backend note: populate this from nearest appointment -->
-            <div
-              class="xl:col-span-2 relative flex min-h-[170px] flex-col justify-center overflow-hidden rounded-portal border border-portal-reminder-border bg-portal-reminder px-[30px] py-7 text-white shadow-portal max-[639px]:p-6"
-            >
-              <p
-                id="upcomingReminderKicker"
-                class="uppercase tracking-[0.2em] text-xs text-white/80 font-semibold relative z-[1]"
-              >
-                UPCOMING SCHEDULE
-              </p>
-
-              <h3 id="upcomingReminderTitle" class="font-bold relative z-[1] mt-[13px] text-[23px] leading-[1.35] max-[639px]:text-[21px]">
-                You don’t have any scheduled grooming yet
-              </h3>
-
-              <p id="upcomingReminderText" class="text-white/90 relative z-[1] mt-2">
-                Start by pre-registering your first grooming session for your pet.
-              </p>
-              <svg class="ph-icon pointer-events-none absolute bottom-5 right-6 h-[110px] w-[110px] -rotate-[15deg] text-white/10" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
-            </div>
-
-            <!-- Quick Actions -->
-            <div
-              class="portal-card max-[639px]:p-5"
-            >
-              <div class="flex items-center justify-between mb-[18px] gap-3">
-                <h3 class="font-bold text-portal-text text-[22px] leading-[1.3]">Quick Actions</h3>
-              </div>
-
-              <div class="grid grid-cols-1 gap-4">
-                <a
-                  href="./my-pets.html?add=1"
-                  class="transition flex items-center justify-between gap-3 rounded-[14px] border border-portal-border bg-portal-surface-soft px-4 py-3.5 hover:bg-portal-active"
-                >
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="portal-icon-tile h-[46px] w-[46px] rounded-[13px]"
-                    >
-                      <svg class="ph-icon w-5 h-5" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#paw-print"></use></svg>
-                    </div>
-                    <div>
-                      <p class="font-semibold text-portal-text">Add Pet</p>
-                      <p class="text-sm text-portal-muted">
-                        Register a new pet profile
-                      </p>
+            <section id="queueSection" class="portal-card order-3 flex min-h-[264px] flex-col xl:col-start-2 xl:row-start-1 max-[639px]:p-5" aria-labelledby="queueHeading">
+              <h3 id="queueHeading" class="text-[22px] font-bold leading-[1.3]">Grooming Queue Today</h3>
+              <div class="mt-5 flex min-h-[160px] flex-1 flex-col">
+                <div id="groomingQueueLoading" class="flex min-h-[160px] flex-1 flex-col items-center justify-center py-6 text-center" role="status" aria-live="polite"><svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg><p class="mt-3 text-sm text-portal-muted">Loading...</p></div>
+                <div id="groomingQueueDetails" class="hidden flex-1 flex-col">
+                  <span id="groomingCapacityBadge" class="inline-flex self-start rounded-full bg-portal-active px-3 py-1 text-xs font-semibold text-portal-primary"></span>
+                  <div class="mt-auto pt-5">
+                    <div class="w-full rounded-[14px] border border-portal-border bg-portal-record px-5 py-6 text-center">
+                      <p id="groomingQueueSummary" class="text-base font-semibold text-portal-text"></p>
+                      <p id="groomingCapacityText" class="mt-2 text-sm leading-relaxed text-portal-muted"></p>
                     </div>
                   </div>
-                  <svg class="ph-icon w-4 h-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#caret-right"></use></svg>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- ===================================================== -->
-          <!-- LOWER GRID -->
-          <!-- ===================================================== -->
-          <div class="grid grid-cols-1 xl:grid-cols-2 gap-[22px] md:grid-cols-2 max-[639px]:gap-4">
-
-            <!-- Schedules -->
-            <div class="portal-card max-[639px]:p-5 min-h-56">
-              <div class="flex items-center justify-between mb-[18px] gap-3">
-                <h3 class="font-bold text-portal-text text-[22px] leading-[1.3]">Schedules</h3>
-              </div>
-              <div id="appointmentsList">
-                <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-                  <svg class="ph-icon w-8 h-8 mx-auto animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-                  <p class="mt-3 text-portal-muted text-sm">Loading...</p>
                 </div>
               </div>
-            </div>
-
-            <!-- Grooming Tracker (My Pets at clinic right now) -->
-            <div class="portal-card max-[639px]:p-5 min-h-56">
-              <div class="flex items-center justify-between mb-[18px] gap-3">
-                <h3 class="font-bold text-portal-text text-[22px] leading-[1.3]">Grooming Tracker</h3>
-                <span id="groomingLiveBadge" class="hidden font-semibold uppercase tracking-widest inline-flex items-center gap-[7px] rounded-[10px] bg-portal-active px-2.5 py-1.5 text-[10px] text-portal-danger before:h-1.5 before:w-1.5 before:rounded-full before:bg-current before:content-['']">Live</span>
-              </div>
-              <div id="groomingTracker">
-                <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-                  <svg class="ph-icon w-8 h-8 mx-auto animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-                  <p class="mt-3 text-portal-muted text-sm">Loading...</p>
-                </div>
-              </div>
-            </div>
-
+            </section>
           </div>
+          <p id="groomingStatusAnnouncement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
 
-          <!-- Grooming History -->
-          <div class="portal-card max-[639px]:p-5">
-            <div class="flex items-center justify-between mb-[18px] gap-3">
-              <h3 class="font-bold text-portal-text text-[22px] leading-[1.3]">Grooming History</h3>
-            </div>
-            <div id="groomingHistory">
-              <div class="flex min-h-[140px] flex-col items-center justify-center py-[22px] text-center">
-                <svg class="ph-icon w-8 h-8 mx-auto animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
-                <p class="mt-3 text-portal-muted text-sm">Loading...</p>
+          <div class="mt-[22px] grid grid-cols-1 items-stretch gap-[22px] lg:grid-cols-2 max-[639px]:mt-4 max-[639px]:gap-4">
+            <section class="portal-card flex flex-col max-[639px]:p-5" aria-labelledby="myPetsHeading">
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <h3 id="myPetsHeading" class="text-[22px] font-bold leading-[1.3]">My Pets</h3>
+                <a href="./my-pets.html" class="whitespace-nowrap text-sm font-semibold text-portal-primary hover:underline">Manage Pets</a>
               </div>
-            </div>
+              <div id="myPetsPreview" class="flex min-h-[160px] flex-1 flex-col"><div class="flex min-h-[160px] flex-1 flex-col items-center justify-center py-6 text-center" role="status" aria-live="polite"><svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg><p class="mt-3 text-sm text-portal-muted">Loading...</p></div></div>
+              <a href="./my-pets.html?add=1" class="portal-button-secondary mt-5 w-full whitespace-nowrap"><svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#plus"></use></svg>Add Pet</a>
+            </section>
+            <section class="portal-card flex flex-col max-[639px]:p-5" aria-labelledby="recentGroomingHeading">
+              <h3 id="recentGroomingHeading" class="mb-5 text-[22px] font-bold leading-[1.3]">Recent Grooming</h3>
+              <div id="groomingHistory" class="flex min-h-[160px] flex-1 flex-col"><div class="flex min-h-[160px] flex-1 flex-col items-center justify-center py-6 text-center" role="status" aria-live="polite"><svg class="ph-icon h-9 w-9 animate-spin text-portal-muted-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#spinner-gap"></use></svg><p class="mt-3 text-sm text-portal-muted">Loading...</p></div></div>
+              <a href="./grooming-history.html" class="portal-button-secondary mt-5 w-full whitespace-nowrap max-[374px]:px-3"><svg class="ph-icon h-5 w-5" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#caret-right"></use></svg>View Grooming History</a>
+            </section>
           </div>
-
         </section>
 
         <!-- Reschedule Modal -->
@@ -534,10 +356,10 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=site-assets-20261001&release=20261001"></script>
+    <script src="../../scripts/api.js?v=site-assets-20261001&release=20261003"></script>
     <script src="../../scripts/services/app-clock.js" defer></script>
     <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications" defer></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260914-customer-idle"></script>
-    <script src="../../scripts/components/client-dashboard.js?v=auth-session-20260816&ui=20260915-grooming-live&notif=20260915-client-notifications" defer></script>
+    <script src="../../scripts/components/client-dashboard.js?v=auth-session-20260816&ui=20261005-dashboard-loading-v1&notif=20260915-client-notifications" defer></script>
   </body>
 </html>

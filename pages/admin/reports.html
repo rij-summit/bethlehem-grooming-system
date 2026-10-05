@@ -57,7 +57,7 @@
               <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="calendar-days" class="h-5 w-5"></i>
                 <span>Grooming</span>
-                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Incoming schedules"></span>
+                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Active grooming customers today"></span>
               </a>
               <a href="./clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'clinic' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
                 <i data-lucide="stethoscope" class="h-5 w-5"></i>
@@ -1017,7 +1017,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=unified-inventory-20261001b"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005"></script>
     <script src="../../scripts/components/admin-reports.js"></script>
   </body>
 </html>

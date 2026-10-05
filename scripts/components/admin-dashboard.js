@@ -2534,6 +2534,7 @@ function adminDashboard() {
     // Returns a snapshot of the dashboard state for handlers and custom events.
     getState() {
       return {
+        selectedDate: this.selectedDate,
         activeTab: this.activeTab,
         todayCount: this.todayCount,
         weekCount: this.weekCount,
@@ -2552,6 +2553,7 @@ function adminDashboard() {
         inProgressList: [...this.inProgressList],
         forPickupList: [...this.forPickupList],
         forPaymentList: [...this.forPaymentList],
+        releasedList: [...this.releasedList],
       };
     },
 
@@ -4112,11 +4114,13 @@ function adminDashboard() {
     // ── Admin Bookings ────────────────────────────────────────────────────────
 
     async loadAdminBookings() {
+      const selectedDate = this.selectedDate;
       try {
-        const data = await API.getAdminBookings(this.selectedDate, {
+        const data = await API.getAdminBookings(selectedDate, {
           includeFuture: this.showFutureAppointments,
         });
         this._resetPollFailures("_bookingInterval");
+        if (selectedDate !== this.selectedDate) return;
         this.applyDashboardData(data);
       } catch (error) {
         this._stopPollOnFailure("_bookingInterval", "loadAdminBookings", error);

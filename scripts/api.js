@@ -893,6 +893,11 @@ var API = (() => {
     // authenticated browser session.
     const data = await request("POST", "/email/verify", { token });
     if (data?.token && data?.user?.role === "customer") {
+      // Presentation-only session cookie: shared across tabs, never used for auth.
+      // Leave it through sign-out/sign-in so the initial browser session stays new.
+      if (data.user.user_id != null) {
+        document.cookie = `bethlehem_customer_initial_session_${encodeURIComponent(data.user.user_id)}=1; Path=/; SameSite=Lax`;
+      }
       clearBookingDraft();
       setAuthSession(data.token, "customer", true);
       rememberCustomerProfileName(data.user.first_name, data.user.last_name);

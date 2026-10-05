@@ -131,6 +131,7 @@ function adminSidebar() {
     staffInitials: "ST",
     clinicStopped: false,
     incomingAppointmentCount: 0,
+    _incomingAppointmentRevision: 0,
     _incomingAppointmentInterval: null,
     _incomingAppointmentListener: null,
     stopModal: {
@@ -154,6 +155,7 @@ function adminSidebar() {
     },
 
     get hasIncomingAppointments() {
+      // Keep the shared sidebar binding; the dot represents all active grooming customers today.
       return this.incomingAppointmentCount > 0;
     },
 
@@ -225,11 +227,9 @@ function adminSidebar() {
 
     registerIncomingAppointmentListener() {
       this._incomingAppointmentListener = (event) => {
-        if (this.activePage !== "appointments") return;
-
-        const incomingList = event.detail?.state?.incomingList;
-        if (Array.isArray(incomingList)) {
-          this.setIncomingAppointmentCount(incomingList.length);
+        const state = event.detail?.state;
+        if (state?.selectedDate === this.todayDate()) {
+          this.setIncomingAppointmentCount(state);
         }
       };
 
@@ -247,10 +247,21 @@ function adminSidebar() {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
 
-    setIncomingAppointmentCount(count) {
-      const nextCount = Number(count);
-      this.incomingAppointmentCount =
-        Number.isFinite(nextCount) && nextCount > 0 ? nextCount : 0;
+    setIncomingAppointmentCount(data, today = this.todayDate()) {
+      this._incomingAppointmentRevision += 1;
+      // Use the existing status lists, including released bookings awaiting pickup.
+      const activeLists = [
+        data?.incomingList ?? data?.incoming,
+        data?.queuedList ?? data?.queued,
+        data?.inProgressList ?? data?.inProgress,
+        data?.forPaymentList ?? data?.forPayment,
+        data?.forPickupList ?? data?.forPickup,
+        data?.releasedList,
+      ];
+      this.incomingAppointmentCount = activeLists.reduce((count, list) =>
+        count + (Array.isArray(list)
+          ? list.filter((booking) => booking?.appointmentDate === today).length
+          : 0), 0);
     },
 
     async loadIncomingAppointmentCount() {
@@ -264,13 +275,12 @@ function adminSidebar() {
       }
 
       try {
-        const data = await API.getAdminBookings(this.todayDate(), {
-          includeFuture: true,
-        });
-        const incomingList = data?.incomingList ?? data?.incoming ?? [];
-        this.setIncomingAppointmentCount(
-          Array.isArray(incomingList) ? incomingList.length : 0,
-        );
+        const today = this.todayDate();
+        const revision = ++this._incomingAppointmentRevision;
+        const data = await API.getAdminBookings(today);
+        if (revision === this._incomingAppointmentRevision && today === this.todayDate()) {
+          this.setIncomingAppointmentCount(data, today);
+        }
       } catch {
         // Non-fatal: the sidebar should stay usable even if the count cannot load.
       }
