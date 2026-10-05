@@ -60,6 +60,8 @@ async function runDashboard(getBookingHistory, { pets = [], capacity = {} } = {}
   const consoleErrors = [];
   const context = {
     API: {
+      readCustomerCache: () => null,
+      loadCustomerData: (endpoint, load, render) => load().then(render),
       getUserPets: async () => ({ pets }),
       getGroomingCapacity: async () => capacity,
       getBookingHistory,

@@ -32,40 +32,65 @@ class AuthController extends Controller
                 : null,
         ]);
 
-        $data = $request->validate([
-            'first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
-            'last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
-            'username' => [
-                'nullable',
-                'string',
-                'max:50',
-                Rule::unique('users', 'username'),
-                Rule::unique('pending_customer_registrations', 'username'),
-            ],
-            'phone' => [
-                'required',
-                'string',
-                'regex:/^09\d{9}$/',
-                Rule::unique('users', 'phone'),
-                Rule::unique('pending_customer_registrations', 'phone'),
-            ],
-            'email' => [
-                'required',
-                'email',
-                Rule::unique('users', 'email'),
-                Rule::unique('pending_customer_registrations', 'email'),
-            ],
-            'password' => 'required|string|min:8|max:100|confirmed',
-        ]);
+        [$pendingRegistration, $editToken] = DB::transaction(function () use ($request): array {
+            $pendingRegistration = null;
+            if ($request->isMethod('put')) {
+                $credential = $request->validate(['registration_token' => 'required|string|size:64']);
+                $pendingRegistration = PendingCustomerRegistration::query()
+                    ->where('registration_edit_token_hash', hash('sha256', $credential['registration_token']))
+                    ->lockForUpdate()->first();
+                if (! $pendingRegistration) {
+                    abort(422, 'This registration is no longer available. Please sign up again.');
+                }
+            }
+            $editToken = Str::random(64);
+            $data = $request->validate([
+                'first_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
+                'last_name' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z\s\'\-]+$/'],
+                'username' => [
+                    'nullable',
+                    'string',
+                    'max:50',
+                    Rule::unique('users', 'username'),
+                    Rule::unique('pending_customer_registrations', 'username')->ignore($pendingRegistration?->getKey()),
+                ],
+                'phone' => [
+                    'required',
+                    'string',
+                    'regex:/^09\d{9}$/',
+                    Rule::unique('users', 'phone'),
+                    Rule::unique('pending_customer_registrations', 'phone')->ignore($pendingRegistration?->getKey()),
+                ],
+                'email' => [
+                    'required',
+                    'email',
+                    Rule::unique('users', 'email'),
+                    Rule::unique('pending_customer_registrations', 'email')->ignore($pendingRegistration?->getKey()),
+                ],
+                'password' => 'required|string|min:8|max:100|confirmed',
+            ]);
 
-        $pendingRegistration = DB::transaction(fn () => PendingCustomerRegistration::create([
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'username' => $data['username'] ?: null,
-            'email' => $data['email'],
-            'phone' => $data['phone'],
-            'password_hash' => Hash::make($data['password']),
-        ]));
+            $values = [
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'username' => $data['username'] ?? null,
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'password_hash' => Hash::make($data['password']),
+                'registration_edit_token_hash' => hash('sha256', $editToken),
+                'email_verification_token' => null,
+                'email_verification_code_hash' => null,
+                'email_verification_expires_at' => null,
+                'email_verification_attempts' => 0,
+            ];
+            if ($pendingRegistration) {
+                $pendingRegistration->update($values);
+            } else {
+                $pendingRegistration = PendingCustomerRegistration::create($values);
+            }
+            return [$pendingRegistration, $editToken];
+
+        });
 
         try {
             EmailVerificationController::sendVerificationEmail($pendingRegistration);
@@ -76,10 +101,12 @@ class AuthController extends Controller
             // callers must not retry registration and hit duplicate fields.
             return response()->json([
                 'success' => true,
-                'message' => 'Registration saved, but the verification email could not be queued. Please use Resend verification email.',
+                'message' => 'Registration saved, but the verification email could not be queued. Please use Resend Code.',
                 'requires_verification' => true,
                 'email_delivery_queued' => false,
                 'email' => $pendingRegistration->email,
+                'registration_token' => $editToken,
+                'resend_after' => max(0, ($pendingRegistration->fresh()->email_verification_last_sent_at?->timestamp ?? 0) + 45 - now()->timestamp),
             ], 201);
         }
 
@@ -89,6 +116,8 @@ class AuthController extends Controller
             'requires_verification' => true,
             'email_delivery_queued' => true,
             'email' => $pendingRegistration->email,
+            'registration_token' => $editToken,
+            'resend_after' => 45,
         ], 201);
     }
 
@@ -191,7 +220,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'code' => 'email_not_verified',
-                'message' => 'Please verify your email address before signing in. Check your inbox for the verification link.',
+                'message' => 'Please verify your email address before signing in. Check your inbox for the verification code.',
                 'email_not_verified' => true,
                 'email' => $user->email,
             ], 403);

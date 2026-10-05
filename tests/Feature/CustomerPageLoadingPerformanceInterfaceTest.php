@@ -33,7 +33,8 @@ class CustomerPageLoadingPerformanceInterfaceTest extends TestCase
             'let archivedPetsCache = null;',
             'let petCollectionGeneration = 0;',
             'async function loadPetCollection(archived, { force = false } = {})',
-            'if (!force && cachedPets !== null) return cachedPets;',
+            'if (!force && cachedPets !== null && shared?.fresh) return cachedPets;',
+            'API.loadCustomerData(endpoint,',
             'function schedulePetCollectionPrefetch()',
             'loadPetCollection(!showingArchived)',
             'function invalidatePetCollections()',
@@ -101,5 +102,36 @@ class CustomerPageLoadingPerformanceInterfaceTest extends TestCase
         ] as $optimization) {
             $this->assertStringContainsString($optimization, $preRegistration);
         }
+    }
+
+    public function test_customer_pages_share_session_scoped_data_and_background_revalidation(): void
+    {
+        $api = file_get_contents(base_path('scripts/api.js'));
+        foreach ([
+            'bethlehem.customer.data.v1',
+            'function readCustomerCache(endpoint)',
+            'async function loadCustomerData(endpoint, load, render, { force = false } = {})',
+            'if (cached) render(cached.data);',
+            'if (customerRequests.has(endpoint)) return customerRequests.get(endpoint);',
+            'function invalidateCustomerMutation(endpoint)',
+            'epoch !== customerCacheEpoch',
+            'clearCustomerCache();',
+        ] as $behavior) {
+            $this->assertStringContainsString($behavior, $api);
+        }
+
+        foreach ([
+            'scripts/components/client-dashboard.js' => '/pets?archived=0',
+            'scripts/components/client-settings.js' => '/me',
+            'pages/client/grooming-history.html' => '/booking/history',
+        ] as $path => $endpoint) {
+            $this->assertStringContainsString(
+                'API.loadCustomerData("'.$endpoint.'"',
+                file_get_contents(base_path($path)),
+            );
+        }
+        $dashboard = file_get_contents(base_path('scripts/components/client-dashboard.js'));
+        $this->assertStringContainsString('loadAppointments({ force: true })', $dashboard);
+        $this->assertStringContainsString('loadGroomingCapacity({ force: true })', $dashboard);
     }
 }

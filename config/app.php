@@ -60,7 +60,6 @@ return [
     */
     'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
 
-    'email_verification_ttl_hours' => (int) env('EMAIL_VERIFICATION_TTL_HOURS', 24),
 
     'login_confirmation_ttl_minutes' => (int) env('LOGIN_CONFIRMATION_TTL_MINUTES', 15),
 

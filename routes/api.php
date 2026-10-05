@@ -27,6 +27,7 @@ use App\Http\Controllers\WalkinController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::put('/register/pending', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in', [AuthController::class, 'signIn']);
 Route::post('/password/forgot', [PasswordResetController::class, 'requestCode'])
     ->middleware('throttle:3,10');
@@ -40,8 +41,8 @@ Route::post('/staff/password-setup/complete', [PasswordResetController::class, '
     ->middleware('throttle:10,1');
 Route::post('/staff/password-setup/request-new-link', [PasswordResetController::class, 'requestNewStaffSetupLink'])
     ->middleware('throttle:3,10');
-Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:10,1');
-Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
+Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:registration-verify');
+Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:registration-resend');
 Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])
     ->middleware('throttle:10,1');
 Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resend'])

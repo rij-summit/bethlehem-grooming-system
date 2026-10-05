@@ -35,6 +35,8 @@ async function loadPreRegistrationAccess() {
     } catch (error) {
       buttons.forEach((button) => setButtonAccess(button, false));
       console.error("Failed to check pre-registration access:", error);
+    } finally {
+      accessRequest = null;
     }
   })();
 
@@ -53,5 +55,13 @@ function scheduleAccessCheck() {
 }
 
 if (buttons.length > 0) {
+  const cached = API.readCustomerCache("/pre-registration/access");
+  if (cached?.fresh) buttons.forEach((button) => setButtonAccess(button, cached.data.allowed));
   window.requestAnimationFrame(scheduleAccessCheck);
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") void loadPreRegistrationAccess();
+  }, 15000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void loadPreRegistrationAccess();
+  });
 }

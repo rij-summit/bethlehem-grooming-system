@@ -62,6 +62,8 @@ function createPage(getMe) {
     API: {
       hasAuthenticatedSession: () => true,
       getMe,
+      readCustomerCache: () => null,
+      loadCustomerData: (endpoint, load, render) => load().then(render),
       isAuthenticationError: () => false,
       redirectToSignIn() {},
     },

@@ -14,7 +14,10 @@ class VerifyEmailNotification extends Notification implements ShouldBeEncrypted,
 
     public int $tries = 3;
 
-    public function __construct(private string $verificationUrl)
+    // Hydrated only by notification jobs queued before the code rollout.
+    private ?string $verificationUrl = null;
+
+    public function __construct(public readonly string $code)
     {
         $this->afterCommit();
     }
@@ -31,15 +34,20 @@ class VerifyEmailNotification extends Notification implements ShouldBeEncrypted,
 
     public function toMail(object $notifiable): MailMessage
     {
-        $expiryHours = (int) config('app.email_verification_ttl_hours', 24);
+        if (! isset($this->code) && $this->verificationUrl) {
+            return (new MailMessage)
+                ->subject('Verify your Bethlehem account')
+                ->line('Finish creating your Bethlehem Animal Clinic account.')
+                ->action('Verify Email Address', $this->verificationUrl)
+                ->line('If you did not create a Bethlehem account, you can ignore this email.');
+        }
+
+        // Recheck in the queue worker, where the mail configuration may differ.
+        \App\Services\RegistrationEmailCodeService::assertMailerDoesNotLogCodes();
 
         return (new MailMessage)
-            ->subject('Verify Your Email — Bethlehem Animal Clinic')
-            ->greeting("Hi {$notifiable->first_name}!")
-            ->line('Thank you for registering at Bethlehem Animal Clinic & Grooming.')
-            ->line('Please click the button below to verify your email address and activate your account.')
-            ->action('Verify Email Address', $this->verificationUrl)
-            ->line("This link expires in {$expiryHours} hours.")
-            ->line('If you did not create an account, no further action is required.');
+            ->subject('Your Bethlehem verification code')
+            ->view('mail.registration-code', ['code' => $this->code])
+            ->text('mail.registration-code-text', ['code' => $this->code]);
     }
 }

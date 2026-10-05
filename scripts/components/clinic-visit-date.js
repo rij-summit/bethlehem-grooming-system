@@ -4,7 +4,7 @@ import {
   requireCustomerSession,
   updateClinicVisitDraft,
 } from "../services/clinic-visit-service.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=20260807-ongoing-access";
+import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!requireCustomerSession("./sign-in.html")) {

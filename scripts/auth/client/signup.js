@@ -13,6 +13,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!signupForm || !phoneInput || !emailInput) return;
 
+  let editingToken = "";
+  try {
+    if (new URLSearchParams(window.location.search).get("edit") === "1") {
+      const draft = JSON.parse(sessionStorage.getItem("pendingSignupDetails") || "null");
+      editingToken = sessionStorage.getItem("pendingRegistrationEditToken") || "";
+      if (draft && editingToken) {
+        for (const [id, value] of Object.entries(draft)) document.getElementById(id).value = value;
+      }
+    }
+  } catch { /* storage unavailable; signup remains usable */ }
+
   // Independent toggle — each button only controls its own field and icons.
   const toggleMap = [
     {
@@ -109,7 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setBusyState(true);
 
     try {
-      const data = await API.register({
+      const payload = {
         first_name:            firstName,
         last_name:             lastName,
         username:              username || null,
@@ -117,15 +128,24 @@ document.addEventListener("DOMContentLoaded", () => {
         phone:                 phone || null,
         password,
         password_confirmation: confirmPassword,
-      });
+      };
+      const data = editingToken
+        ? await API.updatePendingRegistration(payload, editingToken)
+        : await API.register(payload);
 
       if (data?.requires_verification) {
-        sessionStorage.setItem("pendingVerificationEmail", data.email ?? email);
-        if (data.email_delivery_queued === false) {
-          sessionStorage.setItem("pendingVerificationDeliveryFailed", "1");
-        } else {
-          sessionStorage.removeItem("pendingVerificationDeliveryFailed");
-        }
+        try {
+          sessionStorage.setItem("pendingVerificationEmail", data.email ?? email);
+          sessionStorage.setItem("pendingVerificationPhone", phone);
+          sessionStorage.setItem("pendingRegistrationEditToken", data.registration_token || "");
+          sessionStorage.setItem("pendingSignupDetails", JSON.stringify({ firstName, lastName, username, email, phone }));
+          sessionStorage.setItem("pendingVerificationResendUntil", String(Date.now() + (data.resend_after || 0) * 1000));
+          if (data.email_delivery_queued === false) {
+            sessionStorage.setItem("pendingVerificationDeliveryFailed", "1");
+          } else {
+            sessionStorage.removeItem("pendingVerificationDeliveryFailed");
+          }
+        } catch { /* delivery and verification remain recoverable by email */ }
         window.location.replace("./verify-email.html");
         return;
       }

@@ -74,6 +74,7 @@ class EmailVerificationTest extends TestCase
             $table->timestamps();
             $table->index(['tokenable_type', 'tokenable_id']);
         });
+        (require base_path('database/migrations/2026_10_05_000001_add_registration_verification_codes.php'))->up();
     }
 
     protected function tearDown(): void
@@ -86,7 +87,7 @@ class EmailVerificationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_registration_queues_a_verification_link_and_hashes_its_token(): void
+    public function test_registration_queues_a_six_digit_code_and_hashes_it(): void
     {
         Notification::fake();
         config()->set('app.frontend_url', 'https://clinic.example/bethlehem');
@@ -107,16 +108,14 @@ class EmailVerificationTest extends TestCase
             'new.customer@example.test',
         )->firstOrFail();
 
-        $plainToken = $this->verificationTokenSentTo($pendingRegistration);
+        $plainToken = $this->verificationCodeSentTo($pendingRegistration);
 
-        $this->assertSame(64, strlen($plainToken));
-        $this->assertSame(
-            hash('sha256', $plainToken),
-            $pendingRegistration->fresh()->email_verification_token,
-        );
+        $this->assertSame(6, strlen($plainToken));
+        $this->assertTrue(Hash::check($plainToken, $pendingRegistration->fresh()->email_verification_code_hash));
+        $this->assertNull($pendingRegistration->fresh()->email_verification_token);
         $this->assertNotSame(
             $plainToken,
-            $pendingRegistration->fresh()->email_verification_token,
+            $pendingRegistration->fresh()->email_verification_code_hash,
         );
     }
 
@@ -126,9 +125,9 @@ class EmailVerificationTest extends TestCase
 
         $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
         $pendingRegistration = PendingCustomerRegistration::firstOrFail();
-        $plainToken = $this->verificationTokenSentTo($pendingRegistration);
+        $plainToken = $this->verificationCodeSentTo($pendingRegistration);
 
-        $this->postJson('/api/email/verify', ['token' => $plainToken])
+        $this->postJson('/api/email/verify', ['email' => $pendingRegistration->email, 'code' => $plainToken])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('user.email', 'new.customer@example.test')
@@ -811,7 +810,7 @@ class EmailVerificationTest extends TestCase
             ->assertJsonPath('requires_login_confirmation', true);
     }
 
-    public function test_resend_is_generic_and_rotates_to_a_hashed_token_for_active_users(): void
+    public function test_resend_is_generic_and_issues_a_code_for_existing_unverified_users(): void
     {
         Notification::fake();
         $user = User::factory()->unverified()->create();
@@ -820,20 +819,20 @@ class EmailVerificationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
-        $plainToken = $this->verificationTokenSentTo($user);
-        $this->assertSame(hash('sha256', $plainToken), $user->fresh()->email_verification_token);
+        $plainToken = $this->verificationCodeSentTo($user);
+        $this->assertTrue(Hash::check($plainToken, $user->fresh()->email_verification_code_hash));
 
         Notification::fake();
         $this->postJson('/api/email/resend', ['email' => 'missing@example.test'])
             ->assertOk()
             ->assertJsonPath(
                 'message',
-                'If that email is registered and unverified, a new verification link has been sent.',
+                'If that email is registered and unverified, a new verification code has been sent.',
             );
         Notification::assertNothingSent();
     }
 
-    public function test_resend_rotates_a_pending_registration_token(): void
+    public function test_resend_issues_a_pending_registration_code(): void
     {
         Notification::fake();
         $pendingRegistration = PendingCustomerRegistration::create([
@@ -849,11 +848,9 @@ class EmailVerificationTest extends TestCase
             'email' => strtoupper($pendingRegistration->email),
         ])->assertOk();
 
-        $plainToken = $this->verificationTokenSentTo($pendingRegistration);
-        $this->assertSame(
-            hash('sha256', $plainToken),
-            $pendingRegistration->fresh()->email_verification_token,
-        );
+        $plainToken = $this->verificationCodeSentTo($pendingRegistration);
+        $this->assertTrue(Hash::check($plainToken, $pendingRegistration->fresh()->email_verification_code_hash));
+        $this->assertNull($pendingRegistration->fresh()->email_verification_token);
         $this->assertDatabaseCount('users', 0);
     }
 
@@ -892,6 +889,265 @@ class EmailVerificationTest extends TestCase
             ->assertTooManyRequests();
     }
 
+    public function test_signup_requires_both_contact_fields(): void
+    {
+        foreach (['email', 'phone'] as $field) {
+            $payload = $this->registrationPayload();
+            unset($payload[$field]);
+            $this->postJson('/api/register', $payload)->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('pending_customer_registrations', 0);
+    }
+
+    public function test_signup_code_is_single_use_and_never_verifies_the_phone(): void
+    {
+        Notification::fake();
+        $response = $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $code = $this->verificationCodeSentTo($pending);
+        $this->assertStringNotContainsString($code, $response->getContent());
+        $this->assertStringNotContainsString($code, json_encode($pending->getAttributes()));
+        $this->assertArrayNotHasKey('email_verification_code_hash', $pending->toArray());
+        $payload = ['email' => $pending->email, 'code' => $code];
+        $this->postJson('/api/email/verify', $payload)->assertOk();
+        $this->postJson('/api/email/verify', $payload)->assertUnprocessable();
+        $user = User::firstOrFail();
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertNull($user->phone_verified_at);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
+    public function test_incorrect_and_expired_signup_codes_fail(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $code = $this->verificationCodeSentTo($pending);
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => '000000'])
+            ->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
+        $this->assertSame(1, $pending->fresh()->email_verification_attempts);
+        $this->travel(15)->minutes();
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $code])
+            ->assertUnprocessable()->assertJsonPath('message', 'Invalid or expired verification code.');
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_attempt_limit_and_resend_rotation_are_enforced(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $oldCode = $this->verificationCodeSentTo($pending);
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => '000000'])->assertUnprocessable();
+        }
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $oldCode])
+            ->assertTooManyRequests()->assertJsonPath('message', 'Too many attempts. Please request a new verification code.');
+        $this->travel(46)->seconds();
+        Notification::fake();
+        $this->postJson('/api/email/resend', ['email' => $pending->email])->assertOk();
+        $newCode = $this->verificationCodeSentTo($pending);
+        $this->assertNotSame($oldCode, $newCode);
+        $this->assertSame(0, $pending->fresh()->email_verification_attempts);
+        $this->assertTrue($pending->fresh()->email_verification_expires_at->equalTo(now()->addMinutes(15)->startOfSecond()));
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $oldCode])->assertUnprocessable();
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $newCode])->assertOk();
+    }
+
+    public function test_resend_cooldown_is_enforced_across_different_ips(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $hash = $pending->email_verification_code_hash;
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.52']);
+        $this->postJson('/api/email/resend', ['email' => $pending->email])
+            ->assertTooManyRequests()->assertHeader('Retry-After')
+            ->assertJsonPath('message', 'Please wait before requesting another code.');
+        $this->assertSame($hash, $pending->fresh()->email_verification_code_hash);
+    }
+
+    public function test_duplicate_contacts_and_username_are_still_protected(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $this->postJson('/api/register', $this->registrationPayload())->assertUnprocessable()
+            ->assertJsonValidationErrors(['email', 'phone', 'username']);
+        PendingCustomerRegistration::query()->delete();
+        User::factory()->create(['email' => 'new.customer@example.test', 'phone' => '09123456789', 'username' => 'newcustomer']);
+        $this->postJson('/api/register', $this->registrationPayload())->assertUnprocessable()
+            ->assertJsonValidationErrors(['email', 'phone', 'username']);
+    }
+
+    public function test_verification_rechecks_all_unique_registration_details(): void
+    {
+        Notification::fake();
+        foreach (['email', 'phone', 'username'] as $field) {
+            $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+            $pending = PendingCustomerRegistration::firstOrFail();
+            $code = $this->verificationCodeSentTo($pending);
+            $conflict = User::factory()->create([$field => $pending->$field]);
+            $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $code])
+                ->assertUnprocessable()->assertJsonMissingPath('token');
+            $this->assertDatabaseCount('users', 1);
+            $this->assertDatabaseCount('pending_customer_registrations', 0);
+            $conflict->delete();
+            Notification::fake();
+        }
+    }
+
+    public function test_failed_first_delivery_can_be_retried_without_registering_again(): void
+    {
+        $this->mock(Dispatcher::class, function ($mock) {
+            $mock->shouldReceive('send')->once()->andThrow(new \RuntimeException('Queue unavailable'));
+        });
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated()
+            ->assertJsonPath('email_delivery_queued', false);
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $this->assertNull($pending->email_verification_code_hash);
+        $this->assertNull($pending->email_verification_last_sent_at);
+        Notification::fake();
+        $this->app->instance(Dispatcher::class, Notification::getFacadeRoot());
+        $this->postJson('/api/email/resend', ['email' => $pending->email])->assertOk();
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $this->verificationCodeSentTo($pending)])->assertOk();
+    }
+
+    public function test_failed_resend_preserves_the_previous_code_and_attempts(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $code = $this->verificationCodeSentTo($pending);
+        $pending->update(['email_verification_attempts' => 2]);
+        $hash = $pending->email_verification_code_hash;
+        $this->travel(46)->seconds();
+        $this->mock(Dispatcher::class, function ($mock) {
+            $mock->shouldReceive('send')->once()->andThrow(new \RuntimeException('Queue unavailable'));
+        });
+        $this->postJson('/api/email/resend', ['email' => $pending->email])->assertStatus(503);
+        $this->assertSame($hash, $pending->fresh()->email_verification_code_hash);
+        $this->assertSame(2, $pending->fresh()->email_verification_attempts);
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $code])->assertOk();
+    }
+
+    public function test_pending_details_can_only_be_corrected_with_the_private_edit_credential(): void
+    {
+        Notification::fake();
+        $response = $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $pending = PendingCustomerRegistration::firstOrFail();
+        $oldCode = $this->verificationCodeSentTo($pending);
+        $payload = $this->registrationPayload();
+        $payload['email'] = 'corrected@example.test';
+        $payload['phone'] = '09178889999';
+        $payload['registration_token'] = str_repeat('0', 64);
+        $this->putJson('/api/register/pending', $payload)->assertUnprocessable();
+        $this->travel(46)->seconds();
+        Notification::fake();
+        $payload['registration_token'] = $response->json('registration_token');
+        $this->putJson('/api/register/pending', $payload)->assertCreated()->assertJsonPath('email_delivery_queued', true);
+        $this->assertDatabaseCount('pending_customer_registrations', 1);
+        $this->assertDatabaseCount('users', 0);
+        $pending->refresh();
+        $newCode = $this->verificationCodeSentTo($pending);
+        $this->putJson('/api/register/pending', $payload)->assertUnprocessable();
+        $this->postJson('/api/email/verify', ['email' => 'new.customer@example.test', 'code' => $oldCode])->assertUnprocessable();
+        $this->postJson('/api/email/verify', ['email' => $pending->email, 'code' => $newCode])->assertOk();
+        $this->assertDatabaseHas('users', ['email' => 'corrected@example.test', 'phone' => '09178889999', 'phone_verified_at' => null]);
+    }
+
+    public function test_no_sms_endpoint_or_phone_payload_can_complete_registration(): void
+    {
+        Notification::fake();
+        $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $this->postJson('/api/email/verify', ['phone' => '09123456789', 'code' => '123456', 'channel' => 'sms'])->assertUnprocessable();
+        $this->postJson('/api/sms/verify', ['phone' => '09123456789', 'code' => '123456'])->assertNotFound();
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('pending_customer_registrations', 1);
+    }
+
+    public function test_signup_mail_has_a_prominent_code_without_a_verification_url(): void
+    {
+        $mail = (new VerifyEmailNotification('123456'))->toMail((object) ['first_name' => 'Customer']);
+        $this->assertSame('Your Bethlehem verification code', $mail->subject);
+        $this->assertNull($mail->actionUrl);
+        $html = (string) $mail->render();
+        $this->assertStringContainsString('123456', $html);
+        $this->assertStringContainsString('font-size:32px', $html);
+        $this->assertStringContainsString('15 minutes', $html);
+        $this->assertStringNotContainsString('verify-email.html', $html);
+        $this->assertStringNotContainsString('token=', $html);
+    }
+
+    public function test_already_queued_link_notifications_can_still_be_rendered(): void
+    {
+        $reflection = new \ReflectionClass(VerifyEmailNotification::class);
+        $queued = $reflection->newInstanceWithoutConstructor();
+        $reflection->getProperty('verificationUrl')->setValue($queued, 'https://clinic.example/pages/client/verify-email.html#token=already-issued');
+        $this->assertSame('https://clinic.example/pages/client/verify-email.html#token=already-issued', $queued->toMail((object) [])->actionUrl);
+    }
+
+    public function test_log_mailer_cannot_record_signup_codes(): void
+    {
+        Notification::fake();
+        foreach (['log', 'failover'] as $mailer) {
+            config()->set('mail.default', $mailer);
+            $this->postJson('/api/register', $this->registrationPayload())->assertCreated()
+                ->assertJsonPath('email_delivery_queued', false);
+            Notification::assertNothingSent();
+            $this->assertNull(PendingCustomerRegistration::firstOrFail()->email_verification_code_hash);
+            $this->assertDatabaseCount('users', 0);
+            PendingCustomerRegistration::query()->delete();
+        }
+    }
+
+    public function test_registration_migration_resumes_partial_schema_and_preserves_data(): void
+    {
+        $migration = require base_path('database/migrations/2026_10_05_000001_add_registration_verification_codes.php');
+        // Match MySQL's state after the original index-name failure: the new
+        // verification fields exist, but the unique index and phone field do not.
+        Schema::table('pending_customer_registrations', function (Blueprint $table) {
+            $table->dropUnique('pending_registration_edit_token_unique');
+        });
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('phone_verified_at');
+        });
+        $pending = PendingCustomerRegistration::create([
+            'first_name' => 'Pending',
+            'last_name' => 'Customer',
+            'phone' => '09123456789',
+            'email' => 'pending@example.test',
+            'password_hash' => Hash::make('strong-password'),
+            'email_verification_code_hash' => Hash::make('123456'),
+            'email_verification_attempts' => 2,
+            'registration_edit_token_hash' => hash('sha256', 'existing-edit-credential'),
+        ]);
+        $user = User::factory()->create();
+        $pendingBefore = $pending->fresh()->getAttributes();
+        $userBefore = $user->fresh()->getAttributes();
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertTrue(Schema::hasIndex('pending_customer_registrations', ['registration_edit_token_hash'], 'unique'));
+        $this->assertTrue(Schema::hasColumn('users', 'phone_verified_at'));
+        $this->assertSame($pendingBefore, $pending->fresh()->getAttributes());
+        $this->assertEquals($userBefore, $user->fresh()->only(array_keys($userBefore)));
+        $this->assertNull($user->fresh()->phone_verified_at);
+        $this->assertDatabaseCount('pending_customer_registrations', 1);
+        $this->assertDatabaseCount('users', 1);
+
+        $migration->down();
+        $this->assertFalse(Schema::hasColumn('users', 'phone_verified_at'));
+        $this->assertFalse(Schema::hasColumn('pending_customer_registrations', 'registration_edit_token_hash'));
+        $this->assertDatabaseCount('pending_customer_registrations', 1);
+        $this->assertDatabaseCount('users', 1);
+        $migration->up();
+        $this->assertTrue(Schema::hasIndex('pending_customer_registrations', ['registration_edit_token_hash'], 'unique'));
+    }
+
     private function registrationPayload(): array
     {
         return [
@@ -905,31 +1161,17 @@ class EmailVerificationTest extends TestCase
         ];
     }
 
-    private function verificationTokenSentTo(
-        User|PendingCustomerRegistration $notifiable,
-    ): string {
-        $verificationUrl = null;
-
-        Notification::assertSentTo(
-            $notifiable,
-            VerifyEmailNotification::class,
-            function (VerifyEmailNotification $notification) use ($notifiable, &$verificationUrl) {
-                $verificationUrl = $notification->toMail($notifiable)->actionUrl;
-
+    private function verificationCodeSentTo(User|PendingCustomerRegistration $notifiable): string
+    {
+        $code = null;
+        Notification::assertSentTo($notifiable, VerifyEmailNotification::class,
+            function (VerifyEmailNotification $notification) use (&$code) {
+                $code = $notification->code;
                 return true;
-            },
-        );
-
-        $this->assertIsString($verificationUrl);
-        $this->assertStringStartsWith(
-            rtrim((string) config('app.frontend_url'), '/').'/pages/client/verify-email.html#',
-            $verificationUrl,
-        );
-
-        parse_str((string) parse_url($verificationUrl, PHP_URL_FRAGMENT), $fragment);
-        $this->assertArrayHasKey('token', $fragment);
-
-        return $fragment['token'];
+            });
+        $this->assertIsString($code);
+        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $code);
+        return $code;
     }
 
     private function loginCodeSentTo(User $user): string

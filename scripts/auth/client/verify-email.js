@@ -1,5 +1,5 @@
 // Connected to pages/client/verify-email.html
-// Handles signup verification, login confirmation, and the signup pending state.
+// Preserves already-issued signup links and the separate login confirmation flow.
 
 document.addEventListener("DOMContentLoaded", () => {
   const stateVerifying = document.getElementById("stateVerifying");
@@ -12,9 +12,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const successMessage = document.getElementById("successMessage");
   const errorTitle     = document.getElementById("errorTitle");
   const errorMessage   = document.getElementById("errorMessage");
-  const pendingEmail   = document.getElementById("pendingEmail");
-  const pendingLead    = document.getElementById("pendingLead");
-  const pendingAction  = document.getElementById("pendingAction");
   const loginCodeEmail = document.getElementById("loginCodeEmail");
   const loginCodeForm  = document.getElementById("loginCodeForm");
   const loginCodeInput = document.getElementById("loginCode");
@@ -49,6 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const verificationToken = fragmentParams.get("token")
     || queryParams.get("token");
   const loginCodeMode = queryParams.get("mode") === "login";
+  if (!verificationToken && !loginCodeMode) return;
 
   if (verificationToken) {
     // Authentication links are credentials. Remove them from the address bar
@@ -64,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (verificationToken) {
+    document.getElementById("statePending").classList.add("hidden");
     showState("verifying");
 
     (async () => {
@@ -98,28 +97,6 @@ document.addEventListener("DOMContentLoaded", () => {
       showState("loginCode");
       loginCodeInput.focus();
       startResendCountdown(60);
-    }
-  } else {
-    const savedEmail = sessionStorage.getItem("pendingVerificationEmail");
-    const deliveryFailed = sessionStorage.getItem("pendingVerificationDeliveryFailed") === "1";
-    showState("pending");
-    if (savedEmail) {
-      pendingEmail.textContent = savedEmail;
-      resendEmail.value = savedEmail;
-      sessionStorage.removeItem("pendingVerificationEmail");
-    } else {
-      pendingEmail.textContent = "your registered email";
-    }
-    resendSection.classList.remove("hidden");
-    sessionStorage.removeItem("pendingVerificationDeliveryFailed");
-
-    if (deliveryFailed) {
-      pendingLead.textContent = "Your registration was saved, but we could not send the first verification email to";
-      pendingAction.textContent = "Use the resend form below to try again.";
-      showResendMessage(
-        "error",
-        "The first verification email was not sent. Please select Resend Verification Email.",
-      );
     }
   }
 
@@ -241,7 +218,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       await API.resendVerification(email);
-      showResendMessage("success", "Verification email sent! Check your inbox (and spam folder).");
+      sessionStorage.setItem("pendingVerificationEmail", email);
+      sessionStorage.setItem("pendingVerificationResendUntil", String(Date.now() + 45000));
+      window.location.replace("./verify-email.html");
     } catch (error) {
       if (error.status === 429) {
         showResendMessage("error", error.message || "Too many requests. Please wait before trying again.");

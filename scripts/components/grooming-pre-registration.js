@@ -4,7 +4,7 @@ import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-s
 import { initBookingReviewStep, refreshBookingReviewStep } from "./booking-review-step.js";
 import { initBookingConsentStep } from "./booking-consent-step.js";
 import { initBookingConfirmedStep } from "./booking-confirmed-step.js";
-import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=20260807-ongoing-access";
+import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
 const steps = ["schedule", "pets", "services", "review", "consent", "confirmed"];
 const initialized = new Set();

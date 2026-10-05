@@ -40,15 +40,23 @@ class User extends Authenticatable
         'email_verified_at',
         'email_verification_token',
         'email_verification_expires_at',
+        'email_verification_code_hash',
+        'email_verification_attempts',
+        'email_verification_last_sent_at',
+        'phone_verified_at',
     ];
 
     protected $hidden = [
         'password_hash',
         'email_verification_token',
+        'email_verification_code_hash',
     ];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'phone_verified_at' => 'datetime',
+        'email_verification_last_sent_at' => 'datetime',
+        'email_verification_attempts' => 'integer',
         'email_verification_expires_at' => 'datetime',
         'is_active' => 'boolean',
         'is_archived' => 'boolean',

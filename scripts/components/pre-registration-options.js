@@ -5,7 +5,7 @@ import {
 import {
   getPreRegistrationAccess,
   setPreRegistrationLinkAccess,
-} from "../services/booking-form-access-guard.js?v=20260807-ongoing-access";
+} from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
 if (requireCustomerSession("./sign-in.html")) {
   const groomingOption = document.getElementById("groomingOption");

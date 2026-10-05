@@ -33,7 +33,8 @@ export async function enforceBookingFormAccessGuard(options = {}) {
     return false;
   }
 
-  const access = await getPreRegistrationAccess();
+  // Entry decisions require a server check even when a recent header result exists.
+  const access = await API.getPreRegistrationAccess({ force: true });
   if (access.allowed) {
     return false;
   }

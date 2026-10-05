@@ -32,15 +32,16 @@ function draw() {
 async function loadNotifications() {
   if (!badge || !list) return;
   try {
-    const data = await API.getCustomerNotifications();
-    notifications = Array.isArray(data.notifications) ? data.notifications : [];
-    const count = Number(data.unread_count || 0);
-    badge.textContent = count > 9 ? "9+" : String(count);
-    badge.classList.toggle("hidden", count === 0);
-    badge.classList.toggle("inline-flex", count > 0);
-    window.ClientNotificationUI.setUnreadCount(dropdown, count);
-    markAll?.toggleAttribute("disabled", count === 0);
-    draw();
+    await API.loadCustomerData("/customer/notifications", () => API.getCustomerNotifications(), (data) => {
+      notifications = Array.isArray(data.notifications) ? data.notifications : [];
+      const count = Number(data.unread_count || 0);
+      badge.textContent = count > 9 ? "9+" : String(count);
+      badge.classList.toggle("hidden", count === 0);
+      badge.classList.toggle("inline-flex", count > 0);
+      window.ClientNotificationUI.setUnreadCount(dropdown, count);
+      markAll?.toggleAttribute("disabled", count === 0);
+      draw();
+    });
   } catch {
     list.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">Notifications are unavailable.</p>';
   }
@@ -91,4 +92,11 @@ window.addEventListener("resize", () => { if (dropdown?.style.display !== "none"
 document.addEventListener("client-notifications-changed", (event) => {
   if (event.detail?.source !== "header") void loadNotifications();
 });
-void loadNotifications();
+if (API.readCustomerCache("/customer/notifications")) void loadNotifications();
+else window.requestAnimationFrame(() => {
+  if (window.requestIdleCallback) window.requestIdleCallback(() => void loadNotifications(), { timeout: 1200 });
+  else window.setTimeout(() => void loadNotifications(), 200);
+});
+window.setInterval(() => {
+  if (document.visibilityState === "visible") void loadNotifications();
+}, 15000);

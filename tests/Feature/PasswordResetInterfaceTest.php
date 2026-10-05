@@ -26,7 +26,7 @@ class PasswordResetInterfaceTest extends TestCase
         $this->assertStringContainsString('id="passwordRequirements"', $forgot);
         $this->assertStringContainsString('id="newPasswordMessage"', $forgot);
         $this->assertStringContainsString('id="confirmPasswordMessage"', $forgot);
-        $this->assertStringContainsString('overflow-wrap: anywhere', $forgot);
+        $this->assertStringContainsString('overflow-wrap: anywhere', file_get_contents(base_path('css/components/verification-code.css')));
 
         foreach ([
             'id="resetPasswordForm"',
@@ -56,7 +56,8 @@ class PasswordResetInterfaceTest extends TestCase
         $this->assertStringContainsString('"./sign-in.html?password_reset=1"', $forgotScript);
         $this->assertStringContainsString('signIn.classList.toggle("hidden", next !== "email")', $forgotScript);
         $this->assertStringContainsString('back.classList.toggle("hidden", next === "email")', $forgotScript);
-        $this->assertStringContainsString('codeInput.addEventListener("paste"', $forgotScript);
+        $this->assertStringContainsString('window.VerificationCode.bind', $forgotScript);
+        $this->assertStringContainsString('codeInput.addEventListener("paste"', file_get_contents(base_path('scripts/auth/verification-code.js')));
         $this->assertStringContainsString('startResendCooldown()', $forgotScript);
         $this->assertStringContainsString('setFieldError(confirmation, confirmPasswordMessage', $forgotScript);
         $this->assertFileDoesNotExist(base_path('pages/client/reset-password.html'));

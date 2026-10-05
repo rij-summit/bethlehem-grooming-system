@@ -261,7 +261,7 @@
       </section>
     </div>
 
-    <script src="../../scripts/api.js?v=site-assets-20261001&release=20261001"></script>
+    <script src="../../scripts/api.js?v=customer-cache-20261005-v1"></script>
     <script>
       function scheduleCustomerHistoryIdleTask(task) {
         if (typeof window.requestIdleCallback === "function") {
@@ -352,11 +352,12 @@
         historyLoadState = "loading";
         historyLoadPromise = (async () => {
           try {
-            const data = await API.getBookingHistory();
-            allHistory = data.history || [];
-            historyLoadState = "loaded";
-            applyFilters();
-            showHistoryContent();
+            await API.loadCustomerData("/booking/history", () => API.getBookingHistory(), (data) => {
+              allHistory = data.history || [];
+              historyLoadState = "loaded";
+              applyFilters();
+              showHistoryContent();
+            });
             return allHistory;
           } catch {
             historyLoadState = "error";
@@ -728,7 +729,7 @@
       window.requestAnimationFrame(() => scheduleCustomerHistoryIdleTask(loadCustomerProfile));
     </script>
     <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications"></script>
-    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=20260915-client-notifications"></script>
-    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=20260915-grooming-history"></script>
+    <script type="module" src="../../scripts/components/customer-header-notifications.js?v=customer-cache-20261005-v1"></script>
+    <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=customer-cache-20261005-v1"></script>
   </body>
 </html>

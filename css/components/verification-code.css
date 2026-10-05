@@ -1,0 +1,76 @@
+/* Bethlehem authentication: shared code cells from Forgot Password. */
+.verification-code-cells {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(.25rem, 1.5vw, .5rem);
+  width: 100%;
+  max-width: 23rem;
+  margin-inline: auto;
+  cursor: text;
+}
+.verification-code-input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+}
+.verification-code-cell {
+  display: flex;
+  min-width: 0;
+  height: clamp(2.75rem, 8vw, 3.25rem);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  background: #fff;
+  color: #1e293b;
+  font-size: clamp(1.125rem, 5vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.verification-code-cell.is-active {
+  border-color: #315b7e;
+  box-shadow: 0 0 0 3px rgba(49, 91, 126, .14);
+}
+
+#verifyEmail,
+#verificationDescription {
+  overflow-wrap: anywhere;
+}
+
+#verifyCodeMessage,
+#signupCodeMessage {
+  max-width: 23rem;
+  margin: .75rem auto 0;
+}
+
+#stateVerifying > div,
+#stateLoginCode > div {
+  background-color: #dbeafe;
+}
+
+#stateVerifying svg,
+#stateLoginCode svg {
+  color: #315b7e;
+}
+
+#stateSuccess > div {
+  background-color: #dcfce7;
+}
+
+#stateSuccess svg {
+  color: #16a34a;
+}
+
+#stateError > div {
+  background-color: #fee2e2;
+}
+
+#stateError svg {
+  color: #dc2626;
+}

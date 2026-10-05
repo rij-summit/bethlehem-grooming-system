@@ -255,28 +255,29 @@ function scheduleCustomerDashboardAfterPaint(task) {
     notificationsLoading = true;
 
     try {
-      const data = await API.getCustomerNotifications();
+      const data = await API.loadCustomerData("/customer/notifications", () => API.getCustomerNotifications(), (data) => {
 
-      // Badge
-      const count = data.unread_count || 0;
-      window.ClientNotificationUI.setUnreadCount(dropdown, Number(count));
-      if (count > 0) {
-        badge.textContent = count > 9 ? "9+" : count;
-        badge.classList.remove("hidden");
-        badge.classList.add("inline-flex");
-      } else {
-        badge.classList.add("hidden");
-        badge.classList.remove("inline-flex");
-      }
+        // Badge
+        const count = data.unread_count || 0;
+        window.ClientNotificationUI.setUnreadCount(dropdown, Number(count));
+        if (count > 0) {
+          badge.textContent = count > 9 ? "9+" : count;
+          badge.classList.remove("hidden");
+          badge.classList.add("inline-flex");
+        } else {
+          badge.classList.add("hidden");
+          badge.classList.remove("inline-flex");
+        }
 
-      // List
-      renderNotifList(data.notifications || []);
+        // List
+        renderNotifList(data.notifications || []);
+      });
 
       // Pickup alert popup — refresh the tracker first so the booking shows
       // its updated status before the popup fires.
       const pickup = data.pickup_alert;
       if (pickup && !getShownPickups().map(String).includes(String(pickup.id))) {
-        await window._refreshAppointments?.();
+        await window._refreshAppointments?.({ force: true });
         pickupMessage.innerHTML = await buildPickupMessage(pickup);
         pickupPopup.dataset.notifId = pickup.id;
         pickupPopup.classList.remove("hidden");
@@ -577,7 +578,9 @@ function scheduleCustomerDashboardAfterPaint(task) {
   let rescheduleLoadId    = 0;
   let dashboardPetsLoadState = "idle";
   let appointmentsLoading = false;
+  let appointmentsLoaded = false;
   let groomingCapacityLoading = false;
+  let groomingCapacityLoaded = false;
   let rescheduleClinicStatus = {
     stoppedToday: false,
     blockedDates: [],
@@ -590,6 +593,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
   document.addEventListener("DOMContentLoaded", () => {
     setRescheduleDateRange(getRescheduleTodayKey());
     void loadAppointments();
+    if (API.readCustomerCache("/pets?archived=0")) void loadDashboardPets();
 
     scheduleDashboardDataAfterPaint(async () => {
       await loadDashboardPets();
@@ -608,8 +612,9 @@ function scheduleCustomerDashboardAfterPaint(task) {
     dashboardPetsLoadState = "loading";
 
     try {
-      const data = await API.getUserPets({ archived: 0 });
-      renderMyPetsSummary(data.pets || []);
+      await API.loadCustomerData("/pets?archived=0", () => API.getUserPets({ archived: 0 }), (data) => {
+        renderMyPetsSummary(data.pets || []);
+      });
       dashboardPetsLoadState = "loaded";
     } catch {
       renderDashboardPanelError(myPetsPreviewEl, "Failed to load pets. Please refresh.");
@@ -617,14 +622,14 @@ function scheduleCustomerDashboardAfterPaint(task) {
     }
   }
 
-  async function loadAppointments() {
+  async function loadAppointments({ force = false } = {}) {
     if (appointmentsLoading) return;
     appointmentsLoading = true;
-    let data;
-
     try {
-      data = await API.getBookingHistory({ historyLimit: 3 });
+      await API.loadCustomerData("/booking/history?history_limit=3",
+        () => API.getBookingHistory({ historyLimit: 3, force }), renderAppointmentData, { force });
     } catch (error) {
+      if (appointmentsLoaded && (error.status === 0 || error.status >= 500)) return;
       renderDashboardPanelError(appointmentsList, "Failed to load schedule. Please try again.");
       renderDashboardPanelError(groomingTrackerEl, "Failed to load grooming status. Please try again.");
       renderDashboardPanelError(groomingHistoryEl, "Failed to load grooming history. Please try again.");
@@ -634,7 +639,9 @@ function scheduleCustomerDashboardAfterPaint(task) {
     } finally {
       appointmentsLoading = false;
     }
+  }
 
+  function renderAppointmentData(data) {
     const active = Array.isArray(data?.bookings) ? data.bookings : [];
     const history = Array.isArray(data?.history) ? data.history : [];
     const scheduled = active.filter(isUpcomingAppointment);
@@ -656,6 +663,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
     renderDashboardPanel(groomingHistoryEl, "grooming history", () => {
       renderGroomingHistory(history);
     });
+    appointmentsLoaded = true;
   }
 
   function renderDashboardPanel(target, label, render) {
@@ -687,14 +695,17 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   // ── Appointments section ───────────────────────────────────────────────────
 
-  async function loadGroomingCapacity() {
+  async function loadGroomingCapacity({ force = false } = {}) {
     if (groomingCapacityLoading) return;
     groomingCapacityLoading = true;
 
     try {
-      const data = await API.getGroomingCapacity();
-      renderGroomingCapacity(data);
-    } catch {
+      await API.loadCustomerData("/booking/grooming-capacity", () => API.getGroomingCapacity({ force }), (data) => {
+        renderGroomingCapacity(data);
+        groomingCapacityLoaded = true;
+      }, { force });
+    } catch (error) {
+      if (groomingCapacityLoaded && (error.status === 0 || error.status >= 500)) return;
       renderGroomingCapacity(null);
     } finally {
       groomingCapacityLoading = false;
@@ -1394,9 +1405,9 @@ function scheduleCustomerDashboardAfterPaint(task) {
   // Expose for coordination with the notification poller (pickup popup sequencing).
   window._refreshAppointments = loadAppointments;
   setInterval(() => {
-    if (document.visibilityState === "visible") void loadAppointments();
+    if (document.visibilityState === "visible") void loadAppointments({ force: true });
   }, 15000);
   setInterval(() => {
-    if (document.visibilityState === "visible") void loadGroomingCapacity();
+    if (document.visibilityState === "visible") void loadGroomingCapacity({ force: true });
   }, 15000);
 })();

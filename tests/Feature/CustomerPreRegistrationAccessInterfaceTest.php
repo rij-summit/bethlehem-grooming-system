@@ -40,6 +40,7 @@ class CustomerPreRegistrationAccessInterfaceTest extends TestCase
         $this->assertStringNotContainsString('24 * 60 * 60 * 1000', $guard);
         $this->assertStringNotContainsString('setBookingFormLock', $consent);
         $this->assertStringContainsString('API.getPreRegistrationAccess()', $guard);
+        $this->assertStringContainsString('API.getPreRegistrationAccess({ force: true })', $guard);
     }
 
     public function test_both_direct_entry_pages_recheck_server_access(): void

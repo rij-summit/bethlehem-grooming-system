@@ -58,6 +58,141 @@ var API = (() => {
   const AUTH_LOGOUT_EVENT_KEY = "bethlehem.auth.logout";
   const AUTH_LAST_ACTIVITY_KEY = "bethlehem.auth.last_activity";
   const CUSTOMER_PROFILE_NAME_KEY = "bethlehem.customer.profile_name";
+  const CUSTOMER_CACHE_KEY = "bethlehem.customer.data.v1";
+  const CUSTOMER_CACHE_SESSION_KEY = "bethlehem.customer.cache_session";
+  const customerCache = new Map();
+  const customerRequests = new Map();
+  const customerCacheRevisions = new Map();
+  let customerCacheOwner = null;
+  let customerCacheToken = null;
+  let customerCacheEpoch = 0;
+
+  // Only customer presentation data is eligible. Medical records, pet detail,
+  // slot availability and scheduling rules always go to the server.
+  function customerCachePolicy(endpoint) {
+    if (endpoint === "/me") return { group: "profile", fresh: 60000, retain: 300000 };
+    if (/^\/pets\?archived=[01]$/.test(endpoint)) return { group: "pets", fresh: 60000, retain: 300000 };
+    if (endpoint === "/booking/history") return { group: "bookings", fresh: 15000, retain: 120000 };
+    if (/^\/booking\/history\?history_limit=\d+$/.test(endpoint)) return { group: "bookings", fresh: 5000, retain: 120000 };
+    if (endpoint === "/booking/grooming-capacity") return { group: "capacity", fresh: 5000, retain: 15000 };
+    if (/^\/customer\/notifications(?:\?|$)/.test(endpoint)) return { group: "notifications", fresh: 5000, retain: 30000 };
+    if (endpoint === "/pre-registration/access") return { group: "access", fresh: 5000, retain: 5000 };
+    return null;
+  }
+
+  function clearCustomerCache() {
+    customerCacheEpoch += 1;
+    customerCache.clear();
+    customerRequests.clear();
+    customerCacheRevisions.clear();
+    customerCacheOwner = null;
+    customerCacheToken = null;
+    safeStorageRemove(sessionStorage, CUSTOMER_CACHE_KEY);
+  }
+
+  function ensureCustomerCacheSession() {
+    const token = getCustomerToken();
+    // Sanctum IDs identify a session without storing its secret. Newly created
+    // sessions also carry a random generation shared with their auth storage.
+    const tokenId = /^(\d+)\|/.exec(token || "")?.[1];
+    const generation = safeStorageGet(customerSessionStorage(), CUSTOMER_CACHE_SESSION_KEY);
+    const owner = token ? `${BASE_URL}:${tokenId || ""}:${generation || ""}` : null;
+    if (!owner || (!tokenId && !generation)) {
+      clearCustomerCache();
+      return false;
+    }
+    if (customerCacheOwner === owner && customerCacheToken === token) return true;
+    customerCacheEpoch += 1;
+    customerCache.clear();
+    customerRequests.clear();
+    customerCacheRevisions.clear();
+    customerCacheOwner = owner;
+    customerCacheToken = token;
+    try {
+      const stored = JSON.parse(safeStorageGet(sessionStorage, CUSTOMER_CACHE_KEY) || "null");
+      if (stored?.owner === owner) {
+        Object.entries(stored.entries || {}).forEach(([key, entry]) => {
+          const policy = customerCachePolicy(key);
+          const age = Date.now() - entry?.at;
+          if (policy && Number.isFinite(age) && age >= 0 && age < policy.retain && entry.data) {
+            customerCache.set(key, entry);
+          }
+        });
+      }
+    } catch { /* Corrupt or unavailable storage is a cache miss. */ }
+    persistCustomerCache();
+    return true;
+  }
+
+  function persistCustomerCache() {
+    customerCache.forEach((entry, key) => {
+      const policy = customerCachePolicy(key);
+      if (!policy || Date.now() - entry.at >= policy.retain) customerCache.delete(key);
+    });
+    // Bound parameterized notification variants in this small per-tab cache.
+    while (customerCache.size > 24) customerCache.delete(customerCache.keys().next().value);
+    try {
+      // Cached customer views do not use free-text booking notes.
+      sessionStorage.setItem(CUSTOMER_CACHE_KEY, JSON.stringify({
+        owner: customerCacheOwner, entries: Object.fromEntries(customerCache),
+      }, (key, value) => key === "special_notes" ? undefined : value));
+    } catch { /* Memory caching still works when storage is full or disabled. */ }
+  }
+
+  function readCustomerCache(endpoint) {
+    if (!ensureCustomerCacheSession()) return null;
+    const policy = customerCachePolicy(endpoint);
+    const entry = customerCache.get(endpoint);
+    const age = Date.now() - entry?.at;
+    if (!policy || !entry || age < 0 || age >= policy.retain) return null;
+    return { data: entry.data, fresh: age < policy.fresh };
+  }
+
+  function invalidateCustomerCache(...groups) {
+    if (!ensureCustomerCacheSession()) return;
+    groups.forEach((group) => customerCacheRevisions.set(group, (customerCacheRevisions.get(group) || 0) + 1));
+    customerCache.forEach((entry, key) => {
+      if (groups.includes(customerCachePolicy(key)?.group)) customerCache.delete(key);
+    });
+    customerRequests.forEach((promise, key) => {
+      if (groups.includes(customerCachePolicy(key)?.group)) customerRequests.delete(key);
+    });
+    persistCustomerCache();
+    if (groups.includes("profile")) {
+      safeStorageRemove(customerSessionStorage(), CUSTOMER_PROFILE_NAME_KEY);
+    }
+  }
+
+  // Render retained data synchronously, then refresh without hiding that data.
+  // Access/authorization failures still propagate through the normal handlers.
+  async function loadCustomerData(endpoint, load, render, { force = false } = {}) {
+    const token = getCustomerToken();
+    const cached = readCustomerCache(endpoint);
+    if (cached) render(cached.data);
+    if (cached?.fresh && !force) return cached.data;
+    let data;
+    try {
+      data = await load();
+    } catch (error) {
+      if (cached && token === getCustomerToken() && readCustomerCache(endpoint)?.data === cached.data
+        && (error.status === 0 || error.status >= 500)) {
+        return cached.data;
+      }
+      throw error;
+    }
+    if (cached && JSON.stringify(data) === JSON.stringify(cached.data)) return cached.data;
+    render(data);
+    return data;
+  }
+
+  function invalidateCustomerMutation(endpoint) {
+    if (/^\/pets(?:\/|$)/.test(endpoint)) invalidateCustomerCache("pets", "bookings", "notifications", "access");
+    else if (/^\/(?:booking\/(?:store|cancel|reschedule)|clinic\/pre-register)$/.test(endpoint)) {
+      invalidateCustomerCache("bookings", "capacity", "notifications", "access");
+      // Grooming pre-registration can create pets inside the same transaction.
+      if (endpoint === "/booking/store") invalidateCustomerCache("pets");
+    } else if (/^\/customer\/notifications\//.test(endpoint)) invalidateCustomerCache("notifications");
+  }
   const INACTIVITY_WARNING_ID = "bethlehem-session-inactivity-warning";
   const ACTIVITY_WRITE_THROTTLE_MS = 1000;
   const SESSION_INACTIVITY_POLICIES = Object.freeze({
@@ -173,6 +308,9 @@ var API = (() => {
   }
 
   function clearAuthStorage() {
+    clearCustomerCache();
+    safeStorageRemove(localStorage, CUSTOMER_CACHE_SESSION_KEY);
+    safeStorageRemove(sessionStorage, CUSTOMER_CACHE_SESSION_KEY);
     AUTH_STORAGE_KEYS.forEach((key) => {
       safeStorageRemove(localStorage, key);
       safeStorageRemove(sessionStorage, key);
@@ -231,6 +369,12 @@ var API = (() => {
       throw error;
     }
 
+    if (role === "customer") {
+      try {
+        storage.setItem(CUSTOMER_CACHE_SESSION_KEY, window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+      } catch { /* Optional cache metadata must never prevent sign-in. */ }
+    }
+
     inactivityLogoutStarted = false;
     const session = getAuthSession();
     const timestamp = Date.now();
@@ -249,6 +393,7 @@ var API = (() => {
   }
 
   function clearCustomerToken() {
+    clearCustomerCache();
     const role = getUserRole();
     safeStorageRemove(localStorage, CUSTOMER_TOKEN_KEY);
     safeStorageRemove(sessionStorage, CUSTOMER_TOKEN_KEY);
@@ -637,6 +782,9 @@ var API = (() => {
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
       if (event.storageArea !== localStorage) return;
+      if (event.key === CUSTOMER_TOKEN_KEY || event.key === CUSTOMER_CACHE_SESSION_KEY || event.key === USER_ROLE_KEY) {
+        clearCustomerCache();
+      }
 
       if (event.key === AUTH_LAST_ACTIVITY_KEY && event.newValue) {
         evaluateSessionInactivity();
@@ -668,7 +816,38 @@ var API = (() => {
   //   error.message — backend message or generic fallback
   //   error.errors  — Laravel validation errors object (422 only), or null
 
-  async function request(method, endpoint, body = null, token = null, requestOptions = {}) {
+  function request(method, endpoint, body = null, token = null, requestOptions = {}) {
+    const customerRequest = !!token && token === getCustomerToken();
+    const policy = method === "GET" && customerRequest ? customerCachePolicy(endpoint) : null;
+    if (!policy || !ensureCustomerCacheSession()) {
+      return networkRequest(method, endpoint, body, token, requestOptions).then((data) => {
+        if (method !== "GET" && customerRequest && token === getCustomerToken()) invalidateCustomerMutation(endpoint);
+        return data;
+      });
+    }
+    const cached = readCustomerCache(endpoint);
+    if (customerRequests.has(endpoint)) return customerRequests.get(endpoint);
+    if (!requestOptions.force && cached?.fresh) return Promise.resolve(cached.data);
+    const revision = customerCacheRevisions.get(policy.group) || 0;
+    const owner = customerCacheOwner;
+    const epoch = customerCacheEpoch;
+    let pending;
+    pending = networkRequest(method, endpoint, body, token, requestOptions).then((data) => {
+      if (token !== getCustomerToken() || owner !== customerCacheOwner || epoch !== customerCacheEpoch
+        || revision !== (customerCacheRevisions.get(policy.group) || 0)) {
+        throw new Error("Customer data changed while loading. Please try again.");
+      }
+      customerCache.set(endpoint, { at: Date.now(), data });
+      persistCustomerCache();
+      return data;
+    }).finally(() => {
+      if (customerRequests.get(endpoint) === pending) customerRequests.delete(endpoint);
+    });
+    customerRequests.set(endpoint, pending);
+    return pending;
+  }
+
+  async function networkRequest(method, endpoint, body = null, token = null, requestOptions = {}) {
     const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
     const headers = {
       Accept: "application/json",
@@ -818,7 +997,7 @@ var API = (() => {
     // POST /api/register
     // payload: { first_name, last_name, username?, email, phone, password, password_confirmation }
     // Registration establishes a browser session only after the customer
-    // follows the verification link sent to their email address.
+    // enters the verification code sent to their email address.
     return request("POST", "/register", payload);
   }
 
@@ -887,11 +1066,16 @@ var API = (() => {
     return request("POST", "/staff/password-setup/request-new-link", { token });
   }
 
-  async function verifyEmail(token) {
-    // POST /api/email/verify  { token }
+  async function updatePendingRegistration(payload, registrationToken) {
+    return request("PUT", "/register/pending", { ...payload, registration_token: registrationToken });
+  }
+
+  async function verifyEmail(emailOrLegacyToken, code) {
+    // POST /api/email/verify { email, code }; token is only for existing links.
     // Successful customer signup verification also establishes the first
     // authenticated browser session.
-    const data = await request("POST", "/email/verify", { token });
+    const payload = code === undefined ? { token: emailOrLegacyToken } : { email: emailOrLegacyToken, code };
+    const data = await request("POST", "/email/verify", payload);
     if (data?.token && data?.user?.role === "customer") {
       // Presentation-only session cookie: shared across tabs, never used for auth.
       // Leave it through sign-out/sign-in so the initial browser session stays new.
@@ -1005,11 +1189,11 @@ var API = (() => {
     }
   }
 
-  async function getMe(role = "customer") {
+  async function getMe(role = "customer", options = {}) {
     // GET /api/me  (protected)
     const token =
       isAdminRole(role) ? getAdminToken() : getCustomerToken();
-    const response = await request("GET", "/me", null, token);
+    const response = await request("GET", "/me", null, token, options);
     if (!isAdminRole(role) && response?.user) {
       rememberCustomerProfileName(response.user.first_name, response.user.last_name);
     }
@@ -1080,11 +1264,11 @@ var API = (() => {
     return request("GET", `/clinic/timeslots?date=${encodeURIComponent(date)}`);
   }
 
-  async function getUserPets({ archived = 0 } = {}) {
+  async function getUserPets({ archived = 0, force = false } = {}) {
     // GET /api/pets?archived=0|1  (protected)
     // archived=0 → active pets (booking form default)
     // archived=1 → archived pets (My Pets page toggle)
-    return request("GET", `/pets?archived=${archived}`, null, getCustomerToken());
+    return request("GET", `/pets?archived=${archived}`, null, getCustomerToken(), { force });
   }
 
   async function getPet(petId) {
@@ -1141,17 +1325,18 @@ var API = (() => {
     return request("POST", "/booking/store", payload, getCustomerToken());
   }
 
-  async function getPreRegistrationAccess() {
+  async function getPreRegistrationAccess(options = {}) {
     // GET /api/pre-registration/access (protected)
     return request(
       "GET",
       "/pre-registration/access",
       null,
       getCustomerToken(),
+      options,
     );
   }
 
-  async function getBookingHistory({ historyLimit = null, petId = null } = {}) {
+  async function getBookingHistory({ historyLimit = null, petId = null, force = false } = {}) {
     // GET /api/booking/history  (protected)
     const params = new URLSearchParams();
     if (historyLimit !== null) {
@@ -1161,12 +1346,12 @@ var API = (() => {
       params.set("pet_id", String(petId));
     }
     const query = params.toString() ? `?${params.toString()}` : "";
-    return request("GET", `/booking/history${query}`, null, getCustomerToken());
+    return request("GET", `/booking/history${query}`, null, getCustomerToken(), { force });
   }
 
-  async function getGroomingCapacity() {
+  async function getGroomingCapacity(options = {}) {
     // GET /api/booking/grooming-capacity  (protected)
-    return request("GET", "/booking/grooming-capacity", null, getCustomerToken());
+    return request("GET", "/booking/grooming-capacity", null, getCustomerToken(), options);
   }
 
   async function cancelBooking(bookingId, reason = null) {
@@ -1590,7 +1775,7 @@ var API = (() => {
     if (options.sort === "recent") params.set("sort", "recent");
     if (options.status === "unread") params.set("status", "unread");
     const suffix = params.size ? `?${params.toString()}` : "";
-    return request("GET", `/customer/notifications${suffix}`, null, getCustomerToken());
+    return request("GET", `/customer/notifications${suffix}`, null, getCustomerToken(), { force: options.force === true });
   }
 
   async function markCustomerNotificationRead(id) {
@@ -1808,6 +1993,9 @@ var API = (() => {
   return {
     // Resolved endpoint (shared by standalone browser services).
     getBaseUrl,
+    readCustomerCache,
+    loadCustomerData,
+    invalidateCustomerCache,
     adminRequest,
     // Token access (used by other scripts that need to attach the token)
     getCustomerToken,
@@ -1962,6 +2150,7 @@ var API = (() => {
     getAdminInventoryItems,
     // Email verification
     verifyEmail,
+    updatePendingRegistration,
     adminGetPetProfile,
     resendVerification,
     resendLoginCode,

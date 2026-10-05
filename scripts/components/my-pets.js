@@ -236,39 +236,40 @@ document.addEventListener("DOMContentLoaded", () => {
       !notificationBadge
       || !notificationList
       || notificationsLoading
-      || (!force && notificationsLoaded)
+      || (!force && notificationsLoaded && API.readCustomerCache("/customer/notifications")?.fresh)
     ) return;
     notificationsLoading = true;
 
     try {
-      const data = await API.getCustomerNotifications();
-      const notifications = Array.isArray(data.notifications) ? data.notifications : [];
-      const unreadCount = Number(data.unread_count || 0);
-      window.ClientNotificationUI.setUnreadCount(notificationDropdown, unreadCount);
-      notificationsLoaded = true;
+      await API.loadCustomerData("/customer/notifications", () => API.getCustomerNotifications({ force }), (data) => {
+        const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+        const unreadCount = Number(data.unread_count || 0);
+        window.ClientNotificationUI.setUnreadCount(notificationDropdown, unreadCount);
+        notificationsLoaded = true;
 
-      notificationBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
-      notificationBadge.classList.toggle("hidden", unreadCount === 0);
-      notificationBadge.classList.toggle("inline-flex", unreadCount > 0);
+        notificationBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+        notificationBadge.classList.toggle("hidden", unreadCount === 0);
+        notificationBadge.classList.toggle("inline-flex", unreadCount > 0);
 
-      window.ClientNotificationUI.render(notificationList, notifications, currentNotificationTab());
+        window.ClientNotificationUI.render(notificationList, notifications, currentNotificationTab());
 
-      notificationList.querySelectorAll("[data-client-notification-index]").forEach((button) => {
-        button.addEventListener("click", async () => {
-          const notification = notifications[Number(button.dataset.clientNotificationIndex)];
+        notificationList.querySelectorAll("[data-client-notification-index]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            const notification = notifications[Number(button.dataset.clientNotificationIndex)];
 
-          try {
-            await API.markCustomerNotificationRead(notification.id);
-            if (notification.destination) {
-              window.location.href = notification.destination;
-              return;
+            try {
+              await API.markCustomerNotificationRead(notification.id);
+              if (notification.destination) {
+                window.location.href = notification.destination;
+                return;
+              }
+              await loadNotifications({ force: true });
+            } catch {
+              // Notifications are non-critical to pet profile management.
             }
-            await loadNotifications({ force: true });
-          } catch {
-            // Notifications are non-critical to pet profile management.
-          }
+          });
         });
-      });
+      }, { force });
     } catch {
       notificationList.innerHTML = '<p class="px-4 py-6 text-center text-sm text-portal-muted">Notifications are unavailable.</p>';
     } finally {
@@ -329,24 +330,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadPetCollection(archived, { force = false } = {}) {
     const cachedPets = getPetCollectionCache(archived);
-    if (!force && cachedPets !== null) return cachedPets;
+    const endpoint = `/pets?archived=${archived ? 1 : 0}`;
+    const shared = API.readCustomerCache(endpoint);
+    if (!force && cachedPets !== null && shared?.fresh) return cachedPets;
 
     const inFlightRequest = archived ? archivedPetsRequest : activePetsRequest;
     if (!force && inFlightRequest) return inFlightRequest;
 
     const requestGeneration = petCollectionGeneration;
     let request;
-    request = (archived
-      ? API.getUserPets({ archived: 1 })
-      : API.getUserPets({ archived: 0 }))
-      .then((data) => {
+    request = API.loadCustomerData(endpoint,
+      () => API.getUserPets({ archived: archived ? 1 : 0, force }),
+      (data) => {
         const pets = Array.isArray(data.pets) ? data.pets : [];
-        if (requestGeneration !== petCollectionGeneration) return pets;
+        if (requestGeneration !== petCollectionGeneration) return;
         if (archived) archivedPetsCache = pets;
         else activePetsCache = pets;
         syncAllKnownPets();
-        return pets;
-      })
+        if (showingArchived === archived) {
+          allPets = pets;
+          petsLoadPending = false;
+          applyFilter();
+        }
+      }, { force })
+      .then((data) => Array.isArray(data.pets) ? data.pets : [])
       .finally(() => {
         if (archived && archivedPetsRequest === request) archivedPetsRequest = null;
         if (!archived && activePetsRequest === request) activePetsRequest = null;
@@ -394,19 +401,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadPets({ force = false } = {}) {
     const archived = showingArchived;
+    const generation = petCollectionGeneration;
     petsLoadPending = true;
-    if (getPetCollectionCache(archived) === null) renderGrid(null);
+    if (getPetCollectionCache(archived) === null && !API.readCustomerCache(`/pets?archived=${archived ? 1 : 0}`)) renderGrid(null);
 
     try {
       const pets = await loadPetCollection(archived, { force });
       if (showingArchived !== archived) return;
-      allPets = pets;
-    } catch {
+      if (generation !== petCollectionGeneration) return;
+      if (petsLoadPending || allPets !== pets) {
+        allPets = pets;
+        petsLoadPending = false;
+        applyFilter();
+      }
+    } catch (error) {
       if (showingArchived !== archived) return;
-      allPets = [];
+      if (generation !== petCollectionGeneration) return;
+      allPets = getPetCollectionCache(archived) !== null && (error.status === 0 || error.status >= 500)
+        ? getPetCollectionCache(archived) : [];
+      petsLoadPending = false;
+      applyFilter();
     }
-    petsLoadPending = false;
-    applyFilter();
     schedulePetCollectionPrefetch();
   }
 
@@ -644,8 +659,8 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     hideFormError();
     await Promise.allSettled([
-      loadPetCollection(false),
-      loadPetCollection(true),
+      loadPetCollection(false, { force: true }),
+      loadPetCollection(true, { force: true }),
     ]);
 
     const id = document.getElementById("petId").value;
@@ -974,6 +989,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Init ──────────────────────────────────────────────
   loadPets();
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") void loadNotifications({ force: true });
+  }, 30000);
 
   if (new URLSearchParams(window.location.search).get("add") === "1") {
     openAddModal();

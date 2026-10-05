@@ -54,7 +54,8 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPasswordToggles();
   setupForms();
   loadingRetry?.addEventListener("click", loadProfile);
-  window.requestAnimationFrame(() => scheduleSettingsIdleTask(loadProfile));
+  if (API.readCustomerCache("/me")) void loadProfile();
+  else window.requestAnimationFrame(() => scheduleSettingsIdleTask(loadProfile));
 
   function setupSidebar() {
     if (!sidebarToggle || !sidebarClose || !sidebarBackdrop || !sidebar) return;
@@ -198,14 +199,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     profileLoadPromise = (async () => {
       try {
-        const { user } = await API.getMe("customer");
-        if (!user) throw new Error("Account profile is unavailable.");
-        applyUserToAccount(user);
-        serverUser = user;
-        settingsContent?.removeAttribute("inert");
-        settingsContent?.removeAttribute("aria-hidden");
-        settingsContent?.classList.remove("hidden");
-        loadingScreen?.classList.add("hidden");
+        await API.loadCustomerData("/me", () => API.getMe("customer"), ({ user }) => {
+          if (!user) throw new Error("Account profile is unavailable.");
+          applyUserToAccount(user);
+          serverUser = user;
+          settingsContent?.removeAttribute("inert");
+          settingsContent?.removeAttribute("aria-hidden");
+          settingsContent?.classList.remove("hidden");
+          loadingScreen?.classList.add("hidden");
+        });
         return serverUser;
       } catch (error) {
         if (API.isAuthenticationError(error) || !API.hasAuthenticatedSession("customer")) {

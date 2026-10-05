@@ -74,33 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  function updateCodeCells() {
-    const digits = codeInput.value;
-    codeCells.forEach((cell, index) => {
-      cell.textContent = digits[index] || "";
-      cell.classList.toggle("is-active", document.activeElement === codeInput && index === Math.min(digits.length, 5));
-    });
-  }
-
-  codeInput.addEventListener("input", () => {
-    codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 6);
-    setError(codeMessage);
-    updateCodeCells();
-  });
-  codeInput.addEventListener("focus", () => {
-    codeInput.setSelectionRange(codeInput.value.length, codeInput.value.length);
-    updateCodeCells();
-  });
-  codeInput.addEventListener("blur", updateCodeCells);
-  codeInput.addEventListener("click", () => codeInput.setSelectionRange(codeInput.value.length, codeInput.value.length));
-  codeInput.addEventListener("paste", (event) => {
-    const digits = event.clipboardData?.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!digits) return;
-    event.preventDefault();
-    codeInput.value = digits;
-    setError(codeMessage);
-    updateCodeCells();
-  });
+  const otp = window.VerificationCode.bind(codeInput, codeCells, () => setError(codeMessage));
+  const updateCodeCells = otp.refresh;
 
   function updateResend() {
     const remaining = Math.max(0, Math.ceil((resendUntil - Date.now()) / 1000));
