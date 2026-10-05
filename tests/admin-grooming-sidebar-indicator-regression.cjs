@@ -155,6 +155,7 @@ async function run() {
     const page = fs.readFileSync(path.join(__dirname, '../pages/admin', file), 'utf8');
     const groomingLink = page.match(/<a\b[^>]*href="[^"]*appointments\.html"[\s\S]*?<\/a>/)?.[0];
     assert.ok(groomingLink?.includes('x-show="hasIncomingAppointments"'), `${file} uses the persistent dot`);
+    assert.equal((groomingLink.match(/x-show="hasIncomingAppointments"/g) || []).length, 1, `${file} shows exactly one persistent dot`);
     assert.ok(groomingLink?.includes('aria-label="Active grooming customers today"'));
     assert.doesNotMatch(groomingLink, /@click=.*(?:incomingAppointmentCount|hasIncomingAppointments)/);
     assert.ok(page.includes('admin-sidebar.js?v=grooming-today-indicator-20261005'));
