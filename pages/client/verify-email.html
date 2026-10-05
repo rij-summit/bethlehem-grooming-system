@@ -8,12 +8,12 @@
     <title>Verify Your Email | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css" />
     <link rel="stylesheet" href="../../css/custom.css?v=site-assets-20261001&release=20261001" />
-    <link rel="stylesheet" href="../../css/components/verification-code.css?v=verification-css-20261005" />
+    <link rel="stylesheet" href="../../css/components/verification-code.css?v=verification-css-20261005&release=verification-footer-gap-20261005" />
   </head>
   <body class="min-h-screen bg-slate-100 px-4 py-8">
     <div class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-lg items-center justify-center">
       <div class="w-full rounded-[1.75rem] bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
-        <div class="px-8 py-10 sm:px-10">
+        <div id="verificationCardContent" class="px-8 py-10 sm:px-10">
 
           <!-- ── Verifying state (shown while API call is in-flight) ── -->
           <div id="stateVerifying" class="hidden text-center">
@@ -58,9 +58,12 @@
                 <div id="signupCodeMessage" class="hidden" role="alert"></div>
               </div>
               <button id="signupCodeSubmit" type="submit" class="w-full rounded-2xl bg-[#315b7e] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#274a66] disabled:cursor-not-allowed disabled:opacity-70">Verify Email</button>
-              <div class="text-center text-sm text-slate-500">Didn't receive the code? <button id="signupResend" type="button" class="font-semibold text-[#315b7e] transition hover:text-[#274a66] disabled:cursor-not-allowed disabled:opacity-70">Resend Code</button></div>
-              <div class="text-center text-sm text-slate-500"><span id="channelPrompt">Prefer text message? </span><button id="switchVerificationChannel" type="button" class="font-semibold text-[#315b7e] transition hover:text-[#274a66]">Verify with SMS instead</button></div>
-              <div id="correctSignupSection" class="text-center text-sm"><a id="correctSignup" href="./signup.html?edit=1" class="font-semibold text-[#315b7e] transition hover:text-[#274a66]">Correct signup information</a></div>
+              <div id="signupVerificationActions" class="space-y-2 text-center text-sm text-slate-500">
+                <div>Didn't receive the code? <button id="signupResend" type="button" class="font-semibold text-[#315b7e] transition hover:text-[#274a66] disabled:cursor-not-allowed disabled:opacity-70">Resend Code</button></div>
+                <div class="text-slate-600">
+                  <button id="switchVerificationChannel" type="button" class="whitespace-nowrap transition hover:text-[#315b7e] disabled:cursor-not-allowed disabled:opacity-70">Use SMS instead</button>
+                </div>
+              </div>
             </form>
           </div>
 
@@ -142,7 +145,7 @@
           </div>
 
           <!-- Back to sign-in -->
-          <div class="mt-6 text-center text-sm text-slate-500">
+          <div id="verificationBackLink" class="mt-6 text-center text-sm text-slate-500">
             <a href="./sign-in.html" class="font-semibold text-[#315b7e] transition hover:text-[#274a66]">
               Back to Sign In
             </a>
@@ -154,7 +157,7 @@
 
     <script src="../../scripts/api.js?v=signup-code-20261005" defer></script>
     <script src="../../scripts/auth/verification-code.js?v=signup-code-20261005" defer></script>
-    <script src="../../scripts/auth/client/signup-verification.js?v=signup-code-20261005" defer></script>
+    <script src="../../scripts/auth/client/signup-verification.js?v=signup-code-20261005&release=verification-footer-gap-20261005" defer></script>
     <script src="../../scripts/auth/client/verify-email.js?v=signup-code-20261005" defer></script>
   </body>
 </html>

@@ -88,8 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
     description.textContent = channel === "email"
       ? `We sent a 6-digit verification code to ${email || "your email address"}.`
       : `We'll send a 6-digit verification code to ${phone.slice(0, 4)} ••• ••${phone.slice(-2)}.`;
-    document.getElementById("channelPrompt").textContent = channel === "email" ? "Prefer text message? " : "";
-    switchChannel.textContent = channel === "email" ? "Verify with SMS instead" : "Use email instead";
+    switchChannel.textContent = channel === "email" ? "Use SMS instead" : "Use email instead";
     recovery.classList.toggle("hidden", !!email || channel !== "email");
     otp.clear();
     scheduleCountdown();
@@ -173,7 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   view.classList.remove("hidden");
   renderChannel();
-  if (!read("pendingRegistrationEditToken")) document.getElementById("correctSignup").href = "./signup.html";
   if (read("pendingVerificationDeliveryFailed") === "1") {
     setMessage("Your registration was saved, but the code could not be sent. Please select Resend Code.");
   }

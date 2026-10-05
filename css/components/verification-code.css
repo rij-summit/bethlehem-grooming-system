@@ -43,6 +43,23 @@
   overflow-wrap: anywhere;
 }
 
+#verificationCardContent:has(> #statePending:not(.hidden)) {
+  padding-bottom: 1.25rem;
+}
+
+#statePending:not(.hidden) ~ #verificationBackLink {
+  margin-top: 2rem;
+}
+
+#statePending:not(.hidden) ~ #verificationBackLink a {
+  color: #64748b;
+  font-weight: 400;
+}
+
+#statePending:not(.hidden) ~ #verificationBackLink a:hover {
+  color: #315b7e;
+}
+
 #verifyCodeMessage,
 #signupCodeMessage {
   max-width: 23rem;

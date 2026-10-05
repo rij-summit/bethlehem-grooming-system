@@ -85,6 +85,7 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
 (async () => {
   const p = page();
   assert.equal(p.element('verificationTitle').textContent, 'Verify your email');
+  assert.equal(p.element('switchVerificationChannel').textContent, 'Use SMS instead');
   assert.match(p.element('verificationDescription').textContent, /customer@example.test/);
   assert.equal(p.element('signupResend').textContent, 'Resend code in 45s');
   assert.equal(p.element('signupCodeSubmit').disabled, true);
@@ -128,6 +129,7 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
   assert.equal([...p.storage.values()].includes('123456'), false, 'OTP must never enter storage');
   p.dispatch('switchVerificationChannel', 'click');
   assert.equal(p.element('verificationTitle').textContent, 'Verify your email');
+  assert.equal(p.element('switchVerificationChannel').textContent, 'Use SMS instead');
   assert.equal(p.element('signupCode').value, '');
   assert.match(p.element('signupResend').textContent, /^Resend code in 30s/);
   p.advance(30000);
@@ -175,5 +177,10 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
     assert.match(html, /inputmode="numeric"/);
     assert.match(html, /autocomplete="one-time-code"/);
   }
+  const verificationHtml = fs.readFileSync(path.join(root, 'pages/client/verify-email.html'), 'utf8');
+  assert.match(verificationHtml, /id="signupVerificationActions" class="space-y-2 text-center text-sm text-slate-500"/);
+  assert.match(verificationHtml, /id="switchVerificationChannel"[^>]*>Use SMS instead<\/button>/);
+  assert.doesNotMatch(verificationHtml, /Prefer text message\?|Correct signup information|Edit signup information|correctSignup|channelPrompt|&middot;/);
+  assert.match(verificationHtml, /id="verificationBackLink"[\s\S]*?href="\.\/sign-in\.html"/);
   console.log('Customer signup verification regression checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
