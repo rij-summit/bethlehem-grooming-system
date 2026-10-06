@@ -129,6 +129,8 @@ class InventoryStockMovementService
                 'unit_cost_at_time' => $entry['unit_cost_at_time'] ?? null,
                 'selling_price_at_time' => $entry['selling_price'] ?? $item->selling_price,
                 'reason' => $entry['reason'],
+                'batch_number' => $entry['batch_number'] ?? null,
+                'expiry_date' => $entry['expiry_date'] ?? null,
                 'notes' => $entry['notes'] ?? null,
                 'reference_type' => $entry['reference_type'] ?? 'manual',
                 'reference_id' => $entry['reference_id'] ?? null,

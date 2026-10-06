@@ -141,9 +141,14 @@ class InventoryController extends Controller
             'expiry_date'           => $t->expiry_date?->format('Y-m-d'),
             'reference_type'        => $t->reference_type,
             'reference_id'          => $t->reference_id,
-            'source_label'          => $t->reference_type === 'grooming'
-                ? 'Grooming · '.($t->groomingBooking?->booking_reference ?? $t->reference_id)
-                : ($t->reference_type === 'pos' ? 'POS · #'.$t->reference_id : null),
+            'source_label'          => match ($t->reference_type) {
+                'grooming' => 'Grooming · '.($t->groomingBooking?->booking_reference ?? $t->reference_id),
+                'clinic' => $t->reference_id === null
+                    ? 'Clinic'
+                    : 'Clinic · '.($t->clinicAppointment?->appointment_reference ?? $t->reference_id),
+                'pos' => 'POS · #'.$t->reference_id,
+                default => null,
+            },
             'notes'                 => $t->notes,
             'performed_by'          => $t->performed_by,
             'performed_by_name'     => $t->performedBy
@@ -421,7 +426,7 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $query = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking'])
+        $query = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking', 'clinicAppointment'])
                      ->orderBy('created_at', 'desc');
 
         if ($request->filled('item_id')) {
@@ -526,7 +531,7 @@ class InventoryController extends Controller
         $expiryCount = $this->currentExpiryAlerts()->count();
 
         $recentTransactionsPage = max(1, $request->integer('page', 1));
-        $recentTransactions = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking'])
+        $recentTransactions = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking', 'clinicAppointment'])
             ->orderBy('created_at', 'desc')
             ->paginate(10, ['*'], 'page', $recentTransactionsPage);
 

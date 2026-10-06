@@ -186,6 +186,20 @@ class InventoryBatchBalanceService
         return $this->forItems([$itemId], $asOf)[$itemId] ?? $this->emptyBalance();
     }
 
+    /**
+     * The batch the next sale/usage stock-out would be allocated to (FEFO).
+     *
+     * @param  array<string, mixed>  $balance
+     * @return array<string, mixed>|null
+     */
+    public function nextAvailableBatch(array $balance): ?array
+    {
+        return collect($balance['batches'] ?? [])
+            ->filter(fn (array $batch) => $batch['remaining_quantity'] > 0 && $batch['is_unexpired'])
+            ->sortBy(fn (array $batch) => [$batch['expiry_date'], $batch['transaction_id']])
+            ->first();
+    }
+
     /** @return array<string, mixed> */
     public function emptyBalance(): array
     {
