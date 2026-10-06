@@ -46,6 +46,37 @@ function clinicLocalDate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// ── Shared confirm dialog and toast ───────────────────────────────────────────
+// Used by every clinic page component instead of the browser's alert()/confirm().
+
+document.addEventListener("alpine:init", () => {
+  let resolveDialog = null;
+  let toastTimer = null;
+
+  Alpine.store("clinicFeedback", {
+    dialog: { open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false },
+    toast: { show: false, message: "", ok: true },
+
+    confirm({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false }) {
+      resolveDialog?.(false);
+      this.dialog = { open: true, title, message, confirmLabel, cancelLabel, danger };
+      return new Promise((resolve) => { resolveDialog = resolve; });
+    },
+
+    answer(confirmed) {
+      this.dialog.open = false;
+      resolveDialog?.(confirmed);
+      resolveDialog = null;
+    },
+
+    notify(message, ok = true) {
+      clearTimeout(toastTimer);
+      this.toast = { show: true, message, ok };
+      toastTimer = setTimeout(() => { this.toast.show = false; }, 3500);
+    },
+  });
+});
+
 // ── Medical Record Modal ──────────────────────────────────────────────────────
 
 function adminClinicModal() {
@@ -182,7 +213,13 @@ function adminClinicModal() {
     },
 
     async deleteAttachment(attachment) {
-      if (!window.confirm(`Remove ${attachment.file_name}? This cannot be undone.`)) return;
+      const confirmed = await this.$store.clinicFeedback.confirm({
+        title: "Remove attachment?",
+        message: `${attachment.file_name} will be removed. This cannot be undone.`,
+        confirmLabel: "Remove",
+        danger: true,
+      });
+      if (!confirmed) return;
 
       this.attachmentBusyId = attachment.id;
       this.attachmentError = "";
@@ -321,14 +358,21 @@ function adminClinicPage() {
     caseStatus(item) { return item.status === "waiting_to_arrive" ? "Waiting for Arrival" : "In Progress"; },
     caseOpened(item) { return item.created_at ? new Date(item.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—"; },
     async cancelCase(item) {
-      if (!window.confirm(`Cancel the case for ${item.pet?.name || "this patient"}?`)) return;
+      const confirmed = await this.$store.clinicFeedback.confirm({
+        title: "Cancel this case?",
+        message: `The case for ${item.pet?.name || "this patient"} will be cancelled.`,
+        confirmLabel: "Cancel Case",
+        cancelLabel: "Keep Case",
+        danger: true,
+      });
+      if (!confirmed) return;
       try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
-      catch (error) { alert(error.message || "Could not cancel this case."); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", false); }
     },
     openCase(item, section) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } })); },
     async startCase(item) {
       try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
-      catch (error) { alert(error.message || "Could not start this case."); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
     },
     openAddCustomer() {
       this.addCustomer = { open: true, saving: false, error: "", form: { first_name: "", last_name: "", middle_name: "", phone: "", email: "", pet_name: "", species: "", breed: "" } };
@@ -346,9 +390,16 @@ function adminClinicPage() {
         this.addCustomer.open = false;
         this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
       } catch (error) {
-        if (error.code === "similar_customer_name" && !confirmSimilarName && window.confirm(error.message)) {
-          this.addCustomer.saving = false;
-          return this.saveCustomerRecord(true);
+        if (error.code === "similar_customer_name" && !confirmSimilarName) {
+          const confirmed = await this.$store.clinicFeedback.confirm({
+            title: "Similar customer found",
+            message: error.message,
+            confirmLabel: "Save Anyway",
+          });
+          if (confirmed) {
+            this.addCustomer.saving = false;
+            return this.saveCustomerRecord(true);
+          }
         }
         this.addCustomer.error = error.errors ? Object.values(error.errors).flat().join(" ") : (error.message || "Customer record could not be saved.");
       } finally { this.addCustomer.saving = false; }
@@ -501,12 +552,17 @@ function adminClinicPage() {
         } catch (error) {
           if (error.code !== "active_case_exists" || !error.data?.case) throw error;
           const tabName = section === "vaccinations" ? "Vaccinations" : "Medical Record";
-          if (!window.confirm(`${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`)) return;
+          const confirmed = await this.$store.clinicFeedback.confirm({
+            title: "Ongoing case found",
+            message: `${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`,
+            confirmLabel: "Open Case",
+          });
+          if (!confirmed) return;
           caseItem = error.data.case;
           if (caseItem.status === "waiting_to_arrive") caseItem = (await API.startClinicCase(caseItem.id)).case;
         }
         await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(caseItem, section);
-      } catch (error) { alert(error.message || `Could not open a ${caseType} case.`); }
+      } catch (error) { this.$store.clinicFeedback.notify(error.message || `Could not open a ${caseType} case.`, false); }
     },
 
     async openVaccinations() {

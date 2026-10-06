@@ -3,22 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClinicAppointment;
+use App\Models\InventoryItem;
 use App\Models\Pet;
 use App\Models\User;
 use App\Models\VaccinationRecord;
-use Carbon\CarbonImmutable;
+use App\Services\InventoryBatchBalanceService;
+use App\Services\InventoryStockMovementService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Validation\Validator as LaravelValidator;
 
 class AdminVaccinationController extends Controller
 {
-    private const PROVIDER_ROLES = ['admin', 'staff'];
-
     private const RESPONSE_RELATIONS = [
         'clinicAppointment:id,appointment_reference',
         'inventoryItem:item_id,item_name,category',
@@ -27,6 +27,62 @@ class AdminVaccinationController extends Controller
         'publishedBy:user_id,first_name,last_name',
         'voidedBy:user_id,first_name,last_name',
     ];
+
+    public function __construct(
+        private readonly InventoryBatchBalanceService $batchBalances,
+        private readonly InventoryStockMovementService $stockMovements,
+    ) {
+    }
+
+    public function options(Request $request)
+    {
+        $actor = $request->user();
+        $items = InventoryItem::query()
+            ->where('category', 'vaccine')
+            ->where('is_active', 1)
+            ->orderBy('item_name')
+            ->get(['item_id', 'item_name', 'unit', 'quantity_on_hand']);
+        $balances = $this->batchBalances->forItems($items->pluck('item_id'));
+
+        $vaccines = $items->map(function (InventoryItem $item) use ($balances) {
+            $balance = $balances[(int) $item->item_id] ?? $this->batchBalances->emptyBalance();
+            $batch = $this->batchBalances->nextAvailableBatch($balance);
+
+            return [
+                'item_id' => $item->item_id,
+                'item_name' => $item->item_name,
+                'unit' => $item->unit,
+                'available_quantity' => min(
+                    (float) $item->quantity_on_hand,
+                    (float) $balance['unexpired_quantity'],
+                ),
+                'next_batch' => $batch ? [
+                    'batch_number' => $batch['batch_number'],
+                    'expiry_date' => $batch['expiry_date'],
+                ] : null,
+            ];
+        })->values();
+
+        $veterinarians = $this->eligibleProviders($actor)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['user_id', 'first_name', 'last_name'])
+            ->sortByDesc(fn (User $user) => (int) $user->user_id === (int) $actor->user_id)
+            ->map(fn (User $user) => [
+                'user_id' => $user->user_id,
+                'name' => $this->formatUserName($user) ?? "User #{$user->user_id}",
+                'is_current' => (int) $user->user_id === (int) $actor->user_id,
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'vaccines' => $vaccines,
+            'veterinarians' => $veterinarians,
+            'current_user_id' => $actor->user_id,
+            'can_manage_staff' => $actor->role === 'admin',
+        ]);
+    }
 
     public function index(int $petId)
     {
@@ -52,6 +108,7 @@ class AdminVaccinationController extends Controller
     {
         $pet = $this->findPet($petId);
         $data = $this->validateClinicalData($request, $pet->pet_id);
+        $data = $this->addInventorySnapshot($data);
         $data = $this->addProviderSnapshot($data);
 
         if (! empty($data['clinic_appointment_id'])) {
@@ -101,6 +158,7 @@ class AdminVaccinationController extends Controller
             }
 
             $data = $this->validateClinicalData($request, $petId, $record);
+            $data = $this->addInventorySnapshot($data);
             $data = $this->addProviderSnapshot($data);
 
             $record->fill($data);
@@ -116,10 +174,14 @@ class AdminVaccinationController extends Controller
 
     public function publish(Request $request, int $petId, int $vaccinationId)
     {
-        $this->findPet($petId);
-        $request->validate($this->serverManagedRules());
+        $pet = $this->findPet($petId);
+        $validated = $request->validate([
+            ...$this->serverManagedRules(),
+            'finish_case' => ['sometimes', 'boolean'],
+        ]);
+        $finishCase = (bool) ($validated['finish_case'] ?? false);
 
-        return DB::transaction(function () use ($request, $petId, $vaccinationId) {
+        return DB::transaction(function () use ($request, $pet, $petId, $vaccinationId, $finishCase) {
             $record = $this->findScopedRecord($petId, $vaccinationId, lockForUpdate: true);
 
             if ($record->voided_at !== null) {
@@ -136,16 +198,85 @@ class AdminVaccinationController extends Controller
                     'message' => 'The vaccination draft is not ready to publish.',
                     'errors' => [
                         'publication' => [
-                            'Vaccine name, administration date, and either a staff/admin provider or provider name are required.',
+                            'Vaccine, administration date, and an administering provider are required.',
                         ],
                     ],
                 ], 422);
             }
 
+            if ($record->dose_amount === null || blank($record->dose_unit)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Add the dose amount and unit before finalizing this record.',
+                    'errors' => [
+                        'dose_amount' => ['Dose amount and unit are required.'],
+                    ],
+                ], 422);
+            }
+
+            if ($record->inventory_item_id === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Select a vaccine from clinic inventory before finalizing this record.',
+                    'errors' => [
+                        'inventory_item_id' => ['Select a vaccine from clinic inventory.'],
+                    ],
+                ], 422);
+            }
+
+            $item = InventoryItem::query()
+                ->whereKey($record->inventory_item_id)
+                ->lockForUpdate()
+                ->first();
+            $batch = $item?->is_active
+                ? $this->batchBalances->nextAvailableBatch(
+                    $this->batchBalances->forItem((int) $item->item_id),
+                )
+                : null;
+
+            if (! $batch) {
+                $vaccineName = $item?->item_name ?? $record->vaccine_name;
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "No unexpired stock left for {$vaccineName}. Choose another vaccine.",
+                    'errors' => [
+                        'inventory_item_id' => ["No unexpired stock left for {$vaccineName}."],
+                    ],
+                ], 422);
+            }
+
+            $caseToFinish = null;
+            if ($finishCase && $record->clinic_appointment_id !== null) {
+                $caseToFinish = ClinicAppointment::query()
+                    ->whereKey($record->clinic_appointment_id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! in_array($caseToFinish?->status, ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES, true)) {
+                    return $this->conflict('This case is already closed.');
+                }
+            }
+
+            $this->stockMovements->remove($request->user(), [[
+                'item_id' => $item->item_id,
+                'quantity' => 1,
+                'unit_cost_at_time' => $item->unit_cost,
+                'reason' => 'used',
+                'batch_number' => $batch['batch_number'],
+                'expiry_date' => $batch['expiry_date'],
+                'notes' => "Vaccination · {$pet->pet_name}",
+                'reference_type' => 'clinic',
+                'reference_id' => $record->clinic_appointment_id,
+            ]]);
+
             $record->forceFill([
+                'batch_number' => $batch['batch_number'],
+                'product_expiry_date' => $batch['expiry_date'],
                 'published_at' => now(),
                 'published_by_user_id' => $request->user()->user_id,
             ])->save();
+
+            $caseToFinish?->markCompleted();
 
             return response()->json([
                 'success' => true,
@@ -204,24 +335,20 @@ class AdminVaccinationController extends Controller
         $required = $updating ? ['sometimes', 'required'] : ['required'];
 
         $validator = Validator::make($request->all(), [
-            'vaccine_name' => [...$required, 'string', 'max:150'],
-            'product_name' => [...$optional, 'string', 'max:150'],
-            'manufacturer' => [...$optional, 'string', 'max:150'],
-            'batch_number' => [...$optional, 'string', 'max:100'],
-            'administered_date' => [...$required, 'date'],
-            'next_due_date' => [...$optional, 'date'],
-            'product_expiry_date' => [...$optional, 'date'],
-            'dose_amount' => [...$optional, 'numeric', 'gt:0'],
-            'dose_unit' => [...$optional, 'string', 'max:30'],
+            'next_due_date' => [...$optional, 'date', 'after_or_equal:today'],
+            'dose_amount' => [...$required, 'numeric', 'gt:0', 'max:99999.999'],
+            'dose_unit' => [...$required, 'string', 'max:30'],
             'route' => [...$optional, Rule::in(VaccinationRecord::ADMINISTRATION_ROUTES)],
             'administration_site' => [...$optional, 'string', 'max:100'],
             'administered_by_user_id' => [
-                ...$optional,
+                ...$required,
                 'integer',
-                Rule::exists('users', 'user_id')
-                    ->where(fn ($query) => $query->whereIn('role', self::PROVIDER_ROLES)),
+                function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+                    if (! $this->eligibleProviders($request->user())->whereKey($value)->exists()) {
+                        $fail('Choose yourself or an active veterinarian account.');
+                    }
+                },
             ],
-            'administered_by_name' => [...$optional, 'string', 'max:200'],
             'clinic_appointment_id' => [
                 ...$optional,
                 'integer',
@@ -229,60 +356,27 @@ class AdminVaccinationController extends Controller
                     ->where(fn ($query) => $query->where('pet_id', $petId)),
             ],
             'inventory_item_id' => [
-                ...$optional,
+                ...$required,
                 'integer',
                 Rule::exists('inventory_items', 'item_id')
-                    ->where(fn ($query) => $query->where('category', 'vaccine')),
+                    ->where(fn ($query) => $query->where('category', 'vaccine')->where('is_active', 1)),
             ],
             'notes' => [...$optional, 'string'],
             ...$this->serverManagedRules(),
+            ...$this->systemFilledRules(),
+        ], [
+            'next_due_date.after_or_equal' => 'The next vaccination date cannot be before today.',
+            'dose_amount.required' => 'Dose amount is required.',
+            'dose_amount.gt' => 'Dose amount must be greater than zero.',
+            'dose_amount.max' => 'Dose amount must not exceed 99,999.999.',
+            'dose_unit.required' => 'Dose unit is required.',
         ]);
 
-        $validator->after(function (LaravelValidator $validator) use ($request, $record): void {
-            $this->validateDateSequence(
-                $validator,
-                $request,
-                $record,
-                'next_due_date',
-                'The next due date must be on or after the administration date.',
-            );
-            $this->validateDateSequence(
-                $validator,
-                $request,
-                $record,
-                'product_expiry_date',
-                'The product expiry date must be on or after the administration date.',
-            );
-        });
-
-        return $validator->validate();
-    }
-
-    private function validateDateSequence(
-        LaravelValidator $validator,
-        Request $request,
-        ?VaccinationRecord $record,
-        string $laterDateField,
-        string $message,
-    ): void {
-        if ($validator->errors()->has('administered_date') || $validator->errors()->has($laterDateField)) {
-            return;
-        }
-
-        $administeredDate = $request->exists('administered_date')
-            ? $request->input('administered_date')
-            : $record?->administered_date?->toDateString();
-        $laterDate = $request->exists($laterDateField)
-            ? $request->input($laterDateField)
-            : $record?->{$laterDateField}?->toDateString();
-
-        if (
-            filled($administeredDate)
-            && filled($laterDate)
-            && CarbonImmutable::parse($laterDate)->lt(CarbonImmutable::parse($administeredDate))
-        ) {
-            $validator->errors()->add($laterDateField, $message);
-        }
+        // The vaccine is given from current clinic stock, so it is always recorded as given today.
+        return [
+            ...$validator->validate(),
+            'administered_date' => now()->toDateString(),
+        ];
     }
 
     private function serverManagedRules(): array
@@ -301,12 +395,57 @@ class AdminVaccinationController extends Controller
         ];
     }
 
+    // Product facts come from clinic inventory, the provider name from the account, and the date is today.
+    private function systemFilledRules(): array
+    {
+        return [
+            'administered_date' => ['prohibited'],
+            'vaccine_name' => ['prohibited'],
+            'product_name' => ['prohibited'],
+            'manufacturer' => ['prohibited'],
+            'batch_number' => ['prohibited'],
+            'product_expiry_date' => ['prohibited'],
+            'administered_by_name' => ['prohibited'],
+        ];
+    }
+
+    // The logged-in account, or any active veterinarian, may be recorded as the provider.
+    private function eligibleProviders(User $actor): Builder
+    {
+        return User::query()->where(function (Builder $query) use ($actor): void {
+            $query->whereKey($actor->user_id)
+                ->orWhere(fn (Builder $vet) => $vet
+                    ->where('role', 'staff')
+                    ->where('staff_subrole', 'veterinarian')
+                    ->where('is_active', 1));
+        });
+    }
+
+    // Drafts show the batch FEFO would use now; publish() fixes the batch actually consumed.
+    private function addInventorySnapshot(array $data): array
+    {
+        if (empty($data['inventory_item_id'])) {
+            return $data;
+        }
+
+        $item = InventoryItem::query()->findOrFail($data['inventory_item_id']);
+        $batch = $this->batchBalances->nextAvailableBatch(
+            $this->batchBalances->forItem((int) $item->item_id),
+        );
+
+        return [
+            ...$data,
+            'vaccine_name' => $item->item_name,
+            'product_name' => null,
+            'manufacturer' => null,
+            'batch_number' => $batch['batch_number'] ?? null,
+            'product_expiry_date' => $batch['expiry_date'] ?? null,
+        ];
+    }
+
     private function addProviderSnapshot(array $data): array
     {
-        if (
-            ! empty($data['administered_by_user_id'])
-            && empty($data['administered_by_name'])
-        ) {
+        if (! empty($data['administered_by_user_id'])) {
             $provider = User::query()->findOrFail($data['administered_by_user_id']);
             $data['administered_by_name'] = $this->formatUserName($provider);
         }
