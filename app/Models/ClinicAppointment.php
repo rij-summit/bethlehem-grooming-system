@@ -80,4 +80,13 @@ class ClinicAppointment extends Model
     {
         return $this->hasMany(VaccinationRecord::class, 'clinic_appointment_id', 'id');
     }
+
+    public function markCompleted(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'queue_number' => null,
+            'consultation_finished_at' => now(),
+        ]);
+    }
 }

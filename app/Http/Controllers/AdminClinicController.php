@@ -207,11 +207,7 @@ class AdminClinicController extends Controller
             if (in_array($appointment->status, self::TERMINAL_CASE_STATUSES, true)) {
                 throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
             }
-            $appointment->update([
-                'status' => 'completed',
-                'queue_number' => null,
-                'consultation_finished_at' => now(),
-            ]);
+            $appointment->markCompleted();
             return $appointment;
         });
         return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
