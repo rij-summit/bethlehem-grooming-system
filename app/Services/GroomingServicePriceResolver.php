@@ -12,6 +12,24 @@ class GroomingServicePriceResolver
     public function bookingPriceBounds(Service $service, ?string $petSize): array
     {
         $catalog = config("grooming_services.services.{$service->slug}", []);
+        if ($service->starting_price_sizes !== null) {
+            $price = $this->servicePrice($service, $petSize);
+            if (($catalog['kind'] ?? null) === 'package') {
+                $maximum = ($service->range_price_maximums ?? [])[$this->normalizeSize($petSize)] ?? null;
+                if ($this->isPositive($maximum)) {
+                    return ['min' => $price, 'max' => $this->normalizeMoney($maximum)];
+                }
+                return in_array($this->normalizeSize($petSize), $service->starting_price_sizes, true)
+                    ? ['min' => $price, 'max' => null]
+                    : ['min' => $price, 'max' => $price];
+            }
+            if ($this->isPositive($service->price_min) && $this->isPositive($service->price_max)) {
+                return ['min' => $this->normalizeMoney($service->price_min), 'max' => $this->normalizeMoney($service->price_max)];
+            }
+            return $service->is_starting_price
+                ? ['min' => $price, 'max' => null]
+                : ['min' => $price, 'max' => $price];
+        }
         $hasDatabaseBounds = $this->isPositive($service->price_min ?? null)
             || $this->isPositive($service->price_max ?? null);
         $minimum = $hasDatabaseBounds ? $service->price_min : ($catalog['minimum'] ?? null);
@@ -46,7 +64,18 @@ class GroomingServicePriceResolver
         $sizeChanged = ($catalog['kind'] ?? null) === 'package' && $size !== $bookedSize;
         $minimum = $line->price_min_at_booking;
         $maximum = $line->price_max_at_booking;
-        if (($minimum === null || $sizeChanged) && $service) {
+        // Older lines predate bounds snapshots. Recover their original rule from
+        // legacy metadata, using the saved amount rather than today's catalogue.
+        if (! $sizeChanged && $minimum === null && $this->isPositive($line->price_at_booking)) {
+            if (($catalog['starting_price'] ?? false)
+                || in_array($size, $catalog['starting_sizes'] ?? [], true)) {
+                $minimum = $this->normalizeMoney($line->price_at_booking);
+            } elseif (isset($catalog['minimum'], $catalog['maximum'])) {
+                $minimum = $catalog['minimum'];
+                $maximum = $catalog['maximum'];
+            }
+        }
+        if (($sizeChanged || ($minimum === null && ! $this->isPositive($line->price_at_booking))) && $service) {
             $bounds = $this->bookingPriceBounds($service, $size);
             $minimum = $bounds['min'];
             $maximum = $bounds['max'];
@@ -65,13 +94,13 @@ class GroomingServicePriceResolver
         $safetyMaximum = null;
         $reviewThreshold = null;
         if ($pricingType === 'plus') {
-            if (($catalog['kind'] ?? null) === 'package'
-                && in_array($size, $catalog['starting_sizes'] ?? [], true)) {
+            if (($catalog['kind'] ?? null) === 'package') {
                 $safetyMaximum = $this->normalizeMoney((float) $minimum + 500);
-                if ($size === 'large') {
+                $startingSizes = $service->starting_price_sizes ?? $catalog['starting_sizes'] ?? [];
+                if ($size === 'large' && in_array('extra_large', $startingSizes, true)) {
                     $reviewThreshold = $this->servicePrice($service, 'extra_large');
                 }
-            } elseif (in_array($service?->slug, ['ear_cleaning', 'tooth_brushing'], true)) {
+            } elseif (($catalog['kind'] ?? null) === 'ala_carte') {
                 $safetyMaximum = $this->normalizeMoney((float) $minimum + 200);
             }
         }
@@ -87,13 +116,20 @@ class GroomingServicePriceResolver
 
     /**
      * Resolve a fixed price or variable-price minimum. Positive database
-     * catalogue prices take precedence, while the application catalogue
-     * covers imported zero rows and extra-large package pricing.
+     * catalogue prices take precedence. Legacy defaults only cover rows
+     * without persisted pricing metadata.
      */
     public function servicePrice(Service $service, ?string $petSize): string
     {
         $size = $this->normalizeSize($petSize);
         $catalog = config("grooming_services.services.{$service->slug}");
+
+        if ($service->starting_price_sizes !== null) {
+            if (($catalog['kind'] ?? null) === 'package') {
+                return $this->normalizeMoney($this->databasePackagePrice($service, $size) ?? $service->base_price);
+            }
+            return $this->normalizeMoney($service->price_min ?? $service->base_price);
+        }
 
         if ($this->isPositive($service->price_min ?? null)
             || $this->isPositive($catalog['minimum'] ?? null)) {

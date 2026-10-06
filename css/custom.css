@@ -2673,3 +2673,74 @@ body.customer-detail-modal-open {
 .custom-password-input::-ms-clear {
   display: none;
 }
+
+/* Admin Settings - Pricing */
+.grooming-pricing, .grooming-pricing-overlay {
+  --pricing-border: #dce7f4;
+  --pricing-control-border: #c9d9e8;
+  --pricing-ink: #2f4b66;
+  --pricing-muted: #647e9f;
+  --pricing-accent: #315b7e;
+  --pricing-hover: #edf5fc;
+  --pricing-header: #f7faff;
+}
+.grooming-pricing { min-width: 0; border: 1px solid var(--pricing-border); border-radius: 24px; background: white; padding: 20px; color: var(--pricing-ink); }
+.grooming-pricing-heading { font-size: 18px; font-weight: 700; line-height: 26px; }
+.grooming-pricing-subtext { margin-top: 4px; color: var(--pricing-muted); font-size: 12px; line-height: 18px; }
+.grooming-pricing-notice { margin-top: 20px; border: 1px solid var(--pricing-control-border); border-radius: 10px; background: var(--pricing-hover); padding: 12px 14px; font-size: 12px; line-height: 18px; }
+.grooming-pricing-section-heading { font-size: 14px; font-weight: 600; line-height: 20px; }
+.grooming-pricing-table-wrap { margin-top: 10px; max-width: 100%; overflow-x: auto; border: 1px solid var(--pricing-border); border-radius: 12px; }
+.grooming-pricing-table { width: 100%; min-width: 740px; border-collapse: collapse; table-layout: fixed; text-align: left; font-size: 14px; line-height: 20px; }
+.grooming-pricing-table--ala { min-width: 640px; }
+.grooming-pricing-table th { background: var(--pricing-header); padding: 12px 16px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.grooming-pricing-table td { border-top: 1px solid var(--pricing-border); padding: 12px 16px; font-variant-numeric: tabular-nums; }
+.grooming-pricing-table :is(th, td):first-child { width: 26%; white-space: nowrap; }
+.grooming-pricing-table td:first-child { font-weight: 600; }
+.grooming-pricing-table :is(th, td):last-child { width: 88px; }
+.grooming-pricing-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--pricing-control-border); border-radius: 8px; background: white; padding: 7px 14px; color: var(--pricing-accent); font-size: 14px; line-height: 20px; white-space: nowrap; transition: background-color .15s; }
+.grooming-pricing-button:hover { background: var(--pricing-hover); }
+.grooming-pricing-button:active { background: var(--pricing-header); }
+.grooming-pricing-button:disabled, .grooming-pricing-close:disabled { cursor: not-allowed; opacity: .5; }
+.grooming-pricing-button--action { width: 132px; flex-shrink: 0; }
+.grooming-pricing-button--primary { border-color: var(--pricing-accent); background: var(--pricing-accent); color: white; font-weight: 600; }
+.grooming-pricing-button--primary:hover { background: #274a67; }
+.grooming-pricing-button--primary:active { background: #1f3850; }
+.grooming-pricing-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; overflow-y: auto; overscroll-behavior: contain; background: rgb(15 23 42 / 50%); padding: 16px; color: var(--pricing-ink); }
+.grooming-pricing-dialog { width: 100%; max-width: 672px; overflow: hidden; border-radius: 24px; background: white; box-shadow: 0 24px 60px rgb(15 23 42 / 20%); }
+.grooming-pricing-dialog form { display: flex; max-height: calc(100dvh - 32px); flex-direction: column; }
+.grooming-pricing-modal-header { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--pricing-border); padding: 24px; }
+.grooming-pricing-modal-header h2 { font-size: 20px; font-weight: 700; line-height: 28px; overflow-wrap: anywhere; }
+.grooming-pricing-modal-header p { margin-top: 6px; color: var(--pricing-muted); font-size: 14px; line-height: 20px; }
+.grooming-pricing-close { display: inline-flex; width: 36px; height: 36px; flex-shrink: 0; align-items: center; justify-content: center; margin: -4px -8px 0 0; border-radius: 8px; color: var(--pricing-muted); }
+.grooming-pricing-close:hover { background: var(--pricing-hover); color: var(--pricing-accent); }
+.grooming-pricing-modal-body { position: relative; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 24px; }
+.grooming-pricing-matrix-head { display: none; }
+.grooming-pricing-matrix-row { display: grid; min-width: 0; gap: 14px; border-bottom: 1px solid var(--pricing-border); padding: 16px 0; font-size: 14px; line-height: 20px; }
+.grooming-pricing-matrix-row:last-child { border-bottom: 0; }
+.grooming-pricing-size { font-weight: 600; }
+.grooming-pricing-field { min-width: 0; }
+.grooming-pricing-field-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; }
+.grooming-pricing-input-wrap { position: relative; }
+.grooming-pricing-currency { position: absolute; top: 9px; left: 12px; color: var(--pricing-muted); pointer-events: none; }
+.grooming-pricing-control { width: 100%; min-width: 0; height: 38px; border: 1px solid var(--pricing-control-border); border-radius: 8px; background: white; padding: 8px 10px; color: var(--pricing-ink); font-size: 14px; line-height: 20px; }
+input.grooming-pricing-control { padding-left: 28px; }
+.grooming-pricing-control[aria-invalid="true"] { border-color: #dc2626; }
+.grooming-pricing-field-error { margin-top: 6px; color: #dc2626; font-size: 12px; line-height: 18px; }
+.grooming-pricing-preview { color: var(--pricing-accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.grooming-pricing-modal-footer { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--pricing-border); padding: 16px 24px; }
+:is(.grooming-pricing, .grooming-pricing-overlay) :is(button, input, select, [tabindex]):focus-visible { outline: 2px solid var(--pricing-accent); outline-offset: 3px; }
+@media (min-width: 640px) {
+  .grooming-pricing { padding: 24px; }
+  .grooming-pricing-matrix-head, .grooming-pricing-matrix-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(0, 1.05fr); gap: 16px; }
+  .grooming-pricing-matrix--package :is(.grooming-pricing-matrix-head, .grooming-pricing-matrix-row) { grid-template-columns: minmax(0, .95fr) minmax(0, 1.55fr) minmax(0, 1.3fr) minmax(0, 1.05fr); }
+  .grooming-pricing-matrix-head { display: grid; border-bottom: 1px solid var(--pricing-border); padding: 8px 0; font-size: 12px; font-weight: 600; line-height: 20px; }
+  .grooming-pricing-matrix-row { align-items: start; padding: 10px 0; }
+  .grooming-pricing-size, .grooming-pricing-preview { padding-top: 9px; }
+  .grooming-pricing-field-label:not(.grooming-pricing-field-label--visible) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+@media (max-width: 639px) {
+  .grooming-pricing-modal-header, .grooming-pricing-modal-footer { padding: 16px; }
+  .grooming-pricing-modal-body { padding: 0 16px; }
+  .grooming-pricing-button, .grooming-pricing-close, .grooming-pricing-control { min-height: 44px; }
+  .grooming-pricing-currency { top: 12px; }
+}

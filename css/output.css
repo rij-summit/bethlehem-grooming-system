@@ -806,6 +806,10 @@ video {
   visibility: hidden;
 }
 
+.collapse {
+  visibility: collapse;
+}
+
 .static {
   position: static;
 }
@@ -1608,6 +1612,10 @@ video {
 
 .table-fixed {
   table-layout: fixed;
+}
+
+.border-collapse {
+  border-collapse: collapse;
 }
 
 .-translate-x-full {

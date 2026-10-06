@@ -20,181 +20,17 @@ function maximumPaymentAmount(totalDue) {
   );
 }
 
-/*
- * Payment modal service rules mirror scripts/services/grooming-service.js.
- * This dashboard is loaded as a classic script, so keep these values in sync
- * until the admin page can read the same catalog from an API/shared bundle.
- */
-function createPaymentFixedPrice({ label, sizeKey = "", amount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "fixed",
-    minAmount: amount,
-    maxAmount: amount,
-  };
+const PAYMENT_SERVICE_BY_ID = new Map();
+const PAYMENT_SERVICE_BY_NAME = new Map();
+
+function applyPaymentCatalogue(catalogue) {
+  PAYMENT_SERVICE_BY_ID.clear();
+  PAYMENT_SERVICE_BY_NAME.clear();
+  for (const service of catalogue) {
+    PAYMENT_SERVICE_BY_ID.set(service.id, service);
+    PAYMENT_SERVICE_BY_NAME.set(normalizePaymentText(service.name), service);
+  }
 }
-
-function createPaymentPlusPrice({ label, sizeKey = "", amount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "plus",
-    minAmount: amount,
-    maxAmount: null,
-  };
-}
-
-function createPaymentRangePrice({ label, sizeKey = "", minAmount, maxAmount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "range",
-    minAmount,
-    maxAmount,
-  };
-}
-
-const PAYMENT_GROOMING_SERVICES = [
-  {
-    id: "partial_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Partial Grooming",
-    descriptionItems: [
-      "Trimming, nail clipping and ear cleaning",
-      "Cologne spritz and dry shampoo",
-    ],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 400 }),
-      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 500 }),
-      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 600 }),
-      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 700 }),
-    ],
-  },
-  {
-    id: "regular_dog_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Regular Dog Grooming",
-    descriptionItems: [
-      "Bathing with shampoo and blow drying",
-      "Haircut, trims, nail clipping, ear cleaning and tooth-brushing",
-    ],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 550 }),
-      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 650 }),
-      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 850 }),
-      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 1050 }),
-    ],
-  },
-  {
-    id: "deluxe_dog_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Deluxe Dog Grooming",
-    descriptionItems: [
-      "Bathing with shampoo and blow drying",
-      "Special haircut, nail clipping, ear cleaning and tooth-brushing",
-    ],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 650 }),
-      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 750 }),
-      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 1000 }),
-      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 1200 }),
-    ],
-  },
-  {
-    id: "bath_and_go",
-    kind: "package",
-    petType: "dog",
-    name: "Bath and Go!",
-    descriptionItems: [
-      "Bathing with shampoo and blow drying",
-      "Nail clipping, ear cleaning and tooth-brushing",
-    ],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 450 }),
-      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 550 }),
-      createPaymentPlusPrice({ label: "Large", sizeKey: "large", amount: 650 }),
-      createPaymentPlusPrice({ label: "Extra Large", sizeKey: "extra_large", amount: 750 }),
-    ],
-  },
-  {
-    id: "cat_full_grooming",
-    kind: "package",
-    petType: "cat",
-    name: "Full Grooming",
-    descriptionItems: [
-      "Bathing with shampoo and blow drying",
-      "Haircut if requested, nail clipping and ear cleaning",
-    ],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Small", sizeKey: "small", amount: 500 }),
-      createPaymentFixedPrice({ label: "Medium", sizeKey: "medium", amount: 600 }),
-    ],
-  },
-  {
-    id: "nail_clipping",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Nail Clipping",
-    descriptionItems: [],
-    priceOptions: [
-      createPaymentRangePrice({ label: "Standard", minAmount: 50, maxAmount: 100 }),
-    ],
-  },
-  {
-    id: "ear_cleaning",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Ear Cleaning",
-    descriptionItems: [],
-    priceOptions: [
-      createPaymentPlusPrice({ label: "Standard", amount: 150 }),
-    ],
-  },
-  {
-    id: "facial_trimming",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Facial Trimming",
-    descriptionItems: [],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Standard", amount: 150 }),
-    ],
-  },
-  {
-    id: "anal_sac_draining",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Anal Sac Draining",
-    descriptionItems: [],
-    priceOptions: [
-      createPaymentFixedPrice({ label: "Standard", amount: 150 }),
-    ],
-  },
-  {
-    id: "tooth_brushing",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Tooth Brushing",
-    descriptionItems: [],
-    priceOptions: [
-      createPaymentPlusPrice({ label: "Standard", amount: 100 }),
-    ],
-  },
-];
-
-const PAYMENT_SERVICE_BY_ID = new Map(
-  PAYMENT_GROOMING_SERVICES.map((service) => [service.id, service]),
-);
-const PAYMENT_SERVICE_BY_NAME = new Map(
-  PAYMENT_GROOMING_SERVICES.map((service) => [
-    normalizePaymentText(service.name),
-    service,
-  ]),
-);
 
 function normalizePaymentText(value) {
   return String(value || "")
@@ -367,7 +203,7 @@ function formatPaymentPriceOption(priceOption, includeCurrency = true) {
     const maxAmount = includeCurrency
       ? formatPaymentAmount(priceOption.maxAmount)
       : Number(priceOption.maxAmount || 0).toLocaleString("en-PH");
-    return `${minAmount}-${maxAmount}`;
+    return `${minAmount}–${maxAmount}`;
   }
 
   return minAmount;
@@ -482,14 +318,15 @@ function getPaymentPriceSafetyRules(pricing, serviceDefinition, petSize) {
   const rules = { safetyMaxAmount: null, reviewThreshold: null };
   if (pricing.pricingType !== "plus" || !serviceDefinition) return rules;
 
-  if (serviceDefinition.kind === "package" && ["large", "extra_large"].includes(petSize)) {
+  if (serviceDefinition.kind === "package") {
     rules.safetyMaxAmount = pricing.minAmount + 500;
     if (petSize === "large") {
       rules.reviewThreshold = serviceDefinition.priceOptions.find(
         (option) => option.sizeKey === "extra_large",
-      )?.minAmount ?? null;
+      )?.pricingType === "plus"
+        ? serviceDefinition.priceOptions.find((option) => option.sizeKey === "extra_large").minAmount : null;
     }
-  } else if (["ear_cleaning", "tooth_brushing"].includes(serviceDefinition.id)) {
+  } else if (serviceDefinition.kind === "ala_carte") {
     rules.safetyMaxAmount = pricing.minAmount + 200;
   }
   return rules;
@@ -2619,6 +2456,10 @@ function adminDashboard() {
       if (savedMin > 0) {
         return { min: savedMin, max: savedMax > 0 ? savedMax : null };
       }
+      if (service?.paymentPriceRules?.min > 0) {
+        return { min: Number(service.paymentPriceRules.min), max: service.paymentPriceRules.max === null ? null : Number(service.paymentPriceRules.max) };
+      }
+      if (bookedAmount > 0) return { min: bookedAmount, max: bookedAmount };
 
       const serviceDefinition = getPaymentServiceDefinition(service);
       if (!serviceDefinition) {
@@ -3337,12 +3178,25 @@ function adminDashboard() {
       );
     },
 
-    openPaymentModal(booking, isEarlyPayment = false) {
+    async openPaymentModal(booking, isEarlyPayment = false) {
       if (!isEarlyPayment && booking?.paymentReady === false) {
         alert(booking?.paymentBlockedReason || "This booking is not ready for final payment.");
         return;
       }
 
+      this.paymentModal.open = true;
+      this.paymentModal.busy = true;
+      this.paymentModal.error = "";
+      this.paymentModal.petBreakdown = [];
+      try {
+        const { loadGroomingCatalogue } = await import("../services/grooming-service.js?v=grooming-pricing-20261006");
+        applyPaymentCatalogue(await loadGroomingCatalogue());
+      } catch (error) {
+        this.paymentModal.busy = false;
+        this.paymentModal.error = "Unable to load current grooming pricing. Close and reopen this payment to retry.";
+        return;
+      }
+      if (!this.paymentModal.open) return;
       const petBreakdown = this.buildPaymentBreakdown(booking, { lockFixedPrices: true });
       this.paymentModal = {
         open: true,
@@ -3646,13 +3500,18 @@ function adminDashboard() {
               selectedPriceOption: null,
             }
           : getPaymentServicePricing(null, pet.sizeKey);
-      const savedMin = parsePaymentNumber(rawService?.priceMinAtBooking ?? rawService?.price_min_at_booking);
-      const savedMax = parsePaymentNumber(rawService?.priceMaxAtBooking ?? rawService?.price_max_at_booking);
+      const savedMin = parsePaymentNumber(rawService?.priceMinAtBooking ?? rawService?.price_min_at_booking ?? rawService?.paymentPriceRules?.min);
+      const savedMax = parsePaymentNumber(rawService?.priceMaxAtBooking ?? rawService?.price_max_at_booking ?? rawService?.paymentPriceRules?.max);
+      if (!(savedMin > 0) && fallbackAmount > 0) {
+        pricing = { minAmount: fallbackAmount, maxAmount: fallbackAmount, pricingType: "fixed",
+          displayPrice: formatPaymentAmount(fallbackAmount), placeholder: String(fallbackAmount) };
+      }
       if (savedMin > 0) {
         const pricingType = savedMax > 0 ? (savedMax === savedMin ? "fixed" : "range") : "plus";
         pricing = {
           ...pricing,
           minAmount: savedMin,
+          selectedPriceOption: null,
           maxAmount: savedMax > 0 ? savedMax : null,
           pricingType,
           displayPrice: formatPaymentPriceOption({ pricingType, minAmount: savedMin, maxAmount: savedMax }),
@@ -3685,8 +3544,8 @@ function adminDashboard() {
         minAmount: pricing.minAmount,
         maxAmount: pricing.maxAmount ?? pricing.selectedPriceOption?.maxAmount ?? null,
         ...getPaymentPriceSafetyRules(pricing, serviceDefinition, pet.sizeKey),
-        savedMinAmount: savedMin > 0 ? savedMin : null,
-        savedMaxAmount: savedMax > 0 ? savedMax : null,
+        savedMinAmount: savedMin > 0 ? savedMin : fallbackAmount > 0 ? fallbackAmount : null,
+        savedMaxAmount: savedMax > 0 ? savedMax : !(savedMin > 0) && fallbackAmount > 0 ? fallbackAmount : null,
         originalSizeKey: pet.sizeKey,
         priceHint: pricing.displayPrice,
         placeholder: pricing.placeholder,
@@ -3719,6 +3578,7 @@ function adminDashboard() {
         pricing = {
           ...pricing,
           minAmount: line.savedMinAmount,
+          selectedPriceOption: null,
           maxAmount: line.savedMaxAmount,
           pricingType,
           displayPrice: formatPaymentPriceOption({ pricingType, minAmount: line.savedMinAmount, maxAmount: line.savedMaxAmount }),

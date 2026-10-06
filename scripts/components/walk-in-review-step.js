@@ -9,7 +9,7 @@ import {
   formatAmountRange,
   formatPriceOption,
   getPackageById,
-} from "../services/grooming-service.js?v=plus-price-notice-20260822";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006";
 import { renderWalkInConsentStep } from "./walk-in-consent-step.js";
 
 const state = {

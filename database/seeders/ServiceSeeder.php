@@ -115,10 +115,11 @@ class ServiceSeeder extends Seeder
         ];
 
         foreach ($services as $service) {
-            DB::table('services')->updateOrInsert(
-                ['slug' => $service['slug']],
-                array_merge($service, ['is_active' => true]),
+            $service['starting_price_sizes'] = json_encode(
+                config("grooming_services.services.{$service['slug']}.starting_sizes", []),
             );
+            // Re-seeding must not overwrite administrator-managed catalogue prices.
+            DB::table('services')->insertOrIgnore(array_merge($service, ['is_active' => true]));
         }
     }
 }

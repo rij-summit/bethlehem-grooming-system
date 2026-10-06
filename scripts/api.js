@@ -541,11 +541,17 @@ var API = (() => {
     return true;
   }
 
-  function notifyLogout(role, reason = "logout") {
+  function logoutSessionId(session) {
+    // Broadcast only the Sanctum row ID, never the bearer token's secret.
+    const tokenId = /^(\d+)\|/.exec(session?.token || "")?.[1];
+    return tokenId && session?.role ? `${session.role}:${tokenId}` : null;
+  }
+
+  function notifyLogout(role, reason = "logout", session = null) {
     try {
       localStorage.setItem(
         AUTH_LOGOUT_EVENT_KEY,
-        JSON.stringify({ role, reason, at: Date.now() })
+        JSON.stringify({ role, reason, sessionId: logoutSessionId(session), at: Date.now() })
       );
     } catch {
       // Non-fatal: removing the token still syncs logout in supported browsers.
@@ -553,16 +559,26 @@ var API = (() => {
   }
 
   function invalidateSession(role = null, reason = "expired") {
-    const resolvedRole = getAuthSession()?.role ?? role ?? "customer";
+    const session = getAuthSession();
+    const resolvedRole = session?.role ?? role ?? "customer";
     clearAuthStorage();
     if (resolvedRole === "customer") clearBookingDraft();
-    notifyLogout(resolvedRole, reason);
+    notifyLogout(resolvedRole, reason, session);
     redirectToSignIn();
   }
 
-  function handleCrossTabLogout(role) {
+  function handleCrossTabLogout(event) {
+    const session = getAuthSession();
+    if (!session) {
+      // Persistent auth may already have been removed by another tab.
+      // Do not erase a pending login confirmation or unrelated draft.
+      enforceProtectedPageAccess();
+      return;
+    }
+    if (!event?.sessionId || event.sessionId !== logoutSessionId(session)) return;
+
     clearAuthStorage();
-    if (role === "customer") clearBookingDraft();
+    if (session.role === "customer") clearBookingDraft();
 
     if (isAdminPage() || isProtectedClientPage()) {
       redirectToSignIn();
@@ -795,7 +811,7 @@ var API = (() => {
 
       try {
         const data = JSON.parse(event.newValue);
-        handleCrossTabLogout(data?.role);
+        handleCrossTabLogout(data);
       } catch {
         // Ignore malformed auth sync events.
       }
@@ -862,6 +878,7 @@ var API = (() => {
     }
 
     const options = { method, headers };
+    if (requestOptions.cache) options.cache = requestOptions.cache;
 
     if (body !== null) {
       options.body = isFormData ? body : JSON.stringify(body);
@@ -1166,7 +1183,7 @@ var API = (() => {
 
     clearAuthStorage();
     if (resolvedRole === "customer") clearBookingDraft();
-    notifyLogout(resolvedRole, logoutOptions.reason || "logout");
+    notifyLogout(resolvedRole, logoutOptions.reason || "logout", currentSession);
 
     if (!token) return { success: true, local_only: true };
 
@@ -1814,6 +1831,16 @@ var API = (() => {
     return request("GET", `/admin/reports/services-performed${query}`, null, getAdminToken());
   }
 
+  async function getGroomingCatalogue() {
+    return request("GET", "/grooming/services", null,
+      getAdminToken() || getCustomerToken(), { force: true, cache: "no-store" });
+  }
+
+  async function updateGroomingPricing(serviceId, payload) {
+    return request("PATCH", `/admin/grooming/services/${encodeURIComponent(serviceId)}/pricing`,
+      payload, getAdminToken());
+  }
+
   async function submitWalkIn(payload) {
     // POST /api/admin/walk-in  (protected — admin token)
     // payload: { fname, lname, mname?, email?, phone, pets: [...], sedation_consent, terms_agreed }
@@ -2127,6 +2154,8 @@ var API = (() => {
     getServicesPerformedReport,
     getCustomerActivityReport,
     // Walk-in
+    getGroomingCatalogue,
+    updateGroomingPricing,
     submitWalkIn,
     submitClinicWalkIn,
     getClinicRecords,

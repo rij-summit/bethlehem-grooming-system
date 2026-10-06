@@ -1513,6 +1513,11 @@ class AdminBookingController extends Controller
             'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $paidServicesTotal, $canUseSavedServicePrices, $bookedServices) {
                 $bookingPet = $bpetsById->get($bs->booking_pet_id);
                 $pet = $bookingPet?->pet;
+                $bs->setRelation('bookingPet', $bookingPet);
+                $paymentPriceRules = $bs->service
+                    ? app(\App\Services\GroomingServicePriceResolver::class)->paymentPriceRules(
+                        $bs, $bookingPet?->confirmed_size ?? $bookingPet?->registered_size ?? $pet?->groomingSize(),
+                    ) : null;
                 $savedPrice = (float) ($bs->price_at_booking ?? 0);
                 $paidPrice = null;
                 $paidPriceSource = null;
@@ -1553,6 +1558,7 @@ class AdminBookingController extends Controller
                     'priceMinAtBooking' => $bs->price_min_at_booking,
                     'price_min_at_booking' => $bs->price_min_at_booking,
                     'priceMaxAtBooking' => $bs->price_max_at_booking,
+                    'paymentPriceRules' => $paymentPriceRules,
                     'price_max_at_booking' => $bs->price_max_at_booking,
                     'durationMinutes' => (int) ($bs->service?->duration_minutes ?? 60),
                     'paidPrice' => $paidPrice,

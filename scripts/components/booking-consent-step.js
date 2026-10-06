@@ -1,3 +1,5 @@
+import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006";
+import { getBookingDraft } from "../services/booking-draft-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 
 export function initBookingConsentStep() {
@@ -112,6 +114,15 @@ export function initBookingConsentStep() {
     const submittedAt = new Date().toISOString();
 
     try {
+      await loadGroomingCatalogue();
+      const draft = getBookingDraft();
+      const selections = normalizeStepThreeDraft(getStoredData("bookingStep3"), draft);
+      if (sessionStorage.getItem("groomingReviewedPricing") !== selectedPricingSignature(draft, selections)) {
+        submitBookingButton.disabled = false;
+        submitBookingButton.textContent = "Submit Registration";
+        goToGroomingStep("review");
+        return;
+      }
       const response = await API.storeBooking({
         booking_date: schedule.date,
         window_id: schedule.window_id,

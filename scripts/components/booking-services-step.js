@@ -10,6 +10,8 @@ import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
   buildStepThreeDraftPayload,
+  loadGroomingCatalogue,
+  selectedPricingSignature,
   calculatePetSelectionPricing,
   createEmptyPetServiceSelection,
   formatAmountRange,
@@ -20,7 +22,7 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006";
 
 /**
  * Booking Services Step Controller
@@ -54,9 +56,10 @@ const elements = {
 const state = {
   bookingDraft: null,
   petSelections: [],
+  catalogueReady: false,
 };
 
-export function refreshBookingServicesStep() {
+export async function refreshBookingServicesStep() {
   state.bookingDraft = getBookingDraft();
 
   populateHiddenInputs(state.bookingDraft);
@@ -72,13 +75,30 @@ export function refreshBookingServicesStep() {
     state.bookingDraft,
   );
 
-  renderPetServiceSelections();
-  updateServiceNotice();
+  await loadServicePricing();
 }
 
 export function initBookingServicesStep() {
   refreshBookingServicesStep();
   bindEvents();
+}
+
+async function loadServicePricing() {
+  state.catalogueReady = false;
+  syncNextButtonState(false);
+  elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
+  try {
+    await loadGroomingCatalogue();
+    state.catalogueReady = true;
+    renderPetServiceSelections();
+    updateServiceNotice();
+  } catch (error) {
+    state.catalogueReady = false;
+    elements.petServiceSelections.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700" role="alert">
+      Unable to load current grooming pricing. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
+    </div>`;
+    syncNextButtonState(false);
+  }
 }
 
 function bindEvents() {
@@ -479,6 +499,8 @@ function syncNextButtonState(isEnabled) {
 }
 
 function handleSelectionClick(event) {
+  if (event.target.closest("[data-retry-pricing]")) { loadServicePricing(); return; }
+  if (!state.catalogueReady) return;
   const target = event.target;
 
   if (
@@ -580,6 +602,7 @@ function handleSelectionInput(event) {
 
 function handleSubmit(event) {
   event.preventDefault();
+  if (!state.catalogueReady) return;
 
   const incompletePets = state.bookingDraft.pets.filter((pet) => {
     const selection = getSelectionByPetId(pet.id);
@@ -625,6 +648,8 @@ function handleSubmit(event) {
 }
 
 function saveCurrentStepDraft() {
+  sessionStorage.setItem("groomingSelectedPricing", selectedPricingSignature(state.bookingDraft, state.petSelections));
+  sessionStorage.removeItem("groomingReviewedPricing");
   sessionStorage.setItem(
     BOOKING_STEP_THREE_KEY,
     JSON.stringify(buildStepThreeDraftPayload(state.petSelections)),

@@ -4,41 +4,6 @@ import {
   normalizePetType,
 } from "./booking-draft-service.js";
 
-function createFixedPriceOption({ label, sizeKey = "", amount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "fixed",
-    minAmount: amount,
-    maxAmount: amount,
-  };
-}
-
-function createPlusPriceOption({ label, sizeKey = "", amount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "plus",
-    minAmount: amount,
-    maxAmount: null,
-  };
-}
-
-function createRangePriceOption({ label, sizeKey = "", minAmount, maxAmount }) {
-  return {
-    label,
-    sizeKey,
-    pricingType: "range",
-    minAmount,
-    maxAmount,
-  };
-}
-
-/*
-  BACKEND NOTE:
-  Keep all grooming service IDs and pricing in one place so this can be
-  replaced by API data later without rewriting the booking flow UI.
-*/
 export const GROOMING_PACKAGES = [
   {
     id: "partial_grooming",
@@ -49,20 +14,7 @@ export const GROOMING_PACKAGES = [
       "Trimming, Nail Clipping and Ear Cleaning",
       "Cologne Spritz and Dry Shampoo",
     ],
-    priceOptions: [
-      createFixedPriceOption({ label: "Small", sizeKey: "small", amount: 400 }),
-      createFixedPriceOption({
-        label: "Medium",
-        sizeKey: "medium",
-        amount: 500,
-      }),
-      createPlusPriceOption({ label: "Large", sizeKey: "large", amount: 600 }),
-      createPlusPriceOption({
-        label: "Extra Large",
-        sizeKey: "extra_large",
-        amount: 700,
-      }),
-    ],
+    priceOptions: [],
     allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
   },
@@ -77,20 +29,7 @@ export const GROOMING_PACKAGES = [
       "Spot, Sanitary area trim, paw pads, face, belly, or rear",
       "Nail Clipping, Ear Cleaning and Tooth-brushing",
     ],
-    priceOptions: [
-      createFixedPriceOption({ label: "Small", sizeKey: "small", amount: 550 }),
-      createFixedPriceOption({
-        label: "Medium",
-        sizeKey: "medium",
-        amount: 650,
-      }),
-      createPlusPriceOption({ label: "Large", sizeKey: "large", amount: 850 }),
-      createPlusPriceOption({
-        label: "Extra Large",
-        sizeKey: "extra_large",
-        amount: 1050,
-      }),
-    ],
+    priceOptions: [],
     allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: [
       "nail_clipping",
@@ -109,20 +48,7 @@ export const GROOMING_PACKAGES = [
       "Nail Clipping, Ear Cleaning and Tooth-brushing",
       "Cologne Spritzes",
     ],
-    priceOptions: [
-      createFixedPriceOption({ label: "Small", sizeKey: "small", amount: 650 }),
-      createFixedPriceOption({
-        label: "Medium",
-        sizeKey: "medium",
-        amount: 750,
-      }),
-      createPlusPriceOption({ label: "Large", sizeKey: "large", amount: 1000 }),
-      createPlusPriceOption({
-        label: "Extra Large",
-        sizeKey: "extra_large",
-        amount: 1200,
-      }),
-    ],
+    priceOptions: [],
     allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: [
       "nail_clipping",
@@ -139,20 +65,7 @@ export const GROOMING_PACKAGES = [
       "Bathing with Shampoo and Blow Drying",
       "Nail Clipping, Ear Cleaning and Tooth-brushing",
     ],
-    priceOptions: [
-      createFixedPriceOption({ label: "Small", sizeKey: "small", amount: 450 }),
-      createFixedPriceOption({
-        label: "Medium",
-        sizeKey: "medium",
-        amount: 550,
-      }),
-      createPlusPriceOption({ label: "Large", sizeKey: "large", amount: 650 }),
-      createPlusPriceOption({
-        label: "Extra Large",
-        sizeKey: "extra_large",
-        amount: 750,
-      }),
-    ],
+    priceOptions: [],
     allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: [
       "nail_clipping",
@@ -171,14 +84,7 @@ export const GROOMING_PACKAGES = [
       "Nail Clipping",
       "Ear Cleaning",
     ],
-    priceOptions: [
-      createFixedPriceOption({ label: "Small", sizeKey: "small", amount: 500 }),
-      createFixedPriceOption({
-        label: "Medium",
-        sizeKey: "medium",
-        amount: 600,
-      }),
-    ],
+    priceOptions: [],
     allowsAlaCarteServices: true,
     includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
   },
@@ -191,13 +97,7 @@ export const ALA_CARTE_SERVICES = [
     petTypes: ["cat", "dog"],
     name: "Nail Clipping",
     descriptionItems: [],
-    priceOptions: [
-      createRangePriceOption({
-        label: "Standard",
-        minAmount: 50,
-        maxAmount: 100,
-      }),
-    ],
+    priceOptions: [],
   },
   {
     id: "ear_cleaning",
@@ -205,7 +105,7 @@ export const ALA_CARTE_SERVICES = [
     petTypes: ["cat", "dog"],
     name: "Ear Cleaning",
     descriptionItems: [],
-    priceOptions: [createPlusPriceOption({ label: "Standard", amount: 150 })],
+    priceOptions: [],
   },
   {
     id: "facial_trimming",
@@ -213,7 +113,7 @@ export const ALA_CARTE_SERVICES = [
     petTypes: ["cat", "dog"],
     name: "Facial Trimming",
     descriptionItems: [],
-    priceOptions: [createFixedPriceOption({ label: "Standard", amount: 150 })],
+    priceOptions: [],
   },
   {
     id: "anal_sac_draining",
@@ -221,7 +121,7 @@ export const ALA_CARTE_SERVICES = [
     petTypes: ["cat", "dog"],
     name: "Anal Sac Draining",
     descriptionItems: [],
-    priceOptions: [createFixedPriceOption({ label: "Standard", amount: 150 })],
+    priceOptions: [],
   },
   {
     id: "tooth_brushing",
@@ -229,9 +129,41 @@ export const ALA_CARTE_SERVICES = [
     petTypes: ["cat", "dog"],
     name: "Tooth Brushing",
     descriptionItems: [],
-    priceOptions: [createPlusPriceOption({ label: "Standard", amount: 100 })],
+    priceOptions: [],
   },
 ];
+
+export function applyGroomingCatalogue(catalogue) {
+  if (!Array.isArray(catalogue)) throw new Error("Grooming pricing is unavailable.");
+  const metadata = [...GROOMING_PACKAGES, ...ALA_CARTE_SERVICES];
+  const byId = new Map(catalogue.map((service) => [service.id, service]));
+  for (const service of metadata) {
+    const live = byId.get(service.id);
+    if (!live?.priceOptions?.length || live.priceOptions.some((option) =>
+      !Number.isFinite(option.minAmount) || option.minAmount <= 0 ||
+      !["fixed", "range", "starting_at"].includes(option.pricingType))) {
+      throw new Error("Grooming pricing is unavailable. Please retry.");
+    }
+  }
+  for (const service of metadata) {
+    const live = byId.get(service.id);
+    service.serviceId = live.serviceId;
+    service.priceOptions = live.priceOptions.map((option) => ({ ...option,
+      pricingType: option.pricingType === "starting_at" ? "plus" : option.pricingType }));
+  }
+  return metadata;
+}
+
+export async function loadGroomingCatalogue() {
+  const response = await API.getGroomingCatalogue();
+  return applyGroomingCatalogue(response.data);
+}
+
+export function selectedPricingSignature(draft, selections) {
+  return JSON.stringify(buildBookingReviewPayload(draft, selections).items.map((item) =>
+    item.pricing.lineItems.map((line) => ({ id: line.serviceId, size: item.pet.size,
+      options: line.pricing.selectedPriceOption || line.pricing.availablePriceOptions }))));
+}
 
 const PACKAGE_MAP = new Map(
   GROOMING_PACKAGES.map((service) => [service.id, service]),
@@ -254,7 +186,7 @@ export function formatPriceOption(priceOption) {
   }
 
   if (priceOption.pricingType === "range") {
-    return `${formatPhpAmount(priceOption.minAmount)} - ${formatPhpAmount(priceOption.maxAmount)}`;
+    return `${formatPhpAmount(priceOption.minAmount)}–${formatPhpAmount(priceOption.maxAmount)}`;
   }
 
   return formatPhpAmount(priceOption.minAmount);

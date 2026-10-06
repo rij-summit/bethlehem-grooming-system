@@ -4,6 +4,7 @@ import {
   formatPetTypeLabel,
 } from "../services/booking-draft-service.js";
 import {
+  loadGroomingCatalogue,
   calculatePetSelectionPricing,
   createEmptyPetServiceSelection,
   formatAmountRange,
@@ -13,12 +14,13 @@ import {
   getPackageById,
   getPackageAlaCarteRules,
   getPackagesByPetType,
-} from "../services/grooming-service.js";
-import { renderWalkInReviewStep } from "./walk-in-review-step.js";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006";
+import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006";
 
 const state = {
   pets: [],
   petSelections: [],
+  catalogueReady: false,
 };
 
 /*
@@ -133,6 +135,24 @@ function normalizePet(pet, index) {
     furType: pet?.furType || "",
     medicalNotes: pet?.medicalNotes || "",
   };
+}
+
+async function loadServicePricing() {
+  state.catalogueReady = false;
+  syncNextButtonState(false);
+  elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
+  try {
+    await loadGroomingCatalogue();
+    state.catalogueReady = true;
+    renderPetServiceSelections();
+    updateServiceNotice();
+  } catch (error) {
+    state.catalogueReady = false;
+    elements.petServiceSelections.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700" role="alert">
+      Unable to load current grooming pricing. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
+    </div>`;
+    syncNextButtonState(false);
+  }
 }
 
 function bindEvents() {
@@ -465,6 +485,8 @@ function syncNextButtonState(isEnabled) {
 }
 
 function handleSelectionClick(event) {
+  if (event.target.closest("[data-retry-pricing]")) { loadServicePricing(); return; }
+  if (!state.catalogueReady) return;
   const target = event.target;
 
   if (
@@ -563,6 +585,7 @@ function handleSelectionInput(event) {
 
 function handleSubmit(event) {
   event.preventDefault();
+  if (!state.catalogueReady) return;
 
   const incompletePets = state.pets.filter((pet) => {
     const selection = getSelectionByPetId(pet.id);
@@ -655,8 +678,7 @@ export function renderWalkInServicesStep({ pets = [], petSelections = [] } = {})
   if (state.pets.length === 0) {
     renderMissingPetState();
   } else {
-    renderPetServiceSelections();
-    updateServiceNotice();
+    loadServicePricing();
   }
 
   if (window.lucide) {

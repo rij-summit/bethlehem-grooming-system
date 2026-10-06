@@ -1,8 +1,8 @@
 import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js";
 import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js";
-import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js";
-import { initBookingReviewStep, refreshBookingReviewStep } from "./booking-review-step.js";
-import { initBookingConsentStep } from "./booking-consent-step.js";
+import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js?v=grooming-pricing-20261006";
+import { initBookingReviewStep, refreshBookingReviewStep } from "./booking-review-step.js?v=grooming-pricing-20261006";
+import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-pricing-20261006";
 import { initBookingConfirmedStep } from "./booking-confirmed-step.js";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 

@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Validate grooming price input as entered, including malformed whitespace.
+        $middleware->trimStrings(except: [
+            fn ($request) => $request->is('api/admin/grooming/services/*/pricing'),
+        ]);
         $middleware->alias([
             'account.usable' => EnsureAccountIsUsable::class,
             'role' => EnsureUserHasRole::class,

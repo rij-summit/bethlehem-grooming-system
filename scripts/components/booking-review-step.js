@@ -10,12 +10,14 @@ import {
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
+  loadGroomingCatalogue,
+  selectedPricingSignature,
   buildBookingReviewPayload,
   formatAmountRange,
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006";
 
 /**
  * Booking Review Step Controller
@@ -50,7 +52,7 @@ const state = {
   reviewPayload: null,
 };
 
-export function refreshBookingReviewStep() {
+export async function refreshBookingReviewStep() {
   state.bookingDraft = getBookingDraft();
 
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
@@ -65,6 +67,24 @@ export function refreshBookingReviewStep() {
     readSessionJson(BOOKING_STEP_THREE_KEY),
     state.bookingDraft,
   );
+  const previousSignature = sessionStorage.getItem("groomingReviewedPricing") || sessionStorage.getItem("groomingSelectedPricing");
+  state.reviewPayload = null;
+  elements.confirmBookingBtn.disabled = true;
+  elements.reviewSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading current grooming pricing...</p>';
+  try {
+    await loadGroomingCatalogue();
+  } catch (error) {
+    renderEmptyState("Unable to load current grooming pricing. Please retry.");
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Retry";
+    retry.className = "mt-3 font-semibold text-[#315b7e] underline";
+    retry.addEventListener("click", refreshBookingReviewStep);
+    elements.reviewSelections.append(retry);
+    return;
+  }
+  const latestSignature = selectedPricingSignature(state.bookingDraft, state.petSelections);
+  sessionStorage.setItem("groomingReviewedPricing", latestSignature);
   state.reviewPayload = buildBookingReviewPayload(
     state.bookingDraft,
     state.petSelections,
@@ -72,6 +92,10 @@ export function refreshBookingReviewStep() {
 
   renderSummary();
   renderReviewNotice();
+  if (previousSignature && previousSignature !== latestSignature) {
+    elements.reviewNotice.classList.remove("hidden");
+    elements.reviewNotice.textContent = "A grooming price was updated. Please review the latest pricing before confirming.";
+  }
   renderReviewSelections();
   renderTotalPricing();
   saveReviewDraft();

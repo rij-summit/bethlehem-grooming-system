@@ -322,7 +322,7 @@ class BookingController extends Controller
                         }
 
                         $bounds = $servicePrices->bookingPriceBounds($service, $petSize);
-                        $price = $bounds['max'] !== null
+                        $price = $bounds['max'] !== null && $bounds['min'] !== $bounds['max']
                             ? '0.00'
                             : $servicePrices->servicePrice($service, $petSize);
 

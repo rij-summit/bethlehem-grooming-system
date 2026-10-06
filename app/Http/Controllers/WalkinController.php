@@ -278,7 +278,8 @@ class WalkinController extends Controller
     {
         $bounds = $this->servicePrices->bookingPriceBounds($service, $size);
         return [
-            'price' => $bounds['max'] !== null ? 0 : (float) $this->servicePrices->servicePrice($service, $size),
+            'price' => $bounds['max'] !== null && $bounds['min'] !== $bounds['max']
+                ? 0 : (float) $this->servicePrices->servicePrice($service, $size),
             'price_min' => $bounds['min'],
             'price_max' => $bounds['max'],
         ];

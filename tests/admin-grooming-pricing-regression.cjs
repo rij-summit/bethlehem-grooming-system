@@ -8,6 +8,15 @@ const context = { window: { AppClock: { todayKey: () => "2026-09-27" } }, consol
 vm.runInNewContext(source, context);
 const ui = context.adminDashboard();
 
+async function main() {
+const catalogue = JSON.parse(fs.readFileSync(path.join(__dirname, "grooming-catalogue-fixture.json"), "utf8").replace(/^\uFEFF/, "")).data;
+const catalogueModule = "../services/grooming-service.js?v=grooming-pricing-20261006";
+for (const component of ["admin-dashboard", "booking-services-step", "booking-review-step", "booking-consent-step", "walk-in-services-step", "walk-in-review-step"]) {
+  const componentSource = fs.readFileSync(path.join(__dirname, `../scripts/components/${component}.js`), "utf8");
+  assert.ok(componentSource.includes(`"${catalogueModule}"`), `${component} must share the same live catalogue module instance`);
+}
+const grooming = await import("../scripts/services/grooming-service.js?v=grooming-pricing-20261006");
+context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(catalogue));
 const booking = {
   paid: false,
   pets: [{ bookingPetId: 1, petName: "Mochi", species: "Cat", size: "small" }],
@@ -160,4 +169,105 @@ ui.paymentModal.amountPaid = "3000.01";
 ui.enforcePaymentAmountLimit();
 assert.equal(ui.paymentModal.amountPaid, "3000", "Cash Received keeps its existing bill-based clamp");
 
+// A newly loaded catalogue drives every consumer; original booking bounds still win.
+const updated = JSON.parse(JSON.stringify(catalogue));
+const regular = updated.find((service) => service.id === "regular_dog_grooming");
+regular.priceOptions[0] = { ...regular.priceOptions[0], minAmount: 600, maxAmount: 600 };
+regular.priceOptions[2] = { ...regular.priceOptions[2], minAmount: 950 };
+regular.priceOptions[3] = { ...regular.priceOptions[3], minAmount: 1150 };
+const facial = updated.find((service) => service.id === "facial_trimming");
+facial.priceOptions[0] = { ...facial.priceOptions[0], pricingType: "starting_at", minAmount: 250, maxAmount: null };
+context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(updated));
+assert.equal(grooming.evaluateServicePricing(grooming.getPackageById("regular_dog_grooming"), "small").displayPrice, "₱600");
+const current = ui.normalizePaymentLine({ slug: regular.id }, { sizeKey: "large" }, "current");
+assert.equal(current.minAmount, 950);
+assert.equal(current.safetyMaxAmount, 1450);
+assert.equal(current.reviewThreshold, 1150);
+const historical = ui.normalizePaymentLine({ slug: regular.id, priceMinAtBooking: "850" }, { sizeKey: "large" }, "historical");
+assert.equal(historical.minAmount, 850);
+assert.equal(historical.safetyMaxAmount, 1350);
+const changedMode = ui.normalizePaymentLine({ slug: facial.id }, pet, "new-starting");
+assert.equal(changedMode.safetyMaxAmount, 450);
+const historicalFixed = ui.normalizePaymentLine({ slug: facial.id, priceAtBooking: "150" }, pet, "old-fixed", { lockFixedPrices: true });
+assert.equal(historicalFixed.isFixedPriceLocked, true);
+assert.equal(historicalFixed.amount, "150.00");
+assert.throws(() => grooming.applyGroomingCatalogue([]), /unavailable/);
+
+const legacyRules = ui.normalizePaymentLine({ slug: "ear_cleaning", priceAtBooking: "150",
+  paymentPriceRules: { min: "150", max: null, pricing_type: "plus", safety_max: "350" } }, pet, "legacy-server-rules");
+assert.equal(legacyRules.pricingType, "plus");
+assert.equal(legacyRules.safetyMaxAmount, 350);
+const draft = { pets: [{ id: "pet-1", size: "small", petType: "dog" }] };
+const selection = [{ petId: "pet-1", servicePackage: regular.id, alaCarteServices: [] }];
+const beforeSignature = grooming.selectedPricingSignature(draft, selection);
+grooming.applyGroomingCatalogue(catalogue);
+assert.notEqual(grooming.selectedPricingSignature(draft, selection), beforeSignature);
+let loads = 0;
+global.API = { getGroomingCatalogue: async () => { loads++; return { data: updated }; } };
+await grooming.loadGroomingCatalogue();
+await grooming.loadGroomingCatalogue();
+assert.equal(loads, 2, "A normal catalogue refresh must fetch current prices again");
+// Review consumes the catalogue loaded in service selection, including new prices.
+const draftUtilities = await import("../scripts/services/booking-draft-service.js");
+const reviewElements = new Map();
+const reviewDocument = {
+  body: {}, addEventListener() {},
+  getElementById(id) {
+    if (!reviewElements.has(id)) reviewElements.set(id, {
+      classList: { add() {} }, addEventListener() {},
+    });
+    return reviewElements.get(id);
+  },
+};
+const reviewContext = { ...grooming, ...draftUtilities, document: reviewDocument, window: {}, sessionStorage: { setItem() {} } };
+const reviewSource = fs.readFileSync(path.join(__dirname, "../scripts/components/walk-in-review-step.js"), "utf8")
+  .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g, "")
+  .replace(/export function /g, "function ");
+vm.runInNewContext(reviewSource, reviewContext);
+reviewContext.renderWalkInReviewStep({ pets: draft.pets, petSelections: selection });
+assert.equal(reviewElements.get("totalPriceText").textContent, "₱600");
+assert.ok(reviewElements.get("reviewSelections").innerHTML.includes("₱600"));
+
+// Package ranges use the same catalogue and bounds in selection, review, and payment.
+regular.priceOptions[0] = { ...regular.priceOptions[0], pricingType: "range", minAmount: 600, maxAmount: 680 };
+regular.priceOptions[3] = { ...regular.priceOptions[3], pricingType: "range", minAmount: 1150, maxAmount: 1800 };
+context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(updated));
+const packageRange = grooming.evaluateServicePricing(grooming.getPackageById(regular.id), "small");
+assert.equal(packageRange.displayPrice, "₱600–₱680");
+assert.equal(packageRange.isEstimate, true);
+reviewContext.renderWalkInReviewStep({ pets: draft.pets, petSelections: selection });
+assert.ok(reviewElements.get("reviewSelections").innerHTML.includes("₱600–₱680"));
+const rangePet = { sizeKey: "small" };
+const packageLine = ui.normalizePaymentLine({ slug: regular.id, priceMinAtBooking: "600", priceMaxAtBooking: "680" }, rangePet, "package-range", { lockFixedPrices: true });
+assert.equal(packageLine.isFixedPriceLocked, false);
+assert.equal(packageLine.safetyMaxAmount, null);
+assert.equal(packageLine.reviewThreshold, null);
+for (const amount of ["599", "681"]) {
+  packageLine.amount = amount;
+  assert.equal(ui.paymentLineError(packageLine), "Enter an amount from ₱600 to ₱680.");
+}
+for (const amount of ["600", "650", "680"]) {
+  packageLine.amount = amount;
+  assert.equal(ui.paymentLineError(packageLine), "");
+}
+regular.priceOptions[0].maxAmount = 750;
+context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(updated));
+ui.refreshPaymentLinePricing(rangePet, packageLine);
+assert.equal(packageLine.maxAmount, 680, "Historical package ranges must keep their saved maximum");
+rangePet.sizeKey = "extra_large";
+ui.refreshPaymentLinePricing(rangePet, packageLine);
+assert.equal(packageLine.minAmount, 1150);
+assert.equal(packageLine.maxAmount, 1800, "A size correction must use that size's current range");
+assert.equal(packageLine.safetyMaxAmount, null);
+packageLine.amount = "1800";
+assert.equal(ui.paymentLineError(packageLine), "", "Starting-at safety caps do not apply to ranges");
+packageLine.amount = "1800.01";
+assert.equal(ui.paymentLineError(packageLine), "Enter an amount from ₱1,150 to ₱1,800.");
+
+global.API.getGroomingCatalogue = async () => { throw new Error("Pricing unavailable"); };
+await assert.rejects(grooming.loadGroomingCatalogue(), /unavailable/);
+delete global.API;
 console.log("Admin grooming pricing regression tests passed.");
+
+}
+main().catch((error) => { console.error(error); process.exitCode = 1; });

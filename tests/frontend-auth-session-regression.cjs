@@ -329,7 +329,7 @@ async function testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs() {
   let browser;
   browser = createBrowser({
     pathname: "/pages/client/dashboard.html",
-    session: { customer_token: "session-token", user_role: "customer" },
+    session: { customer_token: "101|session-secret", user_role: "customer" },
     fetchImpl: async () => {
       stateAtRequest = {
         token: browser.sessionStorage.getItem("customer_token"),
@@ -341,27 +341,30 @@ async function testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs() {
 
   await browser.API.logout("customer");
   assert.deepEqual(stateAtRequest, { token: null, role: null });
+  const logoutEvent = JSON.parse(browser.localStorage.getItem("bethlehem.auth.logout"));
+  assert.equal(logoutEvent.sessionId, "customer:101");
+  assert.equal(JSON.stringify(logoutEvent).includes("session-secret"), false);
 
   const otherTab = createBrowser({
     pathname: "/pages/client/settings.html",
-    session: { customer_token: "other-tab-token", user_role: "customer" },
+    session: { customer_token: "101|session-secret", user_role: "customer" },
   });
   otherTab.dispatch("storage", {
     storageArea: otherTab.localStorage,
     key: "bethlehem.auth.logout",
-    newValue: JSON.stringify({ role: "customer", reason: "logout" }),
+    newValue: JSON.stringify(logoutEvent),
   });
   assert.equal(otherTab.API.getCustomerToken(), null);
   assert.equal(otherTab.replacements.at(-1), "/pages/client/sign-in.html");
 
   const adminTab = createBrowser({
     pathname: "/pages/admin/dashboard.html",
-    local: { admin_token: "admin-token", user_role: "staff" },
+    local: { admin_token: "102|staff-secret", user_role: "staff" },
   });
   adminTab.dispatch("storage", {
     storageArea: adminTab.localStorage,
     key: "bethlehem.auth.logout",
-    newValue: JSON.stringify({ role: "admin", reason: "logout" }),
+    newValue: JSON.stringify({ role: "staff", sessionId: "staff:102", reason: "logout" }),
   });
   assert.equal(adminTab.API.getAdminToken(), null);
   assert.equal(adminTab.replacements.at(-1), "/pages/client/sign-in.html");
@@ -382,6 +385,121 @@ function testTokenReplacementRemovalEventCannotClearFreshLogin() {
 
   assert.equal(browser.API.getCustomerToken(), "fresh-token");
   assert.deepEqual(browser.replacements, []);
+}
+
+function testLogoutFromAnotherSessionCannotClearTheCurrentLogin() {
+  for (const role of ["admin", "customer"]) {
+    const browser = createBrowser({
+      pathname: `/pages/${role === "customer" ? "client" : "admin"}/dashboard.html`,
+      local: { [role === "customer" ? "customer_token" : "admin_token"]: "202|current-secret", user_role: role },
+    });
+    for (const event of [
+      { role: role === "admin" ? "customer" : "admin", sessionId: "customer:101", reason: "logout" },
+      { role, sessionId: `${role}:101`, reason: "expired" },
+      { role, sessionId: `${role}:101`, reason: "inactivity" },
+      { role, reason: "logout" }, // An old cached page cannot identify this session.
+    ]) {
+      browser.dispatch("storage", {
+        storageArea: browser.localStorage, key: "bethlehem.auth.logout",
+        newValue: JSON.stringify(event),
+      });
+      assert.equal(browser.API.getUserRole(), role, "Unrelated or delayed logout must not erase a newer session");
+      assert.equal(browser.API.hasAuthenticatedSession(), true);
+      assert.deepEqual(browser.replacements, []);
+    }
+  }
+}
+
+async function testIndependentBrowserContextsInBothLoginOrders() {
+  for (const roles of [["admin", "customer"], ["customer", "admin"]]) {
+    // Normal/Private profiles (and different browsers) have independent stores,
+    // but make requests to the same server/token catalogue.
+    const tokens = new Map();
+    let sequence = 300;
+    const fetchImpl = async (url, options) => {
+      if (url.endsWith("/sign-in")) {
+        const role = JSON.parse(options.body).identifier;
+        const token = `${++sequence}|${role}-secret`;
+        tokens.set(token, role);
+        return jsonResponse(200, { token, user: { role } });
+      }
+      const token = options.headers.Authorization?.replace(/^Bearer /, "");
+      const role = tokens.get(token);
+      if (!role) return jsonResponse(401, { message: "Unauthenticated." });
+      if (url.endsWith("/logout")) {
+        tokens.delete(token);
+        return jsonResponse(200, { success: true });
+      }
+      if (url.endsWith("/grooming/services")) {
+        assert.equal(options.cache, "no-store");
+        return jsonResponse(200, { data: [] });
+      }
+      return jsonResponse(200, { user: { role } });
+    };
+    const normal = createBrowser({ fetchImpl });
+    const privateWindow = createBrowser({ fetchImpl });
+    await normal.API.signIn(roles[0], "password");
+    const normalToken = roles[0] === "admin" ? normal.API.getAdminToken() : normal.API.getCustomerToken();
+    await privateWindow.API.signIn(roles[1], "password", false);
+    assert.equal(normal.API.getUserRole(), roles[0]);
+    for (const [browser, role] of [[normal, roles[0]], [privateWindow, roles[1]]]) {
+      assert.equal((await browser.API.getMe(role)).user.role, role);
+      await browser.API.getGroomingCatalogue();
+      assert.deepEqual(browser.replacements, []);
+    }
+    await privateWindow.API.logout(roles[1]);
+    assert.equal((await normal.API.getMe(roles[0], { force: true })).user.role, roles[0]);
+    assert.equal(tokens.has(normalToken), true);
+    assert.equal(tokens.size, 1);
+    assert.deepEqual(normal.replacements, []);
+  }
+}
+
+function testSharedPersistentLogoutDoesNotErasePendingConfirmation() {
+  const browser = createBrowser({
+    pathname: "/pages/client/verify-email.html",
+    session: { pending_login_poll_token: "new-login-challenge" },
+  });
+  browser.dispatch("storage", {
+    storageArea: browser.localStorage, key: "bethlehem.auth.logout",
+    newValue: JSON.stringify({ role: "customer", sessionId: "customer:101" }),
+  });
+  assert.equal(browser.sessionStorage.getItem("pending_login_poll_token"), "new-login-challenge");
+  assert.deepEqual(browser.replacements, []);
+
+  browser.location.pathname = "/pages/admin/dashboard.html";
+  browser.dispatch("storage", {
+    storageArea: browser.localStorage, key: "bethlehem.auth.logout",
+    newValue: JSON.stringify({ role: "admin", sessionId: "admin:101" }),
+  });
+  assert.equal(browser.replacements.at(-1), "/pages/client/sign-in.html");
+}
+
+async function testPricingAuthFailuresStayLocalToTheRequestingSession() {
+  for (const role of ["admin", "customer"]) {
+    const tokenKey = role === "admin" ? "admin_token" : "customer_token";
+    for (const status of [401, 419]) {
+      const browser = createBrowser({
+        local: { [tokenKey]: "401|request-secret", user_role: role },
+        fetchImpl: async () => jsonResponse(status, { message: "Request rejected" }),
+      });
+      const other = createBrowser({
+        local: { [tokenKey]: "402|other-secret", user_role: role },
+      });
+      await assert.rejects(browser.API.getGroomingCatalogue(), /Request rejected/);
+      const logoutEvent = browser.localStorage.getItem("bethlehem.auth.logout");
+      if (logoutEvent) {
+        other.dispatch("storage", {
+          storageArea: other.localStorage, key: "bethlehem.auth.logout", newValue: logoutEvent,
+        });
+        assert.equal(JSON.parse(logoutEvent).sessionId, `${role}:401`);
+      }
+      assert.equal(browser.API.hasAuthenticatedSession(), status !== 401,
+        "A current-token 401 ends that session; a 419 must not erase bearer auth");
+      assert.equal(other.API.hasAuthenticatedSession(), true);
+      assert.deepEqual(other.replacements, []);
+    }
+  }
 }
 
 function testBackForwardCacheGuard() {
@@ -754,7 +872,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|site-assets-20261001|customer-cache-20261005-v1|signup-code-20261005|clinic-records-20260906|clinic-owner-groups-20260926|clinic-attachment-view-20261001|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|grooming-notes-20260927|unified-inventory-20261001b|product-search-stock-20261002b?)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|site-assets-20261001|customer-cache-20261005-v1|signup-code-20261005|clinic-records-20260906|clinic-owner-groups-20260926|clinic-attachment-view-20261001|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|staff-settings-20260928|grooming-today-indicator-20261005|grooming-notes-20260927|unified-inventory-20261001b|product-search-stock-20261002b?)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }
@@ -933,6 +1051,10 @@ async function testStaffSetupUsernameForm() {
   await testStale401CannotClearANewerLogin();
   await testOnlyExplicit403AuthCodesInvalidateSession();
   await testLogoutClearsBeforeNetworkAndSynchronizesCustomerTabs();
+  testLogoutFromAnotherSessionCannotClearTheCurrentLogin();
+  await testIndependentBrowserContextsInBothLoginOrders();
+  testSharedPersistentLogoutDoesNotErasePendingConfirmation();
+  await testPricingAuthFailuresStayLocalToTheRequestingSession();
   testTokenReplacementRemovalEventCannotClearFreshLogin();
   testBackForwardCacheGuard();
   testVerificationCredentialsAreScrubbedBeforeUse();

@@ -21,6 +21,242 @@ function adminSettings() {
     isAdmin: currentRole === "admin",
     isStaff: currentRole === "staff",
     activeSettingsTab: "general",
+    groomingPrices: [],
+    groomingPriceLimits: null,
+    pricingLoading: false,
+    pricingError: "",
+    pricingModal: { open: false, service: null, rows: [], savedState: "", defaultRows: [], busy: false, errors: {}, pristineFields: {}, error: "" },
+
+    async loadGroomingPrices() {
+      if (!this.isAdmin) return;
+      this.pricingLoading = true;
+      this.pricingError = "";
+      try {
+        const response = await API.getGroomingCatalogue();
+        if (!response.priceLimits?.package || !response.priceLimits?.ala_carte) throw new Error("Grooming price limits are unavailable.");
+        this.groomingPrices = response.data;
+        this.groomingPriceLimits = response.priceLimits;
+      } catch (error) {
+        this.pricingError = "Unable to load grooming pricing. Please retry.";
+      } finally { this.pricingLoading = false; }
+    },
+
+    pricingAmount(amount) {
+      return `₱${Number(amount).toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
+    },
+
+    pricingDisplay(option) {
+      const amount = this.pricingAmount(option.minAmount);
+      if (option.pricingType === "starting_at") return `${amount}+`;
+      if (option.pricingType === "range") return `${amount}–${this.pricingAmount(option.maxAmount)}`;
+      return amount;
+    },
+
+    pricingSizeDisplay(service, sizeKey) {
+      const option = service.priceOptions.find((item) => item.sizeKey === sizeKey);
+      return option ? this.pricingDisplay(option) : "—";
+    },
+
+    pricingRows(options) {
+      return options.map((option) => ({ ...option, amount: String(option.minAmount),
+        maximum: option.pricingType === "range" ? String(option.maxAmount) : "" }));
+    },
+
+    pricingState(rows) {
+      const amount = (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) ? Number(value).toFixed(2) : String(value);
+      return JSON.stringify(rows.map((row) => ({ sizeKey: row.sizeKey, pricingType: row.pricingType,
+        amount: amount(row.amount), maximum: row.pricingType === "range" ? amount(row.maximum) : null })));
+    },
+
+    get pricingIsDirty() {
+      return this.pricingState(this.pricingModal.rows) !== this.pricingModal.savedState;
+    },
+
+    get pricingCanRestoreDefault() {
+      return !this.pricingIsDirty && this.pricingModal.defaultRows.length > 0
+        && this.pricingState(this.pricingModal.defaultRows) !== this.pricingModal.savedState;
+    },
+
+    get pricingActionDisabled() {
+      return this.pricingModal.busy || (!this.pricingCanRestoreDefault
+        && (!this.pricingIsDirty || Object.keys(this.pricingModal.errors).length > 0));
+    },
+
+    restoreGroomingDefault() {
+      if (!this.isAdmin || this.pricingModal.busy || !this.pricingCanRestoreDefault) return;
+      this.pricingModal.rows = clone(this.pricingModal.defaultRows);
+      this.pricingModal.pristineFields = {};
+      this.pricingModal.error = "";
+      this.validatePricing();
+    },
+
+    async submitPricingAction() {
+      if (this.pricingActionDisabled) return;
+      if (this.pricingCanRestoreDefault) this.restoreGroomingDefault();
+      else await this.saveGroomingPrice();
+    },
+
+    openPricingModal(service, trigger) {
+      if (!this.isAdmin) return;
+      this._pricingTrigger = trigger;
+      const rows = this.pricingRows(service.priceOptions);
+      this.pricingModal = { open: true, service, busy: false, error: "", errors: {}, pristineFields: {},
+        rows, savedState: this.pricingState(rows), defaultRows: this.pricingRows(service.defaultPriceOptions || []) };
+      this.validatePricing();
+      this.$nextTick(() => {
+        if (!this.pricingModal.open) return;
+        this.lockPricingPage();
+        this.$refs.pricingDialog.querySelector("select, input")?.focus();
+      });
+    },
+
+    closePricingModal() {
+      if (this.pricingModal.busy) return;
+      this.pricingModal.open = false;
+      this.unlockPricingPage();
+      this._pricingTrigger?.focus();
+    },
+
+    lockPricingPage() {
+      if (this._pricingPageState) return;
+      const body = document.body;
+      const root = document.documentElement;
+      const overlay = this.$refs.pricingDialog.closest(".grooming-pricing-overlay");
+      const scrollbarWidth = window.innerWidth - root.clientWidth;
+      this._pricingPageState = { bodyOverflow: body.style.overflow, rootOverflow: root.style.overflow,
+        bodyPadding: body.style.paddingRight,
+        background: [...body.children].filter((element) => element !== overlay)
+          .map((element) => ({ element, inert: element.inert })) };
+      if (scrollbarWidth > 0) body.style.paddingRight = `${parseFloat(window.getComputedStyle(body).paddingRight) + scrollbarWidth}px`;
+      body.style.overflow = "hidden";
+      root.style.overflow = "hidden";
+      this._pricingPageState.background.forEach(({ element }) => { element.inert = true; });
+    },
+
+    unlockPricingPage() {
+      const saved = this._pricingPageState;
+      if (!saved) return;
+      document.body.style.overflow = saved.bodyOverflow;
+      document.body.style.paddingRight = saved.bodyPadding;
+      document.documentElement.style.overflow = saved.rootOverflow;
+      saved.background.forEach(({ element, inert }) => { element.inert = inert; });
+      this._pricingPageState = null;
+    },
+
+    destroy() {
+      this.unlockPricingPage();
+    },
+
+    pricingModalKeydown(event) {
+      if (!this.pricingModal.open) return;
+      if (event.key === "Escape") { event.preventDefault(); this.closePricingModal(); return; }
+      if (event.key !== "Tab") return;
+      const controls = [...this.$refs.pricingDialog.querySelectorAll("button:not(:disabled), select:not(:disabled), input:not(:disabled)")]
+        .filter((element) => element.offsetParent !== null);
+      if (!controls.length) { event.preventDefault(); this.$refs.pricingDialog.focus(); return; }
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    },
+
+    changePricingType(row) {
+      row.maximum = "";
+      // Defer newly revealed field feedback while still validating completeness.
+      for (const field of ["amount", "maximum"]) {
+        const key = this.pricingFieldKey(row, field);
+        if (row.pricingType === "range") this.pricingModal.pristineFields[key] = true;
+        else delete this.pricingModal.pristineFields[key];
+      }
+      this.validatePricing();
+    },
+
+    pricingFieldChanged(row, field) {
+      delete this.pricingModal.pristineFields[this.pricingFieldKey(row, field)];
+      this.validatePricing();
+    },
+
+    pricingFieldError(row, field) {
+      const key = this.pricingFieldKey(row, field);
+      return this.pricingModal.pristineFields[key] ? "" : this.pricingModal.errors[key];
+    },
+
+    pricingAmountIsValid(value) {
+      const limits = this.groomingPriceLimits?.[this.pricingModal.service?.kind];
+      const text = String(value);
+      return Boolean(limits) && /^\d+(?:\.\d{1,2})?$/.test(text) && text.trim() === text
+        && Number.isFinite(Number(value)) && Number(value) >= limits.minimum && Number(value) <= limits.maximum;
+    },
+
+    pricingPreview(row) {
+      if (!["fixed", "range", "starting_at"].includes(row.pricingType) || !this.pricingAmountIsValid(row.amount)
+        || (row.pricingType === "range" && (!this.pricingAmountIsValid(row.maximum) || Number(row.maximum) <= Number(row.amount)))) return "—";
+      return this.pricingDisplay({ pricingType: row.pricingType, minAmount: Number(row.amount), maxAmount: Number(row.maximum) });
+    },
+
+    pricingFieldKey(row, field) {
+      return this.pricingModal.service?.kind === "package" ? `sizes.${row.sizeKey}.${field}` : field;
+    },
+
+    validatePricing() {
+      const errors = {};
+      const packageService = this.pricingModal.service.kind === "package";
+      const validateAmount = (value, key) => {
+        if (!this.pricingAmountIsValid(value)) errors[key] = "Enter a reasonable price amount.";
+      };
+      if (packageService) {
+        const supported = this.pricingModal.service.priceOptions.map((option) => option.sizeKey);
+        if (this.pricingModal.rows.length !== supported.length ||
+            this.pricingModal.rows.some((row, index) => row.sizeKey !== supported[index])) {
+          errors.sizes = "Only the supported package sizes may be updated.";
+        }
+      }
+      for (const row of this.pricingModal.rows) {
+        const key = this.pricingFieldKey(row, "amount");
+        validateAmount(row.amount, key);
+        if (!["fixed", "range", "starting_at"].includes(row.pricingType)) {
+          errors[this.pricingFieldKey(row, "pricing_type")] = "Choose a supported pricing type.";
+        }
+        if (row.pricingType === "range") {
+          const maximumKey = this.pricingFieldKey(row, "maximum");
+          validateAmount(row.maximum, maximumKey);
+          if (!errors[maximumKey] && !errors[key] && Number(row.maximum) <= Number(row.amount)) errors[maximumKey] = "Maximum price must be greater than minimum price.";
+        }
+      }
+      if (packageService && Object.keys(errors).length === 0) {
+        let previous = 0;
+        for (const row of this.pricingModal.rows) {
+          if (Number(row.amount) < previous) errors[this.pricingFieldKey(row, "amount")] = "Price must not be lower than the preceding size.";
+          previous = Number(row.amount);
+        }
+      }
+      this.pricingModal.errors = errors;
+      return Object.keys(errors).length === 0;
+    },
+
+    async saveGroomingPrice() {
+      if (!this.isAdmin || this.pricingModal.busy) return;
+      this.pricingModal.pristineFields = {};
+      if (!this.validatePricing()) return;
+      if (!this.pricingIsDirty) return;
+      const modal = this.pricingModal;
+      const payload = modal.service.kind === "package"
+        ? { sizes: Object.fromEntries(modal.rows.map((row) => [row.sizeKey, { pricing_type: row.pricingType, amount: row.amount,
+          ...(row.pricingType === "range" ? { maximum: row.maximum } : {}) }])) }
+        : { pricing_type: modal.rows[0].pricingType, amount: modal.rows[0].amount,
+          ...(modal.rows[0].pricingType === "range" ? { maximum: modal.rows[0].maximum } : {}) };
+      modal.busy = true;
+      modal.error = "";
+      try {
+        const response = await API.updateGroomingPricing(modal.service.serviceId, payload);
+        this.groomingPrices = this.groomingPrices.map((service) => service.id === response.data.id ? response.data : service);
+        modal.busy = false;
+        this.closePricingModal();
+        this.showStaffActionToast(`${modal.service.name} pricing updated.`);
+      } catch (error) {
+        modal.errors = Object.fromEntries(Object.entries(error.errors || {}).map(([key, messages]) => [key, messages[0]]));
+        modal.error = error.message || "Unable to save pricing. Please retry.";
+      } finally { modal.busy = false; }
+    },
     appointmentReminders: true,
     noShowAlerts: true,
     paymentReceipt: true,

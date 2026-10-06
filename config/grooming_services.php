@@ -1,14 +1,13 @@
 <?php
 
 return [
-    /*
-     * Server-side grooming price catalogue.
-     *
-     * These values mirror the customer and staff grooming catalogues. They are
-     * used whenever an imported/legacy services row has no usable database
-     * price, and they provide the booking snapshot for extra-large packages
-     * because the current services table has no price_extra_large column.
-     */
+    // Editable grooming catalogue limits; clinic pricing has separate business rules.
+    'price_limits' => [
+        'package' => ['minimum' => 1, 'maximum' => 20000],
+        'ala_carte' => ['minimum' => 1, 'maximum' => 5000],
+    ],
+    // Static kinds/supported sizes and official restoration/legacy defaults.
+    // Persisted catalogue values remain authoritative for current live pricing.
     'services' => [
         'partial_grooming' => [
             'kind' => 'package',

@@ -24,6 +24,7 @@ use App\Http\Controllers\PetVaccinationController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WalkinController;
+use App\Http\Controllers\GroomingPricingController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
@@ -66,6 +67,8 @@ Route::get('/system/clock', function () {
 
 // ── PROTECTED ROUTES (token required) ────────────────
 Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
+    Route::get('/grooming/services', [GroomingPricingController::class, 'index']);
+    Route::patch('/admin/grooming/services/{service}/pricing', [GroomingPricingController::class, 'update'])->middleware('role:admin');
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);

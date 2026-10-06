@@ -24,6 +24,8 @@ class Service extends Model
         'price_min',
         'price_max',
         'is_starting_price',
+        'starting_price_sizes',
+        'range_price_maximums',
         'is_active',
         'duration_minutes',
     ];
@@ -31,5 +33,7 @@ class Service extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_starting_price' => 'boolean',
+        'starting_price_sizes' => 'array',
+        'range_price_maximums' => 'array',
     ];
 }

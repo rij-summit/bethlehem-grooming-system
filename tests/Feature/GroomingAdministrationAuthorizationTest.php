@@ -214,6 +214,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->decimal('price_small', 8, 2)->nullable();
             $table->decimal('price_medium', 8, 2)->nullable();
             $table->decimal('price_large', 8, 2)->nullable();
+            $table->decimal('price_extra_large', 8, 2)->nullable();
+            $table->json('starting_price_sizes')->nullable();
+            $table->json('range_price_maximums')->nullable();
             $table->decimal('price_min', 8, 2)->nullable();
             $table->decimal('price_max', 8, 2)->nullable();
             $table->boolean('is_starting_price')->default(false);
@@ -588,6 +591,123 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $transactions = collect($this->getJson('/api/admin/transactions')->assertOk()->json('transactions'));
         $this->assertEquals(80, $transactions->firstWhere('bookingId', $walkinBookingId)['finalPrice']);
         $this->assertEquals(100, $transactions->firstWhere('bookingId', $customerBookingId)['finalPrice']);
+    }
+
+    #[DataProvider('livePricingModes')]
+    public function test_updated_catalogue_propagates_to_new_customer_and_walk_in_snapshots(string $type, int $amount, ?int $maximum): void
+    {
+        DB::table('services')->insert(['service_id' => 4, 'service_name' => 'Nail Clipping',
+            'slug' => 'nail_clipping', 'base_price' => 75, 'price_min' => 50, 'price_max' => 100]);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $this->authenticateAs('admin');
+        $this->patchJson('/api/admin/grooming/services/4/pricing', [
+            'pricing_type' => $type, 'amount' => (string) $amount, 'maximum' => $maximum,
+        ])->assertOk();
+        $this->authenticateAs('customer');
+        $customerId = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Mochi', 'species' => 'cat', 'weight' => 4,
+                'services' => ['ala_carte' => ['nail_clipping']]]],
+        ])->assertCreated()->json('booking.booking_id');
+        $this->authenticateAs('staff');
+        $walkinId = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pets' => [['pet_name' => 'Bantay', 'species' => 'dog', 'weight' => 8,
+                'services' => [['service_slug' => 'nail_clipping', 'price' => 1]]]],
+            'sedation_consent' => false, 'terms_agreed' => true,
+        ])->assertCreated()->json('booking_id');
+        foreach ([$customerId, $walkinId] as $id) {
+            $this->assertDatabaseHas('booking_services', ['booking_id' => $id,
+                'price_at_booking' => $type === 'range' ? 0 : $amount,
+                'price_min_at_booking' => $amount,
+                'price_max_at_booking' => $type === 'fixed' ? $amount : $maximum]);
+        }
+        $before = DB::table('booking_services')->get()->toArray();
+        $this->authenticateAs('admin');
+        $this->patchJson('/api/admin/grooming/services/4/pricing', ['pricing_type' => 'fixed', 'amount' => '300'])->assertOk();
+        $this->assertEquals($before, DB::table('booking_services')->get()->toArray());
+        $line = DB::table('booking_services')->where('booking_id', $walkinId)->first();
+        $invalid = $type === 'fixed' ? $amount + 1 : ($type === 'range' ? $maximum + 1 : $amount + 201);
+        $this->postJson("/api/admin/bookings/$walkinId/pay-now", ['final_price' => $invalid, 'amount_paid' => $invalid,
+            'service_prices' => [['booking_service_id' => $line->booking_service_id, 'amount' => $invalid]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('service_prices');
+        $this->postJson("/api/admin/bookings/$walkinId/pay-now", ['final_price' => $amount, 'amount_paid' => $amount,
+            'service_prices' => [['booking_service_id' => $line->booking_service_id, 'amount' => $amount]],
+        ])->assertOk();
+    }
+
+    public static function livePricingModes(): array
+    {
+        return [['fixed', 200, 200], ['range', 65, 125], ['starting_at', 175, null]];
+    }
+
+    #[DataProvider('updatedPackageModes')]
+    public function test_updated_package_prices_propagate_and_payment_enforces_size_rules(string $size, int $weight, string $type, int $amount, ?int $threshold, ?int $maximum = null): void
+    {
+        DB::table('services')->insert(['service_id' => 4, 'service_name' => 'Regular Dog Grooming',
+            'slug' => 'regular_dog_grooming', 'base_price' => 650]);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $this->authenticateAs('admin');
+        $sizes = [];
+        foreach (['small' => 600, 'medium' => 700, 'large' => 950, 'extra_large' => 1150] as $key => $value) {
+            $sizes[$key] = ['pricing_type' => in_array($key, ['large', 'extra_large']) ? 'starting_at' : 'fixed', 'amount' => (string) $value];
+        }
+        $sizes[$size]['pricing_type'] = $type;
+        if ($type === 'range') $sizes[$size]['maximum'] = (string) $maximum;
+        $this->patchJson('/api/admin/grooming/services/4/pricing', ['sizes' => $sizes])->assertOk();
+        $this->authenticateAs('customer');
+        $customerId = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Rigby', 'species' => 'dog', 'weight' => $weight,
+                'services' => ['package' => 'regular_dog_grooming']]],
+        ])->assertCreated()->json('booking.booking_id');
+        $this->authenticateAs('staff');
+        $walkinId = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pets' => [['pet_name' => 'Bantay', 'species' => 'dog', 'weight' => $weight,
+                'services' => [['service_slug' => 'regular_dog_grooming', 'price' => 1]]]],
+            'sedation_consent' => false, 'terms_agreed' => true,
+        ])->assertCreated()->json('booking_id');
+        foreach ([$customerId, $walkinId] as $id) {
+            $this->assertDatabaseHas('booking_services', ['booking_id' => $id, 'price_at_booking' => $type === 'range' ? 0 : $amount,
+                'price_min_at_booking' => $amount, 'price_max_at_booking' => $type === 'fixed' ? $amount : $maximum]);
+        }
+        if ($type === 'range') {
+            $before = DB::table('booking_services')->get()->toArray();
+            $this->authenticateAs('admin');
+            $sizes[$size]['maximum'] = (string) ($maximum + 100);
+            $this->patchJson('/api/admin/grooming/services/4/pricing', ['sizes' => $sizes])->assertOk();
+            $this->assertEquals($before, DB::table('booking_services')->get()->toArray());
+        }
+        $line = DB::table('booking_services')->where('booking_id', $walkinId)->first();
+        $invalid = $type === 'fixed' ? $amount + 1 : ($type === 'range' ? $maximum + 1 : $amount + 501);
+        $this->postJson("/api/admin/bookings/$walkinId/pay-now", ['final_price' => $invalid, 'amount_paid' => $invalid,
+            'service_prices' => [['booking_service_id' => $line->booking_service_id, 'amount' => $invalid]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('service_prices');
+        if ($type === 'range') {
+            $below = $amount - 1;
+            $this->postJson("/api/admin/bookings/$walkinId/pay-now", ['final_price' => $below, 'amount_paid' => $below,
+                'service_prices' => [['booking_service_id' => $line->booking_service_id, 'amount' => $below]],
+            ])->assertUnprocessable()->assertJsonValidationErrors('service_prices');
+        }
+        $valid = $maximum ?? $threshold ?? $amount;
+        $response = $this->postJson("/api/admin/bookings/$walkinId/pay-now", ['final_price' => $valid, 'amount_paid' => $valid,
+            'service_prices' => [['booking_service_id' => $line->booking_service_id, 'amount' => $valid]],
+        ])->assertOk();
+        if ($threshold !== null) $response->assertJsonCount(1, 'service_price_warnings');
+        else $response->assertJsonCount(0, 'service_price_warnings');
+    }
+
+    public static function updatedPackageModes(): array
+    {
+        return [['small', 8, 'fixed', 600, null], ['small', 8, 'starting_at', 600, null],
+            ['large', 30, 'starting_at', 950, 1150],
+            ['small', 8, 'range', 600, null, 680],
+            ['medium', 15, 'range', 700, null, 850],
+            ['large', 30, 'range', 950, null, 1100],
+            ['extra_large', 60, 'range', 1150, null, 1800]];
     }
 
     public function test_staff_can_record_in_person_sedation_consent_before_grooming(): void

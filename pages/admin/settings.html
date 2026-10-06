@@ -1,12 +1,12 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=security-ui-20260827" />
-    <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../css/output.css?v=grooming-pricing-ui-20261006" />
+    <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=pricing-footer-20261006" />
     <link rel="stylesheet" href="../../css/components/toast.css" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -149,7 +149,7 @@
       </div>
 
       <!-- Main Content -->
-      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+      <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-[280px]">
         <!-- Mobile Header -->
         <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
           <div>
@@ -212,6 +212,12 @@
                     <span>Capacity</span>
                   </button>
 
+                  <button type="button" x-show="isAdmin"
+                    @click="activeSettingsTab = 'pricing'; loadGroomingPrices()"
+                    class="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+                    :class="activeSettingsTab === 'pricing' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66] hover:bg-white'">
+                    <i data-lucide="tags" class="h-4 w-4"></i><span>Pricing</span>
+                  </button>
                   <button
                     type="button"
                     @click="activeSettingsTab = 'notifications'"
@@ -236,6 +242,122 @@
           </section>
 
           <section class="mt-6 space-y-6">
+            <section x-show="isAdmin && activeSettingsTab === 'pricing'" x-cloak class="grooming-pricing">
+              <h2 class="grooming-pricing-heading">Grooming Pricing</h2>
+              <p class="grooming-pricing-subtext">Manage the prices used for new grooming pre-registrations and walk-ins.</p>
+              <p class="grooming-pricing-notice">Price changes apply to new grooming requests. Existing bookings keep the pricing recorded when they were created.</p>
+              <p x-show="pricingLoading" class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>
+              <div x-show="pricingError" class="mt-4 text-sm text-red-600" role="alert"><span x-text="pricingError"></span> <button type="button" @click="loadGroomingPrices()" class="font-semibold underline">Retry</button></div>
+              <template x-if="!pricingLoading && !pricingError">
+                <div class="mt-6 space-y-6">
+                  <template x-for="group in [{ kind: 'package', label: 'Grooming Packages' }, { kind: 'ala_carte', label: 'À la Carte Services' }]" :key="group.kind">
+                    <section>
+                      <h3 class="grooming-pricing-section-heading" x-text="group.label"></h3>
+                      <p class="grooming-pricing-subtext">Prices with + are starting prices. Ranges show minimum and maximum prices.</p>
+                      <div class="grooming-pricing-table-wrap" tabindex="0" role="region" :aria-label="group.label + ' pricing table'">
+                        <table class="grooming-pricing-table" :class="{ 'grooming-pricing-table--ala': group.kind === 'ala_carte' }">
+                          <thead>
+                            <tr>
+                              <th scope="col">Service</th>
+                              <template x-if="group.kind === 'package'">
+                                <template x-for="size in ['Small', 'Medium', 'Large', 'Extra Large']" :key="size"><th scope="col" x-text="size"></th></template>
+                              </template>
+                              <template x-if="group.kind === 'ala_carte'"><th scope="col">Price</th></template>
+                              <th scope="col">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="service in groomingPrices.filter(item => item.kind === group.kind)" :key="service.id">
+                              <tr>
+                                <td x-text="service.name"></td>
+                                <template x-if="group.kind === 'package'">
+                                  <template x-for="sizeKey in ['small', 'medium', 'large', 'extra_large']" :key="sizeKey"><td x-text="pricingSizeDisplay(service, sizeKey)"></td></template>
+                                </template>
+                                <template x-if="group.kind === 'ala_carte'"><td x-text="pricingDisplay(service.priceOptions[0])"></td></template>
+                                <td><button type="button" @click="openPricingModal(service, $event.currentTarget)" :aria-label="'Edit ' + service.name + ' pricing'" class="grooming-pricing-button">Edit</button></td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </template>
+                </div>
+              </template>
+            </section>
+
+            <template x-teleport="body">
+              <div x-show="pricingModal.open" x-cloak class="grooming-pricing-overlay" @keydown.window="pricingModalKeydown($event)" @click.self="closePricingModal()">
+                <section x-ref="pricingDialog" class="grooming-pricing-dialog" role="dialog" aria-modal="true" aria-labelledby="pricingModalTitle" aria-describedby="pricingModalDescription" tabindex="-1">
+                  <form @submit.prevent="submitPricingAction()" novalidate>
+                    <header class="grooming-pricing-modal-header">
+                      <div class="min-w-0">
+                        <h2 id="pricingModalTitle" x-text="'Edit ' + (pricingModal.service?.name || '') + ' prices'"></h2>
+                        <p id="pricingModalDescription" x-text="pricingModal.service?.kind === 'package' ? 'Set the price and pricing type for each pet size.' : 'Set the price and pricing type for this service.'"></p>
+                      </div>
+                      <button type="button" @click="closePricingModal()" :disabled="pricingModal.busy" class="grooming-pricing-close" aria-label="Close pricing editor">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                      </button>
+                    </header>
+                    <div class="grooming-pricing-modal-body">
+                      <fieldset :disabled="pricingModal.busy" class="min-w-0">
+                        <div :class="{ 'grooming-pricing-matrix--package': pricingModal.service?.kind === 'package' }">
+                          <div class="grooming-pricing-matrix-head" aria-hidden="true">
+                            <template x-if="pricingModal.service?.kind === 'package'"><span>Size</span></template>
+                            <span>Pricing type</span><span>Amount</span><span>Shown as</span>
+                          </div>
+                          <div>
+                            <template x-for="row in pricingModal.rows" :key="row.sizeKey || 'standard'">
+                              <div class="grooming-pricing-matrix-row">
+                                <template x-if="pricingModal.service?.kind === 'package'"><p class="grooming-pricing-size" x-text="row.label"></p></template>
+                                <div class="grooming-pricing-field">
+                                  <label :for="'pricing-type-' + row.sizeKey" class="grooming-pricing-field-label">Pricing type<span class="sr-only" x-text="' for ' + row.label"></span></label>
+                                  <select :id="'pricing-type-' + row.sizeKey" x-model="row.pricingType" @change="changePricingType(row)" :aria-invalid="Boolean(pricingModal.errors[pricingFieldKey(row, 'pricing_type')])" :aria-describedby="'pricing-type-error-' + row.sizeKey" class="grooming-pricing-control">
+                                    <option value="fixed">Fixed</option>
+                                    <option value="range">Range</option>
+                                    <option value="starting_at">Starting at</option>
+                                  </select>
+                                  <p :id="'pricing-type-error-' + row.sizeKey" x-show="pricingModal.errors[pricingFieldKey(row, 'pricing_type')]" class="grooming-pricing-field-error" x-text="pricingModal.errors[pricingFieldKey(row, 'pricing_type')]"></p>
+                                </div>
+                                <div class="grooming-pricing-field">
+                                  <label :for="'pricing-amount-' + row.sizeKey" class="grooming-pricing-field-label" :class="{ 'grooming-pricing-field-label--visible': row.pricingType === 'range' }"><span x-text="row.pricingType === 'range' ? 'Minimum price' : pricingModal.service?.kind === 'package' ? 'Amount' : row.pricingType === 'fixed' ? 'Price' : 'Minimum price'"></span><span class="sr-only" x-text="' for ' + row.label"></span></label>
+                                  <div class="grooming-pricing-input-wrap">
+                                    <span class="grooming-pricing-currency" aria-hidden="true">₱</span>
+                                    <input :id="'pricing-amount-' + row.sizeKey" type="text" inputmode="decimal" x-model="row.amount" @input="$nextTick(() => pricingFieldChanged(row, 'amount'))" @blur="pricingFieldChanged(row, 'amount')" :aria-invalid="Boolean(pricingFieldError(row, 'amount'))" :aria-describedby="'pricing-amount-error-' + row.sizeKey" class="grooming-pricing-control" />
+                                  </div>
+                                  <p :id="'pricing-amount-error-' + row.sizeKey" x-show="pricingFieldError(row, 'amount')" class="grooming-pricing-field-error" x-text="pricingFieldError(row, 'amount')"></p>
+                                  <template x-if="row.pricingType === 'range'">
+                                    <div class="mt-3">
+                                      <label :for="'pricing-maximum-' + row.sizeKey" class="grooming-pricing-field-label grooming-pricing-field-label--visible">Maximum price<span class="sr-only" x-text="' for ' + row.label"></span></label>
+                                      <div class="grooming-pricing-input-wrap">
+                                        <span class="grooming-pricing-currency" aria-hidden="true">₱</span>
+                                        <input :id="'pricing-maximum-' + row.sizeKey" type="text" inputmode="decimal" x-model="row.maximum" @input="$nextTick(() => pricingFieldChanged(row, 'maximum'))" @blur="pricingFieldChanged(row, 'maximum')" :aria-invalid="Boolean(pricingFieldError(row, 'maximum'))" :aria-describedby="'pricing-maximum-error-' + row.sizeKey" class="grooming-pricing-control" />
+                                      </div>
+                                      <p :id="'pricing-maximum-error-' + row.sizeKey" x-show="pricingFieldError(row, 'maximum')" class="grooming-pricing-field-error" x-text="pricingFieldError(row, 'maximum')"></p>
+                                    </div>
+                                  </template>
+                                </div>
+                                <div class="grooming-pricing-field">
+                                  <span class="grooming-pricing-field-label" aria-hidden="true">Shown as</span>
+                                  <p class="grooming-pricing-preview" aria-live="polite"><span class="sr-only">Shown as: </span><span x-text="pricingPreview(row)"></span></p>
+                                </div>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                        <p x-show="pricingModal.errors.sizes" class="grooming-pricing-field-error" x-text="pricingModal.errors.sizes"></p>
+                        <p x-show="pricingModal.error" class="grooming-pricing-field-error" role="alert" x-text="pricingModal.error"></p>
+                      </fieldset>
+                    </div>
+                    <footer class="grooming-pricing-modal-footer">
+                      <button type="button" @click="closePricingModal()" :disabled="pricingModal.busy" class="grooming-pricing-button">Cancel</button>
+                      <button type="submit" :disabled="pricingActionDisabled" class="grooming-pricing-button grooming-pricing-button--action" :class="{ 'grooming-pricing-button--primary': !pricingCanRestoreDefault }" x-text="pricingModal.busy ? 'Saving...' : pricingCanRestoreDefault ? 'Restore default' : 'Save changes'"></button>
+                    </footer>
+                  </form>
+                </section>
+              </div>
+            </template>
+
             <form x-show="activeSettingsTab === 'general'" class="space-y-6">
               <div x-show="isStaff" class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800">
                 These settings are managed by an administrator.
@@ -1452,9 +1574,9 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=staff-settings-20260928&release=staff-confirmation-20261001"></script>
+    <script src="../../scripts/api.js?v=staff-settings-20260928&release=grooming-pricing-20261006&auth=session-scope-20261006"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005"></script>
     <script src="../../scripts/components/success-toast.js"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=staff-username-setup-20261005"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=pricing-footer-20261006"></script>
   </body>
 </html>
