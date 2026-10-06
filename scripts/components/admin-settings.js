@@ -143,6 +143,11 @@ function adminSettings() {
     },
 
     async init() {
+      // settings.html?tab=security opens staff accounts (vaccination form's "Add veterinarian").
+      if (this.isAdmin && new URLSearchParams(window.location.search).get("tab") === "security") {
+        this.activeSettingsTab = "security";
+      }
+
       await Promise.all([
         this.loadAvailability(),
         this.isAdmin ? this.loadSecurityAccounts() : this.loadOwnAccount(),

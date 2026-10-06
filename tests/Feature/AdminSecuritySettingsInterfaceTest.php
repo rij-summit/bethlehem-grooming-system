@@ -80,7 +80,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
         $this->assertSame(3, substr_count($adminSecurity, 'data-lucide="eye"'));
         $this->assertStringContainsString(
-            'admin-settings.js?v=staff-settings-20260928',
+            'admin-settings.js?v=vaccination-vet-link-20261001',
             $page,
         );
     }
