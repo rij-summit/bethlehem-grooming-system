@@ -135,6 +135,28 @@ async function testDeepLinksAndAlertPaging() {
   assert.equal(app.context.location.hash,'#overview');
 }
 
+async function testDefaultAndDirectActionRoutes() {
+  const overview=setup();
+  overview.context.location.hash='';
+  await overview.shell.init();
+  assert.equal(overview.context.location.hash,'#overview');
+  assert.equal(overview.shell.activeSection,'overview');
+
+  for (const [section,title] of [['stock-in','Stock In'],['stock-out','Stock Out']]) {
+    const app=setup();
+    app.context.location.hash='#'+section;
+    await app.shell.init();
+    assert.equal(app.context.location.hash,'#'+section,'direct action links must survive initialization/refresh');
+    assert.equal(app.shell.activeSection,section);
+    assert.equal(app.context.document.title,`${title} | Bethlehem Animal Clinic`);
+    assert.equal(app.panels.length,1);
+    assert.equal(app.panels[0].dataset.inventorySection,section);
+    assert.equal(app.scripts.some(url=>url.includes('dashboard')),false,'action views must remain independently lazy loaded');
+    await app.visit('#overview');
+    assert.equal(app.shell.activeSection,'overview');
+  }
+}
+
 async function testRapidNavigationDoesNotLoadHiddenData() {
   const app=setup();
   let resolve;
@@ -195,10 +217,25 @@ function testSidebarNavigation() {
   context.document.createElement=()=>({attrs:{},children:[],setAttribute(key,value){this.attrs[key]=value;},append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);}});
   context.installAdminInventoryNavigation();
   assert.equal(group.children[0].attrs['aria-controls'],'inventory-submenu');
-  assert.deepEqual(group.children[1].children.map(child=>child.textContent),['Overview','Products','Stock In','Stock Out','History']);
+  assert.deepEqual(group.children[1].children.map(child=>child.textContent),['Overview','Products','History']);
   assert.equal(group.children[1].children[1].href,'/pages/admin/inventory/inventory.html#products');
   assert.equal(group.children[1].children[1].attrs['@click'],'sidebarOpen = false');
   assert.match(group.children[1].children[1].attrs[':aria-current'],/inventorySection === 'products'/);
+
+  const mobileTitle=read('pages/admin/inventory/inventory.html').match(/x-text="([^"]*\[inventorySection\][^"]*)"/)[1];
+  for (const [section,title] of [['stock-in','Stock In'],['stock-out','Stock Out']]) {
+    context.window.location.pathname='/pages/admin/inventory/inventory.html';
+    context.window.location.hash='#'+section;
+    const actionSidebar=context.adminSidebar();
+    assert.equal(actionSidebar.activePage,'inventory');
+    assert.equal(actionSidebar.inventoryExpanded,true);
+    assert.equal(actionSidebar.inventorySection,section);
+    for (const child of group.children[1].children) {
+      assert.equal(vm.runInNewContext(child.attrs[':class'],actionSidebar),'','no destination may be falsely highlighted in an action view');
+      assert.equal(vm.runInNewContext(child.attrs[':aria-current'],actionSidebar),null);
+    }
+    assert.equal(vm.runInNewContext(mobileTitle,actionSidebar),title);
+  }
 }
 
 function testUnifiedEntryAndSectionMarkup() {
@@ -212,11 +249,25 @@ function testUnifiedEntryAndSectionMarkup() {
   const sidebar=read('scripts/components/admin-sidebar.js');
   assert.match(sidebar, /aria-expanded/);
   assert.match(sidebar, /aria-current/);
+
+  const overview=read('pages/admin/inventory/sections/overview.html');
+  const header=overview.split('</section>')[0];
+  assert.match(header,/Monitor products, stock levels, alerts, and recent activity\./);
+  assert.match(header,/href="#stock-in"[^>]*>Stock In<\/a>/);
+  assert.match(header,/href="#stock-out"[^>]*>Stock Out<\/a>/);
+  assert.match(overview,/href="#stock-in"[^>]*>Restock<\/a>/);
+  assert.doesNotMatch(overview,/New Sale|href=["'][^"']*pos\.html|scannerActive|pending\.length/i);
+  for (const section of ['stock-in','stock-out']) {
+    const header=read(`pages/admin/inventory/sections/${section}.html`).split('</section>')[0];
+    assert.match(header,/href="#overview"[^>]*>.*Back to Overview<\/a>/);
+    assert.match(header,/focus-visible:outline/);
+  }
 }
 
 (async()=>{
   await testLazyNavigationAndMutationRefresh();
   await testDeepLinksAndAlertPaging();
+  await testDefaultAndDirectActionRoutes();
   await testRapidNavigationDoesNotLoadHiddenData();
   await testCameraStopsEvenWhenNavigationInterruptsStartup();
   testSidebarNavigation();

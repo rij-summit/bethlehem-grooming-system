@@ -67,7 +67,7 @@ function adminInventory() {
         const mount = async () => {
           const config = InventorySections[section];
           const [response] = await Promise.all([
-            fetch(`./sections/${section}.html?v=product-details-20261002`),
+            fetch(`./sections/${section}.html?v=inventory-actions-20261007`),
             ...config.dependencies.map(loadInventoryScript),
             loadInventoryScript(config.script),
           ]);

@@ -5409,6 +5409,10 @@ video {
     width: 13rem;
   }
 
+  .xl\:shrink-0 {
+    flex-shrink: 0;
+  }
+
   .xl\:grid-cols-12 {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }

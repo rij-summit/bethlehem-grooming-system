@@ -70,12 +70,13 @@ function revealStaffSettingsSidebarLink() {
   });
 }
 
-const adminInventoryLinks = { overview: "Overview", products: "Products", "stock-in": "Stock In", "stock-out": "Stock Out", history: "History" };
+const adminInventoryLinks = { overview: "Overview", products: "Products", history: "History" };
+const adminInventoryRoutes = ["overview", "products", "stock-in", "stock-out", "history"];
 
 function getAdminInventorySection() {
   if (!String(window.location.pathname || "").endsWith("/inventory.html")) return "";
   const section = String(window.location.hash || "").slice(1).split("?")[0];
-  return Object.hasOwn(adminInventoryLinks, section) ? section : "overview";
+  return adminInventoryRoutes.includes(section) ? section : "overview";
 }
 
 function installAdminInventoryNavigation() {
