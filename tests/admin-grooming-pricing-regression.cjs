@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../scripts/components/admin-dashboard.js"), "utf8");
 const context = { window: { AppClock: { todayKey: () => "2026-09-27" } }, console, Date, Intl };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../scripts/components/cash-payment.js"), "utf8"), context);
 vm.runInNewContext(source, context);
 const ui = context.adminDashboard();
 
@@ -168,6 +169,12 @@ assert.equal(ui.paymentMaximumAmount, 3000);
 ui.paymentModal.amountPaid = "3000.01";
 ui.enforcePaymentAmountLimit();
 assert.equal(ui.paymentModal.amountPaid, "3000", "Cash Received keeps its existing bill-based clamp");
+assert.equal(ui.paymentChange, 1400);
+for (const invalid of ["", "100", "1600.001", "3000.01", "9".repeat(400)]) {
+  ui.paymentModal.amountPaid = invalid;
+  assert.equal(ui.paymentChange, 0, "Grooming and POS guard invalid change through the same helper");
+  assert.equal(ui.canSubmitPayment, false);
+}
 
 // A newly loaded catalogue drives every consumer; original booking bounds still win.
 const updated = JSON.parse(JSON.stringify(catalogue));

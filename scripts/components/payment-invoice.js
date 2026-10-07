@@ -20,9 +20,9 @@ window.PaymentInvoice = (() => {
       return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(subtotal)
         ? formatPeso(subtotal / quantity) : "—";
     },
-    print() {
+    print(invoiceId = "paymentInvoice") {
       const printClass = "payment-invoice-printing";
-      const invoice = document.getElementById("paymentInvoice");
+      const invoice = document.getElementById(invoiceId);
       const printClone = invoice?.cloneNode(true) ?? null;
       let classRestored = false;
 
@@ -38,6 +38,7 @@ window.PaymentInvoice = (() => {
       }
 
       if (printClone) {
+        printClone.id = "paymentInvoice";
         // Keep the rendered payment snapshot outside Alpine's component lifecycle.
         printClone.setAttribute("x-ignore", "");
         printClone.classList.add("payment-invoice-print-clone");

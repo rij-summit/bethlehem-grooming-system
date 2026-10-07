@@ -8,7 +8,7 @@ var InventoryAPI = (() => {
     }
 
     return API.adminRequest(method, endpoint, body).then((response) => {
-      if (method !== "GET" && endpoint.startsWith("/inventory/") && window.dispatchEvent) {
+      if (method !== "GET" && (endpoint.startsWith("/inventory/") || endpoint === "/pos/transactions") && window.dispatchEvent) {
         window.dispatchEvent(new CustomEvent("inventory:changed"));
       }
       return response;
@@ -49,9 +49,11 @@ var InventoryAPI = (() => {
 
   // ── Barcode & search ──────────────────────────────────────────────────────
 
-  function findByBarcode(barcode, includeInactive = false) {
-    const query = includeInactive ? "?include_inactive=1" : "";
-    return request("GET", `/inventory/barcode/${encodeURIComponent(barcode)}${query}`);
+  function findByBarcode(barcode, includeInactive = false, saleContext = "") {
+    const params = new URLSearchParams();
+    if (includeInactive) params.set("include_inactive", "1");
+    if (saleContext) params.set("sale_context", saleContext);
+    return request("GET", `/inventory/barcode/${encodeURIComponent(barcode)}${params.size ? '?' + params : ''}`);
   }
 
   function searchItems(q, includeInactive = false, saleContext = "") {
@@ -105,6 +107,10 @@ var InventoryAPI = (() => {
 
   // ── POS ───────────────────────────────────────────────────────────────────
 
+  function validateCart(payload) {
+    return request("POST", "/pos/validate-cart", payload);
+  }
+
   function processSale(payload) {
     return request("POST", "/pos/transactions", payload);
   }
@@ -131,6 +137,6 @@ var InventoryAPI = (() => {
     // alerts + history
     getLowStock, getExpiryAlerts, getAlertBadge, getTransactions, getSummary,
     // pos
-    processSale, getReceipt, getPosTransactions,
+    validateCart, processSale, getReceipt, getPosTransactions,
   };
 })();

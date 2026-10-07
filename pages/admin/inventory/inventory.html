@@ -7,6 +7,8 @@
     <title>Inventory | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../../css/output.css?v=inventory-actions-20261007" />
     <link rel="stylesheet" href="../../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../../css/components/admin-pos.css?v=pos-cart-20261007" />
+    <link rel="stylesheet" href="../../../css/components/print-information.css?v=pos-20261007" />
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -40,7 +42,7 @@
       <!-- Main -->
       <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
         <header class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden">
-          <div><p class="text-sm font-semibold text-[#5c7690]">Inventory</p><h2 class="text-lg font-extrabold text-[#1f3850]" x-text="({overview: 'Overview', products: 'Products', 'stock-in': 'Stock In', 'stock-out': 'Stock Out', history: 'History'})[inventorySection] || 'Overview'">Overview</h2></div>
+          <div><p class="text-sm font-semibold text-[#5c7690]">Inventory</p><h2 class="text-lg font-extrabold text-[#1f3850]" x-text="({overview: 'Overview', products: 'Products', 'sell-product': 'Point of Sale', 'stock-in': 'Stock In', 'stock-out': 'Stock Out', history: 'Stock Movements'})[inventorySection] || 'Overview'">Overview</h2></div>
           <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#c9d9e8] bg-white text-[#315b7e] shadow-sm" @click="sidebarOpen=true" aria-label="Open navigation"><i data-lucide="menu" class="h-5 w-5"></i></button>
         </header>
 
@@ -55,9 +57,9 @@
       </div>
     </div>
     <script src="../../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006"></script>
-    <script src="../../../scripts/services/inventory-service.js?v=unified-inventory-20261001b"></script>
-    <script src="../../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-actions-20261007"></script>
-    <script src="../../../scripts/components/admin-inventory.js?v=product-details-20261002&release=inventory-actions-20261007"></script>
+    <script src="../../../scripts/services/inventory-service.js?v=unified-inventory-20261001b&release=pos-cart-20261007"></script>
+    <script src="../../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007"></script>
+    <script src="../../../scripts/components/admin-inventory.js?v=product-details-20261002&release=pos-cart-20261007"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

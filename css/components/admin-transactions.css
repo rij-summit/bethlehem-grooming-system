@@ -35,6 +35,7 @@
 .transaction-button-primary:hover { background: var(--tx-blue-hover); }
 .transactions-page :is(button, input, select, [tabindex]):focus-visible { outline: 2px solid var(--tx-blue); outline-offset: 3px; }
 .transaction-button:active { transform: translateY(1px); }
+.transaction-button:disabled { opacity: .55; cursor: not-allowed; }
 .transaction-date-heading { flex-wrap: wrap; }
 .transaction-date-heading > span:first-child { font-size: var(--admin-record-secondary-size); }
 .transaction-dialog { width: calc(100% - 32px); max-width: 768px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--tx-border); border-radius: 18px; background: var(--tx-surface); color: var(--tx-ink); box-shadow: var(--tx-shadow); overflow: hidden; }

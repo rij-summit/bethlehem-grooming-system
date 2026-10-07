@@ -5,21 +5,6 @@ const PAYMENT_SIZE_OPTIONS = [
   { value: "extra_large", label: "Extra Large" },
 ];
 
-const PAYMENT_BILL_DENOMINATION = 1000;
-
-function maximumPaymentAmount(totalDue) {
-  const amount = Number(totalDue);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return 0;
-  }
-
-  return (
-    Math.floor(amount / PAYMENT_BILL_DENOMINATION) * PAYMENT_BILL_DENOMINATION +
-    PAYMENT_BILL_DENOMINATION * 2
-  );
-}
-
 const PAYMENT_SERVICE_BY_ID = new Map();
 const PAYMENT_SERVICE_BY_NAME = new Map();
 
@@ -3155,16 +3140,14 @@ function adminDashboard() {
     },
 
     get paymentMaximumAmount() {
-      return maximumPaymentAmount(this.paymentTotalDue);
+      return window.CashPayment.maximumFor(this.paymentTotalDue);
     },
 
     get paymentChange() {
-      const paid = parseFloat(this.paymentModal.amountPaid) || 0;
-      return paid - this.paymentTotalDue;
+      return window.CashPayment.change(this.paymentModal.amountPaid, this.paymentTotalDue);
     },
 
     get canSubmitPayment() {
-      const paid = parseFloat(this.paymentModal.amountPaid) || 0;
       return (
         !this.paymentModal.busy &&
         !this.paymentModal.error &&
@@ -3173,8 +3156,7 @@ function adminDashboard() {
         this.paymentTotalDue > 0 &&
         !this.hasMissingPaymentPrices() &&
         !this.getInvalidPaymentLine() &&
-        this.paymentChange >= 0 &&
-        paid <= this.paymentMaximumAmount
+        !window.CashPayment.error(this.paymentModal.amountPaid, this.paymentTotalDue)
       );
     },
 
@@ -3674,11 +3656,9 @@ function adminDashboard() {
 
     enforcePaymentAmountLimit(event = null) {
       const currentValue = event?.target?.value ?? this.paymentModal.amountPaid;
-      const amount = parseFloat(currentValue);
-      const maximum = this.paymentMaximumAmount;
+      const maximumValue = window.CashPayment.capInput(currentValue, this.paymentTotalDue);
 
-      if (Number.isFinite(amount) && maximum > 0 && amount > maximum) {
-        const maximumValue = String(maximum);
+      if (maximumValue !== currentValue) {
         this.paymentModal.amountPaid = maximumValue;
 
         if (event?.target) {
@@ -3835,12 +3815,9 @@ function adminDashboard() {
         this.paymentModal.error = "Please enter service prices before confirming payment.";
         return;
       }
-      if (!ap || ap < fp) {
-        this.paymentModal.error = "Cash received is less than the amount due.";
-        return;
-      }
-      if (ap > this.paymentMaximumAmount) {
-        this.paymentModal.error = `Amount paid cannot exceed ${this.formatPeso(this.paymentMaximumAmount)}.`;
+      const cashError = window.CashPayment.error(amountPaid, fp);
+      if (cashError) {
+        this.paymentModal.error = cashError;
         return;
       }
 

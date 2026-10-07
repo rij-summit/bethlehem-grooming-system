@@ -73,4 +73,9 @@ class Payment extends Model
     {
         return $this->hasMany(GroomingPaymentProduct::class, 'payment_id', $this->getKeyName());
     }
+
+    public function processedBy()
+    {
+        return $this->belongsTo(User::class, 'processed_by', 'user_id');
+    }
 }

@@ -14,7 +14,10 @@ function createPage(file, factory, api) {
     clearTimeout: () => { pendingSearch = null; },
   };
   vm.runInNewContext(read(file), context);
-  return { page: context[factory](), runSearch: () => pendingSearch() };
+  const page = context[factory]();
+  page.$nextTick = callback => callback();
+  page.$refs = { productSearch: { focus() {} } };
+  return { page, runSearch: () => pendingSearch() };
 }
 
 const product = (overrides = {}) => ({
@@ -119,17 +122,26 @@ async function testPosUsesSellableStock() {
   assert.equal(page.cart[1].quantity, 3);
   assert.equal(page.cart[1].subtotal, 750);
   page.addToCart(product({ item_id: 4, saleable_quantity: 0.5 }));
-  assert.equal(page.cart[2].quantity, 0.5);
-  assert.equal(page.cart[2].subtotal, 125);
+  assert.equal(page.cart.length, 2, 'Retail cannot add a fraction of one unit');
+  assert.match(page.error, /one whole unit/);
+  page.cart[0].quantity = 1.5; page.addToCart(product());
+  assert.equal(page.cart[0].quantity, 1.5, 'Invalid decimal input is rejected, never rounded');
+  assert.match(page.lineError(page.cart[0]), /whole quantity/);
 }
 
 function testDisabledResultMarkup() {
   for (const [file, handler, stockCheck] of [
     ["pages/admin/appointments.html", "addPaymentProduct", "hasPaymentProductStock"],
-    ["pages/admin/inventory/pos.html", "addToCart", "hasProductStock"],
+    ["pages/admin/inventory/sections/sell-product.html", "addToCart", "hasProductStock"],
   ]) {
     const markup = read(file).match(new RegExp(`<button[^>]*@click="${handler}\\(item\\)"[\\s\\S]*?</button>`))[0];
     assert.ok(markup.includes(`:disabled="!${stockCheck}(item)"`));
+    if (handler === "addToCart") {
+      assert.match(markup, /Out of stock/);
+      assert.match(markup, /x-show="hasProductStock\(item\)"/);
+      assert.match(read('css/components/admin-pos.css'), /pos-result-meta strong.*var\(--pos-error\)/);
+      continue;
+    }
     assert.ok(markup.includes(`<template x-if="${stockCheck}(item)">`));
     assert.ok(markup.includes(`<template x-if="!${stockCheck}(item)">`));
     if (handler === "addPaymentProduct") {

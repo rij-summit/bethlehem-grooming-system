@@ -15,7 +15,7 @@ function setup() {
   let fail=false;
   let blockMarkup;
   const context={
-    console,URLSearchParams,Date,clearTimeout,setTimeout,CustomEvent:class {constructor(type){this.type=type;}},
+    console,URL,URLSearchParams,Date,clearTimeout,setTimeout,CustomEvent:class {constructor(type){this.type=type;}},
     location:{hash:'#overview'},
     scrollTo:()=>{},
     addEventListener:(type,listener)=>{listeners.set(type,listener);},
@@ -33,6 +33,7 @@ function setup() {
     document:{title:'',head:{appendChild(script){
       scripts.push(script.src);
       if(!script.src.startsWith('https:')) {
+        context.document.currentScript={src:'http://localhost/scripts/components/'+script.src.split('/').pop()};
         const filename=script.src.split('/').pop().split('?')[0];
         vm.runInContext(read('scripts/components/'+filename),context);
       }
@@ -43,6 +44,7 @@ function setup() {
       panel.state=context.adminInventorySection(section);
       panel.state.$nextTick=fn=>fn();
       panel.state.$el={querySelector:()=>null};
+      panel.state.$refs={productSearch:{focus(){}},successDialog:{close(){},showModal(){}}};
       panel.state.init();
     },$data:panel=>panel.state},
   };
@@ -157,6 +159,30 @@ async function testDefaultAndDirectActionRoutes() {
   }
 }
 
+async function testSellProductUsesTheShellAndInvalidatesStockViews() {
+  const app=setup();
+  await app.visit('#sell-product');
+  assert.equal(app.shell.activeSection,'sell-product');
+  assert.equal(app.context.document.title,'Point of Sale | Bethlehem Animal Clinic');
+  assert.equal(app.scripts.some(url=>url.includes('admin-pos.js')),true);
+  assert.equal(app.scripts.some(url=>url.includes('product-sale-invoice.js')),true);
+  assert.equal(app.scripts.some(url=>url.includes('dashboard')),false);
+  const pos=app.state('sell-product');
+  pos.cart=[{item_id:1,quantity:2}];pos.amountTendered='500';
+  await app.context.InventoryAPI.validateCart({items:[{item_id:1,quantity:2}]});
+  assert.equal(app.shell.inventoryRevision,0,'Read-only validation must not invalidate stock views');
+  await app.visit('#products');
+  await app.context.InventoryAPI.processSale({items:[]});
+  assert.equal(app.shell.inventoryRevision,1,'Completed POS requests refresh stock views');
+  await app.visit('#sell-product');
+  assert.equal(app.state('sell-product'),pos);
+  assert.equal(pos.cart[0].quantity,2);
+  assert.equal(pos.amountTendered,'500');
+  const calls=app.calls.length;
+  await app.visit('#products');
+  assert.equal(app.calls.length,calls+1,'Products reload after a POS deduction');
+}
+
 async function testRapidNavigationDoesNotLoadHiddenData() {
   const app=setup();
   let resolve;
@@ -172,7 +198,7 @@ async function testRapidNavigationDoesNotLoadHiddenData() {
 }
 
 async function testCameraStopsEvenWhenNavigationInterruptsStartup() {
-  for (const section of ['stock-in','stock-out']) {
+  for (const section of ['stock-in','stock-out','sell-product']) {
     const app=setup();
     await app.visit('#'+section);
     const state=app.state(section);
@@ -217,20 +243,20 @@ function testSidebarNavigation() {
   context.document.createElement=()=>({attrs:{},children:[],setAttribute(key,value){this.attrs[key]=value;},append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);}});
   context.installAdminInventoryNavigation();
   assert.equal(group.children[0].attrs['aria-controls'],'inventory-submenu');
-  assert.deepEqual(group.children[1].children.map(child=>child.textContent),['Overview','Products','History']);
+  assert.deepEqual(group.children[1].children.map(child=>child.textContent),['Overview','Products','Point of Sale','Stock Movements']);
   assert.equal(group.children[1].children[1].href,'/pages/admin/inventory/inventory.html#products');
   assert.equal(group.children[1].children[1].attrs['@click'],'sidebarOpen = false');
   assert.match(group.children[1].children[1].attrs[':aria-current'],/inventorySection === 'products'/);
 
   const mobileTitle=read('pages/admin/inventory/inventory.html').match(/x-text="([^"]*\[inventorySection\][^"]*)"/)[1];
-  for (const [section,title] of [['stock-in','Stock In'],['stock-out','Stock Out']]) {
+  for (const [section,title] of [['stock-in','Stock In'],['stock-out','Stock Out'],['sell-product','Point of Sale'],['history','Stock Movements']]) {
     context.window.location.pathname='/pages/admin/inventory/inventory.html';
     context.window.location.hash='#'+section;
     const actionSidebar=context.adminSidebar();
     assert.equal(actionSidebar.activePage,'inventory');
     assert.equal(actionSidebar.inventoryExpanded,true);
     assert.equal(actionSidebar.inventorySection,section);
-    for (const child of group.children[1].children) {
+    if (section.startsWith('stock-')) for (const child of group.children[1].children) {
       assert.equal(vm.runInNewContext(child.attrs[':class'],actionSidebar),'','no destination may be falsely highlighted in an action view');
       assert.equal(vm.runInNewContext(child.attrs[':aria-current'],actionSidebar),null);
     }
@@ -242,7 +268,7 @@ function testUnifiedEntryAndSectionMarkup() {
   const inventoryDirectory=path.join(root,'pages/admin/inventory');
   assert.deepEqual(fs.readdirSync(inventoryDirectory).filter(name=>name.endsWith('.html')).sort(),['inventory.html','pos.html']);
   assert.match(read('pages/admin/inventory/inventory.html'), /x-data="adminInventory\(\)"/);
-  for(const section of ['overview','products','stock-in','stock-out','history']) {
+  for(const section of ['overview','products','sell-product','stock-in','stock-out','history']) {
     const fragment=read(`pages/admin/inventory/sections/${section}.html`);
     assert.doesNotMatch(fragment, /data-lucide|<span[^>]*>Back<\/span>|<script|<main/);
   }
@@ -268,6 +294,7 @@ function testUnifiedEntryAndSectionMarkup() {
   await testLazyNavigationAndMutationRefresh();
   await testDeepLinksAndAlertPaging();
   await testDefaultAndDirectActionRoutes();
+  await testSellProductUsesTheShellAndInvalidatesStockViews();
   await testRapidNavigationDoesNotLoadHiddenData();
   await testCameraStopsEvenWhenNavigationInterruptsStartup();
   testSidebarNavigation();

@@ -70,8 +70,8 @@ function revealStaffSettingsSidebarLink() {
   });
 }
 
-const adminInventoryLinks = { overview: "Overview", products: "Products", history: "History" };
-const adminInventoryRoutes = ["overview", "products", "stock-in", "stock-out", "history"];
+const adminInventoryLinks = { overview: "Overview", products: "Products", "sell-product": "Point of Sale", history: "Stock Movements" };
+const adminInventoryRoutes = ["overview", "products", "sell-product", "stock-in", "stock-out", "history"];
 
 function getAdminInventorySection() {
   if (!String(window.location.pathname || "").endsWith("/inventory.html")) return "";

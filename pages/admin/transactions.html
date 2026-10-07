@@ -175,7 +175,7 @@
               <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <h2 class="text-2xl font-extrabold text-[#1f3850] lg:text-3xl">Transactions</h2>
-                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">PAYMENT HISTORY</p>
+                  <p class="mt-1 text-xs font-medium tracking-[0.18em] text-[#355674] lg:text-sm lg:tracking-[0.25em]">TRANSACTION HISTORY</p>
                 </div>
 
                 <!-- Collection summary card -->
@@ -195,14 +195,20 @@
                   </span>
                   <input
                     type="search"
-                    aria-label="Search transactions by owner, pet, or reference"
+                    aria-label="Search transactions by reference, customer, pet, or product"
                     x-model="searchQuery"
                     @input.debounce.400ms="onSearchChange()"
-                    placeholder="Search by owner, pet, or reference..."
+                    placeholder="Search by reference, customer, pet, or product..."
                     class="w-full rounded-xl border border-transparent bg-white px-10 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#7fa2c9]"
                   />
                 </label>
 
+                <label class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
+                  <span class="sr-only">Transaction type</span>
+                  <select x-model="transactionType" @change="loadTransactions()" class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer">
+                    <option value="all">All Transactions</option><option value="grooming_payment">Grooming Payments</option><option value="product_sale">Product Sales</option>
+                  </select>
+                </label>
                 <!-- Period filter -->
                 <div class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
                   <svg class="ph-icon h-4 w-4 text-[#315b7e] shrink-0" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#calendar-check"></use></svg>
@@ -292,7 +298,7 @@
                 <svg class="ph-icon h-8 w-8" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               </div>
               <p class="mt-4 text-lg font-bold text-[#2f4b66]">No transactions yet</p>
-              <p class="mt-2 text-sm text-slate-500">Payment records will appear here once payments are processed.</p>
+              <p class="mt-2 text-sm text-slate-500">Completed grooming payments and product sales will appear here.</p>
             </div>
           </template>
 
@@ -320,20 +326,20 @@
                   <!-- Compact history: identify the transaction, then inspect its details. -->
                   <div class="transaction-list">
                     <div class="transaction-columns" aria-hidden="true">
-                      <span>Time</span><span>Pet Owner / Reference</span><span>Pet</span><span>Payment</span><span class="transaction-money">Total</span><span></span>
+                      <span>Time</span><span>Transaction / Reference</span><span>Details</span><span>Payment</span><span class="transaction-money">Total</span><span></span>
                     </div>
-                    <template x-for="tx in group.items" :key="tx.id">
+                    <template x-for="tx in group.items" :key="tx.key || tx.id">
                       <article class="transaction-row">
                         <p class="transaction-time" x-text="formatTime(tx.paidAt)"></p>
                         <div class="transaction-owner">
-                          <p class="transaction-owner-name" x-text="tx.ownerName || '—'"></p>
+                          <p class="transaction-owner-name" x-text="transactionName(tx)"></p>
                           <p class="transaction-reference" x-text="tx.reference"></p>
                         </div>
-                        <p class="transaction-pets" :title="petNames(tx).join(', ')" x-text="compactPetNames(tx)"></p>
+                        <p class="transaction-pets" :title="transactionDetails(tx)" x-text="transactionDetails(tx)"></p>
                         <span class="transaction-method" x-text="tx.paymentMethodLabel || tx.paymentMethod || '—'"></span>
                         <p class="transaction-total" x-text="formatInvoicePeso(tx.finalPrice)"></p>
                         <button type="button" class="transaction-button transaction-button-secondary transaction-view"
-                          :data-transaction-id="tx.id" @click="openDetails(tx, $el)" aria-haspopup="dialog" :aria-label="'View Details for ' + tx.reference">View Details</button>
+                          :data-transaction-id="tx.key || tx.id" @click="openDetails(tx, $el)" aria-haspopup="dialog" :aria-label="'View Details for ' + tx.reference">View Details</button>
                       </article>
                     </template>
                   </div>
@@ -342,13 +348,17 @@
             </div>
           </template>
 
+<div x-show="!loading && lastPage > 1" class="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-slate-500">Page <span x-text="currentPage"></span> of <span x-text="lastPage"></span></p>
+            <div class="flex gap-2"><button type="button" class="transaction-button transaction-button-secondary" @click="loadTransactions(currentPage - 1)" :disabled="currentPage <= 1">Previous</button><button type="button" class="transaction-button transaction-button-secondary" @click="loadTransactions(currentPage + 1)" :disabled="currentPage >= lastPage">Next</button></div>
+          </div>
           <dialog x-ref="detailsDialog" class="transaction-dialog" aria-labelledby="transaction-details-title"
             @cancel.prevent="closeDetails()" @click="if ($event.target === $el) closeDetails()">
             <template x-if="selectedTransaction">
               <div class="transaction-dialog-layout">
                 <header class="transaction-dialog-header">
                   <div class="transaction-dialog-title-row">
-                    <h2 id="transaction-details-title">Transaction Details</h2>
+                    <h2 id="transaction-details-title" x-text="isProductSale(selectedTransaction) ? 'Product Sale' : 'Transaction Details'">Transaction Details</h2>
                     <button type="button" class="transaction-close" aria-label="Close Transaction Details" @click="closeDetails()" autofocus>
                       <svg class="ph-icon" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
                     </button>
@@ -363,13 +373,14 @@
                   <section class="transaction-detail-section" aria-labelledby="transaction-information-title">
                     <h3 id="transaction-information-title">Transaction Information</h3>
                     <dl class="transaction-metadata">
-                      <div><dt>Pet Owner</dt><dd x-text="selectedTransaction.ownerName || '—'"></dd></div>
-                      <div><dt>Pet</dt><dd x-text="petNames(selectedTransaction).join(', ') || '—'"></dd></div>
+                      <template x-if="!isProductSale(selectedTransaction)"><div><dt>Pet Owner</dt><dd x-text="selectedTransaction.ownerName || '—'"></dd></div></template>
+                      <template x-if="!isProductSale(selectedTransaction)"><div><dt>Pet</dt><dd x-text="petNames(selectedTransaction).join(', ') || '—'"></dd></div></template>
                       <div><dt>Reference</dt><dd x-text="selectedTransaction.reference"></dd></div>
                       <div><dt>Transaction Date</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
                       <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
                     </dl>
                   </section>
+                  <template x-if="!isProductSale(selectedTransaction)">
                   <section class="transaction-detail-section" aria-labelledby="transaction-breakdown-title">
                     <h3 id="transaction-breakdown-title">Payment Breakdown</h3>
                     <h4 class="transaction-category-title">Grooming Services</h4>
@@ -396,6 +407,17 @@
                       </div>
                     </template>
                   </section>
+                  </template>
+                  <template x-if="isProductSale(selectedTransaction)">
+                    <section class="transaction-detail-section" aria-labelledby="transaction-products-title">
+                      <h3 id="transaction-products-title">Products</h3>
+                      <dl class="transaction-line-items">
+                        <template x-for="line in selectedTransaction.items" :key="line.id">
+                          <div><dt><span x-text="line.item_name"></span><small x-text="'Qty ' + Number(line.quantity) + ' × ' + formatInvoicePeso(line.price_at_sale)"></small></dt><dd x-text="formatInvoicePeso(line.subtotal)"></dd></div>
+                        </template>
+                      </dl>
+                    </section>
+                  </template>
                   <section class="transaction-detail-section" aria-labelledby="transaction-payment-title">
                     <h3 id="transaction-payment-title">Payment Details</h3>
                     <dl class="transaction-line-items transaction-payment">
@@ -403,12 +425,15 @@
                       <div><dt>Amount Due</dt><dd x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></dd></div>
                       <div><dt>Cash Received</dt><dd x-text="formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
                       <div><dt>Change</dt><dd x-text="formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
+                      <div x-show="selectedTransaction.processedByName"><dt>Processed By</dt><dd x-text="selectedTransaction.processedByName"></dd></div>
+                      <div><dt>Paid At</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
                     </dl>
                     <div class="transaction-paid-total"><span>Total Paid</span><strong x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></strong></div>
                     <div x-show="selectedTransaction.notes" class="transaction-notes"><h4>Notes</h4><p x-text="selectedTransaction.notes"></p></div>
                   </section>
                 </div>
-                <div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.template"></div>
+                <template x-if="!isProductSale(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.template"></div></template>
+                <template x-if="isProductSale(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-data="{ receipt: selectedTransaction.receipt }" x-html="window.ProductSaleInvoice.template"></div></template>
                 <footer class="transaction-dialog-footer">
                   <button type="button" class="transaction-button transaction-button-secondary" @click="closeDetails()">Close</button>
                   <button type="button" class="transaction-button transaction-button-primary" @click="printInvoice()">
@@ -426,9 +451,10 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005"></script>
-    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
-    <script src="../../scripts/components/admin-transactions.js?v=history-navigation-20261003d"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=pos-20261007&auth=session-scope-20261006"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007"></script>
+    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003&release=pos-20261007"></script>
+    <script src="../../scripts/components/product-sale-invoice.js?v=pos-20261007"></script>
+    <script src="../../scripts/components/admin-transactions.js?v=pos-20261007"></script>
   </body>
 </html>

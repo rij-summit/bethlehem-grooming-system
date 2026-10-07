@@ -6,6 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class InventoryItem extends Model
 {
+    public const RETAIL_CATEGORIES = ['food', 'grooming_supply', 'pet_shop', 'miscellaneous'];
+
+    public function scopeRetailSale($query)
+    {
+        return $query->where('is_active', true)
+            ->whereIn('category', self::RETAIL_CATEGORIES)
+            ->where('selling_price', '>', 0)
+            ->where('selling_price', '<=', 999999.99);
+    }
+
     protected $table      = 'inventory_items';
     protected $primaryKey = 'item_id';
 

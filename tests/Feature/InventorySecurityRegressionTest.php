@@ -79,6 +79,8 @@ class InventorySecurityRegressionTest extends TestCase
             $table->id();
             $table->unsignedInteger('pos_id');
             $table->unsignedInteger('item_id');
+            $table->string('item_name')->nullable();
+            $table->string('unit')->nullable();
             $table->decimal('quantity', 10, 2);
             $table->decimal('price_at_sale', 10, 2);
             $table->decimal('subtotal', 10, 2);
@@ -115,6 +117,7 @@ class InventorySecurityRegressionTest extends TestCase
             ['GET', 'api/inventory/alerts/badge'],
             ['GET', 'api/inventory/summary'],
             ['POST', 'api/pos/transactions'],
+            ['POST', 'api/pos/validate-cart'],
             ['GET', 'api/pos/transactions'],
             ['GET', 'api/pos/transactions/{posId}'],
         ];
@@ -149,6 +152,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('customer', '09170000001'));
 
         $this->getJson('/api/inventory/items')->assertForbidden();
+        $this->postJson('/api/pos/validate-cart', [])->assertForbidden();
         $this->postJson('/api/pos/transactions', [])->assertForbidden();
     }
 
@@ -290,6 +294,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('staff', '09170000014'));
 
         $itemId = $this->createInventoryItem('Staff POS Product', 1, 125.50);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => 'food']);
         $this->recordInventoryTransaction($itemId, 'stock_in', 1, [
             'batch_number' => 'STAFF-POS-BATCH',
             'expiry_date' => now()->addYear()->toDateString(),
@@ -680,32 +685,11 @@ class InventorySecurityRegressionTest extends TestCase
         $this->assertStringContainsString('API.adminRequest(method, endpoint, body)', $service);
         $this->assertStringNotContainsString('127.0.0.1:8000', $service);
 
-        foreach ([
-            'inventory.html',
-            'pos.html',
-        ] as $pageName) {
-            $page = file_get_contents(base_path("pages/admin/inventory/{$pageName}"));
-
-            $this->assertStringContainsString(
-                'scripts/api.js?v=session-inactivity-20260828',
-                $page,
-                "{$pageName} must load the compatible shared API client.",
-            );
-            $expectedInventoryServiceVersion = match ($pageName) {
-                'inventory.html' => 'scripts/services/inventory-service.js?v=unified-inventory-20261001b',
-                default => 'scripts/services/inventory-service.js?v=inventory-security-20260816',
-            };
-            $this->assertStringContainsString(
-                $expectedInventoryServiceVersion,
-                $page,
-                "{$pageName} must invalidate the old localhost-only inventory client.",
-            );
-            $this->assertStringContainsString(
-                'scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005',
-                $page,
-                "{$pageName} must invalidate stale logout handling.",
-            );
-        }
+        $page = file_get_contents(base_path('pages/admin/inventory/inventory.html'));
+        $this->assertStringContainsString('scripts/api.js?v=session-inactivity-20260828', $page);
+        $this->assertStringContainsString('scripts/services/inventory-service.js?v=unified-inventory-20261001b', $page);
+        $this->assertStringContainsString('scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005', $page);
+        $this->assertStringContainsString('inventory.html#sell-product', file_get_contents(base_path('pages/admin/inventory/pos.html')));
 
         $inventoryPage = file_get_contents(base_path('pages/admin/inventory/inventory.html'));
         $inventoryLoader = file_get_contents(base_path('scripts/components/admin-inventory.js'));
@@ -725,7 +709,8 @@ class InventorySecurityRegressionTest extends TestCase
             $this->assertStringContainsString($script, $inventoryLoader);
         }
         $this->assertStringContainsString('"success-toast.js"', $inventoryLoader);
-        $this->assertStringContainsString('admin-pos.js?v=product-search-stock-20261002', $posPage);
+        $this->assertStringContainsString('admin-pos.js', $inventoryLoader);
+        $this->assertFileExists(base_path('pages/admin/inventory/sections/sell-product.html'));
         $this->assertStringContainsString(
             'p.item_id === this.selected.item_id && p.reason === this.reason',
             $stockOutScript,
@@ -777,6 +762,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', '09170000004'));
 
         $itemId = $this->createInventoryItem('Expired Medicine', 5, 75);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => 'food']);
         $this->recordInventoryTransaction($itemId, 'stock_in', 5, [
             'batch_number' => 'EXPIRED-ONLY',
             'expiry_date' => now()->subDay()->toDateString(),
@@ -830,6 +816,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', '09170000005'));
 
         $itemId = $this->createInventoryItem('Priced Product', 3, 125.50);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => 'food']);
         $this->recordInventoryTransaction($itemId, 'stock_in', 3, [
             'batch_number' => 'SALE-BATCH',
             'expiry_date' => now()->addYear()->toDateString(),
@@ -848,7 +835,7 @@ class InventorySecurityRegressionTest extends TestCase
 
         $this->postJson('/api/pos/transactions', $tamperedPayload)
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Amount tendered is less than the server-calculated total of ₱251.00.');
+            ->assertJsonPath('errors.amount_tendered.0', 'Amount paid cannot be less than the final price.');
         $this->assertDatabaseCount('pos_transactions', 0);
 
         $tamperedPayload['amount_tendered'] = 300;
@@ -930,6 +917,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', '09170000007'));
 
         $itemId = $this->createInventoryItem('Unpriced Product', 1, null);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => 'food']);
         $this->recordInventoryTransaction($itemId, 'stock_in', 1, [
             'batch_number' => 'UNPRICED-BATCH',
             'expiry_date' => now()->addYear()->toDateString(),
@@ -947,7 +935,7 @@ class InventorySecurityRegressionTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'A selling price must be set for "Unpriced Product" before it can be sold.',
+                'A positive selling price must be set for "Unpriced Product" before it can be sold.',
             );
 
         $this->assertDatabaseCount('pos_transactions', 0);
@@ -1050,6 +1038,7 @@ class InventorySecurityRegressionTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', '09170000010'));
 
         $itemId = $this->createInventoryItem('Bulk Product', 10000, 125.50);
+        DB::table('inventory_items')->where('item_id', $itemId)->update(['category' => 'food']);
         $this->recordInventoryTransaction($itemId, 'stock_in', 10000, [
             'batch_number' => 'BULK-BATCH',
             'expiry_date' => now()->addYear()->toDateString(),
@@ -1290,6 +1279,198 @@ class InventorySecurityRegressionTest extends TestCase
             ->assertJsonPath('data.saleable_quantity', 0)
             ->assertJsonPath('data.expiry_unknown_quantity', 4)
             ->assertJsonPath('data.current_batches.0.expiry_status', 'Expiry unknown');
+    }
+
+    public function test_pos_search_and_barcode_exclude_medical_inactive_and_unpriced_products(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000040'));
+        $expected = [];
+        foreach (['medicine', 'vaccine', 'food', 'grooming_supply', 'pet_shop', 'miscellaneous'] as $index => $category) {
+            $id = $this->createInventoryItem('Retail '.$category, 0, 50);
+            DB::table('inventory_items')->where('item_id', $id)->update(['category' => $category, 'barcode' => '100'.$index]);
+            $response = $this->getJson('/api/inventory/barcode/100'.$index.'?sale_context=pos&include_inactive=1');
+            if (in_array($category, ['medicine', 'vaccine'], true)) {
+                $response->assertNotFound();
+            } else {
+                $response->assertOk();
+                $this->assertEquals(0, $response->json('data.saleable_quantity'));
+                $expected[] = $id;
+            }
+        }
+        foreach ([['is_active' => false], ['selling_price' => null], ['selling_price' => 0]] as $changes) {
+            $id = $this->createInventoryItem('Retail excluded', 1, 50);
+            DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop', ...$changes]);
+        }
+        $result = $this->getJson('/api/inventory/search?q=Retail&sale_context=pos&include_inactive=1')
+            ->assertOk()->assertJsonCount(4, 'data');
+        $this->assertEqualsCanonicalizing($expected, array_column($result->json('data'), 'item_id'));
+    }
+
+    public function test_pos_backend_rejects_medical_inactive_and_invalid_price_even_with_direct_submission(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000041'));
+        foreach ([['category' => 'medicine'], ['category' => 'vaccine'], ['is_active' => false], ['selling_price' => null], ['selling_price' => 0]] as $changes) {
+            $id = $this->createInventoryItem('Restricted Product', 3, 50);
+            DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop', ...$changes]);
+            $this->postJson('/api/pos/transactions', ['items' => [['item_id' => $id, 'quantity' => 1]], 'amount_tendered' => 100])
+                ->assertUnprocessable();
+            $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 3]);
+        }
+        $this->assertDatabaseCount('pos_transactions', 0);
+        $this->assertDatabaseCount('pos_transaction_items', 0);
+        $this->assertDatabaseCount('inventory_transactions', 0);
+    }
+
+    public function test_pos_rejects_decimal_quantities_at_validation_and_checkout_without_rounding(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000045'));
+        $id = $this->createInventoryItem('Whole Retail Product', 10, 50);
+        DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        foreach ([1.02, 1.5, 2.75, '1.02', '2.75'] as $quantity) {
+            $payload = ['items' => [['item_id' => $id, 'quantity' => $quantity]], 'amount_tendered' => 500];
+            foreach (['/api/pos/validate-cart', '/api/pos/transactions'] as $endpoint) {
+                $response = $this->postJson($endpoint, $payload)->assertUnprocessable()
+                    ->assertJsonValidationErrors(['items.0.quantity']);
+                $this->assertSame('Quantity must be a whole number.', $response->json('errors')['items.0.quantity'][0]);
+            }
+        }
+        $this->assertDatabaseCount('pos_transactions', 0);
+        $this->assertDatabaseCount('pos_transaction_items', 0);
+        $this->assertDatabaseCount('inventory_transactions', 0);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 10]);
+    }
+
+    public function test_pos_preflight_returns_current_retail_stock_prices_and_availability_without_writes(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000046'));
+        $food = $this->createInventoryItem('Batch Retail Food', 4, 125.50);
+        $this->recordInventoryTransaction($food, 'stock_in', 2, ['expiry_date' => now()->addYear()->toDateString()]);
+        $this->recordInventoryTransaction($food, 'stock_in', 2, ['expiry_date' => now()->subDay()->toDateString()]);
+        $inactive = $this->createInventoryItem('Inactive Product', 3, 50);
+        DB::table('inventory_items')->where('item_id', $inactive)->update(['category' => 'pet_shop', 'is_active' => false]);
+        $response = $this->postJson('/api/pos/validate-cart', ['items' => [
+            ['item_id' => $food, 'quantity' => 3], ['item_id' => $inactive, 'quantity' => 1], ['item_id' => 999, 'quantity' => 1],
+        ]])->assertOk()->assertJsonCount(3, 'data');
+        $response->assertJsonPath('data.0.item_id', $food)->assertJsonPath('data.0.saleable_quantity', 2)
+            ->assertJsonPath('data.0.selling_price', '125.50')->assertJsonPath('data.1.is_active', false)
+            ->assertJsonPath('data.2.is_active', false)->assertJsonPath('data.2.saleable_quantity', 0);
+        $this->assertDatabaseCount('pos_transactions', 0);
+        $this->assertDatabaseCount('pos_transaction_items', 0);
+        $this->assertDatabaseCount('inventory_transactions', 2);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $food, 'quantity_on_hand' => 4]);
+    }
+
+    public function test_pos_rechecks_reviewed_prices_stock_and_availability_inside_checkout(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000047'));
+        $id = $this->createInventoryItem('Concurrent Retail Product', 4, 250);
+        DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        $payload = ['items' => [['item_id' => $id, 'quantity' => 1, 'expected_price' => 250, 'expected_stock' => 4]], 'amount_tendered' => 1000];
+        foreach ([['selling_price' => 275], ['quantity_on_hand' => 3], ['selling_price' => 275, 'quantity_on_hand' => 3], ['is_active' => false]] as $changes) {
+            $this->postJson('/api/pos/validate-cart', ['items' => [['item_id' => $id, 'quantity' => 1]]])->assertOk();
+            DB::table('inventory_items')->where('item_id', $id)->update($changes);
+            $this->postJson('/api/pos/transactions', $payload)->assertUnprocessable()->assertJsonPath('code', 'POS_CART_CHANGED')
+                ->assertJsonPath('data.0.item_name', 'Concurrent Retail Product');
+            $this->assertDatabaseCount('pos_transactions', 0);
+            $this->assertDatabaseCount('pos_transaction_items', 0);
+            $this->assertDatabaseCount('inventory_transactions', 0);
+            DB::table('inventory_items')->where('item_id', $id)->update(['selling_price' => 250, 'quantity_on_hand' => 4, 'is_active' => true]);
+        }
+        $this->postJson('/api/pos/transactions', $payload)->assertCreated()->assertJsonPath('data.total_amount', '250.00')
+            ->assertJsonPath('data.change_amount', '750.00')->assertJsonPath('data.items.0.quantity', '1.00');
+        $this->assertDatabaseCount('pos_transactions', 1);
+        $this->assertDatabaseCount('inventory_transactions', 1);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 3]);
+    }
+
+    public function test_pos_cash_uses_grooming_payment_limits_and_validation_without_partial_writes(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000043'));
+        $id = $this->createInventoryItem('Retail Cash Test', 10, 1600);
+        DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        $payload = ['items' => [['item_id' => $id, 'quantity' => 1]]];
+        foreach ([null, '', -1, 1599.99, 1600.001, '1600.000', 3000.01, str_repeat('9', 400)] as $cash) {
+            $this->postJson('/api/pos/transactions', [...$payload, 'amount_tendered' => $cash])->assertUnprocessable();
+            $this->assertDatabaseCount('pos_transactions', 0);
+            $this->assertDatabaseCount('pos_transaction_items', 0);
+            $this->assertDatabaseCount('inventory_transactions', 0);
+            $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 10]);
+        }
+        $this->postJson('/api/pos/transactions', $payload)->assertUnprocessable()
+            ->assertJsonPath('errors.amount_tendered.0', 'Amount paid is required.');
+        $this->postJson('/api/pos/transactions', [...$payload, 'amount_tendered' => 3000.01, 'total_amount' => 9000])
+            ->assertUnprocessable()->assertJsonPath('errors.amount_tendered.0', 'Amount paid cannot exceed ₱3,000.00.');
+        $this->postJson('/api/pos/transactions', [...$payload, 'amount_tendered' => 1600])
+            ->assertCreated()->assertJsonPath('data.change_amount', '0.00');
+        $this->postJson('/api/pos/transactions', [...$payload, 'amount_tendered' => 3000])
+            ->assertCreated()->assertJsonPath('data.change_amount', '1400.00');
+        $this->assertDatabaseCount('pos_transactions', 2);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 8]);
+    }
+
+    public function test_pos_consolidates_lines_tracks_the_authenticated_actor_and_preserves_invoice_snapshot(): void
+    {
+        $actor = $this->createUser('staff', '09170000042');
+        Sanctum::actingAs($actor);
+        $id = $this->createInventoryItem('Original Retail Name', 5, 125.50);
+        DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        $sale = $this->postJson('/api/pos/transactions', [
+            'items' => [['item_id' => $id, 'quantity' => 1], ['item_id' => $id, 'quantity' => 2]],
+            'amount_tendered' => 500, 'cashier_id' => 999, 'customer_id' => 999,
+        ])->assertCreated()->assertJsonPath('data.reference', 'POS-000001')
+            ->assertJsonPath('data.cashier_id', $actor->user_id)->assertJsonPath('data.cashier_name', 'Staff Inventory Tester')
+            ->assertJsonPath('data.total_amount', '376.50')->assertJsonPath('data.change_amount', '123.50')
+            ->assertJsonCount(1, 'data.items');
+        $this->assertDatabaseCount('pos_transactions', 1);
+        $this->assertDatabaseCount('pos_transaction_items', 1);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 2]);
+        $this->assertDatabaseHas('inventory_transactions', ['item_id' => $id, 'type' => 'stock_out', 'reason' => 'sold',
+            'quantity' => 3, 'reference_type' => 'pos', 'reference_id' => 1, 'performed_by' => $actor->user_id]);
+        $this->getJson('/api/inventory/transactions')->assertOk()->assertJsonPath('data.0.source_label', 'POS-000001');
+        DB::table('inventory_items')->where('item_id', $id)->update(['item_name' => 'Renamed Retail Product', 'selling_price' => 900, 'is_active' => false]);
+        $this->getJson('/api/pos/transactions/1')->assertOk()
+            ->assertJsonPath('data.items.0.item_name', 'Original Retail Name')
+            ->assertJsonPath('data.items.0.price_at_sale', '125.50')->assertJsonPath('data.items.0.subtotal', '376.50');
+    }
+
+    public function test_pos_rejects_stale_quotes_insufficient_stock_and_invalid_quantities_without_writes(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000043'));
+        $id = $this->createInventoryItem('Changed Retail Product', 2, 50);
+        DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+        foreach ([['quantity' => 3], ['quantity' => 1, 'expected_price' => 40], ['quantity' => 0], ['quantity' => -1], ['quantity' => 1.001]] as $line) {
+            $this->postJson('/api/pos/transactions', ['items' => [['item_id' => $id, ...$line]], 'amount_tendered' => 500])
+                ->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('pos_transactions', 0);
+        $this->assertDatabaseCount('pos_transaction_items', 0);
+        $this->assertDatabaseCount('inventory_transactions', 0);
+        $this->assertDatabaseHas('inventory_items', ['item_id' => $id, 'quantity_on_hand' => 2]);
+    }
+
+    public function test_pos_rolls_back_transaction_lines_and_all_stock_movements_after_a_late_failure(): void
+    {
+        Sanctum::actingAs($this->createUser('staff', '09170000044'));
+        $lines = [];
+        foreach (['Shampoo', 'Collar'] as $name) {
+            $id = $this->createInventoryItem($name, 3, 50);
+            DB::table('inventory_items')->where('item_id', $id)->update(['category' => 'pet_shop']);
+            $lines[] = ['item_id' => $id, 'quantity' => 2];
+        }
+        $movements = app(InventoryStockMovementService::class);
+        $this->mock(InventoryStockMovementService::class)->shouldReceive('remove')->once()
+            ->andReturnUsing(function ($actor, $entries) use ($movements) {
+                $movements->remove($actor, $entries);
+                abort(422, 'Simulated failure after inventory deductions.');
+            });
+        $this->postJson('/api/pos/transactions', ['items' => $lines, 'amount_tendered' => 200])->assertUnprocessable();
+        $this->assertDatabaseCount('pos_transactions', 0);
+        $this->assertDatabaseCount('pos_transaction_items', 0);
+        $this->assertDatabaseCount('inventory_transactions', 0);
+        foreach ($lines as $line) {
+            $this->assertDatabaseHas('inventory_items', ['item_id' => $line['item_id'], 'quantity_on_hand' => 3]);
+        }
     }
 
     private function createUser(string $role, string $phone): User

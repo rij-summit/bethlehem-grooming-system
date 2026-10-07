@@ -14,6 +14,8 @@ class PosTransactionItem extends Model
     protected $fillable = [
         'pos_id',
         'item_id',
+        'item_name',
+        'unit',
         'quantity',
         'price_at_sale',
         'subtotal',

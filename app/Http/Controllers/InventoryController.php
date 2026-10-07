@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Models\PosTransaction;
 use App\Services\InventoryBatchBalanceService;
 use App\Services\InventoryStockMovementService;
 use Carbon\CarbonImmutable;
@@ -147,7 +148,7 @@ class InventoryController extends Controller
                 'clinic' => $t->reference_id === null
                     ? 'Clinic'
                     : 'Clinic · '.($t->clinicAppointment?->appointment_reference ?? $t->reference_id),
-                'pos' => 'POS · #'.$t->reference_id,
+                'pos' => $t->reference_id ? PosTransaction::referenceFor($t->reference_id) : 'POS',
                 default => null,
             },
             'notes'                 => $t->notes,
@@ -157,6 +158,15 @@ class InventoryController extends Controller
                 : null,
             'created_at'            => $t->created_at,
         ];
+    }
+
+    private function formatTransactions($transactions): Collection
+    {
+        // Reference ids are shared by different source tables; hydrate only the
+        // matching source so a POS movement never queries grooming/clinic data.
+        $transactions->where('reference_type', 'grooming')->load('groomingBooking');
+        $transactions->where('reference_type', 'clinic')->load('clinicAppointment');
+        return $transactions->map(fn ($transaction) => $this->formatTransaction($transaction));
     }
 
     // ── Product CRUD ───────────────────────────────────────────────────────────
@@ -311,6 +321,7 @@ class InventoryController extends Controller
         $this->requireAuth();
 
         $item = InventoryItem::where('barcode', $barcode)
+                             ->when($request->query('sale_context') === 'pos', fn ($query) => $query->retailSale())
                              ->when(! $request->boolean('include_inactive'), fn ($query) => $query->where('is_active', 1))
                              ->first();
 
@@ -328,6 +339,7 @@ class InventoryController extends Controller
         $q = trim($request->query('q', ''));
         $includeInactive = $request->boolean('include_inactive');
         $forGrooming = $request->query('sale_context') === 'grooming';
+        $forPos = $request->query('sale_context') === 'pos';
 
         if (strlen($q) < 2) {
             return response()->json(['data' => []]);
@@ -337,19 +349,21 @@ class InventoryController extends Controller
             ->when(! $includeInactive, fn ($query) => $query->where('is_active', 1))
             ->when($forGrooming, fn ($query) => $query->whereNotIn('category', ['medicine', 'vaccine'])
                 ->whereNotNull('selling_price'))
+            ->when($forPos, fn ($query) => $query->retailSale())
             ->where(function ($query) use ($q) {
                 $query->where('item_name', 'like', "%{$q}%")
                       ->orWhere('barcode', 'like', "%{$q}%");
             })
             ->when($forGrooming, fn ($query) => $query->orderByRaw('CASE WHEN is_active = 1 AND quantity_on_hand >= 1 THEN 0 ELSE 1 END'))
+            ->when($forPos, fn ($query) => $query->orderByRaw('CASE WHEN quantity_on_hand > 0 THEN 0 ELSE 1 END'))
             ->orderBy('item_name')
-            ->limit($forGrooming ? 50 : 10)
+            ->limit($forGrooming || $forPos ? 50 : 10)
             ->get();
 
         $formatted = $this->formatItems($items);
 
         return response()->json([
-            'data' => $forGrooming
+            'data' => $forGrooming || $forPos
                 ? $formatted->sortBy(fn ($item) => [
                     $item['is_active'] && (float) $item['saleable_quantity'] >= 1 ? 0 : 1,
                     $item['item_name'],
@@ -449,7 +463,7 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $query = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking', 'clinicAppointment'])
+        $query = InventoryTransaction::with(['item', 'performedBy'])
                      ->orderBy('created_at', 'desc');
 
         if ($request->filled('item_id')) {
@@ -477,7 +491,7 @@ class InventoryController extends Controller
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
-            'data'      => collect($paginator->items())->map(fn ($t) => $this->formatTransaction($t)),
+            'data'      => $this->formatTransactions($paginator->getCollection()),
             'total'     => $paginator->total(),
             'page'      => $page,
             'last_page' => $paginator->lastPage(),
@@ -554,7 +568,7 @@ class InventoryController extends Controller
         $expiryCount = $this->currentExpiryAlerts()->count();
 
         $recentTransactionsPage = max(1, $request->integer('page', 1));
-        $recentTransactions = InventoryTransaction::with(['item', 'performedBy', 'groomingBooking', 'clinicAppointment'])
+        $recentTransactions = InventoryTransaction::with(['item', 'performedBy'])
             ->orderBy('created_at', 'desc')
             ->paginate(10, ['*'], 'page', $recentTransactionsPage);
 
@@ -580,8 +594,7 @@ class InventoryController extends Controller
             'total_items'         => $totalItems,
             'low_stock_count'     => $lowStockCount,
             'expiry_alert_count'  => $expiryCount,
-            'recent_transactions' => collect($recentTransactions->items())
-                ->map(fn ($t) => $this->formatTransaction($t)),
+            'recent_transactions' => $this->formatTransactions($recentTransactions->getCollection()),
             'recent_transactions_page' => $recentTransactions->currentPage(),
             'recent_transactions_last_page' => $recentTransactions->lastPage(),
             'recent_transactions_total' => $recentTransactions->total(),

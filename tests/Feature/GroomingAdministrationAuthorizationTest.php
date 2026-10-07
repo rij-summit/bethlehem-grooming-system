@@ -259,6 +259,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->decimal('subtotal', 10, 2);
         });
 
+        (require database_path('migrations/2026_07_05_100002_create_pos_transactions_table.php'))->up();
+        (require database_path('migrations/2026_07_05_100003_create_pos_transaction_items_table.php'))->up();
+        (require database_path('migrations/2026_10_07_100000_add_product_snapshot_to_pos_items.php'))->up();
+
         Schema::create('notifications', function (Blueprint $table) {
             $table->increments('notification_id');
             $table->string('type');
@@ -291,6 +295,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     protected function tearDown(): void
     {
         Carbon::setTestNow();
+        Schema::dropIfExists('pos_transaction_items');
+        Schema::dropIfExists('pos_transactions');
 
         Schema::dropIfExists('customer_notifications');
         Schema::dropIfExists('notifications');

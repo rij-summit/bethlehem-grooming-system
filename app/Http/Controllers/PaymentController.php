@@ -8,6 +8,7 @@ use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\Notification;
 use App\Models\Payment;
+use App\Models\PosTransaction;
 use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingServicePriceResolver;
 use App\Services\GroomingPaymentSettlementService;
@@ -465,6 +466,10 @@ class PaymentController extends Controller
         $week = (string) $request->query('week', '');
         $month = (string) $request->query('month', '');
         $year = (string) $request->query('year', '');
+        $type = (string) $request->query('transaction_type', 'all');
+        if (! in_array($type, ['all', 'grooming_payment', 'product_sale'], true)) {
+            return response()->json(['success' => false, 'message' => 'Please provide a valid transaction type.'], 422);
+        }
 
         if (! in_array($period, ['day', 'week', 'month', 'year'], true)) {
             return response()->json(['success' => false, 'message' => 'Please provide a valid transaction period.'], 422);
@@ -507,11 +512,42 @@ class PaymentController extends Controller
                 })->orWhereHas('booking.bookingPets.pet', fn ($petQuery) => $petQuery->whereRaw('LOWER(pet_name) LIKE ?', ["%{$search}%"])
                 )->orWhereHas('booking', fn ($bookingQuery) => $bookingQuery->whereRaw(
                     'LOWER(booking_reference) LIKE ?', ["%{$search}%"],
-                ));
+                ))->orWhereHas('products', fn ($products) => $products->whereRaw('LOWER(item_name) LIKE ?', ["%{$search}%"]));
             });
         }
 
-        $transactions = $query->get()->map(fn (Payment $payment) => $this->formatTransaction($payment));
+        $posQuery = PosTransaction::query();
+        $this->applyPeriodFilter($posQuery, $period, $date, $week, $month, $year, 'created_at');
+        if ($search !== '') {
+            $posQuery->where(function ($query) use ($search) {
+                $query->whereHas('items', fn ($lines) => $lines->whereRaw('LOWER(item_name) LIKE ?', ["%{$search}%"]));
+                if (preg_match('/^(?:pos[-\s#]*)?(\d+)$/i', $search, $matches)) {
+                    $query->orWhere('pos_id', (int) $matches[1]);
+                }
+            });
+        }
+
+        // Page common financial fields first, then hydrate only the visible records.
+        $paymentKey = (new Payment)->getKeyName();
+        $groomingRows = $query->reorder()->selectRaw("{$paymentKey} as transaction_id, 'grooming_payment' as transaction_type, paid_at, total_amount")
+            ->when($type === 'product_sale', fn ($q) => $q->whereRaw('1 = 0'))->toBase();
+        $posRows = $posQuery->selectRaw("pos_id as transaction_id, 'product_sale' as transaction_type, created_at as paid_at, total_amount")
+            ->when($type === 'grooming_payment', fn ($q) => $q->whereRaw('1 = 0'))->toBase();
+        $combined = DB::query()->fromSub($groomingRows->unionAll($posRows), 'financial_transactions');
+        $collectionTotal = (float) (clone $combined)->sum('total_amount');
+        $page = (clone $combined)->orderByDesc('paid_at')->orderBy('transaction_type')->orderByDesc('transaction_id')
+            ->paginate(50, ['*'], 'page', max(1, (int) $request->query('page', 1)));
+        $rows = $page->getCollection();
+        $dateTotals = (clone $combined)->whereIn(DB::raw('DATE(paid_at)'), $rows->pluck('paid_at')->map(fn ($at) => substr($at, 0, 10))->unique())
+            ->selectRaw('DATE(paid_at) as date_key, SUM(total_amount) as total')
+            ->groupByRaw('DATE(paid_at)')->pluck('total', 'date_key');
+        $payments = Payment::with(['booking.user', 'products', 'processedBy'])
+            ->whereKey($rows->where('transaction_type', 'grooming_payment')->pluck('transaction_id'))->get()->keyBy($paymentKey);
+        $sales = PosTransaction::with(['items.item', 'cashier'])
+            ->whereKey($rows->where('transaction_type', 'product_sale')->pluck('transaction_id'))->get()->keyBy('pos_id');
+        $transactions = $rows->map(fn ($row) => $row->transaction_type === 'product_sale'
+            ? $this->formatProductSale($sales->get($row->transaction_id))
+            : $this->formatTransaction($payments->get($row->transaction_id)));
 
         return response()->json([
             'success' => true,
@@ -521,24 +557,28 @@ class PaymentController extends Controller
             'month' => $month ?: null,
             'year' => $year ?: null,
             'transactions' => $transactions->values(),
-            'total' => $transactions->count(),
+            'total' => $page->total(),
+            'collection_total' => $collectionTotal,
+            'date_totals' => $dateTotals,
+            'page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
         ]);
     }
 
-    private function applyPeriodFilter($query, string $period, string $date, string $week, string $month, string $year): void
+    private function applyPeriodFilter($query, string $period, string $date, string $week, string $month, string $year, string $column = 'paid_at'): void
     {
         if ($period === 'day' && $date) {
-            $query->whereDate('paid_at', $date);
+            $query->whereDate($column, $date);
         } elseif ($period === 'week' && $week) {
             [$start, $end] = $this->weekRange($week);
-            $query->whereDate('paid_at', '>=', $start->toDateString())
-                ->whereDate('paid_at', '<=', $end->toDateString());
+            $query->whereDate($column, '>=', $start->toDateString())
+                ->whereDate($column, '<=', $end->toDateString());
         } elseif ($period === 'month' && $month) {
             [$selectedYear, $selectedMonth] = explode('-', $month);
-            $query->whereYear('paid_at', (int) $selectedYear)
-                ->whereMonth('paid_at', (int) $selectedMonth);
+            $query->whereYear($column, (int) $selectedYear)
+                ->whereMonth($column, (int) $selectedMonth);
         } elseif ($period === 'year' && $year) {
-            $query->whereYear('paid_at', (int) $year);
+            $query->whereYear($column, (int) $year);
         }
     }
 
@@ -578,6 +618,12 @@ class PaymentController extends Controller
 
         return [
             'id' => $payment->getKey(),
+            'key' => 'grooming-'.$payment->getKey(),
+            'transactionType' => 'grooming_payment',
+            'transactionTypeLabel' => 'Grooming Payment',
+            'processedBy' => $payment->processed_by,
+            'processedByName' => $payment->processedBy
+                ? trim($payment->processedBy->first_name.' '.$payment->processedBy->last_name) : null,
             'bookingId' => $booking?->booking_id,
             'reference' => $booking?->booking_reference ?? '—',
             'ownerName' => trim(($booking?->user?->first_name ?? '').' '.($booking?->user?->last_name ?? '')),
@@ -601,6 +647,30 @@ class PaymentController extends Controller
                 'priceAtSale' => (float) $line->price_at_sale,
                 'subtotal' => (float) $line->subtotal,
             ])->values(),
+        ];
+    }
+
+    private function formatProductSale(PosTransaction $pos): array
+    {
+        $receipt = $pos->receiptSnapshot();
+        return [
+            'id' => $pos->pos_id,
+            'key' => 'pos-'.$pos->pos_id,
+            'transactionType' => 'product_sale',
+            'transactionTypeLabel' => 'Product Sale',
+            'reference' => $receipt['reference'],
+            'finalPrice' => (float) $pos->total_amount,
+            'amountPaid' => (float) $pos->amount_tendered,
+            'changeGiven' => (float) $pos->change_amount,
+            'paymentMethod' => 'cash',
+            'paymentMethodLabel' => 'Cash',
+            'paidAt' => $receipt['created_at'],
+            'dateKey' => $pos->created_at?->toDateString(),
+            'processedBy' => $pos->cashier_id,
+            'processedByName' => $receipt['cashier_name'],
+            'notes' => $pos->notes,
+            'items' => $receipt['items'],
+            'receipt' => $receipt,
         ];
     }
 

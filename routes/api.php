@@ -223,6 +223,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/inventory/summary', [InventoryController::class, 'summary']);
 
         // Admin — POS
+        Route::post('/pos/validate-cart', [PosController::class, 'validateCart']);
         Route::post('/pos/transactions', [PosController::class, 'processSale']);
         Route::get('/pos/transactions', [PosController::class, 'getTransactions']);
         Route::get('/pos/transactions/{posId}', [PosController::class, 'getReceipt']);

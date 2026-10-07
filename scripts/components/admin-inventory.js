@@ -2,6 +2,7 @@
 const InventorySections = {
   overview: { script: "admin-inventory-dashboard.js", factory: "adminInventoryDashboard", dependencies: ["inventory-alerts.js"] },
   products: { script: "admin-inventory-items.js", factory: "adminInventoryItems", dependencies: ["product-form.js", "inventory-alerts.js", "scanner"] },
+  "sell-product": { script: "admin-pos.js", factory: "adminPos", dependencies: ["cash-payment.js", "product-form.js", "scanner", "payment-invoice.js", "product-sale-invoice.js"] },
   "stock-in": { script: "admin-stock-in.js", factory: "adminStockIn", dependencies: ["product-form.js", "success-toast.js", "scanner"] },
   "stock-out": { script: "admin-stock-out.js", factory: "adminStockOut", dependencies: ["product-form.js", "success-toast.js", "scanner"] },
   history: { script: "admin-inventory-transactions.js", factory: "adminInventoryTransactions", dependencies: [] },
@@ -21,7 +22,7 @@ function loadInventoryScript(name) {
       const script = document.createElement("script");
       script.src = name === "scanner"
         ? "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
-        : `../../../scripts/components/${name}?v=product-details-20261002`;
+        : `../../../scripts/components/${name}?v=product-details-20261002&release=pos-cart-20261007`;
       script.onload = resolve;
       script.onerror = () => {
         script.remove();
@@ -67,7 +68,7 @@ function adminInventory() {
         const mount = async () => {
           const config = InventorySections[section];
           const [response] = await Promise.all([
-            fetch(`./sections/${section}.html?v=inventory-actions-20261007`),
+            fetch(`./sections/${section}.html?v=inventory-actions-20261007&release=pos-cart-20261007`),
             ...config.dependencies.map(loadInventoryScript),
             loadInventoryScript(config.script),
           ]);
@@ -102,7 +103,7 @@ function adminInventory() {
       this.activeSection = route.section;
       this.sectionError = "";
       this.sectionLoading = !this.$refs.panels.querySelector(`[data-inventory-section="${route.section}"]`);
-      document.title = `${({ overview: "Inventory", products: "Products", "stock-in": "Stock In", "stock-out": "Stock Out", history: "Inventory History" })[route.section]} | Bethlehem Animal Clinic`;
+      document.title = `${({ overview: "Inventory", products: "Products", "sell-product": "Point of Sale", "stock-in": "Stock In", "stock-out": "Stock Out", history: "Stock Movements" })[route.section]} | Bethlehem Animal Clinic`;
       try {
         const panel = await this.mountSection(route.section);
         // A slower first visit must not override a more recent navigation.
@@ -147,7 +148,10 @@ function adminInventorySection(section) {
       if (section === "products") this.alertFilter = route.filter;
       if (this._loadedRevision === revision && !filterChanged) return;
       const refresh = async () => {
-        if (typeof this.load === "function") {
+        if (section === "sell-product") {
+          this.searchResults = [];
+          if (this.searchQuery.length >= 2) this.onSearchInput();
+        } else if (typeof this.load === "function") {
           await this.load(filterChanged ? 1 : (this.currentPage || 1));
         } else {
           // Keep unsent entries intact, but update the selected product's stock
@@ -171,6 +175,7 @@ function adminInventorySection(section) {
       clearTimeout(this._searchTimer);
       if (this.scannerActive) this.closeScanner();
       if (this.details?.open) this.closeDetails(false);
+      if (section === "sell-product") this.closeSuccess();
     },
 
     destroy() {

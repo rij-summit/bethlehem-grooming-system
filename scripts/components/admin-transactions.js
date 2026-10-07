@@ -9,6 +9,12 @@ function adminTransactions() {
     totalCount: 0,
     searchQuery: "",
     transactionPeriod: "day",
+    transactionType: "all",
+    currentPage: 1,
+    lastPage: 1,
+    serverCollectionTotal: null,
+    serverDateTotals: {},
+    _loadVersion: 0,
     filterDate: "",
     filterMonth: "",
     filterYear: "",
@@ -22,16 +28,19 @@ function adminTransactions() {
     async init() {
       const params = new URLSearchParams(window.location.search);
       const paymentId = params.get("payment");
+      const posId = params.get("pos");
       const reference = params.get("reference");
-      if (paymentId || reference) this.searchQuery = reference || "";
+      if (posId) this.transactionType = "product_sale";
+      if (paymentId || posId || reference) this.searchQuery = reference || (posId ? 'POS-' + posId.padStart(6, '0') : "");
       await this.loadTransactions();
-      if (paymentId || reference) {
-        const tx = this.transactions.find((record) => paymentId
-          ? String(record.id) === paymentId
+      if (paymentId || posId || reference) {
+        const tx = this.transactions.find((record) => posId
+          ? this.isProductSale(record) && String(record.id) === posId
+          : paymentId ? !this.isProductSale(record) && String(record.id) === paymentId
           : record.reference === reference);
         if (tx) {
           this.openDetails(tx, null);
-          this.$nextTick(() => { this.detailsTrigger = document.querySelector(`[data-transaction-id="${tx.id}"]`); });
+          this.$nextTick(() => { this.detailsTrigger = document.querySelector(`[data-transaction-id="${tx.key || tx.id}"]`); });
         } else if (!this.errorMessage) {
           this.errorMessage = "The linked transaction could not be found.";
         }
@@ -39,7 +48,8 @@ function adminTransactions() {
       this.refreshIcons();
     },
 
-    async loadTransactions() {
+    async loadTransactions(page = 1) {
+      const version = ++this._loadVersion;
       this.loading      = true;
       this.errorMessage = "";
 
@@ -50,16 +60,27 @@ function adminTransactions() {
           date:   this.transactionPeriod === "day" ? this.filterDate : "",
           month:  this.transactionPeriod === "month" ? this.filterMonth : "",
           year:   this.transactionPeriod === "year" ? this.filterYear : "",
+          transaction_type: this.transactionType,
+          page,
         });
+        if (version !== this._loadVersion) return;
         this.transactions = data.transactions || [];
         this.totalCount   = data.total ?? this.transactions.length;
+        this.currentPage = data.page ?? 1;
+        this.lastPage = data.last_page ?? 1;
+        this.serverCollectionTotal = data.collection_total ?? null;
+        this.serverDateTotals = data.date_totals || {};
       } catch (error) {
+        if (version !== this._loadVersion) return;
         this.errorMessage = error.message || "Failed to load transactions. Please try again.";
         this.transactions = [];
         this.totalCount   = 0;
+        this.serverCollectionTotal = null;
       } finally {
-        this.loading = false;
-        this.refreshIcons();
+        if (version === this._loadVersion) {
+          this.loading = false;
+          this.refreshIcons();
+        }
       }
     },
 
@@ -89,6 +110,7 @@ function adminTransactions() {
 
     clearFilters() {
       this.searchQuery = "";
+      this.transactionType = "all";
       this.transactionPeriod = "day";
       this.filterDate = "";
       this.filterMonth = "";
@@ -99,6 +121,7 @@ function adminTransactions() {
     get hasActiveFilters() {
       return (
         this.searchQuery ||
+        this.transactionType !== "all" ||
         this.transactionPeriod !== "day" ||
         this.filterDate ||
         this.filterMonth ||
@@ -124,16 +147,16 @@ function adminTransactions() {
         isToday: dateKey === todayKey,
         label:   this.formatGroupDate(dateKey),
         items:   groups[dateKey],
-        total:   groups[dateKey].reduce((sum, tx) => sum + tx.finalPrice, 0),
+        total:   Number(this.serverDateTotals[dateKey] ?? groups[dateKey].reduce((sum, tx) => sum + Number(tx.finalPrice), 0)),
       }));
     },
 
     get collectionTotal() {
-      return this.transactions.reduce((sum, tx) => sum + tx.finalPrice, 0);
+      return this.serverCollectionTotal ?? this.transactions.reduce((sum, tx) => sum + Number(tx.finalPrice), 0);
     },
 
     get collectionCount() {
-      return this.transactions.length;
+      return this.totalCount || this.transactions.length;
     },
 
     get hasSelectedPeriodValue() {
@@ -164,10 +187,20 @@ function adminTransactions() {
       return names.length > 3 ? `${names.slice(0, 2).join(", ")} +${names.length - 2} more` : names.join(", ") || "—";
     },
 
+    isProductSale(tx) { return tx?.transactionType === "product_sale"; },
+    transactionName(tx) { return this.isProductSale(tx) ? "Product Sale" : tx.ownerName || "—"; },
+    transactionDetails(tx) {
+      if (!this.isProductSale(tx)) return this.compactPetNames(tx);
+      const items = tx.items || [];
+      if (!items.length) return "Products";
+      const first = items[0];
+      return `${first.item_name} ×${Number(first.quantity)}${items.length > 1 ? ' + ' + (items.length - 1) + ' more' : ''}`;
+    },
+
     openDetails(tx, trigger) {
       this.selectedTransaction = tx;
       // Build the invoice once from the transaction being inspected.
-      this.receiptModal = {
+      this.receiptModal = this.isProductSale(tx) ? null : {
         bookingReference: tx.reference,
         ownerName: tx.ownerName,
         pets: (tx.paymentSummary?.pets || []).map((pet, index) => ({
@@ -231,7 +264,9 @@ function adminTransactions() {
     },
 
     printInvoice() {
-      if (this.selectedTransaction) window.PaymentInvoice.print();
+      if (!this.selectedTransaction) return;
+      if (this.isProductSale(this.selectedTransaction)) window.ProductSaleInvoice.print();
+      else window.PaymentInvoice.print();
     },
 
     formatGroupDate(dateStr) {

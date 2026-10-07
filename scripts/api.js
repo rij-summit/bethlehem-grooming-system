@@ -1806,10 +1806,12 @@ var API = (() => {
     return request("PATCH", "/customer/notifications/read-all", null, getCustomerToken());
   }
 
-  async function getTransactions({ search = "", period = "day", date = "", week = "", month = "", year = "" } = {}) {
+  async function getTransactions({ search = "", period = "day", date = "", week = "", month = "", year = "", transaction_type = "all", page = 1 } = {}) {
     // GET /api/admin/transactions  (protected — admin token)
     const params = new URLSearchParams();
     if (search) params.set("search", search);
+    params.set("transaction_type", transaction_type);
+    params.set("page", page);
     if (period) params.set("period", period);
     if (date)   params.set("date",   date);
     if (week)   params.set("week",   week);

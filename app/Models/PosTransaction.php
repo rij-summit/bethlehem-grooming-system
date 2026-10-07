@@ -43,4 +43,36 @@ class PosTransaction extends Model
     {
         return $this->hasMany(PosTransactionItem::class, 'pos_id', 'pos_id');
     }
+
+    public static function referenceFor(int $id): string
+    {
+        return 'POS-'.str_pad((string) $id, 6, '0', STR_PAD_LEFT);
+    }
+
+    public function receiptSnapshot(): array
+    {
+        return [
+            'pos_id' => $this->pos_id,
+            'reference' => self::referenceFor($this->pos_id),
+            'transaction_type' => 'product_sale',
+            'payment_method' => 'cash',
+            'cashier_id' => $this->cashier_id,
+            'cashier_name' => $this->cashier
+                ? trim($this->cashier->first_name.' '.$this->cashier->last_name) : null,
+            'total_amount' => $this->total_amount,
+            'amount_tendered' => $this->amount_tendered,
+            'change_amount' => $this->change_amount,
+            'notes' => $this->notes,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'items' => $this->items->map(fn ($line) => [
+                'id' => $line->id,
+                'item_id' => $line->item_id,
+                'item_name' => $line->item_name ?? $line->item?->item_name,
+                'unit' => $line->unit ?? $line->item?->unit,
+                'quantity' => $line->quantity,
+                'price_at_sale' => $line->price_at_sale,
+                'subtotal' => $line->subtotal,
+            ])->values()->all(),
+        ];
+    }
 }

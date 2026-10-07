@@ -1,0 +1,106 @@
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · existing Bethlehem admin palette */
+.pos-workflow {
+  --pos-ink: #1f3850;
+  --pos-muted: #52677c;
+  --pos-blue: #315b7e;
+  --pos-hover: #244966;
+  --pos-border: #d7e3ef;
+  --pos-surface: #fff;
+  --pos-soft: #f5f8fb;
+  --pos-error: #b91c1c;
+  --pos-error-bg: #fef2f2;
+  --pos-success: #15803d;
+  --pos-overlay: rgb(15 23 42 / 55%);
+  --pos-shadow: 0 24px 64px rgb(15 23 42 / 22%);
+  margin-top: 24px;
+  color: var(--pos-ink);
+  min-width: 0;
+}
+.pos-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pos-left { min-width: 0; display: grid; align-content: start; gap: 20px; }
+.pos-panel { min-width: 0; padding: 20px; border: 1px solid var(--pos-border); border-radius: 16px; background: var(--pos-surface); }
+.pos-panel h3, .pos-success-content h3 { font-size: 18px; font-weight: 700; }
+.pos-workflow label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.pos-workflow input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--pos-border); border-radius: 9px; background: var(--pos-surface); font-size: 14px; }
+.pos-workflow :is(button, input):focus-visible { outline: 2px solid var(--pos-blue); outline-offset: 3px; }
+.pos-workflow input[aria-invalid="true"] { border-color: var(--pos-error); }
+.pos-search-input { position: relative; min-width: 0; }
+.pos-search-input input { padding-right: 58px; }
+.pos-scan-button { position: absolute; right: 2px; top: 0; display: flex; align-items: center; justify-content: center; width: 44px; border-radius: 9px; color: var(--pos-blue); }
+.pos-scan-button svg { width: 24px; height: 24px; }
+.pos-workflow button { min-height: 44px; }
+.pos-workflow button:disabled, .pos-layout:disabled :is(button, input) { cursor: not-allowed; opacity: .55; }
+.pos-workflow button:active:not(:disabled) { transform: translateY(1px); }
+.pos-helper { margin-top: 6px; color: var(--pos-muted); font-size: 12px; font-weight: 400; }
+.pos-results { margin-top: 12px; border: 1px solid var(--pos-border); border-radius: 9px; max-height: 320px; overflow-y: auto; }
+.pos-result { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; width: 100%; text-align: left; }
+.pos-result + .pos-result { border-top: 1px solid var(--pos-border); }
+.pos-workflow .pos-result:disabled { opacity: 1; background: var(--pos-soft); color: var(--pos-muted); }
+.pos-result-meta { flex-shrink: 0; text-align: right; color: var(--pos-muted); font-size: 12px; }
+.pos-result-meta span { display: block; }
+.pos-result-meta strong { color: var(--pos-error); }
+.pos-product-name { min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pos-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pos-text-button { color: var(--pos-blue); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.pos-empty { padding: 24px 0; color: var(--pos-muted); font-size: 14px; text-align: center; }
+.pos-cart-line { display: grid; grid-template-columns: minmax(0, 1fr) 90px 44px; gap: 10px; align-items: center; padding: 16px 0; border-top: 1px solid var(--pos-border); }
+.pos-line-product { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
+.pos-line-product strong, .pos-line-product span { display: block; }
+.pos-line-product strong { font-size: 14px; }
+.pos-line-product span { color: var(--pos-muted); font-size: 12px; }
+.pos-quantity { width: 90px; margin: 0 !important; }
+.pos-quantity span { font-size: 12px; color: var(--pos-muted); }
+.pos-line-total { font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pos-remove { display: flex; align-items: center; justify-content: center; width: 44px; border-radius: 9px; color: var(--pos-error); }
+.pos-remove svg { width: 20px; height: 20px; }
+.pos-line-error { grid-column: 1 / -1; color: var(--pos-error); font-size: 12px; }
+.pos-notice { color: var(--pos-muted); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
+.pos-summary { align-self: start; }
+.pos-summary-values { margin: 16px 0; font-size: 14px; }
+.pos-summary-values > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 0; }
+.pos-summary-values dt { color: var(--pos-muted); }
+.pos-summary-values dd { min-width: 0; overflow-wrap: anywhere; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pos-payment-methods { margin: 16px 0; }
+.pos-payment-methods > p { margin-bottom: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .025em; color: var(--pos-muted); }
+.pos-workflow .pos-payment-option { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 16px; margin-bottom: 8px; border: 1px solid var(--pos-border); border-radius: 12px; background: var(--pos-soft); font-size: 14px; }
+.pos-payment-option[aria-disabled="true"] { color: #94a3b8; }
+.pos-workflow .pos-payment-cash { border-color: #bad4e8; background: #f2f8fc; color: #2f4b66; }
+.pos-workflow .pos-payment-option input { flex: 0 0 16px; width: 16px; min-height: 16px; height: 16px; padding: 0; accent-color: var(--pos-blue); }
+.pos-coming-soon { flex-shrink: 0; margin-left: auto; padding: 2px 8px; border-radius: 999px; background: #e2e8f0; color: #64748b; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pos-workflow .pos-cash-error { color: var(--pos-error); }
+.pos-summary :is(.pos-helper, .pos-error) { overflow-wrap: anywhere; }
+.pos-scanner-dialog { width: calc(100% - 32px); max-width: 384px; min-width: 0; max-height: calc(100dvh - 32px); margin: auto; padding: 20px; border: 0; border-radius: 24px; color: var(--pos-ink); background: var(--pos-surface); box-shadow: var(--pos-shadow); overflow-y: auto; }
+.pos-scanner-dialog::backdrop { background: var(--pos-overlay); }
+#pos-qr-reader { margin-top: 12px; max-width: 100%; }
+.pos-summary-values .pos-total { border-top: 1px solid var(--pos-border); padding-top: 12px; margin: 6px 0 12px; font-size: 22px; font-weight: 700; }
+.pos-total dt { color: var(--pos-ink); }
+.pos-button { display: flex; align-items: center; justify-content: center; width: 100%; border: 1px solid var(--pos-blue); border-radius: 9px; padding: 12px 16px; margin-top: 16px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.pos-primary { color: var(--pos-surface); background: var(--pos-blue); }
+.pos-secondary { color: var(--pos-blue); background: var(--pos-surface); }
+.pos-error { padding: 12px; margin-top: 16px; border: 1px solid var(--pos-error); border-radius: 9px; color: var(--pos-error); background: var(--pos-error-bg); font-size: 14px; }
+.pos-success-dialog { width: calc(100% - 32px); max-width: 420px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--pos-border); border-radius: 18px; color: var(--pos-ink); background: var(--pos-surface); box-shadow: var(--pos-shadow); overflow-y: auto; }
+.pos-success-dialog::backdrop { background: var(--pos-overlay); }
+.pos-success-content { padding: 28px; text-align: center; }
+.pos-success-icon { width: 48px; height: 48px; color: var(--pos-success); margin: 0 auto 12px; }
+.pos-success-total { margin-top: 8px; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pos-success-reference { margin-top: 6px; font-weight: 600; }
+.pos-change dd { color: var(--pos-success); font-size: 20px; }
+@media (hover: hover) {
+  .pos-result:hover:not(:disabled), .pos-secondary:hover { background: var(--pos-soft); }
+  .pos-primary:hover:not(:disabled) { background: var(--pos-hover); }
+  .pos-scan-button:hover:not(:disabled) { background: var(--pos-soft); }
+}
+@media (min-width: 1024px) {
+  .pos-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+}
+@media (min-width: 1280px) {
+  .pos-cart-line { grid-template-columns: minmax(0, 1fr) 90px 110px 44px; }
+  .pos-line-product { grid-column: auto; }
+}
+@media (max-width: 374px) {
+  .pos-workflow .pos-payment-option { gap: 8px; padding: 12px 8px; }
+  .pos-panel { padding: 14px; }
+  .pos-success-content { padding: 20px; }
+  .pos-result { flex-direction: column; align-items: start; gap: 4px; }
+  .pos-result-meta { text-align: left; }
+}

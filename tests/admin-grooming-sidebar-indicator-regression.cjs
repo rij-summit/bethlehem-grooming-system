@@ -150,7 +150,7 @@ async function run() {
   for (const file of [
     'dashboard.html', 'clients.html', 'appointments.html', 'clinic.html', 'archive.html',
     'transactions.html', 'reports.html', 'notifications.html', 'settings.html',
-    'inventory/inventory.html', 'inventory/pos.html',
+    'inventory/inventory.html',
   ]) {
     const page = fs.readFileSync(path.join(__dirname, '../pages/admin', file), 'utf8');
     const groomingLink = page.match(/<a\b[^>]*href="[^"]*appointments\.html"[\s\S]*?<\/a>/)?.[0];
