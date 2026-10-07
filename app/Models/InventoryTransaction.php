@@ -70,4 +70,9 @@ class InventoryTransaction extends Model
     {
         return $this->belongsTo(Booking::class, 'reference_id', 'booking_id');
     }
+
+    public function clinicAppointment()
+    {
+        return $this->belongsTo(ClinicAppointment::class, 'reference_id', 'id');
+    }
 }

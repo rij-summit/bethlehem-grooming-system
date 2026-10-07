@@ -32,7 +32,8 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringNotContainsString('1. Owner and Pet Basic Information', $page);
         $this->assertStringNotContainsString('2. Basic Appointment Information', $page);
         $this->assertStringNotContainsString('9. Payment Information', $page);
-        $this->assertStringContainsString('text-3xl font-extrabold', $page);
+        $this->assertStringContainsString('<h3 class="mt-1 text-lg font-semibold text-white">Full Clinic Record</h3>', $page);
+        $this->assertStringContainsString('truncate text-xl font-semibold', $page);
         $this->assertStringContainsString('text-lg font-semibold', $page);
         $this->assertStringContainsString('text-base font-semibold', $page);
         $this->assertStringContainsString('text-sm font-medium', $page);

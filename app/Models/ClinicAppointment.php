@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
 
 class ClinicAppointment extends Model
 {
@@ -11,6 +12,8 @@ class ClinicAppointment extends Model
         'in_consultation',
         'for_payment',
     ];
+
+    public const COMPLETION_VITAL_FIELDS = ['weight_kg', 'temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm'];
 
     protected $table = 'clinic_appointments';
 
@@ -79,5 +82,32 @@ class ClinicAppointment extends Model
     public function vaccinationRecords()
     {
         return $this->hasMany(VaccinationRecord::class, 'clinic_appointment_id', 'id');
+    }
+
+    public function markCompleted(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'queue_number' => null,
+            'consultation_finished_at' => now(),
+        ]);
+    }
+
+    public function assertCompletionVitals(): void
+    {
+        if ($this->case_type === 'vaccination') {
+            return;
+        }
+
+        $vitals = $this->vitals()->first();
+        $errors = [];
+        foreach (self::COMPLETION_VITAL_FIELDS as $field) {
+            if ($vitals?->{$field} === null) {
+                $errors[$field] = 'Save the required consultation vitals in the Medical Record before finishing this case.';
+            }
+        }
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }

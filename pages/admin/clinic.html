@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Records | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -862,7 +862,7 @@
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div class="min-w-0">
                     <p class="break-words text-base font-bold text-[#2f4b66]" x-text="record.vaccine_name"></p>
-                    <p class="mt-0.5 break-words text-sm text-slate-500" x-text="record.product_name || 'Product name not provided'"></p>
+                    <p class="mt-0.5 break-words text-sm text-slate-500" x-text="record.batch_number ? `Batch ${record.batch_number}` : 'Batch not recorded'"></p>
                   </div>
                   <div class="flex flex-wrap gap-2 sm:justify-end">
                     <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" :class="stateBadgeClass(record.state)" x-text="stateLabel(record.state)"></span>
@@ -901,7 +901,7 @@
               <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
                 <div>
                   <h3 id="vaccination-form-title" class="text-lg font-bold text-[#2f4b66]" x-text="formModal.mode === 'edit' ? 'Edit Vaccination Draft' : 'Add Vaccination Record'"></h3>
-                  <p class="mt-1 text-xs text-slate-500">Patient: <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span> · Saving creates a draft.</p>
+                  <p class="mt-1 text-xs text-slate-500">Patient: <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span><template x-if="appointment?.appointment_reference"><span> · Case <span class="font-semibold text-slate-700" x-text="appointment.appointment_reference"></span></span></template> · Saving creates a draft.</p>
                 </div>
                 <button type="button" @click="closeForm()" :disabled="formModal.saving" aria-label="Close vaccination form" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 disabled:opacity-50">
                   <i data-lucide="x" class="h-5 w-5"></i>
@@ -914,62 +914,116 @@
                     <p class="font-bold">Please review the vaccination form.</p>
                     <p class="mt-1" x-text="formErrorSummary"></p>
                   </div>
-                  <section>
-                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccination information</h4>
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <label for="vaccination-vaccine-name" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Name <span class="text-red-600" aria-hidden="true">*</span></label>
-                        <input id="vaccination-vaccine-name" type="text" maxlength="150" required x-model="form.vaccine_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p x-show="fieldError('vaccine_name')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('vaccine_name')"></p>
+                  <div>
+                    <label for="vaccination-record-kind" class="mb-1 block text-xs font-semibold text-slate-600">Record type</label>
+                    <select id="vaccination-record-kind" x-model="recordKind" :disabled="formModal.saving" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
+                      <option value="inventory">Vaccination using current Bethlehem stock</option>
+                      <option value="historical">Historical or externally administered vaccination</option>
+                    </select>
+                    <p class="mt-2 text-xs text-slate-500" x-show="recordKind === 'inventory'">Publishing deducts one explicitly single-dose Inventory unit. Generic bottles, vials, and measured units require a confirmed stock policy first.</p>
+                    <p class="mt-2 text-xs text-slate-500" x-show="recordKind === 'historical'">Preserve the actual clinical details. Publication does not deduct current Inventory or finish a current case.</p>
+                  </div>
+                  <section x-show="recordKind === 'inventory'">
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Vaccine</h4>
+                    <div x-show="!selectedVaccine">
+                      <label for="vaccination-vaccine-search" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Name <span class="text-red-600" aria-hidden="true">*</span></label>
+                      <div class="relative">
+                        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                        <input id="vaccination-vaccine-search" type="search" autocomplete="off" x-model="vaccineQuery" :disabled="optionsLoading" placeholder="Search clinic vaccine inventory…" class="w-full rounded-xl border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100" />
                       </div>
-                      <div>
-                        <label for="vaccination-administered-date" class="mb-1 block text-xs font-semibold text-slate-600">Administration Date <span class="text-red-600" aria-hidden="true">*</span></label>
-                        <input id="vaccination-administered-date" type="date" required x-model="form.administered_date" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p x-show="fieldError('administered_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_date')"></p>
+                      <p x-show="formModal.unavailableVaccineName" class="mt-1 text-xs font-medium text-amber-700" x-text="`${formModal.unavailableVaccineName} is no longer available — choose another vaccine.`"></p>
+                      <p x-show="fieldError('inventory_item_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('inventory_item_id')"></p>
+                      <p x-show="optionsLoading" class="mt-2 text-xs text-slate-500">Loading clinic vaccine inventory…</p>
+                      <div x-show="!optionsLoading && optionsError" class="mt-2 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                        <span x-text="optionsError"></span>
+                        <button type="button" @click="loadOptions()" class="shrink-0 font-semibold underline">Retry</button>
                       </div>
-                      <div>
-                        <label for="vaccination-product-name" class="mb-1 block text-xs font-semibold text-slate-600">Product Name</label>
-                        <input id="vaccination-product-name" type="text" maxlength="150" x-model="form.product_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      <p x-show="!optionsLoading && !optionsError && vaccineOptions.length === 0" class="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">No vaccines in clinic inventory. Add stock through Inventory → Stock In first.</p>
+                      <div x-show="!optionsLoading && vaccineOptions.length > 0 && vaccineQuery.trim()" class="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-[#d7e3ef] bg-white" role="listbox" aria-label="Clinic vaccines">
+                        <template x-for="item in filteredVaccines()" :key="item.item_id">
+                          <button type="button" role="option" @click="selectVaccine(item)" :disabled="!vaccineSelectable(item)" :aria-disabled="!vaccineSelectable(item)"
+                            class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition hover:bg-[#eaf4fb] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white">
+                            <span class="min-w-0 truncate font-semibold text-slate-800" x-text="item.item_name"></span>
+                            <span class="shrink-0 text-xs" :class="vaccineSelectable(item) ? 'text-slate-500' : 'font-semibold text-red-600'" x-text="vaccineAvailabilityLabel(item)"></span>
+                          </button>
+                        </template>
+                        <p x-show="filteredVaccines().length === 0" class="px-4 py-3 text-sm text-slate-500">No matching vaccine found.</p>
                       </div>
-                      <div>
-                        <label for="vaccination-manufacturer" class="mb-1 block text-xs font-semibold text-slate-600">Manufacturer</label>
-                        <input id="vaccination-manufacturer" type="text" maxlength="150" x-model="form.manufacturer" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                    <div x-show="selectedVaccine" class="rounded-2xl bg-[#eaf4fb] p-4">
+                      <div class="flex items-center gap-3">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#315b7e]">
+                          <i data-lucide="package" class="h-4 w-4 text-white"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <p class="truncate font-semibold text-[#1f3850]" x-text="selectedVaccine?.item_name"></p>
+                          <p class="text-xs text-slate-500" x-text="selectedVaccine ? vaccineAvailabilityLabel(selectedVaccine) : ''"></p>
+                        </div>
+                        <button type="button" @click="clearVaccine()" aria-label="Change vaccine" title="Change vaccine" class="shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-white hover:text-red-500">
+                          <i data-lucide="x" class="h-4 w-4"></i>
+                        </button>
                       </div>
-                      <div>
-                        <label for="vaccination-batch-number" class="mb-1 block text-xs font-semibold text-slate-600">Batch Number</label>
-                        <input id="vaccination-batch-number" type="text" maxlength="100" x-model="form.batch_number" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                      </div>
-                      <div>
-                        <label for="vaccination-inventory-item" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Inventory Item</label>
-                        <select id="vaccination-inventory-item" x-model="form.inventory_item_id" :disabled="inventoryLoading" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100">
-                          <option value="" x-text="inventoryLoading ? 'Loading vaccine items…' : 'No inventory link'"></option>
-                          <template x-for="item in inventoryOptions()" :key="item.id">
-                            <option :value="String(item.id)" x-text="inventoryOptionLabel(item)"></option>
-                          </template>
-                        </select>
-                        <p class="mt-1 text-xs text-slate-400">Optional — stock will not be deducted.</p>
-                      </div>
+                      <p class="mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400"><i data-lucide="lock" class="h-3 w-3"></i> From clinic inventory</p>
+                      <dl class="mt-2 grid gap-4 sm:grid-cols-2">
+                        <div><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(selectedVaccine?.next_batch?.batch_number)"></dd></div>
+                        <div><dt class="text-xs font-semibold text-slate-400">Expiration Date</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="formatDate(selectedVaccine?.next_batch?.expiry_date)"></dd></div>
+                      </dl>
+                      <p class="mt-3 text-xs text-slate-500">Batch assigned automatically from available stock. 1 unit is deducted when this vaccination is published.</p>
+                    </div>
+                  </section>
+                  <section x-show="recordKind === 'historical'" class="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label for="historical-vaccine-name" class="mb-1 block text-xs font-semibold text-slate-600">Vaccine Name</label>
+                      <input id="historical-vaccine-name" x-model="form.vaccine_name" type="text" maxlength="150" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      <p class="mt-1 text-xs text-red-600" x-text="fieldError('vaccine_name')"></p>
+                    </div>
+                    <div>
+                      <label for="historical-product-name" class="mb-1 block text-xs font-semibold text-slate-600">Product Name</label>
+                      <input id="historical-product-name" x-model="form.product_name" type="text" maxlength="150" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                    <div>
+                      <label for="historical-manufacturer" class="mb-1 block text-xs font-semibold text-slate-600">Manufacturer</label>
+                      <input id="historical-manufacturer" x-model="form.manufacturer" type="text" maxlength="150" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                    <div>
+                      <label for="historical-batch" class="mb-1 block text-xs font-semibold text-slate-600">Batch Number</label>
+                      <input id="historical-batch" x-model="form.batch_number" type="text" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                    </div>
+                    <div>
+                      <label for="historical-expiry" class="mb-1 block text-xs font-semibold text-slate-600">Product Expiration Date</label>
+                      <input id="historical-expiry" x-model="form.product_expiry_date" type="date" :min="form.administered_date" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                      <p class="mt-1 text-xs text-red-600" x-text="fieldError('product_expiry_date')"></p>
                     </div>
                   </section>
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Schedule and administration</h4>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
-                        <label for="vaccination-next-due-date" class="mb-1 block text-xs font-semibold text-slate-600">Next Due Date</label>
-                        <input id="vaccination-next-due-date" type="date" x-model="form.next_due_date" :min="form.administered_date || null" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <label for="vaccination-administered-date" class="mb-1 block text-xs font-semibold text-slate-600">Administration Date</label>
+                        <div x-show="recordKind === 'inventory'" class="relative">
+                          <input id="vaccination-administered-date" type="text" readonly tabindex="-1" aria-readonly="true" :value="formatDate(form.administered_date)" class="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 pr-9 text-sm text-slate-600 outline-none" />
+                          <i data-lucide="lock" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+                        </div>
+                        <label x-show="recordKind === 'historical'" for="historical-administered-date" class="sr-only">Actual administration date</label>
+                        <input x-show="recordKind === 'historical'" id="historical-administered-date" type="date" x-model="form.administered_date" :max="vaccinationToday()" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p x-show="recordKind === 'inventory'" class="mt-1 text-xs text-slate-400">New administrations use today; existing dates are preserved.</p>
+                        <p class="mt-1 text-xs text-red-600" x-text="fieldError('administered_date')"></p>
                       </div>
                       <div>
-                        <label for="vaccination-product-expiry" class="mb-1 block text-xs font-semibold text-slate-600">Product Expiration Date</label>
-                        <input id="vaccination-product-expiry" type="date" x-model="form.product_expiry_date" :min="form.administered_date || null" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <label for="vaccination-next-due-date" class="mb-1 block text-xs font-semibold text-slate-600">Next Vaccination Date</label>
+                        <input id="vaccination-next-due-date" type="date" x-model="form.next_due_date" :min="form.administered_date" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        <p x-show="fieldError('next_due_date')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('next_due_date')"></p>
                       </div>
                       <div class="grid grid-cols-2 gap-3">
                         <div>
-                          <label for="vaccination-dose-amount" class="mb-1 block text-xs font-semibold text-slate-600">Dose Amount</label>
-                          <input id="vaccination-dose-amount" type="number" min="0.001" step="0.001" x-model="form.dose_amount" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                          <label for="vaccination-dose-amount" class="mb-1 block text-xs font-semibold text-slate-600">Dose Amount <span x-show="recordKind === 'inventory'" class="text-red-600" aria-hidden="true">*</span></label>
+                          <input id="vaccination-dose-amount" type="number" :required="recordKind === 'inventory'" min="0.001" max="99999.999" step="0.001" placeholder="e.g. 1" x-model="form.dose_amount" class="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" :class="fieldError('dose_amount') ? 'border-red-400' : 'border-slate-300'" />
+                          <p x-show="fieldError('dose_amount')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_amount')"></p>
                         </div>
                         <div>
-                          <label for="vaccination-dose-unit" class="mb-1 block text-xs font-semibold text-slate-600">Dose Unit</label>
-                          <input id="vaccination-dose-unit" type="text" maxlength="30" placeholder="e.g. mL" x-model="form.dose_unit" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                          <label for="vaccination-dose-unit" class="mb-1 block text-xs font-semibold text-slate-600">Dose Unit <span x-show="recordKind === 'inventory'" class="text-red-600" aria-hidden="true">*</span></label>
+                          <input id="vaccination-dose-unit" type="text" :required="recordKind === 'inventory'" maxlength="30" placeholder="e.g. mL" x-model="form.dose_unit" class="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" :class="fieldError('dose_unit') ? 'border-red-400' : 'border-slate-300'" />
+                          <p x-show="fieldError('dose_unit')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('dose_unit')"></p>
                         </div>
                       </div>
                       <div>
@@ -985,24 +1039,31 @@
                         <label for="vaccination-site" class="mb-1 block text-xs font-semibold text-slate-600">Administration Site</label>
                         <input id="vaccination-site" type="text" maxlength="100" placeholder="e.g. Right shoulder" x-model="form.administration_site" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
                       </div>
-                      <div>
-                        <label for="vaccination-appointment" class="mb-1 block text-xs font-semibold text-slate-600">Clinic Appointment</label>
-                        <select id="vaccination-appointment" x-model="form.clinic_appointment_id" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]">
-                          <option value="">No appointment link</option>
-                          <template x-for="option in appointmentOptions()" :key="option.id">
-                            <option :value="String(option.id)" x-text="option.label"></option>
-                          </template>
-                        </select>
-                      </div>
                     </div>
                   </section>
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Provider and notes</h4>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
-                        <label for="vaccination-provider-name" class="mb-1 block text-xs font-semibold text-slate-600">Administering Provider Name</label>
-                        <input id="vaccination-provider-name" type="text" maxlength="200" placeholder="e.g. Dr. Ana Santos" x-model="form.administered_by_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
-                        <p x-show="formModal.linkedProviderAccountName" class="mt-1 text-xs font-medium text-[#315b7e]">Linked: <span x-text="formModal.linkedProviderAccountName"></span></p>
+                        <label for="vaccination-provider" class="mb-1 block text-xs font-semibold text-slate-600">Administered By <span class="text-red-600" aria-hidden="true">*</span></label>
+                        <div class="flex gap-2">
+                          <select id="vaccination-provider" required x-model="form.administered_by_user_id" :disabled="optionsLoading" class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-100">
+                            <option value="">Select yourself or a veterinarian…</option>
+                            <template x-for="provider in veterinarians" :key="provider.user_id">
+                              <option :value="String(provider.user_id)" x-text="providerOptionLabel(provider)" :selected="String(provider.user_id) === form.administered_by_user_id"></option>
+                            </template>
+                          </select>
+                          <a x-show="canManageStaff" href="settings.html?tab=security" target="_blank" rel="noopener" title="Add a veterinarian account in Settings"
+                            class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#bfd2e4] bg-[#eef5fb] px-3 py-2.5 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5]">
+                            <i data-lucide="user-round-plus" class="h-4 w-4"></i> Add veterinarian
+                          </a>
+                        </div>
+                        <p x-show="!canManageStaff" class="mt-1 text-xs text-slate-400">Vet not listed? Ask an administrator to add a veterinarian account.</p>
+                        <div x-show="recordKind === 'historical'" class="mt-3">
+                          <label for="historical-provider" class="mb-1 block text-xs font-semibold text-slate-600">External provider name (if no account selected)</label>
+                          <input id="historical-provider" type="text" maxlength="200" x-model="form.administered_by_name" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" />
+                        </div>
+                        <p x-show="fieldError('administered_by_user_id')" class="mt-1 text-xs font-medium text-red-600" x-text="fieldError('administered_by_user_id')"></p>
                       </div>
                       <div class="md:col-span-2">
                         <label for="vaccination-notes" class="mb-1 block text-xs font-semibold text-slate-600">Notes</label>
@@ -1016,7 +1077,7 @@
                   <button type="submit" :disabled="formModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-60">
                     <span x-text="formModal.saving ? 'Saving Draft…' : (formModal.mode === 'edit' ? 'Save Draft Changes' : 'Save as Draft')"></span>
                   </button>
-                  <button type="button" @click="saveAndFinishCase()" :disabled="formModal.saving || !appointment?.id" class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">Save and Finish Case</button>
+                  <button type="button" x-show="recordKind === 'inventory'" @click="saveAndFinishCase()" :disabled="formModal.saving || !appointment?.id" class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">Save and Finish Case</button>
                 </div>
               </form>
             </div>
@@ -1046,7 +1107,6 @@
                     <div><dt class="text-xs font-semibold text-slate-400">Vaccine Name</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="detailModal.record.vaccine_name"></dd></div>
                     <div><dt class="text-xs font-semibold text-slate-400">Administration Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.administered_date)"></dd></div>
                     <div><dt class="text-xs font-semibold text-slate-400">Next Due Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.next_due_date)"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400">Manufacturer</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.manufacturer)"></dd></div>
                     <div><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.batch_number)"></dd></div>
                     <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="doseLabel(detailModal.record)"></dd></div>
                     <div><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-1 break-words text-sm font-medium capitalize text-slate-700" x-text="displayValue(detailModal.record.route).replace('_', ' ')"></dd></div>
@@ -1084,22 +1144,49 @@
             </div>
           </div>
 
-          <!-- Toast -->
-          <div x-show="toast.show" style="display:none" x-transition
-            class="fixed right-4 top-20 z-[260] flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
-            :class="toast.ok ? 'bg-emerald-600' : 'bg-red-600'" role="status" aria-live="polite">
-            <i :data-lucide="toast.ok ? 'check-circle' : 'circle-alert'" class="h-5 w-5 shrink-0"></i>
-            <span x-text="toast.message"></span>
-          </div>
         </section>
       </div>
     </div>
 
+    <!-- Shared clinic confirm dialog and toast (replaces browser alert/confirm) -->
+    <div x-data>
+      <div x-cloak x-show="$store.clinicFeedback.dialog.open" style="display:none" x-transition
+        class="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/75 px-4"
+        @keydown.escape.window="if ($store.clinicFeedback.dialog.open) $store.clinicFeedback.answer(false)">
+        <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="clinic-confirm-title" aria-describedby="clinic-confirm-message">
+          <div class="px-6 py-5">
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl"
+              :class="$store.clinicFeedback.dialog.danger ? 'bg-red-50 text-red-600' : 'bg-[#eef5fb] text-[#315b7e]'">
+              <span x-show="$store.clinicFeedback.dialog.danger"><i data-lucide="circle-alert" class="h-6 w-6"></i></span>
+              <span x-show="!$store.clinicFeedback.dialog.danger"><i data-lucide="info" class="h-6 w-6"></i></span>
+            </div>
+            <h3 id="clinic-confirm-title" class="mt-4 text-lg font-bold text-slate-800" x-text="$store.clinicFeedback.dialog.title"></h3>
+            <p id="clinic-confirm-message" class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600" x-text="$store.clinicFeedback.dialog.message"></p>
+          </div>
+          <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+            <button type="button" @click="$store.clinicFeedback.answer(false)" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" x-text="$store.clinicFeedback.dialog.cancelLabel"></button>
+            <button type="button" @click="$store.clinicFeedback.answer(true)" x-effect="if ($store.clinicFeedback.dialog.open) $nextTick(() => $el.focus())"
+              class="rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+              :class="$store.clinicFeedback.dialog.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-[#315b7e] hover:bg-[#274864]'"
+              x-text="$store.clinicFeedback.dialog.confirmLabel"></button>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="$store.clinicFeedback.toast.show" style="display:none" x-transition
+        class="fixed right-4 top-20 z-[270] flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
+        :class="$store.clinicFeedback.toast.ok ? 'bg-emerald-600' : 'bg-red-600'" role="status" aria-live="polite">
+        <span x-show="$store.clinicFeedback.toast.ok" class="shrink-0"><i data-lucide="check-circle" class="h-5 w-5"></i></span>
+        <span x-show="!$store.clinicFeedback.toast.ok" class="shrink-0"><i data-lucide="circle-alert" class="h-5 w-5"></i></span>
+        <span x-text="$store.clinicFeedback.toast.message"></span>
+      </div>
+    </div>
+
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-attachment-view-20261001"></script>
-    <script src="../../scripts/components/admin-vaccinations.js"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007"></script>
+    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

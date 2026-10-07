@@ -701,7 +701,7 @@ class InventorySecurityRegressionTest extends TestCase
                 "{$pageName} must invalidate the old localhost-only inventory client.",
             );
             $this->assertStringContainsString(
-                'scripts/components/admin-sidebar.js?v=unified-inventory-20261001b',
+                'scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005',
                 $page,
                 "{$pageName} must invalidate stale logout handling.",
             );

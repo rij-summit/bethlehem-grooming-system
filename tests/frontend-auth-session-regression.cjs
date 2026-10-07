@@ -255,7 +255,7 @@ async function testReal401ClearsAndUsesNestedSafePath() {
     fetchImpl: async () => jsonResponse(401, { message: "Unauthenticated." }),
   });
 
-  await assert.rejects(() => browser.API.getAdminInventoryItems(), /Unauthenticated/);
+  await assert.rejects(() => browser.API.getAdminVaccinationOptions(), /Unauthenticated/);
   assert.equal(browser.API.getUserRole(), null);
   assert.equal(browser.localStorage.getItem("admin_token"), null);
   assert.equal(
@@ -872,7 +872,7 @@ function testStaticAuthContracts() {
       if (matchedAsset) {
         assert.match(
           source,
-          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|site-assets-20261001|customer-cache-20261005-v1|signup-code-20261005|clinic-records-20260906|clinic-owner-groups-20260926|clinic-attachment-view-20261001|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|staff-settings-20260928|grooming-today-indicator-20261005|grooming-notes-20260927|unified-inventory-20261001b|product-search-stock-20261002b?)(?:$|&)/,
+          /\?v=(?:auth-session-20260816|pending-registration-20260818|customer-actions-20260927|login-email-auth-20260819|login-approval-polling-20260819|login-code-20260819|admin-notifications-20260821|sedation-consent-20260822|admin-login-code-20260828|security-code-20260828|password-reset-20260828|password-code-20260928|password-code-ui-20260928|session-inactivity-20260828|staff-identity-20260830|site-assets-20261001|customer-cache-20261005-v1|signup-code-20261005|clinic-records-20260906|clinic-owner-groups-20260926|clinic-attachment-view-20261001|vaccination-inventory-20261001|clinic-feedback-dialog-20261001|clinic-merge-20261007|grooming-size-confirmation-20260915|staff-password-setup-20260923|staff-setup-link-renewal-20260923|staff-settings-20260923|staff-settings-20260928|grooming-today-indicator-20261005|grooming-notes-20260927|unified-inventory-20261001b|product-search-stock-20261002b?)(?:$|&)/,
           `Stale ${matchedAsset} cache key in ${path.relative(projectRoot, htmlFile)}`,
         );
       }

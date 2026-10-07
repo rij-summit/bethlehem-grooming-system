@@ -1958,11 +1958,11 @@ var API = (() => {
     );
   }
 
-  async function publishAdminPetVaccination(petId, vaccinationId) {
+  async function publishAdminPetVaccination(petId, vaccinationId, { finishCase = false, consumeInventory = null } = {}) {
     return request(
       "POST",
       `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}/publish`,
-      {},
+      { ...(finishCase ? { finish_case: true } : {}), ...(consumeInventory === null ? {} : { consume_inventory: consumeInventory }) },
       getAdminToken(),
     );
   }
@@ -1976,21 +1976,8 @@ var API = (() => {
     );
   }
 
-  async function getAdminInventoryItems({
-    category = "",
-    includeInactive = false,
-    page = 1,
-  } = {}) {
-    const params = new URLSearchParams({ page: String(page) });
-    if (category) params.set("category", category);
-    if (includeInactive) params.set("include_inactive", "1");
-
-    return request(
-      "GET",
-      `/inventory/items?${params.toString()}`,
-      null,
-      getAdminToken(),
-    );
+  async function getAdminVaccinationOptions() {
+    return request("GET", "/admin/vaccination-options", null, getAdminToken());
   }
 
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {
@@ -2177,7 +2164,7 @@ var API = (() => {
     updateAdminPetVaccination,
     publishAdminPetVaccination,
     voidAdminPetVaccination,
-    getAdminInventoryItems,
+    getAdminVaccinationOptions,
     // Email verification
     verifyEmail,
     updatePendingRegistration,

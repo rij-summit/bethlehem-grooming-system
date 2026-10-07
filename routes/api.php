@@ -188,6 +188,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/clinic-appointments/{id}/attachments/{attachmentId}/download', [AdminClinicController::class, 'downloadAttachment']);
         Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}', [AdminClinicController::class, 'deleteAttachment']);
 
+        Route::get('/admin/vaccination-options', [AdminVaccinationController::class, 'options']);
         Route::get('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'index']);
         Route::post('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'store']);
         Route::get('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'show']);
