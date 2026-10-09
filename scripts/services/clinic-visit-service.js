@@ -28,6 +28,17 @@ export function clearClinicVisitDraft() {
   sessionStorage.removeItem(CLINIC_VISIT_CONFIRMATION_KEY);
 }
 
+export function clearClinicVisitArrival(appointmentDate) {
+  return updateClinicVisitDraft({
+    ...(appointmentDate === undefined ? {} : { appointmentDate }),
+    windowId: null,
+    windowLabel: "",
+    startTime: "",
+    endTime: "",
+    scheduleText: "",
+  });
+}
+
 export const CLINIC_CONCERNS = [
   "Routine check-up", "Vaccination", "Vomiting", "Diarrhea",
   "Not eating", "Skin / itching", "Ear problem", "Eye problem",

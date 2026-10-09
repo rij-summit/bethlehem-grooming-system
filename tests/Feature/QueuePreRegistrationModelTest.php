@@ -15,6 +15,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class QueuePreRegistrationModelTest extends TestCase
@@ -290,6 +291,89 @@ class QueuePreRegistrationModelTest extends TestCase
         $this->assertFalse($service->preferredWindows(ClinicSetting::current(), 'grooming', now()->addDay()->toDateString())[1]['is_closed']);
         Carbon::setTestNow('2026-10-09 14:01:00');
         $this->assertTrue($service->preferredWindows(ClinicSetting::current(), 'grooming', now()->toDateString())[1]['is_cutoff']);
+    }
+
+    #[DataProvider('preferredArrivalBoundaries')]
+    public function test_preferred_arrival_windows_expire_at_their_end_for_both_services(string $flow, string $time, bool $available): void
+    {
+        Carbon::setTestNow("2026-10-09 {$time}");
+        $settings = ClinicSetting::current();
+        $settings->update([
+            "{$flow}_open_time" => '18:00:00',
+            "{$flow}_close_time" => '22:00:00',
+            "{$flow}_prereg_cutoff_time" => '22:00:00',
+        ]);
+        $window = TimeWindow::create([
+            'window_label' => '7:00 PM - 8:00 PM',
+            'start_time' => '19:00:00', 'end_time' => '20:00:00', 'is_active' => true,
+        ]);
+        $service = app(AvailabilityTimeWindowService::class);
+        $this->assertSame(! $available, $service->preferredWindows($settings, $flow, '2026-10-09')[0]['is_past']);
+
+        if ($available) {
+            $service->assertPreferredArrival($settings, $flow, '2026-10-09', $window);
+        } else {
+            try {
+                $service->assertPreferredArrival($settings, $flow, '2026-10-09', $window);
+                $this->fail('An ended arrival window must be rejected.');
+            } catch (ValidationException $exception) {
+                $this->assertSame('arrival_window_ended', $exception->response->getData(true)['code']);
+            }
+        }
+
+        // Tomorrow is unaffected by today's time, even after the same-day cutoff.
+        Carbon::setTestNow('2026-10-09 23:00:00');
+        $future = $service->preferredWindows($settings, $flow, '2026-10-10')[0];
+        $this->assertFalse($future['is_past']);
+        $this->assertFalse($future['is_cutoff']);
+        $service->assertPreferredArrival($settings, $flow, '2026-10-10', $window);
+    }
+
+    public static function preferredArrivalBoundaries(): array
+    {
+        $cases = [];
+        foreach (['clinic', 'grooming'] as $flow) {
+            foreach (['18:59:00' => true, '19:00:00' => true, '19:05:00' => true, '19:59:00' => true, '20:00:00' => false] as $time => $available) {
+                $cases["{$flow} at {$time}"] = [$flow, $time, $available];
+            }
+        }
+        return $cases;
+    }
+
+    public function test_cutoff_closures_and_operating_hours_still_override_active_arrival_windows(): void
+    {
+        Carbon::setTestNow('2026-10-09 19:05:00');
+        $service = app(AvailabilityTimeWindowService::class);
+        $window = TimeWindow::create([
+            'window_label' => '7:00 PM - 8:00 PM',
+            'start_time' => '19:00:00', 'end_time' => '20:00:00', 'is_active' => true,
+        ]);
+        foreach (['clinic', 'grooming'] as $flow) {
+            foreach (['cutoff', 'blocked_date', 'stop_today', 'operating_hours'] as $restriction) {
+                $settings = ClinicSetting::current();
+                $settings->update([
+                    "{$flow}_open_time" => '18:00:00',
+                    "{$flow}_close_time" => $restriction === 'operating_hours' ? '19:00:00' : '22:00:00',
+                    "{$flow}_prereg_cutoff_time" => $restriction === 'cutoff' ? '19:00:00' : '22:00:00',
+                ]);
+                if (in_array($restriction, ['blocked_date', 'stop_today'], true)) {
+                    DB::table('clinic_closures')->insert([
+                        'type' => $restriction, 'start_date' => '2026-10-09', 'end_date' => '2026-10-09',
+                    ]);
+                    $this->assertTrue($service->preferredWindows($settings, $flow, '2026-10-09')[0]['is_closed']);
+                } else {
+                    $this->assertCount(0, $service->preferredWindows($settings, $flow, '2026-10-09'));
+                }
+                try {
+                    $service->assertPreferredArrival($settings, $flow, '2026-10-09', $window);
+                    $this->fail("{$flow}: {$restriction} must block an active window.");
+                } catch (ValidationException $exception) {
+                    $this->assertArrayHasKey('window_id', $exception->errors());
+                    $this->assertNull($exception->response);
+                }
+                DB::table('clinic_closures')->delete();
+            }
+        }
     }
 
     public function test_stop_today_blocks_intake_without_changing_unused_registrations_and_reopen_restores_intake(): void

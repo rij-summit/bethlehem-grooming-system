@@ -111,7 +111,7 @@ class AvailabilityTimeWindowService
             'window_label' => $window->displayLabel(),
             'start_time' => $window->start_time,
             'end_time' => $window->end_time,
-            'is_past' => $date.' '.substr($window->start_time, 0, 8) <= now()->format('Y-m-d H:i:s'),
+            'is_past' => $this->windowHasEnded($date, $window),
             'is_cutoff' => $cutoff,
             'is_closed' => $closed,
         ]);
@@ -120,13 +120,37 @@ class AvailabilityTimeWindowService
     public function assertPreferredArrival(ClinicSetting $settings, string $service, string $date, TimeWindow $window): void
     {
         if ($this->isClosed($date)
-            || $date.' '.substr($window->start_time, 0, 8) <= now()->format('Y-m-d H:i:s')
             || ! $window->is_active
             || ! $settings->isWindowWithinOperatingHours($service, $window->start_time, $window->end_time)
             || $settings->isSameDayPreRegistrationCutoffPassed($service, $date)) {
             throw ValidationException::withMessages([
-                'window_id' => 'This preferred arrival time is unavailable. Please choose another date or time.',
+                'window_id' => 'This preferred arrival window is unavailable. Please choose another date or time.',
             ]);
         }
+
+        $this->assertWindowHasNotEnded($date, $window);
+    }
+
+    private function windowHasEnded(string $date, TimeWindow $window): bool
+    {
+        return $date.' '.substr($window->end_time, 0, 8) <= now()->format('Y-m-d H:i:s');
+    }
+
+    public function assertWindowHasNotEnded(string $date, TimeWindow $window): void
+    {
+        if (! $this->windowHasEnded($date, $window)) {
+            return;
+        }
+
+        $message = 'That arrival window just ended. Please choose the next available time.';
+        $exception = ValidationException::withMessages(['window_id' => $message]);
+        $exception->response = response()->json([
+            'success' => false,
+            'code' => 'arrival_window_ended',
+            'message' => $message,
+            'errors' => $exception->errors(),
+        ], 422);
+
+        throw $exception;
     }
 }

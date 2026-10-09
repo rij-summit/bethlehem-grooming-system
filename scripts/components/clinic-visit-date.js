@@ -3,6 +3,7 @@ import {
   CLINIC_VISIT_DRAFT_KEY,
   requireCustomerSession,
   updateClinicVisitDraft,
+  clearClinicVisitArrival,
 } from "../services/clinic-visit-service.js";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
@@ -23,16 +24,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     dateField: "appointmentDate",
     nextPath: "./booking-pet-details.html?flow=clinic",
     fetchTimeslots: (date) => API.getClinicTimeslots(date),
-    onDateSelected: (appointmentDate) => {
-      updateClinicVisitDraft({
-        appointmentDate,
-        windowId: null,
-        windowLabel: "",
-        startTime: "",
-        endTime: "",
-        scheduleText: "",
-      });
-    },
+    clearSelection: () => clearClinicVisitArrival(),
+    onDateSelected: (appointmentDate) => clearClinicVisitArrival(appointmentDate),
     saveSelection: (selection) => {
       updateClinicVisitDraft({
         appointmentDate: selection.date,

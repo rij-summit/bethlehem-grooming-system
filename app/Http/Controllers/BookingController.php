@@ -771,12 +771,7 @@ class BookingController extends Controller
             ], 422);
         }
 
-        if ($this->windowHasStarted($newDate, $newWindow)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The selected grooming time has already passed.',
-            ], 422);
-        }
+        app(AvailabilityTimeWindowService::class)->assertWindowHasNotEnded($newDate, $newWindow);
 
         $previousSchedule = $this->notificationScheduleLabel(
             (string) $booking->booking_date,
@@ -809,22 +804,6 @@ class BookingController extends Controller
                 'reschedule_count' => $booking->reschedule_count,
             ],
         ]);
-    }
-
-    private function windowHasStarted(string $bookingDate, TimeWindow $window): bool
-    {
-        if ($bookingDate !== now()->toDateString()) {
-            return false;
-        }
-
-        $startTime = substr((string) $window->start_time, 0, 8);
-        $startsAt = Carbon::createFromFormat(
-            'Y-m-d H:i:s',
-            "{$bookingDate} {$startTime}",
-            config('app.timezone'),
-        );
-
-        return $startsAt->lessThanOrEqualTo(now());
     }
 
     private function notificationScheduleLabel(string $date, ?TimeWindow $window): string

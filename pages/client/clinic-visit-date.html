@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clinic Visit - Date and Time</title>
+    <title>Clinic Visit - Preferred Arrival</title>
     <link rel="stylesheet" href="../../css/output.css" />
   </head>
   <body class="min-h-screen bg-[#f6fafd] text-slate-800">
@@ -19,7 +19,7 @@
 
         <div class="mt-4">
           <h1 class="text-3xl font-bold text-[#2f4b66]">
-            Choose Your Preferred Clinic Visit Date and Time
+            Choose Your Preferred Clinic Arrival
           </h1>
         </div>
 
@@ -72,7 +72,7 @@
               <ul class="mt-2 space-y-1">
                 <li id="operatingHoursText">&bull; Loading clinic hours...</li>
                 <li>&bull; Select today or one of the next two days</li>
-                <li>&bull; Past dates, past times, and clinic closure dates are unavailable</li>
+                <li>&bull; Past dates, ended arrival windows, and clinic closure dates are unavailable</li>
                 <li>&bull; 12:00 PM to 1:00 PM is reserved as a break</li>
                 <li class="flex items-center gap-1.5">
                   <span class="inline-block h-3 w-3 shrink-0 rounded bg-[#fef9c3]"></span>
@@ -83,20 +83,21 @@
           </div>
 
           <div class="rounded-3xl bg-[#d7ebfb] p-5">
-            <h2 class="text-xl font-bold text-[#2f4b66]">Preferred Clinic Arrival Time</h2>
+            <h2 class="text-xl font-bold text-[#2f4b66]">When do you expect to arrive?</h2>
             <p class="mt-2 text-sm text-slate-500">
-              Choose approximately when you plan to arrive. This does not reserve a queue position. Your pet joins the queue after check-in at the clinic.
+              Choose your preferred arrival window. Your queue position will be assigned when you check in.
             </p>
+            <p id="arrivalWindowNotice" role="alert" class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></p>
             <div
               id="timeSlots"
               class="mt-5 grid max-h-80 grid-cols-2 gap-3 overflow-y-auto overscroll-contain pr-1"
             ></div>
             <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Planned Clinic Arrival
+                Preferred Arrival
               </p>
               <p id="selectedScheduleText" class="mt-2 text-sm text-slate-600">
-                Please select a clinic visit date and time.
+                Please select a date and preferred arrival window.
               </p>
             </div>
             <div class="mt-6 flex justify-end">

@@ -23,7 +23,7 @@
 
         <div class="mt-4">
           <h1 class="text-3xl font-bold text-[#2f4b66]">
-            Choose Your Preferred Drop-off Date and Time
+            Choose Your Preferred Drop-off Window
           </h1>
         </div>
 
@@ -99,7 +99,7 @@
               <p class="font-semibold text-slate-600">Pre-registration Guidelines:</p>
               <ul class="mt-2 space-y-1">
                 <li id="operatingHoursText">• Loading pet grooming hours...</li>
-                <li>• Past dates and past time slots are unavailable</li>
+                <li>• Past dates and ended arrival windows are unavailable</li>
                 <li>• 12:00 PM to 1:00 PM is reserved as a break</li>
                 <li>• Pre-registration is limited to the next 3 days only</li>
                 <li class="flex items-center gap-1.5">
@@ -114,10 +114,11 @@
           <div class="rounded-3xl bg-[#d7ebfb] p-5">
             <div>
               <h3 class="text-lg font-bold text-[#2f4b66]">
-                Preferred Drop-off Time
+                When do you expect to arrive?
               </h3>
-              <p class="mt-2 text-sm text-slate-500">Choose approximately when you plan to arrive. This does not reserve a queue position. Your pet joins the queue after check-in at the clinic.</p>
+              <p class="mt-2 text-sm text-slate-500">Choose your preferred arrival window. Your queue position will be assigned when you check in.</p>
             </div>
+            <p id="arrivalWindowNotice" role="alert" class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></p>
 
             <div
               id="timeSlots"

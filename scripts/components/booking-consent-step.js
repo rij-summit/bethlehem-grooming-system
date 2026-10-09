@@ -154,6 +154,13 @@ export function initBookingConsentStep() {
       submitBookingButton.disabled = false;
       submitBookingButton.textContent = "Submit Registration";
 
+      if (error.code === "arrival_window_ended") {
+        sessionStorage.removeItem("bookingSchedule");
+        sessionStorage.setItem("bookingScheduleArrivalError", error.message);
+        goToGroomingStep("schedule");
+        return;
+      }
+
       const existingBookingId = error.errors?.existing_booking_id;
       if (existingBookingId) {
         openDuplicateModal(existingBookingId, error.errors.existing_booking_ref, schedule);

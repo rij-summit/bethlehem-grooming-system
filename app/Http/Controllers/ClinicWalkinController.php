@@ -18,7 +18,6 @@ use App\Services\ClinicAppointmentSequence;
 use App\Services\CustomerPreRegistrationAccessService;
 use App\Support\ClinicConcerns;
 use App\Support\PetWeightSize;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -132,12 +131,7 @@ class ClinicWalkinController extends Controller
                 ], 422);
             }
 
-            if ($this->windowHasStarted($appointmentDate, $window)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The selected clinic visit time has already passed.',
-                ], 422);
-            }
+            app(AvailabilityTimeWindowService::class)->assertWindowHasNotEnded($appointmentDate, $window);
 
             $pet = Pet::whereKey($data['pet_id'])
                 ->where('user_id', $user->user_id)
@@ -359,22 +353,6 @@ class ClinicWalkinController extends Controller
                 ]);
 
         return [$user, $unregisteredCustomer, $owner];
-    }
-
-    private function windowHasStarted(string $appointmentDate, TimeWindow $window): bool
-    {
-        if ($appointmentDate !== now()->toDateString()) {
-            return false;
-        }
-
-        $startTime = substr((string) $window->start_time, 0, 8);
-        $startsAt = Carbon::createFromFormat(
-            'Y-m-d H:i:s',
-            "{$appointmentDate} {$startTime}",
-            config('app.timezone'),
-        );
-
-        return $startsAt->lessThanOrEqualTo(now());
     }
 
     private function findOrCreatePet(

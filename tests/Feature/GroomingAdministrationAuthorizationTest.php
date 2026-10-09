@@ -2542,6 +2542,64 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => null, 'grooming_estimate_max' => null]);
     }
 
+    #[DataProvider('groomingArrivalWindowCases')]
+    public function test_grooming_arrival_window_availability_and_submission(string $time, string $date, ?string $restriction, bool $accepted): void
+    {
+        Carbon::setTestNow("2026-10-09 {$time}");
+        $this->authenticateAs('customer');
+        DB::table('clinic_settings')->where('id', 1)->update([
+            'grooming_open_time' => '18:00:00', 'grooming_close_time' => '22:00:00',
+            'grooming_prereg_cutoff_time' => $restriction === 'cutoff' ? '19:00:00' : '22:00:00',
+        ]);
+        DB::table('time_windows')->insert([
+            'window_id' => 1, 'start_time' => '19:00:00', 'end_time' => '20:00:00', 'window_label' => '7:00 PM - 8:00 PM',
+        ]);
+        if (in_array($restriction, ['blocked_date', 'stop_today'], true)) {
+            DB::table('clinic_closures')->insert(['type' => $restriction, 'start_date' => $date, 'end_date' => $date]);
+        }
+
+        $availability = $this->getJson('/api/timeslots?date='.$date)->assertOk();
+        if ($restriction === 'cutoff') {
+            $availability->assertJsonPath('cutoff_passed', true)->assertJsonCount(0, 'windows');
+        } else {
+            $availability->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
+                ->assertJsonPath('windows.0.is_closed', $restriction !== null);
+        }
+        $response = $this->postJson('/api/booking/store', [
+            'booking_date' => $date, 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Mochi', 'species' => 'cat']],
+        ]);
+        if ($accepted) {
+            $response->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
+            $this->assertDatabaseHas('bookings', ['window_id' => 1, 'queue_number' => null, 'dropped_off_at' => null]);
+        } else {
+            $response->assertUnprocessable();
+            $this->assertDatabaseCount('bookings', 0);
+            if ($restriction === null) {
+                $response->assertJsonPath('code', 'arrival_window_ended')
+                    ->assertJsonPath('message', 'That arrival window just ended. Please choose the next available time.')
+                    ->assertJsonValidationErrors('window_id');
+            } else {
+                $this->assertNotSame('arrival_window_ended', $response->json('code'));
+            }
+        }
+    }
+
+    public static function groomingArrivalWindowCases(): array
+    {
+        return [
+            'before start' => ['18:59:00', '2026-10-09', null, true],
+            'at start' => ['19:00:00', '2026-10-09', null, true],
+            'inside window' => ['19:05:00', '2026-10-09', null, true],
+            'before end' => ['19:59:00', '2026-10-09', null, true],
+            'at end' => ['20:00:00', '2026-10-09', null, false],
+            'cutoff during window' => ['19:05:00', '2026-10-09', 'cutoff', false],
+            'blocked date' => ['19:05:00', '2026-10-09', 'blocked_date', false],
+            'stopped today' => ['19:05:00', '2026-10-09', 'stop_today', false],
+            'future date after cutoff' => ['23:00:00', '2026-10-10', null, true],
+        ];
+    }
+
     private function authenticateAs(string $role): void
     {
         $user = new User;

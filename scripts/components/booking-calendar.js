@@ -41,6 +41,7 @@ const state = {
     nextPath: "./grooming-pre-registration.html?step=pets",
     fetchTimeslots: (dateKey) => API.getTimeslots(dateKey),
     saveSelection: null,
+    clearSelection: null,
     onDateSelected: null,
     onNext: null,
   },
@@ -60,6 +61,7 @@ const elements = {
   nextStepBtn: document.getElementById("nextStepBtn"),
   clinicNotice: document.getElementById("clinicNotice"),
   operatingHoursText: document.getElementById("operatingHoursText"),
+  arrivalWindowNotice: document.getElementById("arrivalWindowNotice"),
 };
 
 // =========================
@@ -251,18 +253,31 @@ function updateOperatingHoursText() {
 
 /**
  * Check if a slot from the API should be disabled for the selected date.
- * For today, disable any slot whose start time has already passed in Manila time.
+ * For today, a preferred arrival window remains available until its end time.
  */
 function isSlotDisabled(slot) {
-  if (slot.is_closed || slot.is_past || slot.is_cutoff) return true;
+  if (slot.is_closed || slot.is_past || slot.is_cutoff || isDateDisabled(state.selectedDateKey)) return true;
 
   if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
-    const slotStartMinutes = timeStringToMinutes(slot.start_time);
-    if (currentMinutes >= slotStartMinutes) return true;
+    const slotEndMinutes = timeStringToMinutes(slot.end_time);
+    if (currentMinutes >= slotEndMinutes) return true;
   }
 
   return false;
+}
+
+function clearArrivalSelection() {
+  state.selectedSlot = null;
+  if (state.options.clearSelection) state.options.clearSelection();
+  else sessionStorage.removeItem(state.options.storageKey);
+}
+
+function updateArrivalWindowNotice() {
+  if (!elements.arrivalWindowNotice) return;
+  const message = sessionStorage.getItem(`${state.options.storageKey}ArrivalError`);
+  elements.arrivalWindowNotice.textContent = message || "";
+  elements.arrivalWindowNotice.classList.toggle("hidden", !message);
 }
 
 // =========================
@@ -421,7 +436,7 @@ function renderTimeSlots() {
 
   if (state.timeslots.length === 0) {
     elements.timeSlots.innerHTML =
-      `<p class="col-span-full text-sm text-slate-400">No time slots available for this date.</p>`;
+      `<p class="col-span-full text-sm text-slate-400">No arrival windows available for this date.</p>`;
     return;
   }
 
@@ -449,6 +464,12 @@ function renderTimeSlots() {
       button.disabled = true;
     } else {
       button.addEventListener("click", () => {
+        if (isSlotDisabled(slot)) {
+          clearArrivalSelection();
+          renderTimeSlots();
+          updateSelectedSchedule();
+          return;
+        }
         state.selectedSlot = slot;
         const scheduleText = formatBookingSchedule(
           state.selectedDateKey,
@@ -470,6 +491,9 @@ function renderTimeSlots() {
           // Store schedule including window_id for grooming submission.
           sessionStorage.setItem("bookingSchedule", JSON.stringify(selection));
         }
+
+        sessionStorage.removeItem(`${state.options.storageKey}ArrivalError`);
+        updateArrivalWindowNotice();
 
         renderTimeSlots();
         updateSelectedSchedule();
@@ -496,7 +520,7 @@ function updateSelectedSchedule() {
   }
 
   if (!state.selectedDateKey || !state.selectedSlot) {
-    elements.selectedScheduleText.textContent = "Please select a date and time.";
+    elements.selectedScheduleText.textContent = "Please select a date and preferred arrival window.";
     elements.nextStepBtn.disabled = true;
     elements.nextStepBtn.classList.add("opacity-50", "cursor-not-allowed");
     return;
@@ -578,6 +602,15 @@ function bindEvents() {
 
   elements.nextStepBtn.addEventListener("click", () => {
     if (!state.selectedDateKey || (!state.options.dateOnly && !state.selectedSlot)) return;
+    if (!state.options.dateOnly && isSlotDisabled(state.selectedSlot)) {
+      clearArrivalSelection();
+      sessionStorage.setItem(`${state.options.storageKey}ArrivalError`,
+        "Your preferred arrival window is no longer available. Please choose another date or time.");
+      updateArrivalWindowNotice();
+      renderTimeSlots();
+      updateSelectedSchedule();
+      return;
+    }
     if (state.options.onNext) state.options.onNext();
     else window.location.href = state.options.nextPath;
   });
@@ -588,7 +621,7 @@ export async function refreshBookingCalendar() {
   if (state.selectedDateKey && isDateDisabled(state.selectedDateKey)) {
     state.selectedDateKey = null;
     state.selectedSlot = null;
-    if (!state.options.dateOnly) sessionStorage.removeItem(state.options.storageKey);
+    if (!state.options.dateOnly) clearArrivalSelection();
   }
   if (state.selectedDateKey && !state.options.dateOnly) {
     state.selectedSlot = null;
@@ -598,20 +631,23 @@ export async function refreshBookingCalendar() {
       try {
         saved = JSON.parse(sessionStorage.getItem(state.options.storageKey) || "null");
       } catch {
-        sessionStorage.removeItem(state.options.storageKey);
+        clearArrivalSelection();
       }
       state.selectedSlot = state.timeslots.find((slot) =>
-        slot.window_id === saved?.window_id && !isSlotDisabled(slot)
+        slot.window_id === (saved?.window_id ?? saved?.windowId) && !isSlotDisabled(slot)
       ) || null;
-      if (!state.selectedSlot) sessionStorage.removeItem(state.options.storageKey);
+      if (!state.selectedSlot) clearArrivalSelection();
       renderTimeSlots();
     }
+  } else if (!state.options.dateOnly) {
+    elements.timeSlots.innerHTML = "";
   }
   renderMonthHeader();
   renderCalendarGrid();
   updateClinicNotice();
   updateOperatingHoursText();
   updateSelectedSchedule();
+  updateArrivalWindowNotice();
 }
 
 // =========================
@@ -629,19 +665,17 @@ export async function initBookingCalendar(options = {}) {
   const now = getManilaNowParts();
   state.currentMonth = new Date(now.year, now.month - 1, 1);
 
-  if (state.options.dateOnly || state.options.storageKey === "bookingSchedule") {
-    try {
-      const savedDraft = JSON.parse(
-        sessionStorage.getItem(state.options.storageKey) || "{}",
-      );
-      state.selectedDateKey = savedDraft[state.options.dateField] || null;
-      if (state.selectedDateKey) {
-        const selectedDate = dateKeyToLocalDate(state.selectedDateKey);
-        state.currentMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-      }
-    } catch {
-      state.selectedDateKey = null;
+  try {
+    const savedDraft = JSON.parse(
+      sessionStorage.getItem(state.options.storageKey) || "{}",
+    );
+    state.selectedDateKey = savedDraft[state.options.dateField] || null;
+    if (state.selectedDateKey) {
+      const selectedDate = dateKeyToLocalDate(state.selectedDateKey);
+      state.currentMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
     }
+  } catch {
+    state.selectedDateKey = null;
   }
 
   // Clear any previously selected date if it is now clinic-blocked

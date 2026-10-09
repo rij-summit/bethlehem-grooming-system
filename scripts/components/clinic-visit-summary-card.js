@@ -49,7 +49,7 @@ export function getClinicVisitSummaryMarkup({
               timeLabel
                 ? `
                   <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred Arrival Time</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred Arrival</p>
                     <p class="mt-2 text-sm font-semibold text-[#2f4b66]">${escapeHtml(timeLabel)}</p>
                   </div>
                 `

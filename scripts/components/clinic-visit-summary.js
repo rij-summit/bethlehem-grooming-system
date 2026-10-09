@@ -8,6 +8,7 @@ import {
   readClinicVisitDraft,
   requireCustomerSession,
   validateClinicVisitReason,
+  clearClinicVisitArrival,
 } from "../services/clinic-visit-service.js";
 
 const elements = {
@@ -43,6 +44,12 @@ async function submitClinicVisit(draft) {
     sessionStorage.removeItem(CLINIC_VISIT_PETS_KEY);
     window.location.href = "./clinic-visit-confirmed.html";
   } catch (error) {
+    if (error.code === "arrival_window_ended") {
+      clearClinicVisitArrival();
+      sessionStorage.setItem(`${CLINIC_VISIT_DRAFT_KEY}ArrivalError`, error.message);
+      window.location.href = "./clinic-visit-date.html";
+      return;
+    }
     showError(error.message || "The clinic visit could not be submitted. Please try again.");
     elements.submit.disabled = false;
     elements.submit.textContent = "Submit Pre-registration";
