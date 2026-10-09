@@ -2395,7 +2395,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         }
     }
 
-    public function test_grooming_visit_estimates_follow_confirmed_size_and_reach_both_dashboards(): void
+    #[DataProvider('confirmedEstimateSizes')]
+    public function test_grooming_visit_estimates_follow_confirmed_size_and_reach_both_dashboards(string $size, int $minutes, string $formatted): void
     {
         $this->authenticateAs('admin');
         $this->seedMultiPetBooking();
@@ -2407,28 +2408,81 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('booking_services')->where('booking_pet_id', 2)->update(['service_id' => 92]);
         DB::table('bookings')->where('booking_id', 1)->update(['status' => 'waiting_to_arrive', 'user_id' => 3]);
         DB::table('booking_pets')->where('booking_pet_id', 1)->update([
-            'registered_size' => 'small', 'grooming_preference' => 'summer_cut',
-            'grooming_estimate_min' => 30, 'grooming_estimate_max' => 30,
+            'registered_size' => 'medium', 'grooming_preference' => 'regular_trim',
+            'grooming_estimate_min' => 90, 'grooming_estimate_max' => 105,
         ]);
         DB::table('booking_pets')->where('booking_pet_id', 2)->update([
-            'registered_size' => 'small', 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 120,
+            'registered_size' => 'small', 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 90,
         ]);
         $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
-            ['booking_pet_id' => 1, 'size' => 'large'], ['booking_pet_id' => 2, 'size' => 'small'],
+            ['booking_pet_id' => 1, 'size' => $size], ['booking_pet_id' => 2, 'size' => 'small'],
         ]])->assertOk();
-        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => 45, 'grooming_estimate_max' => 60]);
-        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 120]);
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => $minutes, 'grooming_estimate_max' => $minutes]);
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 90]);
         $this->getJson('/api/admin/bookings')->assertOk()
-            ->assertJsonPath('queuedList.0.pets.0.groomingEstimate.formatted', '45 min–1 hr')
-            ->assertJsonPath('queuedList.0.pets.1.groomingEstimate.formatted', '1 hr 30 min–2 hrs');
+            ->assertJsonPath('queuedList.0.pets.0.groomingEstimate.formatted', $formatted)
+            ->assertJsonPath('queuedList.0.pets.1.groomingEstimate.formatted', '1 hr 30 min');
+        $this->authenticateAs('customer');
+        $this->getJson('/api/booking/history')->assertOk()
+            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.formatted', $formatted)
+            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.minMinutes', $minutes);
+        $this->authenticateAs('admin');
         $this->postJson('/api/admin/bookings/1/pets/1/start-grooming', ['estimate_factors' => ['thick_coat', 'extra_handling']])->assertOk();
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1,
             'grooming_start_time' => now()->toDateTimeString(), 'grooming_estimate_min' => 120, 'grooming_estimate_max' => 240]);
         $this->authenticateAs('customer');
         $this->getJson('/api/booking/history')->assertOk()
             ->assertJsonPath('bookings.0.pets.0.grooming_estimate.formatted', '2–4 hrs')
-            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.preferenceLabel', 'Summer Cut')
+            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.preferenceLabel', 'Regular Trim')
             ->assertJsonPath('bookings.0.pets.1.grooming_estimate.minMinutes', 90);
+    }
+
+    public static function confirmedEstimateSizes(): array
+    {
+        return [['large', 120, '2 hrs'], ['small', 90, '1 hr 30 min']];
+    }
+
+    #[DataProvider('packageFacialEstimates')]
+    public function test_customer_and_walkin_store_the_same_package_and_separately_charged_facial_estimate(string $package, ?string $preference, string $species, int $weight, array $range, int $packagePrice): void
+    {
+        DB::table('services')->where('slug', $package)->delete();
+        DB::table('services')->insert([
+            ['service_id' => 91, 'service_name' => 'Grooming', 'slug' => $package, 'base_price' => $packagePrice],
+            ['service_id' => 92, 'service_name' => 'Facial Trimming', 'slug' => 'facial_trimming', 'base_price' => 150],
+        ]);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $pet = ['pet_name' => 'Coco', 'species' => $species, 'weight' => $weight, 'grooming_preference' => $preference];
+        $this->authenticateAs('customer');
+        $customer = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [array_merge($pet, ['services' => ['package' => $package, 'ala_carte' => ['facial_trimming']]])],
+        ])->assertCreated()->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', $range[0])
+            ->assertJsonPath('booking.pets.0.grooming_estimate.maxMinutes', $range[1]);
+        $this->authenticateAs('staff');
+        $walkin = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pets' => [array_merge($pet, ['services' => [
+                ['service_slug' => $package, 'price' => 1], ['service_slug' => 'facial_trimming', 'price' => 1],
+            ]])], 'sedation_consent' => false, 'terms_agreed' => true,
+        ])->assertCreated();
+        foreach ([$customer->json('booking.booking_id'), $walkin->json('booking_id')] as $id) {
+            $this->assertDatabaseHas('booking_pets', ['booking_id' => $id, 'grooming_preference' => $preference,
+                'grooming_estimate_min' => $range[0], 'grooming_estimate_max' => $range[1]]);
+            $this->assertDatabaseHas('booking_services', ['booking_id' => $id, 'service_id' => 92, 'price_at_booking' => 150]);
+            $this->assertEquals($packagePrice + 150, DB::table('booking_services')->where('booking_id', $id)->sum('price_at_booking'));
+        }
+    }
+
+    public static function packageFacialEstimates(): array
+    {
+        return [
+            ['partial_grooming', null, 'dog', 8, [60, 90], 400],
+            ['regular_dog_grooming', 'summer_cut', 'dog', 8, [90, 105], 550],
+            ['deluxe_dog_grooming', 'puppy_cut', 'dog', 8, [105, 135], 650],
+            ['bath_and_go', null, 'dog', 8, [60, 75], 450],
+            ['cat_full_grooming', null, 'cat', 4, [105, 120], 500],
+        ];
     }
 
     public function test_server_derives_estimates_and_rejects_customer_staff_factors_or_missing_preference(): void
@@ -2447,9 +2501,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $payload['pets'][0]['grooming_estimate_min'] = 1;
         $payload['pets'][0]['grooming_estimate_max'] = 1;
         $this->postJson('/api/booking/store', $payload)->assertCreated()
-            ->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', 60)
+            ->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', 90)
             ->assertJsonPath('booking.pets.0.grooming_estimate.maxMinutes', 90);
-        $this->assertDatabaseHas('booking_pets', ['grooming_preference' => 'regular_trim', 'grooming_estimate_min' => 60, 'grooming_estimate_max' => 90]);
+        $this->assertDatabaseHas('booking_pets', ['grooming_preference' => 'regular_trim', 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 90]);
     }
 
     public function test_unchanged_visit_and_completed_snapshots_survive_rule_changes(): void
@@ -2484,7 +2538,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]));
         $migration = require base_path('database/migrations/2026_10_09_000001_add_grooming_estimates_to_booking_pets.php');
         $migration->up();
-        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => 30, 'grooming_estimate_max' => 45]);
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => 45, 'grooming_estimate_max' => 60]);
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => null, 'grooming_estimate_max' => null]);
     }
 

@@ -20,6 +20,16 @@ async function main() {
     const html = component.renderEstimateSelection({ id: 1, size: 'small' }, { servicePackage: packageId });
     assert.doesNotMatch(html, /data-role="grooming-preference"|<legend>Grooming preference/);
   }
+  for (const [size, minutes, formatted] of [['small', 90, '1 hr 30 min'], ['medium', 105, '1 hr 45 min']]) {
+    const selection = { servicePackage: 'cat_full_grooming' };
+    const estimate = engine.calculate(selection, size);
+    assert.deepEqual([estimate.minMinutes, estimate.maxMinutes, estimate.formatted], [minutes, minutes, formatted]);
+    assert.doesNotMatch(component.renderEstimateSelection({ id: 1, size }, selection), /data-role="grooming-preference"|<legend>Grooming preference/);
+    for (const factor of engine.factors()) {
+      const extended = engine.calculate({ ...selection, estimateFactors: [factor.value] }, size);
+      assert.deepEqual([extended.minMinutes, extended.maxMinutes], [120, 240]);
+    }
+  }
   const regular = component.renderEstimateSelection({ id: 1, size: 'small' }, { servicePackage: 'regular_dog_grooming' });
   assert.equal((regular.match(/type="radio"/g) || []).length, 4);
   assert.doesNotMatch(regular, /Puppy Cut|Custom Hairstyle/);
@@ -36,17 +46,57 @@ async function main() {
   const pets = [{ id: 'coco', size: 'medium' }, { id: 'bruno', size: 'large' }];
   const selections = pets.map((pet) => ({ petId: pet.id, servicePackage: 'regular_dog_grooming', groomingPreference: 'regular_trim', alaCarteServices: [] }));
   const review = grooming.buildBookingReviewPayload({ pets }, selections);
-  assert.equal(review.items[0].groomingEstimate.formatted, '1 hr–1 hr 30 min');
+  assert.equal(review.items[0].groomingEstimate.formatted, '1 hr 30 min–1 hr 45 min');
   assert.equal(review.items[1].groomingEstimate.formatted, '2 hrs');
   assert.equal(grooming.normalizeStepThreeDraft(grooming.buildStepThreeDraftPayload(selections), { pets })[0].groomingPreference, 'regular_trim');
   assert.equal(engine.formatDuration(75), '1 hr 15 min');
   assert.equal(engine.formatDuration(72), '1 hr 12 min');
   assert.equal(engine.formatRange(120, 240), '2–4 hrs');
 
+  const draft = await import('../scripts/services/booking-draft-service.js');
+  const cardContexts = ['booking-services-step', 'walk-in-services-step'].map((file) => {
+    const source = fs.readFileSync(path.join(__dirname, `../scripts/components/${file}.js`), 'utf8');
+    const context = { ...grooming, escapeHtml: draft.escapeHtml };
+    vm.runInNewContext(source.slice(source.indexOf('function renderAlaCarteCard('), source.indexOf('function getSelectionByPetId(')), context);
+    return context;
+  });
+  for (const pkg of grooming.GROOMING_PACKAGES) {
+    assert.deepEqual([...pkg.includedAlaCarteServiceIds].sort(), [...rules.packages[pkg.id].included].sort(), pkg.id);
+    const pet = { id: pkg.id, size: 'small', petType: pkg.petType };
+    const selection = { petId: pet.id, servicePackage: pkg.id, groomingPreference: engine.preferences(pkg.id)[0]?.value || '', alaCarteServices: [] };
+    const base = grooming.estimatePetGrooming(selection, pet);
+    const basePrice = grooming.calculatePetSelectionPricing(selection, pet).total.minAmount;
+    for (const service of grooming.ALA_CARTE_SERVICES) {
+      const included = pkg.includedAlaCarteServiceIds.includes(service.id);
+      for (const context of cardContexts) {
+        const html = context.renderAlaCarteCard(pet, selection, service, pkg);
+        assert.equal(/\sdisabled\s/.test(html), included, `${pkg.id}/${service.id}`);
+        assert.equal(html.includes('Included in Package'), included);
+      }
+      const selected = grooming.sanitizePetServiceSelection({ ...selection, alaCarteServices: [service.id] });
+      const extra = included ? [0, 0] : rules.ala_carte[service.id];
+      const result = grooming.estimatePetGrooming(selected, pet);
+      assert.equal(result.minMinutes, base.minMinutes + extra[0]);
+      assert.equal(result.maxMinutes, base.maxMinutes + extra[1]);
+      const price = grooming.calculatePetSelectionPricing(selected, pet).total.minAmount;
+      assert.equal(price > basePrice, !included);
+    }
+  }
+  const summer = { servicePackage: 'regular_dog_grooming', groomingPreference: 'summer_cut', alaCarteServices: [] };
+  const small = { id: 'small', size: 'small' };
+  assert.equal(grooming.estimatePetGrooming(summer, small).formatted, '1 hr 15 min');
+  summer.alaCarteServices = ['facial_trimming'];
+  assert.equal(grooming.estimatePetGrooming(summer, small).formatted, '1 hr 30 min–1 hr 45 min');
+  assert.match(component.renderEstimateReview(grooming.estimatePetGrooming(summer, small)), /1 hr 30 min–1 hr 45 min/);
+  summer.alaCarteServices = [];
+  assert.equal(grooming.estimatePetGrooming(summer, small).formatted, '1 hr 15 min');
+
   const now = Date.parse('2026-10-09T13:15:00+08:00');
   const estimate = { minMinutes: 60, maxMinutes: 90 };
   const ready = engine.readyWindow(estimate, new Date(now).toISOString(), now);
   assert.equal(ready.label, '2:15–2:45 PM');
+  const mediumTrim = engine.calculate({ servicePackage: 'regular_dog_grooming', groomingPreference: 'regular_trim' }, 'medium');
+  assert.equal(engine.readyWindow(mediumTrim, new Date(now).toISOString(), now).label, '2:45–3:00 PM');
   assert.equal(engine.readyWindow(estimate, new Date(now).toISOString(), now + 91 * 60000).label, 'Taking longer than estimated');
   const elapsed = engine.readyWindow(estimate, new Date(now).toISOString(), now + 75 * 60000);
   assert.equal(elapsed.overdue, false);
@@ -62,7 +112,9 @@ async function main() {
   assert.equal(blocked.a.unavailable, true);
   assert.equal(engine.queueETAs(waiting, overdue, 2, now).a.unavailable, undefined);
 
-  const context = { window: { GroomingEstimates: engine }, Date, Intl, console };
+  const queueNow = Date.now();
+  class QueueDate extends Date { static now() { return queueNow; } }
+  const context = { window: { GroomingEstimates: { ...engine, queueETAs: (waiting, active, capacity) => engine.queueETAs(waiting, active, capacity, queueNow) } }, Date: QueueDate, Intl, console };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/admin-dashboard.js'), 'utf8'), context);
   const ui = context.adminDashboard();
   ui.activeGroomers = 1;
@@ -73,6 +125,13 @@ async function main() {
   assert.equal(ui.petETAs['1'].estDoneMax - ui.petETAs['1'].estDoneMin, 30 * 60000);
   assert.match(ui.queueSummary.avgWaitLabel, /1 hr 30 min–1 hr 45 min/);
   assert.equal(ui.getBookingETA(ui.queuedList[0]), engine.formatTimeWindow(ui.petETAs['2'].estDoneMin, ui.petETAs['2'].estDoneMax));
+  const before = ui.petETAs['2'].estDoneMax;
+  first.groomingEstimate = grooming.estimatePetGrooming(selections[0], pets[0]);
+  const mediumDone = ui.petETAs['2'].estDoneMax;
+  first.groomingEstimate = grooming.estimatePetGrooming(selections[0], { ...pets[0], size: 'large' });
+  assert.equal(ui.petETAs['2'].estDoneMax - mediumDone, 15 * 60000);
+  assert.equal(mediumDone - before, 15 * 60000);
+  first.groomingEstimate = estimate;
   ui.activeGroomingPets = 1;
   assert.equal(ui.isGroomerCapacityFull, true);
   ui.inProgressList = [{ id: 3, pets: [{ ...first, groomingStartedAtIso: new Date(Date.now() - 91 * 60000).toISOString(), isGroomingStarted: true }] }];

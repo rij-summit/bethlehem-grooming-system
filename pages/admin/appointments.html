@@ -13,7 +13,7 @@
       href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003"
     />
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <link rel="stylesheet" href="../../css/grooming-estimates.css?v=20261009">
+    <link rel="stylesheet" href="../../css/grooming-estimates.css?v=checkin-layout-20261009-2">
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -2021,10 +2021,10 @@
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
             @click.self="closeActionConfirmModal()"
           >
-            <div class="w-full max-w-sm overflow-y-auto rounded-3xl bg-white shadow-2xl" style="max-height:calc(100vh - 2rem)">
-              <div class="px-6 py-5 text-center">
+            <div class="admin-action-confirm-dialog w-full max-w-sm overflow-y-auto rounded-3xl bg-white shadow-2xl" :class="{ 'admin-checkin-modal': actionConfirmModal.action === 'checkIn' }">
+              <div class="admin-action-confirm-body px-6 py-5 text-center">
                 <div
-                  class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+                  class="admin-action-confirm-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
                   :class="actionConfirmModal.variant === 'danger' ? 'admin-action-confirm-icon-danger' : (actionConfirmModal.variant === 'warning' ? 'admin-action-confirm-icon-warning' : 'admin-action-confirm-icon-primary')"
                 >
                   <span x-show="actionConfirmModal.icon === 'cancel'">
@@ -2045,29 +2045,32 @@
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
                 <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
-                <div x-show="actionConfirmModal.action === 'checkIn'" class="mt-4 space-y-3 text-left">
-                  <template x-for="pet in actionConfirmModal.petSizes" :key="pet.bookingPetId">
-                    <div class="rounded-xl border border-slate-200 p-3">
-                      <p class="font-semibold text-slate-800" x-text="pet.name"></p>
-                      <p class="text-xs text-slate-600">Weight: <span x-text="pet.weight"></span></p>
-                      <p class="text-xs text-slate-600">Current size: <span x-text="formatPaymentSizeLabel(pet.currentSize)"></span> · <span x-text="pet.verified ? 'Clinic verified' : 'Estimated from weight'"></span></p>
-                      <label class="mt-2 block text-xs font-semibold text-slate-700">Clinic size
-                        <select x-model="pet.size" :disabled="actionConfirmModal.busy" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-                          <template x-for="option in getPaymentBaseSizeOptions(pet.species)" :key="option.value">
-                            <option :value="option.value" x-text="option.label"></option>
-                          </template>
-                        </select>
-                      </label>
+                <div x-show="actionConfirmModal.action === 'checkIn'" class="admin-checkin-form mt-4 text-left">
+                  <div class="admin-checkin-pets" :class="{ 'admin-checkin-pets-multiple': actionConfirmModal.petSizes.length > 1 }">
+                    <template x-for="pet in actionConfirmModal.petSizes" :key="pet.bookingPetId">
+                      <div class="admin-checkin-pet rounded-xl border border-slate-200 p-3">
+                        <p class="font-semibold text-slate-800" x-text="pet.name"></p>
+                        <p class="admin-checkin-pet-summary text-xs text-slate-600">Weight: <span x-text="pet.weight"></span> · Current size: <span x-text="formatPaymentSizeLabel(pet.currentSize)"></span> · <span x-text="pet.verified ? 'Clinic verified' : 'Estimated from weight'"></span></p>
+                        <label class="mt-2 block text-xs font-semibold text-slate-700">Clinic size
+                          <select x-model="pet.size" :disabled="actionConfirmModal.busy" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                            <template x-for="option in getPaymentBaseSizeOptions(pet.species)" :key="option.value">
+                              <option :value="option.value" x-text="option.label"></option>
+                            </template>
+                          </select>
+                        </label>
                         <fieldset class="grooming-estimate-selection"><legend>Estimate factors <span>(optional)</span></legend>
                           <div class="grooming-estimate-chips"><template x-for="factor in estimateFactorOptions" :key="factor.value">
                             <label class="grooming-estimate-chip"><input type="checkbox" :value="factor.value" x-model="pet.estimateFactors" :disabled="actionConfirmModal.busy"><span x-text="factor.label"></span></label>
                           </template></div>
-                          <p class="grooming-estimate-time" aria-live="polite">Estimated grooming time <strong x-text="assessmentPreview(pet)"></strong></p>
                         </fieldset>
-                    </div>
-                  </template>
-                  <label class="block text-xs font-semibold text-slate-700" for="checkInInternalStaffNote">Internal Staff Note <span class="font-normal text-slate-400">(optional)</span></label>
-                  <textarea id="checkInInternalStaffNote" x-model="actionConfirmModal.internalStaffNote" :disabled="actionConfirmModal.busy" rows="3" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Add information for clinic staff"></textarea>
+                        <p class="grooming-estimate-time" aria-live="polite"><span>Estimated grooming time</span><strong x-text="assessmentPreview(pet)"></strong></p>
+                      </div>
+                    </template>
+                  </div>
+                  <div class="admin-checkin-note">
+                    <label class="block text-xs font-semibold text-slate-700" for="checkInInternalStaffNote">Internal Staff Note <span class="font-normal text-slate-400">(optional)</span></label>
+                    <textarea id="checkInInternalStaffNote" x-model="actionConfirmModal.internalStaffNote" :disabled="actionConfirmModal.busy" rows="2" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Add information for clinic staff"></textarea>
+                  </div>
                 </div>
                 <template x-if="actionConfirmModal.action === 'startPetGrooming' && actionConfirmModal.booking?.actionPet">
                     <div class="grooming-estimate-selection text-left" x-data="{ pet: actionConfirmModal.booking.actionPet }">
