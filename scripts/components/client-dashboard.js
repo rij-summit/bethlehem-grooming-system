@@ -554,6 +554,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
   let lastAppointmentsMarkup = "";
   let lastTrackerMarkup = "";
   let lastTrackerMetadataMarkup = "";
+  let trackerVisits = [];
+  const expandedTrackerVisits = new Set();
   let lastPetsMarkup = "";
   let lastHistoryMarkup = "";
   const rescheduleModal          = document.getElementById("rescheduleModal");
@@ -922,7 +924,27 @@ function scheduleCustomerDashboardAfterPaint(task) {
     return (booking.pets || []).filter((pet) => pet.clinic_referred !== true);
   }
 
+  function getTrackerPetStatus(pet, booking) {
+    const status = getPetGroomingStatus(pet, booking);
+    // The API can inherit the visit's in_progress status for an unstarted pet.
+    if (status === "in_progress" && pet.grooming_started_timestamp === null && pet.grooming_started_at === null) {
+      return "checked_in";
+    }
+    return status;
+  }
+
+  groomingTrackerEl.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tracker-toggle]");
+    if (!button) return;
+    const id = button.dataset.trackerToggle;
+    if (expandedTrackerVisits.has(id)) expandedTrackerVisits.delete(id);
+    else expandedTrackerVisits.add(id);
+    renderGroomingTracker(trackerVisits);
+    document.getElementById(button.id)?.focus({ preventScroll: true });
+  });
+
   function renderGroomingTracker(bookings) {
+    trackerVisits = bookings;
     const metadataMarkup = bookings.length ? buildTrackerMetadata(bookings[0]) : "";
     if (metadataMarkup !== lastTrackerMetadataMarkup) {
       if (groomingTrackerMetadataEl) groomingTrackerMetadataEl.innerHTML = metadataMarkup;
@@ -959,54 +981,63 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   function buildTrackerCard(booking, index) {
-    const groups = new Map();
-    trackerPets(booking).forEach((pet) => {
-      const status = getPetGroomingStatus(pet, booking);
-      if (!groups.has(status)) groups.set(status, []);
-      groups.get(status).push(pet);
-    });
-    const progressGroups = groups.size > 1 ? [[booking.status, trackerPets(booking)]] : [...groups];
-    const petStatuses = groups.size > 1 ? `<div class="mt-4 grid gap-2 sm:grid-cols-2">${[...groups].map(([status, pets]) => {
-      const config = getStatusConfig(status);
-      return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-portal-record px-3 py-2 text-xs">
-        <span class="min-w-0 font-semibold [overflow-wrap:anywhere]">${escapeDashboardHtml(pets.map((pet) => pet.pet_name).join(", "))}</span>
-        <span class="inline-flex items-center gap-2 ${config.textClass}"><span class="h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true"></span>${escapeDashboardHtml(config.label)}</span>
-      </div>`;
-    }).join("")}</div>` : "";
-    const groupsMarkup = progressGroups.map(([status, pets]) => {
-      const names = pets.map((pet) => pet.pet_name).filter(Boolean).join(", ") || "Your pet";
-      const current = { checked_in: 0, in_progress: 1, grooming_finished: 1, for_payment: 2, released: 2 }[status] ?? 0;
-      const config = getStatusConfig(status);
-      const steps = ["Checked In", "Grooming in Progress", "Ready for Pickup"].map((label, index) => {
-        const done = index < current || (status === "grooming_finished" && index === 1);
-        const circle = done ? "border-portal-success bg-portal-success text-white"
-          : index === current ? "border-portal-primary bg-portal-primary text-white"
-          : "border-portal-border bg-portal-surface text-portal-muted";
-        const line = index < current ? "bg-portal-success" : "bg-portal-border";
-        return `<li class="relative min-w-0 text-center" ${index === current ? 'aria-current="step"' : ""}>
-          ${index < 2 ? `<span class="absolute left-1/2 top-5 h-0.5 w-full ${line}" aria-hidden="true"></span>` : ""}
-          <span class="relative mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${circle}" aria-hidden="true">${done
-            ? '<svg class="ph-icon h-5 w-5" viewBox="0 0 256 256"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>'
-            : index + 1}</span>
-          <span class="relative mt-2 block px-1 text-xs leading-snug ${index === current ? "font-semibold text-portal-text" : "text-portal-muted"}">${label}<span class="sr-only">${done ? ", complete" : index === current ? ", current" : ", upcoming"}</span></span>
-        </li>`;
-      }).join("");
-      return `<div class="mb-6 last:mb-0">
-        <div class="flex items-center gap-4">
-          <div class="portal-icon-tile h-14 w-14 rounded-full">${petIcon(pets[0], "h-8 w-8")}</div>
-          <div class="min-w-0 [overflow-wrap:anywhere]">
-            <h4 class="text-[28px] font-semibold leading-tight text-portal-text max-[639px]:text-2xl">${escapeDashboardHtml(names)}</h4>
-            <span class="mt-2 inline-flex items-center gap-2 text-sm font-semibold ${config.textClass}"><span class="h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true"></span>${escapeDashboardHtml(config.label)}</span>
-          </div>
-        </div>
-        ${petStatuses}
-        <div class="mt-4 space-y-3">${pets.map((pet) => buildPetEstimate(pet, booking)).join("")}</div>
-        <ol class="mt-6 grid grid-cols-3" aria-label="Grooming progress for ${escapeDashboardHtml(names)}">${steps}</ol>
-      </div>`;
+    const pets = trackerPets(booking);
+    const statuses = pets.map((pet) => getTrackerPetStatus(pet, booking));
+    const readyStatuses = ["for_payment", "released"];
+    const ready = statuses.filter((status) => readyStatuses.includes(status)).length;
+    const grooming = statuses.filter((status) => status === "in_progress").length;
+    const finished = statuses.filter((status) => status === "grooming_finished").length;
+    const waiting = pets.length - ready - grooming - finished;
+    const status = ready === pets.length ? "for_payment"
+      : grooming || finished || ready ? "in_progress" : "checked_in";
+    const current = { checked_in: 0, in_progress: 1, for_payment: 2 }[status];
+    const config = getStatusConfig(status);
+    let summary;
+    if (ready === pets.length) summary = pets.length === 1 ? "Your pet is ready for pickup" : `All ${pets.length} pets are ready for pickup`;
+    else if (waiting === pets.length) summary = pets.length === 1 ? "Your pet is waiting to start grooming" : `All ${pets.length} pets are waiting to start grooming`;
+    else if (pets.length === 1 && grooming) summary = "Your pet is currently being groomed";
+    else if (pets.length === 2 && grooming) summary = `${grooming} of ${pets.length} pets ${grooming === 1 ? "is" : "are"} currently being groomed`;
+    else summary = [[grooming, "grooming"], [ready, "ready"], [finished, "finished"], [waiting, "waiting"]]
+      .filter(([count]) => count).map(([count, label]) => `${count} ${label}`).join(" · ");
+
+    const priority = (pet) => ({ for_payment: 0, released: 0, in_progress: 1, grooming_finished: 2 }[getTrackerPetStatus(pet, booking)] ?? 3);
+    const orderedPets = pets.length > 4 ? pets.slice().sort((a, b) => priority(a) - priority(b)) : pets;
+    const id = escapeDashboardHtml(String(booking.booking_id));
+    const expanded = expandedTrackerVisits.has(String(booking.booking_id));
+    const visiblePets = expanded ? orderedPets : orderedPets.slice(0, 4);
+    const steps = ["Checked In", "Grooming in Progress", "Ready for Pickup"].map((label, index) => {
+      const done = index < current;
+      const circle = done ? "border-portal-success bg-portal-success text-white"
+        : index === current ? "border-portal-primary bg-portal-primary text-white"
+        : "border-portal-border bg-portal-surface text-portal-muted";
+      const line = index < current ? "bg-portal-success" : "bg-portal-border";
+      return `<li class="relative min-w-0 text-center" ${index === current ? 'aria-current="step"' : ""}>
+        ${index < 2 ? `<span class="absolute left-1/2 top-5 h-0.5 w-full ${line}" aria-hidden="true"></span>` : ""}
+        <span class="relative mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${circle}" aria-hidden="true">${done
+          ? '<svg class="ph-icon h-5 w-5" viewBox="0 0 256 256"><use href="../../assets/icons/phosphor.svg#check-circle"></use></svg>'
+          : index + 1}</span>
+        <span class="relative mt-2 block px-1 text-xs leading-snug ${index === current ? "font-semibold text-portal-text" : "text-portal-muted"}">${label}<span class="sr-only">${done ? ", complete" : index === current ? ", current" : ", upcoming"}</span></span>
+      </li>`;
     }).join("");
     return `<article class="border-b border-portal-border pb-5 mb-5 last:border-0 last:pb-0 last:mb-0">
-      ${index > 0 ? `<div class="mb-4 flex justify-end">${buildTrackerMetadata(booking)}</div>` : ""}
-      ${groupsMarkup}
+        ${index > 0 ? `<div class="mb-4 flex justify-end">${buildTrackerMetadata(booking)}</div>` : ""}
+        <div class="flex items-center gap-4">
+          <div class="portal-icon-tile rounded-full">${petIcon(pets[0], "h-7 w-7")}</div>
+          <div class="min-w-0 [overflow-wrap:anywhere]">
+            <h4 class="text-[28px] font-semibold leading-tight text-portal-text max-[639px]:text-2xl">${escapeDashboardHtml(config.label)}</h4>
+            <p class="mt-2 text-sm text-portal-muted">${escapeDashboardHtml(summary)}</p>
+          </div>
+        </div>
+        <div class="mt-5 flex items-center justify-between gap-3">
+          <h5 class="text-sm font-semibold text-portal-text">Your pets</h5>
+          <span class="text-xs text-portal-muted">${pets.length} pet${pets.length === 1 ? "" : "s"}</span>
+        </div>
+        <div id="tracker-pets-${id}" class="mt-3 grid gap-3 sm:grid-cols-2">${visiblePets.map((pet) => buildTrackerPetCard(pet, booking)).join("")}</div>
+        ${pets.length > 4 ? `<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p class="text-xs text-portal-muted">Showing ${visiblePets.length} of ${pets.length} pets</p>
+          <button id="tracker-toggle-${id}" type="button" data-tracker-toggle="${id}" aria-controls="tracker-pets-${id}" aria-expanded="${expanded}" class="portal-button-secondary px-4">${expanded ? "Show fewer" : `Show all ${pets.length} pets`}</button>
+        </div>` : ""}
+        <ol class="mt-6 grid grid-cols-3" aria-label="Queue status for this grooming visit">${steps}</ol>
     </article>`;
   }
 
@@ -1018,16 +1049,19 @@ function scheduleCustomerDashboardAfterPaint(task) {
     return ready ? (ready.overdue ? ready.label : `Estimated ready ${ready.label}`) : `Estimated grooming time ${estimate.formatted}`;
   }
 
-  function buildPetEstimate(pet, booking) {
-    const label = petEstimateStatus(pet, booking);
-    if (!label) return "";
-    const estimate = pet.grooming_estimate;
-    const size = String(pet.size || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-    return `<div class="text-sm text-portal-muted">
-      ${trackerPets(booking).length > 1 ? `<p class="font-semibold text-portal-text">${escapeDashboardHtml(pet.pet_name)}</p>` : ""}
-      <p>${escapeDashboardHtml(label)}</p>
-      ${pet.grooming_started_at ? `<p class="mt-1 text-xs">Started at ${escapeDashboardHtml(pet.grooming_started_at)}</p>` :
-        estimate.preferenceLabel ? `<p class="mt-1 text-xs">${escapeDashboardHtml(estimate.preferenceLabel)} · ${escapeDashboardHtml(size)}</p>` : ""}
+  function buildTrackerPetCard(pet, booking) {
+    const status = getTrackerPetStatus(pet, booking);
+    const config = getStatusConfig(status);
+    const label = petEstimateStatus(pet, booking)
+      .replace(/^Estimated grooming time /, "Est. grooming: ").replace(/^Estimated ready /, "Est. ready: ");
+    const context = status === "checked_in" ? "Waiting to start grooming"
+      : status === "in_progress" && pet.grooming_started_at ? `Started at ${pet.grooming_started_at}`
+      : status === "grooming_finished" ? "Waiting for the grooming visit to be ready for pickup" : "";
+    return `<div data-tracker-pet class="min-w-0 rounded-xl border border-portal-border bg-portal-record p-3 text-sm [overflow-wrap:anywhere]">
+      <h6 class="font-semibold text-portal-text">${escapeDashboardHtml(pet.pet_name || "Your pet")}</h6>
+      <p class="mt-1 text-xs font-semibold ${config.textClass}">${escapeDashboardHtml(config.label)}</p>
+      ${context ? `<p class="mt-2 text-portal-muted">${escapeDashboardHtml(context)}</p>` : ""}
+      ${label ? `<p class="mt-1 font-semibold text-portal-text">${escapeDashboardHtml(label)}</p>` : ""}
     </div>`;
   }
 

@@ -31,6 +31,8 @@ function createElementStore() {
         max: "",
         disabled: false,
         style: {},
+        dataset: {},
+        listeners: {},
         className: "",
         classList: {
           add(...names) { names.forEach((name) => classes.add(name)); },
@@ -43,7 +45,8 @@ function createElementStore() {
           },
           contains(name) { return classes.has(name); },
         },
-        addEventListener() {},
+        addEventListener(type, callback) { this.listeners[type] = callback; },
+        focus() { this.focused = true; },
         setCustomValidity() {},
         querySelectorAll() { return []; },
       });
@@ -226,7 +229,7 @@ async function testMultiPetProgressAndPickupReadiness() {
   assert.doesNotMatch(tracker, /Referred|Being Groomed/);
   assert.doesNotMatch(tracker, /Luna is ready\. Please/);
   assert.match(element("groomingStatusAnnouncement").textContent, /Luna: Grooming finished/);
-  assert.equal((tracker.match(/<ol /g) || []).length, 1, "Mixed statuses share one booking progress tracker and compact pet status rows.");
+  assert.equal((tracker.match(/<ol /g) || []).length, 1, "Mixed statuses share one grooming visit progress tracker.");
   assert.equal(consoleErrors.length, 0);
 }
 
@@ -332,20 +335,19 @@ async function testPerPetGroomingEstimatesAndOverdueTracker() {
     { pet_name: "Bruno", size: "large", grooming_status: "checked_in", grooming_estimate: { minMinutes: 120, maxMinutes: 120, formatted: "2 hrs" } },
   ] }];
   const dashboard = await runDashboard(async () => ({ bookings, history: [] }));
-  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated grooming time 1 hr 30 min–1 hr 45 min/);
-  assert.match(dashboard.element("groomingTracker").innerHTML, /Regular Trim · Medium/);
-  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated grooming time 2 hrs/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Est\. grooming: 1 hr 30 min–1 hr 45 min/);
+  assert.doesNotMatch(dashboard.element("groomingTracker").innerHTML, /Regular Trim|Medium/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Est\. grooming: 2 hrs/);
   for (const [size, minutes, formatted] of [['large', 120, '2 hrs'], ['small', 90, '1 hr 30 min']]) {
     bookings[0].pets[0].size = size;
     bookings[0].pets[0].grooming_estimate = { ...bookings[0].pets[0].grooming_estimate, minMinutes: minutes, maxMinutes: minutes, formatted };
     await dashboard.refresh();
-    assert.ok(dashboard.element("groomingTracker").innerHTML.includes(`Estimated grooming time ${formatted}`));
-    assert.ok(dashboard.element("groomingTracker").innerHTML.includes(`Regular Trim · ${size[0].toUpperCase() + size.slice(1)}`));
+    assert.ok(dashboard.element("groomingTracker").innerHTML.includes(`Est. grooming: ${formatted}`));
     assert.doesNotMatch(dashboard.element("groomingTracker").innerHTML, /1 hr 30 min–1 hr 45 min/);
   }
   bookings[0].pets[0] = { ...bookings[0].pets[0], grooming_status: "in_progress", grooming_started_at: "1:15 PM", grooming_started_timestamp: new Date(now).toISOString() };
   await dashboard.refresh();
-  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated ready/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Est\. ready:/);
   assert.match(dashboard.element("groomingTracker").innerHTML, /Started at 1:15 PM/);
   bookings[0].pets[0].grooming_started_timestamp = new Date(now - 91 * 60000).toISOString();
   await dashboard.refresh();
@@ -354,7 +356,93 @@ async function testPerPetGroomingEstimatesAndOverdueTracker() {
   assert.equal(dashboard.consoleErrors.length, 0);
 }
 
+async function testTrackerOverallStateAndIndividualCards() {
+  const scenarios = [
+    { statuses: ["checked_in", "checked_in"], overall: "Checked In", step: 0 },
+    { statuses: ["checked_in", "in_progress"], overall: "Grooming in Progress", step: 1 },
+    { statuses: ["for_payment", "in_progress", "checked_in"], overall: "Grooming in Progress", step: 1 },
+    { statuses: ["for_payment", "checked_in"], overall: "Grooming in Progress", step: 1 },
+    { statuses: ["for_payment", "released"], overall: "Ready for Pickup", step: 2 },
+    { statuses: ["grooming_finished", "grooming_finished"], overall: "Grooming in Progress", step: 1 },
+  ];
+  for (const { statuses, overall, step } of scenarios) {
+    const pets = statuses.map((status, index) => ({ pet_name: `Pet ${index}`, grooming_status: status }));
+    const { element, consoleErrors } = await runDashboard(async () => ({
+      bookings: [{ booking_id: 22, status: "checked_in", pets }], history: [],
+    }));
+    const tracker = element("groomingTracker").innerHTML;
+    assert.match(tracker, new RegExp(`<h4[^>]*>${overall}</h4>`));
+    assert.equal((tracker.match(/data-tracker-pet /g) || []).length, pets.length);
+    assert.equal((tracker.match(/<ol /g) || []).length, 1);
+    const steps = [...tracker.matchAll(/<li[\s\S]*?<\/li>/g)].map((match) => match[0]);
+    steps.forEach((markup, index) => {
+      assert.equal(markup.includes('aria-current="step"'), index === step);
+      assert.ok(markup.includes(index < step ? ", complete" : index === step ? ", current" : ", upcoming"));
+    });
+    pets.forEach((pet) => assert.equal(tracker.split(`>${pet.pet_name}</h6>`).length - 1, 1));
+    assert.doesNotMatch(tracker, /Appointment|Booking|appointment|booking/);
+    assert.equal(consoleErrors.length, 0);
+  }
+
+  const { element } = await runDashboard(async () => ({ bookings: [{
+    booking_id: 23, status: "in_progress", pets: [
+      { pet_name: "Waiting pet", grooming_status: "in_progress", grooming_started_at: null, grooming_started_timestamp: null },
+      { pet_name: "Active pet", grooming_status: "in_progress", grooming_started_at: "4:21 PM", grooming_started_timestamp: new Date().toISOString() },
+      { pet_name: "Referred pet", clinic_referred: true },
+    ],
+  }], history: [] }));
+  const tracker = element("groomingTracker").innerHTML;
+  assert.match(tracker, /1 of 2 pets is currently being groomed/);
+  assert.match(tracker, /Waiting pet<\/h6>[\s\S]*?>Checked In<\/p>[\s\S]*?Waiting to start grooming/);
+  assert.match(tracker, /Started at 4:21 PM/);
+  assert.doesNotMatch(tracker, /Referred pet/);
+}
+
+async function testTrackerDisclosureAndPrioritySurviveRefresh() {
+  let bookings = [{ booking_id: 30, status: "checked_in", pets: [
+    ...Array.from({ length: 7 }, (_, index) => ({ pet_name: `Waiting ${index}`, grooming_status: "checked_in" })),
+    { pet_name: "Grooming first", grooming_status: "in_progress" },
+    { pet_name: "Ready pet", grooming_status: "for_payment" },
+    { pet_name: "Grooming second", grooming_status: "in_progress" },
+  ] }];
+  const originalOrder = bookings[0].pets.map((pet) => pet.pet_name);
+  const dashboard = await runDashboard(async () => ({ bookings, history: [] }));
+  const markup = () => dashboard.element("groomingTracker").innerHTML;
+  const toggle = dashboard.element("tracker-toggle-30");
+  toggle.dataset.trackerToggle = "30";
+  const click = () => dashboard.element("groomingTracker").listeners.click({ target: { closest: () => toggle } });
+  assert.match(markup(), /2 grooming · 1 ready · 7 waiting/);
+  assert.match(markup(), /Showing 4 of 10 pets/);
+  assert.match(markup(), /Show all 10 pets/);
+  assert.match(markup(), /aria-expanded="false"/);
+  assert.equal((markup().match(/data-tracker-pet /g) || []).length, 4);
+  assert.ok(markup().indexOf("Ready pet</h6>") < markup().indexOf("Grooming first</h6>"));
+  assert.ok(markup().indexOf("Grooming first</h6>") < markup().indexOf("Grooming second</h6>"));
+  assert.ok(markup().indexOf("Grooming second</h6>") < markup().indexOf("Waiting 0</h6>"));
+  assert.doesNotMatch(markup(), /Waiting 1<\/h6>/);
+  assert.deepEqual(bookings[0].pets.map((pet) => pet.pet_name), originalOrder);
+  click();
+  assert.match(markup(), /Showing 10 of 10 pets/);
+  assert.match(markup(), /Show fewer/);
+  assert.match(markup(), /aria-expanded="true"/);
+  assert.equal((markup().match(/data-tracker-pet /g) || []).length, 10);
+  assert.equal(toggle.focused, true);
+  bookings.push({ booking_id: 31, status: "checked_in", pets: bookings[0].pets });
+  await dashboard.refresh();
+  assert.match(markup(), /Showing 10 of 10 pets/);
+  assert.match(markup(), /Showing 4 of 10 pets/);
+  bookings[0].pets[0].grooming_status = "in_progress";
+  await dashboard.refresh();
+  assert.match(markup(), /3 grooming · 1 ready · 6 waiting/);
+  assert.match(markup(), /Showing 10 of 10 pets/);
+  click();
+  assert.equal((markup().match(/data-tracker-pet /g) || []).length, 8);
+  assert.equal(dashboard.consoleErrors.length, 0);
+}
+
 (async () => {
+  await testTrackerOverallStateAndIndividualCards();
+  await testTrackerDisclosureAndPrioritySurviveRefresh();
   testExpiredRegistrationsHaveNeutralHistoryLabels();
   await testPerPetGroomingEstimatesAndOverdueTracker();
   await testInitialAndReturningSessionGreetings();
