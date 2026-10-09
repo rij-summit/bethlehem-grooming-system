@@ -1,3 +1,4 @@
+import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
   escapeHtml,
@@ -10,6 +11,8 @@ import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
   buildStepThreeDraftPayload,
+  hasRequiredGroomingPreference,
+  estimatePetGrooming,
   loadGroomingCatalogue,
   selectedPricingSignature,
   calculatePetSelectionPricing,
@@ -163,9 +166,10 @@ function renderMissingPetState() {
 function renderPetServiceSelections() {
   const pets = Array.isArray(state.bookingDraft?.pets) ? state.bookingDraft.pets : [];
 
-  elements.petServiceSelections.innerHTML = pets
+  renderSelectionsPreservingFocus(elements.petServiceSelections, pets
     .map((pet, index) => renderPetSelectionCard(pet, index))
-    .join("");
+    .join(""),
+    pets.map((pet) => `${pet.petName}: ${estimatePetGrooming(getSelectionByPetId(pet.id), pet)?.formatted || "Complete the service selection"}`).join(". "));
 }
 
 function renderPetSelectionCard(pet, index) {
@@ -222,6 +226,7 @@ function renderPetSelectionCard(pet, index) {
         <div class="grid gap-4 md:grid-cols-2">
           ${packageCards}
         </div>
+        ${renderEstimateSelection(pet, selection, false)}
       </section>
 
       ${
@@ -248,7 +253,7 @@ function renderPetSelectionCard(pet, index) {
         <div>
           <div class="mb-3">
             <h4 class="text-base font-semibold text-[#2f4b66]">
-              Grooming Preferences &amp; Special Instructions
+              Special Instructions
             </h4>
           </div>
 
@@ -403,7 +408,7 @@ function petRequiresPackage(pet) {
 }
 
 function hasCompletedRequiredServiceSelection(pet, selection) {
-  if (!pet) {
+  if (!pet || !hasRequiredGroomingPreference(selection)) {
     return false;
   }
 
@@ -521,6 +526,7 @@ function handleSelectionClick(event) {
   event.preventDefault();
   target.checked = false;
   selection.servicePackage = "";
+  selection.groomingPreference = "";
 
   renderPetServiceSelections();
   updateServiceNotice();
@@ -543,8 +549,11 @@ function handleSelectionChange(event) {
     return;
   }
 
+  updateEstimateSelection(selection, target);
+
   if (target.dataset.role === "service-package") {
     selection.servicePackage = target.value;
+    selection.groomingPreference = "";
     const packageAlaCarteRules = getPackageAlaCarteRules(selection.servicePackage);
     const blockedServiceIds = new Set(packageAlaCarteRules.includedAlaCarteServiceIds);
 
@@ -572,6 +581,7 @@ function handleSelectionChange(event) {
 
     if (selection.alaCarteServices.length > 0 && !packageAlaCarteRules.canCombineWithAlaCarte) {
       selection.servicePackage = "";
+      selection.groomingPreference = "";
     }
   }
 
@@ -632,7 +642,7 @@ function handleSubmit(event) {
       );
     }
 
-    updateServiceNotice(validationMessages.join(" "));
+    updateServiceNotice("Choose services and a grooming preference where required for every pet. " + validationMessages.join(" "));
 
     const firstIncompletePet = incompletePets[0];
     const firstCard = elements.petServiceSelections.querySelector(

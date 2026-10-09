@@ -66,6 +66,10 @@ class StoreWalkinRequest extends FormRequest
             'pets.*.medical_conditions' => ['nullable', 'string', 'max:1000'],
             'pets.*.special_instructions' => ['nullable', 'string', 'max:1000'],
 
+            'pets.*.grooming_preference' => ['nullable', 'string', 'max:32'],
+            'pets.*.estimate_factors' => ['nullable', 'array'],
+            'pets.*.estimate_factors.*' => ['string', 'in:'.implode(',', array_keys(config('grooming_estimates.factors')))],
+
             // Services per pet — at least one per pet, each validated against the DB
             'pets.*.services' => ['required', 'array', 'min:1', 'max:20'],
             'pets.*.services.*.service_slug' => ['required', 'string', 'exists:services,slug'],

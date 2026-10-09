@@ -76,6 +76,8 @@ class BookingController extends Controller
             'pets.*.medical_conditions' => 'nullable|string',
             'pets.*.special_instructions' => 'nullable|string',
             'pets.*.services' => 'nullable|array',
+            'pets.*.grooming_preference' => 'nullable|string|max:32',
+            'pets.*.estimate_factors' => 'prohibited',
             'pets.*.services.package' => 'nullable|string',
             'pets.*.services.ala_carte' => 'nullable|array',
             'pets.*.services.ala_carte.*' => 'nullable|string',
@@ -229,7 +231,11 @@ class BookingController extends Controller
                 if (Schema::hasColumn('booking_pets', 'registered_size')) {
                     $bookingPetAttributes['registered_size'] = $pet->groomingSize();
                 }
+                $engine = app(\App\Services\GroomingTimeEstimate::class);
+                $estimate = $engine->calculate($petData['services']['package'] ?? null, $petData['grooming_preference'] ?? null,
+                    $pet->groomingSize(), $petData['services']['ala_carte'] ?? []);
                 $bookingPet = BookingPet::create($bookingPetAttributes);
+                $engine->snapshot($bookingPet, $estimate);
 
                 // ── Save services for this pet ────────────────
                 $petSize = $pet->groomingSize();
@@ -303,6 +309,8 @@ class BookingController extends Controller
                     'created_at' => $createdAt,
                     'status' => $booking->status,
                     'number_of_pets' => $booking->number_of_pets,
+                    'pets' => $booking->bookingPets->map(fn ($bp) => ['pet_id' => $bp->pet_id,
+                        'grooming_estimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bp)])->values(),
                 ],
             ], 201);
         });
@@ -439,6 +447,7 @@ class BookingController extends Controller
                     'weight' => $bp->pet?->weight,
                     'registered_size' => $bp->registered_size,
                     'confirmed_size' => $bp->confirmed_size,
+                    'grooming_estimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bp),
                     'grooming_status' => $groomingStatus,
                     'active_in_grooming' => ! $groomingFinished,
                     'grooming_started_at' => $bp->grooming_start_time

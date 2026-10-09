@@ -938,7 +938,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
       lastTrackerMarkup = markup;
     }
     const announcement = bookings.flatMap((booking) => trackerPets(booking).map((pet) =>
-      `${pet.pet_name}: ${getStatusConfig(getPetGroomingStatus(pet, booking)).label}`
+      `${pet.pet_name}: ${getStatusConfig(getPetGroomingStatus(pet, booking)).label}. ${petEstimateStatus(pet, booking)}`
     )).join(". ") || "No pets at the clinic right now.";
     if (announcement !== lastGroomingAnnouncement) {
       if (groomingStatusAnnouncement) groomingStatusAnnouncement.textContent = announcement;
@@ -1000,6 +1000,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
           </div>
         </div>
         ${petStatuses}
+        <div class="mt-4 space-y-3">${pets.map((pet) => buildPetEstimate(pet, booking)).join("")}</div>
         <ol class="mt-6 grid grid-cols-3" aria-label="Grooming progress for ${escapeDashboardHtml(names)}">${steps}</ol>
       </div>`;
     }).join("");
@@ -1007,6 +1008,27 @@ function scheduleCustomerDashboardAfterPaint(task) {
       ${index > 0 ? `<div class="mb-4 flex justify-end">${buildTrackerMetadata(booking)}</div>` : ""}
       ${groupsMarkup}
     </article>`;
+  }
+
+  function petEstimateStatus(pet, booking) {
+    const estimate = pet.grooming_estimate;
+    const status = getPetGroomingStatus(pet, booking);
+    if (!estimate || ["grooming_finished", "for_payment", "released"].includes(status)) return "";
+    const ready = pet.grooming_started_timestamp ? window.GroomingEstimates.readyWindow(estimate, pet.grooming_started_timestamp) : null;
+    return ready ? (ready.overdue ? ready.label : `Estimated ready ${ready.label}`) : `Estimated grooming time ${estimate.formatted}`;
+  }
+
+  function buildPetEstimate(pet, booking) {
+    const label = petEstimateStatus(pet, booking);
+    if (!label) return "";
+    const estimate = pet.grooming_estimate;
+    const size = String(pet.size || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return `<div class="text-sm text-portal-muted">
+      ${trackerPets(booking).length > 1 ? `<p class="font-semibold text-portal-text">${escapeDashboardHtml(pet.pet_name)}</p>` : ""}
+      <p>${escapeDashboardHtml(label)}</p>
+      ${pet.grooming_started_at ? `<p class="mt-1 text-xs">Started at ${escapeDashboardHtml(pet.grooming_started_at)}</p>` :
+        estimate.preferenceLabel ? `<p class="mt-1 text-xs">${escapeDashboardHtml(estimate.preferenceLabel)} · ${escapeDashboardHtml(size)}</p>` : ""}
+    </div>`;
   }
 
   function renderGroomingHistory(history) {

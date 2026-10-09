@@ -1,3 +1,4 @@
+import { renderEstimateReview } from "./grooming-estimate-selection.js";
 import {
   escapeHtml,
   formatPetSizeLabel,
@@ -5,6 +6,7 @@ import {
   normalizePetSize,
 } from "../services/booking-draft-service.js";
 import {
+  hasRequiredGroomingPreference,
   buildBookingReviewPayload,
   formatAmountRange,
   formatPriceOption,
@@ -161,6 +163,7 @@ function handleConfirmClick() {
     return;
   }
 
+  if (state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection))) return;
   saveReviewDraft();
   window.history.pushState(null, "", "./walk-in-consent.html");
   renderWalkInConsentStep({
@@ -270,6 +273,7 @@ function renderPetReviewCard(item, index) {
 
       <div class="mt-6 space-y-4">
         ${packageCard}
+        ${renderEstimateReview(item.groomingEstimate)}
         ${alaCarteCard}
         ${missingSelectionNotice}
 
@@ -435,6 +439,7 @@ export function renderWalkInReviewStep(options = {}) {
     return;
   }
 
+  elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));
   renderReviewNotice();
   renderReviewSelections();
   renderTotalPricing();

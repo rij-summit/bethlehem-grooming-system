@@ -1453,12 +1453,12 @@ var API = (() => {
     );
   }
 
-  async function adminStartPetGrooming(bookingId, bookingPetId) {
+  async function adminStartPetGrooming(bookingId, bookingPetId, assessment = {}) {
     // Starts grooming for one pet while preserving the rest of the owner's queue card.
     return request(
       "POST",
       `/admin/bookings/${bookingId}/pets/${bookingPetId}/start-grooming`,
-      null,
+      assessment,
       getAdminToken(),
     );
   }

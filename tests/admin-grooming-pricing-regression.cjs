@@ -226,7 +226,8 @@ const reviewDocument = {
     return reviewElements.get(id);
   },
 };
-const reviewContext = { ...grooming, ...draftUtilities, document: reviewDocument, window: {}, sessionStorage: { setItem() {} } };
+const { renderEstimateReview } = await import("../scripts/components/grooming-estimate-selection.js");
+const reviewContext = { renderEstimateReview, ...grooming, ...draftUtilities, document: reviewDocument, window: {}, sessionStorage: { setItem() {} } };
 const reviewSource = fs.readFileSync(path.join(__dirname, "../scripts/components/walk-in-review-step.js"), "utf8")
   .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g, "")
   .replace(/export function /g, "function ");

@@ -18,7 +18,7 @@ class GroomingPricingController extends Controller
             ->filter(fn ($slug) => $services->has($slug))
             ->map(fn ($slug) => $this->normalize($services[$slug], $resolver))->values();
 
-        return response()->json(['data' => $catalogue, 'priceLimits' => config('grooming_services.price_limits')])
+        return response()->json(['data' => $catalogue, 'priceLimits' => config('grooming_services.price_limits'), 'estimateRules' => config('grooming_estimates')])
             ->header('Cache-Control', 'no-store');
     }
 

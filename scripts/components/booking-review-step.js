@@ -1,3 +1,4 @@
+import { renderEstimateReview } from "./grooming-estimate-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
   escapeHtml,
@@ -10,6 +11,7 @@ import {
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
+  hasRequiredGroomingPreference,
   loadGroomingCatalogue,
   selectedPricingSignature,
   buildBookingReviewPayload,
@@ -99,7 +101,7 @@ export async function refreshBookingReviewStep() {
   renderReviewSelections();
   renderTotalPricing();
   saveReviewDraft();
-  elements.confirmBookingBtn.disabled = false;
+  elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));
   elements.confirmBookingBtn.classList.remove("opacity-50", "cursor-not-allowed");
 }
 
@@ -211,6 +213,7 @@ function renderPetReviewCard(item, index) {
 
       <div class="mt-6 space-y-4">
         ${packageCard}
+        ${renderEstimateReview(item.groomingEstimate)}
         ${alaCarteCard}
         ${missingSelectionNotice}
 
@@ -353,6 +356,8 @@ function saveReviewDraft() {
       sizeVerified: item.pet.sizeVerified,
       weight: item.pet.weight,
       servicePackage: item.selection.servicePackage,
+      groomingPreference: item.selection.groomingPreference,
+      groomingEstimate: item.groomingEstimate,
       alaCarteServices: [...item.selection.alaCarteServices],
       addOns: [...item.selection.addOns],
       specialInstructions: item.selection.specialInstructions.trim(),
@@ -377,7 +382,7 @@ function saveReviewDraft() {
 }
 
 function handleConfirmClick() {
-  if (!state.reviewPayload) {
+  if (!state.reviewPayload || state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection))) {
     return;
   }
 

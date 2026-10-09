@@ -321,6 +321,8 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
       size:                 normalizeSizeForApi(item.pet.size),
       medical_conditions:   item.pet.medicalNotes || null,
       special_instructions: item.selection.specialInstructions?.trim() || null,
+      grooming_preference: item.selection.groomingPreference || null,
+      estimate_factors: item.selection.estimateFactors || [],
       services:             item.pricing.lineItems.map((lineItem) => ({
         service_slug: lineItem.serviceId,
       })),
@@ -375,12 +377,14 @@ function buildConfirmationPayload(response, reviewPayload) {
 
     // Service rows for the service table
     review: {
-      pets: items.map((item) => {
+      pets: items.map((item, index) => {
         const packageLine    = item.pricing.lineItems.find((l) => l.kind === "package");
         const alaCarteLines  = item.pricing.lineItems.filter((l) => l.kind === "ala_carte");
         return {
           petName:              item.pet.petName,
           servicePackage:       packageLine?.serviceName || null,
+          groomingPreference: item.selection.groomingPreference,
+          groomingEstimate: response.pets?.[index]?.grooming_estimate || item.groomingEstimate,
           alaCarteServices:     alaCarteLines.map((l) => l.serviceName),
           pricing:              item.pricing.total,
           specialInstructions:  item.selection.specialInstructions || "",
@@ -488,7 +492,7 @@ function buildConfirmationReview(reviewPayload) {
   const items = Array.isArray(reviewPayload?.items) ? reviewPayload.items : [];
 
   return {
-    pets: items.map((item) => {
+    pets: items.map((item, index) => {
       const lineItems = Array.isArray(item.pricing?.lineItems)
         ? item.pricing.lineItems
         : [];

@@ -139,7 +139,7 @@ export function initBookingConfirmedStep() {
             return `
               <tr>
                 <td class="px-3 py-3 font-medium text-slate-700">${escapeHtml(rp.petName || "Unnamed Pet")}</td>
-                <td class="px-3 py-3 text-slate-600">${escapeHtml(serviceNames.join(", ") || "No service selected")}</td>
+                <td class="px-3 py-3 text-slate-600">${escapeHtml(serviceNames.join(", ") || "No service selected")}${rp.groomingEstimate ? `<p class="mt-2 text-xs">${escapeHtml(rp.groomingEstimate.preferenceLabel || "")}<br>Estimated grooming time: ${escapeHtml(rp.groomingEstimate.formatted)}</p>` : ""}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(alaCarteServices.join(", ") || "No A la Carte service selected")}</td>
                 <td class="whitespace-nowrap px-3 py-3 font-semibold text-slate-700">${escapeHtml(price)}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(instructions)}</td>

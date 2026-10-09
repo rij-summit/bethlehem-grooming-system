@@ -36,9 +36,16 @@ class BookingPet extends Model
         'grooming_start_time',
         'grooming_end_time',
         'grooming_state',
+        'grooming_preference',
+        'grooming_estimate_min',
+        'grooming_estimate_max',
+        'grooming_estimate_factors',
     ];
 
     protected $casts = [
+        'grooming_estimate_min' => 'integer',
+        'grooming_estimate_max' => 'integer',
+        'grooming_estimate_factors' => 'array',
         'pet_queue_date' => 'date',
         'pet_queue_number' => 'integer',
         'grooming_start_time' => 'datetime',

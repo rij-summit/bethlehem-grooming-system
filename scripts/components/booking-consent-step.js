@@ -102,6 +102,7 @@ export function initBookingConsentStep() {
         weight: pet.weight ? parseFloat(pet.weight) : null,
         medical_conditions: pet.medicalNotes || null,
         special_instructions: reviewPet?.specialInstructions || null,
+        grooming_preference: serviceSelection.groomingPreference || null,
         services: {
           package:   serviceSelection.servicePackage || null,
           ala_carte: serviceSelection.alaCarteServices || [],
@@ -143,7 +144,8 @@ export function initBookingConsentStep() {
         status: response.booking.status,
         number_of_pets: response.booking.number_of_pets,
         pets: bookingPets,
-        review: reviewData,
+        review: { ...reviewData, pets: (reviewData.pets || []).map((pet, index) => ({ ...pet,
+          groomingEstimate: response.booking.pets?.[index]?.grooming_estimate || pet.groomingEstimate })) },
         consent: consentPayload,
       }));
 

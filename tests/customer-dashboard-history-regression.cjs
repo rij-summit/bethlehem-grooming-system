@@ -84,6 +84,7 @@ async function runDashboard(getBookingHistory, { pets = [], capacity = {} } = {}
   };
 
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../scripts/services/grooming-estimate-engine.js"), "utf8"), context);
   vm.runInContext(dashboardComponent, context);
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -324,8 +325,30 @@ function testExpiredRegistrationsHaveNeutralHistoryLabels() {
   assert.equal(context.groomingOutcome('archived')[0], 'Completed');
 }
 
+async function testPerPetGroomingEstimatesAndOverdueTracker() {
+  const now = Date.now();
+  let bookings = [{ booking_id: 501, status: "checked_in", pets: [
+    { pet_name: "Coco", size: "medium", grooming_status: "checked_in", grooming_estimate: { minMinutes: 60, maxMinutes: 90, formatted: "1 hr–1 hr 30 min", preferenceLabel: "Regular Trim" } },
+    { pet_name: "Bruno", size: "large", grooming_status: "checked_in", grooming_estimate: { minMinutes: 120, maxMinutes: 120, formatted: "2 hrs" } },
+  ] }];
+  const dashboard = await runDashboard(async () => ({ bookings, history: [] }));
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated grooming time 1 hr–1 hr 30 min/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Regular Trim · Medium/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated grooming time 2 hrs/);
+  bookings[0].pets[0] = { ...bookings[0].pets[0], grooming_status: "in_progress", grooming_started_at: "1:15 PM", grooming_started_timestamp: new Date(now).toISOString() };
+  await dashboard.refresh();
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Estimated ready/);
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Started at 1:15 PM/);
+  bookings[0].pets[0].grooming_started_timestamp = new Date(now - 91 * 60000).toISOString();
+  await dashboard.refresh();
+  assert.match(dashboard.element("groomingTracker").innerHTML, /Taking longer than estimated/);
+  assert.match(dashboard.element("groomingStatusAnnouncement").textContent, /Taking longer than estimated/);
+  assert.equal(dashboard.consoleErrors.length, 0);
+}
+
 (async () => {
   testExpiredRegistrationsHaveNeutralHistoryLabels();
+  await testPerPetGroomingEstimatesAndOverdueTracker();
   await testInitialAndReturningSessionGreetings();
   await testStateHierarchyAndLiveTransitions();
   await testMultiPetProgressAndPickupReadiness();

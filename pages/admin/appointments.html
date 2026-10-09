@@ -13,6 +13,7 @@
       href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003"
     />
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <link rel="stylesheet" href="../../css/grooming-estimates.css?v=20261009">
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -649,7 +650,7 @@
                       <i data-lucide="timer" class="h-4 w-4 text-[#315b7e]"></i>
                     </div>
                     <div>
-                      <p class="text-xs text-slate-500">Avg grooming time</p>
+                      <p class="text-xs text-slate-500">Avg. service estimate</p>
                       <p class="text-lg font-bold text-slate-800" x-text="queueSummary.avgWaitLabel"></p>
                     </div>
                   </div>
@@ -660,7 +661,7 @@
                         <i data-lucide="flag" class="h-4 w-4 text-green-600"></i>
                       </div>
                       <div>
-                        <p class="text-xs text-slate-500">Est. queue done by</p>
+                        <p class="text-xs text-slate-500">Est. queue done</p>
                         <p class="text-lg font-bold text-slate-800" x-text="queueSummary.lastDoneLabel"></p>
                       </div>
                     </div>
@@ -1032,7 +1033,7 @@
                       <template x-if="getBookingETA(booking)">
                         <p class="mt-1 flex items-center gap-1 text-sm text-[#1f3850]">
                           <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0 text-[#b98525]"></i>
-                          Est. ready: <span class="font-semibold" x-text="'~' + getBookingETA(booking)"></span>
+                          Est. ready: <span class="font-semibold" x-text="getBookingETA(booking)"></span>
                         </p>
                       </template>
                     </div>
@@ -1119,6 +1120,9 @@
                             </p>
                             <p class="admin-queued-pet-services" x-text="pet.weight"></p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
+                            <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
+                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
@@ -1288,7 +1292,7 @@
                       <template x-if="getBookingETA(booking)">
                         <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#315b7e]">
                           <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
-                          Est. done: ~<span x-text="getBookingETA(booking)"></span>
+                          Est. ready: <span x-text="getBookingETA(booking)"></span>
                         </p>
                       </template>
                     </div>
@@ -1377,6 +1381,9 @@
                             </p>
                             <p class="admin-queued-pet-services" x-text="pet.weight"></p>
                             <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                            <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
+                            <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
+                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
@@ -2051,12 +2058,33 @@
                           </template>
                         </select>
                       </label>
+                        <fieldset class="grooming-estimate-selection"><legend>Estimate factors <span>(optional)</span></legend>
+                          <div class="grooming-estimate-chips"><template x-for="factor in estimateFactorOptions" :key="factor.value">
+                            <label class="grooming-estimate-chip"><input type="checkbox" :value="factor.value" x-model="pet.estimateFactors" :disabled="actionConfirmModal.busy"><span x-text="factor.label"></span></label>
+                          </template></div>
+                          <p class="grooming-estimate-time" aria-live="polite">Estimated grooming time <strong x-text="assessmentPreview(pet)"></strong></p>
+                        </fieldset>
                     </div>
                   </template>
                   <label class="block text-xs font-semibold text-slate-700" for="checkInInternalStaffNote">Internal Staff Note <span class="font-normal text-slate-400">(optional)</span></label>
                   <textarea id="checkInInternalStaffNote" x-model="actionConfirmModal.internalStaffNote" :disabled="actionConfirmModal.busy" rows="3" maxlength="5000" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Add information for clinic staff"></textarea>
                 </div>
-                <div
+                <template x-if="actionConfirmModal.action === 'startPetGrooming' && actionConfirmModal.booking?.actionPet">
+                    <div class="grooming-estimate-selection text-left" x-data="{ pet: actionConfirmModal.booking.actionPet }">
+                      <fieldset x-show="getEstimatePreferences(pet).length"><legend>Grooming preference</legend>
+                        <div class="grooming-estimate-chips"><template x-for="choice in getEstimatePreferences(pet)" :key="choice.value">
+                          <label class="grooming-estimate-chip"><input type="radio" name="staff_grooming_preference" :value="choice.value" x-model="pet.groomingPreference" :disabled="actionConfirmModal.busy"><span x-text="choice.label"></span></label>
+                        </template></div>
+                      </fieldset>
+                      <fieldset class="grooming-estimate-selection"><legend>Estimate factors <span>(optional)</span></legend>
+                          <div class="grooming-estimate-chips"><template x-for="factor in estimateFactorOptions" :key="factor.value">
+                            <label class="grooming-estimate-chip"><input type="checkbox" :value="factor.value" x-model="pet.estimateFactors" :disabled="actionConfirmModal.busy"><span x-text="factor.label"></span></label>
+                          </template></div>
+                          <p class="grooming-estimate-time" aria-live="polite">Estimated grooming time <strong x-text="assessmentPreview(pet)"></strong></p>
+                        </fieldset>
+                    </div>
+                  </template>
+                  <div
                   x-show="actionConfirmModal.action === 'cancel'"
                   class="mt-4 text-left"
                 >
@@ -2339,6 +2367,7 @@
     <!-- Shared dashboard content script -->
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
+    <script src="../../scripts/services/grooming-estimate-engine.js?v=20261009"></script>
     <script src="../../scripts/components/admin-dashboard.js?v=grooming-onsite-capacity-20261009"></script>
   </body>
 </html>

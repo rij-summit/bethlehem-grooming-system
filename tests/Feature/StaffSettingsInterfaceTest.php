@@ -39,7 +39,7 @@ class StaffSettingsInterfaceTest extends TestCase
         $this->assertStringContainsString('>Groomers on Duty</h3>', $settings);
         $this->assertStringNotContainsString('>Groomers on duty</span>', $appointments);
         $this->assertStringContainsString('>Pets waiting</p>', $appointments);
-        $this->assertStringContainsString('>Avg grooming time</p>', $appointments);
+        $this->assertStringContainsString('>Avg. service estimate</p>', $appointments);
     }
 
     public function test_staff_can_reach_settings_from_the_shared_admin_shell(): void

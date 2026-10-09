@@ -1,9 +1,12 @@
+import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
 import {
   escapeHtml,
   formatPetSizeLabel,
   formatPetTypeLabel,
 } from "../services/booking-draft-service.js";
 import {
+  hasRequiredGroomingPreference,
+  estimatePetGrooming,
   loadGroomingCatalogue,
   calculatePetSelectionPricing,
   createEmptyPetServiceSelection,
@@ -187,9 +190,10 @@ function renderMissingPetState() {
 }
 
 function renderPetServiceSelections() {
-  elements.petServiceSelections.innerHTML = state.pets
+  renderSelectionsPreservingFocus(elements.petServiceSelections, state.pets
     .map((pet, index) => renderPetSelectionCard(pet, index))
-    .join("");
+    .join(""),
+    state.pets.map((pet) => `${pet.petName}: ${estimatePetGrooming(getSelectionByPetId(pet.id), pet)?.formatted || "Complete the service selection"}`).join(". "));
 }
 
 function renderPetSelectionCard(pet, index) {
@@ -237,6 +241,7 @@ function renderPetSelectionCard(pet, index) {
         <div class="grid gap-4 md:grid-cols-2">
           ${packageCards}
         </div>
+        ${renderEstimateSelection(pet, selection, true)}
       </section>
 
       ${
@@ -398,7 +403,7 @@ function petRequiresPackage(pet) {
 }
 
 function hasCompletedRequiredServiceSelection(pet, selection) {
-  if (!pet) {
+  if (!pet || !hasRequiredGroomingPreference(selection)) {
     return false;
   }
 
@@ -507,6 +512,7 @@ function handleSelectionClick(event) {
   event.preventDefault();
   target.checked = false;
   selection.servicePackage = "";
+  selection.groomingPreference = "";
 
   renderPetServiceSelections();
   updateServiceNotice();
@@ -528,8 +534,11 @@ function handleSelectionChange(event) {
     return;
   }
 
+  updateEstimateSelection(selection, target);
+
   if (target.dataset.role === "service-package") {
     selection.servicePackage = target.value;
+    selection.groomingPreference = "";
     const packageAlaCarteRules = getPackageAlaCarteRules(selection.servicePackage);
     const blockedServiceIds = new Set(packageAlaCarteRules.includedAlaCarteServiceIds);
 
@@ -557,6 +566,7 @@ function handleSelectionChange(event) {
 
     if (selection.alaCarteServices.length > 0 && !packageAlaCarteRules.canCombineWithAlaCarte) {
       selection.servicePackage = "";
+      selection.groomingPreference = "";
     }
   }
 
@@ -615,7 +625,7 @@ function handleSubmit(event) {
       );
     }
 
-    updateServiceNotice(validationMessages.join(" "));
+    updateServiceNotice("Choose services and a grooming preference where required for every pet. " + validationMessages.join(" "));
     return;
   }
 

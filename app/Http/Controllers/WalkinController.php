@@ -94,6 +94,8 @@ class WalkinController extends Controller
                     'special_instructions' => trim($item['petData']['special_instructions'] ?? '') ?: null,
                 ]);
 
+                app(\App\Services\GroomingTimeEstimate::class)->snapshot($bookingPet, $item['estimate']);
+
                 foreach ($item['services'] as $svc) {
                     BookingService::create([
                         'booking_id' => $booking->booking_id,
@@ -111,6 +113,7 @@ class WalkinController extends Controller
                     'pet_name' => $item['petData']['pet_name'],
                     'species' => $item['petData']['species'],
                     'size' => $item['size'],
+                    'grooming_estimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bookingPet),
                     'services' => array_map(fn ($s) => [
                         'name' => $s['name'],
                         'price' => $s['price'],
@@ -253,7 +256,17 @@ class WalkinController extends Controller
                 $pet->confirmClinicSize($size);
             }
 
+            $slugs = array_column($petData['services'], 'service_slug');
+            $packages = array_values(array_intersect($slugs, array_keys(config('grooming_estimates.packages'))));
+            if (count($packages) > 1) {
+                throw ValidationException::withMessages(['services' => 'Select one grooming package per pet.']);
+            }
+            $estimate = app(\App\Services\GroomingTimeEstimate::class)->calculate($packages[0] ?? null,
+                $petData['grooming_preference'] ?? null, $size, array_values(array_diff($slugs, $packages)),
+                $petData['estimate_factors'] ?? []);
+
             return [
+                'estimate' => $estimate,
                 'pet' => $pet,
                 'petData' => $petData,
                 'size' => $size,

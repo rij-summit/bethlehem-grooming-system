@@ -183,6 +183,7 @@ class AdminBookingController extends Controller
             'recentActivity' => $this->recentActivity(),
             'capacity' => app(\App\Services\OperationalCapacity::class)->snapshot(),
             'groomerCapacity' => $this->groomerCapacitySnapshot(),
+            'estimateRules' => config('grooming_estimates'),
         ]);
     }
 
@@ -258,13 +259,15 @@ class AdminBookingController extends Controller
         $data = request()->validate([
             'pet_sizes' => ['nullable', 'array'],
             'pet_sizes.*.booking_pet_id' => ['required_with:pet_sizes', 'integer'],
+            'pet_sizes.*.estimate_factors' => ['nullable', 'array'],
+            'pet_sizes.*.estimate_factors.*' => ['string', 'in:'.implode(',', array_keys(config('grooming_estimates.factors')))],
             'pet_sizes.*.size' => ['required_with:pet_sizes', 'in:small,medium,large,extra_large'],
             'internal_staff_note' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ]);
         $selectedSizes = collect($data['pet_sizes'] ?? [])->pluck('size', 'booking_pet_id');
         $queueDate = now()->toDateString();
         $result = app(DailyPetQueue::class)->runForDate($queueDate, function () use ($id, $queueDate, $selectedSizes, $data) {
-            $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet'])
+            $booking = Booking::with(['user', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
                 ->whereKey($id)
                 ->lockForUpdate()
                 ->first();
@@ -304,8 +307,14 @@ class AdminBookingController extends Controller
             foreach ($booking->bookingPets as $bookingPet) {
                 $pet = $bookingPet->pet;
                 $size = $selectedSizes->get($bookingPet->booking_pet_id) ?? $pet->groomingSize();
+                $sizeChanged = ($bookingPet->confirmed_size ?? $bookingPet->registered_size) !== $size;
                 $bookingPet->confirmed_size = $size;
                 $bookingPet->save();
+                $assessment = collect($data['pet_sizes'] ?? [])->firstWhere('booking_pet_id', $bookingPet->booking_pet_id);
+                $factors = $assessment['estimate_factors'] ?? $bookingPet->grooming_estimate_factors ?? [];
+                if ($sizeChanged || ! $bookingPet->grooming_estimate_min || $factors !== ($bookingPet->grooming_estimate_factors ?? [])) {
+                    app(\App\Services\GroomingTimeEstimate::class)->recalculate($booking, $bookingPet, $factors);
+                }
                 $pet->confirmClinicSize($size);
             }
 
@@ -485,6 +494,11 @@ class AdminBookingController extends Controller
 
             $startedAt = now();
             if ($petsToStart->isNotEmpty()) {
+                $booking->loadMissing('bookingServices.service');
+                $petsToStart->loadMissing('pet');
+                foreach ($petsToStart as $petToStart) {
+                    if (! $petToStart->grooming_estimate_min) app(\App\Services\GroomingTimeEstimate::class)->recalculate($booking, $petToStart);
+                }
                 BookingPet::whereIn('booking_pet_id', $petsToStart->pluck('booking_pet_id'))
                     ->update([
                         'grooming_start_time' => $startedAt,
@@ -535,7 +549,12 @@ class AdminBookingController extends Controller
     // No migration is needed: booking_pets.grooming_start_time already stores this per-pet state.
     public function startPetGrooming($id, $bookingPetId)
     {
-        $result = DB::transaction(function () use ($id, $bookingPetId) {
+        $assessment = request()->validate([
+            'grooming_preference' => ['nullable', 'string', 'max:32'],
+            'estimate_factors' => ['sometimes', 'array'],
+            'estimate_factors.*' => ['string', 'in:'.implode(',', array_keys(config('grooming_estimates.factors')))],
+        ]);
+        $result = DB::transaction(function () use ($id, $bookingPetId, $assessment) {
             $settings = ClinicSetting::current(lockForUpdate: true);
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
@@ -572,6 +591,12 @@ class AdminBookingController extends Controller
                 return $this->groomerCapacityError($activePets, $settings->groomers_on_duty);
             }
 
+            if (! $bookingPet->grooming_estimate_min
+                || ($assessment['estimate_factors'] ?? $bookingPet->grooming_estimate_factors ?? []) !== ($bookingPet->grooming_estimate_factors ?? [])
+                || ($assessment['grooming_preference'] ?? $bookingPet->grooming_preference) !== $bookingPet->grooming_preference) {
+                app(\App\Services\GroomingTimeEstimate::class)->recalculate($booking, $bookingPet,
+                    $assessment['estimate_factors'] ?? null, $assessment['grooming_preference'] ?? null);
+            }
             $startedAt = now();
             $bookingPet->update([
                 'grooming_start_time' => $startedAt,
@@ -1368,6 +1393,7 @@ class AdminBookingController extends Controller
                     'breed' => $pet?->breed ?? '—',
                     'size' => $bp->confirmed_size ?? $pet?->groomingSize() ?? '—',
                     'sizeVerified' => $pet?->hasClinicVerifiedSize() ?? false,
+                    'groomingEstimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bp),
                     'registeredSize' => $bp->registered_size,
                     'confirmedSize' => $bp->confirmed_size,
                     'furType' => $pet?->fur_type ?? '—',

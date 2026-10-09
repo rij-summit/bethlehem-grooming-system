@@ -1,3 +1,4 @@
+import "./grooming-estimate-engine.js";
 import {
   BOOKING_STEP_THREE_KEY,
   normalizePetSize,
@@ -156,6 +157,7 @@ export function applyGroomingCatalogue(catalogue) {
 
 export async function loadGroomingCatalogue() {
   const response = await API.getGroomingCatalogue();
+  globalThis.GroomingEstimates.configure(response.estimateRules);
   return applyGroomingCatalogue(response.data);
 }
 
@@ -256,6 +258,8 @@ export function createEmptyPetServiceSelection(pet) {
   return {
     petId: pet?.id || "",
     servicePackage: "",
+    groomingPreference: "",
+    estimateFactors: [],
     alaCarteServices: [],
     addOns: [],
     specialInstructions: "",
@@ -266,6 +270,8 @@ export function sanitizePetServiceSelection(selection) {
   const nextSelection = {
     petId: selection?.petId || "",
     servicePackage: String(selection?.servicePackage || ""),
+    groomingPreference: String(selection?.groomingPreference || ""),
+    estimateFactors: [...new Set(selection?.estimateFactors || [])],
     alaCarteServices: Array.from(
       new Set(
         Array.isArray(selection?.alaCarteServices)
@@ -318,6 +324,7 @@ export function normalizeStepThreeDraft(rawDraft, bookingDraft) {
       defaultSelectionMap.set(
         selection.petId,
         sanitizePetServiceSelection({
+          ...selection,
           petId: selection.petId,
           servicePackage: String(selection.servicePackage || ""),
           alaCarteServices: Array.from(
@@ -383,6 +390,8 @@ export function buildStepThreeDraftPayload(petSelections) {
       return {
         petId: sanitizedSelection.petId,
         servicePackage: sanitizedSelection.servicePackage,
+        groomingPreference: sanitizedSelection.groomingPreference,
+        estimateFactors: [...sanitizedSelection.estimateFactors],
         alaCarteServices: [...sanitizedSelection.alaCarteServices],
         addOns: [...sanitizedSelection.addOns],
         specialInstructions: sanitizedSelection.specialInstructions.trim(),
@@ -599,6 +608,7 @@ export function buildBookingReviewPayload(bookingDraft, petSelections) {
       pet,
       selection,
       pricing,
+      groomingEstimate: estimatePetGrooming(selection, pet),
     };
   });
 
@@ -636,4 +646,17 @@ export function buildBookingReviewPayload(bookingDraft, petSelections) {
     notices,
     isEstimate: totalPricing.isEstimate || notices.length > 0,
   };
+}
+
+export function getGroomingPreferences(packageId) {
+  return globalThis.GroomingEstimates.preferences(packageId);
+}
+
+export function hasRequiredGroomingPreference(selection) {
+  const choices = getGroomingPreferences(selection?.servicePackage);
+  return !choices.length || choices.some((choice) => choice.value === selection?.groomingPreference);
+}
+
+export function estimatePetGrooming(selection, pet) {
+  return globalThis.GroomingEstimates.calculate(selection, normalizePetSize(pet?.size));
 }
