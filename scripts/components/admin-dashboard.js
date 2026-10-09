@@ -384,6 +384,7 @@ function adminDashboard() {
     forPaymentList: [],
     activeGroomers: 2,
     activeGroomingPets: 0,
+    groomingWorkload: null,
     groomerCapacityBusy: false,
     groomerCapacityError: "",
     clinicStopped: false,
@@ -1221,7 +1222,7 @@ function adminDashboard() {
         }
         this.closeActionConfirmModal(true);
       } catch (error) {
-        this.actionConfirmModal.error = error.message || "Action failed. Please try again.";
+        this.actionConfirmModal.error = error.data?.detail ? `${error.message}\n${error.data.detail}` : error.message || "Action failed. Please try again.";
       } finally {
         this.actionConfirmModal.busy = false;
       }
@@ -1514,6 +1515,7 @@ function adminDashboard() {
       if ("activeGroomers" in nextPayload) {
         this.activeGroomers = nextPayload.activeGroomers;
       }
+      if ("groomingWorkload" in nextPayload) this.groomingWorkload = nextPayload.groomingWorkload;
 
       if ("activeGroomingPets" in nextPayload) {
         this.activeGroomingPets = nextPayload.activeGroomingPets;
@@ -1583,6 +1585,7 @@ function adminDashboard() {
       const notifications = payload.notifications || {};
 
       const nextPayload = {};
+      if ("groomingWorkload" in payload) nextPayload.groomingWorkload = payload.groomingWorkload;
 
       if (this.hasValue(payload.todayCount) || this.hasValue(summary.today)) {
         nextPayload.todayCount = this.toNumber(
@@ -1901,16 +1904,11 @@ function adminDashboard() {
 
     // ── QUEUE ETA ENGINE ─────────────────────────────────────────────────────
     _computeQueueETAs() {
-      const active = [], waiting = [];
-      const bookings = [...this.inProgressList, ...this.queuedList].sort((a, b) => (a.queueNumber ?? 0) - (b.queueNumber ?? 0));
-      for (const booking of bookings) {
-        for (const pet of booking.pets || []) {
-          if (this.isPetGroomingFinished(pet)) continue;
-          const item = { key: String(pet.bookingPetId ?? pet.id ?? ""), estimate: pet.groomingEstimate, startedAt: pet.groomingStartedAtIso };
-          (this.isPetGroomingStarted(pet) ? active : waiting).push(item);
-        }
-      }
-      return window.GroomingEstimates.queueETAs(waiting, active, this.activeGroomers);
+      return Object.fromEntries(Object.entries(this.groomingWorkload?.pets || {}).map(([id, pet]) => {
+        const completion = pet.projected_completion ? new Date(pet.projected_completion).getTime() : NaN;
+        return [id, { estDoneMin: completion, estDoneMax: completion, unavailable: !Number.isFinite(completion),
+          queueWait: pet.queue_wait_minutes, start: pet.projected_start, state: pet.state }];
+      }));
     },
 
     get petETAs() { return this._computeQueueETAs(); },
@@ -1923,11 +1921,39 @@ function adminDashboard() {
             estimates.reduce((sum, e) => sum + e.maxMinutes, 0) / estimates.length) : "—";
       const entries = Object.values(this.petETAs);
       const lastDoneLabel = entries.some((entry) => entry.overdue || entry.unavailable) ? "Awaiting groomer availability"
-        : entries.length ? window.GroomingEstimates.formatTimeWindow(Math.max(Date.now(), ...entries.map((entry) => entry.estDoneMin)), Math.max(...entries.map((entry) => entry.estDoneMax))) : null;
+        : entries.length ? window.GroomingEstimates.formatTimeWindow(Math.max(...entries.map((entry) => entry.estDoneMin)), Math.max(...entries.map((entry) => entry.estDoneMax))) : null;
       return { petsWaiting: waiting.length, avgWaitLabel, lastDoneLabel };
     },
 
     get isGroomerCapacityFull() { return this.activeGroomingPets >= this.activeGroomers; },
+
+    get groomingWorkloadMessage() {
+      const state = this.groomingWorkload?.state;
+      return state === "Needs staff action" ? "Current grooming workload needs attention"
+        : state === "At risk" ? "Today's grooming capacity is nearly full" : "Today's grooming workload is on track";
+    },
+
+    get workloadCompletionLabel() {
+      const finish = this.groomingWorkload?.projected_last_completion;
+      if (!finish) return this.groomingWorkload?.state === "Needs staff action" ? "Confirm missing grooming estimates" : "No grooming work waiting";
+      return `Projected last completion: ${window.GroomingEstimates.formatTimeWindow(new Date(finish).getTime(), new Date(finish).getTime())}`;
+    },
+
+    get workloadClosingLabel() {
+      const close = this.groomingWorkload?.closing_time;
+      return close ? `Grooming closes at ${window.GroomingEstimates.formatTimeWindow(new Date(close).getTime(), new Date(close).getTime())}` : "";
+    },
+
+    getPetWorkloadState(pet) {
+      return this.groomingWorkload?.pets?.[String(pet.bookingPetId ?? pet.id)]?.state || "";
+    },
+
+    getPetQueueWait(pet) {
+      const forecast = this.groomingWorkload?.pets?.[String(pet.bookingPetId ?? pet.id)];
+      if (!forecast?.projected_start) return "Awaiting groomer availability";
+      const start = new Date(forecast.projected_start).getTime();
+      return `Queue wait: ${window.GroomingEstimates.formatDuration(forecast.queue_wait_minutes)} · Est. start: ${window.GroomingEstimates.formatTimeWindow(start, start)}`;
+    },
 
     getBookingETA(booking) {
       const map = this.petETAs;
@@ -1935,7 +1961,7 @@ function adminDashboard() {
       if (!entries.length) return null;
       if (entries.some((entry) => entry.overdue)) return "Taking longer than estimated";
       if (entries.some((entry) => entry.unavailable)) return "Awaiting groomer availability";
-      return window.GroomingEstimates.formatTimeWindow(Math.max(Date.now(), ...entries.map((entry) => entry.estDoneMin)), Math.max(...entries.map((entry) => entry.estDoneMax)));
+      return window.GroomingEstimates.formatTimeWindow(Math.max(...entries.map((entry) => entry.estDoneMin)), Math.max(...entries.map((entry) => entry.estDoneMax)));
     },
 
     getPetElapsed(pet) {
@@ -1950,7 +1976,7 @@ function adminDashboard() {
       if (!entry) return "";
       if (entry.overdue) return "Taking longer than estimated";
       if (entry.unavailable) return "Awaiting groomer availability";
-      return `Est. ready: ${window.GroomingEstimates.formatTimeWindow(Math.max(Date.now(), entry.estDoneMin), entry.estDoneMax)}`;
+      return `Est. ready: ${window.GroomingEstimates.formatTimeWindow(entry.estDoneMin, entry.estDoneMax)}`;
     },
 
     getPetEstimateLabel(pet) {

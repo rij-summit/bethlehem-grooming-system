@@ -294,7 +294,7 @@ async function handleSubmit(event) {
     );
     window.location.href = "./walk-in-booking-confirmed.html";
   } catch (error) {
-    showSubmitError(error.message || "Failed to register walk-in. Please try again.");
+    showSubmitError(error.data?.detail ? `${error.message} ${error.data.detail}` : error.message || "Failed to register walk-in. Please try again.");
     resetSubmitButton();
   }
 }

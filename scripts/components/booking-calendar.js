@@ -1,4 +1,5 @@
 import { formatBookingSchedule } from "../services/booking-format-service.js";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js";
 
 /**
  * Booking Calendar Component
@@ -39,7 +40,7 @@ const state = {
     storageKey: "bookingSchedule",
     dateField: "date",
     nextPath: "./grooming-pre-registration.html?step=pets",
-    fetchTimeslots: (dateKey) => API.getTimeslots(dateKey),
+    fetchTimeslots: (dateKey) => forecastGroomingWindows(dateKey),
     saveSelection: null,
     clearSelection: null,
     onDateSelected: null,
@@ -256,7 +257,7 @@ function updateOperatingHoursText() {
  * For today, a preferred arrival window remains available until its end time.
  */
 function isSlotDisabled(slot) {
-  if (slot.is_closed || slot.is_past || slot.is_cutoff || isDateDisabled(state.selectedDateKey)) return true;
+  if (slot.is_closed || slot.is_past || slot.is_cutoff || slot.is_workload_unavailable || isDateDisabled(state.selectedDateKey)) return true;
 
   if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
@@ -449,10 +450,11 @@ function renderTimeSlots() {
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
       ${slot.is_cutoff ? '<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>' : ""}
+      ${slot.is_workload_unavailable ? '<span class="block text-xs mt-0.5 text-slate-600">Unavailable — not enough grooming time remaining</span>' : ""}
     `;
 
     button.className = [
-      "h-16 rounded-2xl border px-4 py-3 text-sm transition text-left",
+      "rounded-2xl border px-4 py-3 text-sm transition text-left",
       disabled
         ? "border-slate-300 bg-slate-200 text-slate-400 cursor-not-allowed"
         : "border-[#a8c8e6] bg-[#edf6fd] text-slate-700 hover:bg-[#dbeefe]",

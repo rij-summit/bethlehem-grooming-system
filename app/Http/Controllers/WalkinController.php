@@ -40,6 +40,9 @@ class WalkinController extends Controller
             [$user, $unregisteredCustomer, $owner] = $this->resolveOwner($data);
 
             $resolvedPets = $this->resolveAllPets($data['pets'], $user, $unregisteredCustomer);
+            $admissionJobs = collect($resolvedPets)->sortBy(fn ($item) => strtolower($item['pet']->species) === 'dog' ? 0 : 1)
+                ->values()->map(fn ($item, $index) => ['id' => 'walkin-'.$index, 'minutes' => $item['estimate']['maxMinutes'], 'active' => false])->all();
+            app(\App\Services\GroomingWorkloadCapacity::class)->assertCanAdmit($admissionJobs);
             $totalAmount = array_sum(array_map(
                 fn ($p) => array_sum(array_column($p['services'], 'price')),
                 $resolvedPets,

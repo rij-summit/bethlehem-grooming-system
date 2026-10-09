@@ -70,14 +70,20 @@ class GroomingTimeEstimate
     public function recalculate(Booking $booking, BookingPet $pet, ?array $factors = null, ?string $preference = null): void
     {
         if ($pet->grooming_end_time || $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED) return;
+        $estimate = $this->estimateForPet($booking, $pet, $factors, $preference);
+        if ($estimate) $this->snapshot($pet, $estimate);
+    }
+
+    public function estimateForPet(Booking $booking, BookingPet $pet, ?array $factors = null, ?string $preference = null): ?array
+    {
         $booking->loadMissing('bookingServices.service');
         $slugs = $booking->bookingServices->where('booking_pet_id', $pet->booking_pet_id)->pluck('service.slug')->filter()->all();
         $slugs = array_values(array_intersect($slugs, array_keys(config('grooming_services.services'))));
-        if (! $slugs) return;
+        if (! $slugs) return null;
         $packages = array_values(array_intersect($slugs, array_keys(config('grooming_estimates.packages'))));
-        $this->snapshot($pet, $this->calculate($packages[0] ?? null, $preference ?? $pet->grooming_preference,
+        return $this->calculate($packages[0] ?? null, $preference ?? $pet->grooming_preference,
             $pet->confirmed_size ?? $pet->registered_size ?? $pet->pet?->groomingSize(),
-            array_values(array_diff($slugs, $packages)), $factors ?? $pet->grooming_estimate_factors ?? [], false));
+            array_values(array_diff($slugs, $packages)), $factors ?? $pet->grooming_estimate_factors ?? [], false);
     }
 
     public function forVisit(BookingPet $pet): ?array

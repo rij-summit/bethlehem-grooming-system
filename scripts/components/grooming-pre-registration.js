@@ -1,8 +1,8 @@
-import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js";
+import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js?v=grooming-workload-20261009";
 import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js";
 import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js?v=grooming-pricing-20261006";
-import { initBookingReviewStep, refreshBookingReviewStep } from "./booking-review-step.js?v=grooming-pricing-20261006";
-import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-pricing-20261006";
+import { initBookingReviewStep, refreshBookingReviewStep, refreshBookingWorkloadForecast } from "./booking-review-step.js?v=grooming-workload-20261009";
+import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-workload-20261009";
 import { initBookingConfirmedStep } from "./booking-confirmed-step.js";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
@@ -102,4 +102,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     navigate(new URLSearchParams(window.location.search).get("step") || "schedule", "replace");
   });
   await navigate(requested, "replace");
+  let refreshingForecast = false;
+  window.setInterval(async () => {
+    if (document.hidden || refreshingForecast) return;
+    refreshingForecast = true;
+    try {
+      if (currentStep === "schedule") await refreshBookingCalendar();
+      else if (currentStep === "review") await refreshBookingWorkloadForecast();
+    } finally { refreshingForecast = false; }
+  }, 30000);
 });

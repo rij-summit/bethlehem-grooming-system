@@ -10,6 +10,7 @@ import {
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js";
 import {
   hasRequiredGroomingPreference,
   loadGroomingCatalogue,
@@ -52,6 +53,7 @@ const state = {
   bookingDraft: null,
   petSelections: [],
   reviewPayload: null,
+  workloadUnavailable: false,
 };
 
 export async function refreshBookingReviewStep() {
@@ -103,6 +105,32 @@ export async function refreshBookingReviewStep() {
   saveReviewDraft();
   elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));
   elements.confirmBookingBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  await refreshBookingWorkloadForecast();
+}
+
+export async function refreshBookingWorkloadForecast() {
+  if (!state.reviewPayload) return;
+  const schedule = readSessionJson("bookingSchedule");
+  if (!schedule?.date) return;
+  elements.confirmBookingBtn.disabled = true;
+  try {
+    const forecast = await forecastGroomingWindows(schedule.date);
+    const window = forecast.windows.find((item) => String(item.window_id) === String(schedule.window_id));
+    state.workloadUnavailable = Boolean(!window || window.is_workload_unavailable || window.is_closed || window.is_past || window.is_cutoff);
+    elements.reviewActionNotice.classList.remove("hidden");
+    elements.reviewActionNotice.textContent = state.workloadUnavailable
+      ? "This preferred arrival window is unavailable. Choose another arrival window."
+      : "Grooming capacity is a forecast. Staff will confirm admission at check-in. Your arrival window is not a grooming start time.";
+    if (window?.is_workload_unavailable) elements.reviewActionNotice.textContent = "Unavailable — not enough grooming time remaining. Choose another arrival window.";
+    elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));
+    elements.confirmBookingBtn.textContent = state.workloadUnavailable ? "Choose arrival window" : "Next Step";
+  } catch {
+    elements.reviewActionNotice.classList.remove("hidden");
+    elements.reviewActionNotice.textContent = "Unable to refresh grooming capacity. Please retry.";
+    elements.confirmBookingBtn.disabled = false;
+    elements.confirmBookingBtn.textContent = "Retry capacity forecast";
+    state.workloadUnavailable = null;
+  }
 }
 
 export function initBookingReviewStep() {
@@ -381,11 +409,17 @@ function saveReviewDraft() {
   sessionStorage.setItem(LEGACY_REVIEW_STORAGE_KEY, serializedReviewDraft);
 }
 
-function handleConfirmClick() {
+async function handleConfirmClick() {
   if (!state.reviewPayload || state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection))) {
     return;
   }
 
+  await refreshBookingWorkloadForecast();
+  if (state.workloadUnavailable === null) return;
+  if (state.workloadUnavailable) {
+    goToGroomingStep("schedule");
+    return;
+  }
   saveReviewDraft();
   goToGroomingStep("consent");
 }

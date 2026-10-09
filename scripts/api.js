@@ -1277,6 +1277,10 @@ var API = (() => {
     return request("GET", `/timeslots?date=${date}`);
   }
 
+  async function forecastGroomingWindows(date, pets) {
+    return request("POST", "/booking/workload-forecast", { date, pets }, getCustomerToken());
+  }
+
   async function getClinicTimeslots(date) {
     // GET /api/clinic/timeslots?date=YYYY-MM-DD (public)
     return request("GET", `/clinic/timeslots?date=${encodeURIComponent(date)}`);
@@ -2041,6 +2045,7 @@ var API = (() => {
     getSystemClock,
     // Timeslots
     getTimeslots,
+    forecastGroomingWindows,
     getClinicTimeslots,
     // Pets
     getUserPets,

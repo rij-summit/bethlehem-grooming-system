@@ -183,6 +183,7 @@ class AdminBookingController extends Controller
             'recentActivity' => $this->recentActivity(),
             'capacity' => app(\App\Services\OperationalCapacity::class)->snapshot(),
             'groomerCapacity' => $this->groomerCapacitySnapshot(),
+            'groomingWorkload' => app(\App\Services\GroomingWorkloadCapacity::class)->snapshot(),
             'estimateRules' => config('grooming_estimates'),
         ]);
     }
@@ -307,16 +308,17 @@ class AdminBookingController extends Controller
             foreach ($booking->bookingPets as $bookingPet) {
                 $pet = $bookingPet->pet;
                 $size = $selectedSizes->get($bookingPet->booking_pet_id) ?? $pet->groomingSize();
-                $sizeChanged = ($bookingPet->confirmed_size ?? $bookingPet->registered_size) !== $size;
                 $bookingPet->confirmed_size = $size;
                 $bookingPet->save();
+                $bookingPet->setRelation('booking', $booking);
                 $assessment = collect($data['pet_sizes'] ?? [])->firstWhere('booking_pet_id', $bookingPet->booking_pet_id);
                 $factors = $assessment['estimate_factors'] ?? $bookingPet->grooming_estimate_factors ?? [];
-                if ($sizeChanged || ! $bookingPet->grooming_estimate_min || $factors !== ($bookingPet->grooming_estimate_factors ?? [])) {
-                    app(\App\Services\GroomingTimeEstimate::class)->recalculate($booking, $bookingPet, $factors);
-                }
+                app(\App\Services\GroomingTimeEstimate::class)->recalculate($booking, $bookingPet, $factors);
                 $pet->confirmClinicSize($size);
             }
+
+            $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+            $workload->assertCanAdmit($workload->admissionJobs($booking->bookingPets));
 
             $queueNumber = ((int) Booking::where('booking_date', $queueDate)
                 ->whereNotNull('queue_number')

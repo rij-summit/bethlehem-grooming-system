@@ -122,21 +122,31 @@ async function main() {
   const second = { id: 2, bookingPetId: 2, groomingEstimate: { minMinutes: 120, maxMinutes: 120 } };
   ui.queuedList = [{ id: 1, queueNumber: 1, pets: [first, second], services: [{ bookingPetId: 1, durationMinutes: 9999 }] }];
   ui.inProgressList = [];
-  assert.equal(ui.petETAs['1'].estDoneMax - ui.petETAs['1'].estDoneMin, 30 * 60000);
+  ui.groomingWorkload = { state: 'On track', pets: {
+    1: { projected_start: new Date(queueNow).toISOString(), projected_completion: new Date(queueNow + 90 * 60000).toISOString(), queue_wait_minutes: 0, state: 'On track' },
+    2: { projected_start: new Date(queueNow + 90 * 60000).toISOString(), projected_completion: new Date(queueNow + 210 * 60000).toISOString(), queue_wait_minutes: 90, state: 'On track' },
+  } };
+  assert.equal(ui.petETAs['1'].estDoneMax, queueNow + 90 * 60000);
   assert.match(ui.queueSummary.avgWaitLabel, /1 hr 30 min–1 hr 45 min/);
   assert.equal(ui.getBookingETA(ui.queuedList[0]), engine.formatTimeWindow(ui.petETAs['2'].estDoneMin, ui.petETAs['2'].estDoneMax));
   const before = ui.petETAs['2'].estDoneMax;
   first.groomingEstimate = grooming.estimatePetGrooming(selections[0], pets[0]);
-  const mediumDone = ui.petETAs['2'].estDoneMax;
+  assert.equal(ui.petETAs['2'].estDoneMax, before, 'Queue projections come from the server, independent of client duration previews');
   first.groomingEstimate = grooming.estimatePetGrooming(selections[0], { ...pets[0], size: 'large' });
-  assert.equal(ui.petETAs['2'].estDoneMax - mediumDone, 15 * 60000);
-  assert.equal(mediumDone - before, 15 * 60000);
+  assert.equal(ui.petETAs['2'].estDoneMax, before);
+  const normalized = ui.normalizeDashboardPayload({ groomingWorkload: { ...ui.groomingWorkload, state: 'Needs staff action' } });
+  assert.equal(normalized.groomingWorkload.state, 'Needs staff action');
+  ui.groomingWorkload.pets[2].state = 'At risk';
+  assert.equal(ui.getPetWorkloadState(second), 'At risk');
+  assert.match(ui.getPetQueueWait(second), /Queue wait: 1 hr 30 min/);
   first.groomingEstimate = estimate;
   ui.activeGroomingPets = 1;
   assert.equal(ui.isGroomerCapacityFull, true);
   ui.inProgressList = [{ id: 3, pets: [{ ...first, groomingStartedAtIso: new Date(Date.now() - 91 * 60000).toISOString(), isGroomingStarted: true }] }];
   ui.queuedList = [];
-  assert.equal(ui.getPetEstDone(ui.inProgressList[0], first), 'Taking longer than estimated');
+  ui.groomingWorkload.pets[1].state = 'Needs staff action';
+  assert.equal(ui.getPetWorkloadState(first), 'Needs staff action');
+  assert.equal(ui.inProgressList[0].pets[0].isGroomingStarted, true);
   for (const file of ['booking-services-step', 'walk-in-services-step']) {
     const source = fs.readFileSync(path.join(__dirname, `../scripts/components/${file}.js`), 'utf8');
     assert.match(source, /renderEstimateSelection\(pet, selection,/);

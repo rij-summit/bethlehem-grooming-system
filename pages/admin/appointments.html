@@ -661,7 +661,7 @@
                         <i data-lucide="flag" class="h-4 w-4 text-green-600"></i>
                       </div>
                       <div>
-                        <p class="text-xs text-slate-500">Est. queue done</p>
+                        <p class="text-xs text-slate-500">Projected last completion</p>
                         <p class="text-lg font-bold text-slate-800" x-text="queueSummary.lastDoneLabel"></p>
                       </div>
                     </div>
@@ -673,6 +673,12 @@
           </section>
 
           <!-- Flow tabs -->
+          <div x-show="groomingWorkload && (activeTab === 'queued' || activeTab === 'in-progress')" class="mt-3 rounded-2xl border border-[#d9e6f1] bg-white px-4 py-3 text-sm" role="status">
+            <p class="font-semibold text-slate-700" x-text="`${activeGroomers} groomer${activeGroomers === 1 ? '' : 's'} on duty · ${groomingWorkload?.waiting || 0} pets waiting · ${groomingWorkload?.in_progress || 0} in progress`"></p>
+            <p class="mt-1 font-semibold" :class="groomingWorkload?.state === 'Needs staff action' ? 'text-red-700' : groomingWorkload?.state === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="groomingWorkloadMessage"></p>
+            <p x-show="!groomingWorkload?.projected_last_completion" class="mt-1 text-slate-500" x-text="workloadCompletionLabel"></p>
+            <p class="text-xs text-slate-500" x-text="workloadClosingLabel"></p>
+          </div>
           <section class="mt-6">
             <div class="rounded-full bg-[#bdd6ec] p-1">
               <div class="grid grid-cols-2 gap-1 lg:grid-cols-6">
@@ -1123,6 +1129,8 @@
                             <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
                             <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
                             <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
+                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetQueueWait(pet)"></p>
+                            <p class="mt-1 text-xs font-semibold" :class="getPetWorkloadState(pet) === 'Needs staff action' ? 'text-red-700' : getPetWorkloadState(pet) === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="getPetWorkloadState(pet)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
@@ -1384,6 +1392,8 @@
                             <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
                             <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
                             <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
+                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetQueueWait(pet)"></p>
+                            <p class="mt-1 text-xs font-semibold" :class="getPetWorkloadState(pet) === 'Needs staff action' ? 'text-red-700' : getPetWorkloadState(pet) === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="getPetWorkloadState(pet)"></p>
                             <p class="admin-queued-pet-services">
                               Grooming state:
                               <strong x-text="petGroomingStateLabel(pet)"></strong>
@@ -2371,6 +2381,6 @@
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
     <script src="../../scripts/services/grooming-estimate-engine.js?v=20261009"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-onsite-capacity-20261009"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-workload-20261009"></script>
   </body>
 </html>

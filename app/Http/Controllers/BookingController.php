@@ -51,6 +51,29 @@ class BookingController extends Controller
     }
 
     // ── SUBMIT A BOOKING ──────────────────────────────────
+    public function forecastTimeslots(Request $request, AvailabilityTimeWindowService $timeWindows)
+    {
+        $data = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'pets' => ['required', 'array', 'min:1', 'max:'.self::MAX_PETS_PER_BOOKING],
+            'pets.*.pet_id' => ['nullable', 'integer'],
+            'pets.*.species' => ['nullable', 'string'],
+            'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large'],
+            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'pets.*.grooming_preference' => ['nullable', 'string', 'max:32'],
+            'pets.*.services.package' => ['nullable', 'string'],
+            'pets.*.services.ala_carte' => ['nullable', 'array'],
+            'pets.*.services.ala_carte.*' => ['string'],
+        ]);
+        $settings = ClinicSetting::current();
+        $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+        $jobs = $workload->selectionJobs($data['pets'], (int) $request->user()->user_id);
+
+        return response()->json(['success' => true, 'availability' => $settings->serviceAvailability('grooming'),
+            'windows' => $workload->forecastWindows($timeWindows->preferredWindows($settings, 'grooming', $data['date']),
+                $data['date'], $jobs, $settings)]);
+    }
+
     public function store(
         Request $request,
         GroomingServicePriceResolver $servicePrices,
@@ -277,6 +300,20 @@ class BookingController extends Controller
                         ]);
                     }
                 }
+            }
+
+            $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+            $booking->load('bookingPets.pet');
+            $booking->bookingPets->each(fn ($pet) => $pet->setRelation('booking', $booking));
+            $arrivalJobs = $booking->bookingPets->every(fn ($pet) => $pet->grooming_estimate_max > 0)
+                ? $workload->admissionJobs($booking->bookingPets) : [];
+            $forecast = $workload->forecastWindows(collect([['end_time' => $window->end_time]]), $date,
+                $arrivalJobs, $settings)->first();
+            if ($forecast['is_workload_unavailable']) {
+                $exception = \Illuminate\Validation\ValidationException::withMessages(['window_id' => $workload::UNAVAILABLE]);
+                $exception->response = response()->json(['success' => false, 'code' => 'grooming_forecast_unavailable',
+                    'message' => $workload::UNAVAILABLE, 'errors' => $exception->errors()], 422);
+                throw $exception;
             }
 
             // ── Create notification for admin ─────────────────
