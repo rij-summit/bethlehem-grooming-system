@@ -162,7 +162,7 @@ class NotificationController extends Controller
                 $booking,
                 $storedMessage,
             ),
-            'no_show' => $this->groomingNoShowContent($booking, $storedMessage),
+            'no_show' => $this->legacyExpiredContent($booking),
             Notification::TYPE_CLINIC_BOOKED => $this->clinicBookedContent(
                 $clinicAppointment,
                 false,
@@ -297,17 +297,17 @@ class NotificationController extends Controller
         );
     }
 
-    private function groomingNoShowContent(?Booking $booking, string $fallback): array
+    private function legacyExpiredContent(?Booking $booking): array
     {
         $reference = $booking?->booking_reference;
         $owner = $this->bookingOwnerName($booking);
         $message = $reference
             ? "Pre-registration {$reference}"
-                .($owner ? " for {$owner}" : '').' was marked as no-show.'
-            : $fallback;
+                .($owner ? " for {$owner}" : '').' was not used on its selected date.'
+            : 'This historical pre-registration was not used on its selected date.';
 
         return $this->content(
-            'Grooming pre-registration missed',
+            'Pre-registration expired',
             $message,
             null,
             [$reference, $owner],
@@ -476,7 +476,7 @@ class NotificationController extends Controller
             'payment_due' => 'circle-check',
             'payment_confirmed', Notification::TYPE_CLINIC_PAYMENT_CONFIRMED => 'credit-card',
             'cancelled', Notification::TYPE_CLINIC_CANCELLED => 'circle-x',
-            'no_show' => 'clock-alert',
+            'no_show' => 'history',
             Notification::TYPE_CLINIC_BOOKED,
             Notification::TYPE_CLINIC_WALK_IN => 'stethoscope',
             Notification::TYPE_CLINIC_PAYMENT_DUE => 'circle-check',

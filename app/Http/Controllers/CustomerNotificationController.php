@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CustomerNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class CustomerNotificationController extends Controller
 {
@@ -22,6 +23,7 @@ class CustomerNotificationController extends Controller
                 'booking.bookingPets.pet',
                 'booking.timeWindow',
                 'pet:pet_id,user_id,pet_name,species',
+                ...(Schema::hasTable('clinic_appointments') ? ['clinicAppointment.pet'] : []),
             ])
             ->when(! $recentFirst, fn ($query) => $query->orderBy('is_read', 'asc'))
             ->orderBy('created_at', 'desc')
@@ -56,6 +58,7 @@ class CustomerNotificationController extends Controller
                     'is_read' => (bool) $n->is_read,
                     'created_at' => $n->created_at?->toDateTimeString(),
                     'booking_id' => $n->booking_id,
+                    'clinic_appointment_id' => $n->clinic_appointment_id,
                     'pet_id' => $updatedPet?->pet_id,
                     'pet_name' => $updatedPet?->pet_name,
                     'destination' => $destination,
@@ -121,6 +124,9 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetNames(CustomerNotification $notification): array
     {
+        if (str_starts_with($notification->type, 'clinic_reminder_')) {
+            return array_filter([$notification->clinicAppointment?->pet?->pet_name]);
+        }
         if (
             $notification->type
             === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
@@ -149,6 +155,9 @@ class CustomerNotificationController extends Controller
 
     private function notificationPetTypes(CustomerNotification $notification, array $petNames): array
     {
+        if (str_starts_with($notification->type, 'clinic_reminder_')) {
+            return array_filter([strtolower((string) $notification->clinicAppointment?->pet?->species)]);
+        }
         if (
             $notification->type
             === CustomerNotification::TYPE_PET_INFORMATION_UPDATED
@@ -187,7 +196,7 @@ class CustomerNotificationController extends Controller
         if (empty($petNames)) {
             return match ($notification->type) {
                 'grooming_started' => "Great news! Your pet has Started Grooming. We'll let you know as soon as they're ready for pickup!",
-                'grooming_finished' => "Your pet is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                'grooming_finished' => "Your pet is Finished with grooming. We'll keep you updated on the rest of the visit.",
                 'ready_for_pickup' => 'Your pet is now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
                 default => $this->formatNotificationMessage($notification->message),
             };
@@ -199,15 +208,15 @@ class CustomerNotificationController extends Controller
 
         return match ($notification->type) {
             'grooming_started' => "Great news! {$subject} ".($isPlural ? 'have' : 'has')." Started Grooming. We'll let you know as soon as they're ready for pickup!",
-            'grooming_finished' => "{$subject} ".($isPlural ? 'are' : 'is')." Finished with grooming. We'll keep you updated on the rest of the appointment.",
+            'grooming_finished' => "{$subject} ".($isPlural ? 'are' : 'is')." Finished with grooming. We'll keep you updated on the rest of the visit.",
             'ready_for_pickup' => 'Your '.($isPlural ? 'pets are' : 'pet is').' now Ready for Pickup and looking fabulous! Please come to the clinic to pick them up.',
             'pickup_reminder' => "Reminder: {$subject} ".($isPlural ? 'are' : 'is').' still waiting to be picked up at the clinic. Please come at your earliest convenience!',
             'picked_up' => "{$subject} ".($isPlural ? 'have' : 'has').' been released. Thank you for visiting Bethlehem Animal Clinic!',
             'reminder_24h' => $timeLabel
-                ? "Reminder: {$subject}'s grooming appointment is tomorrow at {$timeLabel}. Please don't forget!"
+                ? "Reminder: {$subject}'s planned grooming drop-off is tomorrow around {$timeLabel}. Your pet joins the queue after check-in."
                 : $this->formatNotificationMessage($notification->message),
             'reminder_3h' => $timeLabel
-                ? "Heads up! {$subject}'s grooming appointment is in about 3 hours at {$timeLabel}. See you soon!"
+                ? "Heads up! {$subject}'s planned grooming drop-off is in about 3 hours around {$timeLabel}. Your pet joins the queue after check-in."
                 : $this->formatNotificationMessage($notification->message),
             default => $this->formatNotificationMessage($notification->message),
         };
@@ -244,7 +253,7 @@ class CustomerNotificationController extends Controller
             $text
         );
 
-        return $text;
+        return str_ireplace('grooming appointment', 'planned grooming drop-off', $text);
     }
 
     private function formatNameList(array $names): string

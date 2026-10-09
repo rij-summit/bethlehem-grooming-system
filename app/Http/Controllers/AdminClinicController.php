@@ -18,13 +18,14 @@ use Throwable;
 
 class AdminClinicController extends Controller
 {
-    private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show'];
+    private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show', 'expired'];
     private const CLINICAL_CONTENT_EDITABLE_STATUSES = ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES;
 
     // ── Queue index ──────────────────────────────────────────────────────────
 
     public function index()
     {
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
         $with = $this->appointmentRelations();
 
         $incoming = ClinicAppointment::with($with)
@@ -127,6 +128,7 @@ class AdminClinicController extends Controller
     /** Lightweight, case-oriented replacement for the old queue response. */
     public function activeCases()
     {
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
         $cases = ClinicAppointment::query()
             ->with($this->appointmentRelations())
             ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
@@ -148,7 +150,8 @@ class AdminClinicController extends Controller
             'chief_complaint' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        return DB::transaction(function () use ($data, $sequence) {
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
+        return app(\App\Services\DailyPetQueue::class)->runForDate(now()->toDateString(), function () use ($data, $sequence) {
             $pet = Pet::query()->whereKey($data['pet_id'])->where('is_archived', false)->firstOrFail();
             $existing = ClinicAppointment::query()
                 ->where('pet_id', $pet->pet_id)
@@ -168,6 +171,7 @@ class AdminClinicController extends Controller
                 ], 409);
             }
 
+            app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
             $reserved = $sequence->reserve(now()->toDateString(), false);
             $case = ClinicAppointment::create([
                 'appointment_reference' => $reserved['appointment_reference'],
@@ -181,6 +185,7 @@ class AdminClinicController extends Controller
                 'chief_complaint' => $data['chief_complaint'] ?? null,
                 'total_amount' => 0,
                 'paid' => false,
+                'checked_in_at' => now(),
                 'consultation_started_at' => now(),
             ]);
 
@@ -190,14 +195,26 @@ class AdminClinicController extends Controller
 
     public function startCase(int $id)
     {
-        $case = ClinicAppointment::query()->whereKey($id)->firstOrFail();
-        if ($case->status === 'waiting_to_arrive') {
-            $case->update(['status' => 'in_consultation', 'queue_number' => null, 'consultation_started_at' => now()]);
-        }
-        if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
-            return response()->json(['success' => false, 'message' => 'This case is already closed.'], 409);
-        }
-        return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
+        return app(\App\Services\DailyPetQueue::class)->runForDate(now()->toDateString(), function () use ($id) {
+            $case = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($case->status === 'waiting_to_arrive') {
+                if ($case->appointment_date->toDateString() !== now()->toDateString()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['check_in' => 'Check-in is only allowed on the pre-registration date.']);
+                }
+                app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
+                $case->update([
+                    'status' => 'in_consultation',
+                    'queue_number' => app(ClinicAppointmentSequence::class)->nextQueueNumber(now()->toDateString()),
+                    'checked_in_at' => now(),
+                    'consultation_started_at' => now(),
+                ]);
+            }
+            if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
+                return response()->json(['success' => false, 'message' => 'This case is already closed.'], 409);
+            }
+            return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
+        });
     }
 
     public function finishCase(int $id)
@@ -220,7 +237,7 @@ class AdminClinicController extends Controller
         $date = trim((string) $request->query('date', ''));
 
         $query = ClinicAppointment::with($this->appointmentRelations())
-            ->whereIn('status', ['completed', 'cancelled', 'no_show']);
+            ->whereIn('status', ['completed', 'cancelled', 'no_show', 'expired']);
 
         if ($date !== '') {
             $query->whereDate('appointment_date', $date);
@@ -274,12 +291,17 @@ class AdminClinicController extends Controller
 
     public function checkIn(int $id, ClinicAppointmentSequence $clinicSequence)
     {
-        $appt = DB::transaction(function () use ($id, $clinicSequence) {
+        $appt = app(\App\Services\DailyPetQueue::class)->runForDate(now()->toDateString(), function () use ($id, $clinicSequence) {
             $appointment = ClinicAppointment::whereKey($id)->lockForUpdate()->firstOrFail();
 
             if ($appointment->status !== 'waiting_to_arrive') {
                 return null;
             }
+
+            if ($appointment->appointment_date->toDateString() !== now()->toDateString()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['check_in' => 'Check-in is only allowed on the pre-registration date.']);
+            }
+            app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
 
             $queueNumber = $appointment->queue_number;
 
@@ -786,7 +808,7 @@ class AdminClinicController extends Controller
             'for_payment' => 'For Payment',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
-            'no_show' => 'No Show',
+            'no_show', 'expired' => 'Expired',
             default => 'Data is currently unavailable',
         };
     }

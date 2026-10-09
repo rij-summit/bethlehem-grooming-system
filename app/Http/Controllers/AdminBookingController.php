@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\BookingPet;
-use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\CustomerNotification;
 use App\Models\Notification;
@@ -22,31 +21,6 @@ use Illuminate\Support\Facades\Schema;
 
 class AdminBookingController extends Controller
 {
-    private const MAX_CAPACITY = 20;
-
-    private const INTAKE_STATUSES = [
-        'checked_in',
-        'in_progress',
-        'for_payment',
-        'for_pickup',
-        'released',
-    ];
-
-    private function dailyIntakeCount(string $date): int
-    {
-        return Booking::where(function ($query) use ($date) {
-            $query->whereDate('dropped_off_at', $date)
-                ->orWhere(function ($fallback) use ($date) {
-                    $fallback->whereNull('dropped_off_at')
-                        ->where('booking_date', $date)
-                        ->whereIn('status', self::INTAKE_STATUSES);
-                });
-        })
-            ->whereIn('status', self::INTAKE_STATUSES)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
-            ->sum('number_of_pets');
-    }
-
     private function activeGroomingPetCount(): int
     {
         return BookingPet::where(
@@ -89,6 +63,7 @@ class AdminBookingController extends Controller
     // ── GET BOOKINGS (split by status, filterable by date) ────────────
     public function index(Request $request)
     {
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
         $today = Carbon::today();
         $selectedDate = $request->query('date', $today->toDateString());
         $includeFuture = $request->boolean('include_future', false);
@@ -177,31 +152,20 @@ class AdminBookingController extends Controller
 
         // Summary metrics (always based on today, not the filter date)
         $todayCompletedCount = Booking::whereDate('grooming_finished_at', $today->toDateString())
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired'])
             ->sum('number_of_pets');
-        $todayIntakeCount = $this->dailyIntakeCount($today->toDateString());
 
         $weekStart = Carbon::now()->startOfWeek()->toDateString();
         $weekEnd = Carbon::now()->endOfWeek()->toDateString();
         $weekCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
             ->whereNotIn('status', ['cancelled'])
             ->sum('number_of_pets');
-        $weekBookingCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
-            ->whereNotIn('status', ['cancelled'])
-            ->count();
         $revenueToday = Payment::whereDate('paid_at', $today->toDateString())
             ->where('payment_status', 'paid')
             ->sum('total_amount');
         $revenuePaymentCount = Payment::whereDate('paid_at', $today->toDateString())
             ->where('payment_status', 'paid')
             ->count();
-        $noShowWeekCount = Booking::whereBetween('booking_date', [$weekStart, $weekEnd])
-            ->where('status', 'no_show')
-            ->count();
-        $noShowWeekRate = $weekBookingCount > 0
-            ? round(($noShowWeekCount / $weekBookingCount) * 100, 1)
-            : 0;
-
         return response()->json([
             'success' => true,
             'incomingList' => $incoming->values(),
@@ -214,14 +178,10 @@ class AdminBookingController extends Controller
                 'week' => $weekCount,
                 'revenueToday' => (float) $revenueToday,
                 'revenuePaymentCount' => $revenuePaymentCount,
-                'noShowWeek' => $noShowWeekCount,
-                'noShowWeekRate' => $noShowWeekRate,
+                'waitingNow' => app(\App\Services\OperationalCapacity::class)->waitingCount(),
             ],
             'recentActivity' => $this->recentActivity(),
-            'capacity' => [
-                'current' => $todayIntakeCount,
-                'max' => self::MAX_CAPACITY,
-            ],
+            'capacity' => app(\App\Services\OperationalCapacity::class)->snapshot(),
             'groomerCapacity' => $this->groomerCapacitySnapshot(),
         ]);
     }
@@ -318,8 +278,10 @@ class AdminBookingController extends Controller
             }
 
             if ($booking->booking_date !== $queueDate) {
-                return ['error' => ['message' => 'Check-in is only allowed on the day of the appointment.', 'status' => 422]];
+                return ['error' => ['message' => 'Check-in is only allowed on the pre-registration date.', 'status' => 422]];
             }
+
+            app(\App\Services\OperationalCapacity::class)->assertCanAccept('grooming', $booking->bookingPets->count());
 
             $bookingPetIds = $booking->bookingPets->pluck('booking_pet_id')->map(fn ($id) => (int) $id)->all();
             if ($selectedSizes->isNotEmpty() &&
@@ -1098,7 +1060,7 @@ class AdminBookingController extends Controller
                 return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
             }
 
-            if (in_array($booking->status, ['cancelled', 'archived', 'no_show'], true)) {
+            if (in_array($booking->status, ['cancelled', 'archived', 'no_show', 'expired'], true)) {
                 return ['error' => [
                     'message' => 'This booking cannot be cancelled.',
                     'status' => 422,
@@ -1198,87 +1160,6 @@ class AdminBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Booking archived successfully.',
-        ]);
-    }
-
-    // ── NO-SHOW LIST ──────────────────────────────────────
-    // GET /api/admin/bookings/no-shows
-    public function noShowIndex()
-    {
-        $today = Carbon::today()->toDateString();
-
-        $noShows = Booking::where('booking_date', $today)
-            ->where('status', 'no_show')
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
-            ->orderBy('queue_number', 'asc')
-            ->get()
-            ->map(fn ($b) => $this->formatBooking($b));
-
-        return response()->json([
-            'success' => true,
-            'noShowList' => $noShows->values(),
-        ]);
-    }
-
-    // ── LATE CHECK-IN ─────────────────────────────────────
-    // no_show → checked_in (same day only, before 5 PM, clinic not stopped)
-    public function lateCheckIn($id)
-    {
-        $today = Carbon::today()->toDateString();
-        $result = app(DailyPetQueue::class)->runForDate($today, function () use ($id, $today) {
-            $booking = Booking::whereKey($id)->lockForUpdate()->first();
-
-            if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
-            }
-
-            if ($booking->status !== 'no_show') {
-                return ['error' => ['message' => 'Only no-show bookings can be late checked-in.', 'status' => 422]];
-            }
-
-            if ($booking->booking_date !== $today) {
-                return ['error' => ['message' => 'Late check-in is only available on the day of the booking.', 'status' => 422]];
-            }
-
-            if (Carbon::now()->hour >= 17) {
-                return ['error' => ['message' => 'Late check-in is no longer available after 5:00 PM.', 'status' => 422]];
-            }
-
-            $stoppedToday = ClinicClosure::where('type', 'stop_today')
-                ->where('start_date', $today)
-                ->where('is_active', 1)
-                ->exists();
-
-            if ($stoppedToday) {
-                return ['error' => ['message' => 'The clinic has stopped receiving for today.', 'status' => 422]];
-            }
-
-            $queueNumber = ((int) Booking::where('booking_date', $today)
-                ->whereNotNull('queue_number')
-                ->max('queue_number')) + 1;
-
-            $booking->update([
-                'status' => 'checked_in',
-                'queue_number' => $queueNumber,
-                'dropped_off_at' => now(),
-            ]);
-
-            app(DailyPetQueue::class)->assignBookingPets($booking, $today);
-
-            return ['queue_number' => $queueNumber];
-        });
-
-        if (isset($result['error'])) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Late check-in successful. Customer added to the back of the queue.',
-            'queue_number' => $result['queue_number'],
         ]);
     }
 

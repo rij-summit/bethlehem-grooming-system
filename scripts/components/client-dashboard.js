@@ -561,7 +561,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
   const rescheduleBookingRef     = document.getElementById("rescheduleBookingRef");
   const rescheduleDate           = document.getElementById("rescheduleDate");
   const rescheduleSlotsContainer = document.getElementById("rescheduleSlotsContainer");
-  const rescheduleAvailabilityIndicator = document.getElementById("rescheduleAvailabilityIndicator");
   const rescheduleMessage        = document.getElementById("rescheduleMessage");
   const submitRescheduleBtn      = document.getElementById("submitRescheduleBtn");
   const cancelModal              = document.getElementById("cancelModal");
@@ -873,7 +872,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
     if (!data) {
       groomingQueueSummaryEl.textContent = "Unable to load today’s queue";
-      groomingCapacityTextEl.textContent = "Please refresh to check grooming availability.";
+      groomingCapacityTextEl.textContent = "Please refresh to check Grooming capacity.";
       groomingCapacityBadgeEl.textContent = "Unavailable";
       groomingCapacityBadgeEl.className = "inline-flex self-start rounded-full bg-portal-active px-3 py-1 text-xs font-semibold text-portal-muted";
       return;
@@ -883,8 +882,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
       ? `${active} pet${active === 1 ? "" : "s"} currently in the grooming queue`
       : "No pets in the grooming queue right now";
     groomingCapacityTextEl.textContent = isFull
-      ? "Today’s grooming slots are full."
-      : `${remaining} grooming slot${remaining === 1 ? "" : "s"} still available today.`;
+      ? "Grooming capacity is currently full."
+      : `${used}/${max} Grooming pets on-site. ${remaining} space${remaining === 1 ? "" : "s"} available now.`;
     groomingCapacityBadgeEl.textContent = isFull ? "Full" : isBusy ? "Nearly Full" : "Open";
     groomingCapacityBadgeEl.className = `inline-flex self-start rounded-full px-3 py-1 text-xs font-semibold ${isFull
       ? "bg-portal-danger-soft text-portal-danger"
@@ -1055,7 +1054,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
       for_payment:       { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
       released:          { label: "Ready for Pickup",   classes: "bg-portal-success-soft text-portal-success" },
       cancelled:         { label: "Cancelled",          classes: "bg-portal-danger-soft text-portal-danger" },
-      no_show:           { label: "No Show",            classes: "bg-portal-warning-soft text-portal-warning" },
+      no_show:           { label: "Expired",            classes: "bg-slate-100 text-portal-muted" },
+      expired:           { label: "Expired",            classes: "bg-slate-100 text-portal-muted" },
       archived:          { label: "Completed",          classes: "bg-portal-success-soft text-portal-success" },
     };
     const config = map[status] || { label: status, classes: "bg-portal-active text-portal-muted" };
@@ -1067,7 +1067,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
   rescheduleDate.addEventListener("change", async function () {
     const requestId = ++rescheduleLoadId;
     selectedWindowId = null;
-    hideRescheduleAvailability();
     hideRescheduleMessage();
     enableSubmitIfReady();
     const date = this.value;
@@ -1145,7 +1144,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
     rescheduleDate.setCustomValidity("");
     rescheduleDate.disabled = true;
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Select a date to see available slots.</p>';
-    hideRescheduleAvailability();
     hideRescheduleMessage();
     enableSubmitIfReady();
     rescheduleModal.classList.remove("hidden");
@@ -1179,7 +1177,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
     selectedWindowId = null;
     rescheduleDate.disabled = false;
     rescheduleDate.setCustomValidity("");
-    hideRescheduleAvailability();
     submitRescheduleBtn.textContent = "Confirm Reschedule";
   }
 
@@ -1188,20 +1185,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
     const selectedDate = rescheduleDate.value;
     const bookingDate = String(activeRescheduleBooking?.booking_date || "");
     const sameDate = selectedDate === bookingDate;
-    const petCount = Math.max(1, Number(activeRescheduleBooking?.number_of_pets) || 1);
-    const capacity = Math.max(0, Number(data.capacity) || 0);
-    const totalBooked = Math.max(0, Number(data.total_booked) || 0);
-    const bookedWithoutCurrent = Math.max(
-      0,
-      totalBooked - (sameDate ? petCount : 0),
-    );
-    const remaining = Math.max(0, capacity - bookedWithoutCurrent);
-    const bookingFits = capacity === 0 || bookedWithoutCurrent + petCount <= capacity;
-
-    showRescheduleAvailability(remaining);
-
     const available = windows.filter((window) =>
-      bookingFits
+      !window.is_closed
       && !window.is_cutoff
       && !isRescheduleSlotPast(window, selectedDate)
       && !isCurrentRescheduleSelection(selectedDate, window.window_id, window.window_label)
@@ -1323,18 +1308,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
     return Boolean(windowLabel)
       && String(activeRescheduleBooking.time_window?.window_label || "") === String(windowLabel);
   }
-
-  function showRescheduleAvailability(remaining) {
-    rescheduleAvailabilityIndicator.textContent =
-      `${remaining} slot${remaining === 1 ? "" : "s"} left`;
-    rescheduleAvailabilityIndicator.classList.remove("hidden");
-  }
-
-  function hideRescheduleAvailability() {
-    rescheduleAvailabilityIndicator.textContent = "";
-    rescheduleAvailabilityIndicator.classList.add("hidden");
-  }
-
   function escapeRescheduleHtml(value) {
     return String(value || "").replace(/[&<>"']/g, (character) => ({
       "&": "&amp;",

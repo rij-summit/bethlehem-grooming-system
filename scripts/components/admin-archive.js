@@ -223,7 +223,7 @@ function adminArchive() {
     get emptyStateMessage() {
       if (this.hasActiveFilters) return "Try adjusting your search or clearing the filters.";
       return this.archiveType === "clinic"
-        ? "Completed, cancelled, and no-show clinic visits will appear here."
+        ? "Completed, cancelled, and expired clinic visits will appear here."
         : "Completed grooming sessions will appear here after staff add them to history.";
     },
 
@@ -412,7 +412,7 @@ function adminArchive() {
     clinicStatusClass(status) {
       if (status === "completed") return "bg-emerald-50 text-emerald-700 border-emerald-200";
       if (status === "cancelled") return "bg-rose-50 text-rose-700 border-rose-200";
-      if (status === "no_show") return "bg-amber-50 text-amber-700 border-amber-200";
+      if (["no_show", "expired"].includes(status)) return "bg-slate-100 text-slate-600 border-slate-200";
       return "bg-slate-100 text-slate-600 border-slate-200";
     },
 

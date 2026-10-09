@@ -2,113 +2,75 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Carbon\Carbon;
 use App\Models\Booking;
+use App\Models\ClinicAppointment;
 use App\Models\CustomerNotification;
+use App\Services\PreRegistrationExpiry;
+use Carbon\Carbon;
+use Illuminate\Console\Command;
 
 class SendAppointmentReminders extends Command
 {
-    protected $signature   = 'reminders:send';
-    protected $description = 'Send 24-hour and 3-hour appointment reminder notifications to customers.';
+    protected $signature = 'reminders:send';
+    protected $description = 'Send preferred-arrival reminders for Clinic and Grooming pre-registrations.';
 
-    public function handle(): void
+    public function handle(PreRegistrationExpiry $expiry): void
     {
-        $now = Carbon::now();
-
-        // Find active bookings that have a time window (joined)
-        $bookings = Booking::where('status', 'waiting_to_arrive')
-            ->whereNotNull('time_window_id')
+        $expiry->expire();
+        Booking::where('status', 'waiting_to_arrive')->whereNotNull('window_id')
             ->with(['user', 'timeWindow', 'bookingPets.pet'])
-            ->get();
-
-        $sent24h = 0;
-        $sent3h  = 0;
-
-        foreach ($bookings as $booking) {
-            if (!$booking->timeWindow || !$booking->user) {
-                continue;
-            }
-
-            // Build the exact appointment datetime from date + time window start
-            $appointmentAt = Carbon::parse(
-                $booking->booking_date . ' ' . $booking->timeWindow->start_time
-            );
-
-            $minutesUntil = $now->diffInMinutes($appointmentAt, false);
-
-            // Skip past appointments
-            if ($minutesUntil <= 0) {
-                continue;
-            }
-
-            $petName   = $this->petNames($booking);
-            $timeLabel = $booking->timeWindow->window_label;
-
-            // ── 24-hour reminder: between 23h and 25h from now ──────────────
-            if ($minutesUntil >= 1380 && $minutesUntil <= 1500) {
-                $alreadySent = CustomerNotification::where('user_id', $booking->user->user_id)
-                    ->where('booking_id', $booking->booking_id)
-                    ->where('type', 'reminder_24h')
-                    ->exists();
-
-                if (!$alreadySent) {
-                    CustomerNotification::create([
-                        'user_id'    => $booking->user->user_id,
-                        'booking_id' => $booking->booking_id,
-                        'type'       => 'reminder_24h',
-                        'message'    => "Reminder: {$petName}'s grooming appointment is tomorrow at {$timeLabel}. Please don't forget!",
-                        'is_read'    => false,
-                        'created_at' => now(),
-                    ]);
-                    $sent24h++;
+            ->chunkById(100, function ($bookings) {
+                foreach ($bookings as $booking) {
+                    $this->remind($booking, 'grooming', $booking->booking_date, $this->petNames($booking));
                 }
-            }
-
-            // ── 3-hour reminder: between 2h30m and 3h30m from now ──────────
-            if ($minutesUntil >= 150 && $minutesUntil <= 210) {
-                $alreadySent = CustomerNotification::where('user_id', $booking->user->user_id)
-                    ->where('booking_id', $booking->booking_id)
-                    ->where('type', 'reminder_3h')
-                    ->exists();
-
-                if (!$alreadySent) {
-                    CustomerNotification::create([
-                        'user_id'    => $booking->user->user_id,
-                        'booking_id' => $booking->booking_id,
-                        'type'       => 'reminder_3h',
-                        'message'    => "Heads up! {$petName}'s grooming appointment is in about 3 hours at {$timeLabel}. See you soon!",
-                        'is_read'    => false,
-                        'created_at' => now(),
-                    ]);
-                    $sent3h++;
+            }, 'booking_id');
+        ClinicAppointment::where('status', 'waiting_to_arrive')->whereNotNull('window_id')
+            ->with(['user', 'timeWindow', 'pet'])
+            ->chunkById(100, function ($visits) {
+                foreach ($visits as $visit) {
+                    $this->remind($visit, 'clinic', $visit->appointment_date->toDateString(), $visit->pet?->pet_name ?? 'your pet');
                 }
-            }
+            });
+        $this->info('Preferred-arrival reminders processed.');
+    }
+
+    private function remind(Booking|ClinicAppointment $registration, string $service, string $date, string $pets): void
+    {
+        if (! $registration->timeWindow || ! $registration->user) {
+            return;
+        }
+        $arrival = Carbon::parse($date.' '.$registration->timeWindow->start_time);
+        $minutes = now()->diffInMinutes($arrival, false);
+        $period = match (true) {
+            $minutes >= 1380 && $minutes <= 1500 => '24h',
+            $minutes >= 150 && $minutes <= 210 => '3h',
+            default => null,
+        };
+        if ($period === null) {
+            return;
         }
 
-        $this->info("Reminders sent — 24h: {$sent24h}, 3h: {$sent3h}");
+        $foreignKey = $service === 'clinic' ? 'clinic_appointment_id' : 'booking_id';
+        $type = ($service === 'clinic' ? 'clinic_' : '').'reminder_'.$period;
+        $window = $registration->timeWindow->displayLabel();
+        $when = $period === '24h' ? 'tomorrow' : 'today';
+        $plan = $service === 'clinic' ? 'clinic arrival' : 'grooming drop-off';
+        CustomerNotification::firstOrCreate([
+            'user_id' => $registration->user->user_id,
+            $foreignKey => $registration->getKey(),
+            'type' => $type,
+        ], [
+            'message' => "Reminder: You planned {$pets}'s {$plan} {$when} around {$window}. Your pet joins the queue after check-in.",
+            'is_read' => false,
+            'created_at' => now(),
+        ]);
     }
 
     private function petNames(Booking $booking): string
     {
-        $names = ($booking->bookingPets ?? collect())
-            ->map(fn($bookingPet) => $bookingPet->pet?->pet_name)
-            ->filter()
-            ->unique()
-            ->values();
+        $names = $booking->bookingPets->map(fn ($pet) => $pet->pet?->pet_name)
+            ->filter()->unique()->values();
 
-        if ($names->isEmpty()) {
-            return 'your pet';
-        }
-
-        if ($names->count() === 1) {
-            return $names->first();
-        }
-
-        if ($names->count() === 2) {
-            return $names->implode(' and ');
-        }
-
-        return $names->slice(0, -1)->implode(', ') . ', and ' . $names->last();
+        return $names->isEmpty() ? 'your pet' : $names->join(', ', ' and ');
     }
 }

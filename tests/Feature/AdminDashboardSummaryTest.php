@@ -203,8 +203,9 @@ class AdminDashboardSummaryTest extends TestCase
 
         $this->assertSame(10, $summary['today']);
         $this->assertSame(17, $summary['week']);
-        $this->assertSame(1, $summary['noShowWeek']);
-        $this->assertSame(33.3, $summary['noShowWeekRate']);
+        $this->assertSame(0, $summary['waitingNow']);
+        $this->assertArrayNotHasKey('noShowWeek', $summary);
+        $this->assertArrayNotHasKey('noShowWeekRate', $summary);
     }
 
     public function test_schedule_pet_type_summary_uses_all_pets_with_correct_pluralization(): void
@@ -520,7 +521,7 @@ class AdminDashboardSummaryTest extends TestCase
         $payload = (new CustomerNotificationController)->index($request)->getData(true);
         $notification = $payload['notifications'][0];
 
-        $this->assertSame("Max is Finished with grooming. We'll keep you updated on the rest of the appointment.", $notification['display_message']);
+        $this->assertSame("Max is Finished with grooming. We'll keep you updated on the rest of the visit.", $notification['display_message']);
         $this->assertStringNotContainsString('Bella', $notification['display_message']);
         $this->assertStringNotContainsString('Luna', $notification['display_message']);
         $this->assertSame(['Max'], $notification['pet_names']);

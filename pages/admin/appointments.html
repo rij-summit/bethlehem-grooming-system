@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -428,7 +428,7 @@
                     <span>Walk-in</span>
                   </button>
 
-                  <!-- BACKEND: uses today's completed grooming count as clinic capacity -->
+                  <!-- Grooming pets physically on-site -->
                   <div
                     class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-semibold text-white"
                   >
@@ -720,14 +720,6 @@
                   To Pick Up (<span x-text="releasedList.length"></span>)
                 </button>
 
-                <button
-                  type="button"
-                  @click="setTab('no-show')"
-                  class="rounded-full px-3 py-3 text-sm font-bold transition"
-                  :class="activeTab === 'no-show' ? 'bg-red-500 text-white shadow-sm' : 'text-[#1f3850]'"
-                >
-                  No-Show (<span x-text="noShowList.length"></span>)
-                </button>
               </div>
             </div>
           </section>
@@ -783,13 +775,6 @@
                 </p>
               </template>
 
-              <template x-if="activeTab === 'no-show'">
-                <p>
-                  No-Show pre-registrations that were automatically flagged because
-                  the customer did not check in 30 minutes after their time window ended.
-                  <strong>Late Check-in</strong> is available until 5:00 PM on the same day.
-                </p>
-              </template>
             </div>
           </section>
 
@@ -1659,86 +1644,6 @@
             </template>
           </section>
 
-          <!-- No-Show -->
-          <section x-show="activeTab === 'no-show'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-red-500">
-              <i data-lucide="user-x" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">No-Show</h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="noShowList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-400">
-                  <i data-lucide="user-x" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No no-shows today</p>
-                <p class="mt-2 text-sm text-slate-500">Bookings automatically flagged as no-show will appear here.</p>
-              </div>
-            </template>
-
-            <!-- NO-SHOW CARDS -->
-            <template x-for="booking in noShowList" :key="booking.id">
-              <article class="rounded-[24px] border-2 border-red-200 bg-white px-4 py-5 shadow-sm sm:px-6">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold text-red-300" x-text="'#' + booking.queueNumber"></div>
-                    <div class="min-w-0">
-                      <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="clock-3" class="h-4 w-4"></i>
-                          <span x-text="booking.appointmentTime"></span>
-                        </p>
-                        <p class="flex items-center gap-2 text-red-400">
-                          <i data-lucide="user-x" class="h-4 w-4"></i>
-                          <span>Did not show up</span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Late Check-in: only available before 5 PM -->
-                    <template x-if="isLateCheckInAvailable()">
-                      <button
-                        type="button"
-                        @click="lateCheckInBooking(booking)"
-                        :disabled="isActionBusy('lateCheckIn', booking.id)"
-                        class="rounded-xl bg-amber-500 px-6 py-3 text-base font-semibold text-white transition hover:bg-amber-600"
-                        :class="isActionBusy('lateCheckIn', booking.id) ? 'cursor-not-allowed opacity-70' : ''"
-                      >
-                        <span x-text="isActionBusy('lateCheckIn', booking.id) ? 'Checking in...' : 'Late Check-in'"></span>
-                      </button>
-                    </template>
-                    <template x-if="!isLateCheckInAvailable()">
-                      <div class="rounded-xl border border-slate-200 px-6 py-3 text-center text-sm text-slate-400">
-                        Late check-in closed (after 5 PM)
-                      </div>
-                    </template>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
           <!-- Payment Modal -->
           <div
             x-cloak
@@ -2434,6 +2339,6 @@
     <!-- Shared dashboard content script -->
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-today-indicator-20261005&release=shared-cash-20261007"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-onsite-capacity-20261009"></script>
   </body>
 </html>

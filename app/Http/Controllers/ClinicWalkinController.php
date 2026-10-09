@@ -47,55 +47,12 @@ class ClinicWalkinController extends Controller
             $appointmentDate,
         );
 
-        $windows = $timeWindows
-            ->availableWindows($settings, 'clinic')
-            ->map(function (TimeWindow $window) use ($appointmentDate, $cutoffPassed) {
-                $booked = ClinicAppointment::query()
-                    ->whereDate('appointment_date', $appointmentDate)
-                    ->where('window_id', $window->window_id)
-                    ->whereNotIn('status', ['cancelled', 'no_show'])
-                    ->count();
-                $capacity = max(1, (int) $window->max_slots);
-
-                return [
-                    'window_id' => $window->window_id,
-                    'window_label' => $window->displayLabel(),
-                    'start_time' => $window->start_time,
-                    'end_time' => $window->end_time,
-                    'max_slots' => $capacity,
-                    'booked' => $booked,
-                    'remaining' => max(0, $capacity - $booked),
-                    'is_full' => $booked >= $capacity,
-                    'is_past' => $this->windowHasStarted($appointmentDate, $window),
-                    'is_cutoff' => $cutoffPassed,
-                    'recommended' => false,
-                ];
-            });
-
-        $recommended = $windows
-            ->filter(
-                fn (array $window) => ! $window['is_full']
-                    && ! $window['is_past']
-                    && ! $window['is_cutoff'],
-            )
-            ->sortBy([['booked', 'asc'], ['start_time', 'asc']])
-            ->first();
-
-        if ($recommended) {
-            $windows = $windows->map(function (array $window) use ($recommended) {
-                $window['recommended'] = $window['window_id'] === $recommended['window_id'];
-
-                return $window;
-            });
-        }
-
         return response()->json([
             'success' => true,
             'date' => $appointmentDate,
-            'day_full' => false,
             'cutoff_passed' => $cutoffPassed,
             'availability' => $availability,
-            'windows' => $windows->values(),
+            'windows' => $timeWindows->preferredWindows($settings, 'clinic', $appointmentDate),
         ]);
     }
 
@@ -182,20 +139,6 @@ class ClinicWalkinController extends Controller
                 ], 422);
             }
 
-            $bookedInWindow = ClinicAppointment::query()
-                ->whereDate('appointment_date', $appointmentDate)
-                ->where('window_id', $window->window_id)
-                ->whereNotIn('status', ['cancelled', 'no_show'])
-                ->lockForUpdate()
-                ->count();
-
-            if ($bookedInWindow >= max(1, (int) $window->max_slots)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The selected clinic visit time is no longer available.',
-                ], 422);
-            }
-
             $pet = Pet::whereKey($data['pet_id'])
                 ->where('user_id', $user->user_id)
                 ->where('is_archived', false)
@@ -205,7 +148,7 @@ class ClinicWalkinController extends Controller
                 ->whereDate('appointment_date', $appointmentDate)
                 ->where('user_id', $user->user_id)
                 ->where('pet_id', $pet->pet_id)
-                ->whereNotIn('status', ['cancelled', 'no_show'])
+                ->whereNotIn('status', ['cancelled', 'no_show', 'expired'])
                 ->exists();
 
             if ($duplicate) {
@@ -245,7 +188,7 @@ class ClinicWalkinController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Clinic visit pre-registration submitted successfully.',
+                'message' => 'Your pre-registration has been received. Your queue position will be assigned when you check in at the clinic.',
                 'appointment' => [
                     'appointment_id' => $appointment->id,
                     'appointment_reference' => $appointment->appointment_reference,
@@ -280,7 +223,8 @@ class ClinicWalkinController extends Controller
         StoreClinicWalkinRequest $request,
         ClinicAppointmentSequence $clinicSequence,
     ) {
-        return DB::transaction(function () use ($request, $clinicSequence) {
+        return app(\App\Services\DailyPetQueue::class)->runForDate(now()->toDateString(), function () use ($request, $clinicSequence) {
+            app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
             $data = $request->validated();
             $data = PetWeightSize::withComputedSize($data);
 
@@ -319,6 +263,7 @@ class ClinicWalkinController extends Controller
                 'common_concerns' => $data['common_concerns'],
                 'total_amount' => 0,
                 'paid' => false,
+                'checked_in_at' => now(),
                 'consultation_started_at' => now(),
             ]);
 

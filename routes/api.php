@@ -152,8 +152,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/bookings/{id}/cancel', [AdminBookingController::class, 'cancel']);
         Route::post('/admin/bookings/{id}/archive', [AdminBookingController::class, 'archive']);
         Route::post('/admin/bookings/{id}/picked-up', [AdminBookingController::class, 'markPickedUp']);
-        Route::post('/admin/bookings/{id}/late-check-in', [AdminBookingController::class, 'lateCheckIn']);
-        Route::get('/admin/bookings/no-shows', [AdminBookingController::class, 'noShowIndex']);
 
         Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
         Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);

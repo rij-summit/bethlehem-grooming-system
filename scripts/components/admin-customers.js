@@ -995,7 +995,8 @@ function adminCustomers() {
         released: "Released",
         archived: "Completed",
         cancelled: "Cancelled",
-        no_show: "No Show",
+        no_show: "Expired",
+        expired: "Expired",
       })[status] || this.formatLabel(status);
     },
 
@@ -1010,7 +1011,8 @@ function adminCustomers() {
         released: "bg-emerald-50 text-emerald-700",
         archived: "bg-slate-100 text-slate-700",
         cancelled: "bg-red-50 text-red-700",
-        no_show: "bg-red-50 text-red-700",
+        no_show: "bg-slate-100 text-slate-600",
+        expired: "bg-slate-100 text-slate-600",
       })[status] || "bg-slate-100 text-slate-700";
     },
 

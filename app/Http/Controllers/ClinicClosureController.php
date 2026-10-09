@@ -7,7 +7,6 @@ use Carbon\Carbon;
 use App\Models\ClinicClosure;
 use App\Models\ClinicSetting;
 use App\Models\Booking;
-use App\Models\Notification;
 
 class ClinicClosureController extends Controller
 {
@@ -31,7 +30,7 @@ class ClinicClosureController extends Controller
         $settings = ClinicSetting::current();
 
         $stoppedToday = ClinicClosure::where('type', 'stop_today')
-            ->where('start_date', $today)
+            ->whereDate('start_date', $today)
             ->where('is_active', 1)
             ->exists();
 
@@ -63,41 +62,25 @@ class ClinicClosureController extends Controller
 
         $today = Carbon::today()->toDateString();
 
-        // Already stopped
-        if (ClinicClosure::where('type', 'stop_today')->where('start_date', $today)->where('is_active', 1)->exists()) {
-            return response()->json(['success' => false, 'message' => 'Already stopped for today.'], 422);
-        }
+        return app(\App\Services\DailyPetQueue::class)->runForDate($today, function () use ($request, $today) {
+            // Already stopped
+            if (ClinicClosure::where('type', 'stop_today')->whereDate('start_date', $today)->where('is_active', 1)->exists()) {
+                return response()->json(['success' => false, 'message' => 'Already stopped for today.'], 422);
+            }
 
-        ClinicClosure::create([
-            'type'       => 'stop_today',
-            'start_date' => $today,
-            'end_date'   => $today,
-            'is_active'  => 1,
-            'created_by' => $request->user()->user_id,
-        ]);
-
-        // Flag all remaining waiting_to_arrive bookings for today as no_show immediately
-        $remaining = Booking::where('booking_date', $today)
-            ->where('status', 'waiting_to_arrive')
-            ->get();
-
-        foreach ($remaining as $booking) {
-            $booking->update(['status' => 'no_show']);
-
-            Notification::create([
-                'type'       => 'no_show',
-                'booking_id' => $booking->booking_id,
-                'message'    => "Pre-registration {$booking->booking_reference} was marked as no-show. Clinic stopped receiving for today.",
-                'is_read'    => 0,
-                'created_at' => now(),
+            ClinicClosure::create([
+                'type'       => 'stop_today',
+                'start_date' => $today,
+                'end_date'   => $today,
+                'is_active'  => 1,
+                'created_by' => $request->user()->user_id,
             ]);
-        }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Clinic is now closed for today. Remaining bookings marked as no-show.',
-            'flagged' => $remaining->count(),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Bethlehem has stopped receiving Clinic and Grooming customers for today.',
+            ]);
+        });
     }
 
     // ── REOPEN TODAY ──────────────────────────────────────
@@ -108,21 +91,23 @@ class ClinicClosureController extends Controller
 
         $today = Carbon::today()->toDateString();
 
-        $closure = ClinicClosure::where('type', 'stop_today')
-            ->where('start_date', $today)
-            ->where('is_active', 1)
-            ->first();
+        return app(\App\Services\DailyPetQueue::class)->runForDate($today, function () use ($request, $today) {
+            $closure = ClinicClosure::where('type', 'stop_today')
+                ->whereDate('start_date', $today)
+                ->where('is_active', 1)
+                ->first();
 
-        if (!$closure) {
-            return response()->json(['success' => false, 'message' => 'Clinic is not stopped today.'], 422);
-        }
+            if (!$closure) {
+                return response()->json(['success' => false, 'message' => 'Clinic is not stopped today.'], 422);
+            }
 
-        $closure->update(['is_active' => 0]);
+            $closure->update(['is_active' => 0]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Clinic is open again for today. Note: bookings already marked as no-show were not restored.',
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Bethlehem is receiving Clinic and Grooming customers again today.',
+            ]);
+        });
     }
 
     // ── LIST BLOCKED DATES ────────────────────────────────
@@ -163,7 +148,7 @@ class ClinicClosureController extends Controller
 
         // Check for existing bookings in this range
         $conflictCount = Booking::whereBetween('booking_date', [$start->toDateString(), $end->toDateString()])
-            ->whereNotIn('status', ['cancelled', 'no_show', 'archived'])
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired', 'archived'])
             ->count();
 
         ClinicClosure::create([

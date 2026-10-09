@@ -13,6 +13,7 @@ class CustomerPreRegistrationAccessService
         'completed',
         'cancelled',
         'no_show',
+        'expired',
     ];
 
     private const TERMINAL_CLINIC_STATUSES = [
@@ -20,6 +21,7 @@ class CustomerPreRegistrationAccessService
         'archived',
         'cancelled',
         'no_show',
+        'expired',
     ];
 
     /**
@@ -28,6 +30,7 @@ class CustomerPreRegistrationAccessService
      */
     public function forUser(int $userId): array
     {
+        app(PreRegistrationExpiry::class)->expire($userId);
         $grooming = Schema::hasTable('bookings')
             ? Booking::query()
                 ->where('user_id', $userId)

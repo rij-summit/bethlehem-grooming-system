@@ -258,7 +258,6 @@ function adminSettings() {
       } finally { modal.busy = false; }
     },
     appointmentReminders: true,
-    noShowAlerts: true,
     paymentReceipt: true,
     availabilityService: "clinic",
     availability: clone(defaultAvailability),

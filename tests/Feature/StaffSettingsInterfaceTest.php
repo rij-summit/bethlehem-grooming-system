@@ -25,7 +25,6 @@ class StaffSettingsInterfaceTest extends TestCase
             'x-show="isStaff"',
             'x-show="isAdmin"',
             "appointmentReminders ? 'Enabled' : 'Disabled'",
-            "noShowAlerts ? 'Enabled' : 'Disabled'",
             "paymentReceipt ? 'Enabled' : 'Disabled'",
         ] as $expected) {
             $this->assertStringContainsString($expected, $page);

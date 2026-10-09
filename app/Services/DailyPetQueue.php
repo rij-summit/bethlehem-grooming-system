@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\BookingPet;
+use App\Models\ClinicSetting;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -11,11 +12,11 @@ use RuntimeException;
 class DailyPetQueue
 {
     /**
-     * Run queue intake under a date-scoped lock and one database transaction.
+     * Serialize Clinic and Grooming intake, including across midnight.
      */
     public function runForDate(string $queueDate, Closure $callback): mixed
     {
-        $lockName = "daily-pet-queue:{$queueDate}";
+        $lockName = 'bethlehem-shared-intake';
         $usesMysqlLock = DB::getDriverName() === 'mysql';
 
         if ($usesMysqlLock) {
@@ -27,7 +28,13 @@ class DailyPetQueue
         }
 
         try {
-            return DB::transaction($callback, 5);
+            return DB::transaction(function () use ($callback) {
+                // Lock before reading any queue/capacity data. All intake paths
+                // use this same singleton, including on non-MySQL databases.
+                ClinicSetting::current(lockForUpdate: true);
+
+                return $callback();
+            }, 5);
         } finally {
             if ($usesMysqlLock) {
                 DB::selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockName]);

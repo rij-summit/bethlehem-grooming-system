@@ -337,8 +337,7 @@ function adminDashboard() {
     weekCount: 0,
     revenueToday: 0,
     revenuePaymentCount: 0,
-    noShowWeekCount: 0,
-    noShowWeekRate: 0,
+    waitingNow: 0,
     currentCapacity: 0,
     maxCapacity: 20,
     notificationCount: 0,
@@ -382,7 +381,6 @@ function adminDashboard() {
       d.setDate(d.getDate() + 3);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
-    noShowList: [],
     forPaymentList: [],
     activeGroomers: 2,
     activeGroomingPets: 0,
@@ -596,12 +594,6 @@ function adminDashboard() {
             await API.adminArchiveBooking(booking.id);
             await this.loadAdminBookings();
           },
-          lateCheckIn: async ({ booking }) => {
-            await API.adminLateCheckIn(booking.id);
-            await this.loadAdminBookings();
-            await this.loadNoShows();
-            this.setTab("queued");
-          },
           viewDetails: ({ booking }) => {
             this.detailsBooking   = booking;
             this.cancelNoteEdit();
@@ -624,12 +616,10 @@ function adminDashboard() {
       await this.loadNotifications();
       this._notifInterval = setInterval(() => this.loadNotifications(), 30000);
 
-      // Load clinic status and no-show list on init, then poll every 60 seconds
+      // Load clinic status on init, then poll every 60 seconds
       await this.loadClinicStatus();
-      await this.loadNoShows();
       this._clinicInterval = setInterval(async () => {
         await this.loadClinicStatus();
-        await this.loadNoShows();
       }, 60000);
     },
 
@@ -1506,13 +1496,7 @@ function adminDashboard() {
         this.revenuePaymentCount = nextPayload.revenuePaymentCount;
       }
 
-      if ("noShowWeekCount" in nextPayload) {
-        this.noShowWeekCount = nextPayload.noShowWeekCount;
-      }
-
-      if ("noShowWeekRate" in nextPayload) {
-        this.noShowWeekRate = nextPayload.noShowWeekRate;
-      }
+      if ("waitingNow" in nextPayload) this.waitingNow = nextPayload.waitingNow;
 
       if ("currentCapacity" in nextPayload) {
         this.currentCapacity = nextPayload.currentCapacity;
@@ -1521,6 +1505,7 @@ function adminDashboard() {
       if ("maxCapacity" in nextPayload) {
         this.maxCapacity = nextPayload.maxCapacity;
       }
+
 
       if ("activeGroomers" in nextPayload) {
         this.activeGroomers = nextPayload.activeGroomers;
@@ -1633,30 +1618,8 @@ function adminDashboard() {
         );
       }
 
-      if (
-        this.hasValue(payload.noShowWeekCount) ||
-        this.hasValue(summary.noShowWeek) ||
-        this.hasValue(summary.noShowWeekCount) ||
-        this.hasValue(summary.no_show_week)
-      ) {
-        nextPayload.noShowWeekCount = this.toNumber(
-          payload.noShowWeekCount ??
-            summary.noShowWeekCount ??
-            summary.noShowWeek ??
-            summary.no_show_week,
-          this.noShowWeekCount,
-        );
-      }
-
-      if (
-        this.hasValue(payload.noShowWeekRate) ||
-        this.hasValue(summary.noShowWeekRate) ||
-        this.hasValue(summary.no_show_week_rate)
-      ) {
-        nextPayload.noShowWeekRate = this.toNumber(
-          payload.noShowWeekRate ?? summary.noShowWeekRate ?? summary.no_show_week_rate,
-          this.noShowWeekRate,
-        );
+      if (this.hasValue(payload.waitingNow) || this.hasValue(summary.waitingNow)) {
+        nextPayload.waitingNow = this.toNumber(payload.waitingNow ?? summary.waitingNow, 0);
       }
 
       if (
@@ -2129,7 +2092,6 @@ function adminDashboard() {
       this.forPickupList   = this.forPickupList.filter((item) => String(item.id) !== id);
       this.forPaymentList  = this.forPaymentList.filter((item) => String(item.id) !== id);
       this.releasedList    = this.releasedList.filter((item) => String(item.id) !== id);
-      this.noShowList      = this.noShowList.filter((item) => String(item.id) !== id);
     },
 
     rememberLocalCancellation(bookingId) {
@@ -2362,8 +2324,7 @@ function adminDashboard() {
         weekCount: this.weekCount,
         revenueToday: this.revenueToday,
         revenuePaymentCount: this.revenuePaymentCount,
-        noShowWeekCount: this.noShowWeekCount,
-        noShowWeekRate: this.noShowWeekRate,
+        waitingNow: this.waitingNow,
         currentCapacity: this.currentCapacity,
         maxCapacity: this.maxCapacity,
         activeGroomers: this.activeGroomers,
@@ -2891,6 +2852,16 @@ function adminDashboard() {
         .filter((item) => item.title);
     },
 
+    get availableCapacity() {
+      return Math.max(0, this.maxCapacity - this.currentCapacity);
+    },
+
+    get capacityPercent() {
+      return this.maxCapacity > 0
+        ? Math.min(100, Math.max(0, this.currentCapacity / this.maxCapacity * 100))
+        : 0;
+    },
+
     todayQueuePreview() {
       const today = this.localToday();
       const visibleBookings = [...this.inProgressList, ...this.queuedList]
@@ -2905,7 +2876,7 @@ function adminDashboard() {
           const leftStatus = statusOrder[left.status] ?? 2;
           const rightStatus = statusOrder[right.status] ?? 2;
           if (leftStatus !== rightStatus) return leftStatus - rightStatus;
-          return String(left.appointmentTime || "").localeCompare(String(right.appointmentTime || ""));
+          return this.compareBookings(left, right);
         })
         .slice(0, 5);
     },
@@ -2927,10 +2898,8 @@ function adminDashboard() {
     },
 
     queuePreviewDetail(booking) {
-      const action = this.normalizeStatus(booking?.status) === "in-progress"
-        ? "Grooming"
-        : "Checkup";
-      return `${action} - ${booking?.appointmentTime || "Time pending"}`;
+      const service = booking?.serviceType === "clinic" ? "Clinic" : "Grooming";
+      return `${service} · Checked in${booking?.dropOffTime ? ` ${booking.dropOffTime}` : ""}`;
     },
 
     activityDotClass(type) {
@@ -4142,29 +4111,7 @@ function adminDashboard() {
       });
     },
 
-    // ── No-Show & Clinic Status ───────────────────────────────────────────────
-
-    async loadNoShows() {
-      try {
-        const data = await API.getNoShows();
-        this._resetPollFailures("_clinicInterval");
-        this.noShowList = this.filterLocalCancelledBookings(
-          (data.noShowList || []).map((b) => this.normalizeBooking(b, "no_show")),
-        );
-      } catch (error) {
-        this._stopPollOnFailure("_clinicInterval", "loadNoShows", error);
-      }
-    },
-
-    async lateCheckInBooking(booking) {
-      await this.runBookingAction("lateCheckIn", booking);
-    },
-
-    // Returns true when late check-in is still allowed (before 5 PM and clinic not stopped).
-    isLateCheckInAvailable() {
-      const currentMinutes = window.AppClock?.currentMinutes?.() ?? (new Date().getHours() * 60);
-      return currentMinutes < 17 * 60 && !this.clinicStopped;
-    },
+    // ── Clinic Status ───────────────────────────────────────────────
 
     async loadClinicStatus() {
       try {
@@ -4182,14 +4129,14 @@ function adminDashboard() {
         this.stopModal = {
           open:    true,
           title:   "Reopen for Today?",
-          message: "This will allow new walk-ins and late check-ins for the rest of the day.",
+          message: "This will allow Clinic and Grooming walk-ins and check-ins for the rest of the day.",
           action:  "reopen",
         };
       } else {
         this.stopModal = {
           open:    true,
           title:   "Stop Receiving for Today?",
-          message: "Remaining walk-in bookings will be marked as no-show. This action can be undone before the day ends.",
+          message: "This stops physical intake for Clinic and Grooming today. Unused pre-registrations expire after their selected date ends. You can reopen intake today.",
           action:  "stop",
         };
       }
@@ -4204,7 +4151,6 @@ function adminDashboard() {
           await API.adminStopToday();
           this.clinicStopped = true;
           await this.loadAdminBookings();
-          await this.loadNoShows();
           await this.loadNotifications();
         } else {
           await API.adminReopenToday();

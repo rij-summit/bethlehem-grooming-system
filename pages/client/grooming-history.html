@@ -467,6 +467,8 @@
 
       function groomingOutcome(status) {
         const outcomes = {
+          expired: ["Expired", "bg-slate-100 text-slate-600"],
+          no_show: ["Expired", "bg-slate-100 text-slate-600"],
         };
         return outcomes[status] || ["Completed", "bg-emerald-50 text-emerald-700"];
       }
@@ -486,7 +488,7 @@
 
       // Grooming-history card typography and spacing are controlled by the Tailwind classes below.
       function buildHistoryCard(booking, pet) {
-        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status);
+        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status || booking.status);
         const petName = escapeHistoryHtml(pet?.pet_name || "Pet name not recorded");
         const breed = pet?.breed && pet.breed !== "—" ? escapeHistoryHtml(pet.breed) : "Breed not recorded";
         const species = pet?.species ? escapeHistoryHtml(String(pet.species).replace(/\b\w/g, (letter) => letter.toUpperCase())) : "Species not recorded";
@@ -561,7 +563,7 @@
       }
 
       function buildHistoryModalContent(booking, pet) {
-        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status);
+        const [outcomeLabel, outcomeClasses] = groomingOutcome(pet?.grooming_status || booking.status);
         const petName = escapeHistoryHtml(pet?.pet_name || "Pet name not recorded");
         const breed = pet?.breed && pet.breed !== "—" ? escapeHistoryHtml(pet.breed) : "Breed not recorded";
         const species = pet?.species ? escapeHistoryHtml(String(pet.species).replace(/\b\w/g, (letter) => letter.toUpperCase())) : "Species not recorded";

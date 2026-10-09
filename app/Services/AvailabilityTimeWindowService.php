@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\ClinicSetting;
+use App\Models\ClinicClosure;
 use App\Models\TimeWindow;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AvailabilityTimeWindowService
 {
@@ -89,5 +91,42 @@ class AvailabilityTimeWindowService
     private function windowKey(string $startTime, string $endTime): string
     {
         return substr($startTime, 0, 8).'-'.substr($endTime, 0, 8);
+    }
+
+    public function isClosed(string $date): bool
+    {
+        return ClinicClosure::query()->where('is_active', true)
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->whereIn('type', ['blocked_date', 'stop_today'])->exists();
+    }
+
+    public function preferredWindows(ClinicSetting $settings, string $service, string $date): Collection
+    {
+        $closed = $this->isClosed($date);
+        $cutoff = $settings->isSameDayPreRegistrationCutoffPassed($service, $date);
+
+        return $this->availableWindows($settings, $service)->map(fn (TimeWindow $window) => [
+            'window_id' => $window->window_id,
+            'window_label' => $window->displayLabel(),
+            'start_time' => $window->start_time,
+            'end_time' => $window->end_time,
+            'is_past' => $date.' '.substr($window->start_time, 0, 8) <= now()->format('Y-m-d H:i:s'),
+            'is_cutoff' => $cutoff,
+            'is_closed' => $closed,
+        ]);
+    }
+
+    public function assertPreferredArrival(ClinicSetting $settings, string $service, string $date, TimeWindow $window): void
+    {
+        if ($this->isClosed($date)
+            || $date.' '.substr($window->start_time, 0, 8) <= now()->format('Y-m-d H:i:s')
+            || ! $window->is_active
+            || ! $settings->isWindowWithinOperatingHours($service, $window->start_time, $window->end_time)
+            || $settings->isSameDayPreRegistrationCutoffPassed($service, $date)) {
+            throw ValidationException::withMessages([
+                'window_id' => 'This preferred arrival time is unavailable. Please choose another date or time.',
+            ]);
+        }
     }
 }

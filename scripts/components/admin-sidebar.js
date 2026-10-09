@@ -391,7 +391,7 @@ function adminSidebar() {
         this.stopModal = {
           open: true,
           title: "Reopen for Today?",
-          message: "This will allow new walk-ins and late check-ins for the rest of the day.",
+          message: "This will allow Clinic and Grooming walk-ins and check-ins for the rest of the day.",
           confirmLabel: "Yes, Reopen",
           action: "reopen",
           busy: false,
@@ -401,7 +401,7 @@ function adminSidebar() {
         this.stopModal = {
           open: true,
           title: "Stop Receiving for Today?",
-          message: "Remaining walk-in bookings will be marked as no-show. This action can be undone before the day ends.",
+          message: "This stops physical intake for Clinic and Grooming today. Unused pre-registrations expire after their selected date ends. You can reopen intake today.",
           confirmLabel: "Yes, Stop",
           action: "stop",
           busy: false,

@@ -74,7 +74,7 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
             $this->assertStringNotContainsString('petReviewText', $source);
         }
 
-        $this->assertStringContainsString('Schedule Summary', $customerPage);
+        $this->assertStringContainsString('Planned Drop-off', $customerPage);
         $this->assertStringContainsString('Schedule Summary', $walkInPage);
         $this->assertStringContainsString('Schedule Summary', $walkInReview);
     }

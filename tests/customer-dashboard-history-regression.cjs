@@ -274,7 +274,8 @@ async function testQueueStates() {
     assert.equal(element("groomingQueueLoading").classList.contains("hidden"), true);
     assert.equal(element("groomingQueueDetails").classList.contains("flex"), true);
     assert.equal(element("groomingQueueSummary").textContent, "1 pet currently in the grooming queue");
-    assert.doesNotMatch(element("groomingCapacityText").textContent, /%|daily capacity|\//);
+    assert.match(element("groomingCapacityText").textContent, /Grooming pets on-site|Grooming capacity/);
+    assert.doesNotMatch(element("groomingCapacityText").textContent, /Clinic|grooming slots|daily capacity/);
   }
 }
 
@@ -308,7 +309,23 @@ async function testInitialAndReturningSessionGreetings() {
   assert.equal(await greeting(initialCookie, 8), "Welcome back, Gerald", "The marker belongs only to the registered customer.");
 }
 
+function testExpiredRegistrationsHaveNeutralHistoryLabels() {
+  const historySource = fs.readFileSync(path.resolve(__dirname, '../pages/client/grooming-history.html'), 'utf8');
+  const helpers = historySource.slice(historySource.indexOf('function escapeHistoryHtml'), historySource.indexOf('function closeHistoryModal'));
+  const context = vm.createContext({ Intl, Date, document: { getElementById: () => null } });
+  vm.runInContext(helpers, context);
+  for (const status of ['expired', 'no_show']) {
+    const booking = { status, number_of_pets: 1, pets: [] };
+    assert.equal(context.groomingOutcome(status)[0], 'Expired');
+    assert.match(context.buildHistoryCard(booking, null), />Expired<\/span>/);
+    assert.match(context.buildHistoryModalContent(booking, null), />Expired<\/span>/);
+    assert.doesNotMatch(context.groomingOutcome(status)[1], /amber|red|rose/);
+  }
+  assert.equal(context.groomingOutcome('archived')[0], 'Completed');
+}
+
 (async () => {
+  testExpiredRegistrationsHaveNeutralHistoryLabels();
   await testInitialAndReturningSessionGreetings();
   await testStateHierarchyAndLiveTransitions();
   await testMultiPetProgressAndPickupReadiness();

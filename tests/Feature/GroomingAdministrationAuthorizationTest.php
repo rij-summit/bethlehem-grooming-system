@@ -46,8 +46,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/cancel'],
         ['POST', 'api/admin/bookings/{id}/archive'],
         ['POST', 'api/admin/bookings/{id}/picked-up'],
-        ['POST', 'api/admin/bookings/{id}/late-check-in'],
-        ['GET', 'api/admin/bookings/no-shows'],
         ['POST', 'api/admin/bookings/{id}/pay'],
         ['POST', 'api/admin/bookings/{id}/pay-now'],
         ['POST', 'api/admin/bookings/{id}/release'],
@@ -380,8 +378,6 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'staff cancellation' => ['POST', '/api/admin/bookings/1/cancel'],
             'archive booking' => ['POST', '/api/admin/bookings/1/archive'],
             'mark picked up' => ['POST', '/api/admin/bookings/1/picked-up'],
-            'late check in no-show' => ['POST', '/api/admin/bookings/1/late-check-in'],
-            'no-show listing' => ['GET', '/api/admin/bookings/no-shows'],
             'record final payment' => ['POST', '/api/admin/bookings/1/pay'],
             'record early payment' => ['POST', '/api/admin/bookings/1/pay-now'],
             'release paid booking' => ['POST', '/api/admin/bookings/1/release'],
@@ -1530,7 +1526,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $this->getJson('/api/admin/bookings')
             ->assertOk()
-            ->assertJsonPath('queuedList.0.id', 1);
+            ->assertJsonPath('queuedList.0.id', 1)
+            ->assertJsonPath('capacity.used', 2);
 
         $this->postJson('/api/admin/bookings/1/pets/1/start-grooming')
             ->assertOk()
@@ -1543,10 +1540,13 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/bookings/1/pets/1/mark-done')
             ->assertOk()
             ->assertJsonPath('all_pets_finished', false);
+        $this->getJson('/api/admin/bookings')->assertOk()->assertJsonPath('capacity.used', 2);
         $this->postJson('/api/admin/bookings/1/pets/2/mark-done')
             ->assertOk()
             ->assertJsonPath('all_pets_finished', true)
             ->assertJsonPath('booking_status', 'for_payment');
+
+        $this->getJson('/api/admin/bookings')->assertOk()->assertJsonPath('capacity.used', 2);
 
         $this->postJson('/api/admin/bookings/1/pay', [
             'final_price' => 500,
@@ -1569,6 +1569,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'booking_id' => 1,
             'payment_status' => 'paid',
         ]);
+        $this->getJson('/api/admin/bookings')->assertOk()->assertJsonPath('capacity.used', 2);
 
         DB::table('bookings')->insert([
             'booking_id' => 2,
@@ -1640,6 +1641,11 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->getJson('/api/admin/transactions')
             ->assertOk()
             ->assertJsonPath('transactions.0.bookingId', 1);
+
+        $this->getJson('/api/admin/bookings')->assertOk()->assertJsonPath('capacity.used', 4);
+        $this->postJson('/api/admin/bookings/1/picked-up')->assertOk();
+        $this->getJson('/api/admin/bookings')->assertOk()->assertJsonPath('capacity.used', 2);
+        $this->getJson('/api/booking/grooming-capacity')->assertOk()->assertJsonPath('capacity.used', 2);
     }
 
     public static function authorizedGroomingRoles(): array
@@ -2295,6 +2301,78 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $this->assertContains('auth:sanctum', $route->gatherMiddleware());
             $this->assertNotContains('role:admin,staff', $route->gatherMiddleware());
             $this->assertNotContains('role:admin', $route->gatherMiddleware());
+        }
+    }
+
+    public function test_grooming_pre_registrations_share_preferred_times_without_reserving_capacity_or_queue(): void
+    {
+        DB::table('time_windows')->insert([
+            'window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'is_active' => true,
+        ]);
+        foreach (range(1, 6) as $customer) {
+            DB::table('users')->insert(['user_id' => 100 + $customer, 'role' => 'customer']);
+            Sanctum::actingAs(User::findOrFail(100 + $customer), ['*']);
+            $this->postJson('/api/booking/store', [
+                'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 4,
+                'pets' => array_fill(0, 4, ['pet_name' => 'Test pet', 'species' => 'cat']),
+            ])->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
+        }
+        $this->assertSame(24, (int) DB::table('bookings')->sum('number_of_pets'));
+        $this->assertSame(0, DB::table('bookings')->whereNotNull('queue_number')->count());
+        $this->assertSame(0, DB::table('booking_pets')->whereNotNull('pet_queue_number')->count());
+        $this->getJson('/api/timeslots?date='.now()->toDateString())->assertOk()
+            ->assertJsonMissingPath('windows.0.is_full')->assertJsonMissingPath('windows.0.recommended');
+        $this->getJson('/api/booking/grooming-capacity')->assertOk()->assertJsonPath('capacity.used', 0);
+
+        DB::table('bookings')->insert(['booking_id' => 999, 'booking_reference' => 'FULL-ON-SITE',
+            'booking_date' => now()->toDateString(), 'number_of_pets' => 20, 'status' => 'released']);
+        foreach (range(1, 20) as $pet) {
+            DB::table('booking_pets')->insert(['booking_id' => 999, 'grooming_state' => 'finished', 'grooming_end_time' => now()]);
+        }
+        DB::table('users')->insert(['user_id' => 107, 'role' => 'customer']);
+        Sanctum::actingAs(User::findOrFail(107), ['*']);
+        $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Another pet', 'species' => 'cat']],
+        ])->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
+        $this->getJson('/api/booking/grooming-capacity')->assertOk()->assertJsonPath('capacity.used', 20);
+        $this->getJson('/api/timeslots?date='.now()->toDateString())->assertOk()
+            ->assertJsonMissingPath('windows.0.is_full')->assertJsonMissingPath('windows.0.recommended');
+    }
+
+    public function test_grooming_multi_pet_intake_respects_on_site_capacity_ignores_clinic_and_preferred_time(): void
+    {
+        Schema::create('clinic_appointments', function (Blueprint $table) {
+            $table->id();
+            $table->string('status');
+        });
+        try {
+            foreach (range(1, 19) as $pet) {
+                DB::table('clinic_appointments')->insert(['status' => 'in_consultation']);
+            }
+            $this->seedMultiPetBooking();
+            DB::table('bookings')->insert(['booking_id' => 99, 'booking_reference' => 'ON-SITE-19',
+                'booking_date' => now()->toDateString(), 'number_of_pets' => 19, 'status' => 'released']);
+            foreach (range(1, 19) as $pet) {
+                DB::table('booking_pets')->insert(['booking_id' => 99, 'grooming_state' => 'finished', 'grooming_end_time' => now()]);
+            }
+            DB::table('bookings')->where('booking_id', 1)->update(['status' => 'waiting_to_arrive', 'queue_number' => null, 'dropped_off_at' => null]);
+            DB::table('booking_pets')->update(['pet_queue_number' => null, 'pet_queue_date' => null]);
+            $this->authenticateAs('staff');
+            $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
+                ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
+            ]])->assertUnprocessable();
+            $this->assertDatabaseHas('bookings', ['booking_id' => 1, 'status' => 'waiting_to_arrive', 'queue_number' => null]);
+            DB::table('bookings')->where('booking_id', 99)->update(['status' => 'archived']);
+            Carbon::setTestNow(now()->setTime(16, 30));
+            $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
+                ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
+            ]])->assertOk()->assertJsonPath('queue_number', 1);
+            $this->getJson('/api/admin/bookings')->assertOk()
+                ->assertJsonPath('capacity.current', 2)->assertJsonPath('summary.waitingNow', 2);
+        } finally {
+            Schema::dropIfExists('clinic_appointments');
         }
     }
 

@@ -1604,7 +1604,7 @@ var API = (() => {
     return request("PATCH", "/admin/notifications/read-all", null, getAdminToken());
   }
 
-  // ── Clinic closures / no-show ─────────────────────────────────────────────
+  // ── Clinic closures ─────────────────────────────────────────────
 
   async function getClinicStatus() {
     // GET /api/clinic/status  (public — no token needed)
@@ -1750,17 +1750,6 @@ var API = (() => {
     // DELETE /api/admin/clinic/blocked-dates/{id}  (protected — admin token)
     return request("DELETE", `/admin/clinic/blocked-dates/${id}`, null, getAdminToken());
   }
-
-  async function getNoShows() {
-    // GET /api/admin/bookings/no-shows  (protected — admin token)
-    return request("GET", "/admin/bookings/no-shows", null, getAdminToken());
-  }
-
-  async function adminLateCheckIn(bookingId) {
-    // POST /api/admin/bookings/{id}/late-check-in  (protected — admin token)
-    return request("POST", `/admin/bookings/${bookingId}/late-check-in`, null, getAdminToken());
-  }
-
   async function processPayment(bookingId, payload) {
     // POST /api/admin/bookings/{id}/pay  (protected — admin token)
     // payload: { final_price, amount_paid, payment_method?, notes?, service_prices? }
@@ -2106,7 +2095,7 @@ var API = (() => {
     getNotifications,
     markNotificationRead,
     markAllNotificationsRead,
-    // Clinic closures / no-show
+    // Clinic closures
     getClinicStatus,
     adminStopToday,
     adminReopenToday,
@@ -2128,8 +2117,6 @@ var API = (() => {
     getBlockedDates,
     addBlockedDate,
     removeBlockedDate,
-    getNoShows,
-    adminLateCheckIn,
     // Customer notifications
     getCustomerNotifications,
     markCustomerNotificationRead,

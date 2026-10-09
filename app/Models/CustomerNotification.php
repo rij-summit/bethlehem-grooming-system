@@ -17,6 +17,7 @@ class CustomerNotification extends Model
     protected $fillable = [
         'user_id',
         'booking_id',
+        'clinic_appointment_id',
         'pet_id',
         'type',
         'message',
@@ -32,6 +33,11 @@ class CustomerNotification extends Model
     public function booking()
     {
         return $this->belongsTo(Booking::class, 'booking_id', 'booking_id');
+    }
+
+    public function clinicAppointment()
+    {
+        return $this->belongsTo(ClinicAppointment::class, 'clinic_appointment_id');
     }
 
     public function user()

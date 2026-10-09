@@ -65,7 +65,7 @@ class ReportController extends Controller
         }
 
         $bookings = Booking::whereNotNull('grooming_finished_at')
-            ->whereNotIn('status', ['cancelled', 'no_show']);
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired']);
 
         $this->applyPeriodFilter($bookings, 'grooming_finished_at', $period, $date, $week, $month, $year);
 
@@ -73,7 +73,7 @@ class ReportController extends Controller
             ->join('bookings', 'booking_services.booking_id', '=', 'bookings.booking_id')
             ->leftJoin('services', 'booking_services.service_id', '=', 'services.service_id')
             ->whereNotNull('bookings.grooming_finished_at')
-            ->whereNotIn('bookings.status', ['cancelled', 'no_show']);
+            ->whereNotIn('bookings.status', ['cancelled', 'no_show', 'expired']);
 
         $this->applyPeriodFilter($services, 'bookings.grooming_finished_at', $period, $date, $week, $month, $year);
 
@@ -149,7 +149,7 @@ class ReportController extends Controller
         }
 
         $visits = Booking::whereNotNull('grooming_finished_at')
-            ->whereNotIn('status', ['cancelled', 'no_show']);
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired']);
 
         $this->applyPeriodFilter($visits, 'grooming_finished_at', $period, $date, $week, $month, $year);
 
@@ -164,7 +164,7 @@ class ReportController extends Controller
             ->first();
 
         $allVisits = Booking::whereNotNull('grooming_finished_at')
-            ->whereNotIn('status', ['cancelled', 'no_show']);
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired']);
 
         $allCustomers = (clone $allVisits)
             ->join('users', 'bookings.user_id', '=', 'users.user_id')
@@ -197,7 +197,7 @@ class ReportController extends Controller
 
         $firstVisitSubquery = Booking::query()
             ->whereNotNull('grooming_finished_at')
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired'])
             ->select('user_id')
             ->selectRaw('MIN(grooming_finished_at) as firstVisitAt')
             ->groupBy('user_id');
@@ -207,7 +207,7 @@ class ReportController extends Controller
                 $join->on('bookings.user_id', '=', 'first_visits.user_id');
             })
             ->whereNotNull('bookings.grooming_finished_at')
-            ->whereNotIn('bookings.status', ['cancelled', 'no_show'])
+            ->whereNotIn('bookings.status', ['cancelled', 'no_show', 'expired'])
             ->whereColumn('bookings.grooming_finished_at', '>', 'first_visits.firstVisitAt');
 
         $this->applyPeriodFilter($periodReturnVisits, 'bookings.grooming_finished_at', $period, $date, $week, $month, $year);
@@ -264,53 +264,6 @@ class ReportController extends Controller
             ->sortByDesc('lastVisitAt')
             ->values();
 
-        $scheduledBookings = Booking::whereNotIn('status', ['cancelled']);
-        $this->applyPeriodFilter($scheduledBookings, 'booking_date', $period, $date, $week, $month, $year);
-
-        $scheduledByCustomer = (clone $scheduledBookings)
-            ->select('user_id')
-            ->selectRaw('COUNT(booking_id) as scheduledBookings')
-            ->groupBy('user_id')
-            ->get()
-            ->keyBy('user_id');
-
-        $scheduledCount = (int) (clone $scheduledBookings)->count();
-        $noShows = Booking::where('status', 'no_show');
-        $this->applyPeriodFilter($noShows, 'booking_date', $period, $date, $week, $month, $year);
-
-        $noShowCustomers = (clone $noShows)
-            ->join('users', 'bookings.user_id', '=', 'users.user_id')
-            ->select('bookings.user_id', 'users.first_name', 'users.last_name', 'users.email', 'users.phone')
-            ->selectRaw('COUNT(bookings.booking_id) as noShowCount')
-            ->selectRaw('MIN(bookings.booking_date) as firstNoShowDate')
-            ->selectRaw('MAX(bookings.booking_date) as latestNoShowDate')
-            ->groupBy('bookings.user_id', 'users.first_name', 'users.last_name', 'users.email', 'users.phone')
-            ->orderByDesc('noShowCount')
-            ->orderBy('users.last_name')
-            ->orderBy('users.first_name')
-            ->get()
-            ->map(function ($customer) use ($scheduledByCustomer) {
-                $noShowCount = (int) $customer->noShowCount;
-                $scheduledCount = (int) ($scheduledByCustomer->get($customer->user_id)->scheduledBookings ?? $noShowCount);
-
-                return [
-                    'id' => (int) $customer->user_id,
-                    'customerName' => trim($customer->first_name . ' ' . $customer->last_name),
-                    'email' => $customer->email,
-                    'phone' => $customer->phone,
-                    'noShowCount' => $noShowCount,
-                    'noShowRate' => $scheduledCount > 0 ? round(($noShowCount / $scheduledCount) * 100, 1) : 0,
-                    'scheduledBookings' => $scheduledCount,
-                    'firstNoShowDate' => $customer->firstNoShowDate,
-                    'latestNoShowDate' => $customer->latestNoShowDate,
-                ];
-            });
-
-        $noShowCount = (int) $noShowCustomers->sum('noShowCount');
-        $noShowRate = $scheduledCount > 0
-            ? round(($noShowCount / $scheduledCount) * 100, 1)
-            : 0;
-
         return response()->json([
             'success' => true,
             'period' => $period,
@@ -329,10 +282,6 @@ class ReportController extends Controller
             'allCustomers' => $allCustomers->values(),
             'newCustomers' => $newCustomers,
             'returningCustomers' => $returningCustomers,
-            'noShowCount' => $noShowCount,
-            'noShowRate' => $noShowRate,
-            'scheduledBookings' => $scheduledCount,
-            'noShowCustomers' => $noShowCustomers->values(),
         ]);
     }
 

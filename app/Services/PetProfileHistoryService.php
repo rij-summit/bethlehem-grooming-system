@@ -103,7 +103,7 @@ class PetProfileHistoryService
 
     private function groomingStatus(Booking $booking, BookingPet $bookingPet): string
     {
-        if (in_array($booking->status, ['cancelled', 'no_show'], true)) {
+        if (in_array($booking->status, ['cancelled', 'no_show', 'expired'], true)) {
             return $booking->status;
         }
 

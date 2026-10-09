@@ -81,7 +81,7 @@ class CustomerController extends Controller
                 ->count();
 
             $pastBookingCount = Booking::where('user_id', $user->user_id)
-                ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
+                ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'expired', 'no_show'])
                 ->count();
 
             $computedTier = $pastBookingCount > 0 ? 'returning' : 'new';
@@ -134,7 +134,7 @@ class CustomerController extends Controller
                 $petMatches = $petMatches->filter(function (Pet $pet) use ($tier, &$ownerTiers) {
                     if (! array_key_exists($pet->user_id, $ownerTiers)) {
                         $hasPastBooking = Booking::where('user_id', $pet->user_id)
-                            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
+                            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'expired', 'no_show'])
                             ->exists();
                         $ownerTiers[$pet->user_id] = $hasPastBooking ? 'returning' : 'new';
                     }
@@ -718,7 +718,7 @@ class CustomerController extends Controller
             ->count();
 
         $pastBookingCount = Booking::where('user_id', $user->user_id)
-            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive'])
+            ->whereNotIn('status', ['cancelled', 'waiting_to_arrive', 'expired', 'no_show'])
             ->count();
 
         $pets = Pet::where('user_id', $user->user_id)

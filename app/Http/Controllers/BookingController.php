@@ -21,15 +21,12 @@ use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingServicePriceResolver;
 use App\Support\PetWeightSize;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class BookingController extends Controller
 {
-    private const DAILY_CAPACITY = 20;
-
     private const MAX_PETS_PER_BOOKING = 10;
 
     private const MAX_PRE_REGISTRATION_DAYS_AHEAD = 2;
@@ -44,64 +41,12 @@ class BookingController extends Controller
         $availability = $settings->serviceAvailability('grooming');
         $cutoffPassed = $settings->isSameDayPreRegistrationCutoffPassed('grooming', $date);
 
-        $totalBooked = Booking::where('booking_date', $date)
-            ->whereNotIn('status', ['cancelled'])
-            ->sum('number_of_pets');
-
-        $dayFull = $totalBooked >= self::DAILY_CAPACITY;
-        $dailyRemaining = max(0, self::DAILY_CAPACITY - $totalBooked);
-
-        $windows = $timeWindows->availableWindows($settings, 'grooming');
-
-        $result = $windows->map(function ($window) use ($date, $dayFull, $dailyRemaining, $cutoffPassed) {
-            $booked = Booking::where('window_id', $window->window_id)
-                ->where('booking_date', $date)
-                ->whereNotIn('status', ['cancelled'])
-                ->sum('number_of_pets');
-
-            return [
-                'window_id' => $window->window_id,
-                'window_label' => $window->displayLabel(),
-                'start_time' => $window->start_time,
-                'end_time' => $window->end_time,
-                'max_slots' => $window->max_slots,
-                'booked' => $booked,
-                'remaining' => $dailyRemaining,
-                'is_full' => $dayFull,
-                'is_past' => $this->windowHasStarted($date, $window),
-                'is_cutoff' => $cutoffPassed,
-                'recommended' => false,
-            ];
-        });
-
-        // ── AI FEATURE: Mark least congested as recommended ──
-        $available = $result
-            ->where('is_full', false)
-            ->where('is_past', false)
-            ->where('is_cutoff', false);
-        if ($available->isNotEmpty()) {
-            $minBooked = $available->min('booked');
-            $recommended = $available->firstWhere('booked', $minBooked);
-
-            $result = $result->map(function ($window) use ($recommended) {
-                if ($window['window_id'] === $recommended['window_id']) {
-                    $window['recommended'] = true;
-                }
-
-                return $window;
-            });
-        }
-
-        // ── Return active time windows with daily capacity status ──────────────────
         return response()->json([
             'success' => true,
             'date' => $date,
-            'day_full' => $dayFull,
-            'total_booked' => $totalBooked,
-            'capacity' => self::DAILY_CAPACITY,
             'cutoff_passed' => $cutoffPassed,
             'availability' => $availability,
-            'windows' => $result->values(),
+            'windows' => $timeWindows->preferredWindows($settings, 'grooming', $date),
         ]);
     }
 
@@ -162,7 +107,6 @@ class BookingController extends Controller
             }
 
             $date = $request->booking_date;
-            $petCount = (int) $request->number_of_pets;
             $sedationConsent = $request->boolean('sedation_consent');
             $settings = ClinicSetting::current();
 
@@ -173,18 +117,6 @@ class BookingController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
-                ], 422);
-            }
-
-            // ── Check if day is full ──────────────────────────
-            $totalBooked = Booking::where('booking_date', $date)
-                ->whereNotIn('status', ['cancelled'])
-                ->sum('number_of_pets');
-
-            if ($totalBooked + $petCount > self::DAILY_CAPACITY) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Sorry, this date is fully booked. Please choose another date.',
                 ], 422);
             }
 
@@ -208,10 +140,12 @@ class BookingController extends Controller
                 ], 422);
             }
 
+            app(AvailabilityTimeWindowService::class)->assertPreferredArrival($settings, 'grooming', $date, $window);
+
             // ── Check duplicate booking ───────────────────────
             $duplicate = Booking::where('user_id', $user->user_id)
                 ->where('booking_date', $date)
-                ->whereNotIn('status', ['cancelled', 'archived', 'no_show'])
+                ->whereNotIn('status', ['cancelled', 'archived', 'no_show', 'expired'])
                 ->first();
 
             if ($duplicate) {
@@ -360,7 +294,7 @@ class BookingController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Booking confirmed successfully!',
+                'message' => 'Your pre-registration has been received. Your queue position will be assigned when you check in at the clinic.',
                 'booking' => [
                     'booking_id' => $booking->booking_id,
                     'booking_reference' => $booking->booking_reference,
@@ -388,6 +322,7 @@ class BookingController extends Controller
     public function history(Request $request)
     {
         $userId = $request->user()->user_id;
+        app(\App\Services\PreRegistrationExpiry::class)->expire((int) $userId);
         $historyLimit = $request->has('history_limit')
             ? max(0, min(100, (int) $request->query('history_limit')))
             : null;
@@ -424,7 +359,7 @@ class BookingController extends Controller
 
         $activeQuery = Booking::where('user_id', $userId)
             ->neverCancelled($hasCancellationAuditColumns)
-            ->whereNotIn('status', ['archived']);
+            ->whereNotIn('status', ['archived', 'expired', 'no_show']);
 
         if ($petId !== null) {
             $activeQuery->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $petId));
@@ -438,7 +373,7 @@ class BookingController extends Controller
 
         $historyQuery = Booking::where('user_id', $userId)
             ->neverCancelled($hasCancellationAuditColumns)
-            ->where('status', 'archived');
+            ->whereIn('status', ['archived', 'expired', 'no_show']);
 
         if ($petId !== null) {
             $historyQuery->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $petId));
@@ -488,7 +423,7 @@ class BookingController extends Controller
                 $groomingFinished = $bp->grooming_state === BookingPet::GROOMING_STATE_FINISHED
                     || $bp->grooming_end_time !== null;
                 $groomingStatus = match (true) {
-                    in_array($b->status, ['cancelled', 'no_show'], true) => $b->status,
+                    in_array($b->status, ['cancelled', 'no_show', 'expired'], true) => $b->status,
                     $bp->grooming_end_time !== null => 'grooming_finished',
                     $bp->grooming_start_time !== null => 'in_progress',
                     default => $b->status,
@@ -600,24 +535,11 @@ class BookingController extends Controller
         ]);
     }
 
-    private function activeGroomingPetQuery(string $date): Builder
-    {
-        $query = BookingPet::query()
-            ->whereNull('grooming_end_time')
-            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
-            ->whereHas('booking', function (Builder $booking) use ($date) {
-                $booking->where('booking_date', $date)
-                    ->whereIn('status', ['checked_in', 'in_progress']);
-            });
-
-        return $query;
-    }
-
     // Real-time client dashboard snapshot of today's grooming queue and capacity.
     public function groomingCapacity(Request $request)
     {
         $today = Carbon::today()->toDateString();
-        $activeGroomingPets = $this->activeGroomingPetQuery($today);
+        $activeGroomingPets = app(\App\Services\OperationalCapacity::class)->groomingPets();
 
         $queued = (clone $activeGroomingPets)
             ->where('grooming_state', BookingPet::GROOMING_STATE_NOT_STARTED)
@@ -626,7 +548,6 @@ class BookingController extends Controller
         $inProgress = (clone $activeGroomingPets)
             ->where('grooming_state', BookingPet::GROOMING_STATE_IN_PROGRESS)
             ->count();
-        $used = $queued + $inProgress;
 
         $readyForPickup = Booking::where('booking_date', $today)
             ->whereIn('status', ['for_payment', 'for_pickup', 'released'])
@@ -637,23 +558,13 @@ class BookingController extends Controller
             ->count();
 
         $completed = Booking::whereDate('grooming_finished_at', $today)
-            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->whereNotIn('status', ['cancelled', 'no_show', 'expired'])
             ->count();
-
-        $capacity = self::DAILY_CAPACITY;
-        $remaining = max(0, $capacity - $used);
-        $percent = $capacity > 0 ? min(100, round(($used / $capacity) * 100)) : 0;
 
         return response()->json([
             'success' => true,
             'date' => $today,
-            'capacity' => [
-                'used' => $used,
-                'max' => $capacity,
-                'remaining' => $remaining,
-                'percent' => $percent,
-                'is_full' => $used >= $capacity,
-            ],
+            'capacity' => app(\App\Services\OperationalCapacity::class)->snapshot(),
             'queue' => [
                 'active' => $queued + $inProgress,
                 'queued' => $queued,
@@ -696,6 +607,7 @@ class BookingController extends Controller
         ]);
 
         $user = $request->user();
+        app(\App\Services\PreRegistrationExpiry::class)->expire((int) $user->user_id);
         $booking = Booking::where('booking_id', $request->booking_id)
             ->where('user_id', $user->user_id)
             ->first();
@@ -759,6 +671,7 @@ class BookingController extends Controller
         ]);
 
         $user = $request->user();
+        app(\App\Services\PreRegistrationExpiry::class)->expire((int) $user->user_id);
         $booking = Booking::where('booking_id', $request->booking_id)
             ->where('user_id', $user->user_id)
             ->first();
@@ -770,10 +683,10 @@ class BookingController extends Controller
             ], 404);
         }
 
-        if ($booking->status === 'cancelled') {
+        if ($booking->status !== 'waiting_to_arrive') {
             return response()->json([
                 'success' => false,
-                'message' => 'A cancelled booking cannot be rescheduled.',
+                'message' => 'Only an unused pre-registration can change its planned arrival.',
             ], 422);
         }
 
@@ -784,14 +697,13 @@ class BookingController extends Controller
             ], 422);
         }
 
-        // Check that the target date still has enough daily capacity
+        // Validate the new preferred arrival against real availability
         $newDate = $request->new_date;
         $settings = ClinicSetting::current();
         $newWindow = TimeWindow::query()
             ->whereKey($request->new_window_id)
             ->where('is_active', true)
             ->first();
-        $petCount = (int) $booking->number_of_pets;
 
         if (
             $booking->booking_date === $newDate
@@ -854,18 +766,6 @@ class BookingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'The selected grooming time has already passed.',
-            ], 422);
-        }
-
-        $dayBooked = Booking::where('booking_date', $newDate)
-            ->whereNotIn('status', ['cancelled'])
-            ->where('booking_id', '!=', $booking->booking_id)
-            ->sum('number_of_pets');
-
-        if ($dayBooked + $petCount > self::DAILY_CAPACITY) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sorry, this date is fully booked. Please choose another date.',
             ], 422);
         }
 

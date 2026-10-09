@@ -10,10 +10,10 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Flag no-show bookings every 5 minutes
-Schedule::command('bookings:flag-no-shows')->everyFiveMinutes();
+// Preferred arrival times never expire a registration during its selected day.
+Schedule::command('pre-registrations:expire')->everyFiveMinutes()->withoutOverlapping();
 
-// Send 24-hour and 3-hour appointment reminders every 30 minutes
+// Send preferred-arrival reminders every 30 minutes
 Schedule::command('reminders:send')->everyThirtyMinutes();
 
 // Send hourly pickup reminders for released bookings

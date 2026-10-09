@@ -23,9 +23,8 @@ const MAX_BOOKING_DAYS_AHEAD = 3;
 const state = {
   currentMonth: null,
   selectedDateKey: null,
-  selectedSlot: null,   // { window_id, window_label, start_time, end_time, is_full }
+  selectedSlot: null,   // { window_id, window_label, start_time, end_time }
   timeslots: [],        // API response for the selected date
-  dayFull: false,       // true when the selected date has hit 20-booking capacity
   clinicStatus: {
     stoppedToday: false,
     blockedDates: [],   // [{ id, start_date, end_date, reason }]
@@ -189,7 +188,7 @@ function updateClinicNotice() {
 
   if (state.clinicStatus.stoppedToday) {
     elements.clinicNotice.textContent =
-      "The clinic is not accepting bookings for today.";
+      "The clinic is not accepting pre-registrations for today.";
     elements.clinicNotice.classList.remove("hidden");
   } else if (isSameDayPreRegistrationCutoffPassed(getTodayKeyInManila())) {
     const availability = getActiveAvailability();
@@ -255,7 +254,7 @@ function updateOperatingHoursText() {
  * For today, disable any slot whose start time has already passed in Manila time.
  */
 function isSlotDisabled(slot) {
-  if (slot.is_full || slot.is_past || slot.is_cutoff) return true;
+  if (slot.is_closed || slot.is_past || slot.is_cutoff) return true;
 
   if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
@@ -302,7 +301,7 @@ async function fetchTimeslots(dateKey) {
   try {
     const data = await state.options.fetchTimeslots(dateKey);
     state.timeslots = data.windows || [];
-    state.dayFull   = data.day_full === true;
+
     if (data.availability) {
       state.clinicStatus.availability[state.options.service] =
         data.availability;
@@ -310,7 +309,7 @@ async function fetchTimeslots(dateKey) {
     }
   } catch {
     state.timeslots = [];
-    state.dayFull   = false;
+
     elements.timeSlots.innerHTML =
       `<p class="col-span-full text-sm text-red-500">Could not load time slots. Please try again.</p>`;
     return false;
@@ -345,7 +344,7 @@ function createDateButton({ day, dateKey, disabled, selected }) {
 
   let disabledClass = "bg-slate-200 text-slate-400 cursor-not-allowed";
   if (disabled && clinicBlock) {
-    // Amber tint for clinic closures so customers can tell them apart from past/full dates
+    // Amber tint for clinic closures so customers can tell them apart from past dates
     disabledClass = "bg-[#fef9c3] text-[#854d0e] cursor-not-allowed";
   }
 
@@ -366,7 +365,7 @@ function createDateButton({ day, dateKey, disabled, selected }) {
     button.addEventListener("click", async () => {
       state.selectedDateKey = dateKey;
       state.selectedSlot    = null;
-      state.dayFull         = false;
+
       if (!state.options.dateOnly && state.options.storageKey === "bookingSchedule") {
         sessionStorage.removeItem(state.options.storageKey);
       }
@@ -420,16 +419,6 @@ function renderCalendarGrid() {
 function renderTimeSlots() {
   elements.timeSlots.innerHTML = "";
 
-  if (state.dayFull) {
-    elements.timeSlots.innerHTML = `
-      <div class="col-span-full rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center">
-        <p class="font-semibold text-red-600">This date is fully booked (20/20).</p>
-        <p class="mt-1 text-sm text-red-500">Please choose a different date or time slot.</p>
-      </div>`;
-    updateSelectedSchedule();
-    return;
-  }
-
   if (state.timeslots.length === 0) {
     elements.timeSlots.innerHTML =
       `<p class="col-span-full text-sm text-slate-400">No time slots available for this date.</p>`;
@@ -442,17 +431,9 @@ function renderTimeSlots() {
 
     const button = document.createElement("button");
     button.type = "button";
-    const availabilityLabel = slot.is_full
-      ? `<span class="block text-xs mt-0.5 font-semibold text-red-500">Full</span>`
-      : slot.is_cutoff
-        ? `<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>`
-        : slot.recommended
-          ? `<span class="block text-xs mt-0.5 text-emerald-500 font-semibold">Recommended</span>`
-          : "";
-
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
-      ${availabilityLabel}
+      ${slot.is_cutoff ? '<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>' : ""}
     `;
 
     button.className = [

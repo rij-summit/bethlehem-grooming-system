@@ -31,6 +31,7 @@ class WalkinController extends Controller
 
         return app(DailyPetQueue::class)->runForDate($queueDate, function () use ($request, $queueDate) {
             $data = $request->validated();
+            app(\App\Services\OperationalCapacity::class)->assertCanAccept('grooming', count($data['pets']));
             $data['pets'] = array_map(
                 fn (array $pet) => PetWeightSize::withComputedSize($pet),
                 $data['pets'],

@@ -206,7 +206,8 @@ document.addEventListener("DOMContentLoaded", () => {
       released: ["Released", "bg-emerald-50 text-emerald-700"],
       archived: ["Completed", "bg-slate-100 text-slate-700"],
       cancelled: ["Cancelled", "bg-red-50 text-red-700"],
-      no_show: ["No Show", "bg-red-50 text-red-700"],
+      no_show: ["Expired", "bg-slate-100 text-slate-600"],
+      expired: ["Expired", "bg-slate-100 text-slate-600"],
     };
     return statuses[status] || [titleCase(status), "bg-slate-100 text-slate-700"];
   };

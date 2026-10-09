@@ -232,6 +232,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->increments('booking_pet_id');
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id');
+            $table->string('grooming_state')->default('not_started');
             $table->dateTime('grooming_start_time')->nullable();
             $table->dateTime('grooming_end_time')->nullable();
         });
@@ -646,7 +647,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
     }
 
-    public function test_online_request_is_an_active_case_that_starts_without_a_queue_number(): void
+    public function test_online_request_assigns_its_queue_number_only_when_staff_starts_physical_intake(): void
     {
         $this->authenticateAs('staff');
         $this->insertClinicAppointment('waiting_to_arrive');
@@ -672,7 +673,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/start')
             ->assertOk()
             ->assertJsonPath('case.status', 'in_consultation')
-            ->assertJsonPath('case.queue_number', null);
+            ->assertJsonPath('case.queue_number', 1);
+        $this->assertNotNull(DB::table('clinic_appointments')->where('id', 1)->value('checked_in_at'));
     }
 
     public function test_clinic_records_are_paginated_newest_first(): void
@@ -1117,12 +1119,13 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('date', $appointmentDate)
             ->assertJsonPath('windows.0.window_id', 1)
             ->assertJsonPath('windows.0.window_label', '8:00 AM - 9:00 AM')
-            ->assertJsonPath('windows.0.remaining', 4)
-            ->assertJsonPath('windows.0.is_full', false)
+            ->assertJsonMissingPath('windows.0.remaining')
+            ->assertJsonMissingPath('windows.0.is_full')
+            ->assertJsonMissingPath('windows.0.recommended')
             ->assertJsonPath('windows.0.is_past', false);
     }
 
-    public function test_customer_cannot_submit_a_clinic_window_after_it_reaches_capacity(): void
+    public function test_customer_can_select_the_same_preferred_window_after_four_pre_registrations(): void
     {
         $this->authenticateAs('customer', 10);
         $appointmentDate = now()->addDay()->toDateString();
@@ -1149,8 +1152,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
 
         $this->getJson("/api/clinic/timeslots?date={$appointmentDate}")
             ->assertOk()
-            ->assertJsonPath('windows.0.remaining', 0)
-            ->assertJsonPath('windows.0.is_full', true);
+            ->assertJsonMissingPath('windows.0.remaining')
+            ->assertJsonMissingPath('windows.0.is_full')
+            ->assertJsonMissingPath('windows.0.recommended')
+            ->assertJsonPath('windows.0.is_closed', false);
 
         $this->postJson('/api/clinic/pre-register', [
             'common_concerns' => ['Routine check-up'],
@@ -1159,10 +1164,11 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'pet_id' => 101,
             'chief_complaint' => 'Routine wellness consultation',
         ])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'The selected clinic visit time is no longer available.');
+            ->assertCreated()
+            ->assertJsonPath('appointment.status', 'waiting_to_arrive');
 
-        $this->assertDatabaseCount('clinic_appointments', 4);
+        $this->assertDatabaseCount('clinic_appointments', 5);
+        $this->assertNull(DB::table('clinic_appointments')->where('user_id', 10)->value('queue_number'));
     }
 
     public function test_admin_can_list_appointments_and_update_clinic_status(): void
@@ -1940,7 +1946,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'waiting to arrive' => ['waiting_to_arrive'],
             'completed' => ['completed'],
             'cancelled' => ['cancelled'],
-            'no-show' => ['no_show'],
+            'legacy unused' => ['no_show'],
+            'expired' => ['expired'],
         ];
     }
 
@@ -2063,6 +2070,30 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'bookings')
             ->assertJsonCount(0, 'history');
+    }
+
+    public function test_full_grooming_capacity_does_not_block_clinic_intake_or_actual_arrival_order(): void
+    {
+        $this->authenticateAs('staff');
+        try {
+            DB::table('bookings')->insert(['booking_id' => 1, 'booking_reference' => 'ACTIVE-20', 'user_id' => 1,
+                'booking_date' => now()->toDateString(), 'number_of_pets' => 20, 'status' => 'in_progress']);
+            foreach (range(1, 20) as $pet) {
+                DB::table('booking_pets')->insert(['booking_id' => 1, 'pet_id' => $pet]);
+            }
+            foreach ([1, 2] as $id) {
+                $this->insertClinicAppointment('waiting_to_arrive', id: $id);
+                DB::table('clinic_appointments')->where('id', $id)->update(['queue_number' => null, 'appointment_type' => 'pre_registered']);
+            }
+            $this->assertTrue(app(\App\Services\OperationalCapacity::class)->snapshot()['is_full']);
+            Carbon::setTestNow(now()->setTime(16, 0));
+            $this->postJson('/api/admin/clinic-appointments/2/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 1);
+            $this->postJson('/api/admin/clinic-cases/1/start')->assertOk()->assertJsonPath('case.queue_number', 2);
+            $this->postJson('/api/admin/clinic-appointments/2/start-consultation')->assertOk();
+            $this->assertSame(20, app(\App\Services\OperationalCapacity::class)->snapshot()['used']);
+        } finally {
+            Schema::dropIfExists('booking_pets');
+        }
     }
 
     private function authenticateAs(string $role, int $userId = 1): void
