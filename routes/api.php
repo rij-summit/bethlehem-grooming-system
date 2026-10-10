@@ -159,6 +159,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/bookings/{id}/release', [PaymentController::class, 'release']);
         Route::get('/admin/transactions', [PaymentController::class, 'index']);
 
+        Route::post('/admin/walk-in/capacity-preview', [WalkinController::class, 'previewCapacity']);
         Route::post('/admin/walk-in', [WalkinController::class, 'store']);
     });
 

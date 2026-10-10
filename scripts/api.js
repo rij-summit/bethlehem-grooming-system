@@ -1842,6 +1842,10 @@ var API = (() => {
     return request("POST", "/admin/walk-in", payload, getAdminToken());
   }
 
+  async function previewWalkInCapacity(payload) {
+    return request("POST", "/admin/walk-in/capacity-preview", payload, getAdminToken());
+  }
+
   async function submitClinicWalkIn(payload) {
     // POST /api/admin/clinic-walk-in  (protected — admin token)
     // payload: { owner_record_type, customer_user_id?, unregistered_customer_id?, pet_id?, pet_name, species, breed?, gender?, birthdate?, is_neutered?, neutered_date?, fur_type?, weight?, size?, color?, medical_conditions?, common_concerns, chief_complaint?, terms_agreed }
@@ -2138,6 +2142,7 @@ var API = (() => {
     getGroomingCatalogue,
     updateGroomingPricing,
     submitWalkIn,
+    previewWalkInCapacity,
     submitClinicWalkIn,
     getClinicRecords,
     getActiveClinicCases,

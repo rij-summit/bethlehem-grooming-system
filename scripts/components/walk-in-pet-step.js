@@ -1,4 +1,4 @@
-import { renderWalkInServicesStep } from "./walk-in-services-step.js?v=grooming-pricing-20261006";
+import { renderWalkInServicesStep } from "./walk-in-services-step.js?v=grooming-pricing-20261006&capacity=20261010";
 import { renderWalkInClinicComplaintStep } from "./walk-in-clinic-complaint-step.js";
 import { createBreedCombobox } from "./breed-combobox.js?v=walk-in-owner-mode-20260924";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";

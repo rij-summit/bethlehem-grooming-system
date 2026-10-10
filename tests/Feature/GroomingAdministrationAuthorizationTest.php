@@ -51,6 +51,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/release'],
         ['GET', 'api/admin/transactions'],
         ['POST', 'api/admin/walk-in'],
+        ['POST', 'api/admin/walk-in/capacity-preview'],
     ];
 
     protected function setUp(): void
@@ -344,6 +345,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'start grooming' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
             'finish grooming' => ['POST', '/api/admin/bookings/1/pets/1/mark-done'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
+            'preview grooming walk-in capacity' => ['POST', '/api/admin/walk-in/capacity-preview'],
             'record grooming payment' => ['POST', '/api/admin/bookings/1/pay', [
                 'final_price' => 500,
                 'amount_paid' => 500,
@@ -390,6 +392,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'release paid booking' => ['POST', '/api/admin/bookings/1/release'],
             'grooming transaction listing' => ['GET', '/api/admin/transactions'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
+            'preview grooming walk-in capacity' => ['POST', '/api/admin/walk-in/capacity-preview'],
         ];
     }
 
@@ -2733,6 +2736,78 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseCount('notifications', 0);
         $payload['booking_date'] = now()->addDay()->toDateString();
         $this->postJson('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
+    }
+
+    #[DataProvider('authorizedGroomingRoles')]
+    public function test_walkin_capacity_preview_uses_live_workload_and_all_new_pets_without_writes(string $role): void
+    {
+        $this->authenticateAs($role);
+        Carbon::setTestNow(now()->setTime(15, 0));
+        $this->seedMultiPetBooking();
+        DB::table('booking_pets')->update(['grooming_estimate_min' => 60, 'grooming_estimate_max' => 60]);
+        DB::table('booking_pets')->where('booking_pet_id', 1)->update(['grooming_state' => 'in_progress',
+            'grooming_start_time' => now()->subMinutes(30), 'grooming_estimate_max' => 90]);
+        $pet = ['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small',
+            'services' => [['service_slug' => 'partial_grooming']]];
+        $before = [];
+        foreach (['bookings', 'booking_pets', 'pets', 'walkins', 'unregistered_customers', 'booking_services', 'customer_notifications'] as $table) {
+            $before[$table] = DB::table($table)->get()->toArray();
+        }
+        foreach ([1 => false, 2 => true] as $groomers => $fits) {
+            DB::table('clinic_settings')->update(['groomers_on_duty' => $groomers]);
+            $this->postJson('/api/admin/walk-in/capacity-preview', ['pets' => [$pet, [...$pet, 'pet_name' => 'Bruno']]])
+                ->assertOk()->assertJsonPath('capacity.fits', $fits)
+                ->assertJsonPath('capacity.waiting', 1)->assertJsonPath('capacity.in_progress', 1)
+                ->assertJsonPath('capacity.projected_last_completion', now()->setTime($fits ? 17 : 19, 0)->toIso8601String())
+                ->assertJsonPath('capacity.closing_time', now()->setTime(17, 0)->toIso8601String());
+        }
+        foreach ($before as $table => $rows) $this->assertEquals($rows, DB::table($table)->get()->toArray(), $table);
+    }
+
+    public function test_walkin_capacity_preview_uses_verified_size_and_staff_factors_without_updating_pet(): void
+    {
+        $this->authenticateAs('staff');
+        Carbon::setTestNow(now()->setTime(15, 45));
+        DB::table('users')->insert(['user_id' => 3, 'role' => 'customer']);
+        DB::table('pets')->insert(['pet_id' => 1, 'user_id' => 3, 'pet_name' => 'Coco', 'species' => 'dog',
+            'size' => 'extra_large', 'clinic_verified_fields' => '["size"]']);
+        $pet = ['pet_id' => 1, 'pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'weight' => 8,
+            'services' => [['service_slug' => 'partial_grooming']]];
+        $payload = ['owner_record_type' => 'registered', 'customer_user_id' => 3, 'pets' => [$pet]];
+        $this->postJson('/api/admin/walk-in/capacity-preview', $payload)->assertOk()
+            ->assertJsonPath('capacity.fits', false)
+            ->assertJsonPath('capacity.projected_last_completion', now()->setTime(17, 30)->toIso8601String());
+        $payload['pets'][0]['estimate_factors'] = ['matted_tangled'];
+        $this->postJson('/api/admin/walk-in/capacity-preview', $payload)->assertOk()
+            ->assertJsonPath('capacity.projected_last_completion', now()->setTime(19, 45)->toIso8601String());
+        $this->assertDatabaseHas('pets', ['pet_id' => 1, 'size' => 'extra_large', 'weight' => null]);
+        $this->assertDatabaseCount('bookings', 0);
+        $this->assertDatabaseCount('customer_notifications', 0);
+    }
+
+    public function test_walkin_capacity_preview_does_not_guarantee_final_admission_or_reserve_queue_numbers(): void
+    {
+        $this->authenticateAs('staff');
+        Carbon::setTestNow(now()->setTime(15, 0));
+        DB::table('clinic_settings')->update(['groomers_on_duty' => 1]);
+        $pet = ['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small',
+            'services' => [['service_slug' => 'partial_grooming']]];
+        $this->postJson('/api/admin/walk-in/capacity-preview', ['pets' => [$pet]])
+            ->assertOk()->assertJsonPath('capacity.fits', true)
+            ->assertJsonPath('capacity.pets.walkin-0.projected_start', now()->toIso8601String());
+        foreach (['bookings', 'booking_pets', 'walkins', 'pets'] as $table) $this->assertDatabaseCount($table, 0);
+        $this->seedMultiPetBooking();
+        DB::table('booking_pets')->update(['grooming_estimate_min' => 60, 'grooming_estimate_max' => 60]);
+        $payload = ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567', 'pets' => [$pet],
+            'sedation_consent' => false, 'terms_agreed' => true];
+        $this->postJson('/api/admin/walk-in', $payload)->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
+        $this->assertDatabaseCount('bookings', 1);
+        $this->assertDatabaseCount('walkins', 0);
+        $this->assertDatabaseCount('pets', 2);
+        $this->assertSame([1, 2], DB::table('booking_pets')->pluck('pet_queue_number')->all());
+        DB::table('booking_pets')->update(['grooming_state' => 'finished', 'grooming_end_time' => now()]);
+        $this->postJson('/api/admin/walk-in', $payload)->assertCreated()->assertJsonPath('queue_number', 2)
+            ->assertJsonPath('pets.0.pet_queue_number', 3);
     }
 
     private function authenticateAs(string $role): void

@@ -6,6 +6,7 @@ use App\Http\Requests\StoreWalkinRequest;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\Service;
 use App\Models\UnregisteredCustomer;
@@ -14,8 +15,10 @@ use App\Models\Walkin;
 use App\Services\CustomerIdentityService;
 use App\Services\DailyPetQueue;
 use App\Services\GroomingServicePriceResolver;
+use App\Services\GroomingWorkloadCapacity;
 use App\Support\PetWeightSize;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class WalkinController extends Controller
@@ -24,6 +27,37 @@ class WalkinController extends Controller
         private readonly GroomingServicePriceResolver $servicePrices,
         private readonly CustomerIdentityService $customerIdentity,
     ) {}
+
+    public function previewCapacity(Request $request, GroomingWorkloadCapacity $workload)
+    {
+        $rules = (new StoreWalkinRequest)->rules();
+        $data = $request->validate(array_filter($rules, fn ($key) => str_starts_with($key, 'pets')
+            || in_array($key, ['owner_record_type', 'customer_user_id', 'unregistered_customer_id']), ARRAY_FILTER_USE_KEY));
+        $registered = ($data['owner_record_type'] ?? 'new') === 'registered' && ! empty($data['customer_user_id']);
+        $unregistered = ($data['owner_record_type'] ?? 'new') === 'unregistered' && ! empty($data['unregistered_customer_id']);
+        // Load existing owner pets once, including name matches used by final submission.
+        $ownerPets = $registered || $unregistered
+            ? Pet::where($registered ? 'user_id' : 'unregistered_customer_id',
+                $registered ? $data['customer_user_id'] : $data['unregistered_customer_id'])
+                ->where('is_archived', false)->get()
+            : collect();
+        $arrivals = collect($data['pets'])->sortBy(fn ($pet) => strtolower($pet['species']) === 'dog' ? 0 : 1)
+            ->values()->map(function (array $petData, int $index) use ($ownerPets) {
+                $petData = PetWeightSize::withComputedSize($petData);
+                $pet = ! empty($petData['pet_id']) ? $ownerPets->firstWhere('pet_id', $petData['pet_id'])
+                    : $ownerPets->first(fn ($pet) => strtolower($pet->pet_name) === strtolower(Pet::normalizeName($petData['pet_name'])));
+                if (! empty($petData['pet_id']) && ! $pet) {
+                    throw ValidationException::withMessages(['pets' => ['One of the selected pets does not belong to this customer.']]);
+                }
+                $size = $pet?->hasClinicVerifiedSize() ? $pet->size : ($petData['size'] ?? $pet?->groomingSize());
+                $estimate = $this->estimateWalkInPet($petData, $size);
+                return ['id' => 'walkin-'.$index, 'minutes' => $estimate['maxMinutes'], 'active' => false];
+            })->all();
+        $arrival = now();
+        return response()->json(['success' => true, 'capacity' => $workload->project(
+            $workload->liveJobs()->all(), $arrivals, ClinicSetting::current(), $arrival, $arrival,
+        )]);
+    }
 
     public function store(StoreWalkinRequest $request)
     {
@@ -259,14 +293,7 @@ class WalkinController extends Controller
                 $pet->confirmClinicSize($size);
             }
 
-            $slugs = array_column($petData['services'], 'service_slug');
-            $packages = array_values(array_intersect($slugs, array_keys(config('grooming_estimates.packages'))));
-            if (count($packages) > 1) {
-                throw ValidationException::withMessages(['services' => 'Select one grooming package per pet.']);
-            }
-            $estimate = app(\App\Services\GroomingTimeEstimate::class)->calculate($packages[0] ?? null,
-                $petData['grooming_preference'] ?? null, $size, array_values(array_diff($slugs, $packages)),
-                $petData['estimate_factors'] ?? []);
+            $estimate = $this->estimateWalkInPet($petData, $size);
 
             return [
                 'estimate' => $estimate,
@@ -276,6 +303,18 @@ class WalkinController extends Controller
                 'services' => $this->resolveServices($petData['services'], $size),
             ];
         }, $pets);
+    }
+
+    private function estimateWalkInPet(array $petData, ?string $size): array
+    {
+        $slugs = array_column($petData['services'], 'service_slug');
+        $packages = array_values(array_intersect($slugs, array_keys(config('grooming_estimates.packages'))));
+        if (count($packages) > 1) {
+            throw ValidationException::withMessages(['services' => 'Select one grooming package per pet.']);
+        }
+        return app(\App\Services\GroomingTimeEstimate::class)->calculate($packages[0] ?? null,
+            $petData['grooming_preference'] ?? null, $size, array_values(array_diff($slugs, $packages)),
+            $petData['estimate_factors'] ?? []);
     }
 
     private function resolveServices(array $services, ?string $size): array

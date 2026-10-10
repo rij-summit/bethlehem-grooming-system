@@ -311,7 +311,15 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
     unregistered_customer_id: owner.unregisteredCustomerId || null,
     confirm_similar_name: Boolean(owner.confirmSimilarName),
 
-    pets: (reviewPayload.items || []).map((item) => ({
+    pets: buildWalkInPets(reviewPayload),
+
+    sedation_consent: Boolean(consentPayload.sedationConsentAccepted),
+    terms_agreed:     Boolean(consentPayload.groomingAgreementAccepted),
+  };
+}
+
+export function buildWalkInPets(reviewPayload) {
+  return (reviewPayload.items || []).map((item) => ({
       pet_id:              item.pet.petId || null,
       pet_name:             item.pet.petName,
       species:              item.pet.petType,
@@ -326,11 +334,7 @@ function buildApiPayload(owner, reviewPayload, consentPayload) {
       services:             item.pricing.lineItems.map((lineItem) => ({
         service_slug: lineItem.serviceId,
       })),
-    })),
-
-    sedation_consent: Boolean(consentPayload.sedationConsentAccepted),
-    terms_agreed:     Boolean(consentPayload.groomingAgreementAccepted),
-  };
+    }));
 }
 
 function normalizeSizeForApi(size) {
