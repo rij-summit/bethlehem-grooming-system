@@ -100,7 +100,6 @@ export function initBookingConfirmedStep() {
     walkIn: isWalkInConfirmation, queueNumber: confirmation.queue_number, sections,
     primaryHref: isWalkInConfirmation ? "./appointments.html" : "./dashboard.html",
     primaryLabel: isWalkInConfirmation ? "Go to Grooming" : "Return to Dashboard",
-    anotherHref: isWalkInConfirmation ? "./walk-in-booking.html" : "",
     warning: !confirmation.booking_reference ? "Some confirmation details are incomplete. Please contact the clinic." : "",
   });
   const ownerName = document.getElementById("ownerName");

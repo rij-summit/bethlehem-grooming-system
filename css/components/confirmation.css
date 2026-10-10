@@ -70,8 +70,6 @@
 .confirmation-button:hover { background: var(--confirmation-button-hover); }
 .confirmation-button--primary { background: var(--confirmation-blue); color: var(--confirmation-paper); }
 .confirmation-button--primary:hover { background: var(--confirmation-blue-hover); }
-.confirmation-another { color: var(--confirmation-blue); padding: .75rem .5rem; white-space: nowrap; }
-.confirmation-another:hover { text-decoration: underline; }
 .confirmation-page :is(a, button):focus-visible { outline: 3px solid var(--confirmation-blue); outline-offset: 4px; }
 .confirmation-success h1:focus { outline: none; }
 @media (max-width: 767px) {
@@ -86,7 +84,6 @@
   .confirmation-fields { grid-template-columns: minmax(0, 1fr); }
   .confirmation-pet > .confirmation-fields { grid-template-columns: minmax(0, 1fr); }
   .confirmation-actions { flex-direction: column; align-items: stretch; }
-  .confirmation-another { text-align: center; }
 }
 @media print {
   @page bethlehem-confirmation {

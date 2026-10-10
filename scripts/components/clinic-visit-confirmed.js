@@ -68,7 +68,6 @@ export function initClinicVisitConfirmation() {
     walkIn, queueNumber: appointment.queue_number, sections,
     primaryHref: walkIn ? "./clinic.html?tab=active-cases" : "./dashboard.html",
     primaryLabel: walkIn ? "Go to Active Cases" : "Return to Dashboard",
-    anotherHref: walkIn ? "./walk-in-booking.html" : "",
   });
 }
 

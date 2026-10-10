@@ -51,7 +51,7 @@ export function readConfirmationData(key) {
 
 export function renderConfirmation(root, {
   title, message, printTitle, reference, status, walkIn = false, queueNumber,
-  sections, primaryHref, primaryLabel, anotherHref, warning = "",
+  sections, primaryHref, primaryLabel, warning = "",
 }) {
   root.innerHTML = `
     <header class="confirmation-success">
@@ -82,7 +82,6 @@ export function renderConfirmation(root, {
     <div class="confirmation-actions">
       <a class="confirmation-button confirmation-button--primary" href="${escapeHtml(primaryHref)}">${escapeHtml(primaryLabel)}</a>
       <button class="confirmation-button" id="printConfirmationButton" type="button">Print Confirmation</button>
-      ${anotherHref ? `<a class="confirmation-another" href="${escapeHtml(anotherHref)}">Register Another Walk-in</a>` : ""}
     </div>`;
 
   document.body.classList.add("confirmation-ready");

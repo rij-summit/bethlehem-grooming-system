@@ -51,15 +51,22 @@ globalThis.window = {
 const root = { innerHTML: "", querySelector(selector) {
   return selector === "#confirmationHeading" ? { focus() { focused = true; } } : { addEventListener(name, callback) { printCallback = callback; } };
 } };
-renderConfirmation(root, { title: "Clinic Walk-in Checked In", printTitle: "CLINIC WALK-IN CHECK-IN CONFIRMATION", message: "Checked in", reference: "CV-1", status: "Checked In", walkIn: true, queueNumber: null, sections: reason, primaryHref: "./clinic.html?tab=active-cases", primaryLabel: "Go to Active Cases", anotherHref: "./walk-in-booking.html" });
+renderConfirmation(root, { title: "Clinic Walk-in Checked In", printTitle: "CLINIC WALK-IN CHECK-IN CONFIRMATION", message: "Checked in", reference: "CV-1", status: "Checked In", walkIn: true, queueNumber: null, sections: reason, primaryHref: "./clinic.html?tab=active-cases", primaryLabel: "Go to Active Cases" });
 assert.match(root.innerHTML, /Queue number<\/dt><dd>Not assigned/);
 assert.doesNotMatch(root.innerHTML, /<dd>Active/);
 assert.match(root.innerHTML, /Print Confirmation/);
+assert.match(root.innerHTML, /href="\.\/clinic\.html\?tab=active-cases">Go to Active Cases<\/a>/);
+assert.equal((root.innerHTML.match(/class="confirmation-button\b/g) || []).length, 2);
+assert.doesNotMatch(root.innerHTML, /Register Another Walk-in|confirmation-another|walk-in-booking\.html/);
 assert.equal(focused, true);
 printCallback();
 assert.equal(printed, true);
 restoreTitle();
 assert.equal(document.title, "Clinic Walk-in Checked In");
-renderConfirmation(root, { title: "Clinic", printTitle: "CLINIC", message: "Received", reference: "CV-2", status: "Checked In", walkIn: true, queueNumber: 27, sections: reason, primaryHref: "./clinic.html", primaryLabel: "Go to Active Cases" });
+renderConfirmation(root, { title: "Grooming Walk-in Checked In", printTitle: "GROOMING WALK-IN CHECK-IN CONFIRMATION", message: "Checked in", reference: "GR-2", status: "Checked In", walkIn: true, queueNumber: 27, sections: grooming, primaryHref: "./appointments.html", primaryLabel: "Go to Grooming" });
 assert.match(root.innerHTML, /Queue number<\/dt><dd>27/);
+assert.match(root.innerHTML, /href="\.\/appointments\.html">Go to Grooming<\/a>/);
+assert.match(root.innerHTML, /Print Confirmation/);
+assert.equal((root.innerHTML.match(/class="confirmation-button\b/g) || []).length, 2);
+assert.doesNotMatch(root.innerHTML, /Register Another Walk-in|confirmation-another|walk-in-booking\.html/);
 console.log("Confirmation regression checks passed.");
