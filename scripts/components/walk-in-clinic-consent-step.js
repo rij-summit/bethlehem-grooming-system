@@ -205,6 +205,7 @@ async function handleSubmit(event) {
         pet: response.pet,
         chief_complaint: response.chief_complaint,
         common_concerns: response.common_concerns,
+        terms_agreed: payload.terms_agreed,
       }),
     );
 

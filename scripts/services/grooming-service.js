@@ -214,6 +214,21 @@ export function formatAmountRange(summary) {
   return `${formatPhpAmount(summary.minAmount)} - ${formatPhpAmount(summary.maxAmount)}`;
 }
 
+export function getGroomingPricePresentation(summary) {
+  // The calculated flag preserves variable pricing types, even for equal bounds.
+  // Saved summaries without that flag still expose a range or open-ended maximum.
+  const isEstimate = Boolean(summary && (
+    summary.isEstimate || summary.maxAmount === null || summary.minAmount !== summary.maxAmount
+  ));
+
+  return {
+    label: isEstimate ? "Estimated Total Price" : "Total Price",
+    amount: summary ? formatAmountRange(summary) : "To be confirmed",
+    isEstimate,
+    disclaimer: isEstimate ? "Final price is confirmed at the clinic." : "",
+  };
+}
+
 export function getPackagesByPetType(petType) {
   const normalizedType = normalizePetType(petType);
   return GROOMING_PACKAGES.filter(

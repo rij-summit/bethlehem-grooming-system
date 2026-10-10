@@ -16,8 +16,8 @@ import {
   loadGroomingCatalogue,
   selectedPricingSignature,
   calculatePetSelectionPricing,
+  getGroomingPricePresentation,
   createEmptyPetServiceSelection,
-  formatAmountRange,
   formatPriceOption,
   getAlaCarteServiceById,
   getAlaCarteServicesByPetType,
@@ -209,7 +209,7 @@ function renderPetSelectionCard(pet, index) {
             ${escapeHtml(formatPetSizeLabel(pet.size))} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}
           </span>
         </div>
-        ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size and final service price may be confirmed by clinic staff at check-in.</p>'}
+        ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size may be confirmed by clinic staff at check-in.</p>'}
       </div>
 
       <section>
@@ -273,7 +273,7 @@ function renderPetSelectionCard(pet, index) {
           class="flex flex-col rounded-2xl border border-[#b8cadb] bg-[#f4f8fc] p-4"
         >
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Selected Package &amp; Price
+            ${selectionSummary.price ? escapeHtml(selectionSummary.priceLabel) : "Selected Package &amp; Price"}
           </p>
           <p class="mt-2 text-base font-semibold leading-relaxed text-[#2f4b66]">
             ${escapeHtml(selectionSummary.label)}
@@ -430,7 +430,8 @@ function getPetSelectionSummary(selection, petPricing) {
   const alaCarteLabels = selection.alaCarteServices
     .map((serviceId) => getAlaCarteServiceById(serviceId)?.name)
     .filter(Boolean);
-  const price = formatAmountRange(petPricing.total);
+  const presentation = getGroomingPricePresentation(petPricing.total);
+  const price = presentation.amount;
 
   if (selection.servicePackage) {
     const selectedPackage = getPackageById(selection.servicePackage);
@@ -439,13 +440,14 @@ function getPetSelectionSummary(selection, petPricing) {
         ? `${selectedPackage?.name || "Selected package"} + ${alaCarteLabels.join(", ")}`
         : selectedPackage?.name || "Selected package";
 
-    return { label, price };
+    return { label, price, priceLabel: presentation.label };
   }
 
   if (alaCarteLabels.length > 0) {
     return {
       label: alaCarteLabels.join(", "),
       price,
+      priceLabel: presentation.label,
     };
   }
 

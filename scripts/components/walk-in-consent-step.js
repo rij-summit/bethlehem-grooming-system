@@ -377,6 +377,8 @@ function buildConfirmationPayload(response, reviewPayload) {
       petType: item.pet.petType,
       breed:   item.pet.breed || "",
       size:    item.pet.size  || "",
+      weight:  item.pet.weight,
+      sizeVerified: item.pet.sizeVerified,
     })),
 
     // Service rows for the service table

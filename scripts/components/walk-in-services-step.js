@@ -9,8 +9,8 @@ import {
   estimatePetGrooming,
   loadGroomingCatalogue,
   calculatePetSelectionPricing,
+  getGroomingPricePresentation,
   createEmptyPetServiceSelection,
-  formatAmountRange,
   formatPriceOption,
   getAlaCarteServiceById,
   getAlaCarteServicesByPetType,
@@ -224,7 +224,7 @@ function renderPetSelectionCard(pet, index) {
             ${escapeHtml(formatPetSizeLabel(pet.size))} · ${pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}
           </span>
         </div>
-        ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size and final service price may be confirmed by clinic staff at check-in.</p>'}
+        ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size may be confirmed by clinic staff at check-in.</p>'}
       </div>
 
       <section>
@@ -281,7 +281,7 @@ function renderPetSelectionCard(pet, index) {
           >${escapeHtml(selection.specialInstructions || "")}</textarea>
         </div>
         <aside data-role="selection-summary" aria-live="polite" class="flex flex-col rounded-2xl border border-[#b8cadb] bg-[#f4f8fc] p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Package &amp; Price</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">${selectionSummary.price ? escapeHtml(selectionSummary.priceLabel) : "Selected Package &amp; Price"}</p>
           <p class="mt-2 text-base font-semibold leading-relaxed text-[#2f4b66]">${escapeHtml(selectionSummary.label)}</p>
           ${selectionSummary.price ? `<p class="mt-auto pt-4 text-right text-lg font-bold text-[#2f4b66]">${escapeHtml(selectionSummary.price)}</p>` : ""}
         </aside>
@@ -423,7 +423,8 @@ function getPetSelectionSummary(selection, petPricing) {
     .map((serviceId) => getAlaCarteServiceById(serviceId)?.name)
     .filter(Boolean);
 
-  const price = formatAmountRange(petPricing.total);
+  const presentation = getGroomingPricePresentation(petPricing.total);
+  const price = presentation.amount;
 
   if (selection.servicePackage) {
     const selectedPackage = getPackageById(selection.servicePackage);
@@ -432,11 +433,11 @@ function getPetSelectionSummary(selection, petPricing) {
         ? `${selectedPackage?.name || "Selected package"} + ${alaCarteLabels.join(", ")}`
         : selectedPackage?.name || "Selected package";
 
-    return { label, price };
+    return { label, price, priceLabel: presentation.label };
   }
 
   if (alaCarteLabels.length > 0) {
-    return { label: alaCarteLabels.join(", "), price };
+    return { label: alaCarteLabels.join(", "), price, priceLabel: presentation.label };
   }
 
   return { label: "No service selected yet.", price: "" };

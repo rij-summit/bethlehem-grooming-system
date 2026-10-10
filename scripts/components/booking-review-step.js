@@ -16,7 +16,7 @@ import {
   loadGroomingCatalogue,
   selectedPricingSignature,
   buildBookingReviewPayload,
-  formatAmountRange,
+  getGroomingPricePresentation,
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
@@ -174,13 +174,11 @@ function renderReviewNotice() {
     return;
   }
 
-  const hasPlusPrice = state.reviewPayload.notices.includes(
-    "The price is finalized at the clinic.",
-  );
+  const price = getGroomingPricePresentation(state.reviewPayload.totalPricing);
 
   elements.reviewNotice.className =
-    `${hasPlusPrice ? "mb-6" : "hidden"} rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600`;
-  elements.reviewNotice.textContent = "The price is finalized at the clinic.";
+    `${price.isEstimate ? "mb-6" : "hidden"} rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600`;
+  elements.reviewNotice.textContent = price.disclaimer;
 }
 
 function renderReviewSelections() {
@@ -190,6 +188,7 @@ function renderReviewSelections() {
 }
 
 function renderPetReviewCard(item, index) {
+  const price = getGroomingPricePresentation(item.pricing.total);
   const packageId = item.selection.servicePackage;
   const selectedPackage = packageId ? getPackageById(packageId) : null;
   const alaCarteLineItems = item.pricing.lineItems.filter(
@@ -232,8 +231,9 @@ function renderPetReviewCard(item, index) {
           <span class="rounded-full bg-[#edf5fc] px-3 py-1 text-xs font-semibold text-[#315b7e]">
             ${escapeHtml(formatPetSizeLabel(item.pet.size))} · ${item.pet.sizeVerified ? "Clinic verified" : "Estimated from weight"}
           </span>
+          ${item.pricing.hasSelection ? `<span class="text-xs font-semibold text-slate-500">${escapeHtml(price.label)}</span>` : ""}
           <span class="text-lg font-semibold text-[#2f4b66]">${escapeHtml(
-            item.pricing.hasSelection ? formatAmountRange(item.pricing.total) : "No price available",
+            item.pricing.hasSelection ? price.amount : "No price available",
           )}</span>
         </div>
       </div>
@@ -356,12 +356,10 @@ function renderAlaCarteReview(alaCarteLineItems) {
 }
 
 function renderTotalPricing() {
-  const totalPricing = state.reviewPayload.totalPricing;
+  const price = getGroomingPricePresentation(state.reviewPayload.totalPricing);
 
-  elements.totalPriceHeading.textContent = state.reviewPayload.isEstimate
-    ? "Estimated Total"
-    : "Total Price";
-  elements.totalPriceText.textContent = formatAmountRange(totalPricing);
+  elements.totalPriceHeading.textContent = price.label;
+  elements.totalPriceText.textContent = price.amount;
 
   elements.totalPriceSubtext.textContent = "";
   elements.totalPriceSubtext.classList.add("hidden");

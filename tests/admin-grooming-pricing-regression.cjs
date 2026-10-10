@@ -221,7 +221,7 @@ const reviewDocument = {
   body: {}, addEventListener() {},
   getElementById(id) {
     if (!reviewElements.has(id)) reviewElements.set(id, {
-      classList: { add() {} }, addEventListener() {},
+      classList: { add() {}, toggle() {} }, addEventListener() {},
     });
     return reviewElements.get(id);
   },
