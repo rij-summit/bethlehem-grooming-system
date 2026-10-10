@@ -83,6 +83,23 @@ class User extends Authenticatable
             );
     }
 
+    public function clinicPermissions(): array
+    {
+        $admin = $this->role === 'admin';
+        $clinicStaff = $this->role === 'staff' && $this->staff_type === 'clinic';
+        $vet = $clinicStaff && $this->staff_subrole === 'veterinarian';
+        $receptionist = $clinicStaff && $this->staff_subrole === 'clinic_receptionist';
+
+        return [
+            'access' => $admin || $vet || $receptionist,
+            'intake' => $admin || $vet || $receptionist,
+            'clinical' => $admin || $vet,
+            'payment' => $admin || $receptionist,
+            'customers' => $admin || $receptionist,
+            'queue' => $admin || $receptionist,
+        ];
+    }
+
     public function passwordResetRequest()
     {
         return $this->hasOne(PasswordResetRequest::class, 'user_id', 'user_id');

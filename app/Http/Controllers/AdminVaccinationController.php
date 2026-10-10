@@ -114,8 +114,8 @@ class AdminVaccinationController extends Controller
         $data = $this->addProviderSnapshot($data);
 
         if (! empty($data['clinic_appointment_id'])) {
-            $caseStatus = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->value('status');
-            if (! in_array($caseStatus, ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES, true)) {
+            $case = ClinicAppointment::query()->findOrFail($data['clinic_appointment_id']);
+            if (! $case->clinicalContentEditableFor($request->user())) {
                 throw ValidationException::withMessages([
                     'clinic_appointment_id' => 'This case is no longer ongoing. Start a new case to add a vaccination.',
                 ]);
@@ -160,6 +160,12 @@ class AdminVaccinationController extends Controller
             }
 
             $data = $this->validateClinicalData($request, $petId, $record);
+            if (! empty($data['clinic_appointment_id'])) {
+                $case = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->lockForUpdate()->firstOrFail();
+                if (! $case->clinicalContentEditableFor($request->user())) {
+                    return $this->conflict('This case is no longer eligible for clinical changes.');
+                }
+            }
             $data = $this->addInventorySnapshot($data);
             $data = $this->addProviderSnapshot($data);
 
@@ -224,10 +230,11 @@ class AdminVaccinationController extends Controller
             }
 
             $caseToFinish = null;
+            $case = null;
             if ($usesInventory && $record->clinic_appointment_id !== null) {
                 $case = ClinicAppointment::query()->whereKey($record->clinic_appointment_id)->lockForUpdate()->first();
                 if (! $case || (int) $case->pet_id !== $petId
-                    || ! in_array($case->status, ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES, true)) {
+                    || ! $case->clinicalContentEditableFor($request->user())) {
                     return $this->conflict('This case is already closed or is not eligible for vaccination.');
                 }
                 if ($finishCase) {
@@ -260,6 +267,9 @@ class AdminVaccinationController extends Controller
                     throw ValidationException::withMessages([
                         'inventory_item_id' => 'Automatic deduction requires an explicitly single-dose Inventory unit (dose, single-dose vial, or single-dose syringe). Measured units and generic bottles or vials cannot be deducted safely.',
                     ]);
+                }
+                if ($case && ($item->selling_price === null || (float) $item->selling_price < 0)) {
+                    throw ValidationException::withMessages(['inventory_item_id' => 'Set this vaccine\'s selling price in Inventory before finalizing its case charge.']);
                 }
                 if (! $record->administered_by_user_id
                     || ! $this->eligibleProviders($request->user())->whereKey($record->administered_by_user_id)->exists()) {
@@ -307,7 +317,17 @@ class AdminVaccinationController extends Controller
                 'published_by_user_id' => $request->user()->user_id,
             ])->save();
 
-            $caseToFinish?->markCompleted();
+            if ($case && $usesInventory) {
+                $case->charges()->create([
+                    'kind' => 'vaccine', 'description' => $record->vaccine_name,
+                    'inventory_item_id' => $item->item_id, 'vaccination_record_id' => $record->id,
+                    'quantity' => 1, 'unit_price' => $item->selling_price, 'amount' => $item->selling_price,
+                ]);
+            }
+            $caseToFinish?->prepareForPayment();
+            if ($case?->status === 'for_payment' && ! $caseToFinish) {
+                $case->update(['total_amount' => $case->charges()->sum('amount')]);
+            }
 
             return response()->json([
                 'success' => true,

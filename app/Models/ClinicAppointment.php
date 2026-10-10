@@ -10,7 +10,6 @@ class ClinicAppointment extends Model
     public const CLINICAL_CONTENT_EDITABLE_STATUSES = [
         'checked_in',
         'in_consultation',
-        'for_payment',
     ];
 
     public const COMPLETION_VITAL_FIELDS = ['weight_kg', 'temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm'];
@@ -32,6 +31,9 @@ class ClinicAppointment extends Model
         'common_concerns',
         'total_amount',
         'paid',
+        'payment_method',
+        'paid_by_user_id',
+        'paid_at',
         'notes',
         'checked_in_at',
         'consultation_started_at',
@@ -42,6 +44,7 @@ class ClinicAppointment extends Model
     protected $casts = [
         'common_concerns'         => 'array',
         'paid'                    => 'boolean',
+        'paid_at'                 => 'datetime',
         'appointment_date'        => 'date',
         'checked_in_at'           => 'datetime',
         'consultation_started_at' => 'datetime',
@@ -84,13 +87,34 @@ class ClinicAppointment extends Model
         return $this->hasMany(VaccinationRecord::class, 'clinic_appointment_id', 'id');
     }
 
-    public function markCompleted(): void
+    public function charges()
     {
+        return $this->hasMany(ClinicCharge::class);
+    }
+
+    public function clinicalContentEditableFor(User $actor): bool
+    {
+        return in_array($this->status, self::CLINICAL_CONTENT_EDITABLE_STATUSES, true)
+            || ($actor->role === 'admin' && $this->status === 'for_payment');
+    }
+
+    public function prepareForPayment(): void
+    {
+        if ($this->status !== 'in_consultation') {
+            throw ValidationException::withMessages(['status' => 'Start the consultation before finishing it.']);
+        }
+        $this->assertCompletionVitals();
+        $total = (float) $this->charges()->sum('amount');
+        if ($total > 99999999.99) {
+            throw ValidationException::withMessages(['charges' => 'The case charges exceed the supported total.']);
+        }
         $this->update([
-            'status' => 'completed',
-            'queue_number' => null,
+            'status' => 'for_payment',
+            'total_amount' => $total,
             'consultation_finished_at' => now(),
         ]);
+        Notification::createForClinic($this, Notification::TYPE_CLINIC_PAYMENT_DUE,
+            "Clinic visit {$this->appointment_reference} is ready for payment.");
     }
 
     public function assertCompletionVitals(): void

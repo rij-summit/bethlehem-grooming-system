@@ -128,7 +128,7 @@ class ClientPetMedicalRecordsTest extends TestCase
         $this->assertSame($foreign->getContent(), $missing->getContent());
     }
 
-    public function test_medical_records_are_isolated_by_pet_owner_and_medications_stay_with_their_visit(): void
+    public function test_medical_records_are_isolated_by_pet_owner_and_omit_retired_medication_data(): void
     {
         $this->authenticateCustomer(10);
         $this->insertPet(101, 10, 'Mochi');
@@ -149,9 +149,10 @@ class ClientPetMedicalRecordsTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'medical_records')
             ->assertJsonPath('medical_records.0.appointment_reference', 'CL-MOCHI-NEW')
-            ->assertJsonPath('medical_records.0.medications.0.drug_name', 'Mochi New Medicine')
+            ->assertJsonMissingPath('medical_records.0.medications')
             ->assertJsonPath('medical_records.1.appointment_reference', 'CL-MOCHI-OLD')
-            ->assertJsonPath('medical_records.1.medications.0.drug_name', 'Mochi Old Medicine');
+            ->assertJsonMissingPath('medical_records.1.medications');
+        $this->assertDatabaseCount('clinic_medications', 4);
 
         $response
             ->assertJsonMissing(['appointment_reference' => 'CL-BRUNO'])
@@ -242,7 +243,6 @@ class ClientPetMedicalRecordsTest extends TestCase
             'follow_up_date',
             'follow_up_notes',
             'vitals',
-            'medications',
         ], array_keys($visit));
         $this->assertSame([
             'weight_kg',
@@ -251,13 +251,6 @@ class ClientPetMedicalRecordsTest extends TestCase
             'respiratory_rate_bpm',
             'body_condition_score',
         ], array_keys($visit['vitals']));
-        $this->assertSame([
-            'drug_name',
-            'dosage',
-            'frequency',
-            'duration',
-            'instructions',
-        ], array_keys($visit['medications'][0]));
         foreach ([
             'vet_notes',
             'findings',

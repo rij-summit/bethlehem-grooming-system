@@ -28,6 +28,7 @@ class AdminVaccinationApiTest extends TestCase
             $table->string('first_name')->nullable();
             $table->string('last_name')->nullable();
             $table->string('role');
+            $table->string('staff_type')->nullable();
             $table->string('staff_subrole')->nullable();
             $table->boolean('is_active')->default(true);
         });
@@ -45,6 +46,7 @@ class AdminVaccinationApiTest extends TestCase
             $table->string('appointment_reference');
             $table->string('status')->default('in_consultation');
             $table->string('case_type')->default('vaccination');
+            $table->decimal('total_amount', 10, 2)->nullable();
             $table->unsignedSmallInteger('queue_number')->nullable();
             $table->timestamp('consultation_finished_at')->nullable();
             $table->timestamps();
@@ -97,6 +99,7 @@ class AdminVaccinationApiTest extends TestCase
             'database/migrations/2026_07_23_000004_create_vaccination_records_table.php',
         );
         $this->vaccinationMigration->up();
+        (require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php'))->up();
     }
 
     protected function tearDown(): void
@@ -111,6 +114,7 @@ class AdminVaccinationApiTest extends TestCase
         Schema::dropIfExists('inventory_items');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('clinic_vitals');
+        (require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php'))->down();
         Schema::dropIfExists('clinic_appointments');
         Schema::dropIfExists('pets');
         Schema::dropIfExists('users');
@@ -678,7 +682,7 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertSame(1, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
     }
 
-    public function test_finishing_the_case_completes_it_with_the_deduction_and_rejects_closed_cases(): void
+    public function test_finishing_the_case_prepares_payment_with_the_deduction_and_rejects_closed_cases(): void
     {
         Carbon::setTestNow('2026-07-23 14:15:00');
         $this->authenticateAs('staff', 2);
@@ -695,11 +699,16 @@ class AdminVaccinationApiTest extends TestCase
 
         $this->assertDatabaseHas('clinic_appointments', [
             'id' => 201,
-            'status' => 'completed',
-            'queue_number' => null,
+            'status' => 'for_payment',
+            'queue_number' => 3,
             'consultation_finished_at' => '2026-07-23 14:15:00',
         ]);
         $this->assertStockOnHand(301, '5');
+
+        $this->assertDatabaseHas('clinic_charges', [
+            'clinic_appointment_id' => 201, 'vaccination_record_id' => $ongoingCaseRecord,
+            'kind' => 'vaccine', 'amount' => 250,
+        ]);
 
         $this->postJson("/api/admin/pets/101/vaccinations/{$closedCaseRecord}/publish", ['finish_case' => true])
             ->assertStatus(409)
@@ -707,6 +716,23 @@ class AdminVaccinationApiTest extends TestCase
 
         $this->assertStockOnHand(301, '5');
         $this->assertDatabaseHas('vaccination_records', ['id' => $closedCaseRecord, 'published_at' => null]);
+    }
+
+    public function test_admin_can_amend_vaccinations_for_payment_and_refresh_the_charge_total(): void
+    {
+        Carbon::setTestNow('2026-07-23 14:15:00');
+        $this->authenticateAs('admin', 2);
+        $this->insertPet(101, 'Mochi', 'cat');
+        $this->insertAppointment(201, 101, 'for_payment');
+        $this->insertRabiesStock(301);
+        $id = $this->insertFinalizableDraft(301, 201);
+        $this->patchJson("/api/admin/pets/101/vaccinations/{$id}", ['notes' => 'Confirmed administration'])
+            ->assertOk();
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'for_payment', 'total_amount' => 250]);
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertConflict();
+        $this->assertSame(1, DB::table('clinic_charges')->count());
+        $this->assertStockOnHand(301, '5');
     }
 
     public function test_expired_or_doseless_inventory_drafts_do_not_deduct_and_unlinked_records_publish_without_stock(): void
@@ -933,7 +959,7 @@ class AdminVaccinationApiTest extends TestCase
             'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20]);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish", ['finish_case' => true])->assertOk();
         $this->assertStockOnHand(301, '5');
-        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'completed']);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'for_payment']);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertStatus(409);
         $this->assertStockOnHand(301, '5');
     }
@@ -1052,7 +1078,7 @@ class AdminVaccinationApiTest extends TestCase
 
     private function authenticateAs(string $role, int $userId): void
     {
-        $this->insertUser($userId, ucfirst($role), 'User', $role);
+        $this->insertUser($userId, ucfirst($role), 'User', $role, $role === 'staff' ? 'veterinarian' : null);
 
         $user = new User;
         $user->forceFill([
@@ -1060,6 +1086,8 @@ class AdminVaccinationApiTest extends TestCase
             'first_name' => ucfirst($role),
             'last_name' => 'User',
             'role' => $role,
+            'staff_type' => $role === 'staff' ? 'clinic' : null,
+            'staff_subrole' => $role === 'staff' ? 'veterinarian' : null,
         ]);
         $user->exists = true;
 
@@ -1118,6 +1146,7 @@ class AdminVaccinationApiTest extends TestCase
             'item_name' => $name,
             'category' => $category,
             'quantity_on_hand' => $quantity,
+            'selling_price' => 250,
             ...$overrides,
         ]);
     }

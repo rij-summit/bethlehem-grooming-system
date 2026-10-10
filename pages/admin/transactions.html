@@ -113,7 +113,7 @@
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
               <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
-              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : staffRoleLabel">Clinic Manager</p>
             </div>
           </div>
           <!-- Stop Receiving / Reopen toggle — hidden from staff (admin only) -->
@@ -451,8 +451,8 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=pos-20261007&auth=session-scope-20261006"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=pos-20261007&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010"></script>
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003&release=pos-20261007"></script>
     <script src="../../scripts/components/product-sale-invoice.js?v=pos-20261007"></script>
     <script src="../../scripts/components/admin-transactions.js?v=pos-20261007"></script>

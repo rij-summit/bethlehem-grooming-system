@@ -279,7 +279,7 @@
             <div class="min-w-0">
               <!-- BACKEND: Replace with logged-in admin data -->
               <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
-              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : 'Receptionist'">Clinic Manager</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : staffRoleLabel">Clinic Manager</p>
             </div>
           </div>
           <!-- Stop Receiving / Reopen toggle — hidden from staff (admin only) -->
@@ -802,7 +802,6 @@
                           <div><dt>Color and size</dt><dd class="mt-1" :class="!detailsClinicRecord?.pet?.color && !detailsClinicRecord?.pet?.size && 'record-value-missing'" x-text="[detailsClinicRecord?.pet?.color, detailsClinicRecord?.pet?.size].filter(Boolean).join(' • ') || 'Not recorded'"></dd></div>
                           <div class="sm:col-span-2"><dt>Known allergies</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.known_allergies) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.pet?.known_allergies)"></dd></div>
                           <div class="sm:col-span-2"><dt>Existing medical conditions</dt><dd class="mt-1 whitespace-pre-line" x-text="displayArchiveValue(detailsClinicRecord?.pet?.medical_conditions)"></dd></div>
-                          <div class="sm:col-span-2"><dt>Current medications</dt><dd class="mt-1" :class="isArchiveValueMissing(detailsClinicRecord?.pet?.current_medications) && 'record-value-missing'" x-text="displayArchiveValue(detailsClinicRecord?.pet?.current_medications)"></dd></div>
                         </dl>
                       </div>
                     </div>
@@ -873,34 +872,19 @@
                     <p x-show="!detailsClinicRecord?.record?.findings && !detailsClinicRecord?.record?.diagnosis && !detailsClinicRecord?.record?.vet_notes && (detailsClinicRecord?.record?.attachments || []).length === 0" class="mt-3 text-sm font-medium text-slate-500">No medical assessment recorded.</p>
                   </section>
 
-                  <!-- Treatment and medication -->
+                  <!-- Treatment -->
                   <section class="record-treatment record-section rounded-[22px] border border-[#d7e3ef] bg-white shadow-sm xl:col-span-12">
                     <div class="flex items-center gap-3">
                       <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="pill" class="h-5 w-5"></i></div>
-                      <h4 class="text-lg font-semibold text-[#1f3850]">Treatment and Medication</h4>
+                      <h4 class="text-lg font-semibold text-[#1f3850]">Treatment</h4>
                     </div>
-                    <div x-show="detailsClinicRecord?.record?.treatment_given || (detailsClinicRecord?.record?.medications || []).length > 0" class="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div x-show="detailsClinicRecord?.record?.treatment_given" class="mt-4">
                       <div>
                         <p class="text-xs font-medium text-slate-500">Treatment given</p>
                         <p class="mt-1 whitespace-pre-line text-sm font-medium text-slate-600" x-text="displayArchiveValue(detailsClinicRecord?.record?.treatment_given)"></p>
                       </div>
-                      <div>
-                        <p class="text-xs font-medium text-slate-500">Prescribed medication</p>
-                        <template x-if="(detailsClinicRecord?.record?.medications || []).length > 0">
-                          <div class="mt-2 space-y-2">
-                            <template x-for="medication in detailsClinicRecord.record.medications" :key="medication.id">
-                              <div class="rounded-2xl bg-[#eef5fb] p-3">
-                                <p class="text-base font-semibold text-[#1f3850]" x-text="displayArchiveValue(medication.drug_name)"></p>
-                                <p class="mt-1 text-sm font-medium text-slate-600" x-text="[medication.dosage, medication.frequency, medication.duration].filter(Boolean).join(' • ') || 'Not recorded'"></p>
-                                <p class="mt-1 text-sm font-medium text-slate-500" x-text="displayArchiveValue(medication.instructions)"></p>
-                              </div>
-                            </template>
-                          </div>
-                        </template>
-                        <p x-show="(detailsClinicRecord?.record?.medications || []).length === 0" class="mt-1 text-sm font-medium text-slate-500">Not recorded</p>
-                      </div>
                     </div>
-                    <p x-show="!detailsClinicRecord?.record?.treatment_given && (detailsClinicRecord?.record?.medications || []).length === 0" class="mt-3 text-sm font-medium text-slate-500">No treatment or medication recorded.</p>
+                    <p x-show="!detailsClinicRecord?.record?.treatment_given" class="mt-3 text-sm font-medium text-slate-500">No treatment recorded.</p>
                   </section>
 
                   <!-- Grooming referral context -->
@@ -1010,8 +994,8 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010"></script>
     <script src="../../scripts/components/admin-archive.js?v=grooming-record-summary-20261003g"></script>
   </body>
 </html>

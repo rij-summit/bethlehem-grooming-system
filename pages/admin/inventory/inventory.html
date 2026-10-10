@@ -32,7 +32,7 @@
           <div x-show="isAdmin"><p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p><div class="space-y-1.5"><a href="../settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40 text-[#2f4b66]"><i data-lucide="settings" class="h-5 w-5"></i><span>Settings</span></a></div></div>
         </nav>
         <div class="admin-sidebar-footer p-4">
-          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3"><div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin?'AD':'ST'">AD</div><div class="min-w-0"><p class="truncate font-bold text-white" x-text="isAdmin?'Admin':'Staff'">Admin</p><p class="truncate text-sm text-white/80" x-text="isAdmin?'Clinic Manager':'Receptionist'">Clinic Manager</p></div></div>
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3"><div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin?'AD':'ST'">AD</div><div class="min-w-0"><p class="truncate font-bold text-white" x-text="isAdmin?'Admin':'Staff'">Admin</p><p class="truncate text-sm text-white/80" x-text="isAdmin?'Clinic Manager':staffRoleLabel">Clinic Manager</p></div></div>
           <button type="button" x-show="isAdmin" @click="handleStopReceivingClick()" class="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-bold transition" :class="clinicStopped?'btn-clinic-reopen':'btn-clinic-stop'"><i data-lucide="door-closed" class="h-4 w-4 shrink-0"></i><span x-text="clinicStopped?'Reopen Today':'We\'re Done for Today'"></span></button>
           <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()"><i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span></button>
         </div>
@@ -56,9 +56,9 @@
         </main>
       </div>
     </div>
-    <script src="../../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006"></script>
+    <script src="../../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
     <script src="../../../scripts/services/inventory-service.js?v=unified-inventory-20261001b&release=pos-cart-20261007"></script>
-    <script src="../../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007"></script>
+    <script src="../../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010"></script>
     <script src="../../../scripts/components/admin-inventory.js?v=product-details-20261002&release=pos-cart-20261007"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>

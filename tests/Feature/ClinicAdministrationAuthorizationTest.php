@@ -26,6 +26,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Carbon::setTestNow(now()->setTime(10, 0));
 
         Schema::create('users', function (Blueprint $table) {
             $table->increments('user_id');
@@ -34,6 +35,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('role');
+            $table->string('staff_type')->nullable();
+            $table->string('staff_subrole')->nullable();
             $table->string('password_hash')->nullable();
             $table->timestamp('account_deleted_at')->nullable();
         });
@@ -249,6 +252,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('service_id')->nullable();
             $table->decimal('price_at_booking', 8, 2)->nullable();
         });
+        (require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php'))->up();
     }
 
     protected function tearDown(): void
@@ -267,6 +271,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('clinic_medications');
         Schema::dropIfExists('clinic_vitals');
         Schema::dropIfExists('clinic_records');
+        (require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php'))->down();
         Schema::dropIfExists('clinic_appointments');
         Schema::dropIfExists('walkins');
         Schema::dropIfExists('pets');
@@ -325,12 +330,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'finish consultation' => ['POST', '/api/admin/clinic-appointments/1/finish-consultation'],
             'mark clinic payment' => ['POST', '/api/admin/clinic-appointments/1/pay'],
             'cancel appointment' => ['POST', '/api/admin/clinic-appointments/1/cancel'],
-            'save records, vitals, and medications' => ['POST', '/api/admin/clinic-appointments/1/record', [
+            'save records and vitals' => ['POST', '/api/admin/clinic-appointments/1/record', [
                 'diagnosis' => 'Must not be accepted',
                 'weight_kg' => 8.2,
-                'medications' => [[
-                    'drug_name' => 'Must not be accepted',
-                ]],
             ]],
             'upload medical attachment' => ['POST', '/api/admin/clinic-appointments/1/attachments'],
             'download medical attachment' => ['GET', '/api/admin/clinic-appointments/1/attachments/1/download'],
@@ -349,6 +351,157 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         ];
     }
 
+    public function test_receptionist_cannot_call_any_clinical_mutation_endpoint(): void
+    {
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        foreach ([
+            ['POST', '/api/admin/clinic-cases/1/start'],
+            ['POST', '/api/admin/clinic-cases/1/finish'],
+            ['POST', '/api/admin/clinic-appointments/1/start-consultation'],
+            ['POST', '/api/admin/clinic-appointments/1/finish-consultation'],
+            ['POST', '/api/admin/clinic-appointments/1/record'],
+            ['POST', '/api/admin/clinic-appointments/1/attachments'],
+            ['DELETE', '/api/admin/clinic-appointments/1/attachments/1'],
+            ['POST', '/api/admin/pets/1/vaccinations'],
+            ['PATCH', '/api/admin/pets/1/vaccinations/1'],
+            ['POST', '/api/admin/pets/1/vaccinations/1/publish'],
+            ['POST', '/api/admin/pets/1/vaccinations/1/void'],
+        ] as [$method, $uri]) {
+            $this->json($method, $uri)->assertForbidden()->assertExactJson(self::FORBIDDEN_RESPONSE);
+        }
+    }
+
+    public function test_both_clinic_subroles_and_admin_can_check_in_and_view_the_shared_queue(): void
+    {
+        foreach (['veterinarian', 'clinic_receptionist', 'admin'] as $index => $subrole) {
+            $this->authenticateAs($subrole === 'admin' ? 'admin' : 'staff', subrole: $subrole);
+            $this->insertClinicAppointment('waiting_to_arrive', id: $index + 1);
+            $this->postJson('/api/admin/clinic-appointments/'.($index + 1).'/check-in')
+                ->assertOk()->assertJsonPath('appointment.status', 'checked_in');
+            $this->getJson('/api/admin/clinic-cases')->assertOk();
+            $this->getJson('/api/admin/clinic-records')->assertOk();
+        }
+    }
+
+    public function test_other_staff_and_missing_clinic_subroles_are_denied_and_me_exposes_permissions(): void
+    {
+        foreach (['', 'another_role'] as $subrole) {
+            $this->authenticateAs('staff', subrole: $subrole);
+            $this->getJson('/api/admin/clinic-cases')->assertForbidden();
+            $this->postJson('/api/admin/clinic-appointments/1/check-in')->assertForbidden();
+        }
+        $this->authenticateAs('staff', staffType: 'grooming');
+        $this->getJson('/api/admin/clinic-cases')->assertForbidden();
+        $this->authenticateAs('staff');
+        $this->getJson('/api/me')->assertOk()
+            ->assertJsonPath('user.staff_type', 'clinic')
+            ->assertJsonPath('user.staff_subrole', 'veterinarian')
+            ->assertJsonPath('user.clinic_permissions.clinical', true)
+            ->assertJsonPath('user.clinic_permissions.payment', false);
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        $this->getJson('/api/me')->assertOk()
+            ->assertJsonPath('user.clinic_permissions.clinical', false)
+            ->assertJsonPath('user.clinic_permissions.payment', true);
+        $this->authenticateAs('admin');
+        foreach ((new User(['role' => 'admin']))->clinicPermissions() as $permission) {
+            $this->assertTrue($permission);
+        }
+    }
+
+    public function test_receptionist_creates_a_checked_in_case_without_starting_the_assessment(): void
+    {
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        DB::table('pets')->insert(['pet_id' => 1, 'pet_name' => 'Mochi', 'species' => 'cat']);
+        $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'consultation'])
+            ->assertCreated()->assertJsonPath('case.status', 'checked_in')
+            ->assertJsonPath('case.queue_number', 1)
+            ->assertJsonPath('case.consultation_started_at', null);
+        $this->postJson('/api/admin/clinic-cases/1/start')->assertForbidden();
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/clinic-cases/1/start')->assertOk()->assertJsonPath('case.status', 'in_consultation');
+    }
+
+    public function test_charge_migration_preserves_existing_pending_payment_amounts(): void
+    {
+        $migration = require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php');
+        $migration->down();
+        $this->insertClinicAppointment('for_payment');
+        DB::table('clinic_appointments')->where('id', 1)->update(['total_amount' => 1250000]);
+        $migration->up();
+        $this->assertDatabaseHas('clinic_charges', ['clinic_appointment_id' => 1, 'kind' => 'existing', 'amount' => 1250000]);
+        $this->authenticateAs('admin');
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1250000, 'payment_method' => 'cash'])->assertOk();
+    }
+
+    public function test_consultation_charges_wait_for_receptionist_payment_and_reject_tampered_totals(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('checked_in');
+        $this->postJson('/api/admin/clinic-appointments/1/start-consultation')->assertOk();
+        DB::table('clinic_charges')->insert([
+            'clinic_appointment_id' => 1, 'kind' => 'existing', 'description' => 'Previously recorded charge',
+            'quantity' => 1, 'unit_price' => 350, 'amount' => 350,
+        ]);
+        $this->postJson('/api/admin/clinic-appointments/1/record', [
+            'diagnosis' => 'Healthy', 'findings' => 'Stable', 'treatment_given' => 'Exam',
+            'weight_kg' => 4.5, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20,
+            'finish_case' => true,
+        ])->assertOk();
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'for_payment', 'paid' => false, 'total_amount' => 350]);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases')
+            ->assertJsonPath('cases.0.charges.0.description', 'Previously recorded charge');
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 350, 'payment_method' => 'cash'])->assertForbidden();
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1, 'payment_method' => 'cash'])
+            ->assertUnprocessable()->assertJsonValidationErrors('total_amount');
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 350, 'payment_method' => 'cash'])->assertOk();
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'completed', 'paid' => true, 'payment_method' => 'cash', 'paid_by_user_id' => 1]);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 350, 'payment_method' => 'cash'])->assertUnprocessable();
+    }
+
+    public function test_both_finish_endpoints_preserve_the_payment_stage_for_admin(): void
+    {
+        $this->authenticateAs('admin');
+        foreach (['/api/admin/clinic-cases/1/finish', '/api/admin/clinic-appointments/2/finish-consultation'] as $index => $uri) {
+            $this->insertClinicAppointment('in_consultation', id: $index + 1);
+            DB::table('clinic_appointments')->where('id', $index + 1)->update(['case_type' => 'vaccination']);
+            $this->postJson($uri)->assertOk();
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $index + 1, 'status' => 'for_payment', 'paid' => false]);
+            $this->postJson('/api/admin/clinic-appointments/'.($index + 1).'/pay', ['total_amount' => 0, 'payment_method' => 'card'])->assertOk();
+        }
+    }
+
+    public function test_removed_clinical_product_endpoints_are_unavailable_for_every_role(): void
+    {
+        foreach ([['admin', 'veterinarian'], ['staff', 'veterinarian'], ['staff', 'clinic_receptionist'], ['customer', '']] as [$role, $subrole]) {
+            $this->authenticateAs($role, subrole: $subrole);
+            $this->getJson('/api/admin/clinic/clinical-items')->assertNotFound();
+            $this->postJson('/api/admin/clinic-appointments/1/products', ['item_id' => 1, 'quantity' => 2])->assertNotFound();
+        }
+    }
+
+    public function test_stale_medication_and_service_payloads_cannot_create_or_modify_entries(): void
+    {
+        foreach (['admin', 'staff'] as $role) {
+            $this->authenticateAs($role);
+            $id = $role === 'admin' ? 1 : 2;
+            $this->insertClinicAppointment('in_consultation', id: $id);
+            $recordId = DB::table('clinic_records')->insertGetId(['clinic_appointment_id' => $id]);
+            DB::table('clinic_medications')->insert(['clinic_record_id' => $recordId, 'drug_name' => 'Historical entry']);
+            $this->postJson("/api/admin/clinic-appointments/{$id}/record", [
+                'diagnosis' => 'Saved diagnosis',
+                'medications' => [['drug_name' => 'Removed entry']],
+                'services' => [['description' => 'Removed service', 'amount' => 100]],
+            ])->assertOk()->assertJsonPath('record.diagnosis', 'Saved diagnosis')->assertJsonMissingPath('record.medications');
+            $this->assertDatabaseHas('clinic_medications', ['clinic_record_id' => $recordId, 'drug_name' => 'Historical entry']);
+        }
+        $this->assertDatabaseCount('clinic_medications', 2);
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnosis' => 'Forbidden'])->assertForbidden();
+    }
+
     public function test_staff_can_list_clinic_appointments_and_save_a_medical_record(): void
     {
         $this->authenticateAs('staff');
@@ -362,14 +515,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'diagnosis' => 'Authorized test diagnosis',
             'weight_kg' => 8.2,
             'temperature_c' => 38.4,
-            'medications' => [[
-                'drug_name' => 'Authorized test medication',
-                'dosage' => '1 tablet',
-            ]],
         ])
             ->assertOk()
             ->assertJsonPath('record.diagnosis', 'Authorized test diagnosis')
-            ->assertJsonPath('record.medications.0.drug_name', 'Authorized test medication');
+            ->assertJsonMissingPath('record.medications');
 
         $this->assertDatabaseHas('clinic_vitals', [
             'clinic_appointment_id' => 1,
@@ -460,7 +609,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.pet.name', 'Mochi')
             ->assertJsonPath('archived.0.pet.medical_conditions', 'Asthma')
             ->assertJsonPath('archived.0.record.diagnosis', 'Mild irritation')
-            ->assertJsonPath('archived.0.record.medications.0.drug_name', 'Test medication')
+            ->assertJsonMissingPath('archived.0.record.medications')
             ->assertJsonPath('archived.0.vitals.temperature_c', '38.2')
             ->assertJsonPath('archived.0.assigned_veterinarian', null)
             ->assertJsonPath('archived.0.activity.created_by_name', null);
@@ -606,7 +755,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
 
         $caseId = $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'consultation'])
             ->assertCreated()
-            ->assertJsonPath('case.queue_number', null)
+            ->assertJsonPath('case.queue_number', 1)
             ->json('case.id');
         $this->postJson('/api/admin/clinic-cases', ['pet_id' => 1, 'case_type' => 'vaccination'])
             ->assertStatus(409)
@@ -616,6 +765,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertSame(1, DB::table('clinic_appointments')->count());
 
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases');
+        $this->postJson("/api/admin/clinic-cases/{$caseId}/start")->assertOk();
 
         $this->postJson("/api/admin/clinic-appointments/{$caseId}/record", [
             'diagnosis' => 'Healthy', 'finish_case' => true, 'weight_kg' => 4.5,
@@ -642,9 +792,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'weight_kg' => 4.5, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20,
         ])->assertOk();
 
-        $this->assertSame('completed', DB::table('clinic_appointments')->where('id', $caseId)->value('status'));
+        $this->assertSame('for_payment', DB::table('clinic_appointments')->where('id', $caseId)->value('status'));
         $this->assertSame('Healthy', DB::table('clinic_records')->where('clinic_appointment_id', $caseId)->value('diagnosis'));
-        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases');
     }
 
     public function test_online_request_assigns_its_queue_number_only_when_staff_starts_physical_intake(): void
@@ -2039,7 +2189,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     }
 
     #[DataProvider('editableClinicalHistoryStatuses')]
-    public function test_valid_clinical_stages_keep_record_vitals_medication_and_attachment_operations_available(
+    public function test_valid_clinical_stages_keep_record_vitals_and_attachment_operations_available(
         string $status,
     ): void {
         Storage::fake('local');
@@ -2050,11 +2200,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/clinic-appointments/1/record', [
             'diagnosis' => 'Permitted diagnosis',
             'weight_kg' => 6.75,
-            'medications' => [['drug_name' => 'Permitted medicine']],
         ])
             ->assertOk()
             ->assertJsonPath('record.diagnosis', 'Permitted diagnosis')
-            ->assertJsonPath('record.medications.0.drug_name', 'Permitted medicine');
+            ->assertJsonMissingPath('record.medications');
 
         $upload = $this->post('/api/admin/clinic-appointments/1/attachments', [
             'file' => UploadedFile::fake()->create('permitted.pdf', 20, 'application/pdf'),
@@ -2066,7 +2215,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk();
         $this->assertDatabaseCount('clinic_records', 1);
         $this->assertDatabaseCount('clinic_vitals', 1);
-        $this->assertDatabaseCount('clinic_medications', 1);
+        $this->assertDatabaseCount('clinic_medications', 0);
         $this->assertDatabaseCount('clinic_attachments', 0);
     }
 
@@ -2183,7 +2332,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         }
     }
 
-    private function authenticateAs(string $role, int $userId = 1): void
+    private function authenticateAs(string $role, int $userId = 1, string $subrole = 'veterinarian', string $staffType = 'clinic'): void
     {
         $user = new User;
         $user->forceFill([
@@ -2191,6 +2340,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'first_name' => ucfirst($role),
             'last_name' => 'User',
             'role' => $role,
+            'staff_type' => $role === 'staff' ? $staffType : null,
+            'staff_subrole' => $role === 'staff' ? $subrole : null,
         ]);
         $user->exists = true;
 

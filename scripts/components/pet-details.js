@@ -305,7 +305,6 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Respiratory Rate", isMissing(record.vitals?.respiratory_rate_bpm) ? null : `${record.vitals.respiratory_rate_bpm} breaths/min`],
       ["Body Condition Score", isMissing(record.vitals?.body_condition_score) ? null : `${record.vitals.body_condition_score} / 9`],
     ].filter(([, value]) => !isMissing(value));
-    const medications = Array.isArray(record.medications) ? record.medications : [];
     const hasFollowUp = !isMissing(record.follow_up_date) || !isMissing(record.follow_up_notes);
 
     return `
@@ -361,39 +360,6 @@ document.addEventListener("DOMContentLoaded", () => {
             </section>
           ` : ""}
 
-          ${medications.length ? `
-            <section>
-              <h5 class="text-sm font-bold text-[#2f4b66]">
-                Prescribed Medications
-              </h5>
-              <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                ${medications.map((medication) => {
-                  const details = [
-                    ["Dosage", medication.dosage],
-                    ["Frequency", medication.frequency],
-                    ["Duration", medication.duration],
-                    ["Instructions", medication.instructions],
-                  ].filter(([, value]) => !isMissing(value));
-
-                  return `
-                    <div class="min-w-0">
-                      <p class="text-sm font-bold text-slate-800">${escapeHtml(displayValue(medication.drug_name))}</p>
-                      ${details.length ? `
-                        <dl class="mt-3 space-y-2">
-                          ${details.map(([label, value]) => `
-                            <div class="text-xs leading-5">
-                              <dt class="inline font-semibold text-slate-500">${escapeHtml(label)}:</dt>
-                              <dd class="inline whitespace-pre-line text-slate-700"> ${escapeHtml(value)}</dd>
-                            </div>
-                          `).join("")}
-                        </dl>
-                      ` : ""}
-                    </div>
-                  `;
-                }).join("")}
-              </div>
-            </section>
-          ` : ""}
         </div>
       </article>
     `;

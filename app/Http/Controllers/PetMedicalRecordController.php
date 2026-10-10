@@ -37,7 +37,6 @@ class PetMedicalRecordController extends Controller
             ->with([
                 'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',
                 'record:id,clinic_appointment_id,chief_complaint,diagnosis,treatment_given,follow_up_date,follow_up_notes',
-                'record.medications:id,clinic_record_id,drug_name,dosage,frequency,duration,instructions',
             ])
             ->orderByDesc('appointment_date')
             ->orderByDesc('id')
@@ -72,13 +71,6 @@ class PetMedicalRecordController extends Controller
                 'respiratory_rate_bpm' => $vitals->respiratory_rate_bpm,
                 'body_condition_score' => $vitals->body_condition_score,
             ] : null,
-            'medications' => $record->medications->map(fn ($medication) => [
-                'drug_name' => $medication->drug_name,
-                'dosage' => $medication->dosage,
-                'frequency' => $medication->frequency,
-                'duration' => $medication->duration,
-                'instructions' => $medication->instructions,
-            ])->values(),
         ];
     }
 }

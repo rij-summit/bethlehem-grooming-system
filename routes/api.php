@@ -167,34 +167,34 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::get('/admin/reports/customer-activity', [ReportController::class, 'customerActivity']);
 
     // Clinic administration — available only to the project's staff/admin roles.
-    Route::middleware('role:admin,staff')->group(function () {
-        Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store']);
+    Route::middleware(['role:admin,staff', 'clinic:access'])->group(function () {
+        Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store'])->middleware('clinic:intake');
 
         Route::get('/admin/clinic-records', [AdminClinicController::class, 'records']);
         Route::get('/admin/clinic-cases', [AdminClinicController::class, 'activeCases']);
-        Route::post('/admin/clinic-cases', [AdminClinicController::class, 'createCase']);
-        Route::post('/admin/clinic-cases/{id}/start', [AdminClinicController::class, 'startCase']);
-        Route::post('/admin/clinic-cases/{id}/finish', [AdminClinicController::class, 'finishCase']);
+        Route::post('/admin/clinic-cases', [AdminClinicController::class, 'createCase'])->middleware('clinic:intake');
+        Route::post('/admin/clinic-cases/{id}/start', [AdminClinicController::class, 'startCase'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-cases/{id}/finish', [AdminClinicController::class, 'finishCase'])->middleware('clinic:clinical');
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);
-        Route::post('/admin/clinic-appointments/{id}/check-in', [AdminClinicController::class, 'checkIn']);
-        Route::post('/admin/clinic-appointments/{id}/start-consultation', [AdminClinicController::class, 'startConsultation']);
-        Route::post('/admin/clinic-appointments/{id}/finish-consultation', [AdminClinicController::class, 'finishConsultation']);
-        Route::post('/admin/clinic-appointments/{id}/pay', [AdminClinicController::class, 'markPaid']);
-        Route::post('/admin/clinic-appointments/{id}/cancel', [AdminClinicController::class, 'cancel']);
-        Route::post('/admin/clinic-appointments/{id}/record', [AdminClinicController::class, 'saveRecord']);
-        Route::post('/admin/clinic-appointments/{id}/attachments', [AdminClinicController::class, 'uploadAttachment']);
+        Route::post('/admin/clinic-appointments/{id}/check-in', [AdminClinicController::class, 'checkIn'])->middleware('clinic:intake');
+        Route::post('/admin/clinic-appointments/{id}/start-consultation', [AdminClinicController::class, 'startConsultation'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-appointments/{id}/finish-consultation', [AdminClinicController::class, 'finishConsultation'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-appointments/{id}/pay', [AdminClinicController::class, 'markPaid'])->middleware('clinic:payment');
+        Route::post('/admin/clinic-appointments/{id}/cancel', [AdminClinicController::class, 'cancel'])->middleware('clinic:queue');
+        Route::post('/admin/clinic-appointments/{id}/record', [AdminClinicController::class, 'saveRecord'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-appointments/{id}/attachments', [AdminClinicController::class, 'uploadAttachment'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-appointments/{id}/attachments/{attachmentId}/download', [AdminClinicController::class, 'downloadAttachment']);
-        Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}', [AdminClinicController::class, 'deleteAttachment']);
+        Route::delete('/admin/clinic-appointments/{id}/attachments/{attachmentId}', [AdminClinicController::class, 'deleteAttachment'])->middleware('clinic:clinical');
 
         Route::get('/admin/vaccination-options', [AdminVaccinationController::class, 'options']);
         Route::get('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'index']);
-        Route::post('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'store']);
+        Route::post('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'store'])->middleware('clinic:clinical');
         Route::get('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'show']);
-        Route::patch('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'update']);
-        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/publish', [AdminVaccinationController::class, 'publish']);
-        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void', [AdminVaccinationController::class, 'void']);
+        Route::patch('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'update'])->middleware('clinic:clinical');
+        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/publish', [AdminVaccinationController::class, 'publish'])->middleware('clinic:clinical');
+        Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void', [AdminVaccinationController::class, 'void'])->middleware('clinic:clinical');
     });
 
     // Inventory and POS expose stock and financial data only to staff/admin roles.

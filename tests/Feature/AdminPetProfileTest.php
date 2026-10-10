@@ -242,7 +242,7 @@ class AdminPetProfileTest extends TestCase
             ->assertJsonPath('medical_records.0.vet_notes', 'Monitor for recurrence')
             ->assertJsonPath('medical_records.0.attachments.0.file_name', 'skin-scrape.pdf')
             ->assertJsonPath('medical_records.0.attachments.0.label', 'Skin scrape result')
-            ->assertJsonPath('medical_records.0.medications.0.drug_name', 'Skin Care Medicine')
+            ->assertJsonMissingPath('medical_records.0.medications')
             ->assertJsonPath('vaccinations.0.vaccine_name', 'Rabies')
             ->assertJsonPath('vaccinations.0.administering_provider', 'Dr. Reyes');
 

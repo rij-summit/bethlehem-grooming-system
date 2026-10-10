@@ -19,7 +19,7 @@ use Throwable;
 class AdminClinicController extends Controller
 {
     private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show', 'expired'];
-    private const CLINICAL_CONTENT_EDITABLE_STATUSES = ClinicAppointment::CLINICAL_CONTENT_EDITABLE_STATUSES;
+    private ?bool $hasClinicCharges = null;
 
     // ── Queue index ──────────────────────────────────────────────────────────
 
@@ -172,13 +172,13 @@ class AdminClinicController extends Controller
             }
 
             app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
-            $reserved = $sequence->reserve(now()->toDateString(), false);
+            $reserved = $sequence->reserve(now()->toDateString(), true);
             $case = ClinicAppointment::create([
                 'appointment_reference' => $reserved['appointment_reference'],
                 'appointment_type' => 'walk_in',
                 'case_type' => $data['case_type'],
-                'status' => 'in_consultation',
-                'queue_number' => null,
+                'status' => 'checked_in',
+                'queue_number' => $reserved['queue_number'],
                 'appointment_date' => now()->toDateString(),
                 'user_id' => $pet->user_id,
                 'pet_id' => $pet->pet_id,
@@ -186,7 +186,6 @@ class AdminClinicController extends Controller
                 'total_amount' => 0,
                 'paid' => false,
                 'checked_in_at' => now(),
-                'consultation_started_at' => now(),
             ]);
 
             return response()->json(['success' => true, 'created' => true, 'case' => $this->formatAppointment($case)], 201);
@@ -210,6 +209,9 @@ class AdminClinicController extends Controller
                     'consultation_started_at' => now(),
                 ]);
             }
+            if ($case->status === 'checked_in') {
+                $case->update(['status' => 'in_consultation', 'consultation_started_at' => now()]);
+            }
             if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
                 return response()->json(['success' => false, 'message' => 'This case is already closed.'], 409);
             }
@@ -224,8 +226,7 @@ class AdminClinicController extends Controller
             if (in_array($appointment->status, self::TERMINAL_CASE_STATUSES, true)) {
                 throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
             }
-            $appointment->assertCompletionVitals();
-            $appointment->markCompleted();
+            $appointment->prepareForPayment();
             return $appointment;
         });
         return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
@@ -349,22 +350,11 @@ class AdminClinicController extends Controller
 
     public function finishConsultation(int $id)
     {
-        $appt = ClinicAppointment::findOrFail($id);
-
-        if ($appt->status !== 'in_consultation') {
-            return response()->json(['success' => false, 'message' => 'Appointment is not in consultation.'], 422);
-        }
-
-        $appt->update([
-            'status' => 'for_payment',
-            'consultation_finished_at' => now(),
-        ]);
-
-        Notification::createForClinic(
-            $appt,
-            Notification::TYPE_CLINIC_PAYMENT_DUE,
-            "Clinic visit {$appt->appointment_reference} is ready for payment.",
-        );
+        $appt = DB::transaction(function () use ($id) {
+            $appointment = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            $appointment->prepareForPayment();
+            return $appointment;
+        });
 
         return response()->json([
             'success' => true,
@@ -376,7 +366,7 @@ class AdminClinicController extends Controller
     public function markPaid(Request $request, int $id)
     {
         $request->validate([
-            'total_amount' => ['required', 'numeric', 'min:0'],
+            'total_amount' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'payment_method' => ['required', 'in:cash,gcash,maya,card'],
         ]);
 
@@ -390,10 +380,20 @@ class AdminClinicController extends Controller
                 return null;
             }
 
+            $total = round((float) $appointment->charges()->sum('amount'), 2);
+            if (abs($total - (float) $request->total_amount) > 0.001) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'total_amount' => 'The charges have changed. Reload the payment breakdown before recording payment.',
+                ]);
+            }
+
             $appointment->update([
                 'status' => 'completed',
-                'total_amount' => $request->total_amount,
+                'total_amount' => $total,
                 'paid' => true,
+                'payment_method' => $request->payment_method,
+                'paid_by_user_id' => $request->user()->user_id,
+                'paid_at' => now(),
             ]);
             Notification::createForClinic(
                 $appointment,
@@ -453,7 +453,6 @@ class AdminClinicController extends Controller
             'follow_up_notes' => ['nullable', 'string', 'max:1000'],
             'vet_notes' => ['nullable', 'string', 'max:2000'],
             'finish_case' => ['sometimes', 'boolean'],
-
             // Vitals
             'weight_kg' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
             'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
@@ -461,13 +460,6 @@ class AdminClinicController extends Controller
             'respiratory_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
             'body_condition_score' => ['nullable', 'integer', 'min:1', 'max:9'],
 
-            // Medications
-            'medications' => ['nullable', 'array'],
-            'medications.*.drug_name' => ['required', 'string', 'max:200'],
-            'medications.*.dosage' => ['nullable', 'string', 'max:100'],
-            'medications.*.frequency' => ['nullable', 'string', 'max:100'],
-            'medications.*.duration' => ['nullable', 'string', 'max:100'],
-            'medications.*.instructions' => ['nullable', 'string', 'max:500'],
         ], [
             'follow_up_date.after_or_equal' => 'The follow-up date cannot be in the past.',
             'follow_up_date.before_or_equal' => 'The follow-up date must be within 3 months from today.',
@@ -514,23 +506,11 @@ class AdminClinicController extends Controller
                 );
             }
 
-            // Replace medications
-            if (array_key_exists('medications', $data)) {
-                $record->medications()->delete();
-                foreach ($data['medications'] ?? [] as $med) {
-                    $record->medications()->create($med);
-                }
-            }
-
             if (! empty($data['finish_case'])) {
-                $appt->update([
-                    'status' => 'completed',
-                    'queue_number' => null,
-                    'consultation_finished_at' => now(),
-                ]);
+                $appt->prepareForPayment();
             }
 
-            $record->load(['medications', 'attachments']);
+            $record->load('attachments');
 
             return response()->json([
                 'success' => true,
@@ -693,7 +673,10 @@ class AdminClinicController extends Controller
             'chief_complaint' => $a->chief_complaint,
             'common_concerns' => $a->common_concerns,
             'total_amount' => $a->total_amount,
+            'charges' => $a->relationLoaded('charges') ? $a->charges : [],
             'paid' => $a->paid,
+            'payment_method' => $a->payment_method,
+            'paid_at' => $a->paid_at?->toIso8601String(),
             'notes' => $a->notes,
             'checked_in_at' => $a->checked_in_at?->toIso8601String(),
             'consultation_started_at' => $a->consultation_started_at?->toIso8601String(),
@@ -729,7 +712,6 @@ class AdminClinicController extends Controller
                 'size' => $pet->size,
                 'medical_conditions' => $pet->medical_conditions,
                 'known_allergies' => null,
-                'current_medications' => null,
             ] : null,
             'vitals' => $vitals ? [
                 'weight_kg' => $vitals->weight_kg,
@@ -776,12 +758,13 @@ class AdminClinicController extends Controller
         }
         if (Schema::hasTable('clinic_records')) {
             $relations[] = 'record';
-            if (Schema::hasTable('clinic_medications')) {
-                $relations[] = 'record.medications';
-            }
             if (Schema::hasTable('clinic_attachments')) {
                 $relations[] = 'record.attachments';
             }
+        }
+
+        if ($this->hasClinicCharges ??= Schema::hasTable('clinic_charges')) {
+            $relations[] = 'charges';
         }
 
         return $relations;
@@ -819,7 +802,7 @@ class AdminClinicController extends Controller
             return null;
         }
 
-        $record->loadMissing(['medications', 'attachments']);
+        $record->loadMissing('attachments');
 
         return [
             'id' => $record->id,
@@ -832,14 +815,6 @@ class AdminClinicController extends Controller
             'vet_notes' => $record->vet_notes,
             'created_at' => $record->created_at?->toIso8601String(),
             'updated_at' => $record->updated_at?->toIso8601String(),
-            'medications' => $record->medications->map(fn ($medication) => [
-                'id' => $medication->id,
-                'drug_name' => $medication->drug_name,
-                'dosage' => $medication->dosage,
-                'frequency' => $medication->frequency,
-                'duration' => $medication->duration,
-                'instructions' => $medication->instructions,
-            ])->values(),
             'attachments' => $record->attachments
                 ->map(fn (ClinicAttachment $attachment) => $this->formatAttachment($attachment, $appointmentId))
                 ->values(),
@@ -916,11 +891,7 @@ class AdminClinicController extends Controller
     private function assertClinicalContentEditable(
         ClinicAppointment $appointment,
     ): void {
-        if (in_array(
-            $appointment->status,
-            self::CLINICAL_CONTENT_EDITABLE_STATUSES,
-            true,
-        )) {
+        if ($appointment->clinicalContentEditableFor(request()->user())) {
             return;
         }
 

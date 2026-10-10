@@ -53,6 +53,18 @@ document.addEventListener("alpine:init", () => {
   let resolveDialog = null;
   let toastTimer = null;
 
+  Alpine.store("clinicAccess", {
+    permissions: {},
+    async init() {
+      try {
+        const response = await API.getStaffIdentity();
+        this.permissions = response.user?.clinic_permissions || {};
+      } catch {
+        this.permissions = {};
+      }
+    },
+  });
+
   Alpine.store("clinicFeedback", {
     dialog: { open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false },
     toast: { show: false, message: "", ok: true },
@@ -99,13 +111,25 @@ function adminClinicModal() {
       vet_notes: "", follow_up_date: "", follow_up_notes: "",
       weight_kg: "", temperature_c: "", heart_rate_bpm: "",
       respiratory_rate_bpm: "", body_condition_score: "",
-      medications: [],
     },
 
     init() {
       window.addEventListener("clinic-open-modal", (e) => this.openModal(e.detail));
+      window.addEventListener("clinic-cases-loaded", (event) => {
+        if (!this.open) return;
+        const current = event.detail?.find((item) => item.id === this.apptId);
+        if (current) this.currentAppt = current;
+        else this.open = false;
+      });
     },
 
+    get canEditClinical() {
+      return !!this.$store.clinicAccess.permissions.clinical
+        && (["checked_in", "in_consultation"].includes(this.currentAppt?.status)
+          || (API.getUserRole() === "admin" && this.currentAppt?.status === "for_payment"));
+    },
+
+    get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"; },
     get followUpMinDate() {
       return clinicLocalDate(new Date());
     },
@@ -144,7 +168,6 @@ function adminClinicModal() {
         heart_rate_bpm:       v.heart_rate_bpm       ?? "",
         respiratory_rate_bpm: v.respiratory_rate_bpm ?? "",
         body_condition_score: v.body_condition_score ?? "",
-        medications:          (r.medications || []).map((m) => ({ ...m })),
       };
       this.open = true;
       this.selectSection(section);
@@ -161,7 +184,7 @@ function adminClinicModal() {
     },
 
     closeModal() {
-      if (this.saving) return;
+      if (this.saving || this.attachmentBusy) return;
       this.open = false;
       this.activeSection = "medical";
     },
@@ -174,6 +197,7 @@ function adminClinicModal() {
     formatFileSize: formatClinicFileSize,
 
     async uploadAttachment() {
+      if (!this.canEditClinical) return;
       if (!this.attachmentFile) {
         this.attachmentError = "Choose a JPG, PNG, PDF, or DCM file first.";
         return;
@@ -213,6 +237,7 @@ function adminClinicModal() {
     },
 
     async deleteAttachment(attachment) {
+      if (!this.canEditClinical) return;
       const confirmed = await this.$store.clinicFeedback.confirm({
         title: "Remove attachment?",
         message: `${attachment.file_name} will be removed. This cannot be undone.`,
@@ -233,15 +258,8 @@ function adminClinicModal() {
       }
     },
 
-    addMedication() {
-      this.form.medications.push({ drug_name: "", dosage: "", frequency: "", duration: "", instructions: "" });
-    },
-
-    removeMedication(idx) {
-      this.form.medications.splice(idx, 1);
-    },
-
     async saveRecord(finishCase = false) {
+      if (!this.canEditClinical || this.saving || (finishCase && !this.canFinish)) return;
       if (finishCase) {
         const missing = [["weight_kg", "Weight"], ["temperature_c", "Temperature"],
           ["heart_rate_bpm", "Heart Rate"], ["respiratory_rate_bpm", "Respiratory Rate"]]
@@ -260,6 +278,7 @@ function adminClinicModal() {
       this.saving     = true;
       this.modalError = "";
       try {
+        const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
         const payload = {
           chief_complaint:      this.form.chief_complaint      || null,
           diagnosis:            this.form.diagnosis             || null,
@@ -268,12 +287,11 @@ function adminClinicModal() {
           vet_notes:            this.form.vet_notes             || null,
           follow_up_date:       this.form.follow_up_date        || null,
           follow_up_notes:      this.form.follow_up_notes       || null,
-          weight_kg:            this.form.weight_kg             || null,
-          temperature_c:        this.form.temperature_c         || null,
-          heart_rate_bpm:       this.form.heart_rate_bpm        || null,
-          respiratory_rate_bpm: this.form.respiratory_rate_bpm  || null,
-          body_condition_score: this.form.body_condition_score   || null,
-          medications:          this.form.medications.filter((m) => m.drug_name?.trim()),
+          weight_kg:            numberOrNull(this.form.weight_kg),
+          temperature_c:        numberOrNull(this.form.temperature_c),
+          heart_rate_bpm:       numberOrNull(this.form.heart_rate_bpm),
+          respiratory_rate_bpm: numberOrNull(this.form.respiratory_rate_bpm),
+          body_condition_score: numberOrNull(this.form.body_condition_score),
           finish_case:          finishCase,
         };
         await API.clinicSaveRecord(this.apptId, payload);
@@ -303,6 +321,9 @@ function adminClinicPage() {
     hasMoreRecords: false,
     activeCases: [],
     activeCasesLoading: false,
+    caseBusyId: null,
+    accessError: "",
+    payment: { open: false, case: null, method: "cash", saving: false, error: "" },
     tab: "records",
     addCustomer: { open: false, saving: false, error: "", form: {} },
 
@@ -324,13 +345,20 @@ function adminClinicPage() {
     detailAttachmentBusyId: null,
     detailAttachmentError: "",
 
-    init() {
+    async init() {
       const token = API.getAdminToken?.();
       const role  = API.getUserRole?.();
       if (!token || (role !== "admin" && role !== "staff")) {
         API.redirectToSignIn?.();
         return;
       }
+      try {
+        const response = await API.getStaffIdentity();
+        if (!response.user?.clinic_permissions?.access) {
+          this.accessError = "Your staff role does not have access to Clinic.";
+          return;
+        }
+      } catch (error) { this.accessError = error.message || "Could not verify Clinic access."; return; }
       if (new URLSearchParams(window.location.search).get("tab") === "active-cases") this.tab = "active-cases";
       this.loadAllRecords();
       this.loadActiveCases();
@@ -339,7 +367,10 @@ function adminClinicPage() {
 
     async loadActiveCases() {
       this.activeCasesLoading = true;
-      try { this.activeCases = (await API.getActiveClinicCases()).cases || []; }
+      try {
+        this.activeCases = (await API.getActiveClinicCases()).cases || [];
+        window.dispatchEvent(new CustomEvent("clinic-cases-loaded", { detail: this.activeCases }));
+      }
       catch { this.activeCases = []; }
       finally { this.activeCasesLoading = false; }
     },
@@ -355,9 +386,44 @@ function adminClinicPage() {
     },
 
     caseLabel(item) { return ({ online_request: "Online request", consultation: "Consultation", vaccination: "Vaccination" })[item.case_type] || "Clinic case"; },
-    caseStatus(item) { return item.status === "waiting_to_arrive" ? "Waiting for Arrival" : "In Progress"; },
+    caseStatus(item) { return ({ waiting_to_arrive: "Waiting for Arrival", checked_in: "Checked In", in_consultation: "In Consultation", for_payment: "For Payment" })[item.status] || item.status; },
+    get permissions() { return this.$store.clinicAccess.permissions; },
+    money(value) { return Number(value || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" }); },
+    async checkInCase(item) {
+      if (!this.permissions.intake || this.caseBusyId) return;
+      this.caseBusyId = item.id;
+      try { await API.clinicCheckIn(item.id); await this.loadActiveCases(); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not check in this patient.", false); }
+      finally { this.caseBusyId = null; }
+    },
+    reviewPayment(item) {
+      if (!this.permissions.payment || item.status !== "for_payment") return;
+      this.payment = { open: true, case: item, method: "cash", saving: false, error: "" };
+    },
+    async recordPayment() {
+      if (!this.permissions.payment || this.payment.saving) return;
+      this.payment.saving = true; this.payment.error = "";
+      try {
+        await API.clinicRecordPayment(this.payment.case.id, {
+          total_amount: this.payment.case.total_amount, payment_method: this.payment.method,
+        });
+        this.payment.open = false;
+        await this.loadActiveCases();
+        this.$store.clinicFeedback.notify("Payment recorded. Visit completed.");
+        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
+      } catch (error) {
+        this.payment.error = error.message || "Could not record payment.";
+        if (error.errors?.total_amount) {
+          await this.loadActiveCases();
+          const current = this.activeCases.find((item) => item.id === this.payment.case.id);
+          if (current) this.payment.case = current;
+        }
+      }
+      finally { this.payment.saving = false; }
+    },
     caseOpened(item) { return item.created_at ? new Date(item.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—"; },
     async cancelCase(item) {
+      if (!this.permissions.queue) return;
       const confirmed = await this.$store.clinicFeedback.confirm({
         title: "Cancel this case?",
         message: `The case for ${item.pet?.name || "this patient"} will be cancelled.`,
@@ -371,14 +437,19 @@ function adminClinicPage() {
     },
     openCase(item, section) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } })); },
     async startCase(item) {
+      if (!this.permissions.clinical || this.caseBusyId) return;
+      this.caseBusyId = item.id;
       try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
+      finally { this.caseBusyId = null; }
     },
     openAddCustomer() {
+      if (!this.permissions.customers) return;
       this.addCustomer = { open: true, saving: false, error: "", form: { first_name: "", last_name: "", middle_name: "", phone: "", email: "", pet_name: "", species: "", breed: "" } };
     },
     closeAddCustomer() { if (!this.addCustomer.saving) this.addCustomer.open = false; },
     async saveCustomerRecord(confirmSimilarName = false) {
+      if (!this.permissions.customers) return;
       this.addCustomer.saving = true; this.addCustomer.error = "";
       try {
         const form = this.addCustomer.form;
@@ -544,6 +615,7 @@ function adminClinicPage() {
     // One ongoing case per pet: a consultation and a vaccination share the same
     // case through its Medical Record and Vaccinations tabs.
     async openOrResumeCase(caseType) {
+      if (!this.permissions.intake) return;
       const section = caseType === "vaccination" ? "vaccinations" : "medical";
       try {
         let caseItem;
@@ -554,19 +626,32 @@ function adminClinicPage() {
           const tabName = section === "vaccinations" ? "Vaccinations" : "Medical Record";
           const confirmed = await this.$store.clinicFeedback.confirm({
             title: "Ongoing case found",
-            message: `${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`,
+            message: this.permissions.clinical
+              ? `${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`
+              : `${error.message}\n\nOpen this case to view patient information and monitor its status?`,
             confirmLabel: "Open Case",
           });
           if (!confirmed) return;
           caseItem = error.data.case;
-          if (caseItem.status === "waiting_to_arrive") caseItem = (await API.startClinicCase(caseItem.id)).case;
         }
+        if (caseItem.status === "waiting_to_arrive") caseItem = (await API.clinicCheckIn(caseItem.id)).appointment;
+        if (caseItem.status === "checked_in" && this.permissions.clinical) caseItem = (await API.startClinicCase(caseItem.id)).case;
         await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(caseItem, section);
       } catch (error) { this.$store.clinicFeedback.notify(error.message || `Could not open a ${caseType} case.`, false); }
     },
 
     async openVaccinations() {
       if (!this.profile.pet?.id) return;
+      if (!this.permissions.clinical) {
+        const { pet, owner } = this.profile;
+        const appt = this.activeCases.find((item) => item.pet?.id === pet.id) || {
+          pet: { id: pet.id, name: pet.petName || pet.name, species: pet.species },
+          ownerName: owner?.fullName || "—",
+        };
+        this.closeProfile();
+        this.openCase(appt, "vaccinations");
+        return;
+      }
       await this.openOrResumeCase("vaccination");
     },
 

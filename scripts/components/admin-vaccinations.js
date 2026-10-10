@@ -114,7 +114,7 @@ function adminClinicVaccinations() {
       }
 
       this.loadVaccinations();
-      this.loadOptions();
+      if (this.canEditClinical) this.loadOptions();
     },
 
     closeChildDialogs() {
@@ -182,12 +182,16 @@ function adminClinicVaccinations() {
     },
 
     // New vaccinations can only be added while the linked case is ongoing.
+    get canEditClinical() { return !!this.$store.clinicAccess.permissions.clinical; },
+
     caseOngoing() {
       return !this.appointment?.id
-        || ["checked_in", "in_consultation", "for_payment"].includes(this.appointment.status);
+        || ["checked_in", "in_consultation"].includes(this.appointment.status)
+        || (API.getUserRole?.() === "admin" && this.appointment.status === "for_payment");
     },
 
     openCreateForm() {
+      if (!this.canEditClinical) return;
       if (!this.pet?.id || !this.caseOngoing()) return;
 
       this.form = emptyVaccinationDraftForm();
@@ -208,6 +212,7 @@ function adminClinicVaccinations() {
     },
 
     openEditForm(record) {
+      if (!this.canEditClinical) return;
       if (record?.state !== "draft") return;
 
       this.form = {
@@ -404,6 +409,7 @@ function adminClinicVaccinations() {
     },
 
     async saveDraft() {
+      if (!this.canEditClinical) return;
       if (this.formModal.saving || !this.validateForm()) return;
 
       this.formModal.saving = true;
@@ -436,8 +442,9 @@ function adminClinicVaccinations() {
     },
 
     async saveAndFinishCase() {
+      if (!this.canEditClinical) return;
       if (this.recordKind !== "inventory") return;
-      if (!this.appointment?.id || this.formModal.saving || !this.validateForm()) return;
+      if (this.appointment?.status !== "in_consultation" || this.formModal.saving || !this.validateForm()) return;
       if (!(await this.confirmDeduction(this.selectedVaccine, "Deduct and Finish Case"))) return;
 
       this.formModal.saving = true;
@@ -453,10 +460,11 @@ function adminClinicVaccinations() {
 
         await API.publishAdminPetVaccination(this.pet.id, this.formModal.recordId, { finishCase: true, consumeInventory: true });
         this.formModal.open = false;
+        this.appointment.status = "for_payment";
         await this.loadVaccinations();
         this.loadOptions();
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
-        this.showToast("Vaccination saved, stock deducted, and case completed.");
+        this.showToast("Vaccination saved and stock deducted. Case is For Payment.");
       } catch (error) {
         this.loadVaccinations();
         this.applyBackendValidation(error, "The vaccination could not be finalized. The case remains active.");
@@ -498,6 +506,7 @@ function adminClinicVaccinations() {
     },
 
     async publishRecord(record) {
+      if (!this.canEditClinical) return;
       if (record?.state !== "draft" || this.actionBusyId) return;
 
       const usesInventory = Boolean(record.inventory_item_id);
@@ -532,6 +541,7 @@ function adminClinicVaccinations() {
         const response = await API.publishAdminPetVaccination(this.pet.id, record.id, { consumeInventory: usesInventory });
         await this.loadVaccinations();
         this.loadOptions();
+        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
         this.showToast(response.message || "Vaccination record published.");
       } catch (error) {
         this.showToast(error.message || "Vaccination record could not be published.", false);
@@ -541,6 +551,7 @@ function adminClinicVaccinations() {
     },
 
     openVoidDialog(record) {
+      if (!this.canEditClinical) return;
       if (record?.state !== "published" || this.actionBusyId) return;
       this.voidModal = {
         open: true,
@@ -561,6 +572,7 @@ function adminClinicVaccinations() {
     },
 
     async submitVoid() {
+      if (!this.canEditClinical) return;
       const reason = String(this.voidModal.reason || "").trim();
       if (!reason) {
         this.voidModal.error = "A reason is required to void this published record.";

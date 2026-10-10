@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\EnsureClinicPermission;
 use App\Http\Middleware\EnsureAccountIsUsable;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'account.usable' => EnsureAccountIsUsable::class,
             'role' => EnsureUserHasRole::class,
+            'clinic' => EnsureClinicPermission::class,
         ]);
 
         $middleware->api(prepend: [

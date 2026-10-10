@@ -19,7 +19,7 @@ function component() {
   const instance = sandbox.adminClinicVaccinations();
   instance.$nextTick = (callback) => callback();
   instance.$refs = {};
-  instance.$store = { clinicFeedback: { confirm: async () => true, notify() {} } };
+  instance.$store = { clinicAccess: { permissions: { clinical: true } }, clinicFeedback: { confirm: async () => true, notify() {} } };
   return instance;
 }
 

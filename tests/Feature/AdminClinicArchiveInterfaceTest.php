@@ -23,7 +23,8 @@ class AdminClinicArchiveInterfaceTest extends TestCase
         $this->assertStringContainsString('Reason for Visit', $page);
         $this->assertStringContainsString('Vitals', $page);
         $this->assertStringContainsString('Medical Assessment', $page);
-        $this->assertStringContainsString('Treatment and Medication', $page);
+        $this->assertStringContainsString('Treatment</h4>', $page);
+        $this->assertStringNotContainsString('Prescribed medication', $page);
         $this->assertStringContainsString('Grooming Referral Information', $page);
         $this->assertStringContainsString('Follow-up and Discharge', $page);
         $this->assertStringContainsString('Payment Information', $page);

@@ -285,6 +285,9 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,
+                'staff_type' => $user->staff_type,
+                'staff_subrole' => $user->staff_subrole,
+                'clinic_permissions' => $user->clinicPermissions(),
             ],
         ], 200);
     }
@@ -318,6 +321,9 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,
+                'staff_type' => $user->staff_type,
+                'staff_subrole' => $user->staff_subrole,
+                'clinic_permissions' => $user->clinicPermissions(),
             ],
         ], 200);
     }

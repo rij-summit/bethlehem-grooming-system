@@ -1218,6 +1218,17 @@ var API = (() => {
     return response;
   }
 
+  let staffIdentityRequest = null;
+  function getStaffIdentity() {
+    if (!staffIdentityRequest) {
+      staffIdentityRequest = getMe(getUserRole()).catch((error) => {
+        staffIdentityRequest = null;
+        throw error;
+      });
+    }
+    return staffIdentityRequest;
+  }
+
   // Lets every client page show the sidebar name on first paint instead of
   // "Loading..." while GET /me is in flight. It lives in the same storage as the
   // customer token, so clearAuthStorage() (and closing a session-only login)
@@ -1872,6 +1883,14 @@ var API = (() => {
     return request("POST", `/admin/clinic-cases/${id}/finish`, {}, getAdminToken());
   }
 
+  function clinicCheckIn(id) {
+    return request("POST", `/admin/clinic-appointments/${id}/check-in`, {}, getAdminToken());
+  }
+
+  function clinicRecordPayment(id, payload) {
+    return request("POST", `/admin/clinic-appointments/${id}/pay`, payload, getAdminToken());
+  }
+
   async function clinicCancel(id) {
     return request("POST", `/admin/clinic-appointments/${id}/cancel`, {}, getAdminToken());
   }
@@ -2020,6 +2039,7 @@ var API = (() => {
     clearAdminToken,
     // Role access (used by admin dashboard for staff role-based UI hiding)
     getUserRole,
+    getStaffIdentity,
     setUserRole,
     clearUserRole,
     clearAuthState: clearAuthStorage,
@@ -2151,6 +2171,8 @@ var API = (() => {
     finishClinicCase,
     // Clinic queue
     clinicCancel,
+    clinicCheckIn,
+    clinicRecordPayment,
     clinicSaveRecord,
     clinicUploadAttachment,
     clinicDownloadAttachment,

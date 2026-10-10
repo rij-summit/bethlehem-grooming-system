@@ -28,11 +28,6 @@ class ClinicRecord extends Model
         return $this->belongsTo(ClinicAppointment::class, 'clinic_appointment_id', 'id');
     }
 
-    public function medications()
-    {
-        return $this->hasMany(ClinicMedication::class, 'clinic_record_id', 'id');
-    }
-
     public function attachments()
     {
         return $this->hasMany(ClinicAttachment::class, 'clinic_record_id', 'id');

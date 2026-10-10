@@ -106,11 +106,11 @@ class AdminVaccinationInterfaceTest extends TestCase
     public function test_lifecycle_controls_are_state_specific_and_never_hard_delete_records(): void
     {
         $this->assertStringContainsString(
-            'x-show="record.state === \'draft\'"',
+            'x-show="canEditClinical && caseOngoing() && record.state === \'draft\'"',
             $this->clinicPage,
         );
         $this->assertStringContainsString(
-            'x-show="record.state === \'published\'"',
+            'x-show="canEditClinical && record.state === \'published\'"',
             $this->clinicPage,
         );
         $this->assertStringContainsString(
