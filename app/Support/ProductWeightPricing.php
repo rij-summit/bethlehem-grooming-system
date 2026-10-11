@@ -24,8 +24,14 @@ final class ProductWeightPricing
                 } else {
                     if ($min <= 0 || $max === null) return 'Enter a minimum and maximum weight.';
                     if ((float) $max <= $min) return 'Maximum must be greater than minimum.';
+                    $previous = $ranges[$index - 1] ?? null;
+                    if ($previous && (float) $previous['min_weight_kg'] > 0 && $previous['max_weight_kg'] !== null
+                        && round($min * 100) < round((float) $previous['max_weight_kg'] * 100) + 10) {
+                        $previousMax = (float) $previous['max_weight_kg'];
+                        $minimum = (round($previousMax * 100) + 10) / 100;
+                        return 'Must be greater than '.$previousMax.' kg. Minimum allowed: '.$minimum.' kg.';
+                    }
                     if ($index && $min <= (float) $ranges[$index - 1]['min_weight_kg']) return 'Minimum values must increase.';
-                    // Shared catalog endpoints are unambiguous: the next minimum owns the transition.
                     if ($next && (float) $max > (float) $next['min_weight_kg']) return 'Maximum cannot pass the next range.';
                 }
             }

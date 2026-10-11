@@ -26,6 +26,8 @@ window.ProductForm = (() => {
   const validBoundary = value => /^\d+(?:\.\d{0,2})?$/.test(String(value))
     && Number(value) > 0 && Number(value) <= 999999.99;
 
+  const nextRangeMinimum = value => String((Math.round(Number(value) * 100) + 10) / 100);
+
   const rangeBand = range => range.band || (Number(range.min_weight_kg) === 0 ? "below" : range.max_weight_kg == null ? "above" : "normal");
 
   function scheduleRanges(form) {
@@ -81,11 +83,14 @@ window.ProductForm = (() => {
       if (previous?.band === "normal" && validBoundary(String(previous.max_weight_kg).trim()) && min < Number(previous.max_weight_kg))
         return "Above threshold cannot precede the last maximum.";
       if (previous?.band === "below" && min < Number(previous.min_weight_kg)) return "Above threshold cannot precede the Below threshold.";
-    } else if (previous && validBoundary(String(previous.min_weight_kg).trim())) {
-      if (previous.band === "below" && min < Number(previous.min_weight_kg)) return "Minimum cannot precede the Below threshold.";
-      if (previous.band === "normal" && min <= Number(previous.min_weight_kg)) return "Minimum must be greater than the previous minimum.";
-      if (previous.band === "normal" && validBoundary(String(previous.max_weight_kg).trim()) && min < Number(previous.max_weight_kg))
-        return "Minimum cannot precede the previous maximum.";
+    } else if (previous) {
+      if (previous.band === "normal" && validBoundary(String(previous.max_weight_kg).trim())
+        && Math.round(min * 100) < Math.round(Number(previous.max_weight_kg) * 100) + 10)
+        return `Must be greater than ${Number(previous.max_weight_kg)} kg. Minimum allowed: ${nextRangeMinimum(previous.max_weight_kg)} kg.`;
+      if (validBoundary(String(previous.min_weight_kg).trim())) {
+        if (previous.band === "below" && min < Number(previous.min_weight_kg)) return "Minimum cannot precede the Below threshold.";
+        if (previous.band === "normal" && min <= Number(previous.min_weight_kg)) return "Minimum must be greater than the previous minimum.";
+      }
     }
     return "";
   }
@@ -141,8 +146,12 @@ window.ProductForm = (() => {
 
   function addRange(form) {
     const above = form.weight_prices.findIndex(range => range.band === "above");
-    form.weight_prices.splice(above < 0 ? form.weight_prices.length : above, 0,
-      { band: "normal", min_weight_kg: "", max_weight_kg: "", price: "" });
+    const index = above < 0 ? form.weight_prices.length : above;
+    const previous = form.weight_prices[index - 1];
+    const minimum = previous?.band === "normal" && validBoundary(String(previous.max_weight_kg).trim())
+      ? nextRangeMinimum(previous.max_weight_kg) : "";
+    form.weight_prices.splice(index, 0,
+      { band: "normal", min_weight_kg: minimum, max_weight_kg: "", price: "" });
     form.scheduleError = "";
   }
 

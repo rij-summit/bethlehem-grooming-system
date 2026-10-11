@@ -148,6 +148,34 @@ class ClinicInventoryPricingTest extends TestCase
         $this->assertEquals(400, $item->fresh()->clinicPrice(10.01)['price']);
     }
 
+    public function test_catalog_normal_ranges_require_a_tenth_kg_gap_on_add_and_edit(): void
+    {
+        foreach ([[5, 5.1, 6, '5', '5.1'], [5.99, 6.09, 7, '5.99', '6.09']] as [$maximum, $minimum, $end, $displayMaximum, $displayMinimum]) {
+            $ranges = [
+                ['min_weight_kg' => 1, 'max_weight_kg' => $maximum, 'price' => 1750],
+                ['min_weight_kg' => $minimum, 'max_weight_kg' => $end, 'price' => 1900],
+            ];
+            $item = $this->item(['weight_pricing_mode' => 'catalog', 'weight_prices' => $ranges]);
+            $message = 'Must be greater than '.$displayMaximum.' kg. Minimum allowed: '.$displayMinimum.' kg.';
+            foreach ([$maximum, round($maximum + 0.01, 2), round($maximum + 0.09, 2)] as $invalidMinimum) {
+                $invalid = $ranges;
+                $invalid[1]['min_weight_kg'] = $invalidMinimum;
+                $payload = $this->product(['weight_pricing_mode' => 'catalog', 'weight_prices' => $invalid]);
+                $this->postJson('/api/inventory/items', $payload)->assertUnprocessable()
+                    ->assertJsonValidationErrors('weight_prices')->assertJsonPath('errors.weight_prices.0', $message);
+                $this->putJson('/api/inventory/items/'.$item->item_id, $payload)->assertUnprocessable()
+                    ->assertJsonValidationErrors('weight_prices')->assertJsonPath('errors.weight_prices.0', $message);
+            }
+            $this->assertSame(number_format($minimum, 2, '.', ''), $item->fresh()->weightPrices[1]->min_weight_kg);
+            foreach ([$maximum, round($maximum + 0.01, 2), round($maximum + 0.09, 2)] as $weight) {
+                $this->assertEquals(1750, $item->fresh()->clinicPrice($weight)['price']);
+            }
+            $this->assertEquals(1900, $item->fresh()->clinicPrice($minimum)['price']);
+            $this->putJson('/api/inventory/items/'.$item->item_id,
+                $this->product(['weight_pricing_mode' => 'catalog', 'weight_prices' => $ranges]))->assertOk();
+        }
+    }
+
     public function test_catalog_above_boundary_and_final_cap_are_used_by_medicine_charges(): void
     {
         $item = $this->item(['weight_pricing_mode' => 'catalog', 'weight_prices' => [
