@@ -26,76 +26,146 @@ window.ProductForm = (() => {
   const validBoundary = value => /^\d+(?:\.\d{0,2})?$/.test(String(value))
     && Number(value) > 0 && Number(value) <= 999999.99;
 
-  function validateRanges(ranges) {
-    if (!Array.isArray(ranges) || !ranges.length) return "Add at least one weight range.";
-    if (ranges.length > 100) return "Use at most 100 weight ranges.";
-    for (let index = 0; index < ranges.length; index++) {
-      const range = ranges[index];
-      const below = index === 0 && String(range.min_weight_kg) === "0";
-      const open = range.max_weight_kg == null;
-      if (!below && !validBoundary(range.min_weight_kg))
-        return "Enter positive starting weights using no more than 2 decimal places.";
-      if (index && Number(range.min_weight_kg) <= Number(ranges[index - 1].min_weight_kg))
-        return "Starting weights must be positive and increase with each band.";
-      if (open && (below || index !== ranges.length - 1)) return "Only the final Starts band can be open-ended.";
-      if (!open && !validBoundary(range.max_weight_kg))
-        return "Enter a positive maximum weight using no more than 2 decimal places.";
-      if (!open && Number(range.max_weight_kg) <= Number(range.min_weight_kg))
-        return "Maximum weight must be greater than the starting weight.";
-      if (index < ranges.length - 1 && Number(range.max_weight_kg) !== Number(ranges[index + 1].min_weight_kg))
-        return "Each band must end at the next starting weight.";
-      if (!validMoney(range.price)) return "Each range price must be a valid positive money amount.";
-    }
-    return "";
-  }
+  const rangeBand = range => range.band || (Number(range.min_weight_kg) === 0 ? "below" : range.max_weight_kg == null ? "above" : "normal");
 
   function scheduleRanges(form) {
-    return form.weight_prices.map((range, index, ranges) => ({
-      min_weight_kg: range.band === "below" ? "0" : String(range.min_weight_kg).trim(),
-      max_weight_kg: index < ranges.length - 1 ? String(ranges[index + 1].min_weight_kg).trim()
-        : range.band === "below" ? String(range.min_weight_kg).trim()
-        : form.final_range === "open" ? null : String(form.weight_limit ?? "").trim(),
-      price: String(range.price).trim(),
+    return form.weight_prices.map(range => ({
+      band: range.band,
+      min_weight_kg: range.band === "below" ? "0" : String(range.min_weight_kg ?? "").trim(),
+      max_weight_kg: range.band === "above" ? null : String(range.band === "below" ? range.min_weight_kg ?? "" : range.max_weight_kg ?? "").trim(),
+      price: String(range.price ?? "").trim(),
     }));
   }
 
-  function rangeLabel(range, final = true, inclusive = false) {
+  function rangeLabel(range, final = true, inclusive = false, mode = "threshold") {
     const min = Number(range.min_weight_kg);
     const max = range.max_weight_kg === "" || range.max_weight_kg == null ? null : Number(range.max_weight_kg);
+    if (mode === "catalog") {
+      if (min === 0) return `Below ${max} kg`;
+      return max === null ? `Above ${min} kg` : `${min}–${max} kg`;
+    }
     if (max === null) return !inclusive && final && min > 0 ? `${min} kg and above` : "Maximum weight not configured";
     if (!inclusive && min === 0) return `Below ${max} kg`;
     if (!inclusive && !final) return `${min} to below ${max} kg`;
     return inclusive ? `${min} kg to ${max} kg` : `${min}–${max} kg`;
   }
 
-  function scheduleLabel(form, index) {
-    const ranges = scheduleRanges(form);
-    const range = ranges[index];
-    if (!range || (!validBoundary(range.min_weight_kg) && range.min_weight_kg !== "0")
-      || (range.max_weight_kg !== null && !validBoundary(range.max_weight_kg))) return "";
-    return rangeLabel(range, index === ranges.length - 1);
+  function weightInputError(value, required) {
+    const weight = String(value ?? "").trim();
+    if (!weight) return required;
+    if (/^\d+\.\d{3,}$/.test(weight)) return "Use no more than 2 decimal places.";
+    return validBoundary(weight) ? "" : "Enter a valid weight.";
   }
 
-  function syncBelowStart(form, index) {
-    if (form.weight_prices[0]?.band !== "below" || form.weight_prices.length < 2) return;
-    if (index === 0) form.weight_prices[1].min_weight_kg = form.weight_prices[0].min_weight_kg;
-    else if (index === 1) form.weight_prices[0].min_weight_kg = form.weight_prices[1].min_weight_kg;
+  function weightFieldError(form, index, field) {
+    const range = form.weight_prices[index];
+    if (field === "price") {
+      if (String(range.price ?? "").trim() === "") return "Enter a price.";
+      return validMoney(String(range.price).trim()) ? "" : "Enter a valid price.";
+    }
+    if (field === "max" && range.band !== "normal") return "";
+    const value = field === "max" ? range.max_weight_kg : range.min_weight_kg;
+    const error = weightInputError(value, field === "max" ? "Enter a maximum weight."
+      : range.band === "normal" ? "Enter a minimum weight." : "Enter a threshold weight.");
+    if (error) return error;
+    const min = Number(range.min_weight_kg), max = Number(range.max_weight_kg);
+    const previous = form.weight_prices[index - 1], next = form.weight_prices[index + 1];
+    if (field === "max") {
+      if (validBoundary(String(range.min_weight_kg).trim()) && max <= min) return "Maximum must be greater than minimum.";
+      if (next && validBoundary(String(next.min_weight_kg).trim()) && max > Number(next.min_weight_kg))
+        return "Maximum cannot pass the next range.";
+    } else if (range.band === "below") {
+      if (next && validBoundary(String(next.min_weight_kg).trim()) && min > Number(next.min_weight_kg))
+        return "Below threshold cannot pass the next range.";
+    } else if (range.band === "above") {
+      if (previous?.band === "normal" && validBoundary(String(previous.max_weight_kg).trim()) && min < Number(previous.max_weight_kg))
+        return "Above threshold cannot precede the last maximum.";
+      if (previous?.band === "below" && min < Number(previous.min_weight_kg)) return "Above threshold cannot precede the Below threshold.";
+    } else if (previous && validBoundary(String(previous.min_weight_kg).trim())) {
+      if (previous.band === "below" && min < Number(previous.min_weight_kg)) return "Minimum cannot precede the Below threshold.";
+      if (previous.band === "normal" && min <= Number(previous.min_weight_kg)) return "Minimum must be greater than the previous minimum.";
+      if (previous.band === "normal" && validBoundary(String(previous.max_weight_kg).trim()) && min < Number(previous.max_weight_kg))
+        return "Minimum cannot precede the previous maximum.";
+    }
+    return "";
+  }
+
+  function scheduleError(form) {
+    if (!form.weight_prices.length) return "Add a weight range.";
+    if (form.weight_prices.length > 100) return "Use at most 100 weight ranges.";
+    if (form.weight_prices.some((range, index) => !["below", "normal", "above"].includes(range.band)
+      || (range.band === "below" && index !== 0) || (range.band === "above" && index !== form.weight_prices.length - 1)))
+      return "Keep Below first and Above last.";
+    return "";
+  }
+
+  function checkWeightSchedule(form) {
+    form.scheduleError = scheduleError(form);
+    form.weight_prices.forEach((range, index) => {
+      range.weightError = weightFieldError(form, index, "min");
+      range.maximumError = weightFieldError(form, index, "max");
+      range.priceError = weightFieldError(form, index, "price");
+    });
+    return !form.scheduleError && !form.weight_prices.some(range => range.weightError || range.maximumError || range.priceError);
+  }
+
+  function validateRanges(ranges) {
+    if (!Array.isArray(ranges)) return "Add a weight range.";
+    const form = { weight_prices: ranges.map(range => ({...range, band: rangeBand(range),
+      min_weight_kg: rangeBand(range) === "below" ? range.max_weight_kg : range.min_weight_kg})) };
+    return scheduleError(form) || form.weight_prices.map((_, index) =>
+      weightFieldError(form, index, "min") || weightFieldError(form, index, "max") || weightFieldError(form, index, "price")).find(Boolean) || "";
+  }
+
+  function focusLastThreshold(section) {
+    const inputs = section.querySelectorAll("[data-normal-minimum]");
+    inputs[inputs.length - 1]?.focus();
+  }
+
+  function focusWeightError(section) {
+    const target = section?.querySelector('[aria-invalid="true"]') || section?.querySelector("button");
+    target?.focus();
   }
 
   function addBelowRange(form) {
-    if (form.weight_prices[0]?.band === "below") return;
+    if (form.weight_prices.some(range => range.band === "below")) return;
     form.weight_prices.unshift({ band: "below", min_weight_kg: form.weight_prices[0]?.min_weight_kg ?? "", price: "" });
+    form.scheduleError = "";
+  }
+
+  function addAboveRange(form) {
+    if (form.weight_prices.some(range => range.band === "above")) return;
+    form.weight_prices.push({ band: "above", min_weight_kg: form.weight_prices.at(-1)?.max_weight_kg ?? "", price: "" });
+    form.scheduleError = "";
   }
 
   function addRange(form) {
-    const belowOnly = form.weight_prices.length === 1 && form.weight_prices[0].band === "below";
-    form.weight_prices.push({ band: "starts", min_weight_kg: belowOnly ? form.weight_prices[0].min_weight_kg : "", price: "" });
+    const above = form.weight_prices.findIndex(range => range.band === "above");
+    form.weight_prices.splice(above < 0 ? form.weight_prices.length : above, 0,
+      { band: "normal", min_weight_kg: "", max_weight_kg: "", price: "" });
+    form.scheduleError = "";
   }
 
   function removeRange(form, index) {
     form.weight_prices.splice(index, 1);
-    if (form.weight_prices[0]?.band === "below" && form.weight_prices.length > 1)
-      form.weight_prices[0].min_weight_kg = form.weight_prices[1].min_weight_kg;
+    form.scheduleError = "";
+  }
+
+  function editableRanges(item) {
+    const ranges = (item.weight_prices || []).map(range => ({
+      band: Number(range.min_weight_kg) === 0 ? "below" : range.max_weight_kg == null && item.weight_pricing_mode === "catalog" ? "above" : "normal",
+      min_weight_kg: Number(range.min_weight_kg) === 0 ? range.max_weight_kg ?? "" : range.min_weight_kg,
+      max_weight_kg: range.max_weight_kg, price: range.price,
+    }));
+    // An older open tier includes its minimum; catalog Above rows exclude it.
+    // Keep that boundary price with a one-hundredth normal band at the same price.
+    if (item.weight_pricing_mode === "threshold" && ranges.at(-1)?.band === "normal" && ranges.at(-1).max_weight_kg == null) {
+      const open = ranges.pop();
+      const [whole, fraction = ""] = String(open.min_weight_kg).split(".");
+      const end = String((Number(whole) * 100 + Number(fraction.padEnd(2, "0")) + 1) / 100);
+      ranges.push({...open, max_weight_kg: end}, {...open, band: "above", min_weight_kg: end});
+    }
+    return ranges;
   }
 
   function clinicFields(item) {
@@ -106,13 +176,7 @@ window.ProductForm = (() => {
       dose_unit: standard ? dose : (dose ? "other" : ""), customDoseUnit: standard ? "" : dose,
       strength_concentration: item.category === "medicine" ? item.strength_concentration || "" : "",
       pricing_method: item.pricing_method || "flat",
-      weight_prices: (item.weight_prices || []).map(range => ({
-        band: Number(range.min_weight_kg) === 0 ? "below" : "starts",
-        min_weight_kg: Number(range.min_weight_kg) === 0 ? range.max_weight_kg ?? "" : range.min_weight_kg,
-        price: range.price,
-      })),
-      final_range: item.weight_prices?.length && item.weight_prices.at(-1).max_weight_kg == null ? "open" : "capped",
-      weight_limit: (item.weight_prices || []).at(-1)?.max_weight_kg ?? "",
+      weight_prices: editableRanges(item),
       savedWeightPricing: item.category === "medicine" && item.pricing_method === "weight_based",
     };
   }
@@ -128,7 +192,8 @@ window.ProductForm = (() => {
       unit: "",
       customUnit: "",
       medicine_type: "", dose_unit: "", customDoseUnit: "", strength_concentration: "",
-      pricing_method: "weight_based", weight_prices: [], final_range: "capped", weight_limit: "", savedWeightPricing: false,
+      pricing_method: "weight_based", weight_prices: [], savedWeightPricing: false,
+      scheduleError: "",
       description: "",
       unit_cost: "",
       selling_price: "",
@@ -196,8 +261,7 @@ window.ProductForm = (() => {
       dose_unit: isClinic(form) ? (form.dose_unit === "other" ? form.customDoseUnit.trim() : form.dose_unit) : null,
       strength_concentration: form.category === "medicine" ? String(form.strength_concentration || "").trim() || null : null,
       pricing_method: form.category === "medicine" ? form.pricing_method : "flat",
-      weight_pricing_mode: "threshold",
-      ...(isWeightBased(form) ? { weight_final_range: form.weight_prices.at(-1)?.band === "below" ? "capped" : form.final_range } : {}),
+      weight_pricing_mode: "catalog",
       weight_prices: isWeightBased(form) ? scheduleRanges(form) : [],
       reorder_level: parseInt(form.reorder_level, 10),
     };
@@ -241,5 +305,5 @@ window.ProductForm = (() => {
     owner.scannerActive = false;
   }
 
-  return { addBelowRange, addRange, removeRange, syncBelowStart, scheduleRanges, scheduleLabel, rangeLabel, clinicFields, doseUnitOptions, isClinic, isWeightBased, medicineTypeOptions, validateRanges, categoryOptions, closeBarcodeScanner, empty, normalizeBarcode, normalizeReorderLevel, openBarcodeScanner, payload, unitFields, unitOptions, validate };
+  return { addBelowRange, addAboveRange, addRange, checkWeightSchedule, focusLastThreshold, focusWeightError, removeRange, scheduleRanges, rangeLabel, weightFieldError, clinicFields, doseUnitOptions, isClinic, isWeightBased, medicineTypeOptions, validateRanges, categoryOptions, closeBarcodeScanner, empty, normalizeBarcode, normalizeReorderLevel, openBarcodeScanner, payload, unitFields, unitOptions, validate };
 })();

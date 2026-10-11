@@ -1,0 +1,54 @@
+/* Inventory keeps Bethlehem's existing palette, inputs and focus styles. */
+.inventory-weight-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) 8.5rem 2rem;
+  align-items: start;
+  gap: .5rem;
+  padding: .75rem 0;
+}
+.inventory-weight-row + .inventory-weight-row { border-top: 1px solid #e2e8f0; }
+.inventory-weight-badge {
+  margin-top: .625rem;
+  border-radius: .375rem;
+  background: #f1f5f9;
+  color: #475569;
+  padding: .125rem .375rem;
+  font-size: .75rem;
+  font-weight: 600;
+  text-align: center;
+}
+.inventory-weight-fields { display: flex; gap: .5rem; min-width: 0; }
+.inventory-weight-field { flex: 1; min-width: 0; }
+.inventory-weight-control { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.inventory-weight-control > span { flex-shrink: 0; font-size: .75rem; color: #475569; }
+.inventory-weight-control input { height: 2.5rem; min-width: 0; width: 100%; max-width: 5rem; }
+.inventory-weight-remove { margin-top: .25rem; }
+.inventory-weight-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.inventory-weight-actions button { white-space: nowrap; }
+.inventory-loader {
+  display: flex;
+  min-height: 160px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: .875rem;
+}
+.inventory-loader--main { min-height: calc(100vh - 8rem); }
+.inventory-loader svg { width: 2.25rem; height: 2.25rem; }
+.inventory-loader p { margin-top: .75rem; }
+@media (min-width: 1024px) {
+  .inventory-loader--main { min-height: calc(100vh - 3rem); }
+}
+@media (max-width: 639px) {
+  .inventory-weight-row { grid-template-columns: minmax(0, 1fr) 2rem; gap: .75rem; }
+  .inventory-weight-badge { justify-self: start; margin-top: 0; }
+  .inventory-weight-fields { grid-column: 1; flex-direction: column; }
+  .inventory-weight-price { grid-column: 1; }
+  .inventory-weight-remove { grid-column: 2; grid-row: 1; margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inventory-loader .animate-spin { animation: none; }
+}

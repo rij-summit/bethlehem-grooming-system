@@ -104,6 +104,18 @@ function clinicMedicinePrice(item, weight) {
     return { error: "Record or update the pet's weight before selecting a weight-based medicine price." };
   const ranges = item.weight_prices || [];
   const matches = ranges.map((range, index) => {
+    if (item.weight_pricing_mode === "catalog") {
+      const min = Number(range.min_weight_kg), next = ranges[index + 1];
+      let max = range.max_weight_kg, matches;
+      if (min === 0) matches = max != null && Number(weight) < Number(max);
+      else if (max == null) matches = Number(weight) > min;
+      else {
+        if (next) max = next.min_weight_kg;
+        const inclusive = !next || next.max_weight_kg == null;
+        matches = Number(weight) >= min && (inclusive ? Number(weight) <= Number(max) : Number(weight) < Number(max));
+      }
+      return {...range, max_weight_kg: max, matches};
+    }
     const final = index === ranges.length - 1;
     const threshold = item.weight_pricing_mode === "threshold";
     const max = threshold && !final ? ranges[index + 1].min_weight_kg : range.max_weight_kg;

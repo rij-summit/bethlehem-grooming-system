@@ -59,6 +59,11 @@ class ClinicInventoryPricingTest extends TestCase
         if (($payload['weight_pricing_mode'] ?? null) === 'threshold') {
             $payload['weight_final_range'] = $changes['weight_final_range'] ?? (($payload['weight_prices'][array_key_last($payload['weight_prices'])]['max_weight_kg'] ?? null) === null ? 'open' : 'capped');
         }
+        if (($payload['weight_pricing_mode'] ?? null) === 'catalog') {
+            $payload['weight_prices'] = array_map(fn ($range) => [...$range,
+                'band' => $range['band'] ?? ((float) $range['min_weight_kg'] === 0.0 ? 'below' : ($range['max_weight_kg'] === null ? 'above' : 'normal')),
+            ], $payload['weight_prices']);
+        }
         return $payload;
     }
 
@@ -79,6 +84,90 @@ class ClinicInventoryPricingTest extends TestCase
     {
         return ['inventory_item_id' => $item->item_id, 'expected_price' => $price,
             'expected_weight_kg' => $weight, 'inventory_quantity' => $quantity, 'request_key' => (string) Str::uuid()];
+    }
+
+    public function test_catalog_examples_preserve_display_endpoints_and_decimal_prices_on_add_and_edit(): void
+    {
+        $examples = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true)['catalog_pricing'];
+        foreach ($examples as $example) {
+            $ranges = array_map(fn ($r) => ['min_weight_kg' => $r[0], 'max_weight_kg' => $r[1], 'price' => $r[2]], $example['ranges']);
+            $item = $this->item(['weight_pricing_mode' => 'catalog', 'weight_prices' => $ranges, 'unit_cost' => 73.25]);
+            $this->assertSame('catalog', $item->weight_pricing_mode);
+            foreach ($example['examples'] as [$weight, $price]) {
+                $range = \App\Support\ProductWeightPricing::rangeFor($item->weightPrices->toArray(), $weight, 'catalog');
+                $this->assertEquals($price, $range['price'] ?? null);
+                if ($price !== null) $this->assertEquals($price, $item->clinicPrice($weight)['price']);
+            }
+            $this->postJson('/api/inventory/stock-in', ['items' => [[
+                'item_id' => $item->item_id, 'quantity' => 3, 'reason' => 'purchase',
+                'batch_number' => 'CATALOG', 'expiry_date' => today()->addYear()->toDateString(),
+            ]]])->assertCreated();
+            $this->putJson('/api/inventory/items/'.$item->item_id, $this->product([
+                'weight_pricing_mode' => 'catalog', 'weight_prices' => $ranges, 'unit_cost' => 73.25,
+            ]))->assertOk();
+            $details = $this->getJson('/api/inventory/items/'.$item->item_id)->assertOk();
+            foreach ($ranges as $index => $range) {
+                $details->assertJsonPath('data.weight_prices.'.$index.'.min_weight_kg', number_format($range['min_weight_kg'], 2, '.', ''))
+                    ->assertJsonPath('data.weight_prices.'.$index.'.max_weight_kg', $range['max_weight_kg'] === null ? null : number_format($range['max_weight_kg'], 2, '.', ''));
+            }
+            $this->putJson('/api/inventory/items/'.$item->item_id, [
+                'item_name' => 'Updated catalog', 'unit_cost' => 73.25, 'reorder_level' => 0,
+            ])->assertOk()->assertJsonPath('data.weight_pricing_mode', 'catalog');
+            $this->assertSame('73.25', $item->fresh()->unit_cost);
+            $this->assertSame('3.00', $item->fresh()->quantity_on_hand);
+            $this->assertNull($item->fresh()->selling_price);
+        }
+    }
+
+    public function test_invalid_catalog_rows_are_rejected_on_add_and_edit_without_mutating_saved_prices(): void
+    {
+        $r = fn ($min, $max, $price = 200, $band = 'normal') => ['band' => $band, 'min_weight_kg' => $min, 'max_weight_kg' => $max, 'price' => $price];
+        $valid = [$r(0, 1, 200, 'below'), $r(1, 4, 250), $r(5, 10, 300), $r(10, null, 400, 'above')];
+        $item = $this->item(['weight_pricing_mode' => 'catalog', 'weight_prices' => $valid]);
+        foreach ([[$r(1, null)], [$r(1, '')], [$r(0, 4)], [$r(1, 1)], [$r(5, 4)],
+            [$r(1, 6), $r(5, 10)], [$r(1, 4), $r(1, 5)], [$r(5, 10), $r(1, 4)],
+            [$r(0, 6, 200, 'below'), $r(5, 10)], [$r(0, 1, 200, 'below'), $r(0, 2, 200, 'below')],
+            [$r(1, 4), $r(0, 1, 200, 'below')], [$r(1, 4, 200, 'below')],
+            [$r(1, null, 200, 'above'), $r(5, 10)], [$r(1, 10), $r(9, null, 200, 'above')],
+            [$r(1, 10, 200, 'above')], [$r(10, null, 200, 'above'), $r(20, null, 200, 'above')],
+            [$r(0, null, 200, 'above')], [$r(-1, 4)], [$r('1.000', 4)], [$r(1, '4.200000')],
+            [$r(1, 4, 0)], [$r(1, 4, '2.345')], [$r(0, '1.000', 200, 'below')], [$r('40.000', null, 200, 'above')]] as $bad) {
+            $payload = $this->product(['weight_pricing_mode' => 'catalog', 'weight_prices' => $bad]);
+            $this->postJson('/api/inventory/items', $payload)->assertUnprocessable();
+            $this->putJson('/api/inventory/items/'.$item->item_id, $payload)->assertUnprocessable();
+        }
+        $missing = $this->product(['weight_pricing_mode' => 'catalog', 'weight_prices' => $valid]);
+        unset($missing['weight_prices'][1]['max_weight_kg']);
+        $this->postJson('/api/inventory/items', $missing)->assertUnprocessable()->assertJsonValidationErrors('weight_prices.1.max_weight_kg');
+        $missing = $this->product(['weight_pricing_mode' => 'catalog', 'weight_prices' => $valid]);
+        unset($missing['weight_prices'][3]['band']);
+        $this->postJson('/api/inventory/items', $missing)->assertUnprocessable()->assertJsonValidationErrors('weight_prices.3.band');
+        $this->assertSame('4.00', $item->fresh()->weightPrices[1]->max_weight_kg);
+        $this->assertEquals(250, $item->fresh()->clinicPrice(4.99)['price']);
+        $this->assertEquals(300, $item->fresh()->clinicPrice(10)['price']);
+        $this->assertEquals(400, $item->fresh()->clinicPrice(10.01)['price']);
+    }
+
+    public function test_catalog_above_boundary_and_final_cap_are_used_by_medicine_charges(): void
+    {
+        $item = $this->item(['weight_pricing_mode' => 'catalog', 'weight_prices' => [
+            ['min_weight_kg' => 31, 'max_weight_kg' => 40, 'price' => 650],
+            ['min_weight_kg' => 40, 'max_weight_kg' => null, 'price' => 800],
+        ]]);
+        foreach ([[40, 650], [40.01, 800], [41, 800]] as [$weight, $price]) {
+            $appointment = $this->appointment($weight);
+            $this->postJson('/api/admin/clinic-appointments/'.$appointment->id.'/record', [
+                'weight_kg' => (string) $weight, 'medicines' => [$this->charge($item, $price, $weight)],
+            ])->assertOk();
+        }
+        $this->putJson('/api/inventory/items/'.$item->item_id, $this->product([
+            'weight_pricing_mode' => 'catalog', 'weight_prices' => [['min_weight_kg' => 31, 'max_weight_kg' => 40, 'price' => 650]],
+        ]))->assertOk();
+        $appointment = $this->appointment(40.01);
+        $this->postJson('/api/admin/clinic-appointments/'.$appointment->id.'/record', [
+            'weight_kg' => '40.01', 'medicines' => [$this->charge($item, 650, 40.01)],
+        ])->assertUnprocessable();
+        $this->assertDatabaseCount('clinic_charges', 3);
     }
 
     public function test_threshold_examples_round_trip_on_add_and_edit_without_changing_cost_or_stock(): void

@@ -202,9 +202,9 @@
         class="shrink-0 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Close</button>
     </div>
     <div class="overflow-y-auto px-6 py-5">
-      <div x-show="details.loading" role="status" class="flex items-center gap-2 py-6 text-sm text-slate-500">
-        <svg class="ph-icon h-5 w-5 animate-spin" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#spinner-gap"></use></svg>
-        Loading current product information…
+      <div x-show="details.loading" role="status" aria-live="polite" class="inventory-loader">
+        <svg class="ph-icon animate-spin" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg#spinner-gap"></use></svg>
+        <p>Loading current product information…</p>
       </div>
       <div x-show="details.error" role="alert" class="rounded-xl bg-red-50 p-4 text-sm text-red-700">
         <p x-text="details.error"></p>
@@ -271,7 +271,7 @@
             <div x-show="ProductForm.isWeightBased(details.item)" class="mt-3">
               <p class="mb-2 text-sm font-semibold text-slate-700">Weight Price Schedule</p>
               <table class="w-full text-left text-sm"><thead class="border-b border-slate-200 text-xs text-slate-500"><tr><th scope="col" class="py-2">Weight range</th><th scope="col" class="text-right">Price</th></tr></thead>
-                <tbody><template x-for="(range, index) in details.item.weight_prices" :key="index"><tr class="border-b border-slate-100"><td class="py-2" x-text="ProductForm.rangeLabel(range, index === details.item.weight_prices.length - 1, details.item.weight_pricing_mode !== 'threshold')"></td><td class="text-right" x-text="fmtMoney(range.price)"></td></tr></template></tbody>
+                <tbody><template x-for="(range, index) in details.item.weight_prices" :key="index"><tr class="border-b border-slate-100"><td class="py-2" x-text="ProductForm.rangeLabel(range, index === details.item.weight_prices.length - 1, details.item.weight_pricing_mode !== 'threshold', details.item.weight_pricing_mode)"></td><td class="text-right" x-text="fmtMoney(range.price)"></td></tr></template></tbody>
               </table>
             </div>
           </section>
@@ -293,14 +293,14 @@
 <!-- ── Add / Edit Modal ────────────────────────────────────────── -->
 <div x-cloak x-show="modal.open" style="display:none" x-transition
   class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-  <div x-ref="productForm" class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden" @click.stop>
-    <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+  <div x-ref="productForm" class="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-3xl bg-white shadow-2xl overflow-hidden" @click.stop>
+    <div class="flex shrink-0 items-center justify-between px-6 py-5 border-b border-slate-100">
       <h4 class="text-lg font-bold text-slate-800" x-text="form.item_id ? 'Edit Product' : 'Add Product'"></h4>
       <button type="button" @click="modal.open=false" class="text-slate-400 hover:text-red-500">
 
       Close</button>
     </div>
-    <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+    <div class="min-h-0 flex-1 px-6 py-5 space-y-4 overflow-y-auto">
       <!-- Name -->
       <div>
         <label class="block text-sm font-semibold text-slate-700 mb-1.5">
@@ -356,36 +356,48 @@
         <span class="mb-1.5 block text-sm font-semibold text-slate-700">Pricing Method *</span>
         <select x-model="form.pricing_method" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"><option value="weight_based">Weight-based</option><option value="flat">Flat price</option></select>
       </label>
-      <section x-show="ProductForm.isWeightBased(form)" x-cloak x-data="{ touched: false }" @input="touched = true" @change="touched = true" class="space-y-2 rounded-xl border border-slate-200 p-3" aria-label="Weight Price Schedule">
+      <section x-show="ProductForm.isWeightBased(form)" x-cloak class="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Weight Price Schedule">
         <h5 class="text-sm font-semibold text-slate-700">Weight-based Pricing</h5>
-        <table class="w-full text-left text-sm" style="table-layout: fixed">
-          <colgroup><col /><col style="width: 30%" /><col style="width: 32px" /></colgroup>
-          <thead class="text-xs text-slate-600"><tr><th scope="col" class="pb-1 pr-2 font-medium">Weight band (kg)</th><th scope="col" class="pb-1 font-medium">Price (₱)</th><th scope="col"><span class="sr-only">Remove</span></th></tr></thead>
-          <tbody><template x-for="(range, index) in form.weight_prices" :key="index">
-            <tr>
-              <td class="py-1 pr-2">
-                <div class="flex items-center gap-2">
-                  <span class="shrink-0 text-xs text-slate-600" x-text="range.band === 'below' ? 'Below' : 'Starts'"></span>
-                  <input x-model="range.min_weight_kg" @input="ProductForm.syncBelowStart(form, index)" type="text" inputmode="decimal" :aria-label="(range.band === 'below' ? 'Below weight' : 'Starting weight') + ' in kilograms, row ' + (index + 1)" aria-describedby="form-weight-schedule-error" :aria-invalid="touched && Boolean(ProductForm.validateRanges(ProductForm.scheduleRanges(form)))" :required="ProductForm.isWeightBased(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+        <div>
+          <template x-for="(range, index) in form.weight_prices" :key="index">
+            <div class="inventory-weight-row">
+              <span class="inventory-weight-badge" x-text="range.band === 'normal' ? 'Range' : range.band === 'below' ? 'Below' : 'Above'"></span>
+              <div class="inventory-weight-fields">
+                <div class="inventory-weight-field">
+                  <label class="inventory-weight-control">
+                    <span x-text="range.band === 'normal' ? 'From' : range.band === 'below' ? 'Below' : 'Above'"></span>
+                    <input x-model="range.min_weight_kg" @input="range.weightError = ''" @blur="if (String(range.min_weight_kg ?? '').trim() || range.weightError) range.weightError = ProductForm.weightFieldError(form, index, 'min')" :data-normal-minimum="range.band === 'normal' ? '' : null" type="text" inputmode="decimal" :aria-label="(range.band === 'normal' ? 'From weight' : range.band === 'below' ? 'Below threshold' : 'Above threshold') + ' in kilograms, row ' + (index + 1)" :aria-describedby="'form-weight-error-' + index" :aria-invalid="Boolean(range.weightError)" :required="ProductForm.isWeightBased(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                    <span>kg</span>
+                  </label>
+                  <p :id="'form-weight-error-' + index" x-show="range.weightError" x-text="range.weightError" class="mt-1 text-xs text-red-600" role="alert"></p>
                 </div>
-                <span x-show="ProductForm.scheduleLabel(form, index)" x-text="ProductForm.scheduleLabel(form, index)" class="mt-1 block text-xs text-slate-500"></span>
-              </td>
-              <td class="py-1" style="vertical-align: top"><input x-model="range.price" type="text" inputmode="decimal" :aria-label="'Price in pesos, row ' + (index + 1)" aria-describedby="form-weight-schedule-error" :aria-invalid="touched && Boolean(ProductForm.validateRanges(ProductForm.scheduleRanges(form)))" :required="ProductForm.isWeightBased(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" /></td>
-              <td class="py-1 text-right" style="vertical-align: top"><button type="button" @click="ProductForm.removeRange(form, index); touched = true" :aria-label="'Remove weight range ' + (index + 1)" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]"><svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#x"></use></svg></button></td>
-            </tr>
-          </template></tbody>
-          <tfoot x-show="form.weight_prices.length && form.weight_prices.at(-1)?.band !== 'below'"><tr><td colspan="3" class="py-1">
-            <div class="flex items-center gap-2">
-              <select x-model="form.final_range" aria-label="Final range" class="shrink-0 rounded-lg border border-slate-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"><option value="capped">Capped</option><option value="open">And above</option></select>
-              <input x-show="form.final_range === 'capped'" x-model="form.weight_limit" type="text" inputmode="decimal" aria-label="Final maximum weight in kilograms" aria-describedby="form-weight-schedule-error" :aria-invalid="touched && Boolean(ProductForm.validateRanges(ProductForm.scheduleRanges(form)))" :required="ProductForm.isWeightBased(form) && !(form.final_range !== 'capped' || !form.weight_prices.length || form.weight_prices.at(-1)?.band === 'below')" :disabled="form.final_range !== 'capped' || !form.weight_prices.length || form.weight_prices.at(-1)?.band === 'below'" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
-              <span x-show="form.final_range === 'capped'" class="text-xs text-slate-600">kg</span>
+                <template x-if="range.band === 'normal'">
+                  <div class="inventory-weight-field">
+                    <label class="inventory-weight-control">
+                      <span>To</span>
+                      <input x-model="range.max_weight_kg" @input="range.maximumError = ''" @blur="if (String(range.max_weight_kg ?? '').trim() || range.maximumError) range.maximumError = ProductForm.weightFieldError(form, index, 'max')" type="text" inputmode="decimal" :aria-label="'To weight in kilograms, row ' + (index + 1)" :aria-describedby="'form-maximum-error-' + index" :aria-invalid="Boolean(range.maximumError)" :required="ProductForm.isWeightBased(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                      <span>kg</span>
+                    </label>
+                    <p :id="'form-maximum-error-' + index" x-show="range.maximumError" x-text="range.maximumError" class="mt-1 text-xs text-red-600" role="alert"></p>
+                  </div>
+                </template>
+              </div>
+              <div class="inventory-weight-price">
+                <label class="inventory-weight-control">
+                  <span>Price ₱</span>
+                  <input x-model="range.price" @input="range.priceError = ''" @blur="if (String(range.price ?? '').trim() || range.priceError) range.priceError = ProductForm.weightFieldError(form, index, 'price')" data-money-input type="text" inputmode="decimal" :aria-label="'Price in pesos, row ' + (index + 1)" :aria-describedby="'form-price-error-' + index" :aria-invalid="Boolean(range.priceError)" :required="ProductForm.isWeightBased(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+                </label>
+                <p :id="'form-price-error-' + index" x-show="range.priceError" x-text="range.priceError" class="mt-1 text-xs text-red-600" role="alert"></p>
+              </div>
+              <div class="inventory-weight-remove"><button type="button" @click="ProductForm.removeRange(form, index)" :aria-label="'Remove weight range ' + (index + 1)" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]"><svg class="ph-icon h-4 w-4" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../../assets/icons/phosphor.svg?v=inventory-icons-20261002#x"></use></svg></button></div>
             </div>
-          </td></tr></tfoot>
-        </table>
-        <p id="form-weight-schedule-error" x-show="touched && ProductForm.validateRanges(ProductForm.scheduleRanges(form))" x-text="ProductForm.validateRanges(ProductForm.scheduleRanges(form))" class="text-xs text-red-600" role="alert"></p>
-        <div class="flex flex-wrap items-center gap-2">
-          <button type="button" @click="ProductForm.addRange(form)" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">+ Add weight range</button>
-          <button x-show="form.weight_prices[0]?.band !== 'below'" type="button" @click="ProductForm.addBelowRange(form)" class="px-2 py-2 text-xs font-semibold text-slate-600 hover:text-[#315b7e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Add Below range</button>
+          </template>
+        </div>
+        <p x-show="form.scheduleError" x-text="form.scheduleError" class="text-xs text-red-600" role="alert"></p>
+        <div class="inventory-weight-actions">
+          <button type="button" @click="ProductForm.addRange(form); $nextTick(() => ProductForm.focusLastThreshold($el.closest('section')))" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">+ Add weight range</button>
+          <button x-show="!form.weight_prices.some(range => range.band === 'below')" type="button" @click="ProductForm.addBelowRange(form)" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Add Below Range</button>
+          <button x-show="form.weight_prices.some(range => range.band === 'below') && !form.weight_prices.some(range => range.band === 'above')" type="button" @click="ProductForm.addAboveRange(form)" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Add Above Range</button>
         </div>
       </section>
       <p x-show="form.savedWeightPricing && !ProductForm.isWeightBased(form)" x-cloak class="text-xs text-amber-700">Saving this change will remove the saved medicine price ranges. Switch back to Medicine and Weight-based to keep them.</p>
@@ -413,7 +425,7 @@
           <label class="block text-sm font-semibold text-slate-700 mb-1.5">Unit Cost</label>
           <div class="relative">
             <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">₱</span>
-            <input x-model="form.unit_cost" type="number" step="0.01" min="0.01" required placeholder="0.00"
+            <input x-model="form.unit_cost" data-money-input inputmode="decimal" type="number" step="0.01" min="0.01" required placeholder="0.00"
               class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </div>
         </div>
@@ -421,7 +433,7 @@
           <label class="block text-sm font-semibold text-slate-700 mb-1.5">Selling Price</label>
           <div class="relative">
             <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">₱</span>
-            <input x-model="form.selling_price" type="number" step="0.01" min="0.01" :required="!ProductForm.isWeightBased(form)" placeholder="0.00"
+            <input x-model="form.selling_price" data-money-input inputmode="decimal" type="number" step="0.01" min="0.01" :required="!ProductForm.isWeightBased(form)" placeholder="0.00"
               class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </div>
         </div>
@@ -435,13 +447,13 @@
       <!-- Error -->
       <p x-show="modal.error" style="display:none" class="text-sm text-red-600" x-text="modal.error"></p>
     </div>
-    <div class="flex gap-3 border-t border-slate-100 px-6 py-4">
+    <div class="flex shrink-0 gap-3 border-t border-slate-100 px-6 py-4">
       <button type="button" @click="modal.open=false"
         class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
         Cancel
       </button>
       <button type="button" @click="submitForm()" :disabled="modal.busy"
-        class="flex-1 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#284a67] disabled:opacity-50">
+        class="flex-1 whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#284a67] disabled:opacity-50">
         <span x-text="modal.busy ? 'Saving…' : (form.item_id ? 'Save Changes' : 'Add Product')">Add Product</span>
       </button>
     </div>

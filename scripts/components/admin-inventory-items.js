@@ -198,21 +198,25 @@ function adminInventoryItems() {
 
     async submitForm() {
       this.modal.error = "";
+      if (ProductForm.isWeightBased(this.form) && !ProductForm.checkWeightSchedule(this.form)) {
+        this.$nextTick(() => ProductForm.focusWeightError(this.$refs?.productForm?.querySelector('section[aria-label="Weight Price Schedule"]')));
+        return;
+      }
       this.modal.error = ProductForm.validate(this.form);
       if (this.modal.error) return;
 
       this.modal.busy = true;
       try {
         const payload = ProductForm.payload(this.form);
+        const editing = Boolean(this.form.item_id);
         if (this.form.item_id) {
           await InventoryAPI.updateItem(this.form.item_id, payload);
-          this.showToast("Item updated");
         } else {
           await InventoryAPI.createItem(payload);
-          this.showToast("Item added");
         }
         this.modal.open = false;
         await this.load(this.currentPage);
+        this.showToast(editing ? "Product updated successfully." : "Product added successfully.");
       } catch (err) {
         this.modal.error = err.errors
           ? Object.values(err.errors).flat().join(" ")

@@ -322,15 +322,16 @@ class InventoryController extends Controller
             'dose_unit' => $clinic ? 'required|string|max:30' : 'prohibited',
             'strength_concentration' => $medicine ? 'nullable|string|max:150' : 'prohibited',
             'pricing_method' => $medicine ? 'required|in:flat,weight_based' : 'nullable|in:flat',
-            'weight_pricing_mode' => 'sometimes|in:legacy,threshold,ranges',
+            'weight_pricing_mode' => 'sometimes|in:legacy,threshold,ranges,catalog',
             'weight_final_range' => 'sometimes|in:open,capped',
             'weight_prices' => $weightBased ? 'required|array|min:1|max:100' : 'prohibited',
-            'weight_prices.*' => 'required|array:min_weight_kg,max_weight_kg,price',
-            'weight_prices.*.min_weight_kg' => ['required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', $preserveSchedule || $pricingMode === 'threshold' ? 'min:0' : 'gt:0', 'max:999999.99'],
-            'weight_prices.*.max_weight_kg' => ['present', $preserveSchedule || $pricingMode === 'threshold' ? 'nullable' : 'required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', 'gt:0', 'max:999999.99'],
+            'weight_prices.*' => 'required|array:'.($pricingMode === 'catalog' ? 'band,' : '').'min_weight_kg,max_weight_kg,price',
+            'weight_prices.*.band' => $pricingMode === 'catalog' ? ($preserveSchedule ? 'sometimes' : 'required').'|in:below,normal,above' : 'prohibited',
+            'weight_prices.*.min_weight_kg' => ['required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', $preserveSchedule || in_array($pricingMode, ['threshold', 'catalog'], true) ? 'min:0' : 'gt:0', 'max:999999.99'],
+            'weight_prices.*.max_weight_kg' => ['present', $preserveSchedule || in_array($pricingMode, ['threshold', 'catalog'], true) ? 'nullable' : 'required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', 'gt:0', 'max:999999.99'],
             'weight_prices.*.price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
         ], [
-            'weight_prices.*.min_weight_kg.required' => 'Enter a starting weight for every band.',
+            'weight_prices.*.min_weight_kg.required' => 'Enter a minimum or threshold weight.',
             'weight_prices.*.max_weight_kg.required' => 'Enter a maximum weight for every range.',
             'weight_prices.*.min_weight_kg.numeric' => 'Enter a valid starting weight in kilograms.',
             'weight_prices.*.max_weight_kg.numeric' => 'Enter a valid maximum weight in kilograms.',
@@ -339,7 +340,7 @@ class InventoryController extends Controller
             'weight_prices.*.min_weight_kg.min' => 'Starting weights cannot be negative.',
             'weight_prices.*.min_weight_kg.gt' => 'Starting weight must be greater than 0 kg.',
             'weight_prices.*.max_weight_kg.gt' => 'Maximum weight must be greater than 0 kg.',
-            'weight_prices.*.max_weight_kg.present' => 'Set a maximum weight or choose And above.',
+            'weight_prices.*.max_weight_kg.present' => 'Enter a maximum weight.',
             'weight_prices.*.price.required' => 'Enter a price for every range.',
             'weight_prices.*.price.numeric' => 'Enter a valid range price.',
             'weight_prices.*.price.decimal' => 'Enter range prices using no more than 2 decimal places.',
@@ -348,6 +349,14 @@ class InventoryController extends Controller
         $validator->after(function ($validator) use ($data, $weightBased, $preserveSchedule, $pricingMode) {
             if (! $weightBased || $preserveSchedule || $validator->errors()->isNotEmpty()) return;
             $ranges = array_values($data['weight_prices']);
+            if ($pricingMode === 'catalog') {
+                foreach ($ranges as $index => $range) {
+                    if ($range['band'] !== 'above' && $range['max_weight_kg'] === null) {
+                        $validator->errors()->add('weight_prices.'.$index.'.max_weight_kg', 'Enter a maximum weight.');
+                    }
+                }
+                if ($validator->errors()->isNotEmpty()) return;
+            }
             $error = \App\Support\ProductWeightPricing::configurationError($ranges, $pricingMode);
             if ($error) $validator->errors()->add('weight_prices', $error);
             if ($pricingMode === 'threshold') {

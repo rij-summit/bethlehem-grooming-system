@@ -141,6 +141,10 @@ function adminStockIn() {
 
     async createAndSelect() {
       this.createError = "";
+      if (ProductForm.isWeightBased(this.createForm) && !ProductForm.checkWeightSchedule(this.createForm)) {
+        this.$nextTick(() => ProductForm.focusWeightError(this.$el?.querySelector('section[aria-label="Weight Price Schedule"]')));
+        return;
+      }
       this.createError = ProductForm.validate(this.createForm);
       if (this.createError) return;
 
