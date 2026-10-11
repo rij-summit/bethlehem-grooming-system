@@ -303,11 +303,10 @@ class InventoryController extends Controller
         $weightBased = $medicine && ($data['pricing_method'] ?? null) === 'weight_based';
         $savedRanges = $weightBased && $item
             ? $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->all() : [];
-        // Legacy endpoints may only be kept unchanged on an existing product.
-        $preserveLegacy = $weightBased && $item?->pricing_method === 'weight_based'
-            && ($item->weight_pricing_mode ?? 'legacy') === 'legacy'
-            && ($data['weight_pricing_mode'] ?? 'legacy') === 'legacy'
-            && ($data['weight_prices'] ?? []) == $savedRanges;
+        // Partial updates must not reinterpret a schedule that was not edited.
+        $preserveSchedule = $weightBased && $item?->pricing_method === 'weight_based'
+            && ! $request->exists('weight_prices') && ($data['weight_prices'] ?? []) == $savedRanges;
+        $pricingMode = $preserveSchedule ? ($item->weight_pricing_mode ?? 'legacy') : ($data['weight_pricing_mode'] ?? 'threshold');
         $required = $item ? 'sometimes' : 'required';
         $validator = Validator::make($data, [
             'item_name' => $required.'|string|max:150',
@@ -323,24 +322,51 @@ class InventoryController extends Controller
             'dose_unit' => $clinic ? 'required|string|max:30' : 'prohibited',
             'strength_concentration' => $medicine ? 'nullable|string|max:150' : 'prohibited',
             'pricing_method' => $medicine ? 'required|in:flat,weight_based' : 'nullable|in:flat',
-            'weight_pricing_mode' => 'sometimes|in:legacy,threshold',
+            'weight_pricing_mode' => 'sometimes|in:legacy,threshold,ranges',
+            'weight_final_range' => 'sometimes|in:open,capped',
             'weight_prices' => $weightBased ? 'required|array|min:1|max:100' : 'prohibited',
             'weight_prices.*' => 'required|array:min_weight_kg,max_weight_kg,price',
-            'weight_prices.*.min_weight_kg' => 'required|numeric|decimal:0,2|min:0|max:999999.99',
-            'weight_prices.*.max_weight_kg' => 'nullable|numeric|decimal:0,2|gt:0|max:999999.99',
+            'weight_prices.*.min_weight_kg' => ['required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', $preserveSchedule || $pricingMode === 'threshold' ? 'min:0' : 'gt:0', 'max:999999.99'],
+            'weight_prices.*.max_weight_kg' => ['present', $preserveSchedule || $pricingMode === 'threshold' ? 'nullable' : 'required', 'numeric', 'regex:/^\d+(?:\.\d{0,2})?$/', 'gt:0', 'max:999999.99'],
             'weight_prices.*.price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+        ], [
+            'weight_prices.*.min_weight_kg.required' => 'Enter a starting weight for every band.',
+            'weight_prices.*.max_weight_kg.required' => 'Enter a maximum weight for every range.',
+            'weight_prices.*.min_weight_kg.numeric' => 'Enter a valid starting weight in kilograms.',
+            'weight_prices.*.max_weight_kg.numeric' => 'Enter a valid maximum weight in kilograms.',
+            'weight_prices.*.min_weight_kg.regex' => 'Enter starting weights using no more than 2 decimal places.',
+            'weight_prices.*.max_weight_kg.regex' => 'Enter maximum weights using no more than 2 decimal places.',
+            'weight_prices.*.min_weight_kg.min' => 'Starting weights cannot be negative.',
+            'weight_prices.*.min_weight_kg.gt' => 'Starting weight must be greater than 0 kg.',
+            'weight_prices.*.max_weight_kg.gt' => 'Maximum weight must be greater than 0 kg.',
+            'weight_prices.*.max_weight_kg.present' => 'Set a maximum weight or choose And above.',
+            'weight_prices.*.price.required' => 'Enter a price for every range.',
+            'weight_prices.*.price.numeric' => 'Enter a valid range price.',
+            'weight_prices.*.price.decimal' => 'Enter range prices using no more than 2 decimal places.',
+            'weight_prices.*.price.min' => 'Range price must be greater than zero.',
         ]);
-        $validator->after(function ($validator) use ($data, $weightBased, $preserveLegacy) {
-            if (! $weightBased || $preserveLegacy || $validator->errors()->isNotEmpty()) return;
-            $error = \App\Support\ProductWeightPricing::configurationError(array_values($data['weight_prices']));
+        $validator->after(function ($validator) use ($data, $weightBased, $preserveSchedule, $pricingMode) {
+            if (! $weightBased || $preserveSchedule || $validator->errors()->isNotEmpty()) return;
+            $ranges = array_values($data['weight_prices']);
+            $error = \App\Support\ProductWeightPricing::configurationError($ranges, $pricingMode);
             if ($error) $validator->errors()->add('weight_prices', $error);
+            if ($pricingMode === 'threshold') {
+                $final = $ranges[array_key_last($ranges)];
+                $open = ($data['weight_final_range'] ?? 'capped') === 'open';
+                if (! $open && $final['max_weight_kg'] === null) {
+                    $validator->errors()->add('weight_prices', 'Enter a maximum weight or choose And above.');
+                } elseif ($open && $final['max_weight_kg'] !== null) {
+                    $validator->errors()->add('weight_prices', 'Clear the maximum weight when choosing And above.');
+                }
+            }
         });
         $validated = $validator->validate();
+        unset($validated['weight_final_range']);
         $validated['medicine_type'] = $medicine ? $validated['medicine_type'] : null;
         $validated['dose_unit'] = $clinic ? trim($validated['dose_unit']) : null;
         $validated['strength_concentration'] = $medicine ? ($validated['strength_concentration'] ?? null) : null;
         $validated['pricing_method'] = $medicine ? $validated['pricing_method'] : 'flat';
-        $validated['weight_pricing_mode'] = $preserveLegacy ? 'legacy' : 'threshold';
+        $validated['weight_pricing_mode'] = $pricingMode;
         $validated['weight_prices'] = $weightBased
             ? collect($validated['weight_prices'])->map(fn ($range) => [
                 'min_weight_kg' => $range['min_weight_kg'], 'max_weight_kg' => $range['max_weight_kg'] ?? null,

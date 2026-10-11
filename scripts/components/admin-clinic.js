@@ -94,7 +94,7 @@ document.addEventListener("alpine:init", () => {
   });
 });
 
-// Preserve legacy endpoints; threshold tiers include only their final upper bound.
+// Threshold bands use the next starting weight; explicit historical ranges retain their endpoints.
 function clinicMedicinePrice(item, weight) {
   if (item.pricing_method !== "weight_based") {
     if (!(Number(item.selling_price) > 0)) return { error: "Set this medicine's selling price in Inventory." };
@@ -102,9 +102,16 @@ function clinicMedicinePrice(item, weight) {
   }
   if (weight === "" || weight == null || !Number.isFinite(Number(weight)) || Number(weight) <= 0)
     return { error: "Record or update the pet's weight before selecting a weight-based medicine price." };
-  const matches = (item.weight_prices || []).filter((range, index, ranges) => Number(weight) >= Number(range.min_weight_kg)
-    && (range.max_weight_kg == null || (item.weight_pricing_mode !== "threshold" || index === ranges.length - 1
-      ? Number(weight) <= Number(range.max_weight_kg) : Number(weight) < Number(range.max_weight_kg))));
+  const ranges = item.weight_prices || [];
+  const matches = ranges.map((range, index) => {
+    const final = index === ranges.length - 1;
+    const threshold = item.weight_pricing_mode === "threshold";
+    const max = threshold && !final ? ranges[index + 1].min_weight_kg : range.max_weight_kg;
+    const inclusive = !threshold || (final && Number(range.min_weight_kg) > 0);
+    const open = threshold && final && Number(range.min_weight_kg) > 0 && max === null;
+    return { ...range, max_weight_kg: max, matches: Number(weight) >= Number(range.min_weight_kg)
+      && (open || (max != null && max !== "" && (inclusive ? Number(weight) <= Number(max) : Number(weight) < Number(max)))) };
+  }).filter(range => range.matches);
   if (matches.length !== 1) return { error: "No price is configured for this pet's weight. Correct the pricing configuration or pet weight." };
   return { price: Number(matches[0].price), pet_weight_kg: Number(weight),
     min_weight_kg: matches[0].min_weight_kg, max_weight_kg: matches[0].max_weight_kg };

@@ -11,13 +11,13 @@ vm.runInContext(fs.readFileSync("scripts/components/admin-clinic.js", "utf8"), c
 });
 const pf = context.window.ProductForm;
 const ranges = [
-  { min_weight_kg: 0, price: "200" },
-  { min_weight_kg: "5.1", price: "400" },
-  { min_weight_kg: "10.1", price: "700" },
-  { min_weight_kg: "15.1", price: "900" },
+  { min_weight_kg: "1", max_weight_kg: "5", price: "200" },
+  { min_weight_kg: "5.1", max_weight_kg: "10", price: "400" },
+  { min_weight_kg: "10.1", max_weight_kg: "15", price: "700" },
+  { min_weight_kg: "15.1", max_weight_kg: "50", price: "900" },
 ];
 const form = pf.empty({ item_name: "Medicine", category: "medicine", medicine_type: "deworming",
-  unit: "bottle", dose_unit: "mL", strength_concentration: "10 mg/mL", unit_cost: "50", reorder_level: "0", weight_prices: ranges });
+  unit: "bottle", dose_unit: "mL", strength_concentration: "10 mg/mL", unit_cost: "50", reorder_level: "0", weight_prices: ranges, final_range: "capped", weight_limit: "50" });
 assert.equal(form.pricing_method, "weight_based");
 assert.equal(pf.validate(form), "");
 for (const option of pf.medicineTypeOptions) {
@@ -36,8 +36,8 @@ assert.equal(pf.validate(form), "");
 assert.equal(pf.payload(form).strength_concentration, null);
 form.strength_concentration = "10 mg/mL";
 assert.equal(payload.selling_price, null);
-assert.deepEqual(Array.from(payload.weight_prices, r => r.min_weight_kg), [0, 5.1, 10.1, 15.1]);
-assert.equal(payload.weight_prices[3].max_weight_kg, null);
+assert.deepEqual(Array.from(payload.weight_prices, r => Number(r.min_weight_kg)), [1, 5.1, 10.1, 15.1]);
+assert.equal(payload.weight_prices[3].max_weight_kg, "50");
 const invalid = [[], [{min_weight_kg: -1, max_weight_kg: 5, price: 1}],
   [{min_weight_kg: 5, max_weight_kg: 5, price: 1}], [{min_weight_kg: 5, max_weight_kg: 4, price: 1}],
   [{min_weight_kg: 0, max_weight_kg: 5, price: 0}], [{min_weight_kg: 0, max_weight_kg: 5, price: "1.001"}],
@@ -78,7 +78,8 @@ const item = {item_id: 1, item_name: "Medicine", unit: "bottle", pricing_method:
 for (const [weight, price] of [[1,200], [5,200], [5.1,400], [10,400], [10.1,700], [12.4,700], [15,700], [41,900]])
   assert.equal(context.clinicMedicinePrice(item, weight).price, price);
 for (const weight of [null, "", 0, -1, NaN]) assert.match(context.clinicMedicinePrice(item, weight).error, /Record or update/);
-assert.equal(context.clinicMedicinePrice(item, 5.05).price, 200);
+for (const [weight,price] of [[5.05,200],[10.05,400],[15.05,700]]) assert.equal(context.clinicMedicinePrice(item, weight).price, price);
+for (const weight of [0.5, 50.01]) assert.match(context.clinicMedicinePrice(item, weight).error, /No price is configured/);
 assert.equal(context.clinicMedicinePrice({pricing_method:"flat",selling_price:"300"}, null).price, 300);
 const modal = context.adminClinicModal();
 modal.$store = {clinicAccess: {permissions: {clinical: true}}};
