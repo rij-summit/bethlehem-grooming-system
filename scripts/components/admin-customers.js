@@ -4,7 +4,7 @@ const adminCustomerPetFieldModulesReady = Promise.all([
   import("./breed-coat-catalogue.js"),
   import("./breed-coat-combobox.js"),
   import("./fixed-option-combobox.js"),
-  import("./pet-weight-size.js"),
+  import("./pet-weight-size.js?v=pet-weight-size-20261011-v3"),
 ]).then(([
   bookingDraft,
   breedCombobox,
@@ -22,6 +22,7 @@ const adminCustomerPetFieldModulesReady = Promise.all([
 }));
 
 let adminCustomerPetFields = null;
+let adminCustomerPetTools = null;
 
 function adminCustomers() {
   return {
@@ -495,6 +496,7 @@ function adminCustomers() {
 
       try {
         const tools = await adminCustomerPetFieldModulesReady;
+        adminCustomerPetTools = tools;
         const elements = {
           species: document.getElementById("adminPetSpecies"),
           breed: document.getElementById("adminPetBreed"),
@@ -551,7 +553,7 @@ function adminCustomers() {
             toggleButton: document.getElementById("adminPetSizeDropdownButton"),
             placeholder: "Select size",
             options: [],
-            displaySelectedLabel: true,
+            displaySelectedLabel: false,
           }),
         };
 
@@ -561,9 +563,6 @@ function adminCustomers() {
 
         elements.species.addEventListener("change", () => {
           this.petModal.form.species = controls.species.getValue();
-          if (elements.weight.dataset.weightFieldMode === "range") {
-            tools.resetWeightFieldForEntry(elements.weight);
-          }
           this.syncPetWeightAndSize({ clearManualSize: true });
           this.validatePetWeightOnCommit();
         });
@@ -578,9 +577,6 @@ function adminCustomers() {
         });
         elements.weight.addEventListener("input", () => this.syncPetWeightAndSize());
         elements.weight.addEventListener("change", () => this.validatePetWeightOnCommit());
-        elements.weight.addEventListener("focus", () => {
-          tools.resetWeightFieldForEntry(elements.weight);
-        });
         elements.size.addEventListener("change", () => this.handleManualPetSizeChange());
 
         return true;
@@ -622,9 +618,9 @@ function adminCustomers() {
       controls.furType.reset();
       elements.breed.value = p.breed || "";
       tools.initializeWeightField(elements.weight);
-      elements.weight.value = p.weight ?? "";
+      elements.weight.value = tools.formatSavedWeight(p.weight);
       this.syncPetWeightAndSize({ clearManualSize: true });
-      this.setStoredPetSize(p.size);
+      if (!tools.getSizeForWeight(species, elements.weight.value)) this.setStoredPetSize(p.size);
 
       await tools.breedCoatCatalogueReady;
       controls.furType.update();
@@ -716,6 +712,10 @@ function adminCustomers() {
 
         this.refreshIcons();
       } catch (err) {
+        if (err.errors?.weight?.[0]) {
+          const { tools, elements } = adminCustomerPetFields;
+          tools.showWeightValidationInField(elements.weight, err.errors.weight[0]);
+        }
         this.petModal.saveError = err.errors
           ? Object.values(err.errors).flat()[0]
           : (err.message || "Failed to save changes.");
@@ -766,7 +766,7 @@ function adminCustomers() {
         ({ value }) => tools.normalizePetSize(value),
       );
       if (payload.size && !allowedSizes.includes(payload.size)) {
-        return `${payload.species} size must be one of: ${allowedSizes.join(", ")}.`;
+        return "Select a size available for this pet type.";
       }
 
       return "";
@@ -790,51 +790,16 @@ function adminCustomers() {
     syncPetWeightAndSize({ clearManualSize = false } = {}) {
       if (!adminCustomerPetFields) return;
       const { tools, elements, controls } = adminCustomerPetFields;
-      const rawWeight = tools.getEnteredWeight(elements.weight);
-      const options = tools.getSizeOptions(elements.species.value);
-
-      controls.size.setOptions(options, { preserveValue: !clearManualSize });
-      const computedSize = tools.getSizeForWeight(elements.species.value, rawWeight);
-      if (computedSize) controls.size.setValue(computedSize);
-      controls.size.setDisabled(options.length === 0);
+      tools.syncPetWeightAndSize(elements.weight, elements.species.value, controls.size, { clearManualSize });
     },
 
     validatePetWeightOnCommit() {
-      if (!adminCustomerPetFields) return false;
-      const { tools, elements, controls } = adminCustomerPetFields;
-      const rawWeight = tools.getEnteredWeight(elements.weight);
-
-      if (!rawWeight) {
-        if (elements.weight.dataset.weightFieldMode !== "error") {
-          tools.showWeightRangeInField(
-            elements.weight,
-            elements.species.value,
-            controls.size.getValue(),
-          );
-        }
-        return true;
-      }
-
-      const message = tools.getWeightValidationMessage(elements.species.value, rawWeight);
-      if (message) {
-        tools.showWeightValidationInField(elements.weight, message);
-        return false;
-      }
-
-      return true;
+      this.syncPetWeightAndSize();
+      return !adminCustomerPetFields?.tools.getWeightFieldValidationMessage(adminCustomerPetFields.elements.weight);
     },
 
     handleManualPetSizeChange() {
-      if (!adminCustomerPetFields) return;
-      const { tools, elements, controls } = adminCustomerPetFields;
-      if (!tools.getEnteredWeight(elements.weight)
-        && elements.weight.dataset.weightFieldMode !== "error") {
-        tools.showWeightRangeInField(
-          elements.weight,
-          elements.species.value,
-          controls.size.getValue(),
-        );
-      }
+      this.syncPetWeightAndSize();
     },
 
     async openCustomerDetails(customer) {
@@ -949,10 +914,7 @@ function adminCustomers() {
 
     formatWeight(value) {
       if (value === null || value === undefined || value === "") return "Not provided";
-      const amount = Number(value);
-      if (!Number.isFinite(amount)) return String(value);
-
-      return `${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`;
+      return `${adminCustomerPetTools.formatSavedWeight(value)} kg`;
     },
 
     formatPetBoolean(value) {

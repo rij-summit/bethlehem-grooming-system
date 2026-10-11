@@ -59,6 +59,7 @@ class PetController extends Controller
     // POST /api/pets
     public function store(Request $request)
     {
+        $request->merge(['species' => $request->input('species') ?? 'Dog']);
         $data = $request->validate([
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
@@ -67,7 +68,7 @@ class PetController extends Controller
             'birthdate' => 'nullable|date',
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'weight' => ['nullable', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
@@ -77,9 +78,6 @@ class PetController extends Controller
             $data['pet_name'],
         );
         $data = PetWeightSize::withComputedSize($data);
-        if (! empty($data['weight'])) {
-            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? 'Dog', $data['weight']);
-        }
 
         $pet = Pet::create([
             'user_id' => $request->user()->user_id,
@@ -115,6 +113,7 @@ class PetController extends Controller
             return response()->json(['success' => false, 'message' => 'Pet not found.'], 404);
         }
 
+        $request->merge(['species' => $request->input('species') ?? $pet->species]);
         $data = $request->validate([
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
@@ -123,7 +122,7 @@ class PetController extends Controller
             'birthdate' => 'nullable|date',
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'weight' => ['nullable', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
@@ -133,14 +132,7 @@ class PetController extends Controller
             $data['pet_name'],
             $pet->pet_id,
         );
-        if ($pet->hasClinicVerifiedSize()) {
-            $data['size'] = $pet->size;
-        }
         $data = PetWeightSize::withComputedSize($data);
-
-        if (! $pet->hasClinicVerifiedSize() && ! empty($data['weight'])) {
-            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? $pet->species, $data['weight']);
-        }
 
         $attributes = [
             'pet_name' => $data['pet_name'],
@@ -193,6 +185,7 @@ class PetController extends Controller
             return response()->json(['success' => false, 'message' => 'Pet not found.'], 404);
         }
 
+        $request->merge(['species' => $request->input('species') ?? $pet->species]);
         $data = $request->validate([
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
@@ -205,7 +198,7 @@ class PetController extends Controller
             'deceased_date' => 'nullable|date',
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'weight' => ['nullable', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);
@@ -218,15 +211,7 @@ class PetController extends Controller
                 $pet->unregistered_customer_id,
             );
         }
-        if ($pet->hasClinicVerifiedSize() && ! array_key_exists('size', $data)) {
-            $data['size'] = $pet->size;
-        }
         $data = PetWeightSize::withComputedSize($data);
-
-        if (array_key_exists('weight', $data) && $data['weight'] !== null
-            && (float) $data['weight'] !== (float) $pet->weight) {
-            $data['size'] = PetWeightSize::sizeFor($data['species'] ?? $pet->species, $data['weight']);
-        }
 
         $attributes = [
             'pet_name' => $data['pet_name'],
@@ -314,6 +299,7 @@ class PetController extends Controller
             return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
         }
 
+        $request->merge(['species' => $request->input('species') ?? 'Dog']);
         $data = $request->validate([
             'pet_name' => 'required|string|max:100',
             'species' => 'nullable|string|max:50',
@@ -326,7 +312,7 @@ class PetController extends Controller
             'deceased_date' => 'nullable|date',
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'weight' => ['nullable', new ValidPetWeight],
             'color' => 'nullable|string|max:50',
             'medical_conditions' => 'nullable|string|max:1000',
         ]);

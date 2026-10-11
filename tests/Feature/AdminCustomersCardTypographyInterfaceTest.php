@@ -305,7 +305,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             'tools.createFixedOptionCombobox({',
             'tools.getSizeForWeight(',
             'tools.getWeightValidationMessage(',
-            'tools.showWeightRangeInField(',
+            'tools.syncPetWeightAndSize(',
             'tools.normalizePetSize(',
         ] as $sharedBehavior) {
             $this->assertStringContainsString($sharedBehavior, $component);

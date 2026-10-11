@@ -12,7 +12,7 @@ import {
   formatPriceOption,
   getPackageById,
 } from "../services/grooming-service.js?v=grooming-pricing-20261006";
-import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010";
+import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010&pet-weight=pet-weight-size-20261011-v3";
 
 const state = {
   bookingDraft: null,

@@ -1,5 +1,5 @@
 import { formatBookingSchedule } from "../services/booking-format-service.js";
-import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3";
 
 /**
  * Booking Calendar Component

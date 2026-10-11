@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Records | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
@@ -302,7 +302,7 @@
             <form @submit.prevent="recordPayment()" class="max-h-[75vh] space-y-4 overflow-y-auto px-6 py-5">
               <p class="text-xs text-slate-500">Review the recorded charges for this clinic case.</p>
               <template x-for="charge in (payment.case?.charges || [])" :key="charge.id">
-                <div class="flex justify-between gap-3 border-b border-slate-100 pb-2 text-sm"><div class="min-w-0"><p class="break-words font-semibold text-slate-700" x-text="charge.description"></p><p class="text-xs text-slate-400" x-text="charge.quantity + ' × ' + money(charge.unit_price)"></p></div><span class="shrink-0 font-semibold text-slate-700" x-text="money(charge.amount)"></span></div>
+                <div class="flex justify-between gap-3 border-b border-slate-100 pb-2 text-sm"><div class="min-w-0"><p class="break-words font-semibold text-slate-700" x-text="charge.description"></p><p class="text-xs text-slate-400" x-text="charge.quantity + ' × ' + money(charge.unit_price)"></p><p x-show="charge.pet_weight_kg != null" class="text-xs text-slate-500" x-text="'Pet weight: ' + charge.pet_weight_kg + ' kg · ' + clinicPriceRange(charge)"></p></div><span class="shrink-0 font-semibold text-slate-700" x-text="money(charge.amount)"></span></div>
               </template>
               <p x-show="!payment.case?.charges?.length" class="text-sm text-slate-500">No chargeable items recorded.</p>
               <div class="flex justify-between font-bold text-[#2f4b66]"><span>Total</span><span x-text="money(payment.case?.total_amount)"></span></div>
@@ -670,8 +670,12 @@
             <h3 class="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Vitals</h3>
             <div class="grid gap-3 md:grid-cols-3">
               <div>
-                <label class="mb-1 block text-xs font-medium text-slate-600">Weight (kg)</label>
-                <input :disabled="!canEditClinical" type="number" step="0.01" x-model="form.weight_kg" placeholder="e.g. 4.5" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                <label for="clinicWeight" class="mb-1 block text-xs font-medium text-slate-600">Weight</label>
+                <div class="relative">
+                  <input id="clinicWeight" :disabled="!canEditClinical" type="text" inputmode="decimal" x-model="form.weight_kg" @input="weightServerError = ''" placeholder="e.g. 4.25" aria-describedby="clinicWeightError" :aria-invalid="Boolean(weightValidationMessage)" :class="weightValidationMessage ? 'border-red-400' : 'border-slate-300'" class="w-full rounded-xl border px-3 py-2 pr-10 text-sm outline-none focus:border-[#315b7e]" />
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">kg</span>
+                </div>
+                <p id="clinicWeightError" role="alert" x-show="weightValidationMessage" x-text="weightValidationMessage" class="mt-1 text-xs text-red-600"></p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-slate-600">Temperature (°C)</label>
@@ -715,6 +719,52 @@
                 <label class="mb-1 block text-xs font-medium text-slate-600">Vet Notes</label>
                 <textarea :disabled="!canEditClinical" rows="2" x-model="form.vet_notes" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]"></textarea>
               </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="clinic-medicine-heading" class="space-y-3">
+            <h3 id="clinic-medicine-heading" class="text-sm font-semibold uppercase tracking-wide text-slate-500">Medicine / Treatment Charges</h3>
+            <template x-for="charge in (currentAppt?.charges || []).filter(charge => charge.kind === 'medicine')" :key="charge.id">
+              <div class="rounded-xl border border-slate-200 p-3 text-sm">
+                <p class="font-semibold text-slate-700" x-text="charge.description + ' · ' + medicineMoney(charge.amount)"></p>
+                <p x-show="charge.pet_weight_kg != null" class="mt-1 text-xs text-slate-500" x-text="'Pet weight: ' + charge.pet_weight_kg + ' kg · Price range: ' + medicineRange(charge)"></p>
+              </div>
+            </template>
+            <div x-show="canEditClinical" class="space-y-3 rounded-xl border border-slate-200 p-3">
+              <label class="block"><span class="mb-1 block text-xs font-medium text-slate-600">Find Medicine product</span>
+                <input x-model="medicineQuery" @input="searchMedicines()" :disabled="saving" type="text" placeholder="Search medicine name or barcode" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+              </label>
+              <p x-show="medicineLoading" role="status" class="text-xs text-slate-500">Loading medicines…</p>
+              <div x-show="medicineResults.length" class="max-h-56 space-y-1 overflow-y-auto">
+                <template x-for="item in medicineResults" :key="item.item_id"><button type="button" @click="selectMedicine(item)" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]" x-text="item.item_name + (item.pricing_method === 'weight_based' ? ' · Weight-based' : ' · ' + medicineMoney(item.selling_price))"></button></template>
+              </div>
+              <template x-if="selectedMedicine">
+                <div class="space-y-2 text-sm">
+                  <p class="font-semibold text-slate-700" x-text="selectedMedicine.item_name"></p>
+                  <p x-show="selectedMedicine.dose_unit || selectedMedicine.strength_concentration" class="text-xs text-slate-500" x-text="[selectedMedicine.dose_unit ? 'Dose unit: ' + selectedMedicine.dose_unit : '', selectedMedicine.strength_concentration].filter(Boolean).join(' · ')"></p>
+                  <p x-show="medicineQuote?.error" role="alert" class="text-red-600" x-text="medicineQuote?.error"></p>
+                  <template x-if="medicineQuote && !medicineQuote.error"><div class="space-y-1 rounded-xl bg-slate-50 p-3">
+                    <p x-show="medicineQuote.pet_weight_kg != null" x-text="'Pet weight: ' + medicineQuote.pet_weight_kg + ' kg'"></p>
+                    <p x-show="medicineQuote.pet_weight_kg != null" x-text="'Price range: ' + medicineRange(medicineQuote)"></p>
+                    <p class="font-semibold text-slate-700" x-text="'Medicine price: ' + medicineMoney(medicineQuote.price)"></p>
+                  </div></template>
+                  <label class="block"><span class="mb-1 block text-xs font-medium text-slate-600" x-text="'Inventory used (' + selectedMedicine.unit + ') — optional'"></span>
+                    <input x-model="inventoryQuantity" type="number" min="0.01" step="0.01" placeholder="Physical quantity used" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                  </label>
+                  <p class="text-xs text-slate-500">Enter physical inventory used to record a stock-out. Leave blank for a charge only. Price bands do not calculate dosage or quantity.</p>
+                  <button type="button" @click="addMedicine()" :disabled="saving || !!medicineQuote?.error" class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274864] disabled:opacity-50">Add medicine charge</button>
+                </div>
+              </template>
+              <p x-show="medicineError" role="alert" class="text-sm text-red-600" x-text="medicineError"></p>
+              <template x-for="(entry, index) in pendingMedicines" :key="entry.request_key">
+                <div class="space-y-1 border-t border-slate-200 pt-3 text-sm">
+                  <p class="font-semibold text-slate-700" x-text="entry.item.item_name + ' · ' + medicineMoney(entry.price)"></p>
+                  <p x-show="entry.pet_weight_kg != null" class="text-xs text-slate-500" x-text="'Pet weight: ' + entry.pet_weight_kg + ' kg · Price range: ' + medicineRange(entry)"></p>
+                  <p class="text-xs text-slate-500" x-text="entry.inventory_quantity == null ? 'Charge only · Pending save' : 'Inventory used: ' + entry.inventory_quantity + ' ' + entry.item.unit + ' · Pending save'"></p>
+                  <button type="button" @click="pendingMedicines.splice(index, 1)" :disabled="saving" class="text-xs font-semibold text-red-600 hover:underline">Remove pending charge</button>
+                </div>
+              </template>
+              <p x-show="pendingMedicines.length" class="text-xs text-slate-500">Charges and any stock use are recorded when you save the medical record.</p>
             </div>
           </section>
 
@@ -1170,10 +1220,10 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=sections-removed-20261010"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=sections-removed-20261010&clinic-products=20261010"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4"></script>
-    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&pet-weight=pet-weight-size-20261011-v3"></script>
+    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

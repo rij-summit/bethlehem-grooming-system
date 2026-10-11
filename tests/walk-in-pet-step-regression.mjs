@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import * as weightTools from "../scripts/components/pet-weight-size.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const page = readFileSync(path.join(root, "pages/admin/walk-in-pet-details.html"), "utf8");
@@ -68,7 +69,7 @@ function combobox({ input }) {
     setValue(next) { value = next; input.value = next; },
     getValue() { return value; },
     setOptions() {},
-    setDisabled() {},
+    setDisabled(disabled) { input.disabled = disabled; },
     reset() { value = ""; input.value = ""; },
     update() {},
     showValidation() {},
@@ -84,6 +85,8 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
         ["petSelectionTabs", "addPetSection", "existingPetsSection", "existingPetsLoading"].includes(id)
           ? ["hidden"] : [],
       ));
+      elements.get(id).id = id;
+      elements.get(id).ownerDocument = { getElementById: getElement };
     }
     return elements.get(id);
   };
@@ -91,6 +94,9 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
   for (const id of ["petType", "petName", "breed", "weight", "furType", "size", "medicalNotes"]) {
     form[id] = getElement(id);
   }
+  form.reset = () => {
+    for (const id of ["petType", "petName", "breed", "weight", "furType", "size", "medicalNotes"]) form[id].value = "";
+  };
 
   const stored = new Map([
     ["walkInOwnerStep", JSON.stringify(owner)],
@@ -132,19 +138,9 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
     "./breed-coat-combobox.js": { createBreedCoatCombobox: combobox },
     "./fixed-option-combobox.js": { createFixedOptionCombobox: combobox },
     "../services/booking-draft-service.js": { formatPetSizeLabel: (value) => value },
-    "./pet-weight-size.js": {
-      getEnteredWeight: (input) => input.value || "",
-      getSizeForWeight: () => "",
-      getSizeOptions: () => [],
-      getWeightFieldValidationMessage: () => "",
-      getWeightValidationMessage: () => "",
-      initializeWeightField() {},
-      resetWeightFieldForEntry() {},
-      showWeightRangeInField() {},
-      showWeightValidationInField() {},
-    },
+    "./pet-weight-size.js": weightTools,
   };
-  const main = new vm.SourceTextModule(source, { context, identifier: "walk-in-pet-step.js" });
+  const main = new vm.SourceTextModule(source + '\nexport { handleAddPetSubmit, syncWeightAndSize };', { context, identifier: "walk-in-pet-step.js" });
   await main.link((specifier) => {
     if (specifier.startsWith("./pet-selection-tabs.js")) {
       return new vm.SourceTextModule(tabsSource, { context, identifier: specifier });
@@ -162,7 +158,7 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
     resolvePets({ customer: { pets: apiPets } });
     await new Promise((resolve) => setImmediate(resolve));
   }
-  return { ui, calls, resolvePets, rejectPets };
+  return { ui, calls, resolvePets, rejectPets, handlers: main.namespace };
 }
 
 const savedPet = { id: 42, petName: "Mochi", species: "Dog", breed: "Poodle", size: "small", sizeVerified: true };
@@ -218,3 +214,24 @@ assert.deepEqual(newClinicOwner.calls, []);
 assert.equal(newClinicOwner.ui("petSelectionTabs").classList.contains("hidden"), true);
 assert.equal(newClinicOwner.ui("addPetSection").classList.contains("hidden"), false);
 assert.equal(newClinicOwner.ui("selectedPetCount").textContent, "0 / 1 selected");
+
+for (const appointmentType of ["grooming", "clinic"]) {
+  for (const weight of ["4.780", "4.200000", "10.555"]) {
+    const flow = await runStep(ownerDraft(null, appointmentType), { draft: {
+      pets: [], newPetForm: { petType: "Dog", petName: "Decimal puppy", breed: "Mixed Breed / Aspin", weight },
+    } });
+    assert.equal(flow.ui("weight").value, weight);
+    assert.equal(flow.ui("weightError").textContent, "Enter weight using no more than 2 decimal places.");
+    await flow.handlers.handleAddPetSubmit({ preventDefault() {} });
+    assert.equal(flow.ui("weight").value, weight);
+    assert.equal(flow.ui("selectedPetCards").children.length, 0);
+    flow.ui("weight").value = "4.10";
+    flow.handlers.syncWeightAndSize();
+    assert.equal(flow.ui("weightError").textContent, "");
+    assert.equal(flow.ui("size").value, "Small");
+    assert.equal(flow.ui("size").disabled, true);
+    await flow.handlers.handleAddPetSubmit({ preventDefault() {} });
+    assert.equal(flow.ui("selectedPetCards").children.length, 1);
+  }
+}
+console.log("Walk-in customer selection, restored precision errors, blocked submissions and exact size derivation passed.");

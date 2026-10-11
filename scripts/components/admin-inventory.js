@@ -22,7 +22,7 @@ function loadInventoryScript(name) {
       const script = document.createElement("script");
       script.src = name === "scanner"
         ? "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
-        : `../../../scripts/components/${name}?v=product-details-20261002&release=pos-cart-20261007`;
+        : `../../../scripts/components/${name}?v=product-details-20261002&release=clinic-products-20261010-product-strength`;
       script.onload = resolve;
       script.onerror = () => {
         script.remove();
@@ -68,7 +68,7 @@ function adminInventory() {
         const mount = async () => {
           const config = InventorySections[section];
           const [response] = await Promise.all([
-            fetch(`./sections/${section}.html?v=inventory-actions-20261007&release=pos-cart-20261007`),
+            fetch(`./sections/${section}.html?v=inventory-actions-20261007&release=clinic-products-20261010-product-strength`),
             ...config.dependencies.map(loadInventoryScript),
             loadInventoryScript(config.script),
           ]);

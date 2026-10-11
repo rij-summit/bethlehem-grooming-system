@@ -102,7 +102,7 @@
             </td>
             <td class="px-4 py-3 hidden md:table-cell text-slate-500 font-mono text-xs" x-text="item.barcode || '—'"></td>
             <td class="px-4 py-3 hidden lg:table-cell text-slate-600" x-text="'₱' + parseFloat(item.unit_cost || 0).toFixed(2)"></td>
-            <td class="px-4 py-3 hidden lg:table-cell text-slate-600" x-text="item.selling_price ? '₱' + parseFloat(item.selling_price).toFixed(2) : '—'"></td>
+            <td class="px-4 py-3 hidden lg:table-cell text-slate-600" x-text="ProductForm.isWeightBased(item) ? 'Weight-based' : fmtMoney(item.selling_price)"></td>
             <td class="px-4 py-3 font-semibold text-slate-800">
               <span x-text="fmtQty(item.quantity_on_hand)"></span>
               <span class="text-xs text-slate-400 ml-0.5" x-text="item.unit"></span>
@@ -216,7 +216,10 @@
             <h4 id="product-information-heading" class="mb-3 text-sm font-bold text-[#355674]">Product Information</h4>
             <dl class="grid grid-cols-2 gap-4 text-sm">
               <div><dt class="text-xs text-slate-500">Barcode</dt><dd class="mt-1 break-words font-mono text-slate-800" x-text="details.item.barcode || '—'"></dd></div>
-              <div><dt class="text-xs text-slate-500">Unit</dt><dd class="mt-1 break-words text-slate-800" x-text="details.item.unit || '—'"></dd></div>
+              <div><dt class="text-xs text-slate-500">Inventory Unit</dt><dd class="mt-1 break-words text-slate-800" x-text="details.item.unit || '—'"></dd></div>
+              <div x-show="details.item.category === 'medicine' && details.item.medicine_type"><dt class="text-xs text-slate-500">Medicine Type</dt><dd class="mt-1 text-slate-800" x-text="ProductForm.medicineTypeOptions.find(option => option.value === details.item.medicine_type)?.label || '—'"></dd></div>
+              <div x-show="ProductForm.isClinic(details.item) && details.item.dose_unit"><dt class="text-xs text-slate-500">Dose Unit</dt><dd class="mt-1 text-slate-800" x-text="details.item.dose_unit"></dd></div>
+              <div x-show="details.item.category === 'medicine' && details.item.strength_concentration" class="col-span-2"><dt class="text-xs text-slate-500">Product Strength</dt><dd class="mt-1 text-slate-800" x-text="details.item.strength_concentration"></dd></div>
               <div class="col-span-2"><dt class="text-xs text-slate-500">Description</dt><dd class="mt-1 whitespace-pre-wrap break-words text-slate-700" x-text="details.item.description || '—'"></dd></div>
             </dl>
           </section>
@@ -262,8 +265,15 @@
             <h4 id="product-pricing-heading" class="mb-3 text-sm font-bold text-[#355674]">Pricing</h4>
             <dl class="grid grid-cols-2 gap-4 text-sm">
               <div><dt class="text-xs text-slate-500">Unit Cost</dt><dd class="mt-1 font-semibold text-slate-800" x-text="fmtMoney(details.item.unit_cost)"></dd></div>
-              <div><dt class="text-xs text-slate-500">Selling Price</dt><dd class="mt-1 font-semibold text-slate-800" x-text="fmtMoney(details.item.selling_price)"></dd></div>
+              <div x-show="details.item.category === 'medicine'"><dt class="text-xs text-slate-500">Pricing Method</dt><dd class="mt-1 font-semibold text-slate-800" x-text="ProductForm.isWeightBased(details.item) ? 'Weight-based' : 'Flat price'"></dd></div>
+              <div x-show="!ProductForm.isWeightBased(details.item)"><dt class="text-xs text-slate-500">Selling Price</dt><dd class="mt-1 font-semibold text-slate-800" x-text="fmtMoney(details.item.selling_price)"></dd></div>
             </dl>
+            <div x-show="ProductForm.isWeightBased(details.item)" class="mt-3">
+              <p class="mb-2 text-sm font-semibold text-slate-700">Weight-based Pricing</p>
+              <table class="w-full text-left text-sm"><thead class="border-b border-slate-200 text-xs text-slate-500"><tr><th scope="col" class="py-2">Weight range</th><th scope="col" class="text-right">Price</th></tr></thead>
+                <tbody><template x-for="(range, index) in details.item.weight_prices" :key="index"><tr class="border-b border-slate-100"><td class="py-2" x-text="ProductForm.rangeLabel(range, index === details.item.weight_prices.length - 1, details.item.weight_pricing_mode !== 'threshold')"></td><td class="text-right" x-text="fmtMoney(range.price)"></td></tr></template></tbody>
+              </table>
+            </div>
           </section>
         </div>
       </template>
@@ -299,41 +309,78 @@
         <input x-model="form.item_name" type="text" placeholder="e.g. Frontline Plus Spot-On"
           class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
       </div>
-      <!-- Category + Unit -->
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-1.5">
-            Category <span style="color:#ef4444" class="font-bold">*</span>
-          </label>
-          <select x-model="form.category"
-            style="appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:none;"
-            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+<!-- Shared ProductForm clinical fields; draft values survive temporary dropdown changes. -->
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label :class="form.category === 'vaccine' ? 'sm:col-span-2' : ''">
+          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Category *</span>
+          <select x-model="form.category" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
             <option value="">Select category ▾</option>
-            <template x-for="categoryOption in ProductForm.categoryOptions" :key="categoryOption.value">
-              <option :value="categoryOption.value" x-text="categoryOption.label"></option>
-            </template>
+            <template x-for="option in ProductForm.categoryOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
           </select>
-        </div>
+        </label>
+        <label x-show="form.category === 'medicine'" x-cloak>
+          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Medicine Type *</span>
+          <select x-model="form.medicine_type" :required="form.category === 'medicine'" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+            <option value="">Select medicine type</option>
+            <template x-for="option in ProductForm.medicineTypeOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
+          </select>
+        </label>
         <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-1.5">
-            Unit <span style="color:#ef4444" class="font-bold">*</span>
+          <label><span class="mb-1.5 block text-sm font-semibold text-slate-700">Inventory Unit *</span>
+            <select x-model="form.unit" required class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+              <option value="">Select unit ▾</option>
+              <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value"><option :value="unitOption.value" x-text="unitOption.label"></option></template>
+            </select>
           </label>
-          <select x-model="form.unit" required
-            style="appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:none;"
-            class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
-            <option value="">Select unit ▾</option>
-            <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value">
-              <option :value="unitOption.value" x-text="unitOption.label"></option>
-            </template>
-          </select>
-          <div x-show="form.unit === 'other'" x-cloak class="mt-2">
-            <label class="mb-1 block text-xs font-semibold text-slate-600">Custom unit *</label>
-            <input x-model="form.customUnit" type="text" :required="form.unit === 'other'"
-              placeholder="Enter custom unit"
-              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
-          </div>
+          <label x-show="form.unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom unit *</span>
+            <input x-model="form.customUnit" type="text" maxlength="50" :required="form.unit === 'other'" placeholder="Enter custom unit" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </label>
+        </div>
+        <div x-show="ProductForm.isClinic(form)" x-cloak>
+          <label><span class="mb-1.5 block text-sm font-semibold text-slate-700">Dose Unit *</span>
+            <select x-model="form.dose_unit" :required="ProductForm.isClinic(form)" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
+              <option value="">Select dose unit</option>
+              <template x-for="option in ProductForm.doseUnitOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
+            </select>
+          </label>
+          <label x-show="form.dose_unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom dose unit *</span>
+            <input x-model="form.customDoseUnit" type="text" maxlength="30" :required="ProductForm.isClinic(form) && form.dose_unit === 'other'" placeholder="Enter custom dose unit" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+          </label>
         </div>
       </div>
+      <label x-show="form.category === 'medicine'" x-cloak class="block">
+        <span class="mb-1.5 block text-sm font-semibold text-slate-700">Product Strength <span class="font-normal text-slate-400">(optional)</span></span>
+        <input x-model="form.strength_concentration" type="text" maxlength="150" placeholder="e.g. 10 mg/mL" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
+      </label>
+      <label x-show="form.category === 'medicine'" x-cloak class="block">
+        <span class="mb-1.5 block text-sm font-semibold text-slate-700">Pricing Method *</span>
+        <select x-model="form.pricing_method" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"><option value="weight_based">Weight-based</option><option value="flat">Flat price</option></select>
+      </label>
+      <section x-show="ProductForm.isWeightBased(form)" x-cloak class="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Weight-based Pricing">
+        <h5 class="text-sm font-semibold text-slate-700">Weight-based Pricing</h5>
+        <div x-show="form.legacyWeightPrices" class="space-y-2">
+          <p class="text-xs text-slate-500">Saved ranges are preserved. Refine these tiers to use each starting weight as the previous tier’s end.</p>
+          <template x-for="(range, index) in form.legacyWeightPrices || []" :key="index">
+            <p class="text-sm text-slate-700"><span x-text="ProductForm.rangeLabel(range, true, true)"></span> · ₱<span x-text="Number(range.price).toFixed(2)"></span></p>
+          </template>
+          <button type="button" @click="ProductForm.refineTiers(form)" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refine pricing tiers</button>
+        </div>
+        <div x-show="!form.legacyWeightPrices" class="space-y-3">
+          <template x-for="(range, index) in form.weight_prices" :key="index">
+            <div class="space-y-2 border-b border-slate-100 pb-3">
+              <p class="text-xs font-medium text-slate-700" x-text="ProductForm.tierLabel(form, index)"></p>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <label x-show="index > 0" class="min-w-0"><span class="mb-1 block text-xs text-slate-600">Starting weight (kg)</span><input x-model="range.min_weight_kg" type="number" inputmode="decimal" min="0.01" max="999999.99" step="0.01" :required="index > 0" :disabled="index === 0" :disabled="index === 0" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" /></label>
+                <label class="min-w-0"><span class="mb-1 block text-xs text-slate-600">Price (₱)</span><input x-model="range.price" type="number" inputmode="decimal" min="0.01" max="999999.99" step="0.01" required class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" /></label>
+              </div>
+              <button type="button" @click="ProductForm.removeRange(form, index)" :aria-label="'Remove price tier ' + (index + 1)" class="text-xs font-semibold text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Remove tier</button>
+            </div>
+          </template>
+          <button type="button" @click="ProductForm.addRange(form)" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e]">Add price tier</button>
+          <label class="block"><span class="mb-1 block text-xs text-slate-600">Final maximum weight (kg) <span class="text-slate-400">(optional)</span></span><input x-model="form.weight_limit" type="number" inputmode="decimal" min="0.01" max="999999.99" step="0.01" placeholder="And above" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" /></label>
+        </div>
+      </section>
+      <p x-show="form.savedWeightPricing && !ProductForm.isWeightBased(form)" x-cloak class="text-xs text-amber-700">Saving this change will remove the saved medicine price ranges. Switch back to Medicine and Weight-based to keep them.</p>
       <!-- Barcode -->
       <div>
         <label class="block text-sm font-semibold text-slate-700 mb-1.5">Barcode <span class="font-normal text-slate-400">(optional)</span></label>
@@ -362,11 +409,11 @@
               class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </div>
         </div>
-        <div>
+        <div x-show="!ProductForm.isWeightBased(form)">
           <label class="block text-sm font-semibold text-slate-700 mb-1.5">Selling Price</label>
           <div class="relative">
             <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">₱</span>
-            <input x-model="form.selling_price" type="number" step="0.01" min="0.01" required placeholder="0.00"
+            <input x-model="form.selling_price" type="number" step="0.01" min="0.01" :required="!ProductForm.isWeightBased(form)" placeholder="0.00"
               class="w-full rounded-xl border border-slate-200 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </div>
         </div>

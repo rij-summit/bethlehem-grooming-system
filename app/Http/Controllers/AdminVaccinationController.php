@@ -42,7 +42,7 @@ class AdminVaccinationController extends Controller
             ->where('category', 'vaccine')
             ->where('is_active', 1)
             ->orderBy('item_name')
-            ->get(['item_id', 'item_name', 'unit', 'quantity_on_hand']);
+            ->get();
         $balances = $this->batchBalances->forItems($items->pluck('item_id'));
 
         $vaccines = $items->map(function (InventoryItem $item) use ($balances) {
@@ -53,6 +53,8 @@ class AdminVaccinationController extends Controller
                 'item_id' => $item->item_id,
                 'item_name' => $item->item_name,
                 'unit' => $item->unit,
+                'dose_unit' => $item->dose_unit,
+                'strength_concentration' => $item->strength_concentration,
                 'deduction_supported' => $this->supportsSingleDoseDeduction($item),
                 'available_quantity' => min(
                     (float) $item->quantity_on_hand,

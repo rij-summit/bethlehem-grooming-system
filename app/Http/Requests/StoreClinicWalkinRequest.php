@@ -71,7 +71,7 @@ class StoreClinicWalkinRequest extends FormRequest
             'is_neutered' => ['nullable', 'boolean'],
             'neutered_date' => ['nullable', 'date'],
             'fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'weight' => ['nullable', new ValidPetWeight],
             'size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'color' => ['nullable', 'string', 'max:50'],
             'medical_conditions' => ['nullable', 'string', 'max:1000'],

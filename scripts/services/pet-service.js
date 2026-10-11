@@ -8,7 +8,7 @@
  * On the pet step, call loadPetsFromApi() first to sync the user's pets
  * from the database into localStorage before rendering.
  */
-import { getSizeForWeight } from "../components/pet-weight-size.js";
+import { formatSavedWeight, getSizeForStoredWeight } from "../components/pet-weight-size.js?v=pet-weight-size-20261011-v3";
 
 const CLIENT_PETS_KEY = "clientPets";     // localStorage — persists across tabs/sessions
 const BOOKING_PETS_KEY = "bookingPets";   // sessionStorage — current booking draft only
@@ -53,11 +53,11 @@ export async function loadPetsFromApi() {
         birthdate: p.birthdate || "",
         breed: p.breed || "",
         color: p.color || "",
-        weight: p.weight ? String(p.weight) : "",
+        weight: formatSavedWeight(p.weight),
         furType: p.fur_type || "",
         size: sizeVerified
           ? p.size || ""
-          : (getSizeForWeight(p.species, p.weight).toLowerCase().replaceAll(" ", "_") || p.size || ""),
+          : (getSizeForStoredWeight(p.species, p.weight).toLowerCase().replaceAll(" ", "_") || p.size || ""),
         sizeVerified,
         medicalNotes: p.medical_conditions || "",
       };

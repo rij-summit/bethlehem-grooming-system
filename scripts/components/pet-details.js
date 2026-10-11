@@ -1,7 +1,8 @@
 // Connected to pages/client/pet-details.html
 // Depends on: api.js
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  const { formatSavedWeight } = await import("./pet-weight-size.js?v=pet-weight-size-20261011-v3");
   if (!API.hasAuthenticatedSession("customer")) {
     API.redirectToSignIn();
     return;
@@ -63,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  const formatWeight = (value) => isMissing(value) ? "Not provided." : `${value} kg`;
+  const formatWeight = (value) => isMissing(value) ? "Not provided." : `${formatSavedWeight(value)} kg`;
 
   const formatBoolean = (value) => {
     if (value === null || value === undefined || value === "") return "Not provided.";
@@ -299,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Treatment", displayValue(record.treatment_given)],
     ];
     const vitalItems = [
-      ["Weight", isMissing(record.vitals?.weight_kg) ? null : `${record.vitals.weight_kg} kg`],
+      ["Weight", isMissing(record.vitals?.weight_kg) ? null : `${formatSavedWeight(record.vitals.weight_kg)} kg`],
       ["Temperature", isMissing(record.vitals?.temperature_c) ? null : `${record.vitals.temperature_c} °C`],
       ["Heart Rate", isMissing(record.vitals?.heart_rate_bpm) ? null : `${record.vitals.heart_rate_bpm} bpm`],
       ["Respiratory Rate", isMissing(record.vitals?.respiratory_rate_bpm) ? null : `${record.vitals.respiratory_rate_bpm} breaths/min`],

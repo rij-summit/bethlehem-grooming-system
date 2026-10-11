@@ -8,20 +8,20 @@ final class PetWeightSize
 
     private const PROFILES = [
         'dog' => [
-            ['size' => 'small', 'min' => 4.0, 'max' => 10.0],
-            ['size' => 'medium', 'min' => 11.0, 'max' => 25.0],
-            ['size' => 'large', 'min' => 26.0, 'max' => 50.0],
-            ['size' => 'extra_large', 'min' => 51.0, 'max' => 70.0],
+            ['size' => 'small', 'max' => 11.0],
+            ['size' => 'medium', 'max' => 26.0],
+            ['size' => 'large', 'max' => 51.0],
+            ['size' => 'extra_large', 'max' => null],
         ],
         'cat' => [
-            ['size' => 'small', 'min' => 2.0, 'max' => 4.0],
-            ['size' => 'medium', 'min' => 5.0, 'max' => 8.0],
+            ['size' => 'small', 'max' => 5.0],
+            ['size' => 'medium', 'max' => null],
         ],
     ];
 
     public static function sizeFor(mixed $species, mixed $weight): ?string
     {
-        if ($weight === null || $weight === '' || ! is_numeric($weight)) {
+        if (! self::isValidWeight($weight)) {
             return null;
         }
 
@@ -29,7 +29,7 @@ final class PetWeightSize
         $numericWeight = (float) $weight;
 
         foreach ($profile as $range) {
-            if ($numericWeight >= $range['min'] && $numericWeight <= $range['max']) {
+            if ($range['max'] === null || $numericWeight < $range['max']) {
                 return $range['size'];
             }
         }
@@ -39,21 +39,33 @@ final class PetWeightSize
 
     public static function validationMessage(mixed $species, mixed $weight = null): string
     {
-        if (is_numeric($weight) && ((float) $weight <= 0 || (float) $weight > self::MAX_WEIGHT_KG)) {
-            return 'Weight must be greater than 0 kg and no more than 155.6 kg.';
-        }
+        return self::weightValidationMessage($weight) ?? 'Select Dog or Cat before entering a weight.';
+    }
 
-        return match (self::normalizeSpecies($species)) {
-            'dog' => 'Dog weight must be within an accepted range: Small 4–10 kg, Medium 11–25 kg, Large 26–50 kg, or Extra Large 51–70 kg.',
-            'cat' => 'Cat weight must be within an accepted range: Small 2–4 kg or Medium 5–8 kg.',
-            default => 'Select Dog or Cat before entering a weight.',
-        };
+    /** Validate submitted text before numeric conversion can discard decimal places. */
+    public static function weightValidationMessage(mixed $weight): ?string
+    {
+        if ($weight === null || $weight === '') return null;
+        if (! is_scalar($weight) || is_bool($weight)) return 'Enter a valid weight in kilograms.';
+        $text = trim((string) $weight);
+        if (! preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/D', $text)
+            || ! is_finite((float) $text)) return 'Enter a valid weight in kilograms.';
+        $fraction = explode('.', $text, 2)[1] ?? '';
+        if (strlen($fraction) > 2) return 'Enter weight using no more than 2 decimal places.';
+        if ((float) $text <= 0) return 'Enter a weight greater than 0 kg.';
+        if ((float) $text > self::MAX_WEIGHT_KG) return 'Weight cannot be more than 155.6 kg.';
+        return null;
+    }
+
+    public static function isValidWeight(mixed $weight): bool
+    {
+        return is_numeric($weight) && is_finite((float) $weight)
+            && (float) $weight > 0 && (float) $weight <= self::MAX_WEIGHT_KG;
     }
 
     public static function withComputedSize(array $pet): array
     {
-        if (! empty($pet['size'])
-            || ! array_key_exists('weight', $pet)
+        if (! array_key_exists('weight', $pet)
             || $pet['weight'] === null
             || $pet['weight'] === '') {
             return $pet;

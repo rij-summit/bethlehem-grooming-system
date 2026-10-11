@@ -282,17 +282,21 @@
                     for="weight"
                     class="mb-1 block text-sm font-medium text-portal-text"
                   >
-                    Weight (kg)
+                    Weight
                   </label>
-                  <input
+                  <div class="relative">
+                    <input
                     id="weight"
                     name="weight"
                     type="text"
                     inputmode="decimal"
-                    placeholder="e.g. 12"
-                    aria-invalid="false"
-                    class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active"
+                    placeholder="e.g. 4.25"
+                    aria-invalid="false" aria-describedby="weightError"
+                    class="w-full rounded-xl border border-portal-border bg-white px-4 pr-12 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active"
                   />
+                    <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500">kg</span>
+                  </div>
+                  <p id="weightError" role="alert" class="hidden mt-1 text-xs text-red-600"></p>
                 </div>
                 <div>
                   <label
@@ -344,16 +348,15 @@
                     for="size"
                     class="mb-1 block text-sm font-medium text-portal-text"
                   >
-                    Estimated Size
+                    Size
                   </label>
-                  <p id="sizeEstimateNote" class="mb-2 text-xs font-medium text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
+
                   <div id="sizeCombobox" class="relative">
                     <div class="relative">
                       <input
                         id="size"
                         name="size"
                         type="text"
-                        aria-describedby="sizeEstimateNote"
                         placeholder="Select pet type first"
                         class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                         role="combobox"
@@ -479,7 +482,7 @@
     <script src="../../scripts/api.js?v=customer-cache-20261005-v1&auth=session-scope-20261006"></script>
     <script
       type="module"
-      src="../../scripts/components/booking-pet-step.js"
+      src="../../scripts/components/booking-pet-step.js?v=pet-weight-size-20261011-v3"
     ></script>
   </body>
 </html>

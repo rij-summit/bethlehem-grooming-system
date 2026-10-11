@@ -400,6 +400,8 @@ class WalkinController extends Controller
             'breed' => $petData['breed'] ?? $pet->breed,
             'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
             'weight' => $petData['weight'] ?? $pet->weight,
+            'size' => PetWeightSize::sizeFor($pet->species, $petData['weight'] ?? $pet->weight)
+                ?? $petData['size'] ?? $pet->size,
             'medical_conditions' => $petData['medical_conditions'] ?? $pet->medical_conditions,
         ]);
 

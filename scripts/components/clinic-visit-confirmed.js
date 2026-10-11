@@ -1,6 +1,6 @@
 import {
   CLINIC_VISIT_CONFIRMATION_KEY, formatClinicVisitDate, requireCustomerSession,
-} from "../services/clinic-visit-service.js";
+} from "../services/clinic-visit-service.js?pet-weight=pet-weight-size-20261011-v3";
 import {
   confirmationFields, confirmationSection, formatConfirmationLabel,
   formatConfirmationTimestamp, ownerConfirmationFields, readConfirmationData,

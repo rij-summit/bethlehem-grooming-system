@@ -9,7 +9,7 @@ const stores = {};
 let alpineInit;
 let role = 'staff';
 const sandbox = {
-  document: { addEventListener(name, callback) { if (name === 'alpine:init') alpineInit = callback; } },
+  document: { addEventListener(name, callback) { if (name === 'alpine:init') alpineInit = callback; }, getElementById() { return { focus() {} }; } },
   window: { addEventListener() {}, dispatchEvent() {}, location: { pathname: '/pages/admin/clinic.html', search: '' } },
   Alpine: { store(name, value) { stores[name] = value; } },
   CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
@@ -18,7 +18,10 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 for (const file of ['admin-clinic.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
-  vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox, {
+    filename: path.join(root, 'scripts/components', file),
+    importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
+  });
 }
 alpineInit();
 const feedback = { confirm: async () => true, notify() {} };
@@ -98,15 +101,29 @@ function permissions(clinical, payment, queue, customers) {
   const record = component('adminClinicModal');
   record.currentAppt = { status: 'in_consultation' };
   record.apptId = 1;
-  Object.assign(record.form, { weight_kg: 0, temperature_c: 38.5, heart_rate_bpm: 80, respiratory_rate_bpm: 20 });
+  Object.assign(record.form, { weight_kg: '4.20', temperature_c: 38.5, heart_rate_bpm: 80, respiratory_rate_bpm: 20 });
+  let recordSaveCalls = 0;
   sandbox.API.clinicSaveRecord = async (id, payload) => {
+    recordSaveCalls++;
     assert.equal(id, 1);
     assert.equal(payload.finish_case, true);
     assert.equal('services' in payload, false);
     assert.equal('medications' in payload, false);
-    assert.equal(payload.weight_kg, 0);
+    assert.equal(payload.weight_kg, '4.20');
   };
   await record.saveRecord(true);
+  assert.equal(recordSaveCalls, 1);
+  for (const weight of ['4.780', '4.200000', '10.555']) {
+    record.form.weight_kg = weight;
+    await record.saveRecord(true);
+    assert.equal(recordSaveCalls, 1, 'Invalid precision cannot reach the clinic API');
+    assert.equal(record.form.weight_kg, weight);
+    assert.equal(record.weightValidationMessage, 'Enter weight using no more than 2 decimal places.');
+  }
+  record.form.weight_kg = '4.20';
+  assert.equal(record.weightValidationMessage, '');
+  await record.saveRecord(true);
+  assert.equal(recordSaveCalls, 2);
   assert.equal(record.modalError, '');
   assert.equal('addMedication' in record, false);
   assert.equal('finalizeProduct' in record, false);

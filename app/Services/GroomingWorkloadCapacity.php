@@ -59,7 +59,11 @@ class GroomingWorkloadCapacity
             ->values()->map(function (array $selection, int $index) use ($pets) {
                 $pet = $pets->get($selection['pet_id'] ?? null);
                 $size = $pet?->hasClinicVerifiedSize() ? $pet->groomingSize()
-                    : (\App\Support\PetWeightSize::withComputedSize($selection)['size'] ?? null);
+                    : (\App\Support\PetWeightSize::withComputedSize([
+                        ...$selection,
+                        'species' => $pet?->species ?? $selection['species'] ?? null,
+                        'weight' => $selection['weight'] ?? $pet?->weight,
+                    ])['size'] ?? null);
                 $estimate = $this->estimates->calculate($selection['services']['package'] ?? null,
                     $selection['grooming_preference'] ?? null, $size, $selection['services']['ala_carte'] ?? [], [], false);
                 return ['id' => 'arrival-'.$index, 'minutes' => $estimate['maxMinutes'], 'active' => false];

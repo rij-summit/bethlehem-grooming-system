@@ -7,6 +7,10 @@ use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
 use App\Models\Notification;
+use App\Models\InventoryItem;
+use App\Models\ClinicCharge;
+use App\Services\InventoryStockMovementService;
+use Illuminate\Validation\ValidationException;
 use App\Models\Pet;
 use App\Services\ClinicAppointmentSequence;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -442,6 +446,22 @@ class AdminClinicController extends Controller
 
     // ── Medical record ───────────────────────────────────────────────────────
 
+    public function medicineOptions(Request $request)
+    {
+        $q = trim($request->query('q', ''));
+        if (mb_strlen($q) < 2) return response()->json(['data' => []]);
+        $items = InventoryItem::query()->where('is_active', true)->where('category', 'medicine')
+            ->where(fn ($query) => $query->where('item_name', 'like', "%{$q}%")->orWhere('barcode', $q))
+            ->with('weightPrices')->orderBy('item_name')->limit(20)->get();
+        return response()->json(['data' => $items->map(fn ($item) => [
+            'item_id' => $item->item_id, 'item_name' => $item->item_name, 'unit' => $item->unit,
+            'medicine_type' => $item->medicine_type, 'dose_unit' => $item->dose_unit,
+            'strength_concentration' => $item->strength_concentration,
+            'pricing_method' => $item->pricing_method, 'weight_pricing_mode' => $item->weight_pricing_mode ?? 'legacy', 'selling_price' => $item->selling_price,
+            'weight_prices' => $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->values(),
+        ])]);
+    }
+
     public function saveRecord(Request $request, int $id)
     {
         $data = $request->validate([
@@ -453,8 +473,15 @@ class AdminClinicController extends Controller
             'follow_up_notes' => ['nullable', 'string', 'max:1000'],
             'vet_notes' => ['nullable', 'string', 'max:2000'],
             'finish_case' => ['sometimes', 'boolean'],
+            'medicines' => ['sometimes', 'array', 'max:100'],
+            'medicines.*' => ['array:inventory_item_id,inventory_quantity,expected_price,expected_weight_kg,request_key'],
+            'medicines.*.inventory_item_id' => ['required', 'integer'],
+            'medicines.*.inventory_quantity' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:99999999.99'],
+            'medicines.*.expected_price' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'medicines.*.expected_weight_kg' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'medicines.*.request_key' => ['required', 'uuid', 'distinct'],
             // Vitals
-            'weight_kg' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
+            'weight_kg' => ['nullable', 'required_if_accepted:finish_case', new \App\Rules\ValidPetWeight(requireSpecies: false)],
             'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
             'heart_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
             'respiratory_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
@@ -506,6 +533,7 @@ class AdminClinicController extends Controller
                 );
             }
 
+            $this->saveMedicineCharges($appt, $data['medicines'] ?? []);
             if (! empty($data['finish_case'])) {
                 $appt->prepareForPayment();
             }
@@ -517,6 +545,55 @@ class AdminClinicController extends Controller
                 'record' => $this->formatRecord($record, $appt->id),
             ]);
         });
+    }
+
+    private function saveMedicineCharges(ClinicAppointment $appt, array $entries): void
+    {
+        if (! $entries) return;
+        $items = InventoryItem::query()->whereIn('item_id', array_column($entries, 'inventory_item_id'))
+            ->orderBy('item_id')->lockForUpdate()->with('weightPrices')->get()->keyBy('item_id');
+        $weight = $appt->vitals()->value('weight_kg') ?? $appt->pet?->weight;
+        $existing = ClinicCharge::whereIn('request_key', array_column($entries, 'request_key'))->get()->keyBy('request_key');
+        $movements = [];
+        foreach ($entries as $entry) {
+            if ($charge = $existing->get($entry['request_key'])) {
+                if ((int) $charge->clinic_appointment_id !== (int) $appt->id
+                    || (int) $charge->inventory_item_id !== (int) $entry['inventory_item_id']) {
+                    throw ValidationException::withMessages(['medicines' => 'This medicine request has already been used. Reload the case.']);
+                }
+                continue;
+            }
+            $item = $items->get($entry['inventory_item_id']);
+            if (! $item || ! $item->is_active || $item->category !== 'medicine') {
+                throw ValidationException::withMessages(['medicines' => 'Choose an active Medicine product from Inventory.']);
+            }
+            $pricing = $item->clinicPrice($weight);
+            if (round((float) $pricing['price'] * 100) !== round((float) $entry['expected_price'] * 100)
+                || ($pricing['pet_weight_kg'] !== null && (float) $pricing['pet_weight_kg'] !== (float) ($entry['expected_weight_kg'] ?? 0))) {
+                throw ValidationException::withMessages(['medicines' => 'The pet weight or medicine price has changed. Select the medicine again to review its current price.']);
+            }
+            $charge = $appt->charges()->make([
+                'kind' => 'medicine', 'description' => $item->item_name, 'inventory_item_id' => $item->item_id,
+                'quantity' => 1, 'unit_price' => $pricing['price'], 'amount' => $pricing['price'],
+            ]);
+            $charge->forceFill([
+                'request_key' => $entry['request_key'], 'pet_weight_kg' => $pricing['pet_weight_kg'],
+                'min_weight_kg' => $pricing['min_weight_kg'], 'max_weight_kg' => $pricing['max_weight_kg'],
+            ])->save();
+            // Staff specifies physical stock use independently from the price band.
+            if (($entry['inventory_quantity'] ?? null) !== null) {
+                $movements[] = [
+                    'item_id' => $item->item_id, 'quantity' => $entry['inventory_quantity'], 'reason' => 'used',
+                    'unit_cost_at_time' => $item->unit_cost, 'selling_price' => $pricing['price'],
+                    'reference_type' => 'clinic', 'reference_id' => $appt->id,
+                    'notes' => 'Medicine/treatment · '.$item->item_name,
+                ];
+            }
+        }
+        if ($movements) app(InventoryStockMovementService::class)->remove(request()->user(), $movements);
+        $total = (float) $appt->charges()->sum('amount');
+        if ($total > 99999999.99) throw ValidationException::withMessages(['medicines' => 'The case charges exceed the supported total.']);
+        $appt->update(['total_amount' => $total]);
     }
 
     // ── File upload ──────────────────────────────────────────────────────────

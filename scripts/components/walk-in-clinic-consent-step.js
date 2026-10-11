@@ -1,5 +1,6 @@
+import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 import { getClinicVisitSummaryMarkup } from "./clinic-visit-summary-card.js";
-import { formatClinicVisitReason } from "../services/clinic-visit-service.js";
+import { formatClinicVisitReason } from "../services/clinic-visit-service.js?pet-weight=pet-weight-size-20261011-v3";
 
 const WALK_IN_OWNER_KEY = "walkInOwnerStep";
 const WALK_IN_CLINIC_CONFIRMED_KEY = "walkInClinicConfirmation";
@@ -161,6 +162,13 @@ async function handleSubmit(event) {
     return;
   }
 
+  const weightMessage = getPetWeightSubmissionValidationMessage(state.pet);
+  if (weightMessage) {
+    showError(weightMessage);
+    resetSubmitButton();
+    return;
+  }
+
   const payload = {
     fname:             owner.firstName,
     lname:             owner.lastName,
@@ -176,7 +184,7 @@ async function handleSubmit(event) {
     species:           state.pet?.petType || "",
     breed:             state.pet?.breed || null,
     fur_type:          state.pet?.furType || null,
-    weight:            state.pet?.weight || null,
+    ...getPetWeightSubmission(state.pet),
     size:              normalizeSizeForApi(state.pet?.size),
     medical_conditions: state.pet?.medicalNotes || null,
     chief_complaint:   state.chiefComplaint,

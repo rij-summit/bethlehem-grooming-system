@@ -1,191 +1,113 @@
 const WEIGHT_PROFILES = Object.freeze({
-  Dog: Object.freeze([
-    Object.freeze({ size: "Small", min: 4, max: 10 }),
-    Object.freeze({ size: "Medium", min: 11, max: 25 }),
-    Object.freeze({ size: "Large", min: 26, max: 50 }),
-    Object.freeze({ size: "Extra Large", min: 51, max: 70 }),
-  ]),
-  Cat: Object.freeze([
-    Object.freeze({ size: "Small", min: 2, max: 4 }),
-    Object.freeze({ size: "Medium", min: 5, max: 8 }),
-  ]),
+  Dog: [
+    { size: "Small", max: 11, label: "under 11 kg" },
+    { size: "Medium", max: 26, label: "11 kg to under 26 kg" },
+    { size: "Large", max: 51, label: "26 kg to under 51 kg" },
+    { size: "Extra Large", max: null, label: "51 kg and above" },
+  ],
+  Cat: [
+    { size: "Small", max: 5, label: "under 5 kg" },
+    { size: "Medium", max: null, label: "5 kg and above" },
+  ],
 });
-
 const MAX_WEIGHT_KG = 155.6;
-const NORMAL_WEIGHT_PLACEHOLDER = "e.g. 12";
-const WEIGHT_FIELD_MODE = "weightFieldMode";
-
-function normalizePetType(petType) {
-  const normalized = String(petType || "").trim().toLowerCase();
-
-  return Object.keys(WEIGHT_PROFILES).find(
-    (type) => type.toLowerCase() === normalized,
-  ) || "";
-}
 
 function getProfile(petType) {
-  return WEIGHT_PROFILES[normalizePetType(petType)] || [];
-}
-
-function hasWeight(rawWeight) {
-  return String(rawWeight ?? "").trim() !== "";
-}
-
-function formatRangeList(profile) {
-  return profile
-    .map(({ size, min, max }) => `${size}: ${min} \u2013 ${max} kg`)
-    .join(", ");
+  const type = Object.keys(WEIGHT_PROFILES).find(
+    value => value.toLowerCase() === String(petType || "").trim().toLowerCase(),
+  );
+  return WEIGHT_PROFILES[type] || [];
 }
 
 export function getSizeOptions(petType) {
-  return getProfile(petType).map(({ size, min, max }) => ({
-    value: size,
-    label: `${size} \u00b7 ${min} \u2013 ${max} kg`,
-  }));
-}
-
-export function getWeightLimits(petType) {
-  const profile = getProfile(petType);
-
-  if (profile.length === 0) {
-    return null;
-  }
-
-  return {
-    min: profile[0].min,
-    max: profile[profile.length - 1].max,
-  };
-}
-
-export function getWeightRangeHint(petType) {
-  const normalizedType = normalizePetType(petType);
-  const profile = getProfile(normalizedType);
-
-  if (profile.length === 0) {
-    return "Select a pet type to view its accepted weight ranges.";
-  }
-
-  return `Accepted ${normalizedType.toLowerCase()} weights: ${formatRangeList(profile)}.`;
-}
-
-export function getWeightRangeForSize(petType, size) {
-  const range = getProfile(petType).find(({ size: optionSize }) => optionSize === size);
-
-  return range ? `${range.min} \u2013 ${range.max} kg` : "";
-}
-
-export function getSizeForWeight(petType, rawWeight) {
-  if (!hasWeight(rawWeight)) {
-    return "";
-  }
-
-  const weight = Number(rawWeight);
-
-  if (!Number.isFinite(weight)) {
-    return "";
-  }
-
-  return getProfile(petType).find(
-    ({ min, max }) => weight >= min && weight <= max,
-  )?.size || "";
+  return getProfile(petType).map(({ size, label }) => ({ value: size, label: `${size}: ${label}` }));
 }
 
 export function getWeightValidationMessage(petType, rawWeight) {
-  if (!hasWeight(rawWeight)) {
-    return "";
-  }
-
-  const weight = Number(rawWeight);
-
-  if (!Number.isFinite(weight)) {
-    return "Enter a valid weight in kilograms.";
-  }
-
-  if (weight <= 0 || weight > MAX_WEIGHT_KG) {
-    return `Weight must be greater than 0 kg and no more than ${MAX_WEIGHT_KG} kg.`;
-  }
-
-  const normalizedType = normalizePetType(petType);
-  const profile = getProfile(normalizedType);
-
-  if (profile.length === 0) {
-    return "Select Dog or Cat before entering a weight.";
-  }
-
-  if (!getSizeForWeight(normalizedType, weight)) {
-    return `${normalizedType} weight must be within an accepted range: ${formatRangeList(profile)}.`;
-  }
-
+  const message = getWeightValueValidationMessage(rawWeight);
+  if (message || String(rawWeight ?? "").trim() === "") return message;
+  if (!getProfile(petType).length) return "Select Dog or Cat before entering a weight.";
   return "";
 }
 
-export function getEnteredWeight(input) {
-  if (!input || input.dataset[WEIGHT_FIELD_MODE] !== "input") {
-    return "";
+export function getWeightValueValidationMessage(rawWeight) {
+  if (String(rawWeight ?? "").trim() === "") return "";
+  const text = String(rawWeight).trim();
+  const weight = Number(rawWeight);
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) || !Number.isFinite(weight)) {
+    return "Enter a valid weight in kilograms.";
   }
-
-  return input.value.trim();
+  if ((text.split(".")[1] || "").length > 2) return "Enter weight using no more than 2 decimal places.";
+  if (weight <= 0) return "Enter a weight greater than 0 kg.";
+  if (weight > MAX_WEIGHT_KG) return "Weight cannot be more than 155.6 kg.";
+  return "";
 }
 
-export function resetWeightFieldForEntry(input) {
-  if (!input || input.dataset[WEIGHT_FIELD_MODE] === "input") {
-    return;
-  }
+export function getSizeForWeight(petType, rawWeight) {
+  if (String(rawWeight ?? "").trim() === "" || getWeightValidationMessage(petType, rawWeight)) return "";
+  return getSizeForStoredWeight(petType, rawWeight);
+}
 
-  input.dataset[WEIGHT_FIELD_MODE] = "input";
+// Historical records retain their exact weight, even if it has more than two decimals.
+export function getSizeForStoredWeight(petType, rawWeight) {
+  const weight = Number(rawWeight);
+  if (!Number.isFinite(weight) || weight <= 0 || weight > MAX_WEIGHT_KG) return "";
+  return getProfile(petType).find(({ max }) => max === null || weight < max)?.size || "";
+}
+
+export function formatSavedWeight(rawWeight) {
+  const text = String(rawWeight ?? "").trim();
+  if (!/^[+-]?\d+(?:\.\d*)?$/.test(text)) return text;
+  const [whole, fraction] = text.split(".");
+  const significant = (fraction || "").replace(/0+$/, "");
+  return significant ? `${whole}.${significant}` : whole;
+}
+
+// Saved selections are references, not weight edits. New pet drafts keep their input text.
+export function getPetWeightSubmission(pet) {
+  const savedId = pet.petId ?? pet.id;
+  if (/^[1-9]\d*$/.test(String(savedId ?? ""))) return {};
+  return { weight: String(pet.weight ?? "").trim() || null };
+}
+
+export function getPetWeightSubmissionValidationMessage(pet) {
+  const fields = getPetWeightSubmission(pet);
+  return "weight" in fields ? getWeightValidationMessage(pet.petType ?? pet.species, fields.weight) : "";
+}
+
+export function getEnteredWeight(input) {
+  return input?.value.trim() || "";
+}
+
+export function showWeightValidationInField(input, message = "") {
+  if (!input) return;
   input.readOnly = false;
-  input.value = "";
-  input.placeholder = NORMAL_WEIGHT_PLACEHOLDER;
-  input.setAttribute("aria-invalid", "false");
-  input.classList.remove("border-red-400", "text-red-600");
-  delete input.dataset.weightValidationMessage;
+  input.setAttribute("aria-invalid", String(Boolean(message)));
+  input.classList.toggle("border-red-400", Boolean(message));
+  input.dataset.weightValidationMessage = message;
+  const error = input.ownerDocument.getElementById(`${input.id}Error`);
+  if (error) {
+    error.textContent = message;
+    error.classList.toggle("hidden", !message);
+  }
 }
 
 export function initializeWeightField(input) {
-  if (!input) {
-    return;
-  }
-
-  input.dataset[WEIGHT_FIELD_MODE] = "input";
-  input.readOnly = false;
+  if (!input) return;
   input.value = "";
-  input.placeholder = NORMAL_WEIGHT_PLACEHOLDER;
-  input.setAttribute("aria-invalid", "false");
-  input.classList.remove("border-red-400", "text-red-600");
-  delete input.dataset.weightValidationMessage;
-}
-
-export function showWeightRangeInField(input, petType, size) {
-  const rangeLabel = getWeightRangeForSize(petType, size);
-
-  if (!input || !rangeLabel) {
-    return false;
-  }
-
-  input.dataset[WEIGHT_FIELD_MODE] = "range";
-  input.readOnly = true;
-  input.value = rangeLabel;
-  input.placeholder = NORMAL_WEIGHT_PLACEHOLDER;
-  input.setAttribute("aria-invalid", "false");
-  input.classList.remove("border-red-400", "text-red-600");
-  delete input.dataset.weightValidationMessage;
-  return true;
-}
-
-export function showWeightValidationInField(input, message) {
-  if (!input || !message) {
-    return;
-  }
-
-  input.dataset[WEIGHT_FIELD_MODE] = "error";
-  input.readOnly = true;
-  input.value = message;
-  input.placeholder = NORMAL_WEIGHT_PLACEHOLDER;
-  input.setAttribute("aria-invalid", "true");
-  input.classList.add("border-red-400", "text-red-600");
-  input.dataset.weightValidationMessage = message;
+  showWeightValidationInField(input);
 }
 
 export function getWeightFieldValidationMessage(input) {
   return input?.dataset.weightValidationMessage || "";
+}
+
+// A disabled size still remains available through the combobox's getValue().
+export function syncPetWeightAndSize(input, petType, sizeControl, { clearManualSize = false } = {}) {
+  const options = getSizeOptions(petType);
+  sizeControl.setOptions(options, { preserveValue: !clearManualSize });
+  const size = getSizeForWeight(petType, getEnteredWeight(input));
+  if (size) sizeControl.setValue(size);
+  sizeControl.setDisabled(Boolean(size) || options.length === 0);
+  showWeightValidationInField(input, getWeightValidationMessage(petType, getEnteredWeight(input)));
 }

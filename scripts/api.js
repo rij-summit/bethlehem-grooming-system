@@ -1895,6 +1895,10 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/cancel`, {}, getAdminToken());
   }
 
+  function clinicMedicineOptions(q) {
+    return request("GET", `/admin/clinic-medicine-options?q=${encodeURIComponent(q)}`, null, getAdminToken());
+  }
+
   async function clinicSaveRecord(id, payload) {
     return request("POST", `/admin/clinic-appointments/${id}/record`, payload, getAdminToken());
   }
@@ -2173,6 +2177,7 @@ var API = (() => {
     clinicCancel,
     clinicCheckIn,
     clinicRecordPayment,
+    clinicMedicineOptions,
     clinicSaveRecord,
     clinicUploadAttachment,
     clinicDownloadAttachment,

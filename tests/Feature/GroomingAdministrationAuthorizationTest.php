@@ -445,7 +445,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ];
     }
 
-    public function test_pre_registration_uses_verified_size_for_existing_pet_and_price(): void
+    public function test_pre_registration_reevaluates_profile_size_from_valid_weight(): void
     {
         $this->authenticateAs('customer');
         DB::table('time_windows')->insert([
@@ -487,9 +487,93 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ]],
         ])->assertCreated();
 
-        $this->assertDatabaseHas('pets', ['pet_id' => 3, 'size' => 'small', 'weight' => 12]);
-        $this->assertDatabaseHas('booking_pets', ['pet_id' => 3, 'registered_size' => 'small']);
-        $this->assertDatabaseHas('booking_services', ['service_id' => 3, 'price_at_booking' => 550]);
+        $this->assertDatabaseHas('pets', ['pet_id' => 3, 'size' => 'medium', 'weight' => 12]);
+        $this->assertDatabaseHas('booking_pets', ['pet_id' => 3, 'registered_size' => 'medium']);
+        $this->assertDatabaseHas('booking_services', ['service_id' => 3, 'price_at_booking' => 650]);
+    }
+
+    #[DataProvider('decimalPetWeights')]
+    public function test_booking_and_walkin_persist_the_shared_decimal_size(string $species, mixed $weight, string $size): void
+    {
+        DB::table('services')->insert(['service_id' => 900, 'service_name' => 'Nail Clipping', 'slug' => 'nail_clipping', 'base_price' => 75]);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $pet = ['pet_name' => 'Decimal pet', 'species' => $species, 'weight' => $weight,
+            'size' => $size === 'small' ? 'medium' : 'small'];
+        $this->authenticateAs('customer');
+        $bookingId = $this->postJson('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [[...$pet, 'services' => ['ala_carte' => ['nail_clipping']]]],
+        ])->assertCreated()->json('booking.booking_id');
+        $this->assertDatabaseHas('pets', ['pet_name' => 'Decimal pet', 'weight' => $weight, 'size' => $size]);
+        $this->assertDatabaseHas('booking_services', ['booking_id' => $bookingId, 'service_id' => 900, 'price_at_booking' => 0]);
+        $this->authenticateAs('staff');
+        $walkinId = $this->postJson('/api/admin/walk-in', [
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pets' => [[...$pet, 'pet_name' => 'Walkin decimal', 'services' => [['service_slug' => 'nail_clipping']]]],
+            'sedation_consent' => false, 'terms_agreed' => true,
+        ])->assertCreated()->json('booking_id');
+        $this->assertDatabaseHas('pets', ['pet_name' => 'Walkin decimal', 'weight' => $weight, 'size' => $size]);
+        $this->assertDatabaseHas('booking_services', ['booking_id' => $walkinId, 'service_id' => 900, 'price_at_booking' => 0]);
+    }
+
+    public static function decimalPetWeights(): array
+    {
+        return json_decode(file_get_contents(__DIR__.'/../Fixtures/weight-rules.json'), true)['pets'];
+    }
+
+    public function test_invalid_weight_text_is_rejected_by_booking_forecast_and_grooming_walkin(): void
+    {
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11 AM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $invalid = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true)['invalid_weights'];
+        foreach ($invalid as $weight) {
+            $pet = ['pet_name' => 'Invalid decimal', 'species' => 'Dog', 'weight' => $weight];
+            $this->authenticateAs('customer');
+            $this->postJson('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
+                'number_of_pets' => 1, 'pets' => [$pet]])->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
+            $this->postJson('/api/booking/workload-forecast', ['date' => now()->toDateString(), 'pets' => [$pet]])
+                ->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
+            foreach (['admin', 'staff'] as $role) {
+                $this->authenticateAs($role);
+                $this->postJson('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+                    'pets' => [[...$pet, 'services' => [['service_slug' => 'partial_grooming']]]], 'sedation_consent' => false, 'terms_agreed' => true])
+                    ->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
+            }
+        }
+        $this->assertDatabaseCount('pets', 0);
+        $this->assertDatabaseCount('bookings', 0);
+    }
+
+    public function test_unchanged_historical_weight_is_usable_for_customer_forecast_and_booking(): void
+    {
+        DB::table('pets')->insert(['pet_id' => 101, 'user_id' => 1, 'pet_name' => 'Historical cat',
+            'species' => 'Cat', 'weight' => 4.999, 'size' => 'small', 'is_archived' => false]);
+        DB::table('services')->insert(['service_id' => 900, 'service_name' => 'Nail Clipping', 'slug' => 'nail_clipping', 'base_price' => 75]);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11 AM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $pet = ['pet_id' => 101, 'pet_name' => 'Historical cat', 'species' => 'Cat', 'size' => 'small',
+            'services' => ['ala_carte' => ['nail_clipping']]];
+        $this->authenticateAs('customer');
+        $this->postJson('/api/booking/workload-forecast', ['date' => now()->toDateString(), 'pets' => [$pet]])->assertOk();
+        $this->postJson('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
+            'number_of_pets' => 1, 'pets' => [$pet]])->assertCreated();
+        $this->assertDatabaseHas('pets', ['pet_id' => 101, 'weight' => 4.999, 'size' => 'small']);
+    }
+
+    public function test_grooming_walkin_can_select_a_historical_pet_without_changing_its_weight(): void
+    {
+        DB::table('users')->insert(['user_id' => 10, 'first_name' => 'Maria', 'last_name' => 'Santos',
+            'phone' => '09171234567', 'role' => 'customer']);
+        DB::table('pets')->insert(['pet_id' => 101, 'user_id' => 10, 'pet_name' => 'Historical cat',
+            'species' => 'Cat', 'weight' => 4.999, 'size' => 'small', 'is_archived' => false]);
+        DB::table('services')->insert(['service_id' => 900, 'service_name' => 'Nail Clipping', 'slug' => 'nail_clipping', 'base_price' => 75]);
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'owner_record_type' => 'registered', 'customer_user_id' => 10,
+            'pets' => [['pet_id' => 101, 'pet_name' => 'Historical cat', 'species' => 'Cat', 'size' => 'small',
+                'services' => [['service_slug' => 'nail_clipping']]]], 'sedation_consent' => false, 'terms_agreed' => true])->assertCreated();
+        $this->assertDatabaseHas('pets', ['pet_id' => 101, 'weight' => 4.999, 'size' => 'small']);
     }
 
     public function test_customer_and_walk_in_range_prices_stay_unresolved_until_payment(): void
@@ -1748,9 +1832,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'user_id' => 50,
             'pet_name' => 'Luna',
         ]);
-        $this->assertDatabaseHas('pets', ['pet_id' => 50, 'size' => 'small', 'weight' => 12]);
-        $this->assertDatabaseHas('booking_pets', ['pet_id' => 50, 'confirmed_size' => 'small']);
-        $this->assertDatabaseHas('booking_services', ['service_id' => 2, 'price_at_booking' => 550]);
+        $this->assertDatabaseHas('pets', ['pet_id' => 50, 'size' => 'medium', 'weight' => 12]);
+        $this->assertDatabaseHas('booking_pets', ['pet_id' => 50, 'confirmed_size' => 'medium']);
+        $this->assertDatabaseHas('booking_services', ['service_id' => 2, 'price_at_booking' => 650]);
 
         DB::table('booking_services')->delete();
         DB::table('booking_pets')->delete();

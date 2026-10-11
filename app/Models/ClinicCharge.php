@@ -12,6 +12,7 @@ class ClinicCharge extends Model
     ];
 
     protected $casts = [
+        'pet_weight_kg' => 'decimal:2', 'min_weight_kg' => 'decimal:2', 'max_weight_kg' => 'decimal:2',
         'quantity' => 'decimal:2', 'unit_price' => 'decimal:2', 'amount' => 'decimal:2',
     ];
 }

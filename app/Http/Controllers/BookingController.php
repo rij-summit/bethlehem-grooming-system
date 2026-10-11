@@ -59,7 +59,7 @@ class BookingController extends Controller
             'pets.*.pet_id' => ['nullable', 'integer'],
             'pets.*.species' => ['nullable', 'string'],
             'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large'],
-            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'pets.*.weight' => ['nullable', new ValidPetWeight],
             'pets.*.grooming_preference' => ['nullable', 'string', 'max:32'],
             'pets.*.services.package' => ['nullable', 'string'],
             'pets.*.services.ala_carte' => ['nullable', 'array'],
@@ -94,7 +94,7 @@ class BookingController extends Controller
             'pets.*.breed' => 'nullable|string|max:100',
             'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
-            'pets.*.weight' => ['nullable', 'numeric', new ValidPetWeight],
+            'pets.*.weight' => ['nullable', new ValidPetWeight],
             'pets.*.color' => 'nullable|string|max:50',
             'pets.*.medical_conditions' => 'nullable|string',
             'pets.*.special_instructions' => 'nullable|string',
@@ -223,9 +223,8 @@ class BookingController extends Controller
                         'breed' => $petData['breed'] ?? $pet->breed,
                         'fur_type' => $petData['fur_type'] ?? $pet->fur_type,
                         'weight' => $petData['weight'] ?? $pet->weight,
-                        'size' => $pet->hasClinicVerifiedSize()
-                            ? $pet->size
-                            : (PetWeightSize::sizeFor($pet->species, $petData['weight'] ?? $pet->weight) ?? $petData['size'] ?? $pet->size),
+                        'size' => PetWeightSize::sizeFor($pet->species, $petData['weight'] ?? $pet->weight)
+                            ?? $petData['size'] ?? $pet->size,
                     ]);
                 }
 

@@ -18,7 +18,7 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
 } from "../services/grooming-service.js?v=grooming-pricing-20261006";
-import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010";
+import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010&pet-weight=pet-weight-size-20261011-v3";
 
 const state = {
   pets: [],

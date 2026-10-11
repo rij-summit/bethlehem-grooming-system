@@ -12,6 +12,26 @@ use Tests\TestCase;
 
 class PetWeightSizeTest extends TestCase
 {
+    #[DataProvider('serializedWeights')]
+    public function test_pet_weight_serializes_without_database_scale_padding(mixed $stored, mixed $expected): void
+    {
+        $pet = new Pet;
+        $pet->setRawAttributes(['weight' => $stored], true);
+        $this->assertSame($expected, $pet->toArray()['weight']);
+        $this->assertSame($stored, $pet->getRawOriginal('weight'));
+    }
+
+    public static function serializedWeights(): array
+    {
+        return [
+            ['4.100000000000', 4.1],
+            ['7.000000000000', 7.0],
+            ['20.000000000000', 20.0],
+            ['4.999000000000', 4.999],
+            [null, null],
+        ];
+    }
+
     public function test_verified_size_takes_priority_over_weight_estimate(): void
     {
         $pet = new Pet([
@@ -29,7 +49,7 @@ class PetWeightSizeTest extends TestCase
     #[DataProvider('acceptedWeights')]
     public function test_it_resolves_accepted_weights_to_the_expected_size(
         string $species,
-        float $weight,
+        mixed $weight,
         string $expectedSize,
     ): void {
         $this->assertSame($expectedSize, PetWeightSize::sizeFor($species, $weight));
@@ -37,41 +57,25 @@ class PetWeightSizeTest extends TestCase
 
     public static function acceptedWeights(): array
     {
-        return [
-            'small dog lower bound' => ['Dog', 4, 'small'],
-            'small dog upper bound' => ['Dog', 10, 'small'],
-            'medium dog example' => ['Dog', 20, 'medium'],
-            'large dog upper bound' => ['Dog', 50, 'large'],
-            'extra-large dog upper bound' => ['Dog', 70, 'extra_large'],
-            'small cat example' => ['Cat', 3, 'small'],
-            'medium cat lower bound' => ['Cat', 5, 'medium'],
-            'medium cat upper bound' => ['Cat', 8, 'medium'],
-        ];
+        return json_decode(file_get_contents(__DIR__.'/../Fixtures/weight-rules.json'), true)['pets'];
     }
 
     #[DataProvider('rejectedWeights')]
-    public function test_it_rejects_weights_outside_the_accepted_ranges(
+    public function test_it_rejects_invalid_submitted_weights(
         string $species,
-        float $weight,
+        mixed $weight,
     ): void {
-        $this->assertNull(PetWeightSize::sizeFor($species, $weight));
+        $validator = Validator::make(['species' => $species, 'weight' => $weight], ['weight' => [new ValidPetWeight]]);
+        $this->assertTrue($validator->fails());
     }
 
     public static function rejectedWeights(): array
     {
-        return [
-            'dog below minimum' => ['Dog', 3.99],
-            'zero weight' => ['Dog', 0],
-            'dog between small and medium' => ['Dog', 10.5],
-            'dog above maximum' => ['Dog', 70.01],
-            'above absolute maximum' => ['Dog', 155.61],
-            'cat below minimum' => ['Cat', 1.99],
-            'cat between small and medium' => ['Cat', 4.5],
-            'cat above maximum' => ['Cat', 8.01],
-        ];
+        return array_map(fn ($weight) => ['Dog', $weight],
+            json_decode(file_get_contents(__DIR__.'/../Fixtures/weight-rules.json'), true)['invalid_weights']);
     }
 
-    public function test_it_preserves_a_manually_selected_size(): void
+    public function test_valid_weight_overrides_a_contradictory_manual_size(): void
     {
         $pet = PetWeightSize::withComputedSize([
             'species' => 'Dog',
@@ -79,7 +83,27 @@ class PetWeightSizeTest extends TestCase
             'size' => 'small',
         ]);
 
-        $this->assertSame('small', $pet['size']);
+        $this->assertSame('medium', $pet['size']);
+    }
+
+    public function test_missing_weight_preserves_manual_size_and_decimals_are_not_rounded(): void
+    {
+        $this->assertSame('large', PetWeightSize::withComputedSize(['species' => 'Dog', 'weight' => null, 'size' => 'large'])['size']);
+        $this->assertSame('small', PetWeightSize::sizeFor('Cat', 4.999));
+        $this->assertSame('small', PetWeightSize::sizeFor('Dog', 10.999));
+        $this->assertSame('medium', PetWeightSize::sizeFor('Dog', 25.999));
+    }
+
+    public function test_precision_is_checked_before_converting_text_and_clinic_vitals_need_no_species(): void
+    {
+        foreach (['4.780', '4.200000', '10.555'] as $weight) {
+            $validator = Validator::make(['weight_kg' => $weight], ['weight_kg' => [new ValidPetWeight(requireSpecies: false)]]);
+            $this->assertSame('Enter weight using no more than 2 decimal places.', $validator->errors()->first('weight_kg'));
+        }
+        foreach (['4', '4.', '4.1', '4.20', '4.25', '155.6'] as $weight) {
+            $validator = Validator::make(['weight_kg' => $weight], ['weight_kg' => [new ValidPetWeight(requireSpecies: false)]]);
+            $this->assertFalse($validator->fails());
+        }
     }
 
     public function test_it_computes_size_when_the_submission_omits_it(): void
@@ -103,7 +127,7 @@ class PetWeightSizeTest extends TestCase
 
         $this->assertTrue($validator->fails());
         $this->assertSame(
-            'Weight must be greater than 0 kg and no more than 155.6 kg.',
+            'Weight cannot be more than 155.6 kg.',
             $validator->errors()->first('weight'),
         );
     }
@@ -113,7 +137,7 @@ class PetWeightSizeTest extends TestCase
         $validator = Validator::make([
             'pets' => [[
                 'species' => 'Cat',
-                'weight' => 20,
+                'weight' => 155.61,
             ]],
         ], [
             'pets.*.weight' => ['numeric', new ValidPetWeight],
@@ -121,7 +145,7 @@ class PetWeightSizeTest extends TestCase
 
         $this->assertTrue($validator->fails());
         $this->assertSame(
-            PetWeightSize::validationMessage('Cat'),
+            PetWeightSize::validationMessage('Cat', 155.61),
             $validator->errors()->first('pets.0.weight'),
         );
     }

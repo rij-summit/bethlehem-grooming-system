@@ -295,6 +295,7 @@ function adminClinicVaccinations() {
       if (!this.vaccineSelectable(item)) return;
       this.selectedVaccine = item;
       this.form.inventory_item_id = String(item.item_id);
+      if (!this.form.dose_unit && item.dose_unit) this.form.dose_unit = item.dose_unit;
       this.formModal.unavailableVaccineName = "";
       delete this.formErrors.inventory_item_id;
       this.refreshIcons();

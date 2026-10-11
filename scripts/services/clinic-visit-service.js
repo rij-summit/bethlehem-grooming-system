@@ -1,3 +1,4 @@
+import { formatSavedWeight } from "../components/pet-weight-size.js?v=pet-weight-size-20261011-v3";
 export const CLINIC_VISIT_DRAFT_KEY = "clinicVisitDraft";
 export const CLINIC_VISIT_PETS_KEY = "clinicVisitPets";
 export const CLINIC_VISIT_CONFIRMATION_KEY = "clinicVisitConfirmation";
@@ -91,7 +92,7 @@ export function normalizeApiPet(pet) {
     birthdate: pet?.birthdate || "",
     breed: pet?.breed || "",
     color: pet?.color || "",
-    weight: pet?.weight ? String(pet.weight) : "",
+    weight: formatSavedWeight(pet?.weight),
     furType: pet?.fur_type || pet?.furType || "",
     size: pet?.size || "",
     sizeVerified: Array.isArray(pet?.clinic_verified_fields) && pet.clinic_verified_fields.includes("size"),

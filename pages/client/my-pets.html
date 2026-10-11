@@ -340,13 +340,17 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="petWeight" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
-                Weight (kg)
+                Weight
                 <span id="petWeightVerified"
                   class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
               </label>
-              <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 12"
-                aria-invalid="false"
-                class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
+              <div class="relative">
+                <input type="text" id="petWeight" name="weight" inputmode="decimal" placeholder="e.g. 4.25"
+                aria-invalid="false" aria-describedby="petWeightError"
+                class="w-full rounded-xl border border-portal-border bg-white px-4 pr-12 py-2.5 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active" />
+                <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500">kg</span>
+              </div>
+              <p id="petWeightError" role="alert" class="hidden mt-1 text-xs text-red-600"></p>
             </div>
             <div>
               <label for="petFurType" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
@@ -376,14 +380,14 @@
           <!-- Size -->
           <div>
             <label for="petSize" class="mb-1 flex items-center gap-2 text-sm font-medium text-portal-text">
-              <span id="petSizeLabel">Estimated Size</span>
+              <span id="petSizeLabel">Size</span>
               <span id="petSizeVerified"
                 class="hidden rounded-full bg-portal-active px-2 py-0.5 text-[10px] font-medium leading-none text-portal-primary">Verified</span>
             </label>
-            <p id="petSizeEstimateNote" class="mb-2 text-xs font-medium text-portal-muted">Estimated from weight until verified by Bethlehem Animal Clinic.</p>
+
             <div id="petSizeCombobox" class="relative">
               <div class="relative">
-                <input id="petSize" name="size" type="text" placeholder="Select species first" aria-describedby="petSizeEstimateNote"
+                <input id="petSize" name="size" type="text" placeholder="Select species first"
                   class="w-full rounded-xl border border-portal-border bg-white px-4 py-2.5 pr-12 text-sm outline-none transition focus:border-portal-accent focus:ring-2 focus:ring-portal-active read-only:cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   role="combobox" aria-autocomplete="none" aria-controls="petSizeOptions"
                   aria-expanded="false" aria-invalid="false" autocomplete="off" readonly disabled />
@@ -447,7 +451,7 @@
 
     <script src="../../scripts/api.js?v=customer-cache-20261005-v1&auth=session-scope-20261006"></script>
     <script src="../../scripts/components/client-notification-ui.js?v=20260915-client-notifications"></script>
-    <script type="module" src="../../scripts/components/my-pets.js?v=customer-cache-20261005-v1"></script>
+    <script type="module" src="../../scripts/components/my-pets.js?v=customer-cache-20261005-v1&pet-weight=pet-weight-size-20261011-v3"></script>
     <script type="module" src="../../scripts/components/customer-pre-registration-button.js?v=customer-cache-20261005-v1"></script>
   </body>
 </html>

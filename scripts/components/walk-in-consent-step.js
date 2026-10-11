@@ -1,3 +1,4 @@
+import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 const state = {
   reviewPayload: null,
   onBack: null,
@@ -284,6 +285,12 @@ async function handleSubmit(event) {
       return;
     }
 
+    const weightMessage = (reviewPayload.items || []).map(item => getPetWeightSubmissionValidationMessage(item.pet)).find(Boolean);
+    if (weightMessage) {
+      showSubmitError(weightMessage);
+      resetSubmitButton();
+      return;
+    }
     const payload  = buildApiPayload(owner, reviewPayload, consentPayload);
     const response = await API.submitWalkIn(payload);
 
@@ -325,7 +332,7 @@ export function buildWalkInPets(reviewPayload) {
       species:              item.pet.petType,
       breed:                item.pet.breed    || null,
       fur_type:             item.pet.furType  || null,
-      weight:               item.pet.weight   || null,
+      ...getPetWeightSubmission(item.pet),
       size:                 normalizeSizeForApi(item.pet.size),
       medical_conditions:   item.pet.medicalNotes || null,
       special_instructions: item.selection.specialInstructions?.trim() || null,

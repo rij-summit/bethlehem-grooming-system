@@ -91,6 +91,7 @@ async function calendar(service, time, date = '2026-10-09', restriction = null, 
 }
 
 async function main() {
+  const weightTools = await import('../scripts/components/pet-weight-size.js');
   const draftStorage = new Map();
   globalThis.sessionStorage = { getItem: (key) => draftStorage.get(key) ?? null };
   let submittedForecast = null;
@@ -106,7 +107,7 @@ async function main() {
   const originalDraft = [...draftStorage.entries()];
   await forecastService.forecastGroomingWindows('2026-10-09');
   assert.equal(submittedForecast.pets[0].size, 'extra_large');
-  assert.equal(submittedForecast.pets[0].weight, 55);
+  assert.equal(submittedForecast.pets[0].weight, undefined, "Saved selections reference the stored weight without rewriting it");
   assert.equal(submittedForecast.pets[0].grooming_preference, 'regular_trim');
   assert.deepEqual(submittedForecast.pets[0].services.ala_carte, ['facial_trimming']);
   assert.equal(submittedForecast.pets[0].estimate_factors, undefined, 'Customer forecasts never send staff factors');
@@ -247,6 +248,7 @@ async function main() {
 
   let groomingStep;
   const grooming = harness('booking-consent-step.js', {
+    ...weightTools,
     loadGroomingCatalogue: async () => {}, getBookingDraft: () => ({}),
     normalizeStepThreeDraft: () => [], selectedPricingSignature: () => 'reviewed',
     goToGroomingStep: (step) => { groomingStep = step; },

@@ -11,6 +11,8 @@ class ValidPetWeight implements DataAwareRule, ValidationRule
 {
     private array $data = [];
 
+    public function __construct(private bool $requireSpecies = true) {}
+
     public function setData(array $data): static
     {
         $this->data = $data;
@@ -20,13 +22,16 @@ class ValidPetWeight implements DataAwareRule, ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if ($value === null || $value === '' || ! is_numeric($value)) {
+        if ($value === null || $value === '') {
             return;
         }
 
         $species = $this->relatedSpecies($attribute);
 
-        if (PetWeightSize::sizeFor($species, $value) === null) {
+        $message = PetWeightSize::weightValidationMessage($value);
+        if ($message !== null) {
+            $fail($message);
+        } elseif ($this->requireSpecies && PetWeightSize::sizeFor($species, $value) === null) {
             $fail(PetWeightSize::validationMessage($species, $value));
         }
     }

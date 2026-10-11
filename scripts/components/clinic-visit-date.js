@@ -1,10 +1,10 @@
-import { initBookingCalendar } from "./booking-calendar.js";
+import { initBookingCalendar } from "./booking-calendar.js?pet-weight=pet-weight-size-20261011-v3";
 import {
   CLINIC_VISIT_DRAFT_KEY,
   requireCustomerSession,
   updateClinicVisitDraft,
   clearClinicVisitArrival,
-} from "../services/clinic-visit-service.js";
+} from "../services/clinic-visit-service.js?pet-weight=pet-weight-size-20261011-v3";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
 document.addEventListener("DOMContentLoaded", async () => {

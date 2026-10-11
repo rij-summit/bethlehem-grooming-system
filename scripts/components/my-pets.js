@@ -4,16 +4,16 @@ import { breedCoatCatalogueReady } from "./breed-coat-catalogue.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 import {
+  formatSavedWeight,
   getEnteredWeight,
   getSizeForWeight,
   getSizeOptions,
   getWeightFieldValidationMessage,
   getWeightValidationMessage,
   initializeWeightField,
-  resetWeightFieldForEntry,
-  showWeightRangeInField,
+  syncPetWeightAndSize as syncWeightSizeFields,
   showWeightValidationInField,
-} from "./pet-weight-size.js";
+} from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 
 // Connected to pages/client/my-pets.html
 // Depends on: api.js and the shared pre-registration pet field components
@@ -143,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleButton: document.getElementById("petSizeDropdownButton"),
     placeholder: "Select size",
     options: [],
-    displaySelectedLabel: true,
+    displaySelectedLabel: false,
   });
 
   // ── Icons ─────────────────────────────────────────────
@@ -507,7 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Breed", pet.breed],
       ["Size", sizeLabel[pet.size] ? `${sizeLabel[pet.size]}${isClinicVerified(pet, "size") ? " ✓" : ""}` : null],
       ["Fur Type", resolvedFurType],
-      ["Weight", pet.weight ? `${pet.weight} kg` : null],
+      ["Weight", pet.weight ? `${formatSavedWeight(pet.weight)} kg` : null],
       ["Color", pet.color],
       ["Medical", pet.medical_conditions],
     ].filter(([, v]) => v);
@@ -605,9 +605,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("petMedical").value = pet.medical_conditions || "";
 
     initializeWeightField(petWeight);
-    petWeight.value = pet.weight ?? "";
+    petWeight.value = formatSavedWeight(pet.weight);
     syncWeightAndSize({ clearManualSize: true });
-    setStoredSize(pet.size);
+    if (!getSizeForWeight(petSpecies.value, petWeight.value)) setStoredSize(pet.size);
 
     await breedCoatCatalogueReady;
     breedCoatCombobox.update();
@@ -643,15 +643,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   petSpecies.addEventListener("change", () => {
-    if (petWeight.dataset.weightFieldMode === "range") {
-      resetWeightFieldForEntry(petWeight);
-    }
     syncWeightAndSize({ clearManualSize: true });
     validateWeightOnCommit();
   });
   petWeight.addEventListener("input", () => syncWeightAndSize());
   petWeight.addEventListener("change", validateWeightOnCommit);
-  petWeight.addEventListener("focus", () => resetWeightFieldForEntry(petWeight));
   petSize.addEventListener("change", handleManualSizeChange);
 
   // ── Form submit ───────────────────────────────────────
@@ -722,6 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
       invalidatePetCollections();
       await loadPets();
     } catch (err) {
+      if (err.errors?.weight?.[0]) showWeightValidationInField(petWeight, err.errors.weight[0]);
       showFormError(err.errors
         ? Object.values(err.errors).flat()[0]
         : (err.message || "Something went wrong."));
@@ -821,8 +818,6 @@ document.addEventListener("DOMContentLoaded", () => {
     Object.entries(editVerifiedIndicators).forEach(([field, indicator]) => {
       indicator?.classList.toggle("hidden", !isClinicVerified(pet, field));
     });
-    document.getElementById("petSizeEstimateNote")?.classList.toggle("hidden", isClinicVerified(pet, "size"));
-    document.getElementById("petSizeLabel").textContent = isClinicVerified(pet, "size") ? "Size" : "Estimated Size";
   }
 
   function getChangedVerifiedFieldLabels(pet, payload) {
@@ -890,53 +885,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function syncWeightAndSize({ clearManualSize = false } = {}) {
-    const rawWeight = getEnteredWeight(petWeight);
-    const options = getSizeOptions(petSpecies.value);
-
-    sizeCombobox.setOptions(options, {
-      preserveValue: !clearManualSize,
-    });
-
-    const computedSize = getSizeForWeight(petSpecies.value, rawWeight);
-    if (computedSize && !isClinicVerified(editingPet, "size")) {
-      sizeCombobox.setValue(computedSize);
-    }
-
-    sizeCombobox.setDisabled(options.length === 0);
+    const previousMessage = getWeightFieldValidationMessage(petWeight);
+    syncWeightSizeFields(petWeight, petSpecies.value, sizeCombobox, { clearManualSize });
+    if (previousMessage && petFormError.textContent === previousMessage) hideFormError();
   }
 
   function validateWeightOnCommit() {
-    const rawWeight = getEnteredWeight(petWeight);
-
-    if (!rawWeight) {
-      if (petWeight.dataset.weightFieldMode !== "error") {
-        showWeightRangeInField(
-          petWeight,
-          petSpecies.value,
-          sizeCombobox.getValue(),
-        );
-      }
-      return true;
-    }
-
-    const message = getWeightValidationMessage(petSpecies.value, rawWeight);
-    if (message) {
-      showWeightValidationInField(petWeight, message);
-      return false;
-    }
-
-    return true;
+    syncWeightAndSize();
+    return !getWeightFieldValidationMessage(petWeight);
   }
 
   function handleManualSizeChange() {
-    if (!getEnteredWeight(petWeight)
-      && petWeight.dataset.weightFieldMode !== "error") {
-      showWeightRangeInField(
-        petWeight,
-        petSpecies.value,
-        sizeCombobox.getValue(),
-      );
-    }
+    syncWeightAndSize();
   }
 
   function validatePetForm(payload) {
@@ -970,7 +930,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ({ value }) => normalizePetSize(value),
     );
     if (payload.size && !allowedSizes.includes(payload.size)) {
-      return `${payload.species} size must be one of: ${allowedSizes.join(", ")}.`;
+      return "Select a size available for this pet type.";
     }
 
     return "";

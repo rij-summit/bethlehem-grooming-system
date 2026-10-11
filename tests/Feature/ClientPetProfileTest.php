@@ -18,6 +18,7 @@ class ClientPetProfileTest extends TestCase
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->unsignedInteger('user_id');
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
             $table->string('breed')->nullable();
@@ -35,6 +36,8 @@ class ClientPetProfileTest extends TestCase
             $table->text('medical_conditions')->nullable();
             $table->boolean('is_archived')->default(false);
         });
+
+        (require database_path('migrations/2026_10_11_000002_preserve_pet_weight_precision.php'))->up();
 
         Schema::create('customer_notifications', function (Blueprint $table) {
             $table->id();
@@ -103,6 +106,58 @@ class ClientPetProfileTest extends TestCase
         Schema::dropIfExists('pets');
 
         parent::tearDown();
+    }
+
+    public function test_customer_admin_and_staff_add_and_edit_share_exact_weight_rules(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->increments('user_id'); $table->string('role');
+        });
+        DB::table('users')->insert(['user_id' => 10, 'role' => 'customer']);
+        $cases = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true);
+        foreach (['customer', 'admin', 'staff'] as $role) {
+            $this->authenticateUser($role === 'customer' ? 10 : 20, $role);
+            $createUrl = $role === 'customer' ? '/api/pets' : '/api/admin/customer-pets/registered/10';
+            foreach ($cases['pets'] as $index => [$species, $weight, $size]) {
+                $payload = ['pet_name' => $role.' pet '.$index, 'species' => $species,
+                    'weight' => $weight, 'size' => $size === 'small' ? 'medium' : 'small'];
+                $id = $this->postJson($createUrl, $payload)->assertCreated()->assertJsonPath('pet.size', $size)->json('pet.pet_id');
+                $editUrl = ($role === 'customer' ? '/api/pets/' : '/api/admin/pets/').$id;
+                $this->putJson($editUrl, $payload)->assertOk()->assertJsonPath('pet.size', $size);
+                $this->assertDatabaseHas('pets', ['pet_id' => $id, 'weight' => $weight, 'size' => $size]);
+            }
+            foreach ($cases['invalid_weights'] as $index => $weight) {
+                $this->postJson($createUrl, ['pet_name' => 'Invalid '.$index, 'species' => 'Dog', 'weight' => $weight])
+                    ->assertUnprocessable()->assertJsonValidationErrors('weight');
+                $this->putJson($editUrl, [...$payload, 'weight' => $weight])
+                    ->assertUnprocessable()->assertJsonValidationErrors('weight');
+                $this->assertDatabaseHas('pets', ['pet_id' => $id, 'weight' => $payload['weight'], 'size' => $size]);
+            }
+            $unknown = ['pet_name' => $role.' unknown', 'species' => 'Dog', 'weight' => null, 'size' => 'large'];
+            $id = $this->postJson($createUrl, $unknown)->assertCreated()->assertJsonPath('pet.size', 'large')->json('pet.pet_id');
+            $this->putJson(($role === 'customer' ? '/api/pets/' : '/api/admin/pets/').$id, $unknown)
+                ->assertOk()->assertJsonPath('pet.size', 'large');
+            $editUrl = ($role === 'customer' ? '/api/pets/' : '/api/admin/pets/').$id;
+            $this->putJson($editUrl, [...$unknown, 'weight' => 4.25])
+                ->assertOk()->assertJsonPath('pet.size', 'small');
+            $this->putJson($editUrl, $unknown)->assertOk()
+                ->assertJsonPath('pet.weight', null)->assertJsonPath('pet.size', 'large');
+        }
+        Schema::drop('users');
+    }
+
+    public function test_widening_weight_precision_preserves_existing_pet_records(): void
+    {
+        $migration = require database_path('migrations/2026_10_11_000002_preserve_pet_weight_precision.php');
+        $migration->down();
+        DB::table('pets')->insert([
+            ['pet_id' => 1, 'user_id' => 10, 'pet_name' => 'Historical cat', 'species' => 'Cat', 'weight' => 4.99, 'size' => 'medium'],
+            ['pet_id' => 2, 'user_id' => 10, 'pet_name' => 'Historical dog', 'species' => 'Dog', 'weight' => 155.6, 'size' => 'large'],
+            ['pet_id' => 3, 'user_id' => 10, 'pet_name' => 'Unknown weight', 'species' => 'Dog', 'weight' => null, 'size' => 'small'],
+        ]);
+        $before = DB::table('pets')->orderBy('pet_id')->get()->all();
+        $migration->up();
+        $this->assertEquals($before, DB::table('pets')->orderBy('pet_id')->get()->all());
     }
 
     public function test_pet_profile_requires_authentication(): void
@@ -307,7 +362,7 @@ class ClientPetProfileTest extends TestCase
             'size' => 'large',
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['fur_type', 'weight', 'size']);
+            ->assertJsonValidationErrors(['fur_type', 'size']);
 
         $this->assertDatabaseHas('pets', [
             'pet_id' => 101,
@@ -420,7 +475,7 @@ class ClientPetProfileTest extends TestCase
         );
     }
 
-    public function test_weight_change_preserves_verified_size_until_customer_changes_size(): void
+    public function test_weight_change_derives_size_and_clears_changed_verification(): void
     {
         $this->authenticateCustomer(10);
 
@@ -439,8 +494,8 @@ class ClientPetProfileTest extends TestCase
             'species' => 'Dog',
             'weight' => 12,
         ])->assertOk()
-            ->assertJsonPath('pet.size', 'small')
-            ->assertJsonPath('pet.clinic_verified_fields', ['size']);
+            ->assertJsonPath('pet.size', 'medium')
+            ->assertJsonPath('pet.clinic_verified_fields', null);
 
         $this->putJson('/api/pets/101', [
             'pet_name' => 'Rigby',

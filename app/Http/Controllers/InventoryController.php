@@ -52,6 +52,13 @@ class InventoryController extends Controller
             'barcode'          => $item->barcode,
             'category'         => $item->category,
             'unit'             => $item->unit,
+            'medicine_type' => $item->medicine_type,
+            'dose_unit' => $item->dose_unit,
+            'strength_concentration' => $item->strength_concentration,
+            'pricing_method' => $item->pricing_method ?? 'flat',
+            'weight_pricing_mode' => $item->weight_pricing_mode ?? 'legacy',
+            'weight_prices' => $item->category === 'medicine' && $item->pricing_method === 'weight_based'
+                ? $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->values()->all() : [],
             'description'      => $item->description,
             'unit_cost'        => $item->unit_cost,
             'selling_price'    => $item->selling_price,
@@ -77,7 +84,8 @@ class InventoryController extends Controller
 
     private function formatItems(iterable $items): Collection
     {
-        $items = collect($items);
+        $items = new \Illuminate\Database\Eloquent\Collection($items);
+        $items->where('category', 'medicine')->where('pricing_method', 'weight_based')->loadMissing('weightPrices');
         $balances = $this->batchBalances->forItems($items->pluck('item_id'));
 
         return $items->map(fn (InventoryItem $item) => $this->formatItem(
@@ -95,6 +103,7 @@ class InventoryController extends Controller
             ->get();
         $balances = $this->batchBalances->forItems($items->pluck('item_id'));
 
+        $items->where('category', 'medicine')->where('pricing_method', 'weight_based')->loadMissing('weightPrices');
         return $items->map(function (InventoryItem $item) use ($balances, $today, $cutoff) {
             $balance = $balances[(int) $item->item_id] ?? $this->batchBalances->emptyBalance();
             $expiringBatches = collect($balance['batches'])
@@ -215,24 +224,14 @@ class InventoryController extends Controller
     {
         $this->requireAuth();
 
-        $validated = $request->validate([
-            'item_name'     => 'required|string|max:150',
-            'barcode'       => 'nullable|string|regex:/^[0-9]{1,13}$/|unique:inventory_items,barcode',
-            'category'      => 'required|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
-            'unit'          => 'required|string|max:50',
-            'description'   => 'nullable|string|max:255',
-            'unit_cost'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
-            'selling_price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
-            'reorder_level' => 'required|integer|min:0|max:99999999',
-        ]);
-
-        $item = InventoryItem::create([
-            ...$validated,
-            'unit_cost'        => $validated['unit_cost'],
-            'quantity_on_hand' => 0,
-            'reorder_level'    => $validated['reorder_level'],
-            'is_active'        => 1,
-        ]);
+        $validated = $this->validateProduct($request);
+        $item = DB::transaction(function () use ($validated) {
+            $ranges = $validated['weight_prices'];
+            unset($validated['weight_prices']);
+            $item = InventoryItem::create([...$validated, 'quantity_on_hand' => 0, 'is_active' => 1]);
+            $item->weightPrices()->createMany($ranges);
+            return $item;
+        });
 
         return response()->json(['data' => $this->formatItem($item)], 201);
     }
@@ -270,23 +269,85 @@ class InventoryController extends Controller
 
         $item = InventoryItem::findOrFail($itemId);
 
-        $validated = $request->validate([
-            'item_name'     => 'sometimes|string|max:150',
-            'barcode'       => "nullable|string|regex:/^[0-9]{1,13}$/|unique:inventory_items,barcode,{$item->item_id},item_id",
-            'category'      => 'sometimes|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
-            'unit'          => 'sometimes|string|max:50',
-            'description'   => 'nullable|string|max:255',
-            'unit_cost'     => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
-            'selling_price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
-            'reorder_level' => 'required|integer|min:0|max:99999999',
-        ]);
-
-        // Prevent accidentally overwriting stock quantity via edit form
-        unset($validated['quantity_on_hand']);
-
-        $item->update($validated);
+        DB::transaction(function () use ($request, $item) {
+            $item = InventoryItem::whereKey($item->item_id)->lockForUpdate()->firstOrFail();
+            $validated = $this->validateProduct($request, $item);
+            $ranges = $validated['weight_prices'];
+            unset($validated['weight_prices']);
+            $hadWeightPricing = $item->category === 'medicine' && $item->pricing_method === 'weight_based';
+            $item->update($validated);
+            if ($hadWeightPricing || $ranges) {
+                $item->weightPrices()->delete();
+                $item->weightPrices()->createMany($ranges);
+            }
+        });
 
         return response()->json(['data' => $this->formatItem($item->fresh())]);
+    }
+
+    private function validateProduct(Request $request, ?InventoryItem $item = null): array
+    {
+        $data = $request->all();
+        $category = $data['category'] ?? $item?->category;
+        $medicine = $category === 'medicine';
+        $clinic = $medicine || $category === 'vaccine';
+        if ($item && $category === $item->category) {
+            foreach (['medicine_type', 'dose_unit', 'strength_concentration', 'pricing_method'] as $field) {
+                if (! array_key_exists($field, $data)) $data[$field] = $item->{$field};
+            }
+            if (! array_key_exists('weight_prices', $data) && ($data['pricing_method'] ?? null) === 'weight_based') {
+                $data['weight_prices'] = $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->all();
+            }
+        }
+        if (! $medicine) $data['strength_concentration'] = null;
+        $weightBased = $medicine && ($data['pricing_method'] ?? null) === 'weight_based';
+        $savedRanges = $weightBased && $item
+            ? $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->all() : [];
+        // Legacy endpoints may only be kept unchanged on an existing product.
+        $preserveLegacy = $weightBased && $item?->pricing_method === 'weight_based'
+            && ($item->weight_pricing_mode ?? 'legacy') === 'legacy'
+            && ($data['weight_pricing_mode'] ?? 'legacy') === 'legacy'
+            && ($data['weight_prices'] ?? []) == $savedRanges;
+        $required = $item ? 'sometimes' : 'required';
+        $validator = Validator::make($data, [
+            'item_name' => $required.'|string|max:150',
+            'barcode' => ['nullable', 'string', 'regex:/^[0-9]{1,13}$/',
+                \Illuminate\Validation\Rule::unique('inventory_items', 'barcode')->ignore($item?->item_id, 'item_id')],
+            'category' => $required.'|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
+            'unit' => $required.'|string|max:50',
+            'description' => 'nullable|string|max:255',
+            'unit_cost' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+            'selling_price' => ($weightBased ? 'prohibited' : 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY),
+            'reorder_level' => 'required|integer|min:0|max:99999999',
+            'medicine_type' => $medicine ? 'required|in:'.implode(',', InventoryItem::MEDICINE_TYPES) : 'prohibited',
+            'dose_unit' => $clinic ? 'required|string|max:30' : 'prohibited',
+            'strength_concentration' => $medicine ? 'nullable|string|max:150' : 'prohibited',
+            'pricing_method' => $medicine ? 'required|in:flat,weight_based' : 'nullable|in:flat',
+            'weight_pricing_mode' => 'sometimes|in:legacy,threshold',
+            'weight_prices' => $weightBased ? 'required|array|min:1|max:100' : 'prohibited',
+            'weight_prices.*' => 'required|array:min_weight_kg,max_weight_kg,price',
+            'weight_prices.*.min_weight_kg' => 'required|numeric|decimal:0,2|min:0|max:999999.99',
+            'weight_prices.*.max_weight_kg' => 'nullable|numeric|decimal:0,2|gt:0|max:999999.99',
+            'weight_prices.*.price' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
+        ]);
+        $validator->after(function ($validator) use ($data, $weightBased, $preserveLegacy) {
+            if (! $weightBased || $preserveLegacy || $validator->errors()->isNotEmpty()) return;
+            $error = \App\Support\ProductWeightPricing::configurationError(array_values($data['weight_prices']));
+            if ($error) $validator->errors()->add('weight_prices', $error);
+        });
+        $validated = $validator->validate();
+        $validated['medicine_type'] = $medicine ? $validated['medicine_type'] : null;
+        $validated['dose_unit'] = $clinic ? trim($validated['dose_unit']) : null;
+        $validated['strength_concentration'] = $medicine ? ($validated['strength_concentration'] ?? null) : null;
+        $validated['pricing_method'] = $medicine ? $validated['pricing_method'] : 'flat';
+        $validated['weight_pricing_mode'] = $preserveLegacy ? 'legacy' : 'threshold';
+        $validated['weight_prices'] = $weightBased
+            ? collect($validated['weight_prices'])->map(fn ($range) => [
+                'min_weight_kg' => $range['min_weight_kg'], 'max_weight_kg' => $range['max_weight_kg'] ?? null,
+                'price' => $range['price'],
+            ])->values()->all() : [];
+        if ($weightBased) $validated['selling_price'] = null;
+        return $validated;
     }
 
     public function deactivate(int $itemId): JsonResponse

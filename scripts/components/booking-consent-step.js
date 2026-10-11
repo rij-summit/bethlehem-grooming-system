@@ -1,3 +1,4 @@
+import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006";
 import { getBookingDraft } from "../services/booking-draft-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
@@ -83,6 +84,13 @@ export function initBookingConsentStep() {
     // Map frontend pet format → backend field names
     const step3Selections = (getStoredData("bookingStep3")?.petSelections) || [];
 
+    const weightMessage = bookingPets.map(getPetWeightSubmissionValidationMessage).find(Boolean);
+    if (weightMessage) {
+      alert(weightMessage);
+      goToGroomingStep("pets");
+      return;
+    }
+
     const petsPayload = bookingPets.map((pet) => {
       // Find special instructions for this pet from the review data
       const reviewPet = Array.isArray(reviewData.pets)
@@ -99,7 +107,7 @@ export function initBookingConsentStep() {
         breed: pet.breed || null,
         size: normalizeSizeForApi(pet.size),
         fur_type: pet.furType?.trim() || null,
-        weight: pet.weight ? parseFloat(pet.weight) : null,
+        ...getPetWeightSubmission(pet),
         medical_conditions: pet.medicalNotes || null,
         special_instructions: reviewPet?.specialInstructions || null,
         grooming_preference: serviceSelection.groomingPreference || null,

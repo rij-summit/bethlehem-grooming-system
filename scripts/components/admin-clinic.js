@@ -1,3 +1,8 @@
+let clinicPetWeightToolsReady;
+function loadClinicPetWeightTools() {
+  return clinicPetWeightToolsReady ??= import("./pet-weight-size.js?v=pet-weight-size-20261011-v3");
+}
+
 // ── Shared attachment helpers ─────────────────────────────────────────────────
 
 function formatClinicFileSize(bytes) {
@@ -89,6 +94,27 @@ document.addEventListener("alpine:init", () => {
   });
 });
 
+// Preserve legacy endpoints; threshold tiers include only their final upper bound.
+function clinicMedicinePrice(item, weight) {
+  if (item.pricing_method !== "weight_based") {
+    if (!(Number(item.selling_price) > 0)) return { error: "Set this medicine's selling price in Inventory." };
+    return { price: Number(item.selling_price), pet_weight_kg: null, min_weight_kg: null, max_weight_kg: null };
+  }
+  if (weight === "" || weight == null || !Number.isFinite(Number(weight)) || Number(weight) <= 0)
+    return { error: "Record or update the pet's weight before selecting a weight-based medicine price." };
+  const matches = (item.weight_prices || []).filter((range, index, ranges) => Number(weight) >= Number(range.min_weight_kg)
+    && (range.max_weight_kg == null || (item.weight_pricing_mode !== "threshold" || index === ranges.length - 1
+      ? Number(weight) <= Number(range.max_weight_kg) : Number(weight) < Number(range.max_weight_kg))));
+  if (matches.length !== 1) return { error: "No price is configured for this pet's weight. Correct the pricing configuration or pet weight." };
+  return { price: Number(matches[0].price), pet_weight_kg: Number(weight),
+    min_weight_kg: matches[0].min_weight_kg, max_weight_kg: matches[0].max_weight_kg };
+}
+
+function clinicPriceRange(range) {
+  return range.max_weight_kg == null ? `${Number(range.min_weight_kg)} kg and above`
+    : `${Number(range.min_weight_kg)}–${Number(range.max_weight_kg)} kg`;
+}
+
 // ── Medical Record Modal ──────────────────────────────────────────────────────
 
 function adminClinicModal() {
@@ -96,10 +122,15 @@ function adminClinicModal() {
     open:       false,
     saving:     false,
     modalError: "",
+    weightTools: null,
+    weightServerError: "",
     title:      "Medical Record",
     apptId:     null,
     currentAppt: null,
     activeSection: "medical",
+    medicineQuery: "", medicineResults: [], medicineLoading: false, medicineError: "",
+    selectedMedicine: null, inventoryQuantity: "", pendingMedicines: [],
+    _medicineTimer: null, _medicineRequest: 0,
     attachments: [],
     attachmentFile: null,
     attachmentLabel: "",
@@ -140,8 +171,10 @@ function adminClinicModal() {
       return clinicLocalDate(d);
     },
 
-    openModal({ appt, section = "medical" } = {}) {
+    async openModal({ appt, section = "medical" } = {}) {
       if (!appt) return;
+      this.weightTools = await loadClinicPetWeightTools();
+      this.weightServerError = "";
       this.apptId     = appt.id;
       this.currentAppt = appt;
       this.activeSection = "medical";
@@ -155,6 +188,10 @@ function adminClinicModal() {
       this.attachmentBusy = false;
       this.attachmentBusyId = null;
       this.attachmentError = "";
+      clearTimeout(this._medicineTimer);
+      ++this._medicineRequest;
+      this.medicineQuery = ""; this.medicineResults = []; this.selectedMedicine = null;
+      this.inventoryQuantity = ""; this.pendingMedicines = []; this.medicineError = ""; this.medicineLoading = false;
       this.form = {
         chief_complaint:      r.chief_complaint      || appt.chief_complaint || "",
         diagnosis:            r.diagnosis            || "",
@@ -163,7 +200,7 @@ function adminClinicModal() {
         vet_notes:            r.vet_notes            || "",
         follow_up_date:       r.follow_up_date       || "",
         follow_up_notes:      r.follow_up_notes      || "",
-        weight_kg:            v.weight_kg            ?? "",
+        weight_kg:            this.weightTools.formatSavedWeight(v.weight_kg ?? appt.pet?.weight),
         temperature_c:        v.temperature_c        ?? "",
         heart_rate_bpm:       v.heart_rate_bpm       ?? "",
         respiratory_rate_bpm: v.respiratory_rate_bpm ?? "",
@@ -185,8 +222,57 @@ function adminClinicModal() {
 
     closeModal() {
       if (this.saving || this.attachmentBusy) return;
+      clearTimeout(this._medicineTimer);
+      ++this._medicineRequest;
       this.open = false;
       this.activeSection = "medical";
+    },
+
+    get medicineQuote() {
+      return this.selectedMedicine ? clinicMedicinePrice(this.selectedMedicine, this.form.weight_kg) : null;
+    },
+
+    medicineMoney(value) { return "₱" + Number(value).toFixed(2); },
+    medicineRange: clinicPriceRange,
+
+    searchMedicines() {
+      clearTimeout(this._medicineTimer);
+      const request = ++this._medicineRequest;
+      this.selectedMedicine = null; this.medicineResults = []; this.medicineError = "";
+      this.medicineLoading = false;
+      const q = this.medicineQuery.trim();
+      if (q.length < 2) return;
+      this._medicineTimer = setTimeout(async () => {
+        this.medicineLoading = true;
+        try {
+          const response = await API.clinicMedicineOptions(q);
+          if (request !== this._medicineRequest) return;
+          this.medicineResults = response.data;
+          if (!response.data.length) this.medicineError = "No matching active Medicine products.";
+        } catch (error) {
+          if (request === this._medicineRequest) this.medicineError = error.message || "Unable to load medicines.";
+        } finally {
+          if (request === this._medicineRequest) this.medicineLoading = false;
+        }
+      }, 300);
+    },
+
+    selectMedicine(item) {
+      this.selectedMedicine = item; this.medicineQuery = item.item_name;
+      this.medicineResults = []; this.inventoryQuantity = ""; this.medicineError = "";
+    },
+
+    addMedicine() {
+      if (!this.canEditClinical || !this.selectedMedicine || this.medicineQuote?.error) return;
+      const quantity = String(this.inventoryQuantity ?? "");
+      if (quantity !== "" && (!/^\d+(?:\.\d{1,2})?$/.test(quantity) || Number(quantity) <= 0 || Number(quantity) > 99999999.99)) {
+        this.medicineError = "Inventory quantity must be a positive amount with at most two decimal places.";
+        return;
+      }
+      this.pendingMedicines.push({ item: this.selectedMedicine, ...this.medicineQuote,
+        inventory_quantity: quantity === "" ? null : Number(quantity), request_key: crypto.randomUUID() });
+      this.selectedMedicine = null; this.medicineQuery = ""; this.inventoryQuantity = "";
+      this.medicineError = "";
     },
 
     selectAttachment(event) {
@@ -260,6 +346,11 @@ function adminClinicModal() {
 
     async saveRecord(finishCase = false) {
       if (!this.canEditClinical || this.saving || (finishCase && !this.canFinish)) return;
+      this.weightTools = await loadClinicPetWeightTools();
+      if (this.weightValidationMessage) {
+        document.getElementById("clinicWeight")?.focus();
+        return;
+      }
       if (finishCase) {
         const missing = [["weight_kg", "Weight"], ["temperature_c", "Temperature"],
           ["heart_rate_bpm", "Heart Rate"], ["respiratory_rate_bpm", "Respiratory Rate"]]
@@ -267,6 +358,13 @@ function adminClinicModal() {
           .map(([, label]) => label);
         if (missing.length) {
           this.modalError = `Fill in the vitals before finishing the case: ${missing.join(", ")}.`;
+          return;
+        }
+      }
+      for (const entry of this.pendingMedicines) {
+        const quote = clinicMedicinePrice(entry.item, this.form.weight_kg);
+        if (quote.error || quote.pet_weight_kg !== entry.pet_weight_kg || quote.price !== entry.price) {
+          this.modalError = quote.error || "Pet weight changed. Remove and select the pending medicine again to review its price.";
           return;
         }
       }
@@ -287,21 +385,28 @@ function adminClinicModal() {
           vet_notes:            this.form.vet_notes             || null,
           follow_up_date:       this.form.follow_up_date        || null,
           follow_up_notes:      this.form.follow_up_notes       || null,
-          weight_kg:            numberOrNull(this.form.weight_kg),
+          weight_kg:            String(this.form.weight_kg ?? "").trim() || null,
           temperature_c:        numberOrNull(this.form.temperature_c),
           heart_rate_bpm:       numberOrNull(this.form.heart_rate_bpm),
           respiratory_rate_bpm: numberOrNull(this.form.respiratory_rate_bpm),
           body_condition_score: numberOrNull(this.form.body_condition_score),
           finish_case:          finishCase,
+          medicines: this.pendingMedicines.map(entry => ({ inventory_item_id: entry.item.item_id,
+            inventory_quantity: entry.inventory_quantity, expected_price: entry.price,
+            expected_weight_kg: entry.pet_weight_kg, request_key: entry.request_key })),
         };
         await API.clinicSaveRecord(this.apptId, payload);
         this.open = false;
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (e) {
-        this.modalError = e.message || "Failed to save record.";
+        this.weightServerError = e.errors?.weight_kg?.[0] || "";
+        this.modalError = e.errors ? Object.values(e.errors).flat().join(" ") : (e.message || "Failed to save record.");
       } finally {
         this.saving = false;
       }
+    },
+    get weightValidationMessage() {
+      return this.weightServerError || this.weightTools?.getWeightValueValidationMessage(this.form.weight_kg) || "";
     },
   };
 }

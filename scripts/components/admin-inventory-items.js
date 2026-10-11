@@ -23,12 +23,7 @@ function adminInventoryItems() {
 
     // Add / edit modal
     modal: { open: false, busy: false, error: "" },
-    form: {
-      item_id: null,
-      item_name: "", barcode: "", category: "",
-      unit: "", customUnit: "", description: "",
-      unit_cost: "", selling_price: "", reorder_level: "",
-    },
+    form: ProductForm.empty(),
 
     // Deactivate confirm
     deactivateTarget: null,
@@ -191,6 +186,7 @@ function adminInventoryItems() {
         barcode:       item.barcode ?? "",
         category:      item.category,
         ...ProductForm.unitFields(item.unit),
+        ...ProductForm.clinicFields(item),
         description:   item.description ?? "",
         unit_cost:     item.unit_cost ?? "",
         selling_price: item.selling_price ?? "",

@@ -1,3 +1,4 @@
+import { formatSavedWeight } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 import { renderEstimateReview } from "./grooming-estimate-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
@@ -10,7 +11,7 @@ import {
 } from "../services/booking-draft-service.js";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
-import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3";
 import {
   hasRequiredGroomingPreference,
   loadGroomingCatalogue,
@@ -237,7 +238,7 @@ function renderPetReviewCard(item, index) {
           )}</span>
         </div>
       </div>
-      <p class="mt-2 text-sm text-slate-600">Weight: ${escapeHtml(item.pet.weight ? `${item.pet.weight} kg` : "Not specified")}</p>
+      <p class="mt-2 text-sm text-slate-600">Weight: ${escapeHtml(item.pet.weight ? `${formatSavedWeight(item.pet.weight)} kg` : "Not specified")}</p>
 
       <div class="mt-6 space-y-4">
         ${packageCard}

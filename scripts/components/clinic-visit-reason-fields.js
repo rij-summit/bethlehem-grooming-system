@@ -1,7 +1,7 @@
 import {
   CLINIC_CONCERNS,
   validateClinicVisitReason,
-} from "../services/clinic-visit-service.js";
+} from "../services/clinic-visit-service.js?pet-weight=pet-weight-size-20261011-v3";
 
 function escapeHtml(value) {
   return String(value ?? "")

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class InventoryItem extends Model
 {
     public const RETAIL_CATEGORIES = ['food', 'grooming_supply', 'pet_shop', 'miscellaneous'];
+    public const MEDICINE_TYPES = ['deworming', 'heartworm_prevention', 'heartworm_treatment', 'mange_treatment', 'general_medication'];
 
     public function scopeRetailSale($query)
     {
@@ -24,6 +25,11 @@ class InventoryItem extends Model
         'barcode',
         'category',
         'unit',
+        'medicine_type',
+        'dose_unit',
+        'strength_concentration',
+        'pricing_method',
+        'weight_pricing_mode',
         'description',
         'unit_cost',
         'selling_price',
@@ -51,6 +57,40 @@ class InventoryItem extends Model
     }
 
     // ── Relationships ──────────────────────────────────────────────────────────
+
+    public function weightPrices()
+    {
+        return $this->hasMany(InventoryItemWeightPrice::class, 'item_id', 'item_id')->orderBy('min_weight_kg');
+    }
+
+    /** Deterministic price lookup only; never derives dosage or stock quantity. */
+    public function clinicPrice($weight): array
+    {
+        if ($this->category !== 'medicine' || $this->pricing_method !== 'weight_based') {
+            if ($this->selling_price === null || (float) $this->selling_price <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'medicine' => 'Set this product\'s selling price in Inventory.',
+                ]);
+            }
+            return ['price' => $this->selling_price, 'pet_weight_kg' => null, 'min_weight_kg' => null, 'max_weight_kg' => null];
+        }
+        if (! is_numeric($weight) || ! is_finite((float) $weight) || (float) $weight <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'weight_kg' => 'Record or update the pet\'s weight before selecting a weight-based medicine price.',
+            ]);
+        }
+        $range = \App\Support\ProductWeightPricing::rangeFor(
+            $this->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->all(),
+            $weight, $this->weight_pricing_mode ?? 'legacy',
+        );
+        if ($range === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'medicine' => 'No price is configured for this pet\'s weight. Correct the pricing configuration or pet weight.',
+            ]);
+        }
+        return ['price' => $range['price'], 'pet_weight_kg' => $weight,
+            'min_weight_kg' => $range['min_weight_kg'], 'max_weight_kg' => $range['max_weight_kg']];
+    }
 
     public function transactions()
     {

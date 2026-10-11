@@ -38,6 +38,11 @@ class InventorySecurityRegressionTest extends TestCase
             $table->string('barcode', 100)->nullable()->unique();
             $table->string('category');
             $table->string('unit', 50);
+            $table->string('medicine_type')->nullable();
+            $table->string('dose_unit')->nullable();
+            $table->string('strength_concentration')->nullable();
+            $table->string('pricing_method')->default('flat');
+            $table->string('weight_pricing_mode')->default('legacy');
             $table->string('description', 255)->nullable();
             $table->date('expiry_date')->nullable();
             $table->decimal('unit_cost', 8, 2)->default(0);
@@ -46,6 +51,12 @@ class InventorySecurityRegressionTest extends TestCase
             $table->decimal('reorder_level', 10, 2)->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+        });
+
+        Schema::create('inventory_item_weight_prices', function (Blueprint $table) {
+            $table->id(); $table->unsignedInteger('item_id');
+            $table->decimal('min_weight_kg', 8, 2); $table->decimal('max_weight_kg', 8, 2)->nullable();
+            $table->decimal('price', 8, 2); $table->timestamps();
         });
 
         Schema::create('inventory_transactions', function (Blueprint $table) {
@@ -92,6 +103,7 @@ class InventorySecurityRegressionTest extends TestCase
         Schema::dropIfExists('pos_transaction_items');
         Schema::dropIfExists('pos_transactions');
         Schema::dropIfExists('inventory_transactions');
+        Schema::dropIfExists('inventory_item_weight_prices');
         Schema::dropIfExists('inventory_items');
         Schema::dropIfExists('users');
 
@@ -348,6 +360,7 @@ class InventorySecurityRegressionTest extends TestCase
         $itemId = $this->postJson('/api/inventory/items', [
             'item_name' => 'Canine Vaccine',
             'category' => 'vaccine',
+            'dose_unit' => 'dose',
             'unit' => 'vial',
             'unit_cost' => 100,
             'selling_price' => 150,
@@ -510,6 +523,7 @@ class InventorySecurityRegressionTest extends TestCase
 
         $basePayload = [
             'item_name' => 'Validated Product',
+            'medicine_type' => 'general_medication', 'dose_unit' => 'tablet', 'pricing_method' => 'flat',
             'category' => 'medicine',
             'unit' => 'piece',
         ];
@@ -1493,6 +1507,7 @@ class InventorySecurityRegressionTest extends TestCase
     {
         return (int) DB::table('inventory_items')->insertGetId([
             'item_name' => $name,
+            'medicine_type' => 'general_medication', 'dose_unit' => 'tablet', 'pricing_method' => 'flat',
             'category' => 'medicine',
             'unit' => 'piece',
             'unit_cost' => 50,

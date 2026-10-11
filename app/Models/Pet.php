@@ -42,6 +42,7 @@ class Pet extends Model
     ];
 
     protected $casts = [
+        'weight' => 'float',
         'clinic_verified_fields' => 'array',
     ];
 

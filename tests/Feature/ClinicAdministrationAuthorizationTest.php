@@ -622,6 +622,72 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.id', 1);
     }
 
+    #[DataProvider('decimalClinicPetWeights')]
+    public function test_clinic_walkin_uses_shared_decimal_size(string $species, mixed $weight, string $size): void
+    {
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/clinic-walk-in', [
+            'common_concerns' => ['Routine check-up'], 'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pet_name' => 'Decimal pet', 'species' => $species, 'weight' => $weight,
+            'size' => $size === 'small' ? 'medium' : 'small', 'terms_agreed' => true,
+        ])->assertCreated();
+        $this->assertDatabaseHas('pets', ['pet_name' => 'Decimal pet', 'weight' => $weight, 'size' => $size]);
+    }
+
+    public static function decimalClinicPetWeights(): array
+    {
+        return json_decode(file_get_contents(__DIR__.'/../Fixtures/weight-rules.json'), true)['pets'];
+    }
+
+    public function test_clinic_walkin_rejects_invalid_weight_text_for_admin_and_staff(): void
+    {
+        $invalid = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true)['invalid_weights'];
+        foreach (['admin', 'staff'] as $role) {
+            $this->authenticateAs($role);
+            foreach ($invalid as $weight) {
+                $this->postJson('/api/admin/clinic-walk-in', ['common_concerns' => ['Routine check-up'],
+                    'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+                    'pet_name' => 'Invalid decimal', 'species' => 'Dog', 'weight' => $weight, 'terms_agreed' => true])
+                    ->assertUnprocessable()->assertJsonValidationErrors('weight');
+            }
+        }
+        $this->assertDatabaseCount('pets', 0);
+        $this->assertDatabaseCount('clinic_appointments', 0);
+    }
+
+    public function test_clinic_walkin_can_select_a_historical_pet_without_changing_its_weight(): void
+    {
+        DB::table('users')->insert(['user_id' => 10, 'first_name' => 'Maria', 'last_name' => 'Santos',
+            'phone' => '09171234567', 'role' => 'customer']);
+        DB::table('pets')->insert(['pet_id' => 101, 'user_id' => 10, 'pet_name' => 'Historical dog',
+            'species' => 'Dog', 'weight' => 10.999, 'size' => 'small', 'is_archived' => false]);
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/clinic-walk-in', ['common_concerns' => ['Routine check-up'],
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'owner_record_type' => 'registered', 'customer_user_id' => 10,
+            'pet_id' => 101, 'pet_name' => 'Historical dog', 'species' => 'Dog', 'terms_agreed' => true])->assertCreated();
+        $this->assertDatabaseHas('pets', ['pet_id' => 101, 'weight' => 10.999, 'size' => 'small']);
+    }
+
+    public function test_clinic_vitals_share_precision_limits_and_preserve_records_on_invalid_input(): void
+    {
+        $this->insertClinicAppointment('checked_in');
+        $cases = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true);
+        foreach (['admin', 'staff'] as $role) {
+            $this->authenticateAs($role);
+            foreach ($cases['invalid_weights'] as $weight) {
+                $this->postJson('/api/admin/clinic-appointments/1/record', ['weight_kg' => $weight, 'diagnosis' => 'Do not save'])
+                    ->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
+            }
+        }
+        $this->assertDatabaseCount('clinic_records', 0);
+        $this->assertDatabaseCount('clinic_vitals', 0);
+        foreach (['4', '4.', '4.1', '4.20', '4.25', '0.50', '155.6'] as $weight) {
+            $this->postJson('/api/admin/clinic-appointments/1/record', ['weight_kg' => $weight])->assertOk();
+            $this->assertDatabaseHas('clinic_vitals', ['clinic_appointment_id' => 1, 'weight_kg' => (float) $weight]);
+        }
+    }
+
     public function test_staff_can_create_a_clinic_walk_in(): void
     {
         $this->authenticateAs('staff');
@@ -693,7 +759,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('pet.clinic_verified_fields', null);
     }
 
-    public function test_customer_size_estimate_cannot_replace_a_clinic_verified_size(): void
+    public function test_valid_weight_replaces_a_contradictory_verified_profile_size(): void
     {
         $this->authenticateAs('customer', 10);
         DB::table('pets')->insert([
@@ -713,9 +779,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'size' => 'medium',
         ])
             ->assertOk()
-            ->assertJsonPath('pet.size', 'small');
+            ->assertJsonPath('pet.size', 'medium');
 
-        $this->assertSame(['size'], json_decode(DB::table('pets')->where('pet_id', 502)->value('clinic_verified_fields'), true));
+        $this->assertNull(DB::table('pets')->where('pet_id', 502)->value('clinic_verified_fields'));
     }
 
     public function test_walk_in_requires_valid_distinct_common_concerns(): void
@@ -2233,6 +2299,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $expected = [
             ['POST', 'api/admin/clinic-walk-in', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-records', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-medicine-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/start', 'role:admin,staff'],
@@ -2280,7 +2347,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             fn (RoutingRoute $route) => str_starts_with($route->getActionName(), AdminClinicController::class.'@'),
         );
 
-        $this->assertCount(16, $adminClinicRoutes);
+        $this->assertCount(17, $adminClinicRoutes);
         $adminClinicRoutes->each(function (RoutingRoute $route): void {
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
         });

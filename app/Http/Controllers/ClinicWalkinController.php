@@ -418,6 +418,7 @@ class ClinicWalkinController extends Controller
 
     private function updateWalkInPetDetails(Pet $pet, array $data): Pet
     {
+        $data = PetWeightSize::withComputedSize([...$data, 'species' => $pet->species, 'weight' => $data['weight'] ?? $pet->weight]);
         $pet->update([
             'breed' => $data['breed'] ?? $pet->breed,
             'gender' => $data['gender'] ?? $pet->gender,

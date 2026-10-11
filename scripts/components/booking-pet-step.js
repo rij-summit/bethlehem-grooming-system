@@ -9,7 +9,7 @@ import {
   addPetToBooking as addStoredPet,
   removePetFromBooking as removeStoredPet,
   loadPetsFromApi,
-} from "../services/pet-service.js";
+} from "../services/pet-service.js?v=pet-weight-size-20261011-v3";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { formatPetSizeLabel, normalizePetSize } from "../services/booking-draft-service.js";
 import {
@@ -18,23 +18,24 @@ import {
   readClinicVisitDraft,
   requireCustomerSession,
   updateClinicVisitDraft,
-} from "../services/clinic-visit-service.js";
+} from "../services/clinic-visit-service.js?pet-weight=pet-weight-size-20261011-v3";
 import { createBreedCombobox } from "./breed-combobox.js";
 import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 import { canSelectAllSavedPets, showPetSelectionSection } from "./pet-selection-tabs.js";
 import { goToGroomingStep, isGroomingSinglePage } from "./grooming-flow-navigation.js";
 import {
+  formatSavedWeight,
+  getPetWeightSubmissionValidationMessage,
   getEnteredWeight,
   getSizeForWeight,
   getSizeOptions,
   getWeightFieldValidationMessage,
   getWeightValidationMessage,
   initializeWeightField,
-  resetWeightFieldForEntry,
-  showWeightRangeInField,
+  syncPetWeightAndSize as syncWeightSizeFields,
   showWeightValidationInField,
-} from "./pet-weight-size.js";
+} from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 
 /**
  * Booking Pet Step Controller
@@ -188,7 +189,7 @@ const sizeCombobox = createFixedOptionCombobox({
   toggleButton: document.getElementById("sizeDropdownButton"),
   placeholder: "Select size",
   options: [],
-  displaySelectedLabel: true,
+  displaySelectedLabel: false,
 });
 
 const BOOKING_STEP_TWO_KEY = "bookingStep2";
@@ -297,7 +298,7 @@ function showAddPetSection() {
 }
 
 function formatWeightLabel(weight) {
-  const value = String(weight ?? "").trim();
+  const value = formatSavedWeight(weight);
 
   if (!value) {
     return "Not specified";
@@ -596,7 +597,6 @@ function restoreAddPetFormDraft() {
   elements.color.value = values.color || "";
 
   if (values.weight) {
-    resetWeightFieldForEntry(elements.weight);
     elements.weight.value = values.weight;
   }
 
@@ -606,7 +606,7 @@ function restoreAddPetFormDraft() {
   }
 
   syncWeightAndSize({ clearManualSize: true });
-  if (values.size) {
+  if (values.size && !getSizeForWeight(elements.petType.value, elements.weight.value)) {
     sizeCombobox.setValue(values.size);
   }
 
@@ -640,7 +640,7 @@ function validatePetForm(values) {
 
   const allowedSizes = getSizeOptions(values.petType).map(({ value }) => value);
   if (values.size && !allowedSizes.includes(values.size)) {
-    return `${values.petType} size must be one of: ${allowedSizes.join(", ")}.`;
+    return "Select a size available for this pet type.";
   }
 
   if (getBookingPets().length >= MAX_PETS_PER_BOOKING) {
@@ -715,6 +715,7 @@ async function handleAddPetSubmit(event) {
     renderSelectedPets();
     clearStepError();
   } catch (error) {
+    if (error.errors?.weight?.[0]) showWeightValidationInField(elements.weight, error.errors.weight[0]);
     showStepError(error.message);
   } finally {
     elements.savePetBtn.disabled = false;
@@ -735,6 +736,12 @@ function handleBack() {
 function handleNext() {
   const bookingSchedule = getBookingSchedule();
   const bookingPets = getBookingPets();
+
+  const weightMessage = bookingPets.map(getPetWeightSubmissionValidationMessage).find(Boolean);
+  if (weightMessage) {
+    showStepError(weightMessage);
+    return;
+  }
 
   if (
     !bookingSchedule?.date ||
@@ -782,58 +789,16 @@ function setFieldError(input, errorElement, message) {
 }
 
 function syncWeightAndSize({ clearManualSize = false } = {}) {
-  const petType = elements.petType.value;
-  const rawWeight = getEnteredWeight(elements.weight);
-  const hasWeight = rawWeight.trim() !== "";
-  const options = getSizeOptions(petType);
-
-  sizeCombobox.setOptions(options, {
-    preserveValue: !clearManualSize,
-  });
-
-  const computedSize = getSizeForWeight(petType, rawWeight);
-
-  if (hasWeight && computedSize) {
-    sizeCombobox.setValue(computedSize);
-  }
-
-  sizeCombobox.setDisabled(options.length === 0);
-  setFieldError(elements.size, elements.sizeError, "");
+  syncWeightSizeFields(elements.weight, elements.petType.value, sizeCombobox, { clearManualSize });
 }
 
 function validateWeightOnCommit() {
-  const rawWeight = getEnteredWeight(elements.weight);
-
-  if (!rawWeight) {
-    if (elements.weight.dataset.weightFieldMode !== "error") {
-      showWeightRangeInField(
-        elements.weight,
-        elements.petType.value,
-        sizeCombobox.getValue(),
-      );
-    }
-    return true;
-  }
-
-  const message = getWeightValidationMessage(elements.petType.value, rawWeight);
-
-  if (message) {
-    showWeightValidationInField(elements.weight, message);
-    return false;
-  }
-
-  return true;
+  syncWeightAndSize();
+  return !getWeightFieldValidationMessage(elements.weight);
 }
 
 function handleManualSizeChange() {
-  if (!getEnteredWeight(elements.weight)
-    && elements.weight.dataset.weightFieldMode !== "error") {
-    showWeightRangeInField(
-      elements.weight,
-      elements.petType.value,
-      sizeCombobox.getValue(),
-    );
-  }
+  syncWeightAndSize();
 }
 
 function bindEvents() {
@@ -857,17 +822,11 @@ function bindEvents() {
     breedCombobox.reset();
     breedCombobox.setDisabled(!elements.petType.value);
     breedCoatCombobox.update();
-    if (elements.weight.dataset.weightFieldMode === "range") {
-      resetWeightFieldForEntry(elements.weight);
-    }
     syncWeightAndSize({ clearManualSize: true });
     validateWeightOnCommit();
   });
   elements.weight.addEventListener("input", () => syncWeightAndSize());
   elements.weight.addEventListener("change", validateWeightOnCommit);
-  elements.weight.addEventListener("focus", () => {
-    resetWeightFieldForEntry(elements.weight);
-  });
   elements.size.addEventListener("change", handleManualSizeChange);
 }
 
