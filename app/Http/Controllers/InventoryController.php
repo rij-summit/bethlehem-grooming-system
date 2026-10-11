@@ -319,7 +319,7 @@ class InventoryController extends Controller
             'selling_price' => ($weightBased ? 'prohibited' : 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY),
             'reorder_level' => 'required|integer|min:0|max:99999999',
             'medicine_type' => $medicine ? 'required|in:'.implode(',', InventoryItem::MEDICINE_TYPES) : 'prohibited',
-            'dose_unit' => $clinic ? 'required|string|max:30' : 'prohibited',
+            'dose_unit' => $clinic ? 'nullable|string|max:30' : 'prohibited',
             'strength_concentration' => $medicine ? 'nullable|string|max:150' : 'prohibited',
             'pricing_method' => $medicine ? 'required|in:flat,weight_based' : 'nullable|in:flat',
             'weight_pricing_mode' => 'sometimes|in:legacy,threshold,ranges,catalog',
@@ -372,7 +372,7 @@ class InventoryController extends Controller
         $validated = $validator->validate();
         unset($validated['weight_final_range']);
         $validated['medicine_type'] = $medicine ? $validated['medicine_type'] : null;
-        $validated['dose_unit'] = $clinic ? trim($validated['dose_unit']) : null;
+        $validated['dose_unit'] = $clinic && isset($validated['dose_unit']) ? trim($validated['dose_unit']) : null;
         $validated['strength_concentration'] = $medicine ? ($validated['strength_concentration'] ?? null) : null;
         $validated['pricing_method'] = $medicine ? $validated['pricing_method'] : 'flat';
         $validated['weight_pricing_mode'] = $pricingMode;

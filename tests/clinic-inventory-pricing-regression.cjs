@@ -17,7 +17,7 @@ const ranges = [
   { min_weight_kg: "15.1", max_weight_kg: "50", price: "900" },
 ];
 const form = pf.empty({ item_name: "Medicine", category: "medicine", medicine_type: "deworming",
-  unit: "bottle", dose_unit: "mL", strength_concentration: "10 mg/mL", unit_cost: "50", reorder_level: "0", weight_prices: ranges.map(range => ({...range, band: "normal"})) });
+  unit: "bottle", strength_concentration: "10 mg/mL", unit_cost: "50", reorder_level: "0", weight_prices: ranges.map(range => ({...range, band: "normal"})) });
 assert.equal(form.pricing_method, "weight_based");
 assert.equal(pf.validate(form), "");
 for (const option of pf.medicineTypeOptions) {
@@ -64,13 +64,23 @@ assert.equal(pf.payload(form).selling_price, 950);
 assert.equal(pf.payload(form).weight_prices.length, 0);
 form.pricing_method = "weight_based";
 assert.equal(pf.payload(form).weight_prices.length, 4);
-form.dose_unit = "other"; form.customDoseUnit = "drop";
-assert.equal(pf.payload(form).dose_unit, "drop");
-assert.equal(pf.clinicFields({dose_unit: "drop"}).customDoseUnit, "drop");
+assert.equal(Object.hasOwn(pf.payload(form), "dose_unit"), false);
+assert.equal(Object.hasOwn(pf.clinicFields({dose_unit: "drop"}), "dose_unit"), false);
+assert.ok(pf.unitOptions.some(option => option.value === "pipette" && option.label === "Pipette"));
+assert.equal(pf.unitFields("pipette").unit, "pipette");
+for (const category of ["medicine", "vaccine"]) {
+  const product = pf.empty({item_name: "Spot-on", category, medicine_type: "general_medication",
+    unit: "pipette", pricing_method: "flat", unit_cost: "35.00", selling_price: "75.00", reorder_level: "0"});
+  assert.equal(pf.validate(product), "");
+  assert.equal(pf.payload(product).unit, "pipette");
+  assert.equal(Object.hasOwn(pf.payload(product), "dose_unit"), false);
+  product.unit = "";
+  assert.equal(pf.validate(product), "Unit is required.");
+}
 for (const category of ["food", "grooming_supply", "pet_shop", "miscellaneous"]) {
   form.category = category;
   assert.equal(pf.validate(form), "");
-  assert.equal(pf.payload(form).dose_unit, null);
+  assert.equal(Object.hasOwn(pf.payload(form), "dose_unit"), false);
   assert.equal(pf.payload(form).strength_concentration, null);
   assert.equal(pf.payload(form).weight_prices.length, 0);
 }
@@ -99,7 +109,8 @@ modal.form.weight_kg = "5";
   assert.equal(modal.pendingMedicines[0].inventory_quantity, 0.25);
   for (const file of ["pages/admin/inventory/sections/products.html", "pages/admin/inventory/sections/stock-in.html"]) {
     const html = fs.readFileSync(file, "utf8");
-    assert.match(html, /Inventory Unit/); assert.match(html, /Dose Unit/);
+    assert.match(html, /Inventory Unit/);
+    assert.doesNotMatch(html, /x-model="(?:createForm|form)\.(?:dose_unit|customDoseUnit)"/);
     assert.match(html, /ProductForm.isWeightBased/); assert.match(html, /Medicine Type/);
   }
   console.log("Clinic inventory pricing: form transitions, ranges, weight lookup, and staff-entered stock use passed.");

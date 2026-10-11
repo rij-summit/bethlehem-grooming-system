@@ -128,7 +128,7 @@
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-semibold text-slate-600">
-                  Product Name <span style="color:#ef4444" class="font-bold">*</span>
+                  Product Name <span class="text-red-500 font-bold">*</span>
                 </label>
                 <input x-model="createForm.item_name" type="text" placeholder="e.g. Amoxicillin 500mg"
                   class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
@@ -155,40 +155,29 @@
 
 <!-- Shared ProductForm clinical fields; draft values survive temporary dropdown changes. -->
       <div class="grid gap-3 sm:grid-cols-2">
-        <label :class="createForm.category === 'vaccine' ? 'sm:col-span-2' : ''">
-          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Category *</span>
+        <label>
+          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Category <span class="text-red-500 font-bold">*</span></span>
           <select x-model="createForm.category" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
             <option value="">Select category ▾</option>
             <template x-for="option in ProductForm.categoryOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
           </select>
         </label>
         <label x-show="createForm.category === 'medicine'" x-cloak>
-          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Medicine Type *</span>
+          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Medicine Type <span class="text-red-500 font-bold">*</span></span>
           <select x-model="createForm.medicine_type" :required="createForm.category === 'medicine'" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
             <option value="">Select medicine type</option>
             <template x-for="option in ProductForm.medicineTypeOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
           </select>
         </label>
-        <div>
-          <label><span class="mb-1.5 block text-sm font-semibold text-slate-700">Inventory Unit *</span>
+        <div :class="createForm.category === 'medicine' ? 'sm:col-span-2' : ''">
+          <label><span class="mb-1.5 block text-sm font-semibold text-slate-700">Inventory Unit <span class="text-red-500 font-bold">*</span></span>
             <select x-model="createForm.unit" required class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
               <option value="">Select unit ▾</option>
               <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value"><option :value="unitOption.value" x-text="unitOption.label"></option></template>
             </select>
           </label>
-          <label x-show="createForm.unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom unit *</span>
+          <label x-show="createForm.unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom unit <span class="text-red-500 font-bold">*</span></span>
             <input x-model="createForm.customUnit" type="text" maxlength="50" :required="createForm.unit === 'other'" placeholder="Enter custom unit" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
-          </label>
-        </div>
-        <div x-show="ProductForm.isClinic(createForm)" x-cloak>
-          <label><span class="mb-1.5 block text-sm font-semibold text-slate-700">Dose Unit *</span>
-            <select x-model="createForm.dose_unit" :required="ProductForm.isClinic(createForm)" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30">
-              <option value="">Select dose unit</option>
-              <template x-for="option in ProductForm.doseUnitOptions" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
-            </select>
-          </label>
-          <label x-show="createForm.dose_unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom dose unit *</span>
-            <input x-model="createForm.customDoseUnit" type="text" maxlength="30" :required="ProductForm.isClinic(createForm) && createForm.dose_unit === 'other'" placeholder="Enter custom dose unit" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </label>
         </div>
       </div>
@@ -197,7 +186,7 @@
         <input x-model="createForm.strength_concentration" type="text" maxlength="150" placeholder="e.g. 10 mg/mL" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
       </label>
       <label x-show="createForm.category === 'medicine'" x-cloak class="block">
-        <span class="mb-1.5 block text-sm font-semibold text-slate-700">Pricing Method *</span>
+        <span class="mb-1.5 block text-sm font-semibold text-slate-700">Pricing Method <span class="text-red-500 font-bold">*</span></span>
         <select x-model="createForm.pricing_method" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30"><option value="weight_based">Weight-based</option><option value="flat">Flat price</option></select>
       </label>
       <section x-show="ProductForm.isWeightBased(createForm)" x-cloak class="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Weight Price Schedule">

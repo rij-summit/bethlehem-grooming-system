@@ -2,7 +2,7 @@
 window.ProductForm = (() => {
   const unitOptions = [
     ["pc", "Piece (pc)"], ["tablet", "Tablet"], ["capsule", "Capsule"],
-    ["bottle", "Bottle"], ["vial", "Vial"], ["dose kit", "Dose Kit"], ["sachet", "Sachet"],
+    ["bottle", "Bottle"], ["vial", "Vial"], ["pipette", "Pipette"], ["dose kit", "Dose Kit"], ["sachet", "Sachet"],
     ["pack", "Pack"], ["box", "Box"], ["can", "Can"],
     ["kg", "Kilogram (kg)"], ["g", "Gram (g)"], ["L", "Liter (L)"],
     ["mL", "Milliliter (mL)"], ["other", "Other…"],
@@ -16,8 +16,6 @@ window.ProductForm = (() => {
     ["heartworm_treatment", "Heartworm Treatment"], ["mange_treatment", "Mange Treatment"],
     ["general_medication", "General Medication"],
   ].map(([value, label]) => ({ value, label }));
-  const doseUnitOptions = ["mL", "mg", "g", "tablet", "capsule", "dose", "vial", "other"]
-    .map(value => ({ value, label: value === "other" ? "Other…" : value }));
   const isClinic = form => ["medicine", "vaccine"].includes(form.category);
   const isWeightBased = form => form.category === "medicine" && form.pricing_method === "weight_based";
   const validMoney = value => /^\d+(?:\.\d{1,2})?$/.test(String(value))
@@ -178,11 +176,8 @@ window.ProductForm = (() => {
   }
 
   function clinicFields(item) {
-    const dose = item.dose_unit || "";
-    const standard = doseUnitOptions.some(option => option.value !== "other" && option.value === dose);
     return {
       medicine_type: item.medicine_type || "",
-      dose_unit: standard ? dose : (dose ? "other" : ""), customDoseUnit: standard ? "" : dose,
       strength_concentration: item.category === "medicine" ? item.strength_concentration || "" : "",
       pricing_method: item.pricing_method || "flat",
       weight_prices: editableRanges(item),
@@ -200,7 +195,7 @@ window.ProductForm = (() => {
       category: "",
       unit: "",
       customUnit: "",
-      medicine_type: "", dose_unit: "", customDoseUnit: "", strength_concentration: "",
+      medicine_type: "", strength_concentration: "",
       pricing_method: "weight_based", weight_prices: [], savedWeightPricing: false,
       scheduleError: "",
       description: "",
@@ -243,11 +238,6 @@ window.ProductForm = (() => {
     if (!validMoney(unitCost)) return "Unit cost must be a valid amount";
     if (!isWeightBased(form) && !validMoney(sellingPrice)) return "Selling price must be a valid amount";
     if (!/^\d+$/.test(reorderLevel) || Number(reorderLevel) > 99999999) return "Minimum stock must be a whole number";
-    if (isClinic(form)) {
-      if (!form.dose_unit || (form.dose_unit === "other" && !String(form.customDoseUnit || "").trim())) return "Dose unit is required.";
-      const dose = form.dose_unit === "other" ? form.customDoseUnit.trim() : form.dose_unit;
-      if (dose.length > 30) return "Dose unit must be at most 30 characters.";
-    }
     if (form.category === "medicine") {
       if (String(form.strength_concentration || "").length > 150) return "Product strength must be at most 150 characters.";
       if (!medicineTypeOptions.some(option => option.value === form.medicine_type)) return "Medicine type is required.";
@@ -267,7 +257,6 @@ window.ProductForm = (() => {
       unit_cost: parseFloat(form.unit_cost),
       selling_price: isWeightBased(form) ? null : parseFloat(form.selling_price),
       medicine_type: form.category === "medicine" ? form.medicine_type : null,
-      dose_unit: isClinic(form) ? (form.dose_unit === "other" ? form.customDoseUnit.trim() : form.dose_unit) : null,
       strength_concentration: form.category === "medicine" ? String(form.strength_concentration || "").trim() || null : null,
       pricing_method: form.category === "medicine" ? form.pricing_method : "flat",
       weight_pricing_mode: "catalog",
@@ -314,5 +303,5 @@ window.ProductForm = (() => {
     owner.scannerActive = false;
   }
 
-  return { addBelowRange, addAboveRange, addRange, checkWeightSchedule, focusLastThreshold, focusWeightError, removeRange, scheduleRanges, rangeLabel, weightFieldError, clinicFields, doseUnitOptions, isClinic, isWeightBased, medicineTypeOptions, validateRanges, categoryOptions, closeBarcodeScanner, empty, normalizeBarcode, normalizeReorderLevel, openBarcodeScanner, payload, unitFields, unitOptions, validate };
+  return { addBelowRange, addAboveRange, addRange, checkWeightSchedule, focusLastThreshold, focusWeightError, removeRange, scheduleRanges, rangeLabel, weightFieldError, clinicFields, isClinic, isWeightBased, medicineTypeOptions, validateRanges, categoryOptions, closeBarcodeScanner, empty, normalizeBarcode, normalizeReorderLevel, openBarcodeScanner, payload, unitFields, unitOptions, validate };
 })();

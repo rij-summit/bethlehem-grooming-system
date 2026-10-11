@@ -372,7 +372,7 @@ class ClinicInventoryPricingTest extends TestCase
 
     public function test_required_fields_and_all_invalid_range_configurations_are_rejected(): void
     {
-        foreach (['medicine_type', 'dose_unit', 'pricing_method'] as $field) {
+        foreach (['medicine_type', 'unit', 'pricing_method'] as $field) {
             $payload = $this->product(); unset($payload[$field]);
             $this->postJson('/api/inventory/items', $payload)->assertUnprocessable()->assertJsonValidationErrors($field);
         }
@@ -408,12 +408,46 @@ class ClinicInventoryPricingTest extends TestCase
         $this->assertSame('3.00', $item->fresh()->quantity_on_hand);
     }
 
+    public function test_products_can_be_created_and_edited_with_pipette_without_a_dose_unit(): void
+    {
+        foreach (['medicine', 'vaccine'] as $category) {
+            $payload = $this->product(['category' => $category, 'unit' => 'pipette',
+                'medicine_type' => $category === 'medicine' ? 'general_medication' : null,
+                'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 75]);
+            unset($payload['dose_unit']);
+            $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()
+                ->assertJsonPath('data.unit', 'pipette')->assertJsonPath('data.dose_unit', null)->json('data.item_id');
+            $this->putJson('/api/inventory/items/'.$id, [...$payload, 'selling_price' => 80])
+                ->assertOk()->assertJsonPath('data.unit', 'pipette')->assertJsonPath('data.selling_price', '80.00');
+            $missingUnit = $payload; unset($missingUnit['unit']);
+            $this->postJson('/api/inventory/items', $missingUnit)->assertUnprocessable()->assertJsonValidationErrors('unit');
+        }
+        $payload = $this->product(); unset($payload['dose_unit']);
+        $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()
+            ->assertJsonPath('data.dose_unit', null)->assertJsonCount(4, 'data.weight_prices')->json('data.item_id');
+        $this->putJson('/api/inventory/items/'.$id, $payload)->assertOk()->assertJsonCount(4, 'data.weight_prices');
+    }
+
+    public function test_product_edits_without_dose_unit_preserve_existing_dose_data(): void
+    {
+        foreach (['medicine', 'vaccine'] as $category) {
+            $payload = $this->product(['category' => $category, 'dose_unit' => 'drop',
+                'medicine_type' => $category === 'medicine' ? 'general_medication' : null,
+                'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 75]);
+            $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()->json('data.item_id');
+            unset($payload['dose_unit']);
+            $this->putJson('/api/inventory/items/'.$id, [...$payload, 'unit' => 'pipette'])
+                ->assertOk()->assertJsonPath('data.dose_unit', 'drop');
+            $this->assertSame('drop', InventoryItem::findOrFail($id)->dose_unit);
+        }
+    }
+
     public function test_vaccines_flat_medicines_and_retail_keep_flat_prices(): void
     {
         $vaccine = $this->product(['category' => 'vaccine', 'medicine_type' => null, 'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 950]);
         $id = $this->postJson('/api/inventory/items', $vaccine)->assertCreated()->assertJsonPath('data.pricing_method', 'flat')->json('data.item_id');
         $this->putJson('/api/inventory/items/'.$id, [...$vaccine, 'selling_price' => 975])->assertOk()->assertJsonPath('data.selling_price', '975.00');
-        $this->postJson('/api/inventory/items', [...$vaccine, 'dose_unit' => null])->assertUnprocessable();
+        $this->postJson('/api/inventory/items', [...$vaccine, 'dose_unit' => null])->assertCreated()->assertJsonPath('data.dose_unit', null);
         $this->postJson('/api/inventory/items', [...$vaccine, 'medicine_type' => 'deworming'])->assertUnprocessable();
         $this->postJson('/api/inventory/items', [...$vaccine, 'pricing_method' => 'weight_based'])->assertUnprocessable();
         $this->postJson('/api/inventory/items', [...$vaccine, 'weight_prices' => $this->product()['weight_prices']])->assertUnprocessable();
