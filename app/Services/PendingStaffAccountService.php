@@ -8,6 +8,7 @@ use App\Models\PendingStaffAccount;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\SetUpStaffPasswordNotification;
+use App\Support\StaffRole;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +25,7 @@ class PendingStaffAccountService
         string $email,
     ): array {
         $this->assertAdminIsEligible($requester);
-        $this->assertStaffSubroleIsValid($staffType, $staffSubrole);
+        StaffRole::assertValid($staffType, $staffSubrole);
         $normalizedFirstName = User::normalizeName($firstName);
         $normalizedLastName = User::normalizeName($lastName);
         $normalizedEmail = Str::lower(trim($email));
@@ -139,22 +140,5 @@ class PendingStaffAccountService
     private function staffLabel(string $staffType): string
     {
         return $staffType === 'clinic' ? 'Clinic Staff' : 'Grooming Receptionist';
-    }
-
-    private function assertStaffSubroleIsValid(string $staffType, ?string $staffSubrole): void
-    {
-        $allowedClinicSubroles = ['veterinarian', 'clinic_receptionist'];
-
-        if ($staffType === 'clinic' && ! in_array($staffSubrole, $allowedClinicSubroles, true)) {
-            throw ValidationException::withMessages([
-                'staff_subrole' => 'Choose Veterinarian or Clinic Receptionist for Clinic Staff.',
-            ]);
-        }
-
-        if ($staffType === 'grooming' && $staffSubrole !== null) {
-            throw ValidationException::withMessages([
-                'staff_subrole' => 'Grooming Receptionist does not use a sub-role.',
-            ]);
-        }
     }
 }

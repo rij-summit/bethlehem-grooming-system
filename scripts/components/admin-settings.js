@@ -437,7 +437,7 @@ function adminSettings() {
     accountRoleLabel(account) {
       if (account?.staff_subrole === "veterinarian") return "Veterinarian";
       if (account?.staff_subrole === "clinic_receptionist") return "Clinic Receptionist";
-      if (account?.staff_type === "grooming") return "Grooming Staff";
+      if (account?.staff_subrole === "grooming_receptionist") return "Grooming Receptionist";
       if (account?.staff_type === "clinic") return "Clinic Staff";
       return account?.role === "admin" ? "Administrator" : "Staff";
     },
@@ -724,7 +724,7 @@ function adminSettings() {
     chooseStaffType(staffType) {
       if (!["clinic", "grooming"].includes(staffType)) return;
       this.addStaffModal.staffType = staffType;
-      this.addStaffModal.staffSubrole = "";
+      this.addStaffModal.staffSubrole = staffType === "grooming" ? "grooming_receptionist" : "";
 
       if (staffType === "clinic") {
         this.addStaffModal.roleStage = "clinic";
@@ -788,7 +788,7 @@ function adminSettings() {
       try {
         await API.requestStaffAccount({
           staff_type: this.addStaffModal.staffType,
-          staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null,
+          staff_subrole: staffSubrole,
           first_name: firstName,
           last_name: lastName,
           email,
@@ -820,7 +820,7 @@ function adminSettings() {
 
     staffRoleFields(staff) {
       const roleLabel = staff.staff_type === "clinic" ? "Clinic Staff"
-        : staff.staff_type === "grooming" ? "Grooming Receptionist" : "Staff";
+        : this.accountRoleLabel(staff);
       const subroleLabel = staff.staff_subrole === "veterinarian" ? "Veterinarian"
         : staff.staff_subrole === "clinic_receptionist" ? "Clinic Receptionist" : "";
       return {
@@ -833,8 +833,7 @@ function adminSettings() {
 
     get savedStaffRole() {
       const staff = this.staffDetailsModal.staff;
-      return staff?.staffType === "grooming" ? "grooming_receptionist"
-        : staff?.staffType === "clinic" ? staff.staffSubrole : "";
+      return staff?.staffSubrole || "";
     },
 
     get staffRoleChangePending() {

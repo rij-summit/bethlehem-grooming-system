@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\StaffRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -63,6 +64,18 @@ class User extends Authenticatable
         'account_deleted_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (User $user): void {
+            if ($user->role === 'staff'
+                && $user->isDirty(['role', 'staff_type', 'staff_subrole'])
+                && ($user->staff_type !== null || $user->staff_subrole !== null
+                    || $user->getOriginal('staff_type') !== null || $user->getOriginal('staff_subrole') !== null)) {
+                StaffRole::assertValid((string) $user->staff_type, $user->staff_subrole);
+            }
+        });
+    }
+
     // Tell Sanctum to use password_hash instead of password
     public function getAuthPassword()
     {
@@ -102,12 +115,19 @@ class User extends Authenticatable
 
     public function isVeterinarian(): bool
     {
-        return $this->role === 'staff' && $this->staff_subrole === 'veterinarian';
+        return $this->role === 'staff' && $this->staff_type === 'clinic' && $this->staff_subrole === 'veterinarian';
     }
 
     public function scopeActiveVeterinarian(Builder $query): Builder
     {
-        return $query->where('role', 'staff')->where('staff_subrole', 'veterinarian')->where('is_active', true);
+        return $query->where('role', 'staff')->where('staff_type', 'clinic')->where('staff_subrole', 'veterinarian')->where('is_active', true);
+    }
+
+    public function canAccessGrooming(): bool
+    {
+        return $this->role === 'admin'
+            || ($this->role === 'staff' && $this->staff_type === 'grooming'
+                && $this->staff_subrole === 'grooming_receptionist');
     }
 
     public function passwordResetRequest()

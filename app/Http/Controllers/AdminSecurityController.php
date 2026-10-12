@@ -8,6 +8,7 @@ use App\Models\PrivilegedCredentialChange;
 use App\Models\User;
 use App\Services\PendingStaffAccountService;
 use App\Services\PrivilegedCredentialChangeService;
+use App\Support\StaffRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -120,11 +121,9 @@ class AdminSecurityController extends Controller
         $data = $request->validate([
             'staff_type' => ['required', Rule::in(['clinic', 'grooming'])],
             'staff_subrole' => [
-                'nullable',
+                'required',
                 'string',
-                Rule::requiredIf($request->input('staff_type') === 'clinic'),
-                Rule::prohibitedIf($request->input('staff_type') === 'grooming'),
-                Rule::in(['veterinarian', 'clinic_receptionist']),
+                Rule::in(StaffRole::subrolesForType((string) $request->input('staff_type'))),
             ],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
@@ -207,11 +206,12 @@ class AdminSecurityController extends Controller
         }
 
         $data = $request->validate([
-            'staff_role' => ['required', Rule::in(['veterinarian', 'clinic_receptionist', 'grooming_receptionist'])],
+            'staff_role' => ['required', Rule::in(array_keys(StaffRole::TYPES))],
         ]);
         $this->verifyAdminPassword($request, 'Incorrect password. Try again.');
-        $staffType = $data['staff_role'] === 'grooming_receptionist' ? 'grooming' : 'clinic';
-        $staffSubrole = $staffType === 'clinic' ? $data['staff_role'] : null;
+        $roleFields = StaffRole::fields($data['staff_role']);
+        $staffType = $roleFields['staff_type'];
+        $staffSubrole = $roleFields['staff_subrole'];
 
         $updated = DB::transaction(function () use ($staff, $staffType, $staffSubrole): User {
             $target = User::query()->lockForUpdate()->findOrFail($staff->getKey());

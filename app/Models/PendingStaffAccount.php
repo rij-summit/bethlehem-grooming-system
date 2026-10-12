@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\StaffRole;
 use Illuminate\Database\Eloquent\Model;
 
 class PendingStaffAccount extends Model
@@ -31,6 +32,15 @@ class PendingStaffAccount extends Model
         'expires_at' => 'datetime',
         'last_sent_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (PendingStaffAccount $account): void {
+            if ($account->isDirty(['staff_type', 'staff_subrole'])) {
+                StaffRole::assertValid((string) $account->staff_type, $account->staff_subrole);
+            }
+        });
+    }
 
     public function requester()
     {

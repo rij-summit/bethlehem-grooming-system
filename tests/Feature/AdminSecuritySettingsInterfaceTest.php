@@ -146,7 +146,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             'API.getAdminSecurityAccounts()',
             'API.requestAdminCredentialChange({',
             'API.requestStaffAccount({',
-            'staff_subrole: this.addStaffModal.staffType === "clinic" ? staffSubrole : null',
+            'staff_subrole: staffSubrole',
             'this.addStaffModal.step = "success"',
             'API.updateStaffAccountStatus(staff.id, targetActive, this.staffStatusModal.password)',
             '? API.confirmStaffPasswordChange',

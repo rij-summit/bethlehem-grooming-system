@@ -218,7 +218,7 @@ function adminSidebar() {
         const user = response?.user;
         this.staffRoleLabel = user?.staff_type === "clinic"
           ? ({ veterinarian: "Veterinarian", clinic_receptionist: "Clinic Receptionist" }[user.staff_subrole] || "Clinic Staff")
-          : user?.staff_type === "grooming" ? "Grooming Receptionist" : "Staff";
+          : user?.staff_subrole === "grooming_receptionist" ? "Grooming Receptionist" : "Staff";
         const firstName = String(response?.user?.first_name || "").trim();
         const lastName = String(response?.user?.last_name || "").trim();
         const fullName = `${firstName} ${lastName}`.trim();

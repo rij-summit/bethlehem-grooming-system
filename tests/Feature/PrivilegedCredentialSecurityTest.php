@@ -26,6 +26,7 @@ class PrivilegedCredentialSecurityTest extends TestCase
             $table->string('password_hash');
             $table->string('role');
             $table->string('staff_type', 20)->nullable();
+            $table->string('staff_subrole', 30)->nullable();
             $table->string('customer_tier')->default('new');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_archived')->default(false);
@@ -129,6 +130,7 @@ class PrivilegedCredentialSecurityTest extends TestCase
             'staff@bethlehem.com',
             '09170000104',
         );
+        $legacyStaff->update(['staff_type' => 'grooming', 'staff_subrole' => 'grooming_receptionist']);
         config()->set('app.privileged_seed_accounts.staff', [
             'username' => 'groomingstaff',
             'email' => 'bethlehem.staff.test@gmail.com',
@@ -148,11 +150,35 @@ class PrivilegedCredentialSecurityTest extends TestCase
             'email' => 'bethlehem.staff.test@gmail.com',
             'role' => 'staff',
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
         ]);
         $this->assertTrue(Hash::check(
             'StrongStaff!234',
             $legacyStaff->fresh()->password_hash,
         ));
+    }
+
+    public function test_staff_seeder_initializes_canonical_roles_and_preserves_admin_role_changes(): void
+    {
+        config()->set('app.privileged_seed_accounts.staff', [
+            'username' => 'groomingstaff', 'email' => 'seeded@example.test',
+            'phone' => '09170000104', 'password' => 'StrongStaff!234',
+        ]);
+        $this->seed(StaffSeeder::class);
+        $staff = User::query()->sole();
+        $this->assertSame('staff', $staff->role);
+        $this->assertSame('grooming', $staff->staff_type);
+        $this->assertSame('grooming_receptionist', $staff->staff_subrole);
+
+        foreach (['veterinarian', 'clinic_receptionist'] as $subrole) {
+            $staff->update(['staff_type' => 'clinic', 'staff_subrole' => $subrole]);
+            $this->seed(StaffSeeder::class);
+            $this->assertDatabaseCount('users', 1);
+            $this->assertDatabaseHas('users', [
+                'user_id' => $staff->user_id, 'role' => 'staff',
+                'staff_type' => 'clinic', 'staff_subrole' => $subrole,
+            ]);
+        }
     }
 
     private function createUser(string $role, string $email, string $phone): User

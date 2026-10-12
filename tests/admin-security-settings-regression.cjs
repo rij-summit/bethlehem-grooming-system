@@ -49,7 +49,7 @@ global.API = {
           username: "groomingstaff",
           email: "bethlehem.staff.test@gmail.com",
           staff_type: "grooming",
-          staff_subrole: null,
+          staff_subrole: "grooming_receptionist",
           is_active: true,
           is_archived: false,
           password_setup_required: false,
@@ -130,7 +130,7 @@ global.API = {
     return {
       staff: {
         staff_type: staffRole === "grooming_receptionist" ? "grooming" : "clinic",
-        staff_subrole: staffRole === "grooming_receptionist" ? null : staffRole,
+        staff_subrole: staffRole,
       },
     };
   },
@@ -404,7 +404,7 @@ vm.runInThisContext(componentSource, {
   settings.staffDetailsModal.password = "CurrentAdmin!234";
   await settings.saveStaffRoleChange();
   assert.equal(settings.savedStaffRole, "grooming_receptionist");
-  assert.equal(settings.staffAccounts[0].staffSubrole, "");
+  assert.equal(settings.staffAccounts[0].staffSubrole, "grooming_receptionist");
   assert.equal(settings.staffAccounts[0].subroleLabel, "");
   assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
 
@@ -422,6 +422,19 @@ vm.runInThisContext(componentSource, {
   settings.staffDetailsModal.selectedRole = "veterinarian";
   settings.changeStaffRole();
   assert.equal(settings.staffRoleChangePending, true);
+
+  settings.openAddStaffAccount();
+  settings.chooseStaffType("grooming");
+  assert.equal(settings.addStaffModal.staffSubrole, "grooming_receptionist");
+  settings.addStaffModal.firstName = "New";
+  settings.addStaffModal.lastName = "Receptionist";
+  settings.addStaffModal.email = "new.grooming@example.test";
+  await settings.requestNewStaffAccount();
+  assert.equal(calls.filter((call) => call[0] === "add-staff").at(-1)[1].staff_subrole, "grooming_receptionist");
+  assert.equal(settings.accountRoleLabel({ staff_type: "grooming", staff_subrole: "grooming_receptionist" }), "Grooming Receptionist");
+  assert.equal(settings.accountRoleLabel({ staff_type: "grooming", staff_subrole: null }), "Staff");
+  settings.openStaffDetails({ staffType: "grooming", staffSubrole: "" });
+  assert.equal(settings.savedStaffRole, "");
 
   console.log("Admin security settings regression tests passed.");
 })().catch((error) => {

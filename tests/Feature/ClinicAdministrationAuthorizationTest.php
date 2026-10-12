@@ -2411,7 +2411,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $vitals = ['weight_kg' => 24, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20];
         $this->postJson('/api/admin/clinic-appointments/1/record', [...$vitals, 'finish_case' => true])
             ->assertUnprocessable()->assertJsonValidationErrors('primary_veterinarian_id');
-        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_subrole' => 'veterinarian', 'is_active' => false]);
+        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_type' => 'clinic', 'staff_subrole' => 'veterinarian', 'is_active' => false]);
         $this->postJson('/api/admin/clinic-appointments/1/record', ['primary_veterinarian_id' => 2])
             ->assertUnprocessable()->assertJsonValidationErrors('primary_veterinarian_id');
         DB::table('users')->where('user_id', 2)->update(['is_active' => true, 'first_name' => 'Attending', 'last_name' => 'Vet']);
@@ -2424,7 +2424,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     {
         $this->authenticateAs('staff');
         $this->insertClinicAppointment('in_consultation');
-        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_subrole' => 'veterinarian', 'first_name' => 'Additional', 'last_name' => 'Vet']);
+        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_type' => 'clinic', 'staff_subrole' => 'veterinarian', 'first_name' => 'Additional', 'last_name' => 'Vet']);
         $this->postJson('/api/admin/clinic-appointments/1/record', ['primary_veterinarian_id' => 2, 'additional_veterinarian_ids' => [2]])
             ->assertOk()->assertJsonPath('record.primary_veterinarian_id', 1)
             ->assertJsonPath('record.additional_veterinarians.0.name', 'Additional Vet')

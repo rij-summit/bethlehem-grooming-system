@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Support\StaffRole;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -46,6 +47,9 @@ class StaffSeeder extends Seeder
         }
 
         $staff = $emailOwner ?? $usernameOwner ?? $legacyStaff ?? new User();
+        if (! $staff->exists) {
+            $staff->fill(StaffRole::fields('grooming_receptionist'));
+        }
         $staff->fill([
             'first_name' => 'Grooming',
             'last_name' => 'Staff',
@@ -54,7 +58,6 @@ class StaffSeeder extends Seeder
             'phone' => $credentials['phone'],
             'password_hash' => Hash::make($credentials['password']),
             'role' => 'staff',
-            'staff_type' => 'grooming',
             'customer_tier' => 'new',
             'is_active' => 1,
             'is_archived' => 0,

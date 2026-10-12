@@ -138,7 +138,7 @@ function permissions(clinical, payment, queue, customers) {
   role = 'staff';
   for (const [staff_type, staff_subrole, label] of [
     ['clinic', 'veterinarian', 'Veterinarian'], ['clinic', 'clinic_receptionist', 'Clinic Receptionist'],
-    ['grooming', null, 'Grooming Receptionist'], [null, null, 'Staff'],
+    ['grooming', 'grooming_receptionist', 'Grooming Receptionist'], ['grooming', null, 'Staff'], [null, null, 'Staff'],
   ]) {
     sandbox.API.getMe = sandbox.API.getStaffIdentity = async () => ({ user: { first_name: 'Ana', last_name: 'Santos', staff_type, staff_subrole } });
     const sidebar = sandbox.adminSidebar();

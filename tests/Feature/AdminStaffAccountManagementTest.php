@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AdminBookingController;
+use App\Http\Controllers\AdminClinicController;
 use App\Models\LoginEmailChallenge;
+use App\Models\PendingStaffAccount;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\SetUpStaffPasswordNotification;
+use App\Services\PendingStaffAccountService;
 use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +18,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Validation\ValidationException;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -230,6 +236,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Grooming',
             'last_name' => 'Staff',
             'username' => 'anothergroomer',
@@ -291,6 +298,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'jUaN',
             'last_name' => 'dElA  cRuZ',
             'email' => 'generated.staff@example.test',
@@ -299,7 +307,7 @@ class AdminStaffAccountManagementTest extends TestCase
         $staff = User::query()->where('email', 'generated.staff@example.test')->sole();
         $this->assertSame('Juan', $staff->first_name);
         $this->assertSame('Dela Cruz', $staff->last_name);
-        $this->assertNull($staff->staff_subrole);
+        $this->assertSame('grooming_receptionist', $staff->staff_subrole);
         $this->assertNull($staff->username);
         $this->assertTrue($staff->requiresPasswordSetup());
         $token = $this->staffSetupLinkSentTo($staff);
@@ -623,10 +631,18 @@ class AdminStaffAccountManagementTest extends TestCase
     #[DataProvider('staffRoleChanges')]
     public function test_role_changes_revoke_staff_sessions_and_refresh_permissions(string $from, string $to): void
     {
+        $this->instance(AdminBookingController::class, Mockery::mock(AdminBookingController::class)
+            ->makePartial()->shouldReceive('index')->andReturn(response()->json(['success' => true]))->getMock());
+        $this->instance(AdminClinicController::class, Mockery::mock(AdminClinicController::class)
+            ->makePartial()->shouldReceive('activeCases')->andReturn(response()->json(['success' => true]))->getMock());
         $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
         $adminToken = $admin->createToken('admin_token')->plainTextToken;
+        $this->withToken($adminToken)->getJson('/api/admin/bookings')->assertOk();
+        app('auth')->forgetGuards();
+        $this->withToken($adminToken)->getJson('/api/admin/clinic-cases')->assertOk();
+        app('auth')->forgetGuards();
         $staff = $this->createUser('staff', 'staff@example.test', 'Staff', $from === 'grooming_receptionist' ? 'grooming' : 'clinic');
-        $staff->update(['staff_subrole' => $from === 'grooming_receptionist' ? null : $from]);
+        $staff->update(['staff_subrole' => $from]);
         $staffToken = $staff->createToken('admin_token')->plainTextToken;
         $staff->createToken('another_device');
         LoginEmailChallenge::query()->create([
@@ -643,7 +659,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertJsonPath('message', 'Role updated successfully')
             ->assertJsonPath('staff.role', 'staff')
             ->assertJsonPath('staff.staff_type', $to === 'grooming_receptionist' ? 'grooming' : 'clinic')
-            ->assertJsonPath('staff.staff_subrole', $to === 'grooming_receptionist' ? null : $to);
+            ->assertJsonPath('staff.staff_subrole', $to);
 
         $this->assertSame('Staff', $staff->fresh()->username);
         $this->assertTrue($staff->fresh()->is_active);
@@ -660,17 +676,83 @@ class AdminStaffAccountManagementTest extends TestCase
             'password' => 'CurrentStaff!234',
         ])->assertOk()
             ->assertJsonPath('user.staff_type', $to === 'grooming_receptionist' ? 'grooming' : 'clinic')
-            ->assertJsonPath('user.staff_subrole', $to === 'grooming_receptionist' ? null : $to)
+            ->assertJsonPath('user.staff_subrole', $to)
             ->assertJsonPath('user.clinic_permissions.access', $to !== 'grooming_receptionist')
             ->assertJsonPath('user.clinic_permissions.clinical', $to === 'veterinarian')
             ->assertJsonPath('user.clinic_permissions.payment', $to === 'clinic_receptionist');
 
         app('auth')->forgetGuards();
         $this->withToken($login->json('token'))->getJson('/api/settings/security/account')->assertOk();
+        app('auth')->forgetGuards();
+        $this->withToken($login->json('token'))->getJson('/api/admin/bookings')
+            ->assertStatus($to === 'grooming_receptionist' ? 200 : 403);
+        app('auth')->forgetGuards();
+        $this->withToken($login->json('token'))->getJson('/api/admin/clinic-cases')
+            ->assertStatus($to === 'grooming_receptionist' ? 403 : 200);
+        if ($to !== 'grooming_receptionist') {
+            app('auth')->forgetGuards();
+            $this->withToken($login->json('token'))->postJson('/api/admin/walk-in')->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($login->json('token'))->postJson('/api/admin/bookings/1/pay')->assertForbidden();
+        }
         if ($to !== 'veterinarian') {
             app('auth')->forgetGuards();
             $this->withToken($login->json('token'))->postJson('/api/admin/clinic-cases/1/start')->assertForbidden();
         }
+    }
+
+    public static function invalidStaffCombinations(): array
+    {
+        return [
+            ['grooming', 'veterinarian'],
+            ['grooming', 'clinic_receptionist'],
+            ['clinic', 'grooming_receptionist'],
+            ['grooming', null],
+            ['clinic', null],
+        ];
+    }
+
+    #[DataProvider('invalidStaffCombinations')]
+    public function test_invalid_role_combinations_are_rejected_by_creation_service_and_models(string $type, ?string $subrole): void
+    {
+        Notification::fake();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'grooming');
+        Sanctum::actingAs($admin);
+        $this->postJson('/api/admin/security/staff-accounts', [
+            'staff_type' => $type, 'staff_subrole' => $subrole,
+            'first_name' => 'New', 'last_name' => 'Staff', 'email' => 'new@example.test',
+        ])->assertUnprocessable()->assertJsonValidationErrors('staff_subrole');
+
+        foreach ([
+            fn () => app(PendingStaffAccountService::class)->request($admin, $type, $subrole, 'New', 'Staff', 'new@example.test'),
+            fn () => $staff->fresh()->update(['staff_type' => $type, 'staff_subrole' => $subrole]),
+            fn () => PendingStaffAccount::query()->create(['staff_type' => $type, 'staff_subrole' => $subrole]),
+        ] as $write) {
+            try {
+                $write();
+                $this->fail('Invalid staff role combination was accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('staff_subrole', $exception->errors());
+            }
+        }
+        $this->assertSame('grooming_receptionist', $staff->fresh()->staff_subrole);
+        $this->assertDatabaseCount('users', 2);
+        $this->assertDatabaseCount('pending_staff_accounts', 0);
+        Notification::assertNothingSent();
+    }
+
+    public function test_staff_role_fields_cannot_be_cleared_after_assignment(): void
+    {
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'grooming');
+        try {
+            $staff->update(['staff_type' => null, 'staff_subrole' => null]);
+            $this->fail('Assigned staff role fields were cleared.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('staff_subrole', $exception->errors());
+        }
+        $this->assertSame('grooming', $staff->fresh()->staff_type);
+        $this->assertSame('grooming_receptionist', $staff->fresh()->staff_subrole);
     }
 
     public function test_role_changes_require_the_authenticated_admin_current_password(): void
@@ -688,7 +770,7 @@ class AdminStaffAccountManagementTest extends TestCase
             $this->patchJson($url, ['staff_role' => 'veterinarian', 'current_password' => $password])
                 ->assertUnprocessable()->assertJsonPath('errors.current_password.0', 'Incorrect password. Try again.');
             $this->assertSame('grooming', $staff->fresh()->staff_type);
-            $this->assertNull($staff->fresh()->staff_subrole);
+            $this->assertSame('grooming_receptionist', $staff->fresh()->staff_subrole);
             $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $staff->user_id]);
         }
         foreach (['admin', 'staff', 'Clinic Staff', 'clinic', 'grooming'] as $role) {
@@ -759,6 +841,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', 'admin@example.test', 'Admin'));
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => $firstName,
             'last_name' => $lastName,
             'email' => 'invited.staff@example.test',
@@ -882,6 +965,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Sanctum::actingAs($admin);
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Pending',
             'last_name' => 'Staff',
             'email' => 'pending@example.test',
@@ -928,6 +1012,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Pending',
             'last_name' => 'Staff',
             'username' => 'pendingstaff',
@@ -967,6 +1052,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Sanctum::actingAs($admin);
         $payload = [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Wrong',
             'last_name' => 'Email',
             'username' => 'wrongstaff',
@@ -1010,6 +1096,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Sanctum::actingAs($admin);
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Expired',
             'last_name' => 'Invite',
             'username' => 'expiredstaff',
@@ -1044,6 +1131,7 @@ class AdminStaffAccountManagementTest extends TestCase
         Sanctum::actingAs($this->createUser('admin', 'admin@example.test', 'Admin'));
         $this->postJson('/api/admin/security/staff-accounts', [
             'staff_type' => 'grooming',
+            'staff_subrole' => 'grooming_receptionist',
             'first_name' => 'Invalid',
             'last_name' => 'Email',
             'email' => 'invalid@-example..com',
@@ -1103,6 +1191,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ),
             'role' => $role,
             'staff_type' => $staffType,
+            'staff_subrole' => $staffType === 'grooming' ? 'grooming_receptionist' : ($staffType === 'clinic' ? 'clinic_receptionist' : null),
             'customer_tier' => 'new',
             'is_active' => true,
             'is_archived' => false,

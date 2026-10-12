@@ -122,17 +122,15 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::patch('/customer/notifications/read-all', [CustomerNotificationController::class, 'markAllRead']);
     Route::patch('/customer/notifications/{id}/read', [CustomerNotificationController::class, 'markRead']);
 
-    // Grooming administration — available only to the project's staff/admin roles.
+    // Shared staff functionality, with grooming operations restricted separately.
     Route::middleware('role:admin,staff')->group(function () {
         Route::get('/admin/notifications', [NotificationController::class, 'index']);
         Route::patch('/admin/notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::patch('/admin/notifications/{id}/read', [NotificationController::class, 'markRead']);
 
-        Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
-        Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
         Route::get('/admin/clinic/settings/availability', [ClinicSettingController::class, 'availability']);
         Route::get('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'blockedDates']);
-        Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty']);
+        Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty'])->middleware('grooming');
         Route::get('/settings/security/account', [AdminSecurityController::class, 'ownAccount']);
         Route::post('/settings/security/password-change', [AdminSecurityController::class, 'requestStaffPasswordChange'])
             ->middleware(['role:staff', 'throttle:3,10']);
@@ -140,27 +138,31 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             ->middleware(['role:staff', 'throttle:10,1']);
         Route::post('/settings/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
             ->middleware(['role:staff', 'throttle:3,10']);
-        Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
-        Route::patch('/admin/bookings/{id}/internal-staff-note', [AdminBookingController::class, 'updateInternalStaffNote']);
-        Route::patch('/admin/bookings/{id}/pets/{bookingPetId}/grooming-visit-notes', [AdminBookingController::class, 'updateGroomingVisitNotes']);
-        Route::post('/admin/bookings/{id}/sedation-consent', [AdminBookingController::class, 'recordSedationConsent']);
-        Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
-        Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
-        Route::post('/admin/bookings/{id}/revert-start-grooming', [AdminBookingController::class, 'revertStartGrooming']);
-        Route::post('/admin/bookings/{id}/pets/{bookingPetId}/start-grooming', [AdminBookingController::class, 'startPetGrooming']);
-        Route::post('/admin/bookings/{id}/pets/{bookingPetId}/mark-done', [AdminBookingController::class, 'markPetDone']);
-        Route::post('/admin/bookings/{id}/mark-done', [AdminBookingController::class, 'markDone']);
-        Route::post('/admin/bookings/{id}/cancel', [AdminBookingController::class, 'cancel']);
-        Route::post('/admin/bookings/{id}/archive', [AdminBookingController::class, 'archive']);
-        Route::post('/admin/bookings/{id}/picked-up', [AdminBookingController::class, 'markPickedUp']);
-
-        Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
-        Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);
-        Route::post('/admin/bookings/{id}/release', [PaymentController::class, 'release']);
         Route::get('/admin/transactions', [PaymentController::class, 'index']);
+        Route::middleware('grooming')->group(function () {
+            Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
+            Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
+            Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
+            Route::patch('/admin/bookings/{id}/internal-staff-note', [AdminBookingController::class, 'updateInternalStaffNote']);
+            Route::patch('/admin/bookings/{id}/pets/{bookingPetId}/grooming-visit-notes', [AdminBookingController::class, 'updateGroomingVisitNotes']);
+            Route::post('/admin/bookings/{id}/sedation-consent', [AdminBookingController::class, 'recordSedationConsent']);
+            Route::post('/admin/bookings/{id}/revert-check-in', [AdminBookingController::class, 'revertCheckIn']);
+            Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
+            Route::post('/admin/bookings/{id}/revert-start-grooming', [AdminBookingController::class, 'revertStartGrooming']);
+            Route::post('/admin/bookings/{id}/pets/{bookingPetId}/start-grooming', [AdminBookingController::class, 'startPetGrooming']);
+            Route::post('/admin/bookings/{id}/pets/{bookingPetId}/mark-done', [AdminBookingController::class, 'markPetDone']);
+            Route::post('/admin/bookings/{id}/mark-done', [AdminBookingController::class, 'markDone']);
+            Route::post('/admin/bookings/{id}/cancel', [AdminBookingController::class, 'cancel']);
+            Route::post('/admin/bookings/{id}/archive', [AdminBookingController::class, 'archive']);
+            Route::post('/admin/bookings/{id}/picked-up', [AdminBookingController::class, 'markPickedUp']);
 
-        Route::post('/admin/walk-in/capacity-preview', [WalkinController::class, 'previewCapacity']);
-        Route::post('/admin/walk-in', [WalkinController::class, 'store']);
+            Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
+            Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);
+            Route::post('/admin/bookings/{id}/release', [PaymentController::class, 'release']);
+
+            Route::post('/admin/walk-in/capacity-preview', [WalkinController::class, 'previewCapacity']);
+            Route::post('/admin/walk-in', [WalkinController::class, 'store']);
+        });
     });
 
     Route::get('/admin/reports/services-performed', [ReportController::class, 'servicesPerformed']);

@@ -2341,6 +2341,32 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('groomers_on_duty', 4);
     }
 
+    public function test_clinic_staff_cannot_access_grooming_operations_and_shared_routes_stay_available(): void
+    {
+        foreach (['veterinarian', 'clinic_receptionist'] as $subrole) {
+            $this->authenticateAs('staff');
+            $user = auth()->user();
+            $user->forceFill(['staff_type' => 'clinic', 'staff_subrole' => $subrole]);
+            Sanctum::actingAs($user, ['*']);
+            foreach (self::GROOMING_ADMIN_ROUTES as [$method, $uri]) {
+                if (str_starts_with($uri, 'api/admin/notifications') || $uri === 'api/admin/transactions') continue;
+                $this->json($method, '/'.preg_replace('/\{[^}]+\}/', '1', $uri))
+                    ->assertForbidden()->assertExactJson(self::FORBIDDEN_RESPONSE);
+            }
+        }
+        $this->authenticateAs('staff');
+        auth()->user()->forceFill(['staff_subrole' => null]);
+        $this->getJson('/api/admin/bookings')->assertForbidden();
+
+        foreach (['api/settings/security/account', 'api/admin/notifications', 'api/admin/clinic/settings/availability',
+            'api/admin/clinic/blocked-dates', 'api/admin/transactions', 'api/inventory/items', 'api/pos/transactions'] as $uri) {
+            $route = collect(Route::getRoutes()->getRoutes())->first(fn (RoutingRoute $route) => $route->uri() === $uri);
+            $this->assertNotNull($route);
+            $this->assertContains('role:admin,staff', $route->gatherMiddleware());
+            $this->assertNotContains('grooming', $route->gatherMiddleware());
+        }
+    }
+
     public function test_every_grooming_administration_route_has_authentication_and_role_middleware(): void
     {
         $routes = collect(Route::getRoutes()->getRoutes());
@@ -2354,6 +2380,11 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $this->assertNotNull($route, "Expected grooming route [{$method} {$uri}] is not registered.");
             $this->assertContains('auth:sanctum', $route->gatherMiddleware());
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
+            if (! str_starts_with($uri, 'api/admin/notifications') && $uri !== 'api/admin/transactions') {
+                $this->assertContains('grooming', $route->gatherMiddleware());
+            } else {
+                $this->assertNotContains('grooming', $route->gatherMiddleware());
+            }
         }
 
         $controllerClasses = [
@@ -2906,6 +2937,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'first_name' => ucfirst($role),
             'last_name' => 'User',
             'role' => $role,
+            'staff_type' => $role === 'staff' ? 'grooming' : null,
+            'staff_subrole' => $role === 'staff' ? 'grooming_receptionist' : null,
         ]);
         $user->exists = true;
 

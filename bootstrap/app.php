@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureClinicPermission;
+use App\Http\Middleware\EnsureGroomingPermission;
 use App\Http\Middleware\EnsureAccountIsUsable;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'account.usable' => EnsureAccountIsUsable::class,
             'role' => EnsureUserHasRole::class,
             'clinic' => EnsureClinicPermission::class,
+            'grooming' => EnsureGroomingPermission::class,
         ]);
 
         $middleware->api(prepend: [
