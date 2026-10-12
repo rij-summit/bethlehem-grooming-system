@@ -335,6 +335,11 @@ function adminSettings() {
     staffDetailsModal: {
       open: false,
       staff: null,
+      selectedRole: "",
+      password: "",
+      showPassword: false,
+      busy: false,
+      error: "",
     },
     securityVerification: {
       open: false,
@@ -484,16 +489,6 @@ function adminSettings() {
         this.staffAccounts = (response?.staff || []).map((staff) => {
           const fullName = `${staff.first_name || ""} ${staff.last_name || ""}`.trim()
             || "Staff account";
-          const roleLabel = staff.staff_type === "clinic"
-            ? "Clinic Staff"
-            : staff.staff_type === "grooming"
-              ? "Grooming Receptionist"
-              : "Staff";
-          const subroleLabel = staff.staff_subrole === "veterinarian"
-            ? "Veterinarian"
-            : staff.staff_subrole === "clinic_receptionist"
-              ? "Clinic Receptionist"
-              : "";
           const setupRequired = Boolean(staff.password_setup_required);
           const state = setupRequired ? "pending" : staff.is_active && !staff.is_archived ? "active" : "deactivated";
           const active = state === "active";
@@ -503,11 +498,7 @@ function adminSettings() {
             initials: `${staff.first_name?.charAt(0) || "S"}${staff.last_name?.charAt(0) || ""}`.toUpperCase(),
             username: setupRequired ? "" : staff.username || "",
             email: staff.email || "",
-            staffType: staff.staff_type || "",
-            staffSubrole: staff.staff_subrole || "",
-            roleLabel,
-            subroleLabel,
-            detailRoleLabel: subroleLabel ? `${subroleLabel} (${roleLabel})` : roleLabel,
+            ...this.staffRoleFields(staff),
             active,
             state,
             setupRequired,
@@ -827,15 +818,76 @@ function adminSettings() {
       this.$nextTick(() => document.getElementById("staffStatusAdminPassword")?.focus());
     },
 
+    staffRoleFields(staff) {
+      const roleLabel = staff.staff_type === "clinic" ? "Clinic Staff"
+        : staff.staff_type === "grooming" ? "Grooming Receptionist" : "Staff";
+      const subroleLabel = staff.staff_subrole === "veterinarian" ? "Veterinarian"
+        : staff.staff_subrole === "clinic_receptionist" ? "Clinic Receptionist" : "";
+      return {
+        staffType: staff.staff_type || "",
+        staffSubrole: staff.staff_subrole || "",
+        roleLabel,
+        subroleLabel,
+      };
+    },
+
+    get savedStaffRole() {
+      const staff = this.staffDetailsModal.staff;
+      return staff?.staffType === "grooming" ? "grooming_receptionist"
+        : staff?.staffType === "clinic" ? staff.staffSubrole : "";
+    },
+
+    get staffRoleChangePending() {
+      return Boolean(this.staffDetailsModal.staff && this.staffDetailsModal.selectedRole
+        && this.staffDetailsModal.selectedRole !== this.savedStaffRole);
+    },
+
     openStaffDetails(staff) {
       if (!staff) return;
 
-      this.staffDetailsModal = { open: true, staff };
+      this.staffDetailsModal = { open: true, staff, selectedRole: "", password: "", showPassword: false, busy: false, error: "" };
+      this.staffDetailsModal.selectedRole = this.savedStaffRole;
       this.refreshSecurityIcons();
     },
 
     closeStaffDetails() {
-      this.staffDetailsModal = { open: false, staff: null };
+      if (this.staffDetailsModal.busy) return;
+      this.cancelStaffRoleChange();
+      this.staffDetailsModal.open = false;
+      this.staffDetailsModal.staff = null;
+      this.staffDetailsModal.selectedRole = "";
+    },
+
+    changeStaffRole() {
+      this.staffDetailsModal.error = "";
+      if (!this.staffRoleChangePending) this.cancelStaffRoleChange();
+    },
+
+    cancelStaffRoleChange() {
+      if (this.staffDetailsModal.busy) return;
+      this.staffDetailsModal.selectedRole = this.savedStaffRole;
+      this.staffDetailsModal.password = "";
+      this.staffDetailsModal.showPassword = false;
+      this.staffDetailsModal.error = "";
+    },
+
+    async saveStaffRoleChange() {
+      const modal = this.staffDetailsModal;
+      if (!this.staffRoleChangePending || !modal.password || modal.busy) return;
+
+      modal.error = "";
+      modal.busy = true;
+      try {
+        const response = await API.updateStaffAccountRole(modal.staff.id, modal.selectedRole, modal.password);
+        Object.assign(modal.staff, this.staffRoleFields(response.staff));
+        modal.busy = false;
+        this.cancelStaffRoleChange();
+        window.showSuccessToast("Role updated successfully");
+      } catch (error) {
+        modal.error = this.firstApiError(error);
+      } finally {
+        modal.busy = false;
+      }
     },
 
     closeStaffStatusModal() {

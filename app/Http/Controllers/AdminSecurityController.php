@@ -200,6 +200,43 @@ class AdminSecurityController extends Controller
         ]);
     }
 
+    public function updateStaffRole(Request $request, User $staff)
+    {
+        if ($staff->role !== 'staff' || $staff->is_archived) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'staff_role' => ['required', Rule::in(['veterinarian', 'clinic_receptionist', 'grooming_receptionist'])],
+        ]);
+        $this->verifyAdminPassword($request, 'Incorrect password. Try again.');
+        $staffType = $data['staff_role'] === 'grooming_receptionist' ? 'grooming' : 'clinic';
+        $staffSubrole = $staffType === 'clinic' ? $data['staff_role'] : null;
+
+        $updated = DB::transaction(function () use ($staff, $staffType, $staffSubrole): User {
+            $target = User::query()->lockForUpdate()->findOrFail($staff->getKey());
+            if ($target->role !== 'staff' || $target->is_archived) {
+                abort(404);
+            }
+
+            if ($target->staff_type !== $staffType || $target->staff_subrole !== $staffSubrole) {
+                $target->staff_type = $staffType;
+                $target->staff_subrole = $staffSubrole;
+                $target->save();
+                $target->tokens()->delete();
+                LoginEmailChallenge::query()->where('user_id', $target->user_id)->delete();
+            }
+
+            return $target->load('passwordResetRequest');
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Role updated successfully',
+            'staff' => $this->accountPayload($updated),
+        ]);
+    }
+
     public function resendStaffSetupEmail(User $staff, \App\Services\PasswordResetService $passwordResets)
     {
         if ($staff->role !== 'staff' || $staff->is_archived || ! $staff->requiresPasswordSetup()) {
@@ -359,7 +396,7 @@ class AdminSecurityController extends Controller
         ]);
     }
 
-    private function verifyAdminPassword(Request $request): void
+    private function verifyAdminPassword(Request $request, string $incorrectMessage = 'The admin password is incorrect.'): void
     {
         $data = $request->validate([
             'current_password' => ['required', 'string'],
@@ -369,7 +406,7 @@ class AdminSecurityController extends Controller
 
         if (! Hash::check($data['current_password'], $request->user()->password_hash)) {
             throw ValidationException::withMessages([
-                'current_password' => 'The admin password is incorrect.',
+                'current_password' => $incorrectMessage,
             ]);
         }
     }

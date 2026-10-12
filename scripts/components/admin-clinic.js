@@ -144,13 +144,14 @@ function adminClinicModal() {
     saving:     false,
     modalError: "",
     weightTools: null,
-    weightServerError: "",
     title:      "Medical Record",
     apptId:     null,
     currentAppt: null,
     activeSection: "medical",
     formErrors: {},
     veterinarians: [], optionsLoading: false, optionsError: "",
+    vetDropdownOpen: false,
+    vetSearch: "",
     administrationRoutes: [], diagnosticOptions: [],
     recordedByName: "",
     returnFocus: null,
@@ -194,8 +195,121 @@ function adminClinicModal() {
       const resultIds = this.form.diagnostics.map(row => Number(row.result_attachment_id));
       return this.attachments.filter(file => !resultIds.includes(Number(file.id)));
     },
+    get selectedVeterinarianIds() {
+      return [...new Set([this.form.primary_veterinarian_id, ...this.form.additional_veterinarian_ids].filter(Boolean).map(String))];
+    },
+    get lockedVeterinarianId() {
+      return this.canEditClinical && this.isVeterinarian ? String(this.$store.clinicAccess.user.user_id) : null;
+    },
+    get selectedVeterinarians() {
+      const saved = [
+        { user_id: this.currentAppt?.record?.primary_veterinarian_id, name: this.currentAppt?.record?.primary_veterinarian_name },
+        ...(this.currentAppt?.record?.additional_veterinarians || []),
+      ];
+      return this.selectedVeterinarianIds.map(id => {
+        const vet = this.veterinarians.find(vet => String(vet.user_id) === id) || saved.find(vet => String(vet.user_id) === id);
+        const user = this.$store.clinicAccess.user;
+        const ownName = id === this.lockedVeterinarianId ? [user?.first_name, user?.last_name].filter(Boolean).join(" ") : "";
+        return { user_id: id, name: vet?.name || ownName || "Veterinarian" };
+      });
+    },
+    get filteredVeterinarians() {
+      const search = this.vetSearch.trim().toLowerCase();
+      return this.veterinarians.filter(vet => String(vet.user_id) !== this.lockedVeterinarianId && vet.name.toLowerCase().includes(search));
+    },
+    toggleVeterinarian(id) {
+      id = String(id);
+      if (!this.canEditClinical || this.saving || id === this.lockedVeterinarianId) return;
+      const selected = this.selectedVeterinarianIds;
+      const next = selected.includes(id) ? selected.filter(value => value !== id) : [...selected, id];
+      if (this.lockedVeterinarianId) {
+        this.form.primary_veterinarian_id = this.lockedVeterinarianId;
+        this.form.additional_veterinarian_ids = next.filter(value => value !== this.lockedVeterinarianId);
+      } else {
+        this.form.primary_veterinarian_id = next[0] || "";
+        this.form.additional_veterinarian_ids = next.slice(1);
+      }
+    },
+    removeVeterinarian(id) {
+      const trigger = this.$refs.vetTrigger;
+      this.toggleVeterinarian(id);
+      this.$nextTick?.(() => trigger?.focus());
+    },
+    toggleVetDropdown() {
+      this.vetDropdownOpen = !this.vetDropdownOpen;
+      this.vetSearch = "";
+      if (this.vetDropdownOpen) this.$nextTick?.(() => {
+        const selector = this.veterinarians.length > 8 ? 'input[type="search"]' : 'input[type="checkbox"]';
+        this.$refs.vetDropdown?.querySelector(selector)?.focus();
+      });
+    },
+    closeVetDropdown(restoreFocus = false) {
+      this.vetDropdownOpen = false;
+      if (restoreFocus) this.$refs.vetTrigger?.focus();
+    },
+    vetDropdownKeydown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (event.target.type === "checkbox") event.target.click();
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      if (event.target.type === "search" && event.key !== "ArrowDown") return;
+      const choices = [...this.$refs.vetDropdown.querySelectorAll('input[type="checkbox"]')];
+      if (!choices.length) return;
+      event.preventDefault();
+      const index = choices.indexOf(event.target);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length;
+      choices[next].focus();
+    },
+    errorForField(field) {
+      return Object.entries(this.formErrors).find(([key]) => key === field || key.startsWith(field + "."));
+    },
+    hasFieldError(field) { return Boolean(this.errorForField(field)); },
+    isMissingFieldError(message) {
+      return /\bis required\b|^required$/i.test(message);
+    },
     fieldError(field) {
-      return this.formErrors[field]?.[0] || Object.entries(this.formErrors).find(([key]) => key.startsWith(field + "."))?.[1]?.[0] || "";
+      const error = this.errorForField(field);
+      if (!error) return "";
+      const [key, messages] = error;
+      if (this.isMissingFieldError(messages[0])) return "";
+      if (/characters/i.test(messages[0])) {
+        const limit = messages[0].match(/\b(\d[\d,]*)\s+characters/i)?.[1];
+        if (limit) return `Use up to ${Number(limit.replaceAll(",", "")).toLocaleString()} characters.`;
+      }
+      const name = key.split(".").at(-1);
+      if (key.startsWith("additional_veterinarian_ids")) return "Select an available veterinarian.";
+      if (name === "weight_kg") return this.weightTools?.getWeightValueValidationMessage(this.form.weight_kg) || "Enter a valid weight.";
+      return {
+        primary_veterinarian_id: "Select an available veterinarian.",
+        temperature_c: "Enter a temperature from 0 to 999.9 °C, using at most one decimal place.",
+        heart_rate_bpm: "Enter a whole number from 0 to 65,535.",
+        respiratory_rate_bpm: "Enter a whole number from 0 to 65,535.",
+        body_condition_score: "Select a score from 1 to 9.",
+        follow_up_date: "Choose a follow-up date within the allowed range.",
+        diagnostic: "Select a diagnostic.", custom_name: "Enter a test name.", status: "Select a status.",
+        result_attachment_id: "Select an available result file.",
+        medicine: "Enter a medicine name.", strength_concentration: "Enter a valid strength or concentration.",
+        dose: "Enter a valid dose.", route: "Select a route.", frequency: "Enter a valid frequency.",
+        duration: "Enter a valid duration.", quantity: "Enter a positive quantity, e.g. 14 tablets.",
+        diagnostics: "Check the diagnostic entries.", prescriptions: "Check the prescription entries.",
+      }[name] || "Check this value.";
+    },
+    showValidationErrors(errors) {
+      this.formErrors = errors;
+      const missingOnly = Object.values(errors).every(messages => this.isMissingFieldError(messages[0]));
+      this.modalError = missingOnly ? "Complete the required fields marked *." : "Check the highlighted fields.";
+      this.focusInvalidField();
+    },
+    focusInvalidField() {
+      this.$nextTick?.(() => {
+        const field = this.$el.querySelector('#medical-record-form [aria-invalid="true"]')
+          || this.$el.querySelector('#medical-validation-summary');
+        field?.focus();
+        field?.scrollIntoView?.({ block: "nearest" });
+      });
     },
     trapFocus(event) {
       const controls = [...event.currentTarget.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
@@ -247,7 +361,8 @@ function adminClinicModal() {
       if (!appt) return;
       this.returnFocus = document.activeElement;
       this.weightTools = await loadClinicPetWeightTools();
-      this.weightServerError = "";
+      this.vetDropdownOpen = false;
+      this.vetSearch = "";
       this.apptId     = appt.id;
       this.currentAppt = appt;
       ++this._optionsRequest;
@@ -318,6 +433,7 @@ function adminClinicModal() {
     closeModal() {
       if (this.saving || this.attachmentBusy) return;
       this.open = false;
+      this.vetDropdownOpen = false;
       ++this._optionsRequest;
       this.optionsLoading = false;
       this.returnFocus?.focus();
@@ -355,7 +471,7 @@ function adminClinicModal() {
         if (this.$refs.attachmentFile) this.$refs.attachmentFile.value = "";
       } catch (error) {
         this.attachmentError = error.errors
-          ? Object.values(error.errors).flat().join(" ")
+          ? (error.errors.file ? "Use a JPG, PNG, PDF or DCM file up to 10 MB." : "Keep the label within 200 characters.")
           : (error.message || "Failed to upload attachment.");
       } finally {
         this.attachmentBusy = false;
@@ -404,27 +520,24 @@ function adminClinicModal() {
       this.formErrors = {};
       this.modalError = "";
       this.weightTools = await loadClinicPetWeightTools();
-      if (this.weightValidationMessage) {
-        document.getElementById("clinicWeight")?.focus();
+      const weightError = this.weightTools.getWeightValueValidationMessage(this.form.weight_kg);
+      if (weightError) {
+        this.showValidationErrors({ weight_kg: [weightError] });
         return;
       }
       if (finishCase) {
-        const missing = [["weight_kg", "Weight"], ["temperature_c", "Temperature"],
-          ["heart_rate_bpm", "Heart Rate"], ["respiratory_rate_bpm", "Respiratory Rate"]]
-          .filter(([key]) => String(this.form[key] ?? "").trim() === "")
-          .map(([, label]) => label);
-        if (missing.length) {
-          for (const field of ["weight_kg", "temperature_c", "heart_rate_bpm", "respiratory_rate_bpm"]) {
-            if (String(this.form[field] ?? "").trim() === "") this.formErrors[field] = ["Required before finishing the case."];
-          }
-          this.modalError = `Fill in the vitals before finishing the case: ${missing.join(", ")}.`;
+        const errors = {};
+        for (const field of ["primary_veterinarian_id", "weight_kg", "temperature_c", "heart_rate_bpm", "respiratory_rate_bpm"]) {
+          if (String(this.form[field] ?? "").trim() === "") errors[field] = ["Required"];
+        }
+        if (Object.keys(errors).length) {
+          this.showValidationErrors(errors);
           return;
         }
       }
       const followUp = this.form.follow_up_date;
       if (followUp && (followUp < this.followUpMinDate || followUp > this.followUpMaxDate)) {
-        this.formErrors.follow_up_date = ["Follow-up date must be between today and 3 months from today."];
-        this.modalError = "Follow-up date must be between today and 3 months from today.";
+        this.showValidationErrors({ follow_up_date: ["Invalid date"] });
         return;
       }
       this.saving     = true;
@@ -458,16 +571,11 @@ function adminClinicModal() {
         this.returnFocus?.focus();
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (e) {
-        this.formErrors = e.errors || {};
-        this.weightServerError = e.errors?.weight_kg?.[0] || "";
-        this.modalError = e.errors ? Object.values(e.errors).flat().join(" ") : (e.message || "Failed to save record.");
-        this.$nextTick?.(() => this.$el.querySelector('[aria-invalid="true"]')?.focus());
+        if (e.errors) this.showValidationErrors(e.errors);
+        else this.modalError = e.message || "Unable to save the record. Try again.";
       } finally {
         this.saving = false;
       }
-    },
-    get weightValidationMessage() {
-      return this.weightServerError || this.weightTools?.getWeightValueValidationMessage(this.form.weight_kg) || "";
     },
   };
 }

@@ -8,6 +8,10 @@
     <link rel="stylesheet" href="../../css/output.css?v=grooming-pricing-ui-20261006" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=pricing-footer-20261006" />
     <link rel="stylesheet" href="../../css/components/toast.css" />
+    <style>
+      /* Keep confirmation toasts visible above the Security dialogs. */
+      #success-toast { z-index: 10002; }
+    </style>
   </head>
   <body class="bg-[#f5f8fb] text-slate-800">
     <div
@@ -1347,31 +1351,60 @@
               <!-- Staff account details modal -->
               <template x-teleport="body">
                 <div x-cloak x-show="staffDetailsModal.open" x-transition.opacity class="fixed inset-0 flex items-center justify-center px-4 py-6" style="z-index: 10000; background-color: rgba(15, 23, 42, 0.65)" @click.self="closeStaffDetails()">
-                  <div class="w-full max-w-md overflow-hidden rounded-[24px] bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="staffDetailsTitle">
-                    <div class="flex items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-5 sm:px-6">
+                  <div class="flex w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl" style="max-height: calc(100dvh - 3rem)" role="dialog" aria-modal="true" aria-labelledby="staffDetailsTitle" :aria-busy="staffDetailsModal.busy">
+                    <div class="flex shrink-0 items-start justify-between gap-4 border-b border-[#e8f0f8] px-5 py-5 sm:px-6">
                       <div class="flex items-center gap-3">
                         <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef5fb] text-[#315b7e]"><i data-lucide="user-round" class="h-5 w-5"></i></div>
                         <div><h3 id="staffDetailsTitle" class="text-xl font-bold text-[#1f3850]">Staff account details</h3><p class="mt-1 text-sm text-slate-500">Account information</p></div>
                       </div>
-                      <button type="button" @click="closeStaffDetails()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close staff account details"><i data-lucide="x" class="h-5 w-5"></i></button>
+                      <button type="button" @click="closeStaffDetails()" :disabled="staffDetailsModal.busy" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-60" aria-label="Close staff account details"><i data-lucide="x" class="h-5 w-5"></i></button>
                     </div>
-                    <dl class="space-y-4 px-5 py-5 sm:px-6">
+                    <dl class="min-h-0 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Staff name</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.fullName"></dd></div>
                       <div x-show="!staffDetailsModal.staff?.setupRequired && staffDetailsModal.staff?.username"><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Username</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.username || ''"></dd></div>
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Email</dt><dd class="mt-1 break-all text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.email"></dd></div>
-                      <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Role</dt><dd class="mt-1 text-sm font-semibold text-[#1f3850]" x-text="staffDetailsModal.staff?.detailRoleLabel"></dd></div>
+                      <div>
+                        <dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500"><label for="staffDetailsRole">Role</label></dt>
+                        <dd class="mt-1">
+                          <select id="staffDetailsRole" x-model="staffDetailsModal.selectedRole" @change="changeStaffRole()" :disabled="staffDetailsModal.busy" class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10 disabled:opacity-60">
+                            <option value="" disabled x-show="!savedStaffRole">Select a role</option>
+                            <option value="veterinarian">Veterinarian</option>
+                            <option value="clinic_receptionist">Clinic Receptionist</option>
+                            <option value="grooming_receptionist">Grooming Receptionist</option>
+                          </select>
+                          <div x-cloak x-show="staffRoleChangePending" class="mt-3 space-y-3">
+                            <p class="text-sm text-slate-500">This will change this staff member’s system access.</p>
+                            <div>
+                              <label for="staffRoleAdminPassword" class="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Admin password</label>
+                              <div class="relative">
+                                <input id="staffRoleAdminPassword" :type="staffDetailsModal.showPassword ? 'text' : 'password'" x-model="staffDetailsModal.password" @input="staffDetailsModal.error = ''" @keydown.enter.prevent="saveStaffRoleChange()" :disabled="staffDetailsModal.busy" :aria-invalid="Boolean(staffDetailsModal.error)" aria-describedby="staffRolePasswordHelp staffRolePasswordError" placeholder="Enter your password" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 pr-11 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10 disabled:opacity-60" />
+                                <button type="button" @click="staffDetailsModal.showPassword = !staffDetailsModal.showPassword" :disabled="staffDetailsModal.busy" :aria-label="staffDetailsModal.showPassword ? 'Hide admin password' : 'Show admin password'" :aria-pressed="staffDetailsModal.showPassword" class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#315b7e]">
+                                  <i x-show="!staffDetailsModal.showPassword" data-lucide="eye-closed" class="h-5 w-5"></i>
+                                  <i x-show="staffDetailsModal.showPassword" data-lucide="eye" class="h-5 w-5"></i>
+                                </button>
+                              </div>
+                              <p id="staffRolePasswordHelp" class="mt-1.5 text-xs text-slate-500">Required to save this role change.</p>
+                              <p id="staffRolePasswordError" x-show="staffDetailsModal.error" x-text="staffDetailsModal.error" class="mt-2 text-sm font-semibold text-red-600" role="alert"></p>
+                            </div>
+                          </div>
+                        </dd>
+                      </div>
                       <div><dt class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</dt><dd class="mt-2"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="staffDetailsModal.staff?.statusClass" x-text="staffDetailsModal.staff?.statusLabel"></span></dd></div>
                       <p x-show="staffDetailsModal.staff?.setupLinkExpired" class="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">The setup link has expired. Send a new setup email to continue.</p>
                     </dl>
-                    <div class="flex flex-wrap justify-end gap-2 border-t border-[#e8f0f8] px-5 py-4 sm:px-6">
+                    <div class="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#e8f0f8] px-5 py-4 sm:px-6">
                       <template x-if="staffDetailsModal.staff?.setupRequired">
                         <div class="flex flex-wrap gap-2">
-                          <button type="button" @click="resendStaffSetup(staffDetailsModal.staff)" :disabled="staffSetupBusyId === staffDetailsModal.staff?.id" class="rounded-xl border border-[#c9d9e8] px-4 py-2.5 text-sm font-semibold text-[#315b7e] disabled:opacity-60">Resend Setup Email</button>
-                          <button type="button" @click="openStaffSetupModal(staffDetailsModal.staff)" class="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600">Cancel Account Setup</button>
+                          <button type="button" @click="resendStaffSetup(staffDetailsModal.staff)" :disabled="staffDetailsModal.busy || staffSetupBusyId === staffDetailsModal.staff?.id" class="rounded-xl border border-[#c9d9e8] px-4 py-2.5 text-sm font-semibold text-[#315b7e] disabled:opacity-60">Resend Setup Email</button>
+                          <button type="button" @click="openStaffSetupModal(staffDetailsModal.staff)" :disabled="staffDetailsModal.busy" class="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 disabled:opacity-60">Cancel Account Setup</button>
                         </div>
                       </template>
-                      <button x-show="staffDetailsModal.staff && !staffDetailsModal.staff.setupRequired" type="button" @click="const staff = staffDetailsModal.staff; closeStaffDetails(); openStaffStatusModal(staff)" class="rounded-xl border border-[#c9d9e8] px-4 py-2.5 text-sm font-semibold text-[#315b7e]" x-text="staffDetailsModal.staff?.active ? 'Deactivate' : 'Reactivate'"></button>
-                      <button type="button" @click="closeStaffDetails()" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67]">Close</button>
+                      <button x-show="staffDetailsModal.staff && !staffDetailsModal.staff.setupRequired" type="button" @click="const staff = staffDetailsModal.staff; closeStaffDetails(); openStaffStatusModal(staff)" :disabled="staffDetailsModal.busy" class="rounded-xl border border-[#c9d9e8] px-4 py-2.5 text-sm font-semibold text-[#315b7e] disabled:opacity-60" x-text="staffDetailsModal.staff?.active ? 'Deactivate' : 'Reactivate'"></button>
+                      <div class="ml-auto flex gap-2">
+                        <button x-show="!staffRoleChangePending" type="button" @click="closeStaffDetails()" :disabled="staffDetailsModal.busy" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:opacity-60">Close</button>
+                        <button x-cloak x-show="staffRoleChangePending" type="button" @click="cancelStaffRoleChange()" :disabled="staffDetailsModal.busy" class="whitespace-nowrap rounded-xl border border-[#c9d9e8] px-4 py-2.5 text-sm font-semibold text-[#315b7e] disabled:opacity-60">Cancel</button>
+                        <button x-cloak x-show="staffRoleChangePending" type="button" @click="saveStaffRoleChange()" :disabled="staffDetailsModal.busy || !staffDetailsModal.password" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:opacity-60" x-text="staffDetailsModal.busy ? 'Saving...' : 'Save Changes'"></button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1554,9 +1587,9 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=staff-settings-20260928&release=grooming-pricing-20261006&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/api.js?v=staff-settings-20260928&release=grooming-pricing-20261006&auth=session-scope-20261006&clinic=roles-20261010&staff=role-change-20261012"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010"></script>
     <script src="../../scripts/components/success-toast.js"></script>
-    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=clinic-merge-20261007"></script>
+    <script src="../../scripts/components/admin-settings.js?v=staff-settings-20260928&release=clinic-merge-20261007&staff=role-change-20261012"></script>
   </body>
 </html>

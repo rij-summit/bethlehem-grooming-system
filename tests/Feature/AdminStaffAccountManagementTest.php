@@ -608,6 +608,151 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertTrue(Hash::check('CurrentStaff!234', $staff->fresh()->password_hash));
     }
 
+    public static function staffRoleChanges(): array
+    {
+        return [
+            'vet to clinic reception' => ['veterinarian', 'clinic_receptionist'],
+            'vet to grooming' => ['veterinarian', 'grooming_receptionist'],
+            'clinic reception to vet' => ['clinic_receptionist', 'veterinarian'],
+            'clinic reception to grooming' => ['clinic_receptionist', 'grooming_receptionist'],
+            'grooming to vet' => ['grooming_receptionist', 'veterinarian'],
+            'grooming to clinic reception' => ['grooming_receptionist', 'clinic_receptionist'],
+        ];
+    }
+
+    #[DataProvider('staffRoleChanges')]
+    public function test_role_changes_revoke_staff_sessions_and_refresh_permissions(string $from, string $to): void
+    {
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        $adminToken = $admin->createToken('admin_token')->plainTextToken;
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', $from === 'grooming_receptionist' ? 'grooming' : 'clinic');
+        $staff->update(['staff_subrole' => $from === 'grooming_receptionist' ? null : $from]);
+        $staffToken = $staff->createToken('admin_token')->plainTextToken;
+        $staff->createToken('another_device');
+        LoginEmailChallenge::query()->create([
+            'user_id' => $staff->user_id,
+            'token_hash' => hash('sha256', 'old-login'),
+            'poll_token_hash' => hash('sha256', 'old-poll'),
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        $this->withToken($adminToken)->patchJson("/api/admin/security/staff/{$staff->user_id}/role", [
+            'staff_role' => $to,
+            'current_password' => 'CurrentAdmin!234',
+        ])->assertOk()
+            ->assertJsonPath('message', 'Role updated successfully')
+            ->assertJsonPath('staff.role', 'staff')
+            ->assertJsonPath('staff.staff_type', $to === 'grooming_receptionist' ? 'grooming' : 'clinic')
+            ->assertJsonPath('staff.staff_subrole', $to === 'grooming_receptionist' ? null : $to);
+
+        $this->assertSame('Staff', $staff->fresh()->username);
+        $this->assertTrue($staff->fresh()->is_active);
+        $this->assertTrue(Hash::check('CurrentStaff!234', $staff->fresh()->password_hash));
+        $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $staff->user_id]);
+        $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $admin->user_id]);
+        $this->assertDatabaseMissing('login_email_challenges', ['user_id' => $staff->user_id]);
+
+        app('auth')->forgetGuards();
+        $this->withToken($staffToken)->getJson('/api/settings/security/account')->assertUnauthorized();
+        app('auth')->forgetGuards();
+        $login = $this->postJson('/api/sign-in', [
+            'identifier' => 'Staff',
+            'password' => 'CurrentStaff!234',
+        ])->assertOk()
+            ->assertJsonPath('user.staff_type', $to === 'grooming_receptionist' ? 'grooming' : 'clinic')
+            ->assertJsonPath('user.staff_subrole', $to === 'grooming_receptionist' ? null : $to)
+            ->assertJsonPath('user.clinic_permissions.access', $to !== 'grooming_receptionist')
+            ->assertJsonPath('user.clinic_permissions.clinical', $to === 'veterinarian')
+            ->assertJsonPath('user.clinic_permissions.payment', $to === 'clinic_receptionist');
+
+        app('auth')->forgetGuards();
+        $this->withToken($login->json('token'))->getJson('/api/settings/security/account')->assertOk();
+        if ($to !== 'veterinarian') {
+            app('auth')->forgetGuards();
+            $this->withToken($login->json('token'))->postJson('/api/admin/clinic-cases/1/start')->assertForbidden();
+        }
+    }
+
+    public function test_role_changes_require_the_authenticated_admin_current_password(): void
+    {
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'grooming');
+        $staff->createToken('admin_token');
+        Sanctum::actingAs($admin);
+        $admin->update(['password_hash' => Hash::make('UpdatedAdmin!234')]);
+        $url = "/api/admin/security/staff/{$staff->user_id}/role";
+
+        $this->patchJson($url, ['staff_role' => 'veterinarian'])
+            ->assertUnprocessable()->assertJsonValidationErrors('current_password');
+        foreach (['wrong', 'CurrentStaff!234', 'CurrentAdmin!234'] as $password) {
+            $this->patchJson($url, ['staff_role' => 'veterinarian', 'current_password' => $password])
+                ->assertUnprocessable()->assertJsonPath('errors.current_password.0', 'Incorrect password. Try again.');
+            $this->assertSame('grooming', $staff->fresh()->staff_type);
+            $this->assertNull($staff->fresh()->staff_subrole);
+            $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $staff->user_id]);
+        }
+        foreach (['admin', 'staff', 'Clinic Staff', 'clinic', 'grooming'] as $role) {
+            $this->patchJson($url, ['staff_role' => $role, 'current_password' => 'UpdatedAdmin!234'])
+                ->assertUnprocessable()->assertJsonValidationErrors('staff_role');
+        }
+        $this->assertSame('grooming', $staff->fresh()->staff_type);
+        $this->patchJson($url, ['staff_role' => 'veterinarian', 'current_password' => 'UpdatedAdmin!234'])
+            ->assertOk()->assertJsonPath('staff.staff_subrole', 'veterinarian');
+    }
+
+    public function test_only_admins_can_change_non_archived_staff_roles(): void
+    {
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'grooming');
+        $payload = ['staff_role' => 'veterinarian', 'current_password' => 'CurrentAdmin!234'];
+        $url = "/api/admin/security/staff/{$staff->user_id}/role";
+        $this->patchJson($url, $payload)->assertUnauthorized();
+        Sanctum::actingAs($staff);
+        $this->patchJson($url, $payload)->assertForbidden();
+        $customer = $this->createUser('customer', 'customer@example.test');
+        Sanctum::actingAs($customer);
+        $this->patchJson($url, $payload)->assertForbidden();
+        $admin = $this->createUser('admin', 'admin@example.test', 'Admin');
+        Sanctum::actingAs($admin);
+        foreach ([$admin, $customer] as $target) {
+            $this->patchJson("/api/admin/security/staff/{$target->user_id}/role", $payload)->assertNotFound();
+        }
+        $staff->update(['is_archived' => true]);
+        $this->patchJson($url, $payload)->assertNotFound();
+        $this->assertSame('grooming', $staff->fresh()->staff_type);
+    }
+
+    public function test_role_changes_preserve_pending_setup_and_deactivated_status(): void
+    {
+        [$pending, $setupToken] = $this->inviteStaff();
+        $this->patchJson("/api/admin/security/staff/{$pending->user_id}/role", [
+            'staff_role' => 'clinic_receptionist',
+            'current_password' => 'CurrentAdmin!234',
+        ])->assertOk()->assertJsonPath('staff.password_setup_required', true)->assertJsonPath('staff.is_active', false);
+        $this->assertDatabaseHas('password_reset_requests', ['token_hash' => hash('sha256', $setupToken)]);
+        $this->assertTrue($pending->fresh()->requiresPasswordSetup());
+        $this->assertNull($pending->fresh()->username);
+        $this->assertNull($pending->fresh()->email_verified_at);
+
+        $inactive = $this->createUser('staff', 'inactive@example.test', 'Inactive', 'grooming');
+        $inactive->update(['is_active' => false]);
+        $this->patchJson("/api/admin/security/staff/{$inactive->user_id}/role", [
+            'staff_role' => 'veterinarian',
+            'current_password' => 'CurrentAdmin!234',
+        ])->assertOk()->assertJsonPath('staff.is_active', false);
+    }
+
+    public function test_saving_an_unchanged_role_does_not_revoke_sessions(): void
+    {
+        $staff = $this->createUser('staff', 'staff@example.test', 'Staff', 'grooming');
+        $staff->createToken('admin_token');
+        Sanctum::actingAs($this->createUser('admin', 'admin@example.test', 'Admin'));
+        $this->patchJson("/api/admin/security/staff/{$staff->user_id}/role", [
+            'staff_role' => 'grooming_receptionist',
+            'current_password' => 'CurrentAdmin!234',
+        ])->assertOk();
+        $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $staff->user_id]);
+    }
+
     private function inviteStaff(string $firstName = 'Juan', string $lastName = 'Dela Cruz'): array
     {
         Notification::fake();

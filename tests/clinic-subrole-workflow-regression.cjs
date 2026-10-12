@@ -29,6 +29,7 @@ function component(factory) {
   const value = sandbox[factory]();
   value.$store = { clinicAccess: stores.clinicAccess, clinicFeedback: feedback };
   value.$refs = {};
+  value.$el = { querySelector() { return null; } };
   value.$nextTick = (callback) => callback();
   return value;
 }
@@ -101,7 +102,7 @@ function permissions(clinical, payment, queue, customers) {
   const record = component('adminClinicModal');
   record.currentAppt = { status: 'in_consultation' };
   record.apptId = 1;
-  Object.assign(record.form, { weight_kg: '4.20', temperature_c: 38.5, heart_rate_bpm: 80, respiratory_rate_bpm: 20 });
+  Object.assign(record.form, { primary_veterinarian_id: '1', weight_kg: '4.20', temperature_c: 38.5, heart_rate_bpm: 80, respiratory_rate_bpm: 20 });
   let recordSaveCalls = 0;
   sandbox.API.clinicSaveRecord = async (id, payload) => {
     recordSaveCalls++;
@@ -118,11 +119,11 @@ function permissions(clinical, payment, queue, customers) {
     await record.saveRecord(true);
     assert.equal(recordSaveCalls, 1, 'Invalid precision cannot reach the clinic API');
     assert.equal(record.form.weight_kg, weight);
-    assert.equal(record.weightValidationMessage, 'Enter weight using no more than 2 decimal places.');
+    assert.equal(record.fieldError('weight_kg'), 'Enter weight using no more than 2 decimal places.');
   }
   record.form.weight_kg = '4.20';
-  assert.equal(record.weightValidationMessage, '');
   await record.saveRecord(true);
+  assert.equal(record.fieldError('weight_kg'), '');
   assert.equal(recordSaveCalls, 2);
   assert.equal(record.modalError, '');
   assert.equal('addMedication' in record, false);

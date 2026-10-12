@@ -25,7 +25,7 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
             '>Staff name</dt>',
             '>Username</dt>',
             '>Email</dt>',
-            '>Role</dt>',
+            'for="staffDetailsRole">Role</label>',
             '>Status</dt>',
             'x-text="staff.statusLabel"',
             "staff.active ? 'Deactivate' : 'Reactivate'",
@@ -80,12 +80,40 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
         $this->assertStringNotContainsString('Change credentials', $security);
         $this->assertStringNotContainsString('resetStaffModal', $security);
         $this->assertStringNotContainsString('6-digit email verification code', $security);
-        $this->assertSame(5, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
-        $this->assertSame(5, substr_count($adminSecurity, 'data-lucide="eye"'));
+        $this->assertSame(6, substr_count($adminSecurity, 'data-lucide="eye-closed"'));
+        $this->assertSame(6, substr_count($adminSecurity, 'data-lucide="eye"'));
         $this->assertStringContainsString(
             'admin-settings.js?v=staff-settings-20260928&release=clinic-merge-20261007',
             $page,
         );
+    }
+
+    public function test_role_change_controls_stay_inside_the_staff_details_dialog(): void
+    {
+        $page = file_get_contents(base_path('pages/admin/settings.html'));
+        $details = $this->sourceBetween($page, '<!-- Staff account details modal -->', 'x-show="staffSetupModal.open"');
+        foreach ([
+            'x-model="staffDetailsModal.selectedRole"',
+            '@change="changeStaffRole()"',
+            '<option value="veterinarian">Veterinarian</option>',
+            '<option value="clinic_receptionist">Clinic Receptionist</option>',
+            '<option value="grooming_receptionist">Grooming Receptionist</option>',
+            'x-show="staffRoleChangePending"',
+            'This will change this staff member’s system access.',
+            'placeholder="Enter your password"',
+            'Required to save this role change.',
+            'role="alert"',
+            '@click="cancelStaffRoleChange()"',
+            '@click="saveStaffRoleChange()"',
+            ':disabled="staffDetailsModal.busy || !staffDetailsModal.password"',
+            'x-show="!staffRoleChangePending"',
+        ] as $control) {
+            $this->assertStringContainsString($control, $details);
+        }
+        $this->assertStringNotContainsString('>Clinic Staff</option>', $details);
+        $this->assertStringNotContainsString('Change Role', $details);
+        $this->assertSame(1, substr_count($details, 'role="dialog"'));
+        $this->assertStringContainsString('#success-toast { z-index: 10002; }', $page);
     }
 
     public function test_security_component_calls_admin_credential_and_staff_account_apis(): void
@@ -157,9 +185,9 @@ class AdminSecuritySettingsInterfaceTest extends TestCase
 
         $this->assertStringNotContainsString('autocomplete="current-password"', $adminSecurity);
         $this->assertStringNotContainsString('autocomplete="new-password"', $adminSecurity);
-        $this->assertSame(9, substr_count($adminSecurity, 'data-lpignore="true"'));
-        $this->assertSame(9, substr_count($adminSecurity, 'data-1p-ignore'));
-        $this->assertSame(9, substr_count($adminSecurity, 'data-bwignore'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-lpignore="true"'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-1p-ignore'));
+        $this->assertSame(10, substr_count($adminSecurity, 'data-bwignore'));
 
         $this->assertStringContainsString('autocomplete="username"', $signIn);
         $this->assertStringContainsString('autocomplete="current-password"', $signIn);

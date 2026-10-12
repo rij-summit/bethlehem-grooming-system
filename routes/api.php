@@ -240,6 +240,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             ->middleware('throttle:3,10');
         Route::patch('/admin/security/staff/{staff}/status', [AdminSecurityController::class, 'updateStaffStatus'])
             ->middleware('throttle:10,1');
+        Route::patch('/admin/security/staff/{staff}/role', [AdminSecurityController::class, 'updateStaffRole'])
+            ->middleware('throttle:10,1');
         Route::post('/admin/security/staff/{staff}/setup-email', [AdminSecurityController::class, 'resendStaffSetupEmail'])
             ->middleware('throttle:3,10');
         Route::delete('/admin/security/staff/{staff}/setup', [AdminSecurityController::class, 'cancelStaffSetup'])

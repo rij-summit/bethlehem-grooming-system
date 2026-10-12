@@ -14,6 +14,7 @@ const toasts = [];
 let settings;
 let statusRequest;
 let cancelRequest;
+let roleRequest;
 const focusedFields = [];
 global.window = {
   lucide: null,
@@ -118,6 +119,19 @@ global.API = {
     }
     return {
       message: active ? "Staff account reactivated." : "Staff account deactivated.",
+    };
+  },
+  async updateStaffAccountRole(staffId, staffRole, password) {
+    calls.push(["staff-role", staffId, staffRole, password]);
+    if (roleRequest) return roleRequest;
+    if (password !== "CurrentAdmin!234") {
+      throw { errors: { current_password: ["Incorrect password. Try again."] } };
+    }
+    return {
+      staff: {
+        staff_type: staffRole === "grooming_receptionist" ? "grooming" : "clinic",
+        staff_subrole: staffRole === "grooming_receptionist" ? null : staffRole,
+      },
     };
   },
   async resendStaffSetupEmail(staffId) {
@@ -316,6 +330,98 @@ vm.runInThisContext(componentSource, {
   settings.closeStaffSetupModal();
   assert.equal(settings.staffSetupModal.password, "");
   assert.equal(settings.staffSetupModal.showPassword, false);
+
+  for (const [index, savedRole] of [[0, "grooming_receptionist"], [1, "veterinarian"], [2, "clinic_receptionist"]]) {
+    settings.openStaffDetails(settings.staffAccounts[index]);
+    assert.equal(settings.staffDetailsModal.selectedRole, savedRole);
+    assert.equal(settings.staffRoleChangePending, false);
+  }
+  settings.openStaffDetails(settings.staffAccounts[0]);
+  settings.staffDetailsModal.selectedRole = "veterinarian";
+  settings.changeStaffRole();
+  assert.equal(settings.staffRoleChangePending, true);
+  assert.equal(calls.some((call) => call[0] === "staff-role"), false);
+  await settings.saveStaffRoleChange();
+  assert.equal(calls.some((call) => call[0] === "staff-role"), false);
+  settings.staffDetailsModal.password = "CurrentStaff!234";
+  await settings.saveStaffRoleChange();
+  assert.equal(settings.staffDetailsModal.error, "Incorrect password. Try again.");
+  assert.equal(settings.staffDetailsModal.open, true);
+  assert.equal(settings.staffDetailsModal.selectedRole, "veterinarian");
+  assert.equal(settings.savedStaffRole, "grooming_receptionist");
+  assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
+
+  settings.staffDetailsModal.showPassword = true;
+  settings.cancelStaffRoleChange();
+  assert.equal(settings.staffDetailsModal.open, true);
+  assert.equal(settings.staffDetailsModal.selectedRole, "grooming_receptionist");
+  assert.equal(settings.staffDetailsModal.password, "");
+  assert.equal(settings.staffDetailsModal.error, "");
+  assert.equal(settings.staffDetailsModal.showPassword, false);
+  assert.equal(settings.staffRoleChangePending, false);
+
+  settings.staffDetailsModal.selectedRole = "clinic_receptionist";
+  settings.changeStaffRole();
+  settings.staffDetailsModal.password = "discard";
+  settings.staffDetailsModal.showPassword = true;
+  settings.staffDetailsModal.error = "Discard error";
+  settings.staffDetailsModal.selectedRole = "grooming_receptionist";
+  settings.changeStaffRole();
+  assert.equal(settings.staffRoleChangePending, false);
+  assert.equal(settings.staffDetailsModal.password, "");
+  assert.equal(settings.staffDetailsModal.error, "");
+  assert.equal(settings.staffDetailsModal.showPassword, false);
+
+  settings.staffDetailsModal.selectedRole = "veterinarian";
+  settings.changeStaffRole();
+  settings.staffDetailsModal.password = "CurrentAdmin!234";
+  let finishRole;
+  roleRequest = new Promise((resolve) => { finishRole = resolve; });
+  const savingRole = settings.saveStaffRoleChange();
+  const roleCalls = calls.filter((call) => call[0] === "staff-role").length;
+  await settings.saveStaffRoleChange();
+  settings.closeStaffDetails();
+  settings.cancelStaffRoleChange();
+  assert.equal(settings.staffDetailsModal.open, true);
+  assert.equal(settings.staffDetailsModal.selectedRole, "veterinarian");
+  assert.equal(settings.staffDetailsModal.busy, true);
+  assert.equal(calls.filter((call) => call[0] === "staff-role").length, roleCalls);
+  finishRole({ staff: { staff_type: "clinic", staff_subrole: "veterinarian" } });
+  await savingRole;
+  roleRequest = null;
+  assert.equal(settings.staffDetailsModal.open, true);
+  assert.equal(settings.savedStaffRole, "veterinarian");
+  assert.equal(settings.staffDetailsModal.selectedRole, "veterinarian");
+  assert.equal(settings.staffDetailsModal.password, "");
+  assert.equal(settings.staffRoleChangePending, false);
+  assert.equal(settings.staffDetailsModal.busy, false);
+  assert.equal(settings.staffAccounts[0].staffType, "clinic");
+  assert.equal(settings.staffAccounts[0].subroleLabel, "Veterinarian");
+  assert.equal(toasts.at(-1), "Role updated successfully");
+  assert.equal(settings.staffAccounts[0].active, true);
+  settings.staffDetailsModal.selectedRole = "grooming_receptionist";
+  settings.changeStaffRole();
+  settings.staffDetailsModal.password = "CurrentAdmin!234";
+  await settings.saveStaffRoleChange();
+  assert.equal(settings.savedStaffRole, "grooming_receptionist");
+  assert.equal(settings.staffAccounts[0].staffSubrole, "");
+  assert.equal(settings.staffAccounts[0].subroleLabel, "");
+  assert.equal(settings.staffAccounts[0].roleLabel, "Grooming Receptionist");
+
+  settings.staffDetailsModal.selectedRole = "veterinarian";
+  settings.changeStaffRole();
+  settings.staffDetailsModal.password = "discard";
+  settings.closeStaffDetails();
+  assert.equal(settings.staffDetailsModal.password, "");
+  settings.openStaffDetails(settings.staffAccounts[2]);
+  assert.equal(settings.staffDetailsModal.selectedRole, "clinic_receptionist");
+  assert.equal(settings.staffDetailsModal.error, "");
+  settings.openStaffDetails({ staffType: "clinic", staffSubrole: "" });
+  assert.equal(settings.staffDetailsModal.selectedRole, "");
+  assert.equal(settings.staffRoleChangePending, false);
+  settings.staffDetailsModal.selectedRole = "veterinarian";
+  settings.changeStaffRole();
+  assert.equal(settings.staffRoleChangePending, true);
 
   console.log("Admin security settings regression tests passed.");
 })().catch((error) => {

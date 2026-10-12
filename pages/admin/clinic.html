@@ -761,88 +761,96 @@
 
         <form id="medical-record-form" x-show="activeSection === 'medical'" @submit.prevent="saveRecord()" novalidate class="flex min-h-0 flex-1 flex-col">
           <div class="min-h-0 space-y-7 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-            <p x-show="!canEditClinical" class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Patient record is available for viewing.</p>
-            <section class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="medical-attribution">
-              <h3 id="medical-attribution" class="text-sm font-semibold text-[#2f4b66]">Veterinarian attribution</h3>
-              <p x-show="optionsLoading" role="status" class="text-xs text-slate-500">Loading clinical options…</p>
-              <p x-show="optionsError" role="alert" class="text-sm text-red-600" x-text="optionsError"></p>
-              <button x-show="optionsError" type="button" @click="loadClinicalOptions()" class="text-sm font-semibold text-[#315b7e] hover:underline">
-                Retry
-              </button>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label for="medical-primary-vet" class="mb-1 block text-xs font-medium text-slate-600">Primary Attending Veterinarian</label>
-                  <select x-show="canEditClinical" id="medical-primary-vet" x-model="form.primary_veterinarian_id" @change="form.additional_veterinarian_ids = form.additional_veterinarian_ids.filter(id => id !== form.primary_veterinarian_id)" :disabled="isVeterinarian || optionsLoading || saving" :aria-invalid="Boolean(fieldError('primary_veterinarian_id'))" aria-describedby="medical-primary-vetError" :class="fieldError('primary_veterinarian_id') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
-                    <option value="">
-                      Select veterinarian
-                    </option>
-                    <template x-for="vet in veterinarians" :key="vet.user_id">
-                      <option :value="String(vet.user_id)" x-text="vet.name">
-                      </option>
-                    </template>
-                  </select>
-                  <p x-show="!canEditClinical" class="text-sm text-slate-700" x-text="currentAppt?.record?.primary_veterinarian_name || '—'"></p>
-                  <p x-show="canEditClinical" class="mt-1 text-xs text-slate-500" x-text="isVeterinarian ? 'You are automatically assigned as the attending veterinarian.' : 'Required before finishing the case.'"></p>
-                  <p id="medical-primary-vetError" role="alert" x-show="fieldError('primary_veterinarian_id')" x-text="fieldError('primary_veterinarian_id')" class="mt-1 text-xs text-red-600"></p>
-                </div>
-                <div>
-                  <label for="medical-additional-vets" class="mb-1 block text-xs font-medium text-slate-600">Additional Veterinarians (optional)</label>
-                  <select x-show="canEditClinical" id="medical-additional-vets" multiple size="3" x-model="form.additional_veterinarian_ids" :disabled="optionsLoading || saving" :aria-invalid="Boolean(fieldError('additional_veterinarian_ids'))" aria-describedby="medical-additional-vetsError" :class="fieldError('additional_veterinarian_ids') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
-                    <template x-for="vet in veterinarians.filter(vet => String(vet.user_id) !== String(form.primary_veterinarian_id))" :key="vet.user_id">
-                      <option :value="String(vet.user_id)" x-text="vet.name">
-                      </option>
-                    </template>
-                  </select>
-                  <p x-show="canEditClinical" class="mt-1 text-xs text-slate-500">Use Ctrl/Cmd or Shift to select multiple veterinarians.</p>
-                  <p x-show="!canEditClinical" class="text-sm text-slate-700" x-text="(currentAppt?.record?.additional_veterinarians || []).map(vet =>vet.name).join(', ') || '—'"></p>
-                  <p id="medical-additional-vetsError" role="alert" x-show="fieldError('additional_veterinarian_ids')" x-text="fieldError('additional_veterinarian_ids')" class="mt-1 text-xs text-red-600"></p>
-                  <template x-for="(id, index) in form.additional_veterinarian_ids" :key="id">
-                    <p role="alert" class="text-xs text-red-600" x-show="fieldError('additional_veterinarian_ids.' + index)" x-text="fieldError('additional_veterinarian_ids.' + index)"></p>
+            <p :hidden="canEditClinical" class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Patient record is available for viewing.</p>
+            <p id="medical-required-legend" :hidden="!canEditClinical" class="text-xs text-slate-500"><span class="text-red-600" aria-hidden="true">*</span> Required to finish case</p>
+            <section class="space-y-3" aria-labelledby="medical-veterinarian-heading">
+              <h3 id="medical-veterinarian-heading" class="text-sm font-semibold uppercase tracking-wide text-slate-500">Veterinarian</h3>
+              <div class="flex flex-col gap-2">
+                <template x-if="isVeterinarian && canEditClinical">
+                <div class="flex flex-wrap gap-2">
+                  <template x-for="vet in selectedVeterinarians" :key="vet.user_id">
+                    <span class="inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                      <span class="min-w-0 break-words" x-text="vet.name + (vet.user_id === lockedVeterinarianId ? ' · You' : '')"></span>
+                      <button x-show="canEditClinical && vet.user_id !== lockedVeterinarianId" type="button" @click="removeVeterinarian(vet.user_id)" :disabled="saving" :aria-label="'Remove ' + vet.name" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm text-slate-500 hover:bg-slate-200 hover:text-slate-700"><span aria-hidden="true">×</span></button>
+                    </span>
                   </template>
+                  <span x-show="!canEditClinical && !selectedVeterinarians.length" class="text-sm text-slate-500">—</span>
                 </div>
+                </template>
+                <div x-show="canEditClinical">
+                  <label id="medical-veterinarians-label" for="medical-veterinarians" class="mb-1 block text-xs font-medium text-slate-600">
+                    <span x-text="isVeterinarian ? 'Add another veterinarian (optional)' : 'Attending Veterinarian(s)'"></span>
+                    <span x-show="!isVeterinarian" class="text-red-600" aria-hidden="true">*</span>
+                  </label>
+                  <div class="relative" @click.outside="closeVetDropdown()" @focusout="if (!$el.contains($event.relatedTarget)) closeVetDropdown()" @keydown.escape="if (vetDropdownOpen) { $event.stopPropagation(); $event.preventDefault(); closeVetDropdown(true) }">
+                    <button id="medical-veterinarians" x-ref="vetTrigger" type="button" role="combobox" aria-haspopup="dialog" aria-controls="medical-vet-dropdown" aria-labelledby="medical-veterinarians-label" :aria-expanded="vetDropdownOpen" :aria-required="!isVeterinarian" :aria-invalid="hasFieldError('primary_veterinarian_id') || hasFieldError('additional_veterinarian_ids')" aria-errormessage="medical-validation-summary" aria-describedby="medical-required-legend medical-veterinariansError" @click="toggleVetDropdown()" @keydown.arrow-down.prevent="if (!vetDropdownOpen) toggleVetDropdown()" :disabled="optionsLoading || saving" :class="hasFieldError('primary_veterinarian_id') || hasFieldError('additional_veterinarian_ids') ? 'border-red-400' : 'border-slate-300'" class="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-left text-sm text-slate-600 outline-none focus:border-[#315b7e] disabled:bg-slate-50">
+                      <span x-text="optionsLoading ? 'Loading veterinarians…' : isVeterinarian ? 'Select veterinarian' : 'Select veterinarian(s)'"></span>
+                      <span aria-hidden="true">▾</span>
+                    </button>
+                    <div id="medical-vet-dropdown" x-ref="vetDropdown" x-cloak x-show="vetDropdownOpen" role="dialog" aria-label="Select veterinarians" @keydown="vetDropdownKeydown($event)" class="absolute left-0 top-full z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                      <div x-show="veterinarians.length > 8" class="mb-2">
+                        <label for="medical-vet-search" class="mb-1 block text-xs font-medium text-slate-600">Search veterinarian</label>
+                        <input id="medical-vet-search" x-model="vetSearch" type="search" autocomplete="off" placeholder="Search veterinarian..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                      </div>
+                      <div class="max-h-56 overflow-y-auto" role="group" aria-label="Veterinarians">
+                        <template x-for="vet in filteredVeterinarians" :key="vet.user_id">
+                          <label class="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                            <input type="checkbox" :checked="selectedVeterinarianIds.includes(String(vet.user_id))" @change="toggleVeterinarian(vet.user_id)" :disabled="saving" class="h-4 w-4 shrink-0 accent-[#315b7e]" />
+                            <span class="min-w-0 break-words" x-text="vet.name"></span>
+                          </label>
+                        </template>
+                        <p x-show="!filteredVeterinarians.length" role="status" class="px-3 py-2 text-sm text-slate-500" x-text="vetSearch ? 'No veterinarians found.' : 'No veterinarians available.'"></p>
+                      </div>
+                    </div>
+                  </div>
+                  <p id="medical-veterinariansError" x-show="fieldError('primary_veterinarian_id') || fieldError('additional_veterinarian_ids')" x-text="fieldError('primary_veterinarian_id') || fieldError('additional_veterinarian_ids')" class="mt-1 text-xs text-red-600"></p>
+                  <p x-show="optionsError" role="alert" class="mt-1 text-xs text-red-600">Unable to load veterinarians. <button type="button" @click="loadClinicalOptions()" class="font-semibold underline">Retry</button></p>
+                </div>
+                <template x-if="!isVeterinarian || !canEditClinical">
+                <div class="flex flex-wrap gap-2">
+                  <template x-for="vet in selectedVeterinarians" :key="vet.user_id">
+                    <span class="inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                      <span class="min-w-0 break-words" x-text="vet.name + (vet.user_id === lockedVeterinarianId ? ' · You' : '')"></span>
+                      <button x-show="canEditClinical && vet.user_id !== lockedVeterinarianId" type="button" @click="removeVeterinarian(vet.user_id)" :disabled="saving" :aria-label="'Remove ' + vet.name" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm text-slate-500 hover:bg-slate-200 hover:text-slate-700"><span aria-hidden="true">×</span></button>
+                    </span>
+                  </template>
+                  <span x-show="!canEditClinical && !selectedVeterinarians.length" class="text-sm text-slate-500">—</span>
+                </div>
+                </template>
               </div>
-              <p class="text-xs text-slate-600">
-                <span class="font-semibold">
-                  Recorded By:
-                </span>
-                <span x-text="recordedByName">
-                </span>
-                <span x-show="canEditClinical">
-                  · Updated automatically to your account when saved.
-                </span>
-              </p>
+              <p x-show="!canEditClinical" class="text-xs text-slate-600"><span class="font-medium">Recorded By:</span> <span x-text="recordedByName"></span></p>
             </section>
             <section class="space-y-3">
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Vitals</h3>
               <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
-                  <label for="clinicWeight" class="mb-1 block text-xs font-medium text-slate-600">Weight</label>
+                  <label for="clinicWeight" class="mb-1 block text-xs font-medium text-slate-600">Weight<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
                   <div class="relative">
-                    <input id="clinicWeight" :disabled="!canEditClinical || saving" type="text" inputmode="decimal" x-model="form.weight_kg" @input="weightServerError = ''" placeholder="e.g. 24.0" aria-describedby="clinicWeightError" :aria-invalid="Boolean(weightValidationMessage || fieldError('weight_kg'))" :class="weightValidationMessage || fieldError('weight_kg') ? 'border-red-400' : 'border-slate-300'" class="w-full rounded-xl border px-3 py-2 pr-10 text-sm outline-none focus:border-[#315b7e]" />
+                    <input id="clinicWeight" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" type="text" inputmode="decimal" x-model="form.weight_kg" placeholder="e.g. 24.0" aria-describedby="clinicWeightError" :aria-invalid="hasFieldError('weight_kg')" aria-errormessage="medical-validation-summary" :class="hasFieldError('weight_kg') ? 'border-red-400' : 'border-slate-300'" class="w-full rounded-xl border px-3 py-2 pr-10 text-sm outline-none focus:border-[#315b7e]" />
                     <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">
                       kg
                     </span>
                   </div>
-                  <p id="clinicWeightError" role="alert" x-show="weightValidationMessage || fieldError('weight_kg')" x-text="weightValidationMessage || fieldError('weight_kg')" class="mt-1 text-xs text-red-600"></p>
+                  <p id="clinicWeightError" role="alert" x-show="fieldError('weight_kg')" x-text="fieldError('weight_kg')" class="mt-1 text-xs text-red-600"></p>
                 </div>
                 <div>
-                  <label for="medical-temperature_c" class="mb-1 block text-xs font-medium text-slate-600">Temperature (°C)</label>
-                  <input id="medical-temperature_c" :disabled="!canEditClinical || saving" type="number" min="0" max="999.9" step="0.1" x-model="form.temperature_c" placeholder="e.g. 38.5" :aria-invalid="Boolean(fieldError('temperature_c'))" aria-describedby="medical-temperature_cError" :class="fieldError('temperature_c') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
+                  <label for="medical-temperature_c" class="mb-1 block text-xs font-medium text-slate-600">Temperature (°C)<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                  <input id="medical-temperature_c" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" type="number" min="0" max="999.9" step="0.1" x-model="form.temperature_c" placeholder="e.g. 38.5" :aria-invalid="hasFieldError('temperature_c')" aria-errormessage="medical-validation-summary" aria-describedby="medical-temperature_cError" :class="hasFieldError('temperature_c') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
                   <p id="medical-temperature_cError" role="alert" x-show="fieldError('temperature_c')" x-text="fieldError('temperature_c')" class="mt-1 text-xs text-red-600"></p>
                 </div>
                 <div>
-                  <label for="medical-heart_rate_bpm" class="mb-1 block text-xs font-medium text-slate-600">Heart Rate (bpm)</label>
-                  <input id="medical-heart_rate_bpm" :disabled="!canEditClinical || saving" type="number" min="0" max="65535" step="1" x-model="form.heart_rate_bpm" placeholder="e.g. 80" :aria-invalid="Boolean(fieldError('heart_rate_bpm'))" aria-describedby="medical-heart_rate_bpmError" :class="fieldError('heart_rate_bpm') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
+                  <label for="medical-heart_rate_bpm" class="mb-1 block text-xs font-medium text-slate-600">Heart Rate (bpm)<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                  <input id="medical-heart_rate_bpm" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" type="number" min="0" max="65535" step="1" x-model="form.heart_rate_bpm" placeholder="e.g. 80" :aria-invalid="hasFieldError('heart_rate_bpm')" aria-errormessage="medical-validation-summary" aria-describedby="medical-heart_rate_bpmError" :class="hasFieldError('heart_rate_bpm') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
                   <p id="medical-heart_rate_bpmError" role="alert" x-show="fieldError('heart_rate_bpm')" x-text="fieldError('heart_rate_bpm')" class="mt-1 text-xs text-red-600"></p>
                 </div>
                 <div>
-                  <label for="medical-respiratory_rate_bpm" class="mb-1 block text-xs font-medium text-slate-600">Respiratory Rate (bpm)</label>
-                  <input id="medical-respiratory_rate_bpm" :disabled="!canEditClinical || saving" type="number" min="0" max="65535" step="1" x-model="form.respiratory_rate_bpm" placeholder="e.g. 20" :aria-invalid="Boolean(fieldError('respiratory_rate_bpm'))" aria-describedby="medical-respiratory_rate_bpmError" :class="fieldError('respiratory_rate_bpm') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
+                  <label for="medical-respiratory_rate_bpm" class="mb-1 block text-xs font-medium text-slate-600">Respiratory Rate (bpm)<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                  <input id="medical-respiratory_rate_bpm" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" type="number" min="0" max="65535" step="1" x-model="form.respiratory_rate_bpm" placeholder="e.g. 20" :aria-invalid="hasFieldError('respiratory_rate_bpm')" aria-errormessage="medical-validation-summary" aria-describedby="medical-respiratory_rate_bpmError" :class="hasFieldError('respiratory_rate_bpm') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
                   <p id="medical-respiratory_rate_bpmError" role="alert" x-show="fieldError('respiratory_rate_bpm')" x-text="fieldError('respiratory_rate_bpm')" class="mt-1 text-xs text-red-600"></p>
                 </div>
                 <div>
                   <label for="medical-bcs" class="mb-1 block text-xs font-medium text-slate-600">Body Condition Score (1–9)</label>
-                  <select id="medical-bcs" :disabled="!canEditClinical || saving" x-model="form.body_condition_score" :aria-invalid="Boolean(fieldError('body_condition_score'))" aria-describedby="medical-bcsError" :class="fieldError('body_condition_score') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
+                  <select id="medical-bcs" :disabled="!canEditClinical || saving" x-model="form.body_condition_score" :aria-invalid="hasFieldError('body_condition_score')" aria-errormessage="medical-validation-summary" aria-describedby="medical-bcsError" :class="hasFieldError('body_condition_score') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
                     <option value="">
                       Select score
                     </option>
@@ -859,17 +867,17 @@
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">History</h3>
               <div x-show="canEditClinical || form.chief_complaint">
                 <label for="medical-chief_complaint" class="mb-1 block text-xs font-medium text-slate-600">Chief Complaint</label>
-                <textarea id="medical-chief_complaint" :disabled="!canEditClinical || saving" rows="2" maxlength="1200" x-model="form.chief_complaint" placeholder="e.g. Vomiting since last night" :aria-invalid="Boolean(fieldError('chief_complaint'))" aria-describedby="medical-chief_complaintError" :class="fieldError('chief_complaint') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-chief_complaint" :disabled="!canEditClinical || saving" rows="2" maxlength="1200" x-model="form.chief_complaint" placeholder="e.g. Vomiting since last night" :aria-invalid="hasFieldError('chief_complaint')" aria-errormessage="medical-validation-summary" aria-describedby="medical-chief_complaintError" :class="hasFieldError('chief_complaint') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-chief_complaintError" role="alert" x-show="fieldError('chief_complaint')" x-text="fieldError('chief_complaint')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <div x-show="canEditClinical || form.relevant_history">
                 <label for="medical-relevant_history" class="mb-1 block text-xs font-medium text-slate-600">Relevant Patient History</label>
-                <textarea id="medical-relevant_history" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.relevant_history" placeholder="e.g. Similar episode 2 months ago" :aria-invalid="Boolean(fieldError('relevant_history'))" aria-describedby="medical-relevant_historyError" :class="fieldError('relevant_history') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-relevant_history" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.relevant_history" placeholder="e.g. Similar episode 2 months ago" :aria-invalid="hasFieldError('relevant_history')" aria-errormessage="medical-validation-summary" aria-describedby="medical-relevant_historyError" :class="hasFieldError('relevant_history') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-relevant_historyError" role="alert" x-show="fieldError('relevant_history')" x-text="fieldError('relevant_history')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <div x-show="canEditClinical || form.reported_signs">
                 <label for="medical-reported_signs" class="mb-1 block text-xs font-medium text-slate-600">Reported Signs</label>
-                <textarea id="medical-reported_signs" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.reported_signs" placeholder="e.g. Vomiting, diarrhea, reduced appetite" :aria-invalid="Boolean(fieldError('reported_signs'))" aria-describedby="medical-reported_signsError" :class="fieldError('reported_signs') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-reported_signs" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.reported_signs" placeholder="e.g. Vomiting, diarrhea, reduced appetite" :aria-invalid="hasFieldError('reported_signs')" aria-errormessage="medical-validation-summary" aria-describedby="medical-reported_signsError" :class="hasFieldError('reported_signs') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-reported_signsError" role="alert" x-show="fieldError('reported_signs')" x-text="fieldError('reported_signs')" class="mt-1 text-xs text-red-600"></p>
               </div>
             </section>
@@ -877,7 +885,7 @@
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Objective</h3>
               <div x-show="canEditClinical || form.physical_exam_findings">
                 <label for="medical-physical_exam_findings" class="mb-1 block text-xs font-medium text-slate-600">Physical Exam Findings</label>
-                <textarea id="medical-physical_exam_findings" :disabled="!canEditClinical || saving" rows="3" maxlength="2000" x-model="form.physical_exam_findings" placeholder="e.g. Abdomen mildly tense on palpation" :aria-invalid="Boolean(fieldError('physical_exam_findings'))" aria-describedby="medical-physical_exam_findingsError" :class="fieldError('physical_exam_findings') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-physical_exam_findings" :disabled="!canEditClinical || saving" rows="3" maxlength="2000" x-model="form.physical_exam_findings" placeholder="e.g. Abdomen mildly tense on palpation" :aria-invalid="hasFieldError('physical_exam_findings')" aria-errormessage="medical-validation-summary" aria-describedby="medical-physical_exam_findingsError" :class="hasFieldError('physical_exam_findings') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-physical_exam_findingsError" role="alert" x-show="fieldError('physical_exam_findings')" x-text="fieldError('physical_exam_findings')" class="mt-1 text-xs text-red-600"></p>
               </div>
             </section>
@@ -885,12 +893,12 @@
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Assessment</h3>
               <div x-show="canEditClinical || form.differential_diagnoses">
                 <label for="medical-differential_diagnoses" class="mb-1 block text-xs font-medium text-slate-600">Differential Diagnoses</label>
-                <textarea id="medical-differential_diagnoses" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.differential_diagnoses" placeholder="e.g. Gastroenteritis, pancreatitis" :aria-invalid="Boolean(fieldError('differential_diagnoses'))" aria-describedby="medical-differential_diagnosesError" :class="fieldError('differential_diagnoses') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-differential_diagnoses" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.differential_diagnoses" placeholder="e.g. Gastroenteritis, pancreatitis" :aria-invalid="hasFieldError('differential_diagnoses')" aria-errormessage="medical-validation-summary" aria-describedby="medical-differential_diagnosesError" :class="hasFieldError('differential_diagnoses') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-differential_diagnosesError" role="alert" x-show="fieldError('differential_diagnoses')" x-text="fieldError('differential_diagnoses')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <div x-show="canEditClinical || form.working_diagnosis">
                 <label for="medical-working_diagnosis" class="mb-1 block text-xs font-medium text-slate-600">Working Diagnosis</label>
-                <textarea id="medical-working_diagnosis" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.working_diagnosis" placeholder="e.g. Suspected acute gastroenteritis" :aria-invalid="Boolean(fieldError('working_diagnosis'))" aria-describedby="medical-working_diagnosisError" :class="fieldError('working_diagnosis') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-working_diagnosis" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.working_diagnosis" placeholder="e.g. Suspected acute gastroenteritis" :aria-invalid="hasFieldError('working_diagnosis')" aria-errormessage="medical-validation-summary" aria-describedby="medical-working_diagnosisError" :class="hasFieldError('working_diagnosis') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-working_diagnosisError" role="alert" x-show="fieldError('working_diagnosis')" x-text="fieldError('working_diagnosis')" class="mt-1 text-xs text-red-600"></p>
               </div>
             </section>
@@ -911,18 +919,19 @@
                 <p x-show="!form.diagnostics.length" class="text-sm text-slate-400">—</p>
                 <p x-show="fieldError('diagnostics')" role="alert" x-text="fieldError('diagnostics')" class="text-xs text-red-600"></p>
                 <template x-for="(row, index) in form.diagnostics" :key="row.key">
-                  <div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 p-4">
+                  <div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 p-3">
                     <div class="flex items-center justify-between gap-2">
                       <p class="text-xs font-semibold text-slate-500" x-text="'Diagnostic ' + (index + 1)"></p>
                       <button x-show="canEditClinical" type="button" @click="removeRow('diagnostics', index)" :disabled="saving" :aria-label="'Remove diagnostic ' + (index + 1)" class="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
                         Remove
                       </button>
                     </div>
+                    <p x-show="canEditClinical" class="text-xs text-slate-500"><span class="text-red-600" aria-hidden="true">*</span> Required</p>
                     <div class="grid gap-3 sm:grid-cols-2">
                       <div  >
-                        <label :for="'diagnostics-' + index + '-diagnostic'" class="mb-1 block text-xs font-medium text-slate-600">Diagnostic</label>
+                        <label :for="'diagnostics-' + index + '-diagnostic'" class="mb-1 block text-xs font-medium text-slate-600">Diagnostic<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
                         <p x-show="!canEditClinical" class="text-sm text-slate-700" x-text="diagnosticName(row)"></p>
-                        <select x-show="canEditClinical" :id="'diagnostics-' + index + '-diagnostic'" :disabled="!canEditClinical || saving" x-model="row.diagnostic" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.diagnostic'))" :aria-describedby="'diagnostics-' + index + '-diagnostic' + 'Error'" :class="fieldError('diagnostics.' + index + '.diagnostic') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
+                        <select x-show="canEditClinical" :id="'diagnostics-' + index + '-diagnostic'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.diagnostic" :aria-invalid="hasFieldError('diagnostics.' + index + '.diagnostic')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-diagnostic' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.diagnostic') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
                           <option value="">
                             Select diagnostic
                           </option>
@@ -935,7 +944,7 @@
                       </div>
                       <div  >
                         <label :for="'diagnostics-' + index + '-status'" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
-                        <select :id="'diagnostics-' + index + '-status'" :disabled="!canEditClinical || saving" x-model="row.status" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.status'))" :aria-describedby="'diagnostics-' + index + '-status' + 'Error'" :class="fieldError('diagnostics.' + index + '.status') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
+                        <select :id="'diagnostics-' + index + '-status'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.status" :aria-invalid="hasFieldError('diagnostics.' + index + '.status')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-status' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.status') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
                           <option value="Ordered">
                             Ordered
                           </option>
@@ -946,18 +955,18 @@
                         <p :id="'diagnostics-' + index + '-status' + 'Error'" role="alert" x-show="fieldError('diagnostics.' + index + '.status')" x-text="fieldError('diagnostics.' + index + '.status')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  x-show="row.diagnostic === 'Other'">
-                        <label :for="'diagnostics-' + index + '-custom_name'" class="mb-1 block text-xs font-medium text-slate-600">Diagnostic / test name</label>
-                        <input :id="'diagnostics-' + index + '-custom_name'" :disabled="!canEditClinical || saving" x-model="row.custom_name" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.custom_name'))" :aria-describedby="'diagnostics-' + index + '-custom_name' + 'Error'" :class="fieldError('diagnostics.' + index + '.custom_name') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="Enter diagnostic name" />
+                        <label :for="'diagnostics-' + index + '-custom_name'" class="mb-1 block text-xs font-medium text-slate-600">Diagnostic / test name<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'diagnostics-' + index + '-custom_name'" :required="canEditClinical && row.diagnostic === 'Other'" :aria-required="canEditClinical && row.diagnostic === 'Other'" :disabled="!canEditClinical || saving" x-model="row.custom_name" :aria-invalid="hasFieldError('diagnostics.' + index + '.custom_name')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-custom_name' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.custom_name') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="Enter diagnostic name" />
                         <p :id="'diagnostics-' + index + '-custom_name' + 'Error'" role="alert" x-show="fieldError('diagnostics.' + index + '.custom_name')" x-text="fieldError('diagnostics.' + index + '.custom_name')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div class="sm:col-span-2" >
                         <label :for="'diagnostics-' + index + '-notes'" class="mb-1 block text-xs font-medium text-slate-600">Notes</label>
-                        <textarea :id="'diagnostics-' + index + '-notes'" :disabled="!canEditClinical || saving" x-model="row.notes" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.notes'))" :aria-describedby="'diagnostics-' + index + '-notes' + 'Error'" :class="fieldError('diagnostics.' + index + '.notes') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" rows="2" maxlength="2000" placeholder="e.g. Result pending"></textarea>
+                        <textarea :id="'diagnostics-' + index + '-notes'" :disabled="!canEditClinical || saving" x-model="row.notes" :aria-invalid="hasFieldError('diagnostics.' + index + '.notes')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-notes' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.notes') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" rows="2" maxlength="2000" placeholder="e.g. Result pending"></textarea>
                         <p :id="'diagnostics-' + index + '-notes' + 'Error'" role="alert" x-show="fieldError('diagnostics.' + index + '.notes')" x-text="fieldError('diagnostics.' + index + '.notes')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
                         <label :for="'diagnostics-' + index + '-result_attachment_id'" class="mb-1 block text-xs font-medium text-slate-600">Result attachment (optional)</label>
-                        <select :id="'diagnostics-' + index + '-result_attachment_id'" :disabled="!canEditClinical || saving" x-model="row.result_attachment_id" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.result_attachment_id'))" :aria-describedby="'diagnostics-' + index + '-result_attachment_id' + 'Error'" :class="fieldError('diagnostics.' + index + '.result_attachment_id') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
+                        <select :id="'diagnostics-' + index + '-result_attachment_id'" :disabled="!canEditClinical || saving" x-model="row.result_attachment_id" :aria-invalid="hasFieldError('diagnostics.' + index + '.result_attachment_id')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-result_attachment_id' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.result_attachment_id') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
                           <option value="">
                             No result uploaded
                           </option>
@@ -970,11 +979,10 @@
                       </div>
                       <div class="sm:col-span-2" >
                         <label :for="'diagnostics-' + index + '-result_reference'" class="mb-1 block text-xs font-medium text-slate-600">Result reference (optional)</label>
-                        <input :id="'diagnostics-' + index + '-result_reference'" :disabled="!canEditClinical || saving" x-model="row.result_reference" :aria-invalid="Boolean(fieldError('diagnostics.' + index + '.result_reference'))" :aria-describedby="'diagnostics-' + index + '-result_reference' + 'Error'" :class="fieldError('diagnostics.' + index + '.result_reference') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="500" placeholder="e.g. Laboratory report LAB-123" />
+                        <input :id="'diagnostics-' + index + '-result_reference'" :disabled="!canEditClinical || saving" x-model="row.result_reference" :aria-invalid="hasFieldError('diagnostics.' + index + '.result_reference')" aria-errormessage="medical-validation-summary" :aria-describedby="'diagnostics-' + index + '-result_reference' + 'Error'" :class="hasFieldError('diagnostics.' + index + '.result_reference') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="500" placeholder="e.g. Laboratory report LAB-123" />
                         <p :id="'diagnostics-' + index + '-result_reference' + 'Error'" role="alert" x-show="fieldError('diagnostics.' + index + '.result_reference')" x-text="fieldError('diagnostics.' + index + '.result_reference')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                     </div>
-                    <p x-show="!row.result_attachment_id &amp;&amp; !row.result_reference" class="text-xs text-slate-500">Result pending. A diagnostic can be saved before a result is uploaded.</p>
                     <template x-if="attachments.find(file => Number(file.id) === Number(row.result_attachment_id))">
                       <div class="flex flex-wrap gap-2">
                         <button type="button" @click="viewAttachment(attachments.find(file => Number(file.id) === Number(row.result_attachment_id)))" class="rounded-xl bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e]">
@@ -990,7 +998,7 @@
               </section>
               <div x-show="canEditClinical || form.treatment_given">
                 <label for="medical-treatment_given" class="mb-1 block text-xs font-medium text-slate-600">Treatment Given</label>
-                <textarea id="medical-treatment_given" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.treatment_given" placeholder="e.g. Maropitant 1 mg/kg SC" :aria-invalid="Boolean(fieldError('treatment_given'))" aria-describedby="medical-treatment_givenError" :class="fieldError('treatment_given') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-treatment_given" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.treatment_given" placeholder="e.g. Maropitant 1 mg/kg SC" :aria-invalid="hasFieldError('treatment_given')" aria-errormessage="medical-validation-summary" aria-describedby="medical-treatment_givenError" :class="hasFieldError('treatment_given') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-treatment_givenError" role="alert" x-show="fieldError('treatment_given')" x-text="fieldError('treatment_given')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <section class="space-y-3" aria-labelledby="medical-prescriptions">
@@ -1001,38 +1009,38 @@
                     Add Prescription
                   </button>
                 </div>
-                <p x-show="canEditClinical" class="text-xs text-slate-500">Writing a prescription does not charge medicine or deduct stock. Record administered or dispensed medicines in Treatment.</p>
+                <p x-show="canEditClinical" class="text-xs text-slate-500">Prescriptions do not deduct stock. Record administered medicines in Treatment.</p>
                 <p x-show="!form.prescriptions.length" class="text-sm text-slate-400">—</p>
                 <p x-show="fieldError('prescriptions')" role="alert" x-text="fieldError('prescriptions')" class="text-xs text-red-600"></p>
                 <template x-for="(row, index) in form.prescriptions" :key="index">
-                  <div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 p-4">
+                  <div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 p-3">
                     <div class="flex items-center justify-between gap-2">
                       <p class="text-xs font-semibold text-slate-500" x-text="'Prescription ' + (index + 1)"></p>
                       <button x-show="canEditClinical" type="button" @click="removeRow('prescriptions', index)" :disabled="saving" :aria-label="'Remove prescription ' + (index + 1)" class="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">
                         Remove
                       </button>
                     </div>
-                    <p class="text-xs text-slate-500" x-show="canEditClinical">All fields except Instructions are required when a prescription is added.</p>
+                    <p x-show="canEditClinical" class="text-xs text-slate-500"><span class="text-red-600" aria-hidden="true">*</span> Required</p>
                     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       <div  >
-                        <label :for="'prescriptions-' + index + '-medicine'" class="mb-1 block text-xs font-medium text-slate-600">Medicine</label>
-                        <input :id="'prescriptions-' + index + '-medicine'" :disabled="!canEditClinical || saving" x-model="row.medicine" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.medicine'))" :aria-describedby="'prescriptions-' + index + '-medicine' + 'Error'" :class="fieldError('prescriptions.' + index + '.medicine') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. Amoxicillin-clavulanate" />
+                        <label :for="'prescriptions-' + index + '-medicine'" class="mb-1 block text-xs font-medium text-slate-600">Medicine<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-medicine'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.medicine" :aria-invalid="hasFieldError('prescriptions.' + index + '.medicine')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-medicine' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.medicine') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. Amoxicillin-clavulanate" />
                         <p :id="'prescriptions-' + index + '-medicine' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.medicine')" x-text="fieldError('prescriptions.' + index + '.medicine')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-strength_concentration'" class="mb-1 block text-xs font-medium text-slate-600">Strength / Concentration</label>
-                        <input :id="'prescriptions-' + index + '-strength_concentration'" :disabled="!canEditClinical || saving" x-model="row.strength_concentration" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.strength_concentration'))" :aria-describedby="'prescriptions-' + index + '-strength_concentration' + 'Error'" :class="fieldError('prescriptions.' + index + '.strength_concentration') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 250 mg/tablet" />
+                        <label :for="'prescriptions-' + index + '-strength_concentration'" class="mb-1 block text-xs font-medium text-slate-600">Strength / Concentration<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-strength_concentration'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.strength_concentration" :aria-invalid="hasFieldError('prescriptions.' + index + '.strength_concentration')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-strength_concentration' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.strength_concentration') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 250 mg/tablet" />
                         <p :id="'prescriptions-' + index + '-strength_concentration' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.strength_concentration')" x-text="fieldError('prescriptions.' + index + '.strength_concentration')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-dose'" class="mb-1 block text-xs font-medium text-slate-600">Dose</label>
-                        <input :id="'prescriptions-' + index + '-dose'" :disabled="!canEditClinical || saving" x-model="row.dose" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.dose'))" :aria-describedby="'prescriptions-' + index + '-dose' + 'Error'" :class="fieldError('prescriptions.' + index + '.dose') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 250 mg" />
+                        <label :for="'prescriptions-' + index + '-dose'" class="mb-1 block text-xs font-medium text-slate-600">Dose<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-dose'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.dose" :aria-invalid="hasFieldError('prescriptions.' + index + '.dose')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-dose' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.dose') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 250 mg" />
                         <p :id="'prescriptions-' + index + '-dose' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.dose')" x-text="fieldError('prescriptions.' + index + '.dose')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-route'" class="mb-1 block text-xs font-medium text-slate-600">Route</label>
+                        <label :for="'prescriptions-' + index + '-route'" class="mb-1 block text-xs font-medium text-slate-600">Route<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
                         <p x-show="!canEditClinical" class="text-sm text-slate-700" x-text="routeLabel(row.route)"></p>
-                        <select x-show="canEditClinical" :id="'prescriptions-' + index + '-route'" :disabled="!canEditClinical || saving" x-model="row.route" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.route'))" :aria-describedby="'prescriptions-' + index + '-route' + 'Error'" :class="fieldError('prescriptions.' + index + '.route') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
+                        <select x-show="canEditClinical" :id="'prescriptions-' + index + '-route'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.route" :aria-invalid="hasFieldError('prescriptions.' + index + '.route')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-route' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.route') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white">
                           <option value="">
                             Select route
                           </option>
@@ -1044,23 +1052,23 @@
                         <p :id="'prescriptions-' + index + '-route' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.route')" x-text="fieldError('prescriptions.' + index + '.route')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-frequency'" class="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
-                        <input :id="'prescriptions-' + index + '-frequency'" :disabled="!canEditClinical || saving" x-model="row.frequency" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.frequency'))" :aria-describedby="'prescriptions-' + index + '-frequency' + 'Error'" :class="fieldError('prescriptions.' + index + '.frequency') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. Every 12 hours" />
+                        <label :for="'prescriptions-' + index + '-frequency'" class="mb-1 block text-xs font-medium text-slate-600">Frequency<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-frequency'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.frequency" :aria-invalid="hasFieldError('prescriptions.' + index + '.frequency')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-frequency' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.frequency') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. Every 12 hours" />
                         <p :id="'prescriptions-' + index + '-frequency' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.frequency')" x-text="fieldError('prescriptions.' + index + '.frequency')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-duration'" class="mb-1 block text-xs font-medium text-slate-600">Duration</label>
-                        <input :id="'prescriptions-' + index + '-duration'" :disabled="!canEditClinical || saving" x-model="row.duration" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.duration'))" :aria-describedby="'prescriptions-' + index + '-duration' + 'Error'" :class="fieldError('prescriptions.' + index + '.duration') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 7 days" />
+                        <label :for="'prescriptions-' + index + '-duration'" class="mb-1 block text-xs font-medium text-slate-600">Duration<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-duration'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.duration" :aria-invalid="hasFieldError('prescriptions.' + index + '.duration')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-duration' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.duration') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 7 days" />
                         <p :id="'prescriptions-' + index + '-duration' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.duration')" x-text="fieldError('prescriptions.' + index + '.duration')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div  >
-                        <label :for="'prescriptions-' + index + '-quantity'" class="mb-1 block text-xs font-medium text-slate-600">Quantity</label>
-                        <input :id="'prescriptions-' + index + '-quantity'" :disabled="!canEditClinical || saving" x-model="row.quantity" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.quantity'))" :aria-describedby="'prescriptions-' + index + '-quantity' + 'Error'" :class="fieldError('prescriptions.' + index + '.quantity') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 14 tablets" />
+                        <label :for="'prescriptions-' + index + '-quantity'" class="mb-1 block text-xs font-medium text-slate-600">Quantity<span x-show="canEditClinical" class="text-red-600" aria-hidden="true"> *</span></label>
+                        <input :id="'prescriptions-' + index + '-quantity'" :required="canEditClinical" :aria-required="canEditClinical" :disabled="!canEditClinical || saving" x-model="row.quantity" :aria-invalid="hasFieldError('prescriptions.' + index + '.quantity')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-quantity' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.quantity') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" type="text" maxlength="200" placeholder="e.g. 14 tablets" />
                         <p :id="'prescriptions-' + index + '-quantity' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.quantity')" x-text="fieldError('prescriptions.' + index + '.quantity')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                       <div class="sm:col-span-2" >
-                        <label :for="'prescriptions-' + index + '-instructions'" class="mb-1 block text-xs font-medium text-slate-600">Instructions</label>
-                        <textarea :id="'prescriptions-' + index + '-instructions'" :disabled="!canEditClinical || saving" x-model="row.instructions" :aria-invalid="Boolean(fieldError('prescriptions.' + index + '.instructions'))" :aria-describedby="'prescriptions-' + index + '-instructions' + 'Error'" :class="fieldError('prescriptions.' + index + '.instructions') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" rows="2" maxlength="2000" placeholder="e.g. Give after food"></textarea>
+                        <label :for="'prescriptions-' + index + '-instructions'" class="mb-1 block text-xs font-medium text-slate-600">Instructions (optional)</label>
+                        <textarea :id="'prescriptions-' + index + '-instructions'" :disabled="!canEditClinical || saving" x-model="row.instructions" :aria-invalid="hasFieldError('prescriptions.' + index + '.instructions')" aria-errormessage="medical-validation-summary" :aria-describedby="'prescriptions-' + index + '-instructions' + 'Error'" :class="hasFieldError('prescriptions.' + index + '.instructions') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50 bg-white" rows="2" maxlength="2000" placeholder="e.g. Give after food"></textarea>
                         <p :id="'prescriptions-' + index + '-instructions' + 'Error'" role="alert" x-show="fieldError('prescriptions.' + index + '.instructions')" x-text="fieldError('prescriptions.' + index + '.instructions')" class="mt-1 text-xs text-red-600"></p>
                       </div>
                     </div>
@@ -1072,29 +1080,29 @@
                 <div class="grid gap-3 md:grid-cols-2">
                   <div>
                     <label for="medical-follow-up" class="mb-1 block text-xs font-medium text-slate-600">Follow-up Date</label>
-                    <input :disabled="!canEditClinical" type="date" id="medical-follow-up" x-model="form.follow_up_date" :aria-invalid="Boolean(fieldError('follow_up_date'))" aria-describedby="medical-follow-upError" :class="fieldError('follow_up_date') ? 'border-red-400' : 'border-slate-300'" :min="followUpMinDate" :max="followUpMaxDate" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                    <input :disabled="!canEditClinical" type="date" id="medical-follow-up" x-model="form.follow_up_date" :aria-invalid="hasFieldError('follow_up_date')" aria-errormessage="medical-validation-summary" aria-describedby="medical-follow-upError" :class="hasFieldError('follow_up_date') ? 'border-red-400' : 'border-slate-300'" :min="followUpMinDate" :max="followUpMaxDate" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
                     <p id="medical-follow-upError" role="alert" x-show="fieldError('follow_up_date')" x-text="fieldError('follow_up_date')" class="mt-1 text-xs text-red-600"></p>
                   </div>
                   <div>
                     <label for="medical-follow-up-notes" class="mb-1 block text-xs font-medium text-slate-600">Follow-up Notes</label>
-                    <input :disabled="!canEditClinical" type="text" id="medical-follow-up-notes" x-model="form.follow_up_notes" :aria-invalid="Boolean(fieldError('follow_up_notes'))" aria-describedby="medical-follow-up-notesError" :class="fieldError('follow_up_notes') ? 'border-red-400' : 'border-slate-300'" placeholder="e.g. Recheck in 1 week" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                    <input :disabled="!canEditClinical" type="text" id="medical-follow-up-notes" x-model="form.follow_up_notes" :aria-invalid="hasFieldError('follow_up_notes')" aria-errormessage="medical-validation-summary" aria-describedby="medical-follow-up-notesError" :class="hasFieldError('follow_up_notes') ? 'border-red-400' : 'border-slate-300'" placeholder="e.g. Recheck in 1 week" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
                     <p id="medical-follow-up-notesError" role="alert" x-show="fieldError('follow_up_notes')" x-text="fieldError('follow_up_notes')" class="mt-1 text-xs text-red-600"></p>
                   </div>
                 </div>
               </section>
               <div x-show="canEditClinical || form.vet_notes">
                 <label for="medical-vet_notes" class="mb-1 block text-xs font-medium text-slate-600">Additional Vet Notes</label>
-                <textarea id="medical-vet_notes" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.vet_notes" placeholder="" :aria-invalid="Boolean(fieldError('vet_notes'))" aria-describedby="medical-vet_notesError" :class="fieldError('vet_notes') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-vet_notes" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.vet_notes" placeholder="" :aria-invalid="hasFieldError('vet_notes')" aria-errormessage="medical-validation-summary" aria-describedby="medical-vet_notesError" :class="hasFieldError('vet_notes') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
                 <p id="medical-vet_notesError" role="alert" x-show="fieldError('vet_notes')" x-text="fieldError('vet_notes')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <section x-show="canEditClinical || generalAttachments.length">
                 <div class="mb-3">
                   <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Attachments</h3>
-                  <p class="mt-1 text-xs text-slate-400">Upload consultation files or associate a result with a diagnostic. Save Record to retain the association.</p>
+                  <p class="mt-1 text-xs text-slate-400">Upload files or diagnostic results.</p>
                 </div>
                 <div class="space-y-2">
                   <template x-if="generalAttachments.length === 0">
-                    <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No general attachments uploaded.</p>
+                    <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No attachments yet.</p>
                   </template>
                   <template x-for="attachment in generalAttachments" :key="attachment.id">
                     <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1158,7 +1166,7 @@
             </section>
           </div>
           <div class="shrink-0 space-y-3 border-t border-slate-200 bg-white px-4 py-4 sm:px-6">
-            <div x-show="modalError" role="alert" class="max-h-24 overflow-y-auto rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="modalError">
+            <div id="medical-validation-summary" x-show="modalError" role="alert" tabindex="-1" class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" x-text="modalError">
             </div>
             <div class="flex flex-wrap justify-end gap-2">
               <button type="button" @click="closeModal()" :disabled="saving || attachmentBusy" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
@@ -1592,7 +1600,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=sections-removed-20261010&clinic-products=20261010&medical-record=20261012"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=20261012"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
