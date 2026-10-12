@@ -104,6 +104,7 @@ class AdminPetProfileTest extends TestCase
             $table->text('instructions')->nullable();
         });
         Schema::create('vaccination_records', function (Blueprint $table) {
+            $table->string('treatment_type')->default('vaccine');
             $table->id();
             $table->unsignedInteger('pet_id');
             $table->unsignedBigInteger('clinic_appointment_id')->nullable();

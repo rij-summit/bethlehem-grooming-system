@@ -32,9 +32,9 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('Medical Record', $this->clinicPage);
         $this->assertStringContainsString("selectSection('vaccinations')", $this->clinicPage);
         $this->assertStringContainsString('x-data="adminClinicVaccinations()"', $this->clinicPage);
-        $this->assertStringContainsString('Add Vaccination Record', $this->clinicPage);
-        $this->assertStringContainsString('No vaccination records have been added for this pet.', $this->clinicPage);
-        $this->assertStringContainsString('Loading vaccination history…', $this->clinicPage);
+        $this->assertStringContainsString('Add Treatment', $this->clinicPage);
+        $this->assertStringContainsString('No treatments recorded for this pet.', $this->clinicPage);
+        $this->assertStringContainsString('Loading treatment history…', $this->clinicPage);
         $this->assertStringContainsString('@click="loadVaccinations()"', $this->clinicPage);
 
         $this->assertStringContainsString(
@@ -130,7 +130,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
-            'Voiding preserves this vaccination as historical information.',
+            'Voiding preserves this treatment as historical information.',
             $this->clinicPage,
         );
         $this->assertStringNotContainsString(
@@ -149,7 +149,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             'Dose unit is required.',
             'Next vaccination date cannot be before today.',
             'Choose a supported administration route.',
-            'Complete the vaccination details before publication.',
+            'Complete the treatment details before publication.',
         ] as $message) {
             $this->assertStringContainsString($message, $this->vaccinationComponent);
         }
@@ -193,7 +193,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('selectedVaccine?.next_batch?.expiry_date', $form);
         $this->assertStringContainsString('Next Vaccination Date', $form);
 
-        $inventoryForm = $this->sourceBetween($form, '<section x-show="recordKind === \'inventory\'">', '<section x-show="recordKind === \'historical\'"');
+        $inventoryForm = $this->sourceBetween($form, '<section x-show="recordKind === \'inventory\' && treatmentType === \'vaccine\'">', '<section x-show="recordKind === \'historical\'"');
         foreach ([
             'x-model="form.vaccine_name"',
             'x-model="form.product_name"',
@@ -256,7 +256,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $finish = $this->sourceBetween(
             $this->vaccinationComponent,
             'async saveAndFinishCase() {',
-            'confirmDeduction(vaccine, confirmLabel) {',
+            'confirmDeduction(vaccine, confirmLabel, medicine = false) {',
         );
 
         $this->assertStringContainsString('{ finishCase: true, consumeInventory: true }', $finish);

@@ -11,8 +11,11 @@ const sandbox = {
   clinicLocalDate: (date) => date.toISOString().slice(0, 10),
   setTimeout, clearTimeout, URLSearchParams,
   API: {},
+  document: { addEventListener() {} },
+  crypto: { randomUUID: require("node:crypto").randomUUID },
 };
 vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(path.join(root, "scripts/components/admin-clinic.js"), "utf8"), sandbox);
 vm.runInContext(source, sandbox);
 
 function component() {
@@ -94,6 +97,82 @@ const draft = {
   assert.equal(publications.length, 1);
   assert.equal(publications[0][2].consumeInventory, false);
 
+  const medicine = { item_id: 302, item_name: "Medicine", unit: "bottle", dose_unit: "mL",
+    strength_concentration: "10 mg/mL", pricing_method: "weight_based", weight_pricing_mode: "ranges",
+    weight_prices: [{ min_weight_kg: 1, max_weight_kg: 5, price: 250 }] };
+  const treatment = component();
+  treatment.pet = { id: 101 };
+  treatment.appointment = { id: 201, status: "in_consultation", weight_kg: 4 };
+  treatment.currentUserId = 2;
+  treatment.openCreateForm();
+  treatment.changeTreatmentType("medicine");
+  treatment.selectMedicine(medicine);
+  assert.equal(treatment.medicineQuote.price, 250);
+  assert.equal(treatment.form.dose_unit, "mL");
+  treatment.form.dose_amount = 0.5;
+  assert.equal(treatment.validateForm(), false, "Stock medicine must require physical quantity");
+  treatment.form.inventory_quantity = "0.25";
+  assert.equal(treatment.validateForm(), true);
+  const medicinePayload = treatment.buildPayload();
+  assert.equal(medicinePayload.treatment_type, "medicine");
+  assert.equal(medicinePayload.expected_price, 250);
+  assert.equal(medicinePayload.expected_weight_kg, 4);
+  assert.equal(medicinePayload.inventory_quantity, "0.25");
+  assert.equal(treatment.buildPayload().request_key, medicinePayload.request_key, "Retries keep the same request key");
+  assert.equal(Object.hasOwn(medicinePayload, "batch_number"), false);
+  treatment.loadVaccinations = async () => {};
+  treatment.loadOptions = async () => {};
+  let retries = [];
+  sandbox.API.createAdminPetVaccination = async (petId, payload) => {
+    retries.push(payload.request_key);
+    if (retries.length === 1) throw new Error("Lost response");
+    return { vaccination: { id: 12 } };
+  };
+  await treatment.saveDraft();
+  assert.equal(treatment.formModal.open, true);
+  await treatment.saveDraft();
+  assert.equal(retries[0], retries[1]);
+
+  sandbox.API.clinicMedicineOptions = async () => ({ data: [medicine] });
+  treatment.openEditForm({ ...draft, treatment_type: "medicine", inventory_item_id: 302,
+    inventory_quantity: 0.25, vaccine_name: "Medicine", request_key: medicinePayload.request_key });
+  await treatment.restoreMedicineSelection();
+  assert.equal(treatment.selectedMedicine.item_id, 302);
+  assert.equal(treatment.form.inventory_quantity, 0.25, "Restoring selection preserves stock used");
+  assert.equal(treatment.form.dose_amount, 1, "Restoring selection preserves clinical dosage");
+  assert.equal(treatment.form.request_key, medicinePayload.request_key);
+  assert.equal(treatment.validateForm(), true);
+  assert.equal(treatment.buildPayload().expected_price, 250);
+
+  // A vaccine confirmation must use vaccine stock policy even if the last form was medicine.
+  let confirmation;
+  treatment.$store.clinicFeedback.confirm = async details => { confirmation = details; return true; };
+  await treatment.confirmDeduction(vaccine, "Publish");
+  assert.match(confirmation.message, /^1 dose of Rabies/);
+  assert.equal(confirmation.message.includes("medicine charge"), false);
+
+  treatment.recordKind = "historical";
+  treatment.changeSource();
+  treatment.form.vaccine_name = "External medicine";
+  treatment.form.administered_date = "2020-01-01";
+  treatment.form.administered_by_name = "External provider";
+  assert.equal(treatment.validateForm(), true);
+  const externalPayload = treatment.buildPayload();
+  assert.equal(externalPayload.inventory_item_id, null);
+  assert.equal(Object.hasOwn(externalPayload, "expected_price"), false);
+  assert.equal(Object.hasOwn(externalPayload, "inventory_quantity"), false);
+  assert.equal(externalPayload.administered_date, "2020-01-01");
+  treatment.changeTreatmentType("vaccine");
+  assert.equal(treatment.selectedMedicine, null);
+  assert.equal(treatment.form.inventory_item_id, "");
+  assert.equal(treatment.form.inventory_quantity, "");
+
+  const page = fs.readFileSync(path.join(root, "pages/admin/clinic.html"), "utf8");
+  assert.ok(page.includes("No treatments recorded for this pet."));
+  assert.ok(!page.includes("Create a draft to begin this patient's"));
+  assert.ok(page.includes("Add Treatment"));
+  assert.ok(page.includes(':aria-pressed="treatmentType'));
+
   const css = fs.readFileSync(path.join(root, "css/output.css"), "utf8");
   for (const layer of [200, 210, 230, 240, 250, 270]) {
     const selector = `.z-\\[${layer}\\] {`;
@@ -101,5 +180,5 @@ const draft = {
     assert.ok(offset >= 0, `Compiled CSS must include ${selector}`);
     assert.ok(css.slice(offset, css.indexOf("}", offset)).includes(`z-index: ${layer}`));
   }
-  console.log("Clinic vaccination reconciliation regression checks passed");
+  console.log("Clinic treatment reconciliation regression checks passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

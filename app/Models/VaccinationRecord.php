@@ -27,6 +27,12 @@ class VaccinationRecord extends Model
     ];
 
     protected $fillable = [
+        'treatment_type',
+        'inventory_quantity',
+        'expected_price',
+        'expected_weight_kg',
+        'request_key',
+        'strength_concentration',
         'pet_id',
         'clinic_appointment_id',
         'inventory_item_id',
@@ -53,6 +59,9 @@ class VaccinationRecord extends Model
     ];
 
     protected $casts = [
+        'inventory_quantity' => 'decimal:2',
+        'expected_price' => 'decimal:2',
+        'expected_weight_kg' => 'decimal:2',
         'administered_date' => 'date',
         'next_due_date' => 'date',
         'product_expiry_date' => 'date',
@@ -108,7 +117,7 @@ class VaccinationRecord extends Model
 
     public function scopeVisibleToClients(Builder $query): Builder
     {
-        return $query->published()->notVoided();
+        return $query->where('treatment_type', 'vaccine')->published()->notVoided();
     }
 
     public function hasPublishingRequirements(): bool

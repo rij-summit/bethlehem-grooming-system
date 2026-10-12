@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\VaccinationRecord;
 use App\Services\InventoryBatchBalanceService;
 use App\Services\InventoryStockMovementService;
+use App\Services\ClinicMedicineChargeService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -110,31 +111,44 @@ class AdminVaccinationController extends Controller
 
     public function store(Request $request, int $petId)
     {
-        $pet = $this->findPet($petId);
-        $data = $this->validateClinicalData($request, $pet->pet_id);
-        $data = $this->addInventorySnapshot($data);
-        $data = $this->addProviderSnapshot($data);
-
-        if (! empty($data['clinic_appointment_id'])) {
-            $case = ClinicAppointment::query()->findOrFail($data['clinic_appointment_id']);
-            if (! $case->clinicalContentEditableFor($request->user())) {
-                throw ValidationException::withMessages([
-                    'clinic_appointment_id' => 'This case is no longer ongoing. Start a new case to add a vaccination.',
-                ]);
+        return DB::transaction(function () use ($request, $petId) {
+            $pet = $this->findPet($petId);
+            Pet::whereKey($petId)->lockForUpdate()->firstOrFail();
+            $data = $this->validateClinicalData($request, $pet->pet_id);
+            if (! empty($data['request_key'])) {
+                $existing = VaccinationRecord::where('request_key', $data['request_key'])->first();
+                if ($existing) {
+                    if ((int) $existing->pet_id !== $petId) {
+                        throw ValidationException::withMessages(['request_key' => 'This treatment request has already been used.']);
+                    }
+                    return response()->json(['success' => true, 'message' => 'Treatment already saved.',
+                        'vaccination' => $this->formatRecord($this->loadResponseRelations($existing))]);
+                }
             }
-        }
+            $data = $this->addInventorySnapshot($data);
+            $data = $this->addProviderSnapshot($data);
 
-        $record = VaccinationRecord::create([
-            ...$data,
-            'pet_id' => $pet->pet_id,
-            'recorded_by_user_id' => $request->user()->user_id,
-        ]);
+            if (! empty($data['clinic_appointment_id'])) {
+                $case = ClinicAppointment::query()->findOrFail($data['clinic_appointment_id']);
+                if (! $case->clinicalContentEditableFor($request->user())) {
+                    throw ValidationException::withMessages([
+                        'clinic_appointment_id' => 'This case is no longer ongoing. Start a new case to add a vaccination.',
+                    ]);
+                }
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Vaccination draft created.',
-            'vaccination' => $this->formatRecord($this->loadResponseRelations($record)),
-        ], 201);
+            $record = VaccinationRecord::create([
+                ...$data,
+                'pet_id' => $pet->pet_id,
+                'recorded_by_user_id' => $request->user()->user_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $record->treatment_type === 'medicine' ? 'Medicine treatment draft created.' : 'Vaccination draft created.',
+                'vaccination' => $this->formatRecord($this->loadResponseRelations($record)),
+            ], 201);
+        });
     }
 
     public function show(int $petId, int $vaccinationId)
@@ -162,6 +176,9 @@ class AdminVaccinationController extends Controller
             }
 
             $data = $this->validateClinicalData($request, $petId, $record);
+            if (array_key_exists('request_key', $data) && $record->request_key !== null && $data['request_key'] !== $record->request_key) {
+                throw ValidationException::withMessages(['request_key' => 'The treatment request cannot be changed. Reload the draft.']);
+            }
             if (! empty($data['clinic_appointment_id'])) {
                 $case = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->lockForUpdate()->firstOrFail();
                 if (! $case->clinicalContentEditableFor($request->user())) {
@@ -176,7 +193,7 @@ class AdminVaccinationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Vaccination draft updated.',
+                'message' => $record->treatment_type === 'medicine' ? 'Medicine treatment draft updated.' : 'Vaccination draft updated.',
                 'vaccination' => $this->formatRecord($this->loadResponseRelations($record)),
             ]);
         });
@@ -257,7 +274,22 @@ class AdminVaccinationController extends Controller
                 ], 422);
             }
 
-            if ($usesInventory) {
+            if ($usesInventory && $record->treatment_type === 'medicine') {
+                if (! $case || ! $record->inventory_quantity || ! $record->request_key) {
+                    throw ValidationException::withMessages(['inventory_quantity' => 'An ongoing Clinic case and inventory quantity used are required for medicine treatments.']);
+                }
+                if (! $this->eligibleProviders($request->user())->whereKey($record->administered_by_user_id)->exists()) {
+                    throw ValidationException::withMessages(['administered_by_user_id' => 'Choose yourself or an active veterinarian account.']);
+                }
+                app(ClinicMedicineChargeService::class)->save($case, [[
+                    'inventory_item_id' => $record->inventory_item_id,
+                    'inventory_quantity' => $record->inventory_quantity,
+                    'expected_price' => $record->expected_price,
+                    'expected_weight_kg' => $record->expected_weight_kg,
+                    'request_key' => $record->request_key,
+                    'vaccination_record_id' => $record->id,
+                ]], $request->user());
+            } elseif ($usesInventory) {
                 $item = InventoryItem::query()
                     ->whereKey($record->inventory_item_id)
                     ->lockForUpdate()
@@ -319,7 +351,7 @@ class AdminVaccinationController extends Controller
                 'published_by_user_id' => $request->user()->user_id,
             ])->save();
 
-            if ($case && $usesInventory) {
+            if ($case && $usesInventory && $record->treatment_type !== 'medicine') {
                 $case->charges()->create([
                     'kind' => 'vaccine', 'description' => $record->vaccine_name,
                     'inventory_item_id' => $item->item_id, 'vaccination_record_id' => $record->id,
@@ -333,7 +365,7 @@ class AdminVaccinationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Vaccination record published.',
+                'message' => $record->treatment_type === 'medicine' ? 'Medicine treatment published.' : 'Vaccination record published.',
                 'vaccination' => $this->formatRecord($this->loadResponseRelations($record)),
             ]);
         });
@@ -387,8 +419,16 @@ class AdminVaccinationController extends Controller
         $optional = $updating ? ['sometimes', 'nullable'] : ['nullable'];
         $required = $updating ? ['sometimes', 'required'] : ['required'];
         $usesInventory = filled($request->input('inventory_item_id', $record?->inventory_item_id));
+        $type = $request->input('treatment_type', $record?->treatment_type ?? 'vaccine');
+        $medicine = $type === 'medicine';
 
         $validator = Validator::make($request->all(), [
+            'treatment_type' => ['sometimes', 'required', Rule::in(['vaccine', 'medicine'])],
+            'request_key' => [...($medicine ? $required : $optional), 'uuid'],
+            'inventory_quantity' => [...($medicine && $usesInventory ? $required : $optional), 'numeric', 'decimal:0,2', 'min:0.01', 'max:99999999.99'],
+            'expected_price' => [...($medicine && $usesInventory ? $required : $optional), 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'expected_weight_kg' => [...$optional, 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'strength_concentration' => ['prohibited'],
             'next_due_date' => [...$optional, 'date', ...($usesInventory ? ['after_or_equal:today'] : [])],
             'dose_amount' => [...($usesInventory ? $required : $optional), 'numeric', 'gt:0', 'max:99999.999'],
             'dose_unit' => [...($usesInventory ? $required : $optional), 'string', 'max:30'],
@@ -404,7 +444,7 @@ class AdminVaccinationController extends Controller
                 },
             ],
             'clinic_appointment_id' => [
-                ...$optional,
+                ...($medicine && $usesInventory ? $required : $optional),
                 'integer',
                 Rule::exists('clinic_appointments', 'id')
                     ->where(fn ($query) => $query->where('pet_id', $petId)),
@@ -413,7 +453,7 @@ class AdminVaccinationController extends Controller
                 ...($usesInventory ? $required : $optional),
                 'integer',
                 Rule::exists('inventory_items', 'item_id')
-                    ->where(fn ($query) => $query->where('category', 'vaccine')->where('is_active', 1)),
+                    ->where(fn ($query) => $query->where('category', $type)->where('is_active', 1)),
             ],
             'notes' => [...$optional, 'string'],
             ...$this->serverManagedRules(),
@@ -435,6 +475,14 @@ class AdminVaccinationController extends Controller
         ]);
 
         $data = $validator->validate();
+        if (! $record) $data['treatment_type'] = $type;
+        if ($medicine) {
+            $data = [...$data, 'next_due_date' => null, 'product_name' => null,
+                'manufacturer' => null, 'batch_number' => null, 'product_expiry_date' => null];
+        }
+        if (! $medicine || ! $usesInventory) {
+            $data = [...$data, 'inventory_quantity' => null, 'expected_price' => null, 'expected_weight_kg' => null, 'strength_concentration' => null];
+        }
         if (! $usesInventory) {
             $administered = $data['administered_date'] ?? $record?->administered_date?->toDateString();
             foreach (['next_due_date', 'product_expiry_date'] as $field) {
@@ -505,6 +553,11 @@ class AdminVaccinationController extends Controller
         }
 
         $item = InventoryItem::query()->findOrFail($data['inventory_item_id']);
+        if ($item->category === 'medicine') {
+            return [...$data, 'vaccine_name' => $item->item_name,
+                'strength_concentration' => $item->strength_concentration,
+                'batch_number' => null, 'product_expiry_date' => null];
+        }
         $batch = $this->batchBalances->nextAvailableBatch(
             $this->batchBalances->forItem((int) $item->item_id),
         );
@@ -586,6 +639,14 @@ class AdminVaccinationController extends Controller
     {
         return [
             'id' => $record->id,
+            'treatment_type' => $record->treatment_type ?? 'vaccine',
+            'treatment_name' => $record->vaccine_name,
+            'record_source' => $record->inventory_item_id ? 'inventory' : 'historical',
+            'inventory_quantity' => $record->inventory_quantity,
+            'expected_price' => $record->expected_price,
+            'expected_weight_kg' => $record->expected_weight_kg,
+            'request_key' => $record->request_key,
+            'strength_concentration' => $record->strength_concentration,
             'pet_id' => $record->pet_id,
             'clinic_appointment_id' => $record->clinic_appointment_id,
             'clinic_appointment_reference' => $record->clinicAppointment?->appointment_reference,

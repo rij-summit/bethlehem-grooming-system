@@ -747,7 +747,7 @@ function adminClinicPage() {
           caseItem = (await API.createClinicCase({ pet_id: this.profile.pet.id, case_type: caseType })).case;
         } catch (error) {
           if (error.code !== "active_case_exists" || !error.data?.case) throw error;
-          const tabName = section === "vaccinations" ? "Vaccinations" : "Medical Record";
+          const tabName = section === "vaccinations" ? "Treatment" : "Medical Record";
           const confirmed = await this.$store.clinicFeedback.confirm({
             title: "Ongoing case found",
             message: this.permissions.clinical
