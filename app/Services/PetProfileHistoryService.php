@@ -75,7 +75,7 @@ class PetProfileHistoryService
             ->whereHas('record')
             ->with([
                 'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',
-                'record:id,clinic_appointment_id,chief_complaint,diagnosis,findings,treatment_given,vet_notes,follow_up_date,follow_up_notes',
+                'record',
                 'record.attachments:id,clinic_record_id,file_name,file_type,file_size_bytes,label,created_at',
             ])
             ->orderByDesc('appointment_date')
@@ -128,6 +128,7 @@ class PetProfileHistoryService
             'diagnosis' => $record->diagnosis,
             'treatment_given' => $record->treatment_given,
             'vet_notes' => $record->vet_notes,
+            ...$record->clinicalDetails(),
             'follow_up_date' => $record->follow_up_date?->toDateString(),
             'follow_up_notes' => $record->follow_up_notes,
             'vitals' => $vitals ? [

@@ -125,6 +125,9 @@ class ClinicAppointment extends Model
 
         $vitals = $this->vitals()->first();
         $errors = [];
+        if (! $this->record?->primary_veterinarian_id) {
+            $errors['primary_veterinarian_id'] = 'Select a Primary Attending Veterinarian in the Medical Record before finishing this case.';
+        }
         foreach (self::COMPLETION_VITAL_FIELDS as $field) {
             if ($vitals?->{$field} === null) {
                 $errors[$field] = 'Save the required consultation vitals in the Medical Record before finishing this case.';

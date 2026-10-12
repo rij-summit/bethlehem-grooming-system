@@ -1998,8 +1998,8 @@ var API = (() => {
     );
   }
 
-  async function getAdminVaccinationOptions() {
-    return request("GET", "/admin/vaccination-options", null, getAdminToken());
+  async function getAdminVaccinationOptions(clinicalOnly = false) {
+    return request("GET", "/admin/vaccination-options" + (clinicalOnly ? "?clinical_only=1" : ""), null, getAdminToken());
   }
 
   async function getCustomerActivityReport({ period = "day", date = "", week = "", month = "", year = "" } = {}) {

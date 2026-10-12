@@ -6,6 +6,9 @@ use App\Models\ClinicAppointment;
 use App\Models\ClinicAttachment;
 use App\Models\ClinicRecord;
 use App\Models\ClinicVital;
+use App\Models\User;
+use App\Models\VaccinationRecord;
+use Illuminate\Validation\Rule;
 use App\Models\Notification;
 use App\Models\InventoryItem;
 use Illuminate\Validation\ValidationException;
@@ -462,7 +465,43 @@ class AdminClinicController extends Controller
 
     public function saveRecord(Request $request, int $id)
     {
+        $existing = ClinicRecord::where('clinic_appointment_id', $id)->first();
+        $actor = $request->user();
+        $veterinarians = User::activeVeterinarian()->get(['user_id', 'first_name', 'last_name'])->keyBy('user_id');
+        $attachmentIds = $request->has('diagnostics') && $existing ? $existing->attachments()->pluck('id')->all() : [];
+        $request->merge(['primary_veterinarian_id' => $actor->isVeterinarian()
+            ? $actor->user_id : $request->input('primary_veterinarian_id', $existing?->primary_veterinarian_id)]);
         $data = $request->validate([
+            'primary_veterinarian_id' => ['nullable', 'required_if_accepted:finish_case', 'integer', Rule::in($veterinarians->keys()->all())],
+            'additional_veterinarian_ids' => ['sometimes', 'array', 'list', 'max:20'],
+            'additional_veterinarian_ids.*' => ['required', 'integer', 'distinct', Rule::in($veterinarians->keys()->all()), 'different:primary_veterinarian_id'],
+            'relevant_history' => ['nullable', 'string', 'max:2000'],
+            'reported_signs' => ['nullable', 'string', 'max:2000'],
+            'physical_exam_findings' => ['nullable', 'string', 'max:2000'],
+            'differential_diagnoses' => ['nullable', 'string', 'max:2000'],
+            'working_diagnosis' => ['nullable', 'string', 'max:2000'],
+            'diagnostics' => ['sometimes', 'array', 'list', 'max:100'],
+            'diagnostics.*' => ['required', 'array:key,diagnostic,custom_name,status,notes,result_attachment_id,result_reference'],
+            'diagnostics.*.key' => ['required', 'uuid', 'distinct'],
+            'diagnostics.*.diagnostic' => ['required', Rule::in(ClinicRecord::DIAGNOSTIC_OPTIONS)],
+            'diagnostics.*.custom_name' => ['nullable', 'required_if:diagnostics.*.diagnostic,Other', 'string', 'max:200'],
+            'diagnostics.*.status' => ['required', 'in:Ordered,Completed'],
+            'diagnostics.*.notes' => ['nullable', 'string', 'max:2000'],
+            'diagnostics.*.result_reference' => ['nullable', 'string', 'max:500'],
+            'diagnostics.*.result_attachment_id' => ['nullable', 'integer', 'distinct', Rule::in($attachmentIds)],
+            'prescriptions' => ['sometimes', 'array', 'list', 'max:100'],
+            'prescriptions.*' => ['required', 'array:medicine,strength_concentration,dose,route,frequency,duration,quantity,instructions'],
+            'prescriptions.*.medicine' => ['required', 'string', 'max:200'],
+            'prescriptions.*.strength_concentration' => ['required', 'string', 'max:200'],
+            'prescriptions.*.dose' => ['required', 'string', 'max:200'],
+            'prescriptions.*.route' => ['required', Rule::in(VaccinationRecord::ADMINISTRATION_ROUTES)],
+            'prescriptions.*.frequency' => ['required', 'string', 'max:200'],
+            'prescriptions.*.duration' => ['required', 'string', 'max:200'],
+            'prescriptions.*.quantity' => ['required', 'string', 'max:200', 'regex:/^[0-9]+(?:\.[0-9]{1,2})?(?:\s+\S.*)?$/',
+                function ($attribute, $value, $fail) {
+                    if ((float) $value <= 0 || (float) $value > 99999999.99) $fail('Quantity must be a positive amount, optionally followed by a unit (e.g. 14 tablets).');
+                }],
+            'prescriptions.*.instructions' => ['nullable', 'string', 'max:2000'],
             'chief_complaint' => ['nullable', 'string', 'max:1200'],
             'diagnosis' => ['nullable', 'string', 'max:2000'],
             'findings' => ['nullable', 'string', 'max:2000'],
@@ -480,9 +519,9 @@ class AdminClinicController extends Controller
             'medicines.*.request_key' => ['required', 'uuid', 'distinct'],
             // Vitals
             'weight_kg' => ['nullable', 'required_if_accepted:finish_case', new \App\Rules\ValidPetWeight(requireSpecies: false)],
-            'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'min:0'],
-            'heart_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
-            'respiratory_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0'],
+            'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'decimal:0,1', 'min:0', 'max:999.9'],
+            'heart_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0', 'max:65535'],
+            'respiratory_rate_bpm' => ['nullable', 'required_if_accepted:finish_case', 'integer', 'min:0', 'max:65535'],
             'body_condition_score' => ['nullable', 'integer', 'min:1', 'max:9'],
 
         ], [
@@ -490,20 +529,44 @@ class AdminClinicController extends Controller
             'follow_up_date.before_or_equal' => 'The follow-up date must be within 3 months from today.',
         ]);
 
-        return DB::transaction(function () use ($data, $id) {
+        return DB::transaction(function () use ($data, $id, $actor, $veterinarians) {
             $appt = ClinicAppointment::query()
                 ->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
             $this->assertClinicalContentEditable($appt);
 
-            // Upsert medical record
+            $existing = $appt->record;
+            $name = fn (User $user) => trim($user->first_name.' '.$user->last_name) ?: "User #{$user->user_id}";
+            $primary = $veterinarians->get($data['primary_veterinarian_id'] ?? null);
+            $clinical = [];
+            foreach (['relevant_history', 'reported_signs', 'physical_exam_findings', 'differential_diagnoses', 'working_diagnosis', 'diagnostics', 'prescriptions'] as $field) {
+                if (array_key_exists($field, $data)) $clinical[$field] = $data[$field];
+            }
+            if (array_key_exists('additional_veterinarian_ids', $data)) {
+                $clinical['additional_veterinarians'] = array_map(fn ($userId) => [
+                    'user_id' => (int) $userId, 'name' => $name($veterinarians->get($userId)),
+                ], $data['additional_veterinarian_ids']);
+            } else {
+                $clinical['additional_veterinarians'] = array_values(array_filter($existing?->additional_veterinarians ?? [],
+                    fn ($vet) => (int) $vet['user_id'] !== (int) $primary?->user_id));
+            }
+            // Preserve legacy API consumers while keeping the assessment and exam fields canonical.
+            $clinical['working_diagnosis'] = array_key_exists('working_diagnosis', $data)
+                ? $data['working_diagnosis'] : (array_key_exists('diagnosis', $data) ? $data['diagnosis'] : ($existing?->working_diagnosis ?? $existing?->diagnosis));
+            $clinical['physical_exam_findings'] = array_key_exists('physical_exam_findings', $data)
+                ? $data['physical_exam_findings'] : (array_key_exists('findings', $data) ? $data['findings'] : ($existing?->physical_exam_findings ?? $existing?->findings));
             $record = ClinicRecord::updateOrCreate(
                 ['clinic_appointment_id' => $appt->id],
                 [
                     'chief_complaint' => $data['chief_complaint'] ?? $appt->chief_complaint,
-                    'diagnosis' => $data['diagnosis'] ?? null,
-                    'findings' => $data['findings'] ?? null,
+                    ...$clinical,
+                    'primary_veterinarian_id' => $primary?->user_id,
+                    'primary_veterinarian_name' => $primary ? $name($primary) : null,
+                    'recorded_by_user_id' => $actor->user_id,
+                    'recorded_by_name' => $name($actor),
+                    'diagnosis' => $clinical['working_diagnosis'],
+                    'findings' => $clinical['physical_exam_findings'],
                     'treatment_given' => $data['treatment_given'] ?? null,
                     'follow_up_date' => $data['follow_up_date'] ?? null,
                     'follow_up_notes' => $data['follow_up_notes'] ?? null,
@@ -533,6 +596,7 @@ class AdminClinicController extends Controller
 
             app(\App\Services\ClinicMedicineChargeService::class)->save($appt, $data['medicines'] ?? [], request()->user());
             if (! empty($data['finish_case'])) {
+                $appt->setRelation('record', $record);
                 $appt->prepareForPayment();
             }
 
@@ -561,9 +625,14 @@ class AdminClinicController extends Controller
                 ->firstOrFail();
             $this->assertClinicalContentEditable($appt);
 
+            $actor = request()->user();
+            $actorName = trim($actor->first_name.' '.$actor->last_name) ?: "User #{$actor->user_id}";
             $record = ClinicRecord::firstOrCreate(
                 ['clinic_appointment_id' => $appt->id],
-                ['chief_complaint' => $appt->chief_complaint]
+                ['chief_complaint' => $appt->chief_complaint,
+                    'primary_veterinarian_id' => $actor->isVeterinarian() ? $actor->user_id : null,
+                    'primary_veterinarian_name' => $actor->isVeterinarian() ? $actorName : null,
+                    'recorded_by_user_id' => $actor->user_id, 'recorded_by_name' => $actorName]
             );
 
             $file = $data['file'];
@@ -649,6 +718,12 @@ class AdminClinicController extends Controller
             }
 
             $attachment->delete();
+            $record = $attachment->record;
+            $record->diagnostics = array_map(function ($diagnostic) use ($attachmentId) {
+                if ((int) ($diagnostic['result_attachment_id'] ?? 0) === $attachmentId) $diagnostic['result_attachment_id'] = null;
+                return $diagnostic;
+            }, $record->diagnostics ?? []);
+            $record->save();
 
             return response()->json(['success' => true]);
         });
@@ -839,6 +914,7 @@ class AdminClinicController extends Controller
             'follow_up_date' => $record->follow_up_date?->toDateString(),
             'follow_up_notes' => $record->follow_up_notes,
             'vet_notes' => $record->vet_notes,
+            ...$record->clinicalDetails(),
             'created_at' => $record->created_at?->toIso8601String(),
             'updated_at' => $record->updated_at?->toIso8601String(),
             'attachments' => $record->attachments

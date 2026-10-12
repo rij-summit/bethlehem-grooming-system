@@ -100,6 +100,16 @@ class User extends Authenticatable
         ];
     }
 
+    public function isVeterinarian(): bool
+    {
+        return $this->role === 'staff' && $this->staff_subrole === 'veterinarian';
+    }
+
+    public function scopeActiveVeterinarian(Builder $query): Builder
+    {
+        return $query->where('role', 'staff')->where('staff_subrole', 'veterinarian')->where('is_active', true);
+    }
+
     public function passwordResetRequest()
     {
         return $this->hasOne(PasswordResetRequest::class, 'user_id', 'user_id');

@@ -1300,6 +1300,10 @@ video {
   height: 100vh;
 }
 
+.max-h-24 {
+  max-height: 6rem;
+}
+
 .max-h-56 {
   max-height: 14rem;
 }
@@ -1330,6 +1334,10 @@ video {
 
 .max-h-\[92vh\] {
   max-height: 92vh;
+}
+
+.max-h-\[calc\(100dvh-4rem\)\] {
+  max-height: calc(100dvh - 4rem);
 }
 
 .min-h-0 {
@@ -1894,6 +1902,12 @@ video {
   --tw-space-y-reverse: 0;
   margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));
+}
+
+.space-y-7 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1.75rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1.75rem * var(--tw-space-y-reverse));
 }
 
 .space-y-8 > :not([hidden]) ~ :not([hidden]) {

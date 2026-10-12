@@ -21,6 +21,7 @@ class ClinicInventoryPricingTest extends TestCase
         Schema::create('users', function (Blueprint $table) {
             $table->increments('user_id'); $table->string('role');
             $table->string('first_name')->nullable(); $table->string('last_name')->nullable();
+            $table->string('staff_subrole')->nullable(); $table->boolean('is_active')->default(true);
         });
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id'); $table->string('pet_name'); $table->decimal('weight', 8, 2)->nullable();
@@ -29,7 +30,8 @@ class ClinicInventoryPricingTest extends TestCase
         foreach (['2026_07_05_100000_create_inventory_items_table', '2026_07_04_211409_create_clinic_appointments_table',
             '2026_07_04_211409_create_clinic_records_table', '2026_07_04_211409_create_clinic_vitals_table',
             '2026_07_04_211410_create_clinic_attachments_table', '2026_10_10_000001_create_clinic_charges_table',
-            '2026_10_10_000002_add_clinic_inventory_pricing', '2026_10_11_000001_add_inventory_weight_pricing_mode'] as $file) {
+            '2026_10_10_000002_add_clinic_inventory_pricing', '2026_10_11_000001_add_inventory_weight_pricing_mode',
+            '2026_10_12_000002_extend_clinic_consultation_records'] as $file) {
             (require database_path("migrations/{$file}.php"))->up();
         }
         Schema::create('inventory_transactions', function (Blueprint $table) {

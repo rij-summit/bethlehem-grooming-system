@@ -39,6 +39,19 @@ class AdminVaccinationController extends Controller
     public function options(Request $request)
     {
         $actor = $request->user();
+        if ($request->boolean('clinical_only')) {
+            return response()->json([
+                'success' => true,
+                'veterinarians' => User::activeVeterinarian()->orderBy('first_name')->orderBy('last_name')
+                    ->get(['user_id', 'first_name', 'last_name'])
+                    ->map(fn (User $user) => ['user_id' => $user->user_id, 'name' => $this->formatUserName($user) ?? "User #{$user->user_id}"]),
+                'current_user_id' => $actor->user_id,
+                'current_user_name' => $this->formatUserName($actor),
+                'current_user_is_veterinarian' => $actor->isVeterinarian(),
+                'administration_routes' => VaccinationRecord::ADMINISTRATION_ROUTES,
+                'diagnostic_options' => \App\Models\ClinicRecord::DIAGNOSTIC_OPTIONS,
+            ]);
+        }
         $items = InventoryItem::query()
             ->where('category', 'vaccine')
             ->where('is_active', 1)
@@ -533,10 +546,7 @@ class AdminVaccinationController extends Controller
     {
         return User::query()->where(function (Builder $query) use ($actor): void {
             $query->whereKey($actor->user_id)
-                ->orWhere(fn (Builder $vet) => $vet
-                    ->where('role', 'staff')
-                    ->where('staff_subrole', 'veterinarian')
-                    ->where('is_active', 1));
+                ->orWhere(fn (Builder $vet) => $vet->activeVeterinarian());
         });
     }
 

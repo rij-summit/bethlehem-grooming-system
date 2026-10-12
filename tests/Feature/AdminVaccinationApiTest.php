@@ -65,6 +65,11 @@ class AdminVaccinationApiTest extends TestCase
             $table->unsignedSmallInteger('heart_rate_bpm')->nullable();
             $table->unsignedSmallInteger('respiratory_rate_bpm')->nullable();
         });
+        Schema::create('clinic_records', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_appointment_id');
+            $table->unsignedInteger('primary_veterinarian_id')->nullable();
+        });
 
         Schema::create('inventory_items', function (Blueprint $table) {
             $table->unsignedInteger('item_id')->autoIncrement();
@@ -107,6 +112,7 @@ class AdminVaccinationApiTest extends TestCase
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('clinic_records');
         Carbon::setTestNow();
 
         if (Schema::hasTable('vaccination_records')) {
@@ -231,6 +237,21 @@ class AdminVaccinationApiTest extends TestCase
         $this->getJson('/api/admin/vaccination-options')
             ->assertOk()
             ->assertJsonPath('can_manage_staff', true);
+    }
+
+    public function test_medical_record_options_reuse_active_veterinarians_without_loading_inventory(): void
+    {
+        $this->authenticateAs('admin', 1);
+        $this->insertUser(2, 'Active', 'Vet', 'staff', 'veterinarian');
+        $this->insertUser(3, 'Inactive', 'Vet', 'staff', 'veterinarian', false);
+        $this->insertUser(4, 'Reception', 'Staff', 'staff', 'clinic_receptionist');
+        $queries = [];
+        DB::listen(function ($event) use (&$queries) { $queries[] = $event->sql; });
+        $this->getJson('/api/admin/vaccination-options?clinical_only=1')->assertOk()
+            ->assertJsonCount(1, 'veterinarians')->assertJsonPath('veterinarians.0.user_id', 2)
+            ->assertJsonPath('current_user_is_veterinarian', false)->assertJsonMissingPath('vaccines')
+            ->assertJsonPath('administration_routes', \App\Models\VaccinationRecord::ADMINISTRATION_ROUTES);
+        $this->assertFalse(collect($queries)->contains(fn ($query) => str_contains($query, 'inventory')));
     }
 
     public function test_listing_is_pet_scoped_sorted_and_includes_each_state_and_due_status(): void
@@ -961,6 +982,7 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertDatabaseHas('vaccination_records', ['id' => $id, 'published_at' => null]);
         DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 201, 'weight_kg' => 4.5,
             'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20]);
+        DB::table('clinic_records')->insert(['clinic_appointment_id' => 201, 'primary_veterinarian_id' => 2]);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish", ['finish_case' => true])->assertOk();
         $this->assertStockOnHand(301, '5');
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'for_payment']);
@@ -1200,6 +1222,7 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'in_consultation']);
         DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 201, 'weight_kg' => 4,
             'temperature_c' => 38.5, 'heart_rate_bpm' => 100, 'respiratory_rate_bpm' => 24]);
+        DB::table('clinic_records')->insert(['clinic_appointment_id' => 201, 'primary_veterinarian_id' => 2]);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish", ['finish_case' => true])->assertOk();
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'for_payment', 'total_amount' => 250]);
         $this->assertDatabaseCount('clinic_charges', 1);

@@ -37,6 +37,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('role');
             $table->string('staff_type')->nullable();
             $table->string('staff_subrole')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->string('password_hash')->nullable();
             $table->timestamp('account_deleted_at')->nullable();
         });
@@ -141,6 +142,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->unsignedTinyInteger('body_condition_score')->nullable();
             $table->timestamps();
         });
+        (require database_path('migrations/2026_10_12_000002_extend_clinic_consultation_records.php'))->up();
 
         Schema::create('clinic_medications', function (Blueprint $table) {
             $table->id();
@@ -2399,6 +2401,143 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         }
     }
 
+    public function test_medical_record_admin_drafts_and_finish_require_an_active_attending_vet(): void
+    {
+        $this->authenticateAs('admin');
+        $this->insertClinicAppointment('in_consultation');
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['recorded_by_user_id' => 99, 'recorded_by_name' => 'Spoofed'])
+            ->assertOk()->assertJsonPath('record.primary_veterinarian_id', null)
+            ->assertJsonPath('record.recorded_by_user_id', 1)->assertJsonPath('record.recorded_by_name', 'Admin User');
+        $vitals = ['weight_kg' => 24, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20];
+        $this->postJson('/api/admin/clinic-appointments/1/record', [...$vitals, 'finish_case' => true])
+            ->assertUnprocessable()->assertJsonValidationErrors('primary_veterinarian_id');
+        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_subrole' => 'veterinarian', 'is_active' => false]);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['primary_veterinarian_id' => 2])
+            ->assertUnprocessable()->assertJsonValidationErrors('primary_veterinarian_id');
+        DB::table('users')->where('user_id', 2)->update(['is_active' => true, 'first_name' => 'Attending', 'last_name' => 'Vet']);
+        $this->postJson('/api/admin/clinic-appointments/1/record', [...$vitals, 'primary_veterinarian_id' => 2, 'finish_case' => true])
+            ->assertOk()->assertJsonPath('record.primary_veterinarian_name', 'Attending Vet');
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'for_payment']);
+    }
+
+    public function test_medical_record_vet_is_automatically_primary_and_recorder_tracks_the_saving_account(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        DB::table('users')->insert(['user_id' => 2, 'role' => 'staff', 'staff_subrole' => 'veterinarian', 'first_name' => 'Additional', 'last_name' => 'Vet']);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['primary_veterinarian_id' => 2, 'additional_veterinarian_ids' => [2]])
+            ->assertOk()->assertJsonPath('record.primary_veterinarian_id', 1)
+            ->assertJsonPath('record.additional_veterinarians.0.name', 'Additional Vet')
+            ->assertJsonPath('record.recorded_by_user_id', 1);
+        $this->authenticateAs('admin', 3);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['working_diagnosis' => 'Updated assessment'])
+            ->assertOk()->assertJsonPath('record.primary_veterinarian_id', 1)
+            ->assertJsonPath('record.additional_veterinarians.0.user_id', 2)->assertJsonPath('record.recorded_by_user_id', 3);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['additional_veterinarian_ids' => [1]])
+            ->assertUnprocessable()->assertJsonValidationErrors('additional_veterinarian_ids.0');
+    }
+
+    public function test_medical_record_diagnostics_can_be_ordered_then_linked_to_authenticated_results_and_history(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        DB::table('pets')->insert(['pet_id' => 1, 'pet_name' => 'Consultation Patient']);
+        DB::table('clinic_appointments')->where('id', 1)->update(['pet_id' => 1]);
+        $diagnostic = ['key' => (string) \Illuminate\Support\Str::uuid(), 'diagnostic' => 'CBC', 'status' => 'Ordered', 'notes' => 'Result pending'];
+        $clinical = ['relevant_history' => 'Similar episode 2 months ago', 'reported_signs' => 'Vomiting',
+            'physical_exam_findings' => 'Abdomen mildly tense', 'differential_diagnoses' => 'Pancreatitis',
+            'working_diagnosis' => 'Suspected gastroenteritis', 'diagnostics' => [$diagnostic]];
+        $this->postJson('/api/admin/clinic-appointments/1/record', $clinical)
+            ->assertOk()->assertJsonPath('record.diagnostics.0.status', 'Ordered');
+        Storage::fake('local');
+        $attachmentId = $this->postJson('/api/admin/clinic-appointments/1/attachments', ['file' => UploadedFile::fake()->create('CBC.pdf', 20, 'application/pdf')])
+            ->assertOk()->json('attachment.id');
+        $diagnostic['status'] = 'Completed';
+        $diagnostic['result_attachment_id'] = $attachmentId;
+        $this->postJson('/api/admin/clinic-appointments/1/record', [...$clinical, 'diagnostics' => [$diagnostic]])->assertOk();
+        $this->getJson('/api/admin/clinic-appointments')->assertOk()
+            ->assertJsonPath('in_consultation.0.record.diagnostics.0.result_attachment_id', $attachmentId)
+            ->assertJsonPath('in_consultation.0.record.working_diagnosis', 'Suspected gastroenteritis');
+        $this->getJson("/api/admin/clinic-appointments/1/attachments/{$attachmentId}/download")->assertOk();
+        DB::table('clinic_appointments')->where('id', 1)->update(['status' => 'completed']);
+        $history = app(\App\Services\PetProfileHistoryService::class)->medicalRecords(\App\Models\Pet::findOrFail(1))->first();
+        $this->assertSame('Staff User', $history['primary_veterinarian_name']);
+        $this->assertSame('Completed', $history['diagnostics'][0]['status']);
+        $this->assertSame('Abdomen mildly tense', $history['physical_exam_findings']);
+        DB::table('clinic_appointments')->where('id', 1)->update(['status' => 'in_consultation']);
+        $this->deleteJson("/api/admin/clinic-appointments/1/attachments/{$attachmentId}")->assertOk();
+        $this->assertNull(\App\Models\ClinicRecord::first()->diagnostics[0]['result_attachment_id']);
+    }
+
+    public function test_medical_record_prescriptions_persist_without_stock_queries_or_charges(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        $prescription = ['medicine' => 'Amoxicillin-clavulanate', 'strength_concentration' => '250 mg/tablet',
+            'dose' => '250 mg', 'route' => 'oral', 'frequency' => 'Every 12 hours', 'duration' => '7 days',
+            'quantity' => '14 tablets', 'instructions' => 'Give after food'];
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['prescriptions' => [$prescription]])->assertOk();
+        $this->getJson('/api/admin/clinic-appointments')->assertOk()
+            ->assertJsonPath('in_consultation.0.record.prescriptions.0.medicine', 'Amoxicillin-clavulanate')
+            ->assertJsonPath('in_consultation.0.record.prescriptions.0.quantity', '14 tablets');
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->assertFalse(Schema::hasTable('inventory_transactions'));
+    }
+
+    public function test_medical_record_rejects_partial_rows_invalid_values_and_other_without_a_name(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        $this->postJson('/api/admin/clinic-appointments/1/record', [
+            'temperature_c' => -1, 'heart_rate_bpm' => 1.5, 'respiratory_rate_bpm' => 65536, 'body_condition_score' => 10,
+            'diagnostics' => [['key' => (string) \Illuminate\Support\Str::uuid(), 'diagnostic' => 'Other', 'status' => 'Unknown']],
+            'prescriptions' => [['medicine' => 'Drug', 'quantity' => '-14 tablets', 'route' => 'invalid']],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm',
+            'body_condition_score', 'diagnostics.0.custom_name', 'diagnostics.0.status', 'prescriptions.0.dose',
+            'prescriptions.0.strength_concentration', 'prescriptions.0.frequency', 'prescriptions.0.duration',
+            'prescriptions.0.route', 'prescriptions.0.quantity']);
+        $this->assertDatabaseCount('clinic_records', 0);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnostics' => [null], 'prescriptions' => [null]])
+            ->assertUnprocessable()->assertJsonValidationErrors(['diagnostics.0', 'prescriptions.0']);
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['prescriptions' => ['malformed' => []], 'diagnostics' => ['malformed' => []]])
+            ->assertUnprocessable()->assertJsonValidationErrors(['diagnostics', 'prescriptions']);
+    }
+
+    public function test_medical_record_results_are_scoped_and_cannot_be_assigned_to_two_tests(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        $this->insertClinicAppointment('in_consultation', 2);
+        Storage::fake('local');
+        $foreignId = $this->postJson('/api/admin/clinic-appointments/2/attachments', ['file' => UploadedFile::fake()->create('result.pdf', 20, 'application/pdf')])->assertOk()->json('attachment.id');
+        $diagnostic = ['key' => (string) \Illuminate\Support\Str::uuid(), 'diagnostic' => 'CBC', 'status' => 'Ordered', 'result_attachment_id' => $foreignId];
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnostics' => [$diagnostic]])
+            ->assertUnprocessable()->assertJsonValidationErrors('diagnostics.0.result_attachment_id');
+        $ownId = $this->postJson('/api/admin/clinic-appointments/1/attachments', ['file' => UploadedFile::fake()->create('own.pdf', 20, 'application/pdf')])->assertOk()->json('attachment.id');
+        $diagnostic['result_attachment_id'] = $ownId;
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnostics' => [$diagnostic, [...$diagnostic, 'key' => (string) \Illuminate\Support\Str::uuid()]]])
+            ->assertUnprocessable()->assertJsonValidationErrors('diagnostics.0.result_attachment_id');
+    }
+
+    public function test_medical_record_finish_endpoint_cannot_bypass_attending_attribution(): void
+    {
+        $this->authenticateAs('admin');
+        $this->insertClinicAppointment('in_consultation');
+        $this->postJson('/api/admin/clinic-appointments/1/record', ['weight_kg' => 24, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20])->assertOk();
+        $this->postJson('/api/admin/clinic-cases/1/finish')->assertUnprocessable()->assertJsonValidationErrors('primary_veterinarian_id');
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'in_consultation']);
+    }
+
+    public function test_medical_record_migration_preserves_legacy_assessment_and_exam(): void
+    {
+        $migration = require database_path('migrations/2026_10_12_000002_extend_clinic_consultation_records.php');
+        $migration->down();
+        $this->insertClinicAppointment('in_consultation');
+        DB::table('clinic_records')->insert(['clinic_appointment_id' => 1, 'diagnosis' => 'Legacy diagnosis', 'findings' => 'Legacy exam']);
+        $migration->up();
+        $this->assertDatabaseHas('clinic_records', ['working_diagnosis' => 'Legacy diagnosis', 'physical_exam_findings' => 'Legacy exam', 'primary_veterinarian_id' => null]);
+    }
+
     private function authenticateAs(string $role, int $userId = 1, string $subrole = 'veterinarian', string $staffType = 'clinic'): void
     {
         $user = new User;
@@ -2411,6 +2550,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'staff_subrole' => $role === 'staff' ? $subrole : null,
         ]);
         $user->exists = true;
+        DB::table('users')->updateOrInsert(['user_id' => $userId], $user->getAttributes());
 
         Sanctum::actingAs($user, ['*']);
     }

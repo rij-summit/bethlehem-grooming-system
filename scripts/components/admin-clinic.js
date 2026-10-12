@@ -60,9 +60,11 @@ document.addEventListener("alpine:init", () => {
 
   Alpine.store("clinicAccess", {
     permissions: {},
+    user: null,
     async init() {
       try {
         const response = await API.getStaffIdentity();
+        this.user = response.user || null;
         this.permissions = response.user?.clinic_permissions || {};
       } catch {
         this.permissions = {};
@@ -147,17 +149,24 @@ function adminClinicModal() {
     apptId:     null,
     currentAppt: null,
     activeSection: "medical",
-    medicineQuery: "", medicineResults: [], medicineLoading: false, medicineError: "",
-    selectedMedicine: null, inventoryQuantity: "", pendingMedicines: [],
-    _medicineTimer: null, _medicineRequest: 0,
+    formErrors: {},
+    veterinarians: [], optionsLoading: false, optionsError: "",
+    administrationRoutes: [], diagnosticOptions: [],
+    recordedByName: "",
+    returnFocus: null,
+    _optionsRequest: 0,
+    _clinicalOptionsLoaded: false,
     attachments: [],
     attachmentFile: null,
     attachmentLabel: "",
+    attachmentDiagnosticKey: "",
     attachmentBusy: false,
     attachmentBusyId: null,
     attachmentError: "",
     form: {
-      chief_complaint: "", diagnosis: "", findings: "", treatment_given: "",
+      chief_complaint: "", relevant_history: "", reported_signs: "", physical_exam_findings: "",
+      differential_diagnoses: "", working_diagnosis: "", treatment_given: "",
+      primary_veterinarian_id: "", additional_veterinarian_ids: [], diagnostics: [], prescriptions: [],
       vet_notes: "", follow_up_date: "", follow_up_notes: "",
       weight_kg: "", temperature_c: "", heart_rate_bpm: "",
       respiratory_rate_bpm: "", body_condition_score: "",
@@ -180,6 +189,50 @@ function adminClinicModal() {
     },
 
     get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"; },
+    get isVeterinarian() { return this.$store.clinicAccess.user?.staff_subrole === "veterinarian" && this.$store.clinicAccess.user?.role === "staff"; },
+    get generalAttachments() {
+      const resultIds = this.form.diagnostics.map(row => Number(row.result_attachment_id));
+      return this.attachments.filter(file => !resultIds.includes(Number(file.id)));
+    },
+    fieldError(field) {
+      return this.formErrors[field]?.[0] || Object.entries(this.formErrors).find(([key]) => key.startsWith(field + "."))?.[1]?.[0] || "";
+    },
+    trapFocus(event) {
+      const controls = [...event.currentTarget.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    },
+    routeLabel(route) { return route ? route[0].toUpperCase() + route.slice(1) : "—"; },
+    diagnosticName(row) { return row.diagnostic === "Other" ? row.custom_name || "Other" : row.diagnostic || "Unnamed diagnostic"; },
+    addDiagnostic() {
+      this.form.diagnostics.push({ key: crypto.randomUUID(), diagnostic: "", custom_name: "", status: "Ordered", notes: "", result_attachment_id: "", result_reference: "" });
+    },
+    addPrescription() {
+      this.form.prescriptions.push({ medicine: "", strength_concentration: "", dose: "", route: "", frequency: "", duration: "", quantity: "", instructions: "" });
+    },
+    removeRow(section, index) { this.form[section].splice(index, 1); this.formErrors = {}; },
+    async loadClinicalOptions() {
+      const request = ++this._optionsRequest;
+      this.optionsLoading = true;
+      this.optionsError = "";
+      try {
+        const response = await API.getAdminVaccinationOptions(true);
+        if (request !== this._optionsRequest || !this.open) return;
+        this.veterinarians = response.veterinarians || [];
+        this.administrationRoutes = response.administration_routes || [];
+        this.diagnosticOptions = response.diagnostic_options || [];
+        this._clinicalOptionsLoaded = true;
+        if (!this.currentAppt?.record?.recorded_by_name) this.recordedByName = response.current_user_name || "—";
+        if (this.canEditClinical && response.current_user_is_veterinarian) {
+          this.form.primary_veterinarian_id = String(response.current_user_id);
+          this.form.additional_veterinarian_ids = this.form.additional_veterinarian_ids.filter(id => String(id) !== String(response.current_user_id));
+        }
+      } catch (error) {
+        if (request === this._optionsRequest) this.optionsError = error.message || "Unable to load veterinarian and clinical options.";
+      } finally { if (request === this._optionsRequest) this.optionsLoading = false; }
+    },
     get followUpMinDate() {
       return clinicLocalDate(new Date());
     },
@@ -192,10 +245,14 @@ function adminClinicModal() {
 
     async openModal({ appt, section = "medical" } = {}) {
       if (!appt) return;
+      this.returnFocus = document.activeElement;
       this.weightTools = await loadClinicPetWeightTools();
       this.weightServerError = "";
       this.apptId     = appt.id;
       this.currentAppt = appt;
+      ++this._optionsRequest;
+      this.optionsLoading = false;
+      this._clinicalOptionsLoaded = false;
       this.activeSection = "medical";
       this.modalError = "";
       this.title      = `Patient Record — ${appt.ownerName}${appt.pet?.name ? " / " + appt.pet.name : ""}`;
@@ -204,17 +261,23 @@ function adminClinicModal() {
       this.attachments = (r.attachments || []).map((attachment) => ({ ...attachment }));
       this.attachmentFile = null;
       this.attachmentLabel = "";
+      this.attachmentDiagnosticKey = "";
       this.attachmentBusy = false;
       this.attachmentBusyId = null;
       this.attachmentError = "";
-      clearTimeout(this._medicineTimer);
-      ++this._medicineRequest;
-      this.medicineQuery = ""; this.medicineResults = []; this.selectedMedicine = null;
-      this.inventoryQuantity = ""; this.pendingMedicines = []; this.medicineError = ""; this.medicineLoading = false;
+      this.formErrors = {};
+      this.recordedByName = r.recorded_by_name || "—";
       this.form = {
         chief_complaint:      r.chief_complaint      || appt.chief_complaint || "",
-        diagnosis:            r.diagnosis            || "",
-        findings:             r.findings             || "",
+        relevant_history: r.relevant_history || "",
+        reported_signs: r.reported_signs || "",
+        physical_exam_findings: r.physical_exam_findings ?? r.findings ?? "",
+        differential_diagnoses: r.differential_diagnoses || "",
+        working_diagnosis: r.working_diagnosis ?? r.diagnosis ?? "",
+        primary_veterinarian_id: String(r.primary_veterinarian_id || ""),
+        additional_veterinarian_ids: (r.additional_veterinarians || []).map(vet => String(vet.user_id)),
+        diagnostics: (r.diagnostics || []).map(row => ({ ...row, result_attachment_id: String(row.result_attachment_id || "") })),
+        prescriptions: (r.prescriptions || []).map(row => ({ ...row })),
         treatment_given:      r.treatment_given      || "",
         vet_notes:            r.vet_notes            || "",
         follow_up_date:       r.follow_up_date       || "",
@@ -226,11 +289,24 @@ function adminClinicModal() {
         body_condition_score: v.body_condition_score ?? "",
       };
       this.open = true;
+      if (this.canEditClinical) {
+        if (this.isVeterinarian) {
+          this.form.primary_veterinarian_id = String(this.$store.clinicAccess.user.user_id);
+          this.form.additional_veterinarian_ids = this.form.additional_veterinarian_ids.filter(id => id !== this.form.primary_veterinarian_id);
+        }
+      }
       this.selectSection(section);
+      this.$nextTick?.(() => {
+        this.$el.querySelector('[aria-label="Close patient record"]')?.focus();
+        window.lucide?.createIcons();
+      });
     },
 
     selectSection(section) {
       this.activeSection = section === "vaccinations" ? "vaccinations" : "medical";
+      if (this.activeSection === "medical" && this.canEditClinical && !this._clinicalOptionsLoaded && !this.optionsLoading) {
+        this.loadClinicalOptions();
+      }
 
       if (this.activeSection === "vaccinations" && this.currentAppt) {
         window.dispatchEvent(new CustomEvent("clinic-vaccinations-open", {
@@ -241,57 +317,11 @@ function adminClinicModal() {
 
     closeModal() {
       if (this.saving || this.attachmentBusy) return;
-      clearTimeout(this._medicineTimer);
-      ++this._medicineRequest;
       this.open = false;
+      ++this._optionsRequest;
+      this.optionsLoading = false;
+      this.returnFocus?.focus();
       this.activeSection = "medical";
-    },
-
-    get medicineQuote() {
-      return this.selectedMedicine ? clinicMedicinePrice(this.selectedMedicine, this.form.weight_kg) : null;
-    },
-
-    medicineMoney(value) { return "₱" + Number(value).toFixed(2); },
-    medicineRange: clinicPriceRange,
-
-    searchMedicines() {
-      clearTimeout(this._medicineTimer);
-      const request = ++this._medicineRequest;
-      this.selectedMedicine = null; this.medicineResults = []; this.medicineError = "";
-      this.medicineLoading = false;
-      const q = this.medicineQuery.trim();
-      if (q.length < 2) return;
-      this._medicineTimer = setTimeout(async () => {
-        this.medicineLoading = true;
-        try {
-          const response = await API.clinicMedicineOptions(q);
-          if (request !== this._medicineRequest) return;
-          this.medicineResults = response.data;
-          if (!response.data.length) this.medicineError = "No matching active Medicine products.";
-        } catch (error) {
-          if (request === this._medicineRequest) this.medicineError = error.message || "Unable to load medicines.";
-        } finally {
-          if (request === this._medicineRequest) this.medicineLoading = false;
-        }
-      }, 300);
-    },
-
-    selectMedicine(item) {
-      this.selectedMedicine = item; this.medicineQuery = item.item_name;
-      this.medicineResults = []; this.inventoryQuantity = ""; this.medicineError = "";
-    },
-
-    addMedicine() {
-      if (!this.canEditClinical || !this.selectedMedicine || this.medicineQuote?.error) return;
-      const quantity = String(this.inventoryQuantity ?? "");
-      if (quantity !== "" && (!/^\d+(?:\.\d{1,2})?$/.test(quantity) || Number(quantity) <= 0 || Number(quantity) > 99999999.99)) {
-        this.medicineError = "Inventory quantity must be a positive amount with at most two decimal places.";
-        return;
-      }
-      this.pendingMedicines.push({ item: this.selectedMedicine, ...this.medicineQuote,
-        inventory_quantity: quantity === "" ? null : Number(quantity), request_key: crypto.randomUUID() });
-      this.selectedMedicine = null; this.medicineQuery = ""; this.inventoryQuantity = "";
-      this.medicineError = "";
     },
 
     selectAttachment(event) {
@@ -302,7 +332,7 @@ function adminClinicModal() {
     formatFileSize: formatClinicFileSize,
 
     async uploadAttachment() {
-      if (!this.canEditClinical) return;
+      if (!this.canEditClinical || this.saving || this.attachmentBusy) return;
       if (!this.attachmentFile) {
         this.attachmentError = "Choose a JPG, PNG, PDF, or DCM file first.";
         return;
@@ -317,6 +347,9 @@ function adminClinicModal() {
           this.attachmentLabel.trim(),
         );
         this.attachments.push(result.attachment);
+        const diagnostic = this.form.diagnostics.find(row => row.key === this.attachmentDiagnosticKey);
+        if (diagnostic) diagnostic.result_attachment_id = String(result.attachment.id);
+        this.attachmentDiagnosticKey = "";
         this.attachmentFile = null;
         this.attachmentLabel = "";
         if (this.$refs.attachmentFile) this.$refs.attachmentFile.value = "";
@@ -342,7 +375,7 @@ function adminClinicModal() {
     },
 
     async deleteAttachment(attachment) {
-      if (!this.canEditClinical) return;
+      if (!this.canEditClinical || this.saving) return;
       const confirmed = await this.$store.clinicFeedback.confirm({
         title: "Remove attachment?",
         message: `${attachment.file_name} will be removed. This cannot be undone.`,
@@ -356,6 +389,9 @@ function adminClinicModal() {
       try {
         await API.clinicDeleteAttachment(this.apptId, attachment.id);
         this.attachments = this.attachments.filter((item) => item.id !== attachment.id);
+        this.form.diagnostics.forEach(row => {
+          if (Number(row.result_attachment_id) === Number(attachment.id)) row.result_attachment_id = "";
+        });
       } catch (error) {
         this.attachmentError = error.message || "Failed to remove attachment.";
       } finally {
@@ -364,7 +400,9 @@ function adminClinicModal() {
     },
 
     async saveRecord(finishCase = false) {
-      if (!this.canEditClinical || this.saving || (finishCase && !this.canFinish)) return;
+      if (!this.canEditClinical || this.saving || this.attachmentBusy || this.optionsLoading || (finishCase && !this.canFinish)) return;
+      this.formErrors = {};
+      this.modalError = "";
       this.weightTools = await loadClinicPetWeightTools();
       if (this.weightValidationMessage) {
         document.getElementById("clinicWeight")?.focus();
@@ -376,19 +414,16 @@ function adminClinicModal() {
           .filter(([key]) => String(this.form[key] ?? "").trim() === "")
           .map(([, label]) => label);
         if (missing.length) {
+          for (const field of ["weight_kg", "temperature_c", "heart_rate_bpm", "respiratory_rate_bpm"]) {
+            if (String(this.form[field] ?? "").trim() === "") this.formErrors[field] = ["Required before finishing the case."];
+          }
           this.modalError = `Fill in the vitals before finishing the case: ${missing.join(", ")}.`;
-          return;
-        }
-      }
-      for (const entry of this.pendingMedicines) {
-        const quote = clinicMedicinePrice(entry.item, this.form.weight_kg);
-        if (quote.error || quote.pet_weight_kg !== entry.pet_weight_kg || quote.price !== entry.price) {
-          this.modalError = quote.error || "Pet weight changed. Remove and select the pending medicine again to review its price.";
           return;
         }
       }
       const followUp = this.form.follow_up_date;
       if (followUp && (followUp < this.followUpMinDate || followUp > this.followUpMaxDate)) {
+        this.formErrors.follow_up_date = ["Follow-up date must be between today and 3 months from today."];
         this.modalError = "Follow-up date must be between today and 3 months from today.";
         return;
       }
@@ -398,8 +433,15 @@ function adminClinicModal() {
         const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
         const payload = {
           chief_complaint:      this.form.chief_complaint      || null,
-          diagnosis:            this.form.diagnosis             || null,
-          findings:             this.form.findings              || null,
+          relevant_history: this.form.relevant_history || null,
+          reported_signs: this.form.reported_signs || null,
+          physical_exam_findings: this.form.physical_exam_findings || null,
+          differential_diagnoses: this.form.differential_diagnoses || null,
+          working_diagnosis: this.form.working_diagnosis || null,
+          primary_veterinarian_id: this.form.primary_veterinarian_id || null,
+          additional_veterinarian_ids: this.form.additional_veterinarian_ids,
+          diagnostics: this.form.diagnostics.map(row => ({ ...row, custom_name: row.diagnostic === "Other" ? row.custom_name : null, result_attachment_id: row.result_attachment_id || null })),
+          prescriptions: this.form.prescriptions,
           treatment_given:      this.form.treatment_given       || null,
           vet_notes:            this.form.vet_notes             || null,
           follow_up_date:       this.form.follow_up_date        || null,
@@ -410,16 +452,16 @@ function adminClinicModal() {
           respiratory_rate_bpm: numberOrNull(this.form.respiratory_rate_bpm),
           body_condition_score: numberOrNull(this.form.body_condition_score),
           finish_case:          finishCase,
-          medicines: this.pendingMedicines.map(entry => ({ inventory_item_id: entry.item.item_id,
-            inventory_quantity: entry.inventory_quantity, expected_price: entry.price,
-            expected_weight_kg: entry.pet_weight_kg, request_key: entry.request_key })),
         };
         await API.clinicSaveRecord(this.apptId, payload);
         this.open = false;
+        this.returnFocus?.focus();
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (e) {
+        this.formErrors = e.errors || {};
         this.weightServerError = e.errors?.weight_kg?.[0] || "";
         this.modalError = e.errors ? Object.values(e.errors).flat().join(" ") : (e.message || "Failed to save record.");
+        this.$nextTick?.(() => this.$el.querySelector('[aria-invalid="true"]')?.focus());
       } finally {
         this.saving = false;
       }
