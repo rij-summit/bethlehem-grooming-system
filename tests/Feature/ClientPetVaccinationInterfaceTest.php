@@ -146,7 +146,6 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             'record.dose_amount',
             'record.dose_unit',
             'record.route',
-            'record.administering_provider',
             'record.batch_number',
             'record.administration_site',
             'record.appointment_reference',

@@ -488,10 +488,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               <dt class="text-xs font-medium text-slate-500">Next Due Date</dt>
               <dd class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
             </div>
-            <div>
-              <dt class="text-xs font-medium text-slate-500">Administering Provider</dt>
-              <dd class="mt-1 break-words text-xs font-medium text-slate-700">${escapeHtml(displayValue(record.administering_provider))}</dd>
-            </div>
           </dl>
 
           ${optionalDetails.length ? `

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pet;
-use App\Models\User;
 use App\Models\VaccinationRecord;
 use Illuminate\Http\Request;
 
@@ -27,7 +26,6 @@ class PetVaccinationController extends Controller
             ->visibleToClients()
             ->with([
                 'clinicAppointment:id,appointment_reference',
-                'administeredBy:user_id,first_name,last_name',
             ])
             ->orderByDesc('administered_date')
             ->orderByDesc('id')
@@ -55,31 +53,9 @@ class PetVaccinationController extends Controller
             'dose_unit' => $record->dose_unit,
             'route' => $record->route,
             'administration_site' => $record->administration_site,
-            'administering_provider' => $this->providerDisplay($record),
             'appointment_reference' => $record->clinicAppointment?->appointment_reference,
             'due_status' => $record->dueStatus(),
         ];
     }
 
-    private function providerDisplay(VaccinationRecord $record): string
-    {
-        if (filled($record->administered_by_name)) {
-            return $record->administered_by_name;
-        }
-
-        $linkedProviderName = $this->formatUserName($record->administeredBy);
-
-        return $linkedProviderName ?? 'Not provided.';
-    }
-
-    private function formatUserName(?User $user): ?string
-    {
-        if (! $user) {
-            return null;
-        }
-
-        $name = trim(($user->first_name ?? '').' '.($user->last_name ?? ''));
-
-        return $name !== '' ? $name : null;
-    }
 }

@@ -45,11 +45,30 @@ class ClinicInventoryPricingTest extends TestCase
         Sanctum::actingAs(User::create(['role' => 'admin']));
     }
 
+    public function test_product_units_are_physical_and_legacy_measured_units_remain_readable_and_unchanged(): void
+    {
+        foreach (['vial', 'bottle', 'tablet', 'ampoule', 'syringe', 'tube', 'bag', 'dose kit', 'custom carton'] as $unit) {
+            $this->item(['unit' => $unit]);
+        }
+        foreach (['kg', 'g', 'L', 'mL'] as $unit) {
+            $this->postJson('/api/inventory/items', $this->product(['unit' => $unit]))
+                ->assertUnprocessable()->assertJsonValidationErrors('unit');
+            $item = $this->item();
+            // Simulate existing data without converting or rounding its quantity.
+            DB::table('inventory_items')->where('item_id', $item->item_id)
+                ->update(['unit' => $unit, 'quantity_on_hand' => 3.5]);
+            $this->getJson('/api/inventory/items/'.$item->item_id)->assertOk()
+                ->assertJsonPath('data.unit', $unit)->assertJsonPath('data.quantity_on_hand', '3.50');
+            $this->putJson('/api/inventory/items/'.$item->item_id, $this->product(['unit' => $unit]))
+                ->assertOk()->assertJsonPath('data.unit', $unit)->assertJsonPath('data.quantity_on_hand', '3.50');
+        }
+    }
+
     private function product(array $changes = []): array
     {
         $payload = array_replace([
             'item_name' => 'Clinic medicine', 'category' => 'medicine', 'unit' => 'bottle',
-            'dose_unit' => 'mL', 'medicine_type' => 'deworming', 'pricing_method' => 'weight_based',
+            'medicine_type' => 'deworming', 'pricing_method' => 'weight_based',
             'weight_pricing_mode' => 'ranges', 'strength_concentration' => '10 mg/mL', 'unit_cost' => 50, 'selling_price' => null, 'reorder_level' => 0,
             'weight_prices' => [
                 ['min_weight_kg' => 1, 'max_weight_kg' => 5, 'price' => 200],
@@ -418,7 +437,7 @@ class ClinicInventoryPricingTest extends TestCase
                 'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 75]);
             unset($payload['dose_unit']);
             $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()
-                ->assertJsonPath('data.unit', 'pipette')->assertJsonPath('data.dose_unit', null)->json('data.item_id');
+                ->assertJsonPath('data.unit', 'pipette')->assertJsonMissingPath('data.dose_unit')->json('data.item_id');
             $this->putJson('/api/inventory/items/'.$id, [...$payload, 'selling_price' => 80])
                 ->assertOk()->assertJsonPath('data.unit', 'pipette')->assertJsonPath('data.selling_price', '80.00');
             $missingUnit = $payload; unset($missingUnit['unit']);
@@ -426,22 +445,15 @@ class ClinicInventoryPricingTest extends TestCase
         }
         $payload = $this->product(); unset($payload['dose_unit']);
         $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()
-            ->assertJsonPath('data.dose_unit', null)->assertJsonCount(4, 'data.weight_prices')->json('data.item_id');
+            ->assertJsonMissingPath('data.dose_unit')->assertJsonCount(4, 'data.weight_prices')->json('data.item_id');
         $this->putJson('/api/inventory/items/'.$id, $payload)->assertOk()->assertJsonCount(4, 'data.weight_prices');
     }
 
-    public function test_product_edits_without_dose_unit_preserve_existing_dose_data(): void
+    public function test_inventory_product_edits_do_not_expose_a_clinical_dose_unit(): void
     {
-        foreach (['medicine', 'vaccine'] as $category) {
-            $payload = $this->product(['category' => $category, 'dose_unit' => 'drop',
-                'medicine_type' => $category === 'medicine' ? 'general_medication' : null,
-                'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 75]);
-            $id = $this->postJson('/api/inventory/items', $payload)->assertCreated()->json('data.item_id');
-            unset($payload['dose_unit']);
-            $this->putJson('/api/inventory/items/'.$id, [...$payload, 'unit' => 'pipette'])
-                ->assertOk()->assertJsonPath('data.dose_unit', 'drop');
-            $this->assertSame('drop', InventoryItem::findOrFail($id)->dose_unit);
-        }
+        $item = $this->item();
+        $this->putJson('/api/inventory/items/'.$item->item_id, $this->product())
+            ->assertOk()->assertJsonMissingPath('data.dose_unit');
     }
 
     public function test_vaccines_flat_medicines_and_retail_keep_flat_prices(): void
@@ -449,7 +461,7 @@ class ClinicInventoryPricingTest extends TestCase
         $vaccine = $this->product(['category' => 'vaccine', 'medicine_type' => null, 'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 950]);
         $id = $this->postJson('/api/inventory/items', $vaccine)->assertCreated()->assertJsonPath('data.pricing_method', 'flat')->json('data.item_id');
         $this->putJson('/api/inventory/items/'.$id, [...$vaccine, 'selling_price' => 975])->assertOk()->assertJsonPath('data.selling_price', '975.00');
-        $this->postJson('/api/inventory/items', [...$vaccine, 'dose_unit' => null])->assertCreated()->assertJsonPath('data.dose_unit', null);
+        $this->postJson('/api/inventory/items', [...$vaccine, ])->assertCreated()->assertJsonMissingPath('data.dose_unit');
         $this->postJson('/api/inventory/items', [...$vaccine, 'medicine_type' => 'deworming'])->assertUnprocessable();
         $this->postJson('/api/inventory/items', [...$vaccine, 'pricing_method' => 'weight_based'])->assertUnprocessable();
         $this->postJson('/api/inventory/items', [...$vaccine, 'weight_prices' => $this->product()['weight_prices']])->assertUnprocessable();
@@ -457,7 +469,7 @@ class ClinicInventoryPricingTest extends TestCase
         $this->assertSame('300.00', $flat->clinicPrice(null)['price']);
         foreach (InventoryItem::RETAIL_CATEGORIES as $category) {
             $payload = ['item_name' => $category, 'category' => $category, 'unit' => 'box', 'unit_cost' => 20, 'selling_price' => 30, 'reorder_level' => 0];
-            $this->postJson('/api/inventory/items', $payload)->assertCreated()->assertJsonPath('data.dose_unit', null)->assertJsonPath('data.selling_price', '30.00');
+            $this->postJson('/api/inventory/items', $payload)->assertCreated()->assertJsonMissingPath('data.dose_unit')->assertJsonPath('data.selling_price', '30.00');
         }
         $this->getJson('/api/inventory/search?q=Clinic&sale_context=pos')->assertOk()->assertJsonCount(0, 'data');
     }
@@ -563,25 +575,25 @@ class ClinicInventoryPricingTest extends TestCase
         $this->postJson('/api/inventory/stock-in', ['items' => [[
             'item_id' => $item->item_id, 'quantity' => 2, 'reason' => 'purchase', 'expiry_date' => today()->addYear()->toDateString(), 'batch_number' => 'M-1',
         ]]])->assertCreated();
-        $entry = $this->charge($item, 700, 12.4, 0.25);
+        $entry = $this->charge($item, 700, 12.4, 1);
         $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
         $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
-        $this->assertSame('1.75', $item->fresh()->quantity_on_hand);
+        $this->assertSame('1.00', $item->fresh()->quantity_on_hand);
         $this->assertSame(1, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
-        $this->assertDatabaseHas('inventory_transactions', ['reference_type' => 'clinic', 'reference_id' => $appt->id, 'quantity' => 0.25, 'selling_price_at_time' => 700]);
+        $this->assertDatabaseHas('inventory_transactions', ['reference_type' => 'clinic', 'reference_id' => $appt->id, 'quantity' => 1, 'selling_price_at_time' => 700]);
         $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 700, 12.4, 2)]])->assertUnprocessable();
         DB::table('inventory_transactions')->where('type', 'stock_in')->update(['expiry_date' => today()->subDay()]);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 700, 12.4, 0.25)]])->assertUnprocessable();
+        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 700, 12.4, 1)]])->assertUnprocessable();
         $this->assertSame(1, $appt->charges()->count());
-        $this->assertSame('1.75', $item->fresh()->quantity_on_hand);
+        $this->assertSame('1.00', $item->fresh()->quantity_on_hand);
     }
 
-    public function test_options_only_include_active_medicines_and_clinical_permissions_apply(): void
+    public function test_options_include_inactive_medicines_for_explanation_and_clinical_permissions_apply(): void
     {
         $item = $this->item();
         $this->getJson('/api/admin/clinic-medicine-options?q=Clinic')->assertOk()->assertJsonCount(1, 'data')->assertJsonCount(4, 'data.0.weight_prices');
         $item->update(['is_active' => false]);
-        $this->getJson('/api/admin/clinic-medicine-options?q=Clinic')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/admin/clinic-medicine-options?q=Clinic')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.is_active', false);
         $appt = $this->appointment(); $item->update(['is_active' => true]);
         $appt->update(['status' => 'completed']);
         $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item)]])->assertStatus(409);
@@ -605,6 +617,6 @@ class ClinicInventoryPricingTest extends TestCase
             $this->assertSame($item->category === 'medicine' ? 'general_medication' : null, $item->medicine_type);
         }
         $legacy = InventoryItem::where('category', 'medicine')->first();
-        $this->putJson('/api/inventory/items/'.$legacy->item_id, ['dose_unit' => 'mL', 'unit_cost' => 20, 'selling_price' => 50, 'reorder_level' => 0])->assertOk();
+        $this->putJson('/api/inventory/items/'.$legacy->item_id, ['unit_cost' => 20, 'selling_price' => 50, 'reorder_level' => 0])->assertOk();
     }
 }

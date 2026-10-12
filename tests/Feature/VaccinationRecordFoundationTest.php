@@ -47,6 +47,7 @@ class VaccinationRecordFoundationTest extends TestCase
             $table->unsignedInteger('item_id')->autoIncrement();
             $table->string('item_name');
             $table->string('category');
+            $table->string('dose_unit')->nullable();
         });
 
         $this->migration = require base_path(
@@ -54,6 +55,7 @@ class VaccinationRecordFoundationTest extends TestCase
         );
         $this->migration->up();
         (require database_path('migrations/2026_10_12_000001_extend_vaccination_records_for_treatments.php'))->up();
+        (require database_path('migrations/2026_10_12_000004_separate_treatment_clinical_details_from_inventory.php'))->up();
     }
 
     protected function tearDown(): void
@@ -89,8 +91,6 @@ class VaccinationRecordFoundationTest extends TestCase
             'dose_unit',
             'route',
             'administration_site',
-            'administered_by_user_id',
-            'administered_by_name',
             'recorded_by_user_id',
             'notes',
             'published_at',
@@ -112,7 +112,6 @@ class VaccinationRecordFoundationTest extends TestCase
             'vaccination_duplicate_lookup_idx',
             'vaccination_appointment_idx',
             'vaccination_inventory_item_idx',
-            'vaccination_administered_by_idx',
             'vaccination_recorded_by_idx',
             'vaccination_published_by_idx',
             'vaccination_voided_by_idx',
@@ -146,8 +145,6 @@ class VaccinationRecordFoundationTest extends TestCase
             'dose_unit' => 'mL',
             'route' => 'subcutaneous',
             'administration_site' => 'Right shoulder',
-            'administered_by_user_id' => 10,
-            'administered_by_name' => 'Dr. Historical Name',
             'recorded_by_user_id' => 11,
             'published_at' => '2026-07-23 10:00:00',
             'published_by_user_id' => 12,
@@ -159,7 +156,6 @@ class VaccinationRecordFoundationTest extends TestCase
         $this->assertSame(101, $record->pet->pet_id);
         $this->assertSame(201, $record->clinicAppointment->id);
         $this->assertSame(301, $record->inventoryItem->item_id);
-        $this->assertSame(10, $record->administeredBy->user_id);
         $this->assertSame(11, $record->recordedBy->user_id);
         $this->assertSame(12, $record->publishedBy->user_id);
         $this->assertSame(13, $record->voidedBy->user_id);
@@ -167,7 +163,6 @@ class VaccinationRecordFoundationTest extends TestCase
         $this->assertTrue(Pet::findOrFail(101)->vaccinationRecords->contains($record));
         $this->assertTrue(ClinicAppointment::findOrFail(201)->vaccinationRecords->contains($record));
         $this->assertTrue(InventoryItem::findOrFail(301)->vaccinationRecords->contains($record));
-        $this->assertTrue(User::findOrFail(10)->vaccinationsAdministered->contains($record));
         $this->assertTrue(User::findOrFail(11)->vaccinationsRecorded->contains($record));
         $this->assertTrue(User::findOrFail(12)->vaccinationsPublished->contains($record));
         $this->assertTrue(User::findOrFail(13)->vaccinationsVoided->contains($record));
@@ -177,7 +172,6 @@ class VaccinationRecordFoundationTest extends TestCase
         $this->assertSame('Historical Product Name', $record->product_name);
         $this->assertSame('Historical Manufacturer', $record->manufacturer);
         $this->assertSame('LOT-2026-001', $record->batch_number);
-        $this->assertSame('Dr. Historical Name', $record->administered_by_name);
     }
 
     public function test_foreign_keys_protect_pet_history_and_null_unavailable_links(): void
@@ -193,8 +187,6 @@ class VaccinationRecordFoundationTest extends TestCase
             'inventory_item_id' => 301,
             'vaccine_name' => 'Rabies',
             'administered_date' => '2026-07-23',
-            'administered_by_user_id' => 10,
-            'administered_by_name' => 'Dr. Snapshot Name',
             'recorded_by_user_id' => 10,
             'published_at' => '2026-07-23 10:00:00',
             'published_by_user_id' => 10,
@@ -219,11 +211,9 @@ class VaccinationRecordFoundationTest extends TestCase
 
         $this->assertNull($record->clinic_appointment_id);
         $this->assertNull($record->inventory_item_id);
-        $this->assertNull($record->administered_by_user_id);
         $this->assertNull($record->recorded_by_user_id);
         $this->assertNull($record->published_by_user_id);
         $this->assertNull($record->voided_by_user_id);
-        $this->assertSame('Dr. Snapshot Name', $record->administered_by_name);
         $this->assertSame('Rabies', $record->vaccine_name);
         $this->assertSame('Entered twice.', $record->void_reason);
     }
@@ -236,14 +226,12 @@ class VaccinationRecordFoundationTest extends TestCase
             'pet_id' => 101,
             'vaccine_name' => 'Published Vaccine',
             'administered_date' => '2026-07-23',
-            'administered_by_name' => 'Staff Member',
             'published_at' => '2026-07-23 09:00:00',
         ]);
         VaccinationRecord::create([
             'pet_id' => 101,
             'vaccine_name' => 'Voided Vaccine',
             'administered_date' => '2026-07-23',
-            'administered_by_name' => 'Staff Member',
             'published_at' => '2026-07-23 09:00:00',
             'voided_at' => '2026-07-23 10:00:00',
         ]);
@@ -258,21 +246,18 @@ class VaccinationRecordFoundationTest extends TestCase
             VaccinationRecord::visibleToClients()->pluck('vaccine_name')->all(),
         );
         $this->assertTrue(VaccinationRecord::firstWhere('vaccine_name', 'Published Vaccine')->hasPublishingRequirements());
-        $this->assertFalse(VaccinationRecord::firstWhere('vaccine_name', 'Draft Vaccine')->hasPublishingRequirements());
+        $this->assertTrue(VaccinationRecord::firstWhere('vaccine_name', 'Draft Vaccine')->hasPublishingRequirements());
         $this->assertTrue((new VaccinationRecord([
             'vaccine_name' => 'Provider ID Vaccine',
             'administered_date' => '2026-07-23',
-            'administered_by_user_id' => 99,
-        ]))->hasPublishingRequirements());
+            ]))->hasPublishingRequirements());
         $this->assertFalse((new VaccinationRecord([
             'vaccine_name' => '',
             'administered_date' => '2026-07-23',
-            'administered_by_name' => 'Staff Member',
-        ]))->hasPublishingRequirements());
+            ]))->hasPublishingRequirements());
         $this->assertFalse((new VaccinationRecord([
             'vaccine_name' => 'Missing Date Vaccine',
-            'administered_by_name' => 'Staff Member',
-        ]))->hasPublishingRequirements());
+            ]))->hasPublishingRequirements());
 
         $asOf = CarbonImmutable::parse('2026-07-23');
         $this->assertSame(VaccinationRecord::STATUS_UNKNOWN, $this->recordWithDueDate(null)->dueStatus($asOf));
@@ -320,11 +305,14 @@ class VaccinationRecordFoundationTest extends TestCase
             'voided_at' => null,
         ]);
 
-        foreach (['pet_id', 'vaccine_name', 'administered_date'] as $requiredField) {
+        foreach (['pet_id'] as $requiredField) {
             $invalidRecord = $validDraft;
             unset($invalidRecord[$requiredField]);
             $this->assertInsertFails($invalidRecord);
         }
+
+        $incompleteId = DB::table('vaccination_records')->insertGetId(['pet_id' => 101]);
+        $this->assertFalse(VaccinationRecord::findOrFail($incompleteId)->hasPublishingRequirements());
 
         $invalidPet = $validDraft;
         $invalidPet['pet_id'] = 999;

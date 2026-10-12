@@ -6,7 +6,6 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\ClinicAppointment;
 use App\Models\Pet;
-use App\Models\User;
 use App\Models\VaccinationRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -91,7 +90,6 @@ class PetProfileHistoryService
             ->visibleToClients()
             ->with([
                 'clinicAppointment:id,appointment_reference',
-                'administeredBy:user_id,first_name,last_name',
             ])
             ->orderByDesc('administered_date')
             ->orderByDesc('id')
@@ -163,31 +161,9 @@ class PetProfileHistoryService
             'dose_unit' => $record->dose_unit,
             'route' => $record->route,
             'administration_site' => $record->administration_site,
-            'administering_provider' => $this->providerDisplay($record),
             'appointment_reference' => $record->clinicAppointment?->appointment_reference,
             'due_status' => $record->dueStatus(),
         ];
     }
 
-    private function providerDisplay(VaccinationRecord $record): string
-    {
-        if (filled($record->administered_by_name)) {
-            return $record->administered_by_name;
-        }
-
-        $provider = $this->formatUserName($record->administeredBy);
-
-        return $provider ?? 'Not provided.';
-    }
-
-    private function formatUserName(?User $user): ?string
-    {
-        if (! $user) {
-            return null;
-        }
-
-        $name = trim(($user->first_name ?? '').' '.($user->last_name ?? ''));
-
-        return $name !== '' ? $name : null;
-    }
 }

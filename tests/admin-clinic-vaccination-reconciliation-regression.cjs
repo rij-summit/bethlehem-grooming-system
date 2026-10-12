@@ -27,13 +27,13 @@ function component() {
 }
 
 const vaccine = {
-  item_id: 301, item_name: "Rabies", unit: "dose", deduction_supported: true,
+  item_id: 301, item_name: "Rabies", unit: "vial", is_active: true, quantity_on_hand: 4, stock_status: "available",
   available_quantity: 3, next_batch: { batch_number: "EARLY", expiry_date: "2027-12-01" },
 };
 const draft = {
   id: 7, state: "draft", inventory_item_id: 301, vaccine_name: "Rabies",
   administered_date: sandbox.vaccinationToday(), dose_amount: 1, dose_unit: "mL",
-  administered_by_user_id: 2, clinic_appointment_id: 201,
+  inventory_quantity: 1, clinic_appointment_id: 201,
 };
 
 (async () => {
@@ -54,9 +54,36 @@ const draft = {
     assert.equal(Object.hasOwn(payload, field), false, `Inventory payload must leave ${field} to the server`);
   }
   assert.equal(loading.vaccineSelectable({ ...vaccine, available_quantity: 0 }), false);
-  assert.equal(loading.vaccineSelectable({ ...vaccine, next_batch: null }), false);
-  assert.equal(loading.vaccineSelectable({ ...vaccine, deduction_supported: false, unit: "mL" }), false);
-  assert.equal(loading.vaccineAvailabilityLabel({ ...vaccine, deduction_supported: false }), "Single-dose unit required");
+  assert.equal(loading.vaccineSelectable({ ...vaccine, is_active: false }), false);
+  assert.equal(loading.vaccineSelectable({ ...vaccine, unit: "bottle" }), true);
+  for (const [item, expected, selectable] of [
+    [{ ...vaccine, quantity_on_hand: 0, available_quantity: 0, stock_status: "out_of_stock" }, "Out of stock", false],
+    [{ ...vaccine, quantity_on_hand: 8, available_quantity: 0, stock_status: "expired" }, "Expired stock", false],
+    [{ ...vaccine, unit: "ml", quantity_on_hand: 8, available_quantity: 0, stock_status: "legacy_unit" }, "Legacy unit · review Inventory", false],
+    [{ ...vaccine, quantity_on_hand: 8, available_quantity: 2, stock_status: "low_stock" }, "Low stock · 2 vials available", true],
+    [{ ...vaccine, quantity_on_hand: 12, available_quantity: 3 }, "3 vials available", true],
+  ]) {
+    assert.equal(loading.productAvailabilityLabel(item), expected);
+    assert.equal(loading.productSelectable(item), selectable);
+  }
+  loading.form.dose_amount = ""; loading.form.dose_unit = "";
+  assert.equal(loading.validateForm(true), true);
+  loading.form.dose_amount = 2.5;
+  assert.equal(loading.validateForm(), false);
+  loading.form.dose_unit = "mL";
+  assert.equal(loading.validateForm(true), true);
+  assert.equal(loading.buildPayload().inventory_quantity, "1");
+  loading.form.dose_amount = 7.5;
+  assert.equal(loading.buildPayload().inventory_quantity, "1");
+  loading.changeInventoryQuantity(1); loading.changeInventoryQuantity(1); loading.changeInventoryQuantity(1);
+  assert.equal(loading.form.inventory_quantity, 3);
+  loading.form.inventory_quantity = 4;
+  assert.equal(loading.validateForm(true), false);
+  for (const quantity of [0, 0.25, 0.5, 1.25]) {
+    loading.form.inventory_quantity = quantity;
+    assert.equal(loading.validateForm(true), false);
+  }
+  for (const field of ["administered_by_user_id", "administered_by_name"]) assert.equal(Object.hasOwn(payload, field), false);
 
   const historical = component();
   historical.openEditForm({ ...draft, administered_date: "2020-01-01", manufacturer: "Original", batch_number: "OLD", administered_by_user_id: null, administered_by_name: "External vet" });
@@ -70,7 +97,7 @@ const draft = {
   assert.equal(historicalPayload.administered_date, "2020-01-01");
   assert.equal(historicalPayload.manufacturer, "Original");
   assert.equal(historicalPayload.batch_number, "OLD");
-  assert.equal(historicalPayload.administered_by_name, "External vet");
+  assert.equal(Object.hasOwn(historicalPayload, "administered_by_name"), false);
 
   let publications = [];
   sandbox.API.createAdminPetVaccination = async () => ({ vaccination: { id: 8 } });
@@ -97,7 +124,7 @@ const draft = {
   assert.equal(publications.length, 1);
   assert.equal(publications[0][2].consumeInventory, false);
 
-  const medicine = { item_id: 302, item_name: "Medicine", unit: "bottle", dose_unit: "mL",
+  const medicine = { item_id: 302, item_name: "Medicine", unit: "bottle", available_quantity: 2, quantity_on_hand: 2, is_active: true, stock_status: "available", next_batch: { batch_number: "MED", expiry_date: "2027-12-01" },
     strength_concentration: "10 mg/mL", pricing_method: "weight_based", weight_pricing_mode: "ranges",
     weight_prices: [{ min_weight_kg: 1, max_weight_kg: 5, price: 250 }] };
   const treatment = component();
@@ -108,16 +135,20 @@ const draft = {
   treatment.changeTreatmentType("medicine");
   treatment.selectMedicine(medicine);
   assert.equal(treatment.medicineQuote.price, 250);
-  assert.equal(treatment.form.dose_unit, "mL");
+  assert.equal(treatment.form.dose_unit, "");
+  assert.equal(treatment.form.inventory_quantity, 1);
   treatment.form.dose_amount = 0.5;
   assert.equal(treatment.validateForm(), false, "Stock medicine must require physical quantity");
   treatment.form.inventory_quantity = "0.25";
-  assert.equal(treatment.validateForm(), true);
+  assert.equal(treatment.validateForm(), false, "Fractional stock use is rejected");
+  treatment.form.inventory_quantity = 1;
+  treatment.form.dose_unit = "mL";
+  assert.equal(treatment.validateForm(true), true);
   const medicinePayload = treatment.buildPayload();
   assert.equal(medicinePayload.treatment_type, "medicine");
   assert.equal(medicinePayload.expected_price, 250);
   assert.equal(medicinePayload.expected_weight_kg, 4);
-  assert.equal(medicinePayload.inventory_quantity, "0.25");
+  assert.equal(medicinePayload.inventory_quantity, "1");
   assert.equal(treatment.buildPayload().request_key, medicinePayload.request_key, "Retries keep the same request key");
   assert.equal(Object.hasOwn(medicinePayload, "batch_number"), false);
   treatment.loadVaccinations = async () => {};
@@ -135,10 +166,10 @@ const draft = {
 
   sandbox.API.clinicMedicineOptions = async () => ({ data: [medicine] });
   treatment.openEditForm({ ...draft, treatment_type: "medicine", inventory_item_id: 302,
-    inventory_quantity: 0.25, vaccine_name: "Medicine", request_key: medicinePayload.request_key });
+    inventory_quantity: "1.00", vaccine_name: "Medicine", request_key: medicinePayload.request_key });
   await treatment.restoreMedicineSelection();
   assert.equal(treatment.selectedMedicine.item_id, 302);
-  assert.equal(treatment.form.inventory_quantity, 0.25, "Restoring selection preserves stock used");
+  assert.equal(treatment.form.inventory_quantity, 1, "Restoring selection preserves stock used");
   assert.equal(treatment.form.dose_amount, 1, "Restoring selection preserves clinical dosage");
   assert.equal(treatment.form.request_key, medicinePayload.request_key);
   assert.equal(treatment.validateForm(), true);
@@ -148,7 +179,7 @@ const draft = {
   let confirmation;
   treatment.$store.clinicFeedback.confirm = async details => { confirmation = details; return true; };
   await treatment.confirmDeduction(vaccine, "Publish");
-  assert.match(confirmation.message, /^1 dose of Rabies/);
+  assert.match(confirmation.message, /^1 vial of Rabies/);
   assert.equal(confirmation.message.includes("medicine charge"), false);
 
   treatment.recordKind = "historical";
@@ -160,7 +191,7 @@ const draft = {
   const externalPayload = treatment.buildPayload();
   assert.equal(externalPayload.inventory_item_id, null);
   assert.equal(Object.hasOwn(externalPayload, "expected_price"), false);
-  assert.equal(Object.hasOwn(externalPayload, "inventory_quantity"), false);
+  assert.equal(externalPayload.inventory_quantity, null);
   assert.equal(externalPayload.administered_date, "2020-01-01");
   treatment.changeTreatmentType("vaccine");
   assert.equal(treatment.selectedMedicine, null);

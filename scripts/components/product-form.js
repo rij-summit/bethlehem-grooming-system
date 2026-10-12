@@ -2,10 +2,10 @@
 window.ProductForm = (() => {
   const unitOptions = [
     ["pc", "Piece (pc)"], ["tablet", "Tablet"], ["capsule", "Capsule"],
-    ["bottle", "Bottle"], ["vial", "Vial"], ["pipette", "Pipette"], ["dose kit", "Dose Kit"], ["sachet", "Sachet"],
-    ["pack", "Pack"], ["box", "Box"], ["can", "Can"],
-    ["kg", "Kilogram (kg)"], ["g", "Gram (g)"], ["L", "Liter (L)"],
-    ["mL", "Milliliter (mL)"], ["other", "Other…"],
+    ["bottle", "Bottle"], ["vial", "Vial"], ["ampoule", "Ampoule"], ["syringe", "Syringe"],
+    ["pipette", "Pipette"], ["tube", "Tube"], ["sachet", "Sachet"],
+    ["pack", "Pack"], ["box", "Box"], ["can", "Can"], ["bag", "Bag"],
+    ["dose kit", "Dose Kit"], ["other", "Other…"],
   ].map(([value, label]) => ({ value, label }));
   const categoryOptions = [
     ["medicine", "Medicine"], ["vaccine", "Vaccine"], ["food", "Food"],
@@ -220,7 +220,7 @@ window.ProductForm = (() => {
   function unitFields(unit) {
     return standardUnits.includes(unit)
       ? { unit, customUnit: "" }
-      : { unit: unit ? "other" : "", customUnit: unit ?? "" };
+      : { unit: unit ? "other" : "", customUnit: unit ?? "", legacyUnit: unit ?? "" };
   }
 
   function validate(form) {
@@ -228,6 +228,7 @@ window.ProductForm = (() => {
     if (!form.category) return "Category is required.";
     if (!form.unit) return "Unit is required.";
     if (form.unit === "other" && !form.customUnit.trim()) return "Custom unit is required.";
+    if (form.unit === "other" && /^(kg|g|mg|mcg|l|ml|kilogram|gram|milligram|microgram|liter|litre|milliliter|millilitre)$/i.test(form.customUnit.trim()) && form.customUnit.trim() !== form.legacyUnit) return "Choose a physical inventory unit.";
 
     const barcode = String(form.barcode ?? "");
     const unitCost = String(form.unit_cost ?? "");

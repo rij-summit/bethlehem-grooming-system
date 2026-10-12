@@ -119,8 +119,6 @@ class AdminPetProfileTest extends TestCase
             $table->string('dose_unit')->nullable();
             $table->string('route')->nullable();
             $table->string('administration_site')->nullable();
-            $table->unsignedInteger('administered_by_user_id')->nullable();
-            $table->string('administered_by_name')->nullable();
             $table->timestamp('published_at')->nullable();
             $table->timestamp('voided_at')->nullable();
             $table->timestamps();
@@ -226,7 +224,6 @@ class AdminPetProfileTest extends TestCase
             'clinic_appointment_id' => 701,
             'vaccine_name' => 'Rabies',
             'administered_date' => '2026-08-02',
-            'administered_by_name' => 'Dr. Reyes',
             'published_at' => '2026-08-02 12:00:00',
             'created_at' => '2026-08-02 12:00:00',
             'updated_at' => '2026-08-02 12:00:00',
@@ -244,8 +241,7 @@ class AdminPetProfileTest extends TestCase
             ->assertJsonPath('medical_records.0.attachments.0.file_name', 'skin-scrape.pdf')
             ->assertJsonPath('medical_records.0.attachments.0.label', 'Skin scrape result')
             ->assertJsonMissingPath('medical_records.0.medications')
-            ->assertJsonPath('vaccinations.0.vaccine_name', 'Rabies')
-            ->assertJsonPath('vaccinations.0.administering_provider', 'Dr. Reyes');
+            ->assertJsonPath('vaccinations.0.vaccine_name', 'Rabies')->assertJsonMissingPath('vaccinations.0.administering_provider');
 
         $this->getJson('/api/admin/pets/999/profile')
             ->assertNotFound()

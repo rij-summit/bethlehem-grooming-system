@@ -84,6 +84,15 @@ for (const category of ["food", "grooming_supply", "pet_shop", "miscellaneous"])
   assert.equal(pf.payload(form).strength_concentration, null);
   assert.equal(pf.payload(form).weight_prices.length, 0);
 }
+for (const unit of ["kg", "g", "L", "mL"]) {
+  assert.equal(pf.unitOptions.some(option => option.value === unit), false);
+  const legacy = pf.empty({...form, ...pf.unitFields(unit)});
+  assert.equal(pf.validate(legacy), "");
+  assert.equal(pf.payload(legacy).unit, unit);
+  const newMeasured = pf.empty({...form, unit: "other", customUnit: unit});
+  assert.match(pf.validate(newMeasured), /physical inventory unit/);
+}
+for (const unit of ["tablet", "capsule", "bottle", "vial", "ampoule", "syringe", "pipette", "tube", "sachet", "pack", "box", "can", "bag", "dose kit", "other"]) assert.ok(pf.unitOptions.some(option => option.value === unit));
 const item = {item_id: 1, item_name: "Medicine", unit: "bottle", pricing_method: "weight_based", weight_prices: payload.weight_prices, weight_pricing_mode: "catalog", selling_price: null};
 for (const [weight, price] of [[1,200], [5,200], [5.1,400], [10,400], [10.1,700], [12.4,700], [15,700], [41,900]])
   assert.equal(context.clinicMedicinePrice(item, weight).price, price);
@@ -91,22 +100,32 @@ for (const weight of [null, "", 0, -1, NaN]) assert.match(context.clinicMedicine
 for (const [weight,price] of [[5.05,200],[10.05,400],[15.05,700]]) assert.equal(context.clinicMedicinePrice(item, weight).price, price);
 for (const weight of [0.5, 50.01]) assert.match(context.clinicMedicinePrice(item, weight).error, /No price is configured/);
 assert.equal(context.clinicMedicinePrice({pricing_method:"flat",selling_price:"300"}, null).price, 300);
-const modal = context.adminClinicModal();
+context.window.addEventListener = () => {};
+context.clinicLocalDate = date => date.toISOString().slice(0, 10);
+vm.runInContext(fs.readFileSync("scripts/components/admin-vaccinations.js", "utf8"), context);
+const modal = context.adminClinicVaccinations();
+modal.$nextTick = callback => callback(); modal.$refs = {};
 modal.$store = {clinicAccess: {permissions: {clinical: true}}};
-modal.currentAppt = {status: "in_consultation"}; modal.form.weight_kg = "12.4";
-modal.selectMedicine(item);
-assert.equal(modal.inventoryQuantity, "");
-modal.addMedicine();
-assert.equal(modal.pendingMedicines[0].price, 700);
-assert.equal(modal.pendingMedicines[0].inventory_quantity, null);
-modal.form.weight_kg = "5";
+modal.appointment = { id: 1, status: "in_consultation", weight_kg: 12.4 };
+modal.formModal.clinicAppointmentId = 1; modal.treatmentType = "medicine";
+modal.selectMedicine({...item, is_active: true, quantity_on_hand: 3, available_quantity: 3});
+assert.equal(modal.medicineQuote.price, 700);
+assert.equal(modal.form.inventory_quantity, 1);
+assert.equal(modal.form.dose_unit, "");
+assert.equal(modal.validateForm(true), true);
+assert.equal(modal.buildPayload().expected_price, 700);
+modal.appointment.weight_kg = 5;
+assert.equal(modal.medicineQuote.price, 200);
+modal.appointment.weight_kg = null;
+assert.match(modal.medicineQuote.error, /Record or update/);
+assert.equal(modal.validateForm(true), false);
+modal.appointment.weight_kg = 12.4; modal.form.inventory_quantity = 0.25;
+assert.equal(modal.validateForm(true), false);
+modal.form.inventory_quantity = 2; modal.form.dose_amount = 2.5; modal.form.dose_unit = "mL";
+assert.equal(modal.validateForm(true), true);
+assert.equal(modal.buildPayload().expected_price, 700);
+assert.equal(modal.buildPayload().inventory_quantity, "2");
 (async () => {
-  await modal.saveRecord();
-  assert.match(modal.modalError, /Pet weight changed/);
-  modal.pendingMedicines = []; modal.form.weight_kg = ""; modal.selectMedicine(item); modal.addMedicine();
-  assert.equal(modal.pendingMedicines.length, 0);
-  modal.form.weight_kg = "12.4"; modal.inventoryQuantity = "0.25"; modal.addMedicine();
-  assert.equal(modal.pendingMedicines[0].inventory_quantity, 0.25);
   for (const file of ["pages/admin/inventory/sections/products.html", "pages/admin/inventory/sections/stock-in.html"]) {
     const html = fs.readFileSync(file, "utf8");
     assert.match(html, /Inventory Unit/);

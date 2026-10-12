@@ -218,7 +218,6 @@
               <div><dt class="text-xs text-slate-500">Barcode</dt><dd class="mt-1 break-words font-mono text-slate-800" x-text="details.item.barcode || '—'"></dd></div>
               <div><dt class="text-xs text-slate-500">Inventory Unit</dt><dd class="mt-1 break-words text-slate-800" x-text="details.item.unit || '—'"></dd></div>
               <div x-show="details.item.category === 'medicine' && details.item.medicine_type"><dt class="text-xs text-slate-500">Medicine Type</dt><dd class="mt-1 text-slate-800" x-text="ProductForm.medicineTypeOptions.find(option => option.value === details.item.medicine_type)?.label || '—'"></dd></div>
-              <div x-show="ProductForm.isClinic(details.item) && details.item.dose_unit"><dt class="text-xs text-slate-500">Dose Unit</dt><dd class="mt-1 text-slate-800" x-text="details.item.dose_unit"></dd></div>
               <div x-show="details.item.category === 'medicine' && details.item.strength_concentration" class="col-span-2"><dt class="text-xs text-slate-500">Product Strength</dt><dd class="mt-1 text-slate-800" x-text="details.item.strength_concentration"></dd></div>
               <div class="col-span-2"><dt class="text-xs text-slate-500">Description</dt><dd class="mt-1 whitespace-pre-wrap break-words text-slate-700" x-text="details.item.description || '—'"></dd></div>
             </dl>
@@ -332,6 +331,8 @@
               <template x-for="unitOption in ProductForm.unitOptions" :key="unitOption.value"><option :value="unitOption.value" x-text="unitOption.label"></option></template>
             </select>
           </label>
+          <p class="mt-1 text-xs text-slate-500">How this product is counted in inventory.</p>
+          <p x-show="['kg', 'g', 'l', 'ml'].includes(String(form.legacyUnit || '').toLowerCase())" class="mt-1 text-xs text-amber-700">Legacy measured unit. Saving it unchanged preserves the existing quantities; changing the unit does not convert stock.</p>
           <label x-show="form.unit === 'other'" x-cloak class="mt-2 block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">Custom unit <span class="text-red-500 font-bold">*</span></span>
             <input x-model="form.customUnit" type="text" maxlength="50" :required="form.unit === 'other'" placeholder="Enter custom unit" class="w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#315b7e]/30" />
           </label>

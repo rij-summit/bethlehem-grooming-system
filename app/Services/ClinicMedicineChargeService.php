@@ -20,6 +20,12 @@ class ClinicMedicineChargeService
         $existing = ClinicCharge::whereIn('request_key', array_column($entries, 'request_key'))->get()->keyBy('request_key');
         $movements = [];
         foreach ($entries as $entry) {
+            if (($entry['inventory_quantity'] ?? null) !== null
+                && (! is_numeric($entry['inventory_quantity']) || (float) $entry['inventory_quantity'] < 1
+                    || (float) $entry['inventory_quantity'] > 99999999
+                    || floor((float) $entry['inventory_quantity']) !== (float) $entry['inventory_quantity'])) {
+                throw ValidationException::withMessages(['inventory_quantity' => 'Use a whole number of physical inventory units.']);
+            }
             if ($charge = $existing->get($entry['request_key'])) {
                 if ((int) $charge->clinic_appointment_id !== (int) $appt->id
                     || (int) $charge->inventory_item_id !== (int) $entry['inventory_item_id']
@@ -31,6 +37,9 @@ class ClinicMedicineChargeService
             $item = $items->get($entry['inventory_item_id']);
             if (! $item || ! $item->is_active || $item->category !== 'medicine') {
                 throw ValidationException::withMessages(['medicines' => 'Choose an active Medicine product from Inventory.']);
+            }
+            if (($entry['inventory_quantity'] ?? null) !== null && InventoryItem::isMeasuredUnit($item->unit)) {
+                throw ValidationException::withMessages(['inventory_quantity' => 'Review this legacy measured unit in Inventory before using physical stock. Existing quantities are not converted.']);
             }
             $pricing = $item->clinicPrice($weight);
             if (round((float) $pricing['price'] * 100) !== round((float) $entry['expected_price'] * 100)
@@ -52,6 +61,7 @@ class ClinicMedicineChargeService
                     'item_id' => $item->item_id, 'quantity' => $entry['inventory_quantity'], 'reason' => 'used',
                     'unit_cost_at_time' => $item->unit_cost, 'selling_price' => $pricing['price'],
                     'reference_type' => 'clinic', 'reference_id' => $appt->id,
+                    'batch_number' => $entry['batch_number'] ?? null, 'expiry_date' => $entry['expiry_date'] ?? null,
                     'notes' => 'Medicine/treatment · '.$item->item_name,
                 ];
             }

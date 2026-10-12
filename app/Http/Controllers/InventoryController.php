@@ -53,7 +53,6 @@ class InventoryController extends Controller
             'category'         => $item->category,
             'unit'             => $item->unit,
             'medicine_type' => $item->medicine_type,
-            'dose_unit' => $item->dose_unit,
             'strength_concentration' => $item->strength_concentration,
             'pricing_method' => $item->pricing_method ?? 'flat',
             'weight_pricing_mode' => $item->weight_pricing_mode ?? 'legacy',
@@ -290,9 +289,8 @@ class InventoryController extends Controller
         $data = $request->all();
         $category = $data['category'] ?? $item?->category;
         $medicine = $category === 'medicine';
-        $clinic = $medicine || $category === 'vaccine';
         if ($item && $category === $item->category) {
-            foreach (['medicine_type', 'dose_unit', 'strength_concentration', 'pricing_method'] as $field) {
+            foreach (['medicine_type', 'strength_concentration', 'pricing_method'] as $field) {
                 if (! array_key_exists($field, $data)) $data[$field] = $item->{$field};
             }
             if (! array_key_exists('weight_prices', $data) && ($data['pricing_method'] ?? null) === 'weight_based') {
@@ -313,13 +311,16 @@ class InventoryController extends Controller
             'barcode' => ['nullable', 'string', 'regex:/^[0-9]{1,13}$/',
                 \Illuminate\Validation\Rule::unique('inventory_items', 'barcode')->ignore($item?->item_id, 'item_id')],
             'category' => $required.'|in:medicine,vaccine,food,grooming_supply,pet_shop,miscellaneous',
-            'unit' => $required.'|string|max:50',
+            'unit' => [$required, 'string', 'max:50', function ($attribute, $value, $fail) use ($item) {
+                if (InventoryItem::isMeasuredUnit($value) && $value !== $item?->unit) {
+                    $fail('Choose a physical inventory unit. Existing legacy units may be preserved without changing their quantities.');
+                }
+            }],
             'description' => 'nullable|string|max:255',
             'unit_cost' => 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY,
             'selling_price' => ($weightBased ? 'prohibited' : 'required|numeric|decimal:0,2|min:0.01|max:'.self::MAX_MONEY),
             'reorder_level' => 'required|integer|min:0|max:99999999',
             'medicine_type' => $medicine ? 'required|in:'.implode(',', InventoryItem::MEDICINE_TYPES) : 'prohibited',
-            'dose_unit' => $clinic ? 'nullable|string|max:30' : 'prohibited',
             'strength_concentration' => $medicine ? 'nullable|string|max:150' : 'prohibited',
             'pricing_method' => $medicine ? 'required|in:flat,weight_based' : 'nullable|in:flat',
             'weight_pricing_mode' => 'sometimes|in:legacy,threshold,ranges,catalog',
@@ -372,7 +373,6 @@ class InventoryController extends Controller
         $validated = $validator->validate();
         unset($validated['weight_final_range']);
         $validated['medicine_type'] = $medicine ? $validated['medicine_type'] : null;
-        $validated['dose_unit'] = $clinic && isset($validated['dose_unit']) ? trim($validated['dose_unit']) : null;
         $validated['strength_concentration'] = $medicine ? ($validated['strength_concentration'] ?? null) : null;
         $validated['pricing_method'] = $medicine ? $validated['pricing_method'] : 'flat';
         $validated['weight_pricing_mode'] = $pricingMode;

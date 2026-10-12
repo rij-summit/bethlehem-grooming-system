@@ -44,6 +44,7 @@ class ClientPetVaccinationsTest extends TestCase
             $table->unsignedInteger('item_id')->autoIncrement();
             $table->string('item_name');
             $table->string('category');
+            $table->string('dose_unit')->nullable();
             $table->decimal('quantity_on_hand', 10, 2)->default(0);
             $table->decimal('unit_cost', 10, 2)->nullable();
             $table->string('supplier_name')->nullable();
@@ -54,6 +55,7 @@ class ClientPetVaccinationsTest extends TestCase
         );
         $this->vaccinationMigration->up();
         (require database_path('migrations/2026_10_12_000001_extend_vaccination_records_for_treatments.php'))->up();
+        (require database_path('migrations/2026_10_12_000004_separate_treatment_clinical_details_from_inventory.php'))->up();
     }
 
     protected function tearDown(): void
@@ -180,8 +182,6 @@ class ClientPetVaccinationsTest extends TestCase
             'dose_unit' => 'mL',
             'route' => 'subcutaneous',
             'administration_site' => 'Right shoulder',
-            'administered_by_user_id' => 20,
-            'administered_by_name' => 'Historical Provider Snapshot',
             'recorded_by_user_id' => 21,
             'notes' => 'PRIVATE INTERNAL VACCINATION NOTES',
             'published_by_user_id' => 21,
@@ -204,11 +204,9 @@ class ClientPetVaccinationsTest extends TestCase
             'dose_unit',
             'route',
             'administration_site',
-            'administering_provider',
             'appointment_reference',
             'due_status',
         ], array_keys($record));
-        $this->assertSame('Historical Provider Snapshot', $record['administering_provider']);
         $this->assertSame('CL-SAFE-501', $record['appointment_reference']);
 
         $encoded = json_encode($response->json());
@@ -243,7 +241,7 @@ class ClientPetVaccinationsTest extends TestCase
         );
     }
 
-    public function test_provider_display_uses_snapshot_then_linked_name_then_not_provided(): void
+    public function test_response_no_longer_exposes_treatment_provider_details(): void
     {
         $this->authenticateCustomer(10);
         $this->insertUser(20, 'Alex', 'Reyes', 'staff', [
@@ -253,13 +251,9 @@ class ClientPetVaccinationsTest extends TestCase
         $this->insertPet(101, 10, 'Mochi');
 
         $this->insertVaccination(101, 'Snapshot Provider', '2026-07-23', [
-            'administered_by_user_id' => 20,
-            'administered_by_name' => 'Dr. Historical Name',
-        ]);
+            ]);
         $this->insertVaccination(101, 'Linked Provider', '2026-07-22', [
-            'administered_by_user_id' => 20,
-            'administered_by_name' => null,
-        ]);
+            ]);
         $this->insertVaccination(101, 'No Provider', '2026-07-21');
 
         $records = collect(
@@ -268,10 +262,8 @@ class ClientPetVaccinationsTest extends TestCase
                 ->json('vaccinations'),
         )->keyBy('vaccine_name');
 
-        $this->assertSame('Dr. Historical Name', $records['Snapshot Provider']['administering_provider']);
-        $this->assertSame('Alex Reyes', $records['Linked Provider']['administering_provider']);
-        $this->assertSame('Not provided.', $records['No Provider']['administering_provider']);
 
+        foreach ($records as $record) $this->assertArrayNotHasKey('administering_provider', $record);
         $encoded = json_encode($records);
         $this->assertStringNotContainsString('alex-private@example.test', $encoded);
         $this->assertStringNotContainsString('09991234567', $encoded);

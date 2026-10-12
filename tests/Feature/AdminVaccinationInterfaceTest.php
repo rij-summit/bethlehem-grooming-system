@@ -142,14 +142,11 @@ class AdminVaccinationInterfaceTest extends TestCase
     public function test_form_mirrors_validation_and_does_not_send_server_managed_fields(): void
     {
         foreach ([
-            'Select a vaccine from clinic inventory.',
-            'Select who administered the vaccine.',
-            'Dose amount is required.',
             'Dose amount must be greater than zero.',
-            'Dose unit is required.',
+            'Enter both Dose Amount and Dose Unit, or leave both blank.',
+            'Complete the required fields marked *.',
             'Next vaccination date cannot be before today.',
             'Choose a supported administration route.',
-            'Complete the treatment details before publication.',
         ] as $message) {
             $this->assertStringContainsString($message, $this->vaccinationComponent);
         }
@@ -185,15 +182,15 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('"/admin/vaccination-options"', $this->apiLayer);
         $this->assertStringNotContainsString('getAdminInventoryItems', $this->apiLayer.$this->vaccinationComponent);
 
-        $this->assertStringContainsString('x-model="vaccineQuery"', $form);
-        $this->assertStringContainsString('filteredVaccines()', $form);
-        $this->assertStringContainsString('vaccineAvailabilityLabel(item)', $form);
-        $this->assertStringContainsString('From clinic inventory', $form);
-        $this->assertStringContainsString('selectedVaccine?.next_batch?.batch_number', $form);
-        $this->assertStringContainsString('selectedVaccine?.next_batch?.expiry_date', $form);
+        $this->assertStringContainsString('x-model="productQuery"', $form);
+        $this->assertStringContainsString('productResults', $form);
+        $this->assertStringContainsString('productAvailabilityLabel(item)', $form);
+        $this->assertStringContainsString('Inventory usage', $form);
+        $this->assertStringContainsString('selectedProduct.next_batch?.batch_number', $form);
+        $this->assertStringContainsString('selectedProduct.next_batch?.expiry_date', $form);
         $this->assertStringContainsString('Next Vaccination Date', $form);
 
-        $inventoryForm = $this->sourceBetween($form, '<section x-show="recordKind === \'inventory\' && treatmentType === \'vaccine\'">', '<section x-show="recordKind === \'historical\'"');
+        $inventoryForm = $this->sourceBetween($form, '<section x-show="recordKind === \'inventory\'"', '<section x-show="recordKind === \'historical\'"');
         foreach ([
             'x-model="form.vaccine_name"',
             'x-model="form.product_name"',
@@ -210,7 +207,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         }
     }
 
-    public function test_provider_is_an_account_and_the_payload_carries_only_staff_entered_facts(): void
+    public function test_provider_is_removed_and_payload_carries_only_treatment_facts(): void
     {
         $form = $this->sourceBetween(
             $this->clinicPage,
@@ -223,20 +220,17 @@ class AdminVaccinationInterfaceTest extends TestCase
             'async saveDraft() {',
         );
 
-        $this->assertStringContainsString('x-model="form.administered_by_user_id"', $form);
-        $this->assertStringContainsString('x-for="provider in veterinarians"', $form);
-        $this->assertStringContainsString('x-show="canManageStaff" href="settings.html?tab=security"', $form);
-        $this->assertStringContainsString(
-            'this.form.administered_by_user_id = this.currentUserId ? String(this.currentUserId) : "";',
-            $this->vaccinationComponent,
-        );
+        $this->assertStringNotContainsString('administered_by_', $form.$payloadBuilder);
+        $this->assertStringNotContainsString('provider in veterinarians', $form);
+        $this->assertStringNotContainsString('barcode', $form);
+        $this->assertStringContainsString('Quantity used', $form);
+        $this->assertStringContainsString('step="1"', $form);
 
         $this->assertStringContainsString('id="vaccination-administered-date" type="text" readonly', $form);
         $this->assertStringContainsString('New administrations use today; existing dates are preserved.', $form);
         $this->assertStringContainsString('this.recordKind === "historical" ? {', $payloadBuilder);
         $this->assertStringContainsString('administered_date: nullableText("administered_date")', $payloadBuilder);
 
-        $this->assertStringContainsString('administered_by_user_id: nullableId("administered_by_user_id")', $payloadBuilder);
         $this->assertStringContainsString('inventory_item_id: this.recordKind === "inventory" ? nullableId("inventory_item_id") : null', $payloadBuilder);
         $this->assertStringContainsString('clinic_appointment_id: this.formModal.clinicAppointmentId', $payloadBuilder);
         foreach ([
@@ -245,7 +239,6 @@ class AdminVaccinationInterfaceTest extends TestCase
             'manufacturer',
             'batch_number',
             'product_expiry_date',
-            'administered_by_name',
         ] as $inventoryManagedField) {
             $this->assertStringContainsString($inventoryManagedField.': nullableText("'.$inventoryManagedField.'")', $payloadBuilder);
         }
@@ -256,7 +249,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $finish = $this->sourceBetween(
             $this->vaccinationComponent,
             'async saveAndFinishCase() {',
-            'confirmDeduction(vaccine, confirmLabel, medicine = false) {',
+            'confirmDeduction(vaccine, confirmLabel, medicine = false, quantity = this.form.inventory_quantity) {',
         );
 
         $this->assertStringContainsString('{ finishCase: true, consumeInventory: true }', $finish);

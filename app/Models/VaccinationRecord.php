@@ -47,8 +47,6 @@ class VaccinationRecord extends Model
         'dose_unit',
         'route',
         'administration_site',
-        'administered_by_user_id',
-        'administered_by_name',
         'recorded_by_user_id',
         'notes',
         'published_at',
@@ -85,11 +83,6 @@ class VaccinationRecord extends Model
         return $this->belongsTo(InventoryItem::class, 'inventory_item_id', 'item_id');
     }
 
-    public function administeredBy()
-    {
-        return $this->belongsTo(User::class, 'administered_by_user_id', 'user_id');
-    }
-
     public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by_user_id', 'user_id');
@@ -123,11 +116,7 @@ class VaccinationRecord extends Model
     public function hasPublishingRequirements(): bool
     {
         return filled($this->vaccine_name)
-            && $this->administered_date !== null
-            && (
-                $this->administered_by_user_id !== null
-                || filled($this->administered_by_name)
-            );
+            && $this->administered_date !== null;
     }
 
     public function dueStatus(?CarbonInterface $asOf = null): string

@@ -9,6 +9,11 @@ class InventoryItem extends Model
     public const RETAIL_CATEGORIES = ['food', 'grooming_supply', 'pet_shop', 'miscellaneous'];
     public const MEDICINE_TYPES = ['deworming', 'heartworm_prevention', 'heartworm_treatment', 'mange_treatment', 'general_medication'];
 
+    public static function isMeasuredUnit(string $unit): bool
+    {
+        return (bool) preg_match('/^(kg|g|mg|mcg|l|ml|kilogram|gram|milligram|microgram|liter|litre|milliliter|millilitre)$/i', trim($unit));
+    }
+
     public function scopeRetailSale($query)
     {
         return $query->where('is_active', true)
@@ -26,7 +31,6 @@ class InventoryItem extends Model
         'category',
         'unit',
         'medicine_type',
-        'dose_unit',
         'strength_concentration',
         'pricing_method',
         'weight_pricing_mode',

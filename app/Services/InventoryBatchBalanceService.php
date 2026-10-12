@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use Carbon\CarbonInterface;
 
@@ -185,6 +186,31 @@ class InventoryBatchBalanceService
     public function forItem(int $itemId, ?CarbonInterface $asOf = null): array
     {
         return $this->forItems([$itemId], $asOf)[$itemId] ?? $this->emptyBalance();
+    }
+
+    /** Availability for clinical use, independent of dosage and pricing. */
+    public function treatmentAvailability(InventoryItem $item, array $balance): array
+    {
+        $physical = (float) $item->quantity_on_hand;
+        $available = max(0, min($physical, (float) $balance['unexpired_quantity']));
+        $legacyUnit = InventoryItem::isMeasuredUnit($item->unit);
+        $status = match (true) {
+            $physical <= 0 => 'out_of_stock',
+            $available <= 0 && $balance['expired_quantity'] > 0 => 'expired',
+            $legacyUnit => 'legacy_unit',
+            $available < 1 => 'unavailable',
+            $available <= (float) $item->reorder_level => 'low_stock',
+            default => 'available',
+        };
+        $batch = $this->nextAvailableBatch($balance);
+
+        return [
+            'is_active' => $item->is_active,
+            'quantity_on_hand' => $physical,
+            'available_quantity' => $legacyUnit ? 0 : $available,
+            'stock_status' => $status,
+            'next_batch' => $batch ? ['batch_number' => $batch['batch_number'], 'expiry_date' => $batch['expiry_date']] : null,
+        ];
     }
 
     /**

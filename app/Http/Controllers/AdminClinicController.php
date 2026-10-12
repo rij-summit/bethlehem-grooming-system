@@ -451,12 +451,15 @@ class AdminClinicController extends Controller
     {
         $q = trim($request->query('q', ''));
         if (mb_strlen($q) < 2) return response()->json(['data' => []]);
-        $items = InventoryItem::query()->where('is_active', true)->where('category', 'medicine')
-            ->where(fn ($query) => $query->where('item_name', 'like', "%{$q}%")->orWhere('barcode', $q))
-            ->with('weightPrices')->orderBy('item_name')->limit(20)->get();
+        $items = InventoryItem::query()->where('category', 'medicine')
+            ->where('item_name', 'like', "%{$q}%")
+            ->with('weightPrices')->orderBy('item_name')->get();
+        $batchBalances = app(\App\Services\InventoryBatchBalanceService::class);
+        $balances = $batchBalances->forItems($items->pluck('item_id'));
         return response()->json(['data' => $items->map(fn ($item) => [
             'item_id' => $item->item_id, 'item_name' => $item->item_name, 'unit' => $item->unit,
-            'medicine_type' => $item->medicine_type, 'dose_unit' => $item->dose_unit,
+            'medicine_type' => $item->medicine_type,
+            ...$batchBalances->treatmentAvailability($item, $balances[$item->item_id]),
             'strength_concentration' => $item->strength_concentration,
             'pricing_method' => $item->pricing_method, 'weight_pricing_mode' => $item->weight_pricing_mode ?? 'legacy', 'selling_price' => $item->selling_price,
             'weight_prices' => $item->weightPrices->map->only(['min_weight_kg', 'max_weight_kg', 'price'])->values(),
@@ -513,7 +516,7 @@ class AdminClinicController extends Controller
             'medicines' => ['sometimes', 'array', 'max:100'],
             'medicines.*' => ['array:inventory_item_id,inventory_quantity,expected_price,expected_weight_kg,request_key'],
             'medicines.*.inventory_item_id' => ['required', 'integer'],
-            'medicines.*.inventory_quantity' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:99999999.99'],
+            'medicines.*.inventory_quantity' => ['nullable', 'integer', 'min:1', 'max:99999999'],
             'medicines.*.expected_price' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'medicines.*.expected_weight_kg' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'medicines.*.request_key' => ['required', 'uuid', 'distinct'],
