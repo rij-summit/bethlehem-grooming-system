@@ -9,6 +9,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ClinicClosureController;
 use App\Http\Controllers\ClinicSettingController;
+use App\Http\Controllers\ClinicServiceController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
@@ -252,6 +253,12 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             ->middleware('throttle:10,1');
         Route::post('/admin/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
             ->middleware('throttle:3,10');
+
+        Route::get('/admin/clinic-services/options', [ClinicServiceController::class, 'options']);
+        Route::get('/admin/clinic-services', [ClinicServiceController::class, 'index']);
+        Route::post('/admin/clinic-services', [ClinicServiceController::class, 'store']);
+        Route::put('/admin/clinic-services/{clinicService}', [ClinicServiceController::class, 'update']);
+        Route::patch('/admin/clinic-services/{clinicService}/status', [ClinicServiceController::class, 'status']);
 
         Route::post('/admin/clinic/stop-today', [ClinicClosureController::class, 'stopToday']);
         Route::post('/admin/clinic/reopen-today', [ClinicClosureController::class, 'reopenToday']);

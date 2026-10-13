@@ -111,10 +111,48 @@ function installAdminInventoryNavigation() {
   link.replaceWith(group);
 }
 
+function getAdminClinicSection() {
+  return window.location.hash === '#services' ? 'services' : 'cases';
+}
+
+function installAdminClinicNavigation() {
+  const link = document.querySelector('.admin-sidebar-menu a[href$="clinic.html"]');
+  if (!link) return;
+  const url = new URL(link.href);
+  const group = document.createElement('div');
+  group.className = 'admin-inventory-navigation';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `${link.className} w-full`;
+  button.setAttribute(':class', link.getAttribute(':class') || "''");
+  button.setAttribute('@click', "clinicExpanded = activePage === 'clinic' || !clinicExpanded");
+  button.setAttribute(':aria-expanded', 'clinicExpanded');
+  button.setAttribute('aria-controls', 'clinic-submenu');
+  button.innerHTML = `${link.innerHTML}<span class="ml-auto text-xs" aria-hidden="true" x-text="clinicExpanded ? '▾' : '▸'"></span>`;
+  const submenu = document.createElement('div');
+  submenu.id = 'clinic-submenu';
+  submenu.className = 'admin-inventory-submenu';
+  submenu.setAttribute('x-show', 'clinicExpanded');
+  submenu.setAttribute('x-cloak', '');
+  for (const [section, label] of Object.entries({cases: 'Cases', services: 'Services'})) {
+    const child = document.createElement('a');
+    child.href = `${url.pathname}#${section}`;
+    child.textContent = label;
+    child.setAttribute(':class', `activePage === 'clinic' && clinicSection === '${section}' ? 'is-active' : ''`);
+    child.setAttribute(':aria-current', `activePage === 'clinic' && clinicSection === '${section}' ? 'page' : null`);
+    child.setAttribute('@click', 'sidebarOpen = false');
+    if (section === 'services') child.setAttribute('x-show', 'isAdmin');
+    submenu.appendChild(child);
+  }
+  group.append(button, submenu);
+  link.replaceWith(group);
+}
+
 // Build the shared group before Alpine walks the sidebar. Replacing a live
 // Alpine link can leave its queued effects detached from their parent scope.
 if (typeof document !== "undefined" && document.querySelector) {
   installAdminInventoryNavigation();
+  installAdminClinicNavigation();
   document.querySelectorAll('.admin-sidebar-menu a[href$="archive.html"] span').forEach((label) => {
     if (label.textContent.trim() === "Archive") label.textContent = "History";
   });
@@ -126,6 +164,8 @@ function adminSidebar() {
     activePage: getAdminSidebarActivePage(),
     inventoryExpanded: getAdminSidebarActivePage() === "inventory",
     inventorySection: getAdminInventorySection(),
+    clinicExpanded: getAdminSidebarActivePage() === 'clinic',
+    clinicSection: getAdminClinicSection(),
     _inventoryNavigationListener: null,
     isAdmin: false,
     staffDisplayName: "Staff",
@@ -166,6 +206,8 @@ function adminSidebar() {
       this._inventoryNavigationListener = () => {
         this.inventorySection = getAdminInventorySection();
         if (this.activePage === "inventory") this.inventoryExpanded = true;
+        this.clinicSection = getAdminClinicSection();
+        if (this.activePage === 'clinic') this.clinicExpanded = true;
       };
       window.addEventListener("hashchange", this._inventoryNavigationListener);
       this.isAdmin = API.getUserRole() === "admin";

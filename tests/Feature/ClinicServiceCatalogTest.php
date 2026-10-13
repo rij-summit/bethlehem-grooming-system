@@ -1,0 +1,170 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\ClinicService;
+use App\Models\ClinicServiceCategory;
+use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class ClinicServiceCatalogTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Schema::create('clinic_charges', function (Blueprint $table) {
+            $table->id();
+            $table->string('description');
+            $table->decimal('unit_price', 10, 2);
+        });
+        (require base_path('database/migrations/2026_10_13_000001_create_clinic_services_table.php'))->up();
+        $this->signIn('admin');
+    }
+
+    private function signIn(string $role): void
+    {
+        $user = new User;
+        $user->forceFill(['user_id' => 1, 'role' => $role, 'is_active' => true]);
+        Sanctum::actingAs($user);
+    }
+
+    private function payload(array $changes = []): array
+    {
+        return array_replace([
+            'name' => 'CBC', 'category_id' => 2, 'type' => 'In House', 'pricing_method' => 'fixed',
+            'billing_unit' => null, 'price' => 990, 'is_active' => true, 'notes' => null,
+        ], $changes);
+    }
+
+    public function test_crud_status_and_duplicate_identity(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload())->assertCreated()->json('data.id');
+        $this->postJson('/api/admin/clinic-services', $this->payload(['type' => 'Send Out', 'price' => 500]))->assertCreated();
+        $this->postJson('/api/admin/clinic-services', $this->payload(['category_id' => 3]))->assertCreated();
+        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => '  cbc  ', 'type' => 'In   House']))
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['price' => 1000]))->assertOk();
+        $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertOk();
+        $this->getJson('/api/admin/clinic-services')->assertJsonPath('total', 2);
+        $this->getJson('/api/admin/clinic-services?status=inactive')->assertJsonPath('total', 1);
+        $this->postJson('/api/admin/clinic-services', $this->payload())->assertUnprocessable();
+        $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => true])->assertOk();
+        $this->assertDatabaseCount('clinic_services', 3);
+        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Emergency Fee', 'type' => null]))->assertCreated();
+        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Emergency Fee', 'type' => '  ']))->assertUnprocessable();
+    }
+
+    public function test_form_saves_without_status_default_to_active_and_preserve_deactivation(): void
+    {
+        $payload = $this->payload();
+        unset($payload['is_active']);
+        $id = $this->postJson('/api/admin/clinic-services', $payload)->assertCreated()->json('data.id');
+        $this->assertDatabaseHas('clinic_services', ['id' => $id, 'is_active' => true]);
+        $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertOk();
+        $this->putJson('/api/admin/clinic-services/'.$id, array_replace($payload, ['price' => 1000]))
+            ->assertOk()->assertJsonPath('data.is_active', false);
+        $this->assertDatabaseHas('clinic_services', ['id' => $id, 'price' => 1000, 'is_active' => false]);
+    }
+
+    public function test_type_options_are_predefined_and_optional_on_create_and_edit(): void
+    {
+        $this->getJson('/api/admin/clinic-services/options')
+            ->assertOk()->assertJsonPath('types', ['In House', 'Send Out', 'Test Kit']);
+        $payload = $this->payload();
+        unset($payload['type']);
+        $id = $this->postJson('/api/admin/clinic-services', $payload)
+            ->assertCreated()->assertJsonPath('data.type', null)->json('data.id');
+        foreach (['In House', 'Send Out', 'Test Kit', null, ''] as $type) {
+            $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['type' => $type]))
+                ->assertOk()->assertJsonPath('data.type', $type === '' ? null : $type);
+        }
+        $this->postJson('/api/admin/clinic-services', $this->payload(['type' => 'Custom Type']))
+            ->assertUnprocessable()->assertJsonValidationErrors('type');
+        $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['type' => 'Custom Type']))
+            ->assertUnprocessable()->assertJsonValidationErrors('type');
+        $this->assertDatabaseHas('clinic_services', ['id' => $id, 'type' => null]);
+    }
+
+    public function test_type_filter_matches_predefined_types_and_not_applicable(): void
+    {
+        foreach (['In House', 'Send Out', 'Test Kit', null] as $type) {
+            $this->postJson('/api/admin/clinic-services', $this->payload(['type' => $type]))->assertCreated();
+        }
+        $this->postJson('/api/admin/clinic-services', $this->payload([
+            'name' => 'Inactive consultation', 'type' => null, 'is_active' => false,
+        ]))->assertCreated();
+        foreach (['In House', 'Send Out', 'Test Kit'] as $type) {
+            $this->getJson('/api/admin/clinic-services?type='.rawurlencode($type))
+                ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.type', $type);
+        }
+        $this->getJson('/api/admin/clinic-services?type=__none__')
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.type', null);
+        $this->getJson('/api/admin/clinic-services?type=__none__&status=inactive&category_id=2&q=consultation')
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.name', 'Inactive consultation');
+        $this->getJson('/api/admin/clinic-services?type=__none__&status=all')->assertJsonPath('total', 2);
+        $this->getJson('/api/admin/clinic-services?type=')->assertOk()->assertJsonPath('total', 4);
+        $this->getJson('/api/admin/clinic-services')->assertOk()->assertJsonPath('total', 4);
+        $this->getJson('/api/admin/clinic-services?type=Custom%20Type')
+            ->assertUnprocessable()->assertJsonValidationErrors('type');
+    }
+
+    public function test_pricing_validation_and_method_changes_clear_unused_prices(): void
+    {
+        $this->postJson('/api/admin/clinic-services', $this->payload(['price' => -1]))->assertJsonValidationErrors('price');
+        $this->postJson('/api/admin/clinic-services', $this->payload(['price' => '1.001']))->assertJsonValidationErrors('price');
+        $range = $this->payload(['pricing_method' => 'range', 'min_price' => 500, 'max_price' => 1500]);
+        $id = $this->postJson('/api/admin/clinic-services', $range)->assertCreated()->assertJsonPath('data.price', null)->json('data.id');
+        $this->postJson('/api/admin/clinic-services', array_replace($range, ['max_price' => 499]))->assertJsonValidationErrors('max_price');
+        $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['pricing_method' => 'starting_at', 'price' => 500]))
+            ->assertOk()->assertJsonPath('data.min_price', null)->assertJsonPath('data.max_price', null);
+        $tiered = $this->payload(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'tiers' => [
+            ['size' => 'small', 'price' => 800], ['size' => 'extra_large', 'price' => 1050],
+        ]]);
+        $this->putJson('/api/admin/clinic-services/'.$id, $tiered)->assertOk()->assertJsonPath('data.price', null);
+        $this->putJson('/api/admin/clinic-services/'.$id, array_replace($tiered, ['tiers' => []]))->assertJsonValidationErrors('tiers');
+        $this->putJson('/api/admin/clinic-services/'.$id, array_replace($tiered, ['tiers' => [['size' => 'small', 'price' => -1]]]))->assertJsonValidationErrors('tiers.0.price');
+        $this->putJson('/api/admin/clinic-services/'.$id, array_replace($tiered, ['tiers' => [['size' => 'small']]]))->assertJsonValidationErrors('tiers.0.price');
+        $this->putJson('/api/admin/clinic-services/'.$id, array_replace($tiered, ['tiers' => [['size' => 'small', 'price' => 1], ['size' => 'small', 'price' => 2]]]))->assertJsonValidationErrors('tiers.0.size');
+        $this->putJson('/api/admin/clinic-services/'.$id, $this->payload())->assertOk()->assertJsonPath('data.tiers', null);
+    }
+
+    public function test_filters_pagination_and_extensible_categories(): void
+    {
+        $category = ClinicServiceCategory::create(['name' => 'Dental']);
+        $this->postJson('/api/admin/clinic-services', $this->payload(['category_id' => $category->id, 'type' => null]))->assertCreated();
+        $this->getJson('/api/admin/clinic-services/options')->assertJsonCount(8, 'categories');
+        for ($i = 0; $i < 26; $i++) {
+            $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Test '.$i]))->assertCreated();
+        }
+        $this->getJson('/api/admin/clinic-services?category_id='.$category->id.'&type=__none__&q=CBC')->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-services?type=Send%20Out')->assertJsonPath('total', 0);
+        $this->getJson('/api/admin/clinic-services?page=2')->assertJsonPath('total', 27)->assertJsonCount(2, 'data');
+    }
+
+    public function test_catalog_edits_preserve_charge_snapshots_and_reference(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload())->json('data.id');
+        DB::table('clinic_charges')->insert(['clinic_service_id' => $id, 'description' => 'CBC · In House', 'unit_price' => 990]);
+        $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['name' => 'Complete Blood Count', 'price' => 1200]))->assertOk();
+        $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertOk();
+        $this->assertDatabaseHas('clinic_charges', ['clinic_service_id' => $id, 'description' => 'CBC · In House', 'unit_price' => 990]);
+        $this->assertNotNull(ClinicService::find($id));
+    }
+
+    public function test_staff_and_customers_cannot_read_or_mutate_catalog(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload())->json('data.id');
+        foreach (['staff', 'customer'] as $role) {
+            $this->signIn($role);
+            $this->getJson('/api/admin/clinic-services')->assertForbidden();
+            $this->getJson('/api/admin/clinic-services/options')->assertForbidden();
+            $this->postJson('/api/admin/clinic-services', $this->payload())->assertForbidden();
+            $this->putJson('/api/admin/clinic-services/'.$id, $this->payload())->assertForbidden();
+            $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertForbidden();
+        }
+    }
+}

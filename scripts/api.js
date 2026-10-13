@@ -202,7 +202,6 @@ var API = (() => {
   });
   const ADMIN_ONLY_PAGE_NAMES = [
     "reports.html",
-    "services.html",
   ];
   const PUBLIC_CLIENT_PAGE_NAMES = new Set([
     "sign-in.html",

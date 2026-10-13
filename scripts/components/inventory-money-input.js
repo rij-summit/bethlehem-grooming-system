@@ -31,7 +31,7 @@ window.InventoryMoneyInput = (() => {
     }
   }
 
-  const root = document.querySelector('main[aria-label="Inventory"]');
+  const root = document.querySelector('main[aria-label="Inventory"], [data-money-input-root]');
   for (const type of ['keydown', 'beforeinput', 'paste', 'input']) root?.addEventListener(type, handle, true);
   return { handle };
 })();

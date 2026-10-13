@@ -654,7 +654,10 @@ function adminClinicPage() {
     },
     setTab(tab) {
       this.tab = tab;
-      window.history.replaceState(null, "", tab === "active-cases" ? "?tab=active-cases" : window.location.pathname);
+      const url = new URL(window.location.href);
+      if (tab === "active-cases") url.searchParams.set("tab", "active-cases");
+      else url.searchParams.delete("tab");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
       window.scrollTo(0, 0);
       this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
     },

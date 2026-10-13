@@ -2301,6 +2301,11 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $expected = [
             ['POST', 'api/admin/clinic-walk-in', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-records', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-services/options', 'role:admin'],
+            ['GET', 'api/admin/clinic-services', 'role:admin'],
+            ['POST', 'api/admin/clinic-services', 'role:admin'],
+            ['PUT', 'api/admin/clinic-services/{clinicService}', 'role:admin'],
+            ['PATCH', 'api/admin/clinic-services/{clinicService}/status', 'role:admin'],
             ['GET', 'api/admin/clinic-medicine-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases', 'role:admin,staff'],
