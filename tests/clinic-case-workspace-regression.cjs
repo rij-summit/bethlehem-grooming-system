@@ -167,7 +167,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   await pending;
   assert.equal(stale.searchRows.length, 0, 'Closed case ignores an in-flight catalogue response');
 
-  const billingMarkup = page.slice(page.indexOf('<section id="case-billing-panel"'), page.indexOf('<!-- Vaccination section'));
+  const billingMarkup = page.slice(page.indexOf('<section id="case-billing-panel"'), page.indexOf('<section id="case-confinement-panel"'));
   assert.equal(/<input|<select|Edit Price|Discount/.test(billingMarkup), false, 'Billing has no pricing editor');
   assert.match(page, /<template x-if="needsFinalPrice">/);
   assert.match(page, /x-show="selectedService\?\.pricing_method === 'tiered'/);

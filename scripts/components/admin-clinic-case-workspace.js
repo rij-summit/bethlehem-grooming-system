@@ -1,3 +1,13 @@
+// UX guidance only; the backend resolves catalogue prices authoritatively.
+function clinicFinalPriceError(value, pricing, money) {
+  const price = String(value ?? '').trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(price)) return 'Enter the final price using no more than 2 decimal places.';
+  if (Number(price) < Number(pricing.min_price) || (pricing.max_price != null && Number(price) > Number(pricing.max_price)))
+    return pricing.max_price != null ? `Enter an amount from ${money(pricing.min_price)} to ${money(pricing.max_price)}.`
+      : `Enter an amount of at least ${money(pricing.min_price)}.`;
+  return Number(price) > pricing.technical_max_price ? 'The final price exceeds the supported monetary limit.' : '';
+}
+
 // Case services use server pricing previews; historical lines use saved snapshots.
 function clinicCaseWorkspace() {
   return {
@@ -25,6 +35,7 @@ function clinicCaseWorkspace() {
     sizeLabel(size) { return ({small: 'Small', medium: 'Medium', large: 'Large', extra_large: 'Extra Large'})[size] || '—'; },
     methodLabel(method) { return ({fixed: 'Fixed', range: 'Range', starting_at: 'Starting At', tiered: 'Tiered'})[method] || method; },
     serviceInfo(entry) { return entry.service_snapshot || entry.clinic_service || {}; },
+    isConfinementBase(entry) { return this.workspaceAppointment?.confinement?.clinic_case_service_id === entry.id; },
     categoryLabel(service) { return typeof service?.category === 'string' ? service.category : service?.category?.name; },
     cataloguePrice(service) {
       if (service.pricing_method === 'range') return `${this.money(service.min_price)} – ${this.money(service.max_price)}`;
@@ -172,13 +183,8 @@ function clinicCaseWorkspace() {
       if (!/^\d+(?:\.\d{1,2})?$/.test(quantity) || Number(quantity) < 0.01 || Number(quantity) > 99999999.99)
         this.serviceErrors.quantity = 'Enter a quantity greater than zero, with no more than 2 decimal places.';
       if (this.needsFinalPrice) {
-        const price = String(this.serviceForm.applied_price).trim(), pricing = this.servicePricing;
-        if (!/^\d+(?:\.\d{1,2})?$/.test(price)) this.serviceErrors.applied_price = 'Enter the final price using no more than 2 decimal places.';
-        else if (Number(price) < Number(pricing.min_price) || (pricing.max_price != null && Number(price) > Number(pricing.max_price)))
-          this.serviceErrors.applied_price = pricing.max_price != null
-            ? `Enter an amount from ${this.money(pricing.min_price)} to ${this.money(pricing.max_price)}.`
-            : `Enter an amount of at least ${this.money(pricing.min_price)}.`;
-        else if (Number(price) > pricing.technical_max_price) this.serviceErrors.applied_price = 'The final price exceeds the supported monetary limit.';
+        const error = clinicFinalPriceError(this.serviceForm.applied_price, this.servicePricing, this.money);
+        if (error) this.serviceErrors.applied_price = error;
       }
       return Object.keys(this.serviceErrors).length === 0;
     },

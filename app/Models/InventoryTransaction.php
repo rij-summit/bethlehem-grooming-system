@@ -25,6 +25,7 @@ class InventoryTransaction extends Model
         'reference_id',
         'notes',
         'performed_by',
+        'vaccination_record_id',
     ];
 
     protected $casts = [

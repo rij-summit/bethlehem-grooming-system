@@ -12,6 +12,7 @@ use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicServiceController;
 use App\Http\Controllers\ClinicCaseServiceController;
 use App\Http\Controllers\ClinicBillingController;
+use App\Http\Controllers\ClinicConfinementController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
@@ -177,10 +178,18 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
         Route::get('/admin/clinic-records', [AdminClinicController::class, 'records']);
         Route::get('/admin/clinic-cases', [AdminClinicController::class, 'activeCases']);
+        Route::get('/admin/clinic-confinements', [AdminClinicController::class, 'confinedCases']);
         Route::post('/admin/clinic-cases', [AdminClinicController::class, 'createCase'])->middleware('clinic:intake');
         Route::post('/admin/clinic-cases/{id}/start', [AdminClinicController::class, 'startCase'])->middleware('clinic:clinical');
         Route::post('/admin/clinic-cases/{id}/finish', [AdminClinicController::class, 'finishCase'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'index']);
+        Route::get('/admin/clinic-confinement-service-options', [ClinicConfinementController::class, 'options'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/confinement', [ClinicConfinementController::class, 'show']);
+        Route::post('/admin/clinic-cases/{id}/confinement', [ClinicConfinementController::class, 'admit'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/confinement/observations', [ClinicConfinementController::class, 'observations']);
+        Route::post('/admin/clinic-cases/{id}/confinement/observations', [ClinicConfinementController::class, 'recordObservation'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/confinement/discharge-preview', [ClinicConfinementController::class, 'preview'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-cases/{id}/confinement/discharge', [ClinicConfinementController::class, 'discharge'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-service-options', [ClinicServiceController::class, 'caseOptions'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}', [ClinicCaseServiceController::class, 'pricing'])->middleware('clinic:clinical');
         Route::post('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'store'])->middleware('clinic:clinical');

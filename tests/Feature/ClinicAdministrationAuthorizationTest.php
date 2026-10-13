@@ -2316,6 +2316,14 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['PATCH', 'api/admin/clinic-services/{clinicService}/status', 'role:admin'],
             ['GET', 'api/admin/clinic-medicine-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-confinements', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-confinement-service-options', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/confinement', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/confinement', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/confinement/observations', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/confinement/observations', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/confinement/discharge-preview', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/confinement/discharge', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/start', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/finish', 'role:admin,staff'],
@@ -2369,7 +2377,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             fn (RoutingRoute $route) => str_starts_with($route->getActionName(), AdminClinicController::class.'@'),
         );
 
-        $this->assertCount(17, $adminClinicRoutes);
+        $this->assertCount(18, $adminClinicRoutes);
         $adminClinicRoutes->each(function (RoutingRoute $route): void {
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
         });

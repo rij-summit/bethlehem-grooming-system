@@ -16,7 +16,7 @@ class ClinicMedicineChargeService
         if (! $entries) return;
         $items = InventoryItem::query()->whereIn('item_id', array_column($entries, 'inventory_item_id'))
             ->orderBy('item_id')->lockForUpdate()->with('weightPrices')->get()->keyBy('item_id');
-        $weight = $appt->vitals()->value('weight_kg') ?? $appt->pet?->weight;
+        $weight = $appt->vitals()->value('weight_kg');
         $existing = ClinicCharge::whereIn('request_key', array_column($entries, 'request_key'))->get()->keyBy('request_key');
         $movements = [];
         foreach ($entries as $entry) {
@@ -41,6 +41,9 @@ class ClinicMedicineChargeService
             if (($entry['inventory_quantity'] ?? null) !== null && InventoryItem::isMeasuredUnit($item->unit)) {
                 throw ValidationException::withMessages(['inventory_quantity' => 'Review this legacy measured unit in Inventory before using physical stock. Existing quantities are not converted.']);
             }
+            if ($item->pricing_method === 'weight_based' && ! \App\Support\PetWeightSize::isValidWeight($weight)) {
+                throw ValidationException::withMessages(['weight_kg' => "Record the pet's weight in Vitals before using this weight-based medicine."]);
+            }
             $pricing = $item->clinicPrice($weight);
             if (round((float) $pricing['price'] * 100) !== round((float) $entry['expected_price'] * 100)
                 || ($pricing['pet_weight_kg'] !== null && (float) $pricing['pet_weight_kg'] !== (float) ($entry['expected_weight_kg'] ?? 0))) {
@@ -61,14 +64,13 @@ class ClinicMedicineChargeService
                     'item_id' => $item->item_id, 'quantity' => $entry['inventory_quantity'], 'reason' => 'used',
                     'unit_cost_at_time' => $item->unit_cost, 'selling_price' => $pricing['price'],
                     'reference_type' => 'clinic', 'reference_id' => $appt->id,
+                    'vaccination_record_id' => $entry['vaccination_record_id'] ?? null,
                     'batch_number' => $entry['batch_number'] ?? null, 'expiry_date' => $entry['expiry_date'] ?? null,
                     'notes' => 'Medicine/treatment · '.$item->item_name,
                 ];
             }
         }
         if ($movements) app(InventoryStockMovementService::class)->remove($actor, $movements);
-        $total = (float) $appt->charges()->sum('amount');
-        if ($total > 99999999.99) throw ValidationException::withMessages(['medicines' => 'The case charges exceed the supported total.']);
-        $appt->update(['total_amount' => $total]);
+        app(ClinicBillingService::class)->updateTotal($appt);
     }
 }

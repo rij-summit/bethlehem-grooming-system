@@ -136,6 +136,7 @@ class InventoryStockMovementService
                 'reference_type' => $entry['reference_type'] ?? 'manual',
                 'reference_id' => $entry['reference_id'] ?? null,
                 'performed_by' => $actor->user_id,
+                ...(! empty($entry['vaccination_record_id']) ? ['vaccination_record_id' => $entry['vaccination_record_id']] : []),
             ]);
 
             $results[] = [

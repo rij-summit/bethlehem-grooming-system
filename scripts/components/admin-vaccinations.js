@@ -86,6 +86,14 @@ function adminClinicVaccinations() {
       window.addEventListener("clinic-vaccinations-open", (event) => {
         this.openForAppointment(event.detail?.appt);
       });
+      window.addEventListener('clinic-cases-loaded', (event) => {
+        const current = event.detail?.find(item => item.id === this.appointment?.id);
+        if (current) this.appointment = {...this.appointment, status: current.status, weight_kg: current.vitals?.weight_kg,
+          confinement: current.confinement, paid: current.paid, archived_at: current.archived_at};
+      });
+      window.addEventListener('clinic-case-patch', (event) => {
+        if (event.detail.id === this.appointment?.id) this.appointment = {...this.appointment, ...event.detail};
+      });
     },
 
     openForAppointment(appt) {
@@ -105,7 +113,10 @@ function adminClinicVaccinations() {
         id: appt.id,
         appointment_reference: appt.appointment_reference,
         status: appt.status,
-        weight_kg: appt.vitals?.weight_kg ?? appt.pet?.weight,
+        weight_kg: appt.vitals?.weight_kg,
+        confinement: appt.confinement,
+        paid: appt.paid,
+        archived_at: appt.archived_at,
       };
       this.petNotFound = false;
       this.error = "";
@@ -182,6 +193,7 @@ function adminClinicVaccinations() {
     get canEditClinical() { return !!this.$store.clinicAccess.permissions.clinical; },
 
     caseOngoing() {
+      if (this.appointment?.paid || this.appointment?.archived_at) return false;
       return !this.appointment?.id
         || ["checked_in", "in_consultation"].includes(this.appointment.status)
         || (API.getUserRole?.() === "admin" && this.appointment.status === "for_payment");
@@ -367,7 +379,7 @@ function adminClinicVaccinations() {
     },
 
     get medicineQuote() {
-      return this.selectedMedicine ? clinicMedicinePrice(this.selectedMedicine, this.appointment?.weight_kg ?? this.pet?.weight) : null;
+      return this.selectedMedicine ? clinicMedicinePrice(this.selectedMedicine, this.appointment?.id ? this.appointment.weight_kg : this.pet?.weight) : null;
     },
     medicineMoney(value) { return "₱" + Number(value).toFixed(2); },
     medicineRange: clinicPriceRange,
@@ -559,6 +571,10 @@ function adminClinicVaccinations() {
     },
 
     async saveAndFinishCase() {
+      if (this.appointment?.confinement && !this.appointment.confinement.discharged_at) {
+        this.formErrorSummary = 'Discharge the confined patient before sending this case to Billing.';
+        return;
+      }
       if (!this.canEditClinical) return;
       if (this.recordKind !== "inventory") return;
       if (this.appointment?.status !== "in_consultation" || this.formModal.saving || !this.validateForm(true)) return;

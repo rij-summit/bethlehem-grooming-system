@@ -97,8 +97,10 @@ class ClinicInventoryPricingTest extends TestCase
     private function appointment(?float $weight = 12.4): ClinicAppointment
     {
         $pet = Pet::create(['pet_name' => 'Patient', 'weight' => $weight]);
-        return ClinicAppointment::create(['appointment_reference' => 'TEST-'.Str::random(8),
+        $case = ClinicAppointment::create(['appointment_reference' => 'TEST-'.Str::random(8),
             'appointment_date' => today(), 'pet_id' => $pet->pet_id, 'status' => 'in_consultation']);
+        $case->vitals()->create(['weight_kg' => $weight]);
+        return $case;
     }
 
     private function charge(InventoryItem $item, float $price = 700, ?float $weight = 12.4, ?float $quantity = null): array

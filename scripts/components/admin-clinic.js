@@ -72,6 +72,11 @@ document.addEventListener("alpine:init", () => {
     },
   });
 
+  Alpine.store("clinicConfinementClock", {
+    now: Date.now(),
+    init() { this.timer = setInterval(() => { this.now = Date.now(); }, 60000); },
+  });
+
   Alpine.store("clinicFeedback", {
     dialog: { open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false },
     toast: { show: false, message: "", ok: true },
@@ -183,17 +188,22 @@ function adminClinicModal() {
         if (!this.open) return;
         const current = event.detail?.find((item) => item.id === this.apptId);
         if (current) this.currentAppt = current;
-        else this.open = false;
+        else if (!this.currentAppt?.confinement) this.open = false;
+      });
+      window.addEventListener('clinic-case-patch', (event) => {
+        if (this.open && event.detail.id === this.apptId) this.currentAppt = {...this.currentAppt, ...event.detail};
       });
     },
 
     get canEditClinical() {
       return !!this.$store.clinicAccess.permissions.clinical
+        && !this.currentAppt?.paid && !this.currentAppt?.archived_at
         && (["checked_in", "in_consultation"].includes(this.currentAppt?.status)
           || (API.getUserRole() === "admin" && this.currentAppt?.status === "for_payment"));
     },
 
-    get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"; },
+    get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"
+      && !(this.currentAppt?.confinement && !this.currentAppt.confinement.discharged_at); },
     get isVeterinarian() { return this.$store.clinicAccess.user?.staff_subrole === "veterinarian" && this.$store.clinicAccess.user?.role === "staff"; },
     get generalAttachments() {
       const resultIds = this.form.diagnostics.map(row => Number(row.result_attachment_id));
@@ -424,7 +434,7 @@ function adminClinicModal() {
     selectSection(section) {
       if (this.saving || this.attachmentBusy || this.workspaceSaving) return;
       if (section === "billing" && !this.$store.clinicAccess.permissions.billing) return;
-      this.activeSection = ["vaccinations", "services", "billing"].includes(section) ? section : "medical";
+      this.activeSection = ["vaccinations", "services", "billing", "confinement"].includes(section) ? section : "medical";
       if (this.activeSection === "medical" && this.canEditClinical && !this._clinicalOptionsLoaded && !this.optionsLoading) {
         this.loadClinicalOptions();
       }
@@ -601,6 +611,8 @@ function adminClinicPage() {
     hasMoreRecords: false,
     activeCases: [],
     activeCasesLoading: false,
+    confinedCases: [], confinedCount: 0, confinedLoading: false, confinedError: '', confinedPage: 1, confinedLastPage: 1,
+    _confinedRequest: 0,
     caseBusyId: null,
     accessError: "",
     payment: { open: false, case: null, method: "cash", saving: false, error: "" },
@@ -640,16 +652,22 @@ function adminClinicPage() {
         }
       } catch (error) { this.accessError = error.message || "Could not verify Clinic access."; return; }
       if (new URLSearchParams(window.location.search).get("tab") === "active-cases") this.tab = "active-cases";
+      if (new URLSearchParams(window.location.search).get("tab") === "confined") { this.tab = "confined"; this.loadConfinedCases(); }
       this.loadAllRecords();
       this.loadActiveCases();
-      window.addEventListener("clinic-case-updated", () => this.loadActiveCases());
+      window.addEventListener("clinic-case-updated", () => {
+        this.loadActiveCases();
+        if (this.tab === 'confined') this.loadConfinedCases();
+      });
       window.addEventListener("clinic-review-payment", (event) => this.reviewPayment(event.detail));
     },
 
     async loadActiveCases() {
       this.activeCasesLoading = true;
       try {
-        this.activeCases = (await API.getActiveClinicCases()).cases || [];
+        const response = await API.getActiveClinicCases();
+        this.activeCases = response.cases || [];
+        this.confinedCount = response.confined_count || 0;
         window.dispatchEvent(new CustomEvent("clinic-cases-loaded", { detail: this.activeCases }));
       }
       catch { this.activeCases = []; }
@@ -659,10 +677,26 @@ function adminClinicPage() {
     get visibleActiveCases() {
       return this.tab === "active-cases" ? this.activeCases : this.activeCases.slice(0, 3);
     },
+    async loadConfinedCases(page = 1) {
+      const request = ++this._confinedRequest;
+      this.confinedLoading = true; this.confinedError = '';
+      try {
+        const response = await API.getClinicConfinedCases(page);
+        if (request !== this._confinedRequest) return;
+        this.confinedCases = response.data; this.confinedCount = response.total;
+        this.confinedPage = response.current_page; this.confinedLastPage = response.last_page;
+      } catch (error) { if (request === this._confinedRequest) this.confinedError = error.message || 'Could not load confined patients.'; }
+      finally { if (request === this._confinedRequest) this.confinedLoading = false; }
+    },
+    confinementDuration(caseItem) {
+      const episode = caseItem?.confinement;
+      return clinicConfinementDuration(episode?.admitted_at, episode?.discharged_at || this.$store.clinicConfinementClock?.now || Date.now());
+    },
     setTab(tab) {
       this.tab = tab;
       const url = new URL(window.location.href);
       if (tab === "active-cases") url.searchParams.set("tab", "active-cases");
+      else if (tab === 'confined') { url.searchParams.set('tab', 'confined'); this.loadConfinedCases(); }
       else url.searchParams.delete("tab");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
       window.scrollTo(0, 0);
@@ -691,6 +725,7 @@ function adminClinicPage() {
         await API.clinicRecordPayment(this.payment.case.id, {
           total_amount: this.payment.case.total_amount, payment_method: this.payment.method,
         });
+        window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id: this.payment.case.id, paid: true, status: 'completed'}}));
         this.payment.open = false;
         await this.loadActiveCases();
         this.$store.clinicFeedback.notify("Payment recorded. Visit completed.");
@@ -708,6 +743,7 @@ function adminClinicPage() {
     caseOpened(item) { return item.created_at ? new Date(item.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—"; },
     async cancelCase(item) {
       if (!this.permissions.queue) return;
+      if (item.confinement && !item.confinement.discharged_at) return;
       const confirmed = await this.$store.clinicFeedback.confirm({
         title: "Cancel this case?",
         message: `The case for ${item.pet?.name || "this patient"} will be cancelled.`,

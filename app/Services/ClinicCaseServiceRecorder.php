@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class ClinicCaseServiceRecorder
 {
-    public function save(int $appointmentId, array $data, User $actor, ?int $caseServiceId = null): ClinicCaseService
+    public function save(int $appointmentId, array $data, User $actor, ?int $caseServiceId = null, bool $finalizingConfinement = false): ClinicCaseService
     {
         abort_unless($actor->clinicPermissions()['clinical'], 403);
         $data = Validator::make($data, [
@@ -25,7 +25,7 @@ class ClinicCaseServiceRecorder
             'notes' => 'nullable|string|max:5000',
         ])->validate();
 
-        return DB::transaction(function () use ($appointmentId, $data, $actor, $caseServiceId) {
+        return DB::transaction(function () use ($appointmentId, $data, $actor, $caseServiceId, $finalizingConfinement) {
             $appointment = ClinicAppointment::whereKey($appointmentId)->lockForUpdate()->firstOrFail();
             $entry = $caseServiceId
                 ? $appointment->caseServices()->whereKey($caseServiceId)->firstOrFail()
@@ -40,6 +40,10 @@ class ClinicCaseServiceRecorder
                     return $entry->load('charge');
                 }
                 throw ValidationException::withMessages(['status' => 'Performed and cancelled services cannot be changed. Review the billing charge for financial corrections.']);
+            }
+            if ($entry && ! $finalizingConfinement && \Illuminate\Support\Facades\Schema::hasTable('clinic_confinements')
+                && $entry->confinement()->exists()) {
+                throw ValidationException::withMessages(['status' => 'Finalize the base confinement service through Discharge & Send to Billing.']);
             }
             if ($appointment->paid || $appointment->archived_at || ! $appointment->clinicalContentEditableFor($actor)) {
                 throw ValidationException::withMessages(['status' => 'Clinical services cannot be changed at this case stage.']);

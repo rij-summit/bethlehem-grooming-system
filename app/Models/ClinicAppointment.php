@@ -97,6 +97,17 @@ class ClinicAppointment extends Model
         return $this->hasMany(ClinicCaseService::class);
     }
 
+    public function confinement()
+    {
+        return $this->hasOne(ClinicConfinement::class);
+    }
+
+    public function hasActiveConfinement(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable('clinic_confinements')
+            && $this->confinement()->whereNull('discharged_at')->exists();
+    }
+
     public function clinicalContentEditableFor(User $actor): bool
     {
         return in_array($this->status, self::CLINICAL_CONTENT_EDITABLE_STATUSES, true)
@@ -105,6 +116,9 @@ class ClinicAppointment extends Model
 
     public function prepareForPayment(): void
     {
+        if ($this->hasActiveConfinement()) {
+            throw ValidationException::withMessages(['status' => 'Discharge the confined patient before sending this case to Billing.']);
+        }
         if ($this->status !== 'in_consultation') {
             throw ValidationException::withMessages(['status' => 'Start the consultation before finishing it.']);
         }

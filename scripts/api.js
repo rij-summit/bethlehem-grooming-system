@@ -1907,6 +1907,38 @@ var API = (() => {
     return request("GET", `/admin/clinic-cases/${id}/charges?page=${page}`, null, getAdminToken());
   }
 
+  function getClinicConfinedCases(page = 1) {
+    return request("GET", `/admin/clinic-confinements?page=${page}`, null, getAdminToken());
+  }
+
+  function getClinicConfinement(id) {
+    return request("GET", `/admin/clinic-cases/${id}/confinement`, null, getAdminToken());
+  }
+
+  function clinicConfinementOptions(page = 1) {
+    return request("GET", `/admin/clinic-confinement-service-options?page=${page}`, null, getAdminToken());
+  }
+
+  function clinicAdmitConfinement(id, payload) {
+    return request("POST", `/admin/clinic-cases/${id}/confinement`, payload, getAdminToken());
+  }
+
+  function getClinicConfinementObservations(id, page = 1) {
+    return request("GET", `/admin/clinic-cases/${id}/confinement/observations?page=${page}`, null, getAdminToken());
+  }
+
+  function clinicRecordConfinementObservation(id, payload) {
+    return request("POST", `/admin/clinic-cases/${id}/confinement/observations`, payload, getAdminToken());
+  }
+
+  function clinicConfinementDischargePreview(id) {
+    return request("GET", `/admin/clinic-cases/${id}/confinement/discharge-preview`, null, getAdminToken());
+  }
+
+  function clinicDischargeConfinement(id, payload) {
+    return request("POST", `/admin/clinic-cases/${id}/confinement/discharge`, payload, getAdminToken());
+  }
+
   async function startClinicCase(id) {
     return request("POST", `/admin/clinic-cases/${id}/start`, {}, getAdminToken());
   }
@@ -2209,6 +2241,14 @@ var API = (() => {
     clinicCreateCaseService,
     clinicUpdateCaseService,
     getClinicCaseCharges,
+    getClinicConfinedCases,
+    getClinicConfinement,
+    clinicConfinementOptions,
+    clinicAdmitConfinement,
+    getClinicConfinementObservations,
+    clinicRecordConfinementObservation,
+    clinicConfinementDischargePreview,
+    clinicDischargeConfinement,
     createClinicCase,
     startClinicCase,
     finishClinicCase,

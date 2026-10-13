@@ -10,6 +10,7 @@ use App\Models\VaccinationRecord;
 use App\Services\InventoryBatchBalanceService;
 use App\Services\InventoryStockMovementService;
 use App\Services\ClinicMedicineChargeService;
+use App\Services\ClinicBillingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -108,8 +109,8 @@ class AdminVaccinationController extends Controller
             $data = $this->addInventorySnapshot($data);
 
             if (! empty($data['clinic_appointment_id'])) {
-                $case = ClinicAppointment::query()->findOrFail($data['clinic_appointment_id']);
-                if (! $case->clinicalContentEditableFor($request->user())) {
+                $case = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->lockForUpdate()->firstOrFail();
+                if (! $case->clinicalContentEditableFor($request->user()) || $case->paid || $case->archived_at) {
                     throw ValidationException::withMessages([
                         'clinic_appointment_id' => 'This case is no longer ongoing. Start a new case to add a vaccination.',
                     ]);
@@ -158,9 +159,10 @@ class AdminVaccinationController extends Controller
             if (array_key_exists('request_key', $data) && $record->request_key !== null && $data['request_key'] !== $record->request_key) {
                 throw ValidationException::withMessages(['request_key' => 'The treatment request cannot be changed. Reload the draft.']);
             }
-            if (! empty($data['clinic_appointment_id'])) {
-                $case = ClinicAppointment::query()->whereKey($data['clinic_appointment_id'])->lockForUpdate()->firstOrFail();
-                if (! $case->clinicalContentEditableFor($request->user())) {
+            $caseIds = array_filter(array_unique([$record->clinic_appointment_id, $data['clinic_appointment_id'] ?? null]));
+            if ($caseIds) {
+                $cases = ClinicAppointment::query()->whereKey($caseIds)->orderBy('id')->lockForUpdate()->get();
+                if ($cases->contains(fn ($case) => ! $case->clinicalContentEditableFor($request->user()) || $case->paid || $case->archived_at)) {
                     return $this->conflict('This case is no longer eligible for clinical changes.');
                 }
             }
@@ -231,6 +233,7 @@ class AdminVaccinationController extends Controller
             if ($usesInventory && $record->clinic_appointment_id !== null) {
                 $case = ClinicAppointment::query()->whereKey($record->clinic_appointment_id)->lockForUpdate()->first();
                 if (! $case || (int) $case->pet_id !== $petId
+                    || $case->paid || $case->archived_at
                     || ! $case->clinicalContentEditableFor($request->user())) {
                     return $this->conflict('This case is already closed or is not eligible for vaccination.');
                 }
@@ -299,6 +302,7 @@ class AdminVaccinationController extends Controller
                     'notes' => "Vaccination · {$pet->pet_name}",
                     'reference_type' => 'clinic',
                     'reference_id' => $record->clinic_appointment_id,
+                    'vaccination_record_id' => $record->id,
                 ]]);
             }
 
@@ -313,11 +317,9 @@ class AdminVaccinationController extends Controller
                     'inventory_item_id' => $item->item_id, 'vaccination_record_id' => $record->id,
                     'quantity' => 1, 'unit_price' => $item->selling_price, 'amount' => $item->selling_price,
                 ]);
+                app(ClinicBillingService::class)->updateTotal($case);
             }
             $caseToFinish?->prepareForPayment();
-            if ($case?->status === 'for_payment' && ! $caseToFinish) {
-                $case->update(['total_amount' => $case->charges()->sum('amount')]);
-            }
 
             return response()->json([
                 'success' => true,

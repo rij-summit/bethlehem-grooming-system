@@ -31,4 +31,9 @@ class ClinicCaseService extends Model
     {
         return $this->hasOne(ClinicCharge::class);
     }
+
+    public function confinement(): HasOne
+    {
+        return $this->hasOne(ClinicConfinement::class);
+    }
 }

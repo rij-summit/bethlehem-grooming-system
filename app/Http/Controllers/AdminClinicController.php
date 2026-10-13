@@ -25,6 +25,7 @@ class AdminClinicController extends Controller
 {
     private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show', 'expired'];
     private ?bool $hasClinicCharges = null;
+    private ?bool $hasConfinements = null;
 
     // ── Queue index ──────────────────────────────────────────────────────────
 
@@ -144,7 +145,18 @@ class AdminClinicController extends Controller
             ->map(fn (ClinicAppointment $case) => $this->formatAppointment($case))
             ->values();
 
-        return response()->json(['success' => true, 'cases' => $cases]);
+        return response()->json(['success' => true, 'cases' => $cases, 'confined_count' => Schema::hasTable('clinic_confinements')
+            ? \App\Models\ClinicConfinement::whereNull('discharged_at')->count() : 0]);
+    }
+
+    public function confinedCases(Request $request)
+    {
+        $request->validate(['page' => 'nullable|integer|min:1']);
+        $cases = ClinicAppointment::with($this->appointmentRelations())
+            ->whereHas('confinement', fn ($query) => $query->whereNull('discharged_at'))
+            ->orderBy('created_at')->orderBy('id')->paginate(20);
+        $cases->setCollection($cases->getCollection()->map(fn ($case) => $this->formatAppointment($case)));
+        return response()->json($cases);
     }
 
     public function createCase(Request $request, ClinicAppointmentSequence $sequence)
@@ -426,6 +438,9 @@ class AdminClinicController extends Controller
 
             if (in_array($appointment->status, ['completed', 'cancelled'], true)) {
                 return null;
+            }
+            if ($appointment->hasActiveConfinement()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['status' => 'Discharge the confined patient before cancelling this case.']);
             }
 
             $appointment->update(['status' => 'cancelled']);
@@ -778,6 +793,7 @@ class AdminClinicController extends Controller
             'common_concerns' => $a->common_concerns,
             'total_amount' => $a->total_amount,
             'charges' => $a->relationLoaded('charges') ? $a->charges : [],
+            'confinement' => $a->relationLoaded('confinement') ? $a->confinement : null,
             'paid' => $a->paid,
             'payment_method' => $a->payment_method,
             'paid_at' => $a->paid_at?->toIso8601String(),
@@ -869,6 +885,9 @@ class AdminClinicController extends Controller
 
         if ($this->hasClinicCharges ??= Schema::hasTable('clinic_charges')) {
             $relations[] = 'charges';
+        }
+        if ($this->hasConfinements ??= Schema::hasTable('clinic_confinements')) {
+            $relations[] = 'confinement.caseService.clinicService';
         }
 
         return $relations;
