@@ -107,6 +107,7 @@ class User extends Authenticatable
             'access' => $admin || $vet || $receptionist,
             'intake' => $admin || $vet || $receptionist,
             'clinical' => $admin || $vet,
+            'billing' => $admin || $vet || $receptionist,
             'payment' => $admin || $receptionist,
             'customers' => $admin || $receptionist,
             'queue' => $admin || $receptionist,

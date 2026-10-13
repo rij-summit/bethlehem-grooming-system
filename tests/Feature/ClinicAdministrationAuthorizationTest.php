@@ -359,6 +359,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         foreach ([
             ['POST', '/api/admin/clinic-cases/1/start'],
             ['POST', '/api/admin/clinic-cases/1/finish'],
+            ['POST', '/api/admin/clinic-cases/1/services'],
+            ['PATCH', '/api/admin/clinic-cases/1/services/1'],
             ['POST', '/api/admin/clinic-appointments/1/start-consultation'],
             ['POST', '/api/admin/clinic-appointments/1/finish-consultation'],
             ['POST', '/api/admin/clinic-appointments/1/record'],
@@ -399,12 +401,18 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('user.staff_type', 'clinic')
             ->assertJsonPath('user.staff_subrole', 'veterinarian')
             ->assertJsonPath('user.clinic_permissions.clinical', true)
+            ->assertJsonPath('user.clinic_permissions.billing', true)
             ->assertJsonPath('user.clinic_permissions.payment', false);
         $this->authenticateAs('staff', subrole: 'clinic_receptionist');
         $this->getJson('/api/me')->assertOk()
             ->assertJsonPath('user.clinic_permissions.clinical', false)
+            ->assertJsonPath('user.clinic_permissions.billing', true)
             ->assertJsonPath('user.clinic_permissions.payment', true);
         $this->authenticateAs('admin');
+        $this->getJson('/api/me')->assertOk()->assertJsonPath('user.clinic_permissions', [
+            'access' => true, 'intake' => true, 'clinical' => true, 'billing' => true,
+            'payment' => true, 'customers' => true, 'queue' => true,
+        ]);
         foreach ((new User(['role' => 'admin']))->clinicPermissions() as $permission) {
             $this->assertTrue($permission);
         }
@@ -2311,6 +2319,11 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['POST', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/start', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/finish', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/services', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/services', 'role:admin,staff'],
+            ['PATCH', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/charges', 'role:admin,staff'],
+            ['PATCH', 'api/admin/clinic-cases/{id}/charges/{chargeId}', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-appointments', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-appointments/archived', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-appointments/{id}/check-in', 'role:admin,staff'],

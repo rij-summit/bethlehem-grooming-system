@@ -679,6 +679,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertJsonPath('user.staff_subrole', $to)
             ->assertJsonPath('user.clinic_permissions.access', $to !== 'grooming_receptionist')
             ->assertJsonPath('user.clinic_permissions.clinical', $to === 'veterinarian')
+            ->assertJsonPath('user.clinic_permissions.billing', $to !== 'grooming_receptionist')
             ->assertJsonPath('user.clinic_permissions.payment', $to === 'clinic_receptionist');
 
         app('auth')->forgetGuards();

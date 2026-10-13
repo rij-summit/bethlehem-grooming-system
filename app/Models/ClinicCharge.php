@@ -6,11 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClinicCharge extends Model
 {
-    // Future catalog charges retain this reference; description/unit_price/amount
-    // are immutable charge snapshots, never resolved from current catalog prices.
+    // Catalog prices are never used to recalculate existing financial lines.
     public function clinicService(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(ClinicService::class);
+    }
+
+    public function caseService(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(ClinicCaseService::class, 'clinic_case_service_id');
     }
 
     protected $fillable = [

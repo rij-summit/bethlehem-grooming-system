@@ -10,6 +10,8 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ClinicClosureController;
 use App\Http\Controllers\ClinicSettingController;
 use App\Http\Controllers\ClinicServiceController;
+use App\Http\Controllers\ClinicCaseServiceController;
+use App\Http\Controllers\ClinicBillingController;
 use App\Http\Controllers\ClinicWalkinController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationController;
@@ -178,6 +180,11 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/clinic-cases', [AdminClinicController::class, 'createCase'])->middleware('clinic:intake');
         Route::post('/admin/clinic-cases/{id}/start', [AdminClinicController::class, 'startCase'])->middleware('clinic:clinical');
         Route::post('/admin/clinic-cases/{id}/finish', [AdminClinicController::class, 'finishCase'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'index']);
+        Route::post('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'store'])->middleware('clinic:clinical');
+        Route::patch('/admin/clinic-cases/{id}/services/{caseServiceId}', [ClinicCaseServiceController::class, 'update'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/charges', [ClinicBillingController::class, 'index'])->middleware('clinic:billing');
+        Route::patch('/admin/clinic-cases/{id}/charges/{chargeId}', [ClinicBillingController::class, 'update'])->middleware('clinic:billing');
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);

@@ -92,6 +92,11 @@ class ClinicAppointment extends Model
         return $this->hasMany(ClinicCharge::class);
     }
 
+    public function caseServices()
+    {
+        return $this->hasMany(ClinicCaseService::class);
+    }
+
     public function clinicalContentEditableFor(User $actor): bool
     {
         return in_array($this->status, self::CLINICAL_CONTENT_EDITABLE_STATUSES, true)
