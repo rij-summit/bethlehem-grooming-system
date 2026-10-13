@@ -1883,6 +1883,30 @@ var API = (() => {
     return request("POST", "/admin/clinic-cases", payload, getAdminToken());
   }
 
+  function getClinicCaseServices(id, page = 1) {
+    return request("GET", `/admin/clinic-cases/${id}/services?page=${page}`, null, getAdminToken());
+  }
+
+  function clinicCaseServiceOptions(q = "", page = 1) {
+    return request("GET", `/admin/clinic-service-options?q=${encodeURIComponent(q)}&page=${page}`, null, getAdminToken());
+  }
+
+  function clinicCaseServicePricing(id, serviceId) {
+    return request("GET", `/admin/clinic-cases/${id}/service-pricing/${serviceId}`, null, getAdminToken());
+  }
+
+  function clinicCreateCaseService(id, payload) {
+    return request("POST", `/admin/clinic-cases/${id}/services`, payload, getAdminToken());
+  }
+
+  function clinicUpdateCaseService(id, serviceId, payload) {
+    return request("PATCH", `/admin/clinic-cases/${id}/services/${serviceId}`, payload, getAdminToken());
+  }
+
+  function getClinicCaseCharges(id, page = 1) {
+    return request("GET", `/admin/clinic-cases/${id}/charges?page=${page}`, null, getAdminToken());
+  }
+
   async function startClinicCase(id) {
     return request("POST", `/admin/clinic-cases/${id}/start`, {}, getAdminToken());
   }
@@ -2179,6 +2203,12 @@ var API = (() => {
     submitClinicWalkIn,
     getClinicRecords,
     getActiveClinicCases,
+    getClinicCaseServices,
+    clinicCaseServiceOptions,
+    clinicCaseServicePricing,
+    clinicCreateCaseService,
+    clinicUpdateCaseService,
+    getClinicCaseCharges,
     createClinicCase,
     startClinicCase,
     finishClinicCase,

@@ -891,6 +891,10 @@ video {
   top: 50%;
 }
 
+.top-2\.5 {
+  top: 0.625rem;
+}
+
 .top-20 {
   top: 5rem;
 }
@@ -1548,6 +1552,10 @@ video {
 
 .min-w-\[580px\] {
   min-width: 580px;
+}
+
+.min-w-\[640px\] {
+  min-width: 640px;
 }
 
 .min-w-\[800px\] {
@@ -3148,6 +3156,10 @@ video {
   padding-left: 1rem;
 }
 
+.pl-7 {
+  padding-left: 1.75rem;
+}
+
 .pl-9 {
   padding-left: 2.25rem;
 }
@@ -3166,6 +3178,10 @@ video {
 
 .pr-12 {
   padding-right: 3rem;
+}
+
+.pr-3 {
+  padding-right: 0.75rem;
 }
 
 .pr-4 {

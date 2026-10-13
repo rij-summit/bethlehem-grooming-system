@@ -156,7 +156,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
     }
 
-    public function test_tiered_price_uses_case_weight_and_existing_verified_size_rules(): void
+    public function test_tiered_price_uses_only_current_case_weight_despite_conflicting_verified_profile_size(): void
     {
         $service = $this->catalog(['pricing_method' => 'tiered', 'price' => null, 'tier_basis' => 'pet_size', 'tiers' => [
             ['size' => 'small', 'price' => 300], ['size' => 'medium', 'price' => 600], ['size' => 'large', 'price' => 800],
@@ -166,8 +166,9 @@ class ClinicCaseServiceBillingTest extends TestCase
             ->assertCreated()->assertJsonPath('data.applied_price', '800.00')->assertJsonPath('data.service_snapshot.pet_size', 'large');
         DB::table('pets')->where('pet_id', 1)->update(['clinic_verified_fields' => json_encode(['size'])]);
         $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))
-            ->assertCreated()->assertJsonPath('data.applied_price', '300.00')->assertJsonPath('data.service_snapshot.pet_size', 'small');
+            ->assertCreated()->assertJsonPath('data.applied_price', '800.00')->assertJsonPath('data.service_snapshot.pet_size', 'large');
         DB::table('pets')->where('pet_id', 1)->update(['size' => 'extra_large']);
+        DB::table('clinic_vitals')->where('clinic_appointment_id', 1)->update(['weight_kg' => 70]);
         $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertUnprocessable();
         $this->assertDatabaseCount('clinic_case_services', 2);
         $this->assertDatabaseCount('clinic_charges', 2);
@@ -191,7 +192,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertDatabaseCount('clinic_charges', 2);
     }
 
-    public function test_billing_edits_preserve_clinical_truth_and_retry_does_not_restore_original_charge(): void
+    public function test_service_generated_prices_and_quantities_are_read_only_for_every_billing_role(): void
     {
         $payload = $this->payload($this->catalog());
         $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->json('data.id');
@@ -199,13 +200,113 @@ class ClinicCaseServiceBillingTest extends TestCase
         foreach (['veterinarian', 'clinic_receptionist', 'admin'] as $subrole) {
             $this->signIn($subrole);
             $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk();
-            $this->patchJson('/api/admin/clinic-cases/1/charges/1', ['unit_price' => 400, 'quantity' => 2, 'status' => 'cancelled', 'paid' => true])
-                ->assertOk()->assertJsonPath('data.amount', '800.00');
+            foreach ([['unit_price' => 400], ['unit_price' => 600], ['unit_price' => 0], ['quantity' => 2],
+                ['amount' => 0, 'clinic_case_service_id' => null]] as $change) {
+                $this->patchJson('/api/admin/clinic-cases/1/charges/1', $change)
+                    ->assertUnprocessable()->assertJsonValidationErrors('charges');
+            }
             $this->assertSame($before, ClinicCaseService::find($id)->getAttributes());
-            $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'paid' => false, 'total_amount' => 800]);
+            $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'paid' => false, 'total_amount' => 500]);
         }
-        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.charge.amount', '800.00');
+        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.charge.amount', '500.00');
         $this->assertDatabaseCount('clinic_charges', 1);
+    }
+
+    public function test_unlinked_medicine_vaccine_and_legacy_charge_behavior_is_preserved(): void
+    {
+        $this->signIn('clinic_receptionist');
+        foreach (['medicine', 'vaccine', 'existing'] as $kind) {
+            $id = DB::table('clinic_charges')->insertGetId([
+                'clinic_appointment_id' => 1, 'kind' => $kind, 'description' => $kind,
+                'quantity' => 1, 'unit_price' => 500, 'amount' => 500,
+            ]);
+            $this->patchJson('/api/admin/clinic-cases/1/charges/'.$id, ['unit_price' => 600, 'quantity' => 2])
+                ->assertOk()->assertJsonPath('data.amount', '1200.00');
+        }
+        $this->assertEquals(3600, ClinicAppointment::find(1)->total_amount);
+    }
+
+    public function test_starting_at_accepts_prices_above_grooming_safety_caps(): void
+    {
+        $service = $this->catalog(['pricing_method' => 'starting_at', 'price' => 1000]);
+        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, changes: ['applied_price' => 1800]))
+            ->assertCreated()->assertJsonPath('data.applied_price', '1800.00');
+    }
+
+    public function test_range_boundaries_are_valid_and_resolved_variable_prices_cannot_be_changed_in_billing(): void
+    {
+        $service = $this->catalog(['pricing_method' => 'range', 'price' => null, 'min_price' => 800, 'max_price' => 1500]);
+        foreach ([800, 1500] as $price) {
+            $chargeId = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, changes: ['applied_price' => $price]))
+                ->assertCreated()->json('data.charge.id');
+            $this->patchJson('/api/admin/clinic-cases/1/charges/'.$chargeId, ['unit_price' => 1200])->assertUnprocessable();
+            $this->assertDatabaseHas('clinic_charges', ['id' => $chargeId, 'unit_price' => $price, 'amount' => $price]);
+        }
+    }
+
+    public function test_ordered_tiered_service_resolves_current_vital_weight_at_performance_time(): void
+    {
+        $service = $this->catalog(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size',
+            'tiers' => [['size' => 'medium', 'price' => 600], ['size' => 'large', 'price' => 800]]]);
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 1, 'weight_kg' => 18.4]);
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, 'ordered'))->assertCreated()->json('data.id');
+        DB::table('clinic_vitals')->where('clinic_appointment_id', 1)->update(['weight_kg' => 30]);
+        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertOk()
+            ->assertJsonPath('data.applied_price', '800.00')->assertJsonPath('data.service_snapshot.pet_size', 'large');
+        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed', 'quantity' => 2, 'applied_price' => 0])->assertOk()
+            ->assertJsonPath('data.quantity', '1.00')->assertJsonPath('data.charge.amount', '800.00');
+        $this->assertDatabaseCount('clinic_charges', 1);
+    }
+
+    public function test_tiered_without_valid_saved_case_weight_cannot_use_profile_weight_or_size(): void
+    {
+        $service = $this->catalog(['pricing_method' => 'tiered', 'price' => null, 'tier_basis' => 'pet_size',
+            'tiers' => [['size' => 'small', 'price' => 300], ['size' => 'medium', 'price' => 600]]]);
+        DB::table('pets')->where('pet_id', 1)->update(['clinic_verified_fields' => json_encode(['size'])]);
+        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
+        foreach ([null, 0, -1, 156] as $weight) {
+            DB::table('clinic_vitals')->updateOrInsert(['clinic_appointment_id' => 1], ['weight_kg' => $weight]);
+            $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
+        }
+        $this->assertDatabaseCount('clinic_case_services', 0);
+        $this->assertDatabaseCount('clinic_charges', 0);
+    }
+
+    public function test_tiered_snapshot_does_not_change_when_case_weight_species_tiers_or_method_change(): void
+    {
+        $service = $this->catalog(['pricing_method' => 'tiered', 'price' => null, 'tier_basis' => 'pet_size',
+            'tiers' => [['size' => 'medium', 'price' => 600]]]);
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 1, 'weight_kg' => 18.40]);
+        $payload = $this->payload($service, changes: ['applied_price' => 1]);
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()
+            ->assertJsonPath('data.applied_price', '600.00')->json('data.id');
+        $snapshot = ClinicCaseService::find($id)->service_snapshot;
+        $this->assertEquals(18.40, $snapshot['pet_weight_kg']);
+        DB::table('clinic_vitals')->where('clinic_appointment_id', 1)->update(['weight_kg' => 3]);
+        DB::table('pets')->where('pet_id', 1)->update(['species' => 'cat', 'weight' => 4, 'size' => 'small']);
+        $service->update(['tiers' => [['size' => 'small', 'price' => 300]], 'pricing_method' => 'fixed', 'price' => 900, 'is_active' => false]);
+        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.charge.unit_price', '600.00');
+        $this->assertSame($snapshot, ClinicCaseService::find($id)->service_snapshot);
+        $this->assertDatabaseCount('clinic_charges', 1);
+    }
+
+    public function test_active_catalogue_lookup_and_server_pricing_preview_preserve_clinical_permissions(): void
+    {
+        $fixed = $this->catalog();
+        $this->catalog(['is_active' => false]);
+        $this->getJson('/api/admin/clinic-service-options?status=all')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-services')->assertForbidden();
+        $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$fixed->id)->assertOk()
+            ->assertJsonPath('pricing.requires_final_price', false)->assertJsonPath('pricing.resolved_price', '500.00');
+        $tiered = $this->catalog(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'tiers' => [['size' => 'medium', 'price' => 600]]]);
+        $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$tiered->id)->assertOk()
+            ->assertJsonPath('pricing.error', "Record the pet's weight in Vitals before performing this service.");
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 1, 'weight_kg' => 18.4]);
+        $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$tiered->id)->assertOk()
+            ->assertJsonPath('pricing.pet_size', 'medium')->assertJsonPath('pricing.resolved_price', '600.00');
+        $this->signIn('clinic_receptionist');
+        $this->getJson('/api/admin/clinic-service-options')->assertForbidden();
+        $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$fixed->id)->assertForbidden();
     }
 
     public function test_receptionist_can_view_services_but_cannot_mutate_them_and_vet_cannot_pay(): void

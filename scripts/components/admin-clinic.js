@@ -143,6 +143,7 @@ function adminClinicModal() {
     open:       false,
     saving:     false,
     modalError: "",
+    workspaceSaving: false,
     weightTools: null,
     title:      "Medical Record",
     apptId:     null,
@@ -175,6 +176,9 @@ function adminClinicModal() {
 
     init() {
       window.addEventListener("clinic-open-modal", (e) => this.openModal(e.detail));
+      window.addEventListener("clinic-workspace-busy", (event) => {
+        if (event.detail.id === this.apptId) this.workspaceSaving = event.detail.saving;
+      });
       window.addEventListener("clinic-cases-loaded", (event) => {
         if (!this.open) return;
         const current = event.detail?.find((item) => item.id === this.apptId);
@@ -418,7 +422,9 @@ function adminClinicModal() {
     },
 
     selectSection(section) {
-      this.activeSection = section === "vaccinations" ? "vaccinations" : "medical";
+      if (this.saving || this.attachmentBusy || this.workspaceSaving) return;
+      if (section === "billing" && !this.$store.clinicAccess.permissions.billing) return;
+      this.activeSection = ["vaccinations", "services", "billing"].includes(section) ? section : "medical";
       if (this.activeSection === "medical" && this.canEditClinical && !this._clinicalOptionsLoaded && !this.optionsLoading) {
         this.loadClinicalOptions();
       }
@@ -431,7 +437,7 @@ function adminClinicModal() {
     },
 
     closeModal() {
-      if (this.saving || this.attachmentBusy) return;
+      if (this.saving || this.attachmentBusy || this.workspaceSaving) return;
       this.open = false;
       this.vetDropdownOpen = false;
       ++this._optionsRequest;
@@ -637,6 +643,7 @@ function adminClinicPage() {
       this.loadAllRecords();
       this.loadActiveCases();
       window.addEventListener("clinic-case-updated", () => this.loadActiveCases());
+      window.addEventListener("clinic-review-payment", (event) => this.reviewPayment(event.detail));
     },
 
     async loadActiveCases() {

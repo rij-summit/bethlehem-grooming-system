@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Cases | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261013-pricing-v3" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261013-case-workspace" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
     <style>
       :is(#medical-record-form, [aria-labelledby="patient-record-title"], [aria-labelledby="consultation-record-title"]) :is(button, input, select, textarea):focus-visible {
@@ -196,6 +196,7 @@
                     <button x-show="permissions.clinical && caseItem.status === 'checked_in'" @click="startCase(caseItem)" :disabled="caseBusyId !== null" class="rounded-xl bg-[#315b7e] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">Start Consultation</button>
                     <button @click="openCase(caseItem)" class="rounded-xl border border-[#d0e4f2] px-3 py-1.5 text-xs font-semibold text-[#315b7e]" x-text="permissions.clinical && caseItem.status === 'in_consultation' ? 'Continue Consultation' : 'View'">View</button>
                     <button x-show="permissions.payment && caseItem.status === 'for_payment'" @click="reviewPayment(caseItem)" class="rounded-xl bg-[#315b7e] px-3 py-1.5 text-xs font-semibold text-white">Review Payment</button>
+                    <button x-show="permissions.billing" @click="openCase(caseItem, 'billing')" class="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-[#315b7e]">Billing</button>
                     <button x-show="permissions.queue" @click="cancelCase(caseItem)" class="rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600">Cancel</button>
                   </div>
                 </div>
@@ -740,10 +741,10 @@
       x-cloak
       x-show="open"
       x-transition
-      @keydown.escape.window="if (open && activeSection === 'medical') closeModal()"
+      @keydown.escape.window="if (open && activeSection !== 'vaccinations' && !$store.clinicFeedback.dialog.open) closeModal()"
       class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
     >
-      <div class="w-full overflow-hidden rounded-3xl bg-white shadow-2xl" :class="activeSection === 'medical' ? 'flex max-h-[calc(100dvh-4rem)] max-w-6xl flex-col' : 'max-w-5xl'" @keydown.tab="if (activeSection === 'medical') trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
+      <div class="w-full overflow-hidden rounded-3xl bg-white shadow-2xl" :class="activeSection !== 'vaccinations' ? 'flex max-h-[calc(100dvh-4rem)] max-w-6xl flex-col' : 'max-w-5xl'" @keydown.tab="if (activeSection !== 'vaccinations') trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
           <h2 id="patient-record-title" class="min-w-0 break-words text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
           <button type="button" @click="closeModal()" aria-label="Close patient record" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -762,6 +763,16 @@
               class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
               :class="activeSection === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
               <i data-lucide="syringe" class="h-4 w-4"></i> Treatment
+            </button>
+            <button type="button" role="tab" :aria-selected="activeSection === 'services'" aria-controls="case-services-panel" @click="selectSection('services')" :disabled="workspaceSaving"
+              class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
+              :class="activeSection === 'services' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
+              <i data-lucide="clipboard-list" class="h-4 w-4"></i> Services Performed
+            </button>
+            <button x-show="$store.clinicAccess.permissions.billing" type="button" role="tab" :aria-selected="activeSection === 'billing'" aria-controls="case-billing-panel" @click="selectSection('billing')" :disabled="workspaceSaving"
+              class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
+              :class="activeSection === 'billing' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
+              <i data-lucide="receipt" class="h-4 w-4"></i> Billing
             </button>
           </div>
         </div>
@@ -1190,6 +1201,74 @@
           </div>
         </form>
 
+        <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, activeSection)" x-show="['services', 'billing'].includes(activeSection)" @keydown.capture="window.InventoryMoneyInput?.handle($event)" @beforeinput.capture="window.InventoryMoneyInput?.handle($event)" @paste.capture="window.InventoryMoneyInput?.handle($event)" @input.capture="window.InventoryMoneyInput?.handle($event)" data-case-workspace class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+          <section id="case-services-panel" role="tabpanel" aria-label="Services Performed" x-show="activeSection === 'services'" class="space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div><h3 class="text-base font-bold text-[#2f4b66]">Services Performed</h3><p class="mt-1 text-sm text-slate-500">Order services or record what was performed. Performed services appear in Billing.</p></div>
+              <button type="button" @click="loadServices()" :disabled="servicesLoading || serviceSaving" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
+            </div>
+            <p x-show="!canMutateServices" class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Services are available for viewing. Clinical changes are restricted by your role or the case status.</p>
+            <div x-show="canMutateServices && !pendingPayload" class="space-y-2">
+              <label for="case-service-search" class="block text-xs font-semibold text-slate-600">Select an active catalogue service</label>
+              <input id="case-service-search" type="search" x-model="searchQuery" @input="searchServices()" @focus="if (!searchRows.length) loadOptions()" :disabled="serviceSaving" maxlength="200" placeholder="Search by service name…" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
+              <p x-show="searchLoading" role="status" class="text-xs text-slate-500">Searching catalogue…</p>
+              <p x-show="searchError" role="alert" x-text="searchError" class="text-sm text-red-600"></p>
+              <p x-show="searchPage > 0 && !searchLoading && !searchError && !searchRows.length && !selectedService" class="text-sm text-slate-500">No active services match this search.</p>
+              <ul x-show="searchRows.length" aria-label="Catalogue service results" class="max-h-56 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200">
+                <template x-for="service in searchRows" :key="service.id"><li><button type="button" @click="selectService(service)" :disabled="serviceSaving" class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-3 text-left hover:bg-slate-50 disabled:opacity-50">
+                  <span class="min-w-0"><span class="block break-words text-sm font-semibold text-[#2f4b66]" x-text="service.name"></span><span class="text-xs text-slate-500" x-text="[categoryLabel(service), service.type, methodLabel(service.pricing_method), service.billing_unit ? 'Per ' + service.billing_unit : ''].filter(Boolean).join(' · ')"></span></span>
+                  <span class="text-xs font-semibold text-slate-600" x-text="cataloguePrice(service)"></span>
+                </button></li></template>
+              </ul>
+              <div x-show="searchRows.length && searchLastPage > 1" class="flex items-center justify-end gap-3 text-xs text-slate-500"><button type="button" @click="loadOptions(searchPage - 1)" :disabled="searchLoading || searchPage <= 1" class="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Previous</button><span x-text="searchPage + ' / ' + searchLastPage"></span><button type="button" @click="loadOptions(searchPage + 1)" :disabled="searchLoading || searchPage >= searchLastPage" class="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Next</button></div>
+            </div>
+            <form x-show="serviceForm" x-ref="serviceComposer" @submit.prevent="submitService()" @input="persistDraft()" @change="persistDraft()" novalidate class="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h4 class="break-words text-sm font-bold text-[#2f4b66]" x-text="selectedService?.name || 'Loading selected service…'"></h4><p class="mt-1 text-xs text-slate-500" x-text="[categoryLabel(selectedService), selectedService?.type, selectedService ? methodLabel(selectedService.pricing_method) : '', selectedService?.billing_unit ? 'Per ' + selectedService.billing_unit : ''].filter(Boolean).join(' · ')"></p></div><button type="button" @click="dismissService()" :disabled="serviceSaving || !!pendingPayload" class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-40">Dismiss</button></div>
+              <p x-show="pricingLoading" role="status" class="text-xs text-slate-500">Resolving catalogue pricing…</p>
+              <p x-show="pendingPayload" class="text-sm text-amber-800">This request is awaiting confirmation. Retry it to check the result without creating another service.</p>
+              <template x-if="serviceForm"><div class="space-y-3">
+                <fieldset :disabled="serviceSaving || !!pendingPayload || !canMutateServices" class="space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2"><div><label for="case-service-status" class="mb-1 block text-xs font-semibold text-slate-600">Record as</label><select id="case-service-status" x-model="serviceForm.status" :disabled="!!serviceForm.occurrence_id" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="performed">Performed</option><option value="ordered">Ordered — no charge yet</option></select></div>
+                    <div><label for="case-service-quantity" class="mb-1 block text-xs font-semibold text-slate-600" x-text="'Quantity' + (selectedService?.billing_unit ? ' (' + selectedService.billing_unit + ')' : '')"></label><input id="case-service-quantity" type="number" min="0.01" max="99999999.99" step="0.01" x-model="serviceForm.quantity" :aria-invalid="!!serviceErrors.quantity" aria-describedby="case-service-quantity-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" /><p id="case-service-quantity-error" x-show="serviceErrors.quantity" x-text="serviceErrors.quantity" class="mt-1 text-xs text-red-600"></p></div>
+                  </div>
+                  <div x-show="selectedService?.pricing_method === 'tiered' && servicePricing && !servicePricing.error" class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-3">
+                    <div><p class="text-xs text-slate-500">Saved case weight</p><p class="mt-1 text-sm font-semibold text-slate-700" x-text="servicePricing?.pet_weight_kg + ' kg'"></p></div><div><p class="text-xs text-slate-500">Pricing tier</p><p class="mt-1 text-sm font-semibold text-slate-700" x-text="sizeLabel(servicePricing?.pet_size)"></p></div><div><p class="text-xs text-slate-500">Service price</p><p class="mt-1 text-sm font-semibold text-slate-700" x-text="money(servicePricing?.resolved_price)"></p></div>
+                  </div>
+                  <p x-show="servicePricing && selectedService?.pricing_method !== 'tiered' && !needsFinalPrice" class="text-sm font-semibold text-slate-700" x-text="selectedService?.pricing_method === 'fixed' ? 'Service price: ' + priceRule() : priceRule()"></p>
+                  <p x-show="servicePricing?.error" role="alert" class="text-sm text-amber-800"><span x-text="servicePricing?.error"></span> <button x-show="selectedService?.pricing_method === 'tiered'" type="button" @click="selectSection('medical'); $nextTick(() => document.getElementById('clinicWeight')?.focus())" class="font-semibold text-[#315b7e] underline">Go to Vitals</button></p>
+                  <template x-if="needsFinalPrice"><div>
+                    <label for="case-service-final-price" class="mb-1 block text-xs font-semibold text-slate-600">Final Price <span class="text-red-600" aria-hidden="true">*</span></label>
+                    <div class="relative"><span aria-hidden="true" class="pointer-events-none absolute left-3 top-2.5 text-sm text-slate-500">₱</span><input id="case-service-final-price" type="text" inputmode="decimal" data-money-input x-model="serviceForm.applied_price" required :aria-invalid="!!serviceErrors.applied_price" aria-describedby="case-service-price-rule case-service-price-error" class="w-full rounded-xl border border-slate-300 bg-white py-2 pl-7 pr-3 text-sm outline-none focus:border-[#315b7e]" /></div>
+                    <p id="case-service-price-rule" class="mt-1 text-xs text-slate-500" x-text="priceRule()"></p><p id="case-service-price-error" x-show="serviceErrors.applied_price" role="alert" x-text="serviceErrors.applied_price" class="mt-1 text-xs text-red-600"></p>
+                  </div></template>
+                  <div><label for="case-service-notes" class="mb-1 block text-xs font-semibold text-slate-600">Notes <span class="font-normal text-slate-400">(optional)</span></label><textarea id="case-service-notes" rows="2" maxlength="5000" x-model="serviceForm.notes" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"></textarea></div>
+                </fieldset>
+                <p x-show="serviceError" role="alert" x-text="serviceError" class="text-sm text-red-600"></p>
+                <div class="flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-slate-500" x-text="serviceForm.status === 'ordered' ? 'Ordering does not create a billing charge.' : 'The catalogue price and quantity are saved when performed.'"></p><button type="submit" :disabled="!canMutateServices || serviceSaving || (!pendingPayload && (pricingLoading || !servicePricing || (serviceForm.status === 'performed' && !!servicePricing.error)))" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50" x-text="serviceSaving ? 'Saving…' : pendingPayload ? 'Retry Request' : serviceForm.status === 'ordered' ? 'Order Service' : 'Mark as Performed'"></button></div>
+              </div></template>
+            </form>
+            <p x-show="servicesLoading" role="status" class="text-sm text-slate-500">Loading services…</p>
+            <p x-show="servicesError" role="alert" x-text="servicesError" class="text-sm text-red-600"></p>
+            <p x-show="!servicesLoading && !servicesError && !serviceRows.length" class="py-6 text-center text-sm text-slate-500">No catalogue services recorded for this case.</p>
+            <div x-show="serviceRows.length" class="overflow-hidden rounded-xl border border-slate-200"><div class="overflow-x-auto" role="region" aria-label="Case service history" tabindex="0">
+              <table class="w-full min-w-[640px] text-left text-sm"><caption class="sr-only">Ordered, performed and cancelled Clinic services</caption><thead class="border-b border-slate-200 bg-slate-50 text-xs text-slate-500"><tr><th scope="col" class="px-3 py-3">Service</th><th scope="col" class="px-3 py-3">Status</th><th scope="col" class="px-3 py-3 text-right">Qty</th><th scope="col" class="px-3 py-3 text-right">Applied price</th><th scope="col" class="px-3 py-3">Actions</th></tr></thead><tbody class="divide-y divide-slate-100">
+                <template x-for="entry in serviceRows" :key="entry.id"><tr><td class="max-w-xs px-3 py-3"><p class="break-words font-semibold text-[#2f4b66]" x-text="serviceInfo(entry).name"></p><p class="mt-1 text-xs text-slate-500" x-text="[categoryLabel(serviceInfo(entry)), serviceInfo(entry).type, serviceInfo(entry).billing_unit ? 'Per ' + serviceInfo(entry).billing_unit : ''].filter(Boolean).join(' · ')"></p><p class="mt-1 text-xs text-slate-500" x-text="serviceDate(entry) + ' · Staff #' + (entry.performed_by_user_id || entry.cancelled_by_user_id || entry.recorded_by_user_id)"></p><p x-show="entry.notes" class="mt-1 break-words whitespace-pre-wrap text-xs text-slate-600" x-text="entry.notes"></p><p x-show="entry.service_snapshot?.pet_weight_kg" class="mt-1 text-xs text-slate-500" x-text="entry.service_snapshot?.pet_weight_kg + ' kg · ' + sizeLabel(entry.service_snapshot?.pet_size)"></p></td>
+                  <td class="px-3 py-3"><span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold capitalize" :class="statusClass(entry.status)" x-text="entry.status"></span></td><td class="px-3 py-3 text-right tabular-nums" x-text="entry.quantity"></td><td class="px-3 py-3 text-right tabular-nums" x-text="entry.status === 'performed' ? money(entry.applied_price) : '—'"></td><td class="px-3 py-3"><div x-show="entry.status === 'ordered' && canMutateServices" class="flex flex-wrap gap-2"><button type="button" @click="selectService(entry.clinic_service, entry)" :disabled="serviceSaving || !!pendingPayload" class="whitespace-nowrap rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-[#315b7e] hover:bg-slate-50 disabled:opacity-50">Mark Performed</button><button type="button" @click="cancelOrderedService(entry)" :disabled="serviceSaving" class="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Cancel Order</button></div></td>
+                </tr></template>
+              </tbody></table>
+            </div></div>
+            <button x-show="servicePage < serviceLastPage" type="button" @click="loadServices(servicePage + 1)" :disabled="servicesLoading" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Load more services</button>
+          </section>
+          <section id="case-billing-panel" role="tabpanel" aria-label="Case Billing" x-show="activeSection === 'billing' && $store.clinicAccess.permissions.billing" class="space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="text-base font-bold text-[#2f4b66]">Billing</h3><p class="mt-1 text-sm text-slate-500">Charges recorded for this case. Catalogue service prices are resolved when performed.</p></div><button type="button" @click="loadBilling()" :disabled="billingLoading" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh</button></div>
+            <p x-show="billingLoading" role="status" class="text-sm text-slate-500">Loading charges…</p><p x-show="billingError" role="alert" x-text="billingError" class="text-sm text-red-600"></p>
+            <p x-show="!billingLoading && !billingError && !chargeRows.length" class="py-6 text-center text-sm text-slate-500">No chargeable items recorded.</p>
+            <div x-show="chargeRows.length" class="overflow-hidden rounded-xl border border-slate-200"><div class="overflow-x-auto" role="region" aria-label="Clinic billing breakdown" tabindex="0"><table class="w-full min-w-[640px] text-left text-sm"><caption class="sr-only">Case charges, including services, medicines and treatments</caption><thead class="border-b border-slate-200 bg-slate-50 text-xs text-slate-500"><tr><th scope="col" class="px-3 py-3">Description</th><th scope="col" class="px-3 py-3">Source</th><th scope="col" class="px-3 py-3 text-right">Qty</th><th scope="col" class="px-3 py-3 text-right">Unit price</th><th scope="col" class="px-3 py-3 text-right">Amount</th></tr></thead><tbody class="divide-y divide-slate-100"><template x-for="charge in chargeRows" :key="charge.id"><tr><td class="max-w-xs break-words px-3 py-3 font-semibold text-[#2f4b66]" x-text="charge.description"></td><td class="px-3 py-3"><span class="capitalize text-slate-600" x-text="charge.kind"></span><p x-show="charge.clinic_case_service_id" class="mt-1 text-xs text-slate-500">Performed service · read-only</p></td><td class="px-3 py-3 text-right tabular-nums" x-text="charge.quantity"></td><td class="px-3 py-3 text-right tabular-nums" x-text="money(charge.unit_price)"></td><td class="px-3 py-3 text-right font-semibold tabular-nums" x-text="money(charge.amount)"></td></tr></template></tbody></table></div></div>
+            <button x-show="chargePage < chargeLastPage" type="button" @click="loadBilling(chargePage + 1)" :disabled="billingLoading" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Load more charges</button>
+            <div class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4"><div><p class="text-xs text-slate-500" x-text="workspaceAppointment?.paid ? 'Paid case total' : 'Case total'"></p><p class="mt-1 text-xl font-bold tabular-nums text-[#2f4b66]" x-text="money(billingTotal)"></p></div><button x-show="canRecordCasePayment" type="button" @click="requestCasePayment()" :disabled="billingLoading || !!billingError || billingTotal == null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#274864] disabled:opacity-50">Review Payment</button></div>
+          </section>
+        </div>
+
         <!-- Vaccination section (same as before) -->
         <section
           x-data="adminClinicVaccinations()"
@@ -1566,9 +1645,10 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=sections-removed-20261010&clinic-products=20261010&medical-record=20261012"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=case-workspace-20261013&clinic-products=20261010&medical-record=20261012"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-pricing-v3"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-case-workspace"></script>
+    <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261013-case-workspace"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=physical-stock-20261012-v3"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
     <script src="../../scripts/components/admin-clinic-shell.js?v=20261013-service-pricing-v3"></script>

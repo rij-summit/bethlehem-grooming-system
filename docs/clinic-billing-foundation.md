@@ -24,7 +24,7 @@ The clinical UI must generate and retain one request key for each intended occur
 
 An ordered occurrence has no charge. Transitioning it to performed resolves its current catalog price and creates exactly one linked charge in the same transaction as the clinical record and case total. A unique database constraint on `clinic_charges.clinic_case_service_id` prevents a second financial line. Operations lock the case, matching existing clinical and payment transaction conventions.
 
-Cancelling an order retains its original timestamp, recording user, notes, cancellation time and cancellation user, without creating a charge. Performed and cancelled occurrences are terminal. Repeated requests return the existing occurrence without rewriting timestamps, snapshots, or adjusted financial lines. A delayed POST of the original order cannot undo a terminal transition. Financial corrections use the billing endpoint.
+Cancelling an order retains its original timestamp, recording user, notes, cancellation time and cancellation user, without creating a charge. Performed and cancelled occurrences are terminal. Repeated requests return the existing occurrence without rewriting timestamps, snapshots, or financial lines. A delayed POST of the original order cannot undo a terminal transition. Service-generated financial lines remain read-only in Billing.
 
 New clinical writes follow existing case-stage rules: checked in or in consultation, plus the existing admin exception for cases awaiting payment. Paid and archived cases cannot be mutated. A retry of an already completed transition can still return the historical occurrence.
 
@@ -32,14 +32,24 @@ New clinical writes follow existing case-stage rules: checked in or in consultat
 
 `ClinicServicePriceResolver` consumes the existing Clinic catalog fields and tier configuration; it introduces no additional price configuration.
 
-- Fixed: configured price applies automatically.
-- Tiered: configured `pet_size` tier applies using the existing verified-size and weight-derived-size rules. Current case weight takes precedence over profile weight when deriving size. A missing matching tier rejects performance.
+- Fixed: the exact configured price applies automatically. There is no manual final-price field; a client-supplied price cannot change the resolved price. Billing cannot reprice it.
+- Tiered: the CURRENT case's saved Vitals weight is authoritative. The existing species + weight `PetWeightSize` rules derive the size, then the configured Clinic Service tier determines the price. Profile size, verified profile size, and profile weight never substitute for current case weight. Missing/invalid case weight, unsupported species, or a missing matching tier blocks performance. No manual tier or final-price selection is accepted as pricing authority.
 - Range: performance requires an `applied_price` between configured minimum and maximum, inclusive.
-- Starting at: performance requires an `applied_price` at least equal to the configured starting price, within the existing Clinic price limit.
+- Starting at: performance requires an `applied_price` at least equal to the configured starting price, within the existing technical Clinic monetary limit. There are no Grooming-style +₱500 or +₱200 caps. The technical limit is not presented as a customer-facing service price range.
 
 Range and starting-at services can be ordered before a final price is known. Performance and charge creation succeed together only when that price is supplied. Billing units remain catalog metadata and are preserved in the performance snapshot. Line amount is applied unit price multiplied by quantity, rounded to two decimal places.
 
-The occurrence saves its applied price and historical service metadata at performance. Its original quantity and clinical timestamps remain separate from the financial line. Subsequent catalog edits, deactivation, and payment do not recalculate historical charges.
+The occurrence saves its applied price and historical service metadata at performance, including case weight and derived size for tiered services. Its quantity and applied price determine the linked financial line. Subsequent changes to catalogue names, prices, pricing methods, tiers, active status, species, patient weight, and payment do not recalculate historical performed-service snapshots or charges.
+
+## Case workspace
+
+The existing patient record dialog in `pages/admin/clinic.html` includes Services Performed and Billing tabs alongside Medical Record and Treatment. Services use a compact history table with Ordered, Performed and Cancelled badges. Performed rows display historical snapshots, never current catalogue prices. The Billing table displays all existing charge types and the server's case total without maintaining another invoice calculation.
+
+Clinical users select active services through `GET /api/admin/clinic-service-options`, which reuses the existing catalogue query and always restricts it to active services. Catalogue administration remains admin-only. `GET /api/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}` returns catalogue information and a pricing preview from the backend resolver; it requires clinical permission and does not create any records or charges.
+
+Only Range and Starting At display a Final Price input when marking Performed. Their frontend validation provides guidance; the backend validates the configured rule authoritatively. Fixed shows the configured price read-only. Tiered shows saved case weight, derived size and resolved price read-only, or an error with a link back to Vitals. Unsaved Medical Record weight is not used for pricing. Ordered services resolve the current catalogue rule and current saved case weight when performed.
+
+The workspace keeps a draft and request key in session storage scoped to the acting user and case. An unconfirmed submission retains its exact payload and offers a retry, including after reopening or reloading the case. Submission buttons are disabled while saving. Recoverable validation errors retain entered values. Clinical history, catalogue configuration, Billing and Payment remain separate responsibilities. Before opening the existing payment dialog, Billing includes any remaining charge pages and passes the complete reviewed breakdown with the server total. Payment continues validating that total inside its existing transaction.
 
 ## Billing and payment permissions
 
@@ -52,7 +62,7 @@ The occurrence saves its applied price and historical service metadata at perfor
 `/api/me` and sign-in responses include `user.clinic_permissions.billing` through the existing shared permission output. Receptionists retain access to clinical information while clinical mutation routes remain protected by `clinic:clinical`.
 
 - `GET /api/admin/clinic-cases/{id}/charges`: billing total, paid flag, and paginated charges with original service occurrence snapshots; requires billing permission.
-- `PATCH /api/admin/clinic-cases/{id}/charges/{chargeId}`: edit financial `quantity` and/or `unit_price`; recalculates the line amount and case total atomically. It does not update the clinical occurrence, catalog, inventory usage, or payment state. A zero unit price can waive a financial charge while preserving the performed-service history.
+- `PATCH /api/admin/clinic-cases/{id}/charges/{chargeId}`: rejects edits for charges linked through `clinic_case_service_id` for every role, including admin. Service unit price and quantity cannot be changed independently from the performed `ClinicCaseService`. Billing cannot waive or discount a performed service by setting its price to zero. Billing is not a second service-pricing editor. Existing edit behavior for unlinked medicine, vaccine, treatment and other charges remains unchanged; their line amount and case total update atomically without changing inventory usage, clinical records or payment state.
 - `POST /api/admin/clinic-appointments/{id}/pay`: existing payment endpoint; still requires payment permission.
 
-Billing edits are allowed only on unarchived, unpaid cases that are checked in, in consultation, or awaiting payment. Case-scoped queries prevent editing a charge or service belonging to another case. No full Billing UI or Confinement workflow is included.
+Existing edits for unrelated charge types remain allowed only on unarchived, unpaid cases that are checked in, in consultation, or awaiting payment. Case-scoped queries prevent editing a charge or service belonging to another case. Billing presents generated service lines read-only and connects payment-authorized users to the existing payment dialog, methods, transaction and total validation. Veterinarians can review Billing but cannot record payment. Receptionists can view service history and Billing but cannot mutate clinical services. No discounts, arbitrary service-price overrides, billing adjustments, admin pricing bypasses, or Confinement workflow are included.

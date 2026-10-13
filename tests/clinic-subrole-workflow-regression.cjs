@@ -146,9 +146,10 @@ function permissions(clinical, payment, queue, customers) {
     assert.equal(sidebar.staffRoleLabel, label);
   }
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
-  for (const label of ['Medications', 'Services Performed', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
+  for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }
+  assert.match(page, /Services Performed/);
   assert.match(page, /Attachments<\/h3>/);
   assert.match(page, /Follow-up<\/h3>/);
   assert.equal((page.match(/x-for="caseItem in visibleActiveCases"/g) || []).length, 1);

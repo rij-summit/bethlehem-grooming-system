@@ -25,6 +25,9 @@ class ClinicBillingService
                 throw ValidationException::withMessages(['charges' => 'Billing cannot be changed at this case stage.']);
             }
             $charge = $appointment->charges()->whereKey($chargeId)->firstOrFail();
+            if ($charge->clinic_case_service_id !== null) {
+                throw ValidationException::withMessages(['charges' => 'Performed service charges are read-only. Their quantity and price come from the clinical service snapshot.']);
+            }
             $charge->fill($data);
             $charge->amount = $this->lineAmount($charge->quantity, $charge->unit_price);
             $charge->save();

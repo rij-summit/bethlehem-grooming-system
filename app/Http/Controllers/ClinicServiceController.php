@@ -12,6 +12,12 @@ use Illuminate\Validation\ValidationException;
 
 class ClinicServiceController extends Controller
 {
+    public function caseOptions(Request $request): JsonResponse
+    {
+        $request->merge(['status' => 'active']);
+        return $this->index($request);
+    }
+
     public function options(): JsonResponse
     {
         return response()->json([
