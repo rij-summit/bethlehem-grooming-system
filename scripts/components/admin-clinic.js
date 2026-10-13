@@ -76,9 +76,9 @@ document.addEventListener("alpine:init", () => {
     dialog: { open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false },
     toast: { show: false, message: "", ok: true },
 
-    confirm({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false }) {
+    confirm({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false, dismissOnEscape = true }) {
       resolveDialog?.(false);
-      this.dialog = { open: true, title, message, confirmLabel, cancelLabel, danger };
+      this.dialog = { open: true, title, message, confirmLabel, cancelLabel, danger, dismissOnEscape };
       return new Promise((resolve) => { resolveDialog = resolve; });
     },
 

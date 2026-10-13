@@ -41,7 +41,7 @@ function setup() {
 function component(context) {
   const state = context.adminClinicServices();
   const dialog = () => ({open: false, showModal() {this.open = true;}, close() {this.open = false;}});
-  state.$refs = {serviceDialog: dialog(), detailsDialog: dialog(), detailsClose: {focus() {}}, serviceName: {focus() {}}, formError: {focus() {}}};
+  state.$refs = {serviceDialog: dialog(), serviceForm: {querySelector: () => null, reportValidity: () => true}, detailsDialog: dialog(), detailsClose: {focus() {}}, serviceName: {focus() {}}, formError: {focus() {}}};
   state.$nextTick = fn => fn();
   state.$store = {clinicFeedback: {notify() {}, confirm: async () => true}};
   return state;
@@ -134,11 +134,11 @@ async function workflow() {
   const before = app.calls.length;
   await state.save();
   assert.equal(app.calls.length, before);
-  assert.match(state.formError, /Maximum Price/);
+  assert.match(state.priceErrors.max_price, /Maximum Price/);
   state.form.pricing_method = 'tiered'; state.form.tiers.forEach(tier => {tier.enabled = false;});
   await state.save(); assert.match(state.formError, /at least one/);
   state.form.tiers[0].enabled = true; state.form.tiers[0].price = -1;
-  await state.save(); assert.match(state.formError, /non-negative/);
+  await state.save(); assert.match(state.priceErrors.small, /non-negative/);
   state.form.tiers[0].price = 0;
   await state.save();
   const payload = app.calls.find(call => Array.isArray(call) && call[0] === 'POST')[2];
@@ -169,9 +169,15 @@ function formatting() {
   assert.match(markup, /<option value="__none__">Not Applicable<\/option>/);
   assert.doesNotMatch(markup, /<input[^>]*x-model="form\.type"|<datalist/);
   assert.doesNotMatch(markup, /x-model="form\.is_active"/);
+  for (const dialog of markup.matchAll(/<dialog\b[^>]*>/g)) {
+    assert.ok(dialog[0].includes('@cancel.prevent @pointerdown.self.prevent'), 'Outside pointer events and Escape must not dismiss or blur');
+    assert.ok(!dialog[0].includes('@click='), 'No outside-click dismissal handler');
+  }
   for (const model of ['form.price', 'form.min_price', 'form.max_price', 'tier.price']) {
     const tag = [...markup.matchAll(/<input\b[^>]*>/g)].map(match => match[0]).find(tag => tag.includes(`x-model="${model}"`));
     assert.ok(tag.includes('data-money-input') && tag.includes('inputmode="decimal"'), model);
+    assert.ok(tag.includes('@blur="validatePrice(') && tag.includes('@input="priceInput('), model);
+    assert.ok(tag.includes(':aria-invalid=') && tag.includes('aria-describedby='), model);
   }
   assert.match(markup, /@click\.stop="openModal\(service\)"/);
   assert.match(markup, /@click\.stop="changeStatus\(service\)"/);
@@ -189,4 +195,84 @@ function formatting() {
   assert.equal(format({pricing_method: 'tiered', tiers: [{price: 800}, {price: 1050}]}), '₱800–₱1,050 by size');
 }
 
-(async () => {await navigation(); await workflow(); formatting(); console.log('Clinic Services navigation and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});
+async function priceValidation() {
+  const app = setup();
+  await app.shell.showSection();
+  const state = app.panels[0].state;
+  const maximumError = 'Price must be ₱100,000.00 or less.';
+  for (const editing of [false, true]) {
+    for (const method of ['fixed', 'starting_at', 'range', 'tiered']) {
+      state.openModal(editing ? {id: 1, name: 'CBC'} : null);
+      Object.assign(state.form, {name: 'CBC', category_id: 2, pricing_method: method, price: '100000.00', min_price: '100000.00', max_price: '100000.00'});
+      state.form.tiers.forEach(tier => {tier.enabled = true; tier.price = '100000.00';});
+      for (const field of state.priceFields()) {
+        const target = method === 'tiered' ? state.form.tiers.find(tier => tier.size === field.key) : state.form;
+        const property = method === 'tiered' ? 'price' : field.key;
+        for (const invalid of ['100000.01', '1000000']) {
+          state.priceErrors = {};
+          target[property] = invalid;
+          state.priceInput(field.key);
+          assert.equal(state.priceErrors[field.key], undefined, 'Typing does not show an initial error');
+          state.validatePrice(field.key);
+          assert.equal(state.priceErrors[field.key], maximumError);
+          assert.equal(target[property], invalid, 'Blur preserves the original value');
+          state.priceErrors = {};
+          const before = app.calls.length;
+          await state.save();
+          assert.equal(app.calls.length, before, 'Save blocks every over-limit pricing field');
+          assert.equal(state.priceErrors[field.key], maximumError);
+          assert.equal(target[property], invalid, 'Save never clamps');
+          target[property] = '100000.00';
+          state.priceInput(field.key);
+          assert.equal(state.priceErrors[field.key], '', 'Correcting to the exact limit clears the inline error');
+        }
+      }
+      const before = app.calls.length;
+      await state.save();
+      assert.ok(app.calls.slice(before).some(call => call[0] === (editing ? 'PUT' : 'POST')), 'The exact limit saves for every method');
+    }
+  }
+  state.openModal();
+  for (const invalid of ['-0.01', '1.001', '100.000', '', 'abc']) {
+    state.form.price = invalid;
+    const before = app.calls.length;
+    await state.save();
+    assert.ok(state.priceErrors.price);
+    assert.equal(app.calls.length, before);
+  }
+  state.form.price = '0';
+  assert.equal(state.validatePrice('price'), true, 'Zero remains valid');
+  state.form.pricing_method = 'range';
+  state.form.min_price = '500'; state.form.max_price = '499';
+  state.validatePrice('max_price');
+  assert.match(state.priceErrors.max_price, /Maximum Price/);
+  state.form.min_price = '499'; state.priceInput('min_price');
+  assert.equal(state.priceErrors.max_price, '', 'Correcting the minimum clears the dependent range error');
+  state.openModal();
+  assert.equal(Object.keys(state.priceErrors).length, 0, 'Reopening clears prior errors');
+  Object.assign(state.form, {name: 'CBC', category_id: 2, pricing_method: 'tiered', price: '1000000'});
+  state.form.tiers.forEach(tier => {tier.enabled = false; tier.price = '1000000';});
+  state.form.tiers[1].enabled = true;
+  state.form.tiers[1].price = '500.00';
+  const before = app.calls.length;
+  await state.save();
+  assert.ok(app.calls.slice(before).some(call => call[0] === 'POST'), 'Unused prices and disabled tiers do not block saving');
+}
+
+async function confirmationDismissal() {
+  const stores = {};
+  const context = {document: {addEventListener: (_, callback) => callback()}, Alpine: {store: (name, store) => {stores[name] = store;}}};
+  vm.createContext(context);
+  vm.runInContext(read('scripts/components/admin-clinic.js'), context);
+  const feedback = stores.clinicFeedback;
+  let answer = feedback.confirm({title: 'Service status', dismissOnEscape: false});
+  assert.equal(feedback.dialog.dismissOnEscape, false);
+  feedback.answer(false);
+  assert.equal(await answer, false, 'Cancel still completes confirmation');
+  answer = feedback.confirm({title: 'Case action'});
+  assert.equal(feedback.dialog.dismissOnEscape, true, 'Other clinic confirmations retain their existing Escape behavior');
+  feedback.answer(true);
+  assert.equal(await answer, true);
+}
+
+(async () => {await navigation(); await workflow(); await priceValidation(); await confirmationDismissal(); formatting(); console.log('Clinic Services navigation, pricing and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});

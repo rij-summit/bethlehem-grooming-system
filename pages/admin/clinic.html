@@ -5,7 +5,7 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Cases | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261013-details-v2" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261013-pricing-v3" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
     <style>
       :is(#medical-record-form, [aria-labelledby="patient-record-title"], [aria-labelledby="consultation-record-title"]) :is(button, input, select, textarea):focus-visible {
@@ -1535,7 +1535,7 @@
     <div x-data>
       <div x-cloak x-show="$store.clinicFeedback.dialog.open" style="display:none" x-transition
         class="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/75 px-4"
-        @keydown.escape.window="if ($store.clinicFeedback.dialog.open) $store.clinicFeedback.answer(false)">
+        @keydown.escape.window="if ($store.clinicFeedback.dialog.open && $store.clinicFeedback.dialog.dismissOnEscape) $store.clinicFeedback.answer(false)">
         <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="clinic-confirm-title" aria-describedby="clinic-confirm-message">
           <div class="px-6 py-5">
             <div class="flex h-12 w-12 items-center justify-center rounded-2xl"
@@ -1568,10 +1568,10 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=sections-removed-20261010&clinic-products=20261010&medical-record=20261012"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-pricing-v3"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=physical-stock-20261012-v3"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
-    <script src="../../scripts/components/admin-clinic-shell.js?v=20261013-service-details-v2"></script>
+    <script src="../../scripts/components/admin-clinic-shell.js?v=20261013-service-pricing-v3"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

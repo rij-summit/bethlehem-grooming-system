@@ -1,3 +1,15 @@
+const CLINIC_SERVICE_MAX_PRICE = 100000;
+
+function clinicServicePriceError(value) {
+  const text = String(value ?? '').trim();
+  if (!text || !Number.isFinite(Number(text)) || Number(text) < 0) return 'Enter a non-negative price.';
+  if (Number(text) > CLINIC_SERVICE_MAX_PRICE) {
+    return `Price must be ₱${CLINIC_SERVICE_MAX_PRICE.toLocaleString('en-PH', {minimumFractionDigits: 2})} or less.`;
+  }
+  if (!/^(?:\d+\.?\d{0,2}|\.\d{1,2})$/.test(text)) return 'Price must have no more than 2 decimal places.';
+  return '';
+}
+
 function emptyClinicService() {
   return {
     name: '', category_id: '', type: '', pricing_method: 'fixed', billing_unit: '',
@@ -32,6 +44,7 @@ function adminClinicServices() {
     _requestId: 0, _searchTimer: null, _activation: null,
     modalOpen: false, saving: false, busyId: null, editingId: null, formError: '',
     form: emptyClinicService(), details: null, _detailsTrigger: null,
+    maximumPrice: CLINIC_SERVICE_MAX_PRICE, priceErrors: {},
     init() {},
     destroy() { clearTimeout(this._searchTimer); this.$refs.serviceDialog.close(); this.closeDetails(false); },
     async activate() {
@@ -103,6 +116,7 @@ function adminClinicServices() {
         });
       }
       this.formError = '';
+      this.priceErrors = {};
       this.modalOpen = true;
       this.$refs.serviceDialog.showModal();
       this.$nextTick(() => this.$refs.serviceName.focus());
@@ -127,19 +141,41 @@ function adminClinicServices() {
       else payload.price = f.price;
       return payload;
     },
+    priceFields() {
+      if (this.form.pricing_method === 'tiered') {
+        return this.form.tiers.filter(tier => tier.enabled).map(tier => ({key: tier.size, value: tier.price}));
+      }
+      return (this.form.pricing_method === 'range' ? ['min_price', 'max_price'] : ['price'])
+        .map(key => ({key, value: this.form[key]}));
+    },
+    validatePrice(key) {
+      const field = this.priceFields().find(field => field.key === key);
+      let error = field ? clinicServicePriceError(field.value) : '';
+      if (!error && key === 'max_price' && !clinicServicePriceError(this.form.min_price)
+        && Number(this.form.max_price) < Number(this.form.min_price)) {
+        error = 'Maximum Price must be greater than or equal to Minimum Price.';
+      }
+      this.priceErrors[key] = error;
+      if (key === 'min_price' && this.priceErrors.max_price) this.validatePrice('max_price');
+      return !error;
+    },
+    priceInput(key) {
+      // Recheck an existing error while correcting it; first validation happens on blur or Save.
+      if (this.priceErrors[key]) this.validatePrice(key);
+      if (key === 'min_price' && this.priceErrors.max_price) this.validatePrice('max_price');
+    },
     async save() {
       if (this.saving) return;
       this.formError = '';
       const payload = this.payload();
-      const prices = payload.tiers ? payload.tiers.map(tier => tier.price)
-        : payload.pricing_method === 'range' ? [payload.min_price, payload.max_price] : [payload.price];
+      this.priceErrors = {};
+      for (const field of this.priceFields()) this.validatePrice(field.key);
+      if (Object.values(this.priceErrors).some(Boolean)) {
+        this.$nextTick(() => this.$refs.serviceForm.querySelector('[aria-invalid="true"]')?.focus());
+        return;
+      }
       if (payload.tiers && !payload.tiers.length) { this.formError = 'Configure at least one pet size tier.'; return; }
-      if (prices.some(price => price === '' || price == null || !Number.isFinite(Number(price)) || Number(price) < 0)) {
-        this.formError = 'Enter a non-negative price for each configured price or tier.'; return;
-      }
-      if (payload.pricing_method === 'range' && Number(payload.max_price) < Number(payload.min_price)) {
-        this.formError = 'Maximum Price must be greater than or equal to Minimum Price.'; return;
-      }
+      if (!this.$refs.serviceForm.reportValidity()) return;
       this.saving = true;
       try {
         await API.adminRequest(this.editingId ? 'PUT' : 'POST',
@@ -158,7 +194,7 @@ function adminClinicServices() {
       if (!await this.$store.clinicFeedback.confirm({
         title: `${active ? 'Reactivate' : 'Deactivate'} service?`,
         message: `${service.name}${service.type ? ' · ' + service.type : ''}. ${active ? 'This service will be available in the catalog.' : 'This service will become inactive. Existing case charges are preserved.'}`,
-        confirmLabel: active ? 'Reactivate' : 'Deactivate', danger: !active,
+        confirmLabel: active ? 'Reactivate' : 'Deactivate', danger: !active, dismissOnEscape: false,
       })) return;
       this.busyId = service.id;
       try {

@@ -6,7 +6,7 @@ let clinicServicesScript;
 function loadClinicServicesScript() {
   return clinicServicesScript ??= new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = '../../scripts/components/admin-clinic-services.js?v=20261013-service-details-v2';
+    script.src = '../../scripts/components/admin-clinic-services.js?v=20261013-service-pricing-v3';
     script.onload = resolve;
     script.onerror = () => {
       clinicServicesScript = null;
@@ -32,7 +32,7 @@ function adminClinicShell() {
       if (this.$refs.services.firstElementChild) return this.$refs.services.firstElementChild;
       return pendingServices ??= (async () => {
         const [response] = await Promise.all([
-          fetch('./clinic/sections/services.html?v=20261013-service-details-v2'), loadClinicServicesScript(),
+          fetch('./clinic/sections/services.html?v=20261013-service-pricing-v3'), loadClinicServicesScript(),
         ]);
         if (!response.ok) throw new Error('Unable to load Clinic Services. Please try again.');
         const panel = document.createElement('section');

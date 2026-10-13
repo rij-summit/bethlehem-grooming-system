@@ -132,6 +132,37 @@ class ClinicServiceCatalogTest extends TestCase
         $this->putJson('/api/admin/clinic-services/'.$id, $this->payload())->assertOk()->assertJsonPath('data.tiers', null);
     }
 
+    public function test_service_price_limit_applies_to_every_pricing_field_on_create_and_update(): void
+    {
+        $maximum = ClinicService::MAX_PRICE;
+        $message = 'Price must be ₱100,000.00 or less.';
+        foreach (['fixed', 'starting_at', 'range', 'tiered'] as $method) {
+            $payload = $this->payload([
+                'name' => 'Limit '.$method, 'pricing_method' => $method, 'price' => $maximum,
+                'min_price' => $maximum, 'max_price' => $maximum, 'tier_basis' => 'pet_size',
+                'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => $maximum], ['small', 'medium', 'large', 'extra_large']),
+            ]);
+            $fields = match ($method) {
+                'range' => ['min_price', 'max_price'],
+                'tiered' => ['tiers.0.price', 'tiers.1.price', 'tiers.2.price', 'tiers.3.price'],
+                default => ['price'],
+            };
+            $id = $this->postJson('/api/admin/clinic-services', $payload)->assertCreated()->json('data.id');
+            $this->putJson('/api/admin/clinic-services/'.$id, $payload)->assertOk();
+            foreach ($fields as $field) {
+                foreach ([$maximum + 0.01, 1000000] as $overLimit) {
+                    $invalid = $payload;
+                    $invalid['name'] .= ' invalid';
+                    data_set($invalid, $field, $overLimit);
+                    $this->postJson('/api/admin/clinic-services', $invalid)
+                        ->assertUnprocessable()->assertJsonValidationErrors($field)->assertJsonFragment([$field => [$message]]);
+                    $this->putJson('/api/admin/clinic-services/'.$id, $invalid)
+                        ->assertUnprocessable()->assertJsonValidationErrors($field)->assertJsonFragment([$field => [$message]]);
+                }
+            }
+        }
+    }
+
     public function test_filters_pagination_and_extensible_categories(): void
     {
         $category = ClinicServiceCategory::create(['name' => 'Dental']);
@@ -142,7 +173,12 @@ class ClinicServiceCatalogTest extends TestCase
         }
         $this->getJson('/api/admin/clinic-services?category_id='.$category->id.'&type=__none__&q=CBC')->assertJsonPath('total', 1);
         $this->getJson('/api/admin/clinic-services?type=Send%20Out')->assertJsonPath('total', 0);
-        $this->getJson('/api/admin/clinic-services?page=2')->assertJsonPath('total', 27)->assertJsonCount(2, 'data');
+        foreach ([1 => 10, 2 => 10, 3 => 7] as $page => $count) {
+            $this->getJson('/api/admin/clinic-services?page='.$page)
+                ->assertOk()->assertJsonPath('total', 27)->assertJsonPath('per_page', 10)
+                ->assertJsonPath('current_page', $page)->assertJsonPath('last_page', 3)
+                ->assertJsonCount($count, 'data');
+        }
     }
 
     public function test_catalog_edits_preserve_charge_snapshots_and_reference(): void

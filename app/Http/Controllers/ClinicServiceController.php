@@ -36,7 +36,7 @@ class ClinicServiceController extends Controller
         if (!empty($filters['type'])) {
             $filters['type'] === '__none__' ? $query->whereNull('type') : $query->where('type', $filters['type']);
         }
-        return response()->json($query->orderBy('name')->orderBy('id')->paginate(25));
+        return response()->json($query->orderBy('name')->orderBy('id')->paginate(10));
     }
 
     public function store(Request $request): JsonResponse
@@ -74,7 +74,8 @@ class ClinicServiceController extends Controller
         $type = $normalize($request->input('type'));
         $request->merge(['name' => $normalize($request->input('name')), 'type' => $type === '' ? null : $type]);
         $method = $request->input('pricing_method');
-        $money = ['required', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'];
+        $money = ['required', 'numeric', 'min:0', 'max:'.ClinicService::MAX_PRICE, 'decimal:0,2'];
+        $maximumPriceMessage = 'Price must be ₱'.number_format(ClinicService::MAX_PRICE, 2).' or less.';
         $data = $request->validate([
             'name' => 'required|string|max:200', 'category_id' => 'required|integer|exists:clinic_service_categories,id',
             'type' => ['nullable', Rule::in(ClinicService::TYPES)],
@@ -89,6 +90,11 @@ class ClinicServiceController extends Controller
             'tiers.*' => 'array:size,price',
             'tiers.*.size' => ['required', 'distinct', Rule::in(['small', 'medium', 'large', 'extra_large'])],
             'tiers.*.price' => $money,
+        ], [
+            'price.max' => $maximumPriceMessage,
+            'min_price.max' => $maximumPriceMessage,
+            'max_price.max' => $maximumPriceMessage,
+            'tiers.*.price.max' => $maximumPriceMessage,
         ]);
         $data += ['price' => null, 'min_price' => null, 'max_price' => null, 'tier_basis' => null, 'tiers' => null];
         $data['identity_key'] = hash('sha256', json_encode([mb_strtolower($data['name']), (int) $data['category_id'], mb_strtolower($data['type'] ?? '')]));

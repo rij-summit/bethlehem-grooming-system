@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ClinicService extends Model
 {
     public const TYPES = ['In House', 'Send Out', 'Test Kit'];
+    public const MAX_PRICE = 100000;
 
     protected $fillable = [
         'name', 'category_id', 'type', 'identity_key', 'pricing_method', 'billing_unit',
