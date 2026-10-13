@@ -149,11 +149,50 @@ function permissions(clinical, payment, queue, customers) {
   for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }
-  assert.match(page, /Services Performed/);
+  assert.match(page, /aria-label="Services"/);
   assert.match(page, /Attachments<\/h3>/);
   assert.match(page, /Follow-up<\/h3>/);
   assert.equal((page.match(/x-for="caseItem in visibleActiveCases"/g) || []).length, 1);
-  assert.match(page, /permissions\.payment && caseItem\.status === 'for_payment'/);
-  assert.match(page, /permissions\.intake && caseItem\.status === 'waiting_to_arrive'/);
+  const clinicSource = fs.readFileSync(path.join(root, 'scripts/components/admin-clinic.js'), 'utf8');
+  assert.match(clinicSource, /item\.status === 'for_payment' && this\.permissions\.payment/);
+  assert.match(clinicSource, /item\.status === 'waiting_to_arrive' && this\.permissions\.intake/);
+  permissions(true, true, true, true);
+  const casePage = component('adminClinicPage');
+  const actions = [];
+  casePage.checkInCase = item => actions.push(['check-in', item.id]);
+  casePage.startCase = item => actions.push(['start', item.id]);
+  casePage.reviewPayment = item => actions.push(['payment', item.id]);
+  casePage.openCase = (item, section) => actions.push(['open', item.id, section]);
+  for (const [status, label] of Object.entries({waiting_to_arrive: 'Check In', checked_in: 'Start Consultation', in_consultation: 'Open Case', for_payment: 'Review & Collect Payment'})) {
+    assert.equal(casePage.caseActionLabel({status}), label);
+    casePage.runCaseAction({id: 1, status});
+  }
+  assert.equal(actions[0][0], 'check-in');
+  assert.equal(actions[1][0], 'start');
+  assert.equal(actions[2][0], 'open');
+  assert.equal(actions[3][0], 'payment', 'Payment action opens the existing payment review directly');
+  casePage.activeCases = [{id: 1, status: 'in_consultation'}, {id: 2, status: 'for_payment'},
+    {id: 3, status: 'in_consultation', confinement: {discharged_at: null}}];
+  assert.equal(casePage.activeCount, 1);
+  assert.equal(casePage.forPaymentCount, 1);
+  assert.equal(casePage.visibleActiveCases[0].id, 1);
+  casePage.tab = 'for-payment';
+  assert.equal(casePage.visibleActiveCases.length, 1);
+  assert.equal(casePage.visibleActiveCases[0].id, 2);
+  permissions(false, false, false, false);
+  assert.equal(casePage.caseActionLabel({status: 'for_payment'}), 'Open Case', 'Read-only staff do not receive payment actions');
+  const chargesModal = component('adminClinicModal');
+  chargesModal.$nextTick = () => {};
+  chargesModal.currentAppt = {id: 1, status: 'for_payment'};
+  chargesModal.activeSection = 'services';
+  chargesModal.selectSection('billing');
+  assert.equal(chargesModal.chargesOpen, false, 'Charges requires billing permission');
+  stores.clinicAccess.permissions.billing = true;
+  chargesModal.selectSection('billing');
+  assert.equal(chargesModal.chargesOpen, true);
+  assert.equal(chargesModal.activeSection, 'services', 'Charges preserves the clinical section');
+  chargesModal.closeCharges();
+  assert.equal(chargesModal.activeSection, 'services');
+  assert.equal(chargesModal.chargesOpen, false);
   console.log('Clinic subrole workflow regression checks passed');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

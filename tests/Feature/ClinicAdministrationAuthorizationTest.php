@@ -2331,7 +2331,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['GET', 'api/admin/clinic-service-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/services', 'role:admin,staff'],
-            ['PATCH', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'role:admin,staff'],
+            ['DELETE', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases/{id}/charges', 'role:admin,staff'],
             ['PATCH', 'api/admin/clinic-cases/{id}/charges/{chargeId}', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-appointments', 'role:admin,staff'],

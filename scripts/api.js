@@ -1899,8 +1899,8 @@ var API = (() => {
     return request("POST", `/admin/clinic-cases/${id}/services`, payload, getAdminToken());
   }
 
-  function clinicUpdateCaseService(id, serviceId, payload) {
-    return request("PATCH", `/admin/clinic-cases/${id}/services/${serviceId}`, payload, getAdminToken());
+  function clinicDeleteCaseService(id, serviceId) {
+    return request("DELETE", `/admin/clinic-cases/${id}/services/${serviceId}`, null, getAdminToken());
   }
 
   function getClinicCaseCharges(id, page = 1) {
@@ -2239,7 +2239,7 @@ var API = (() => {
     clinicCaseServiceOptions,
     clinicCaseServicePricing,
     clinicCreateCaseService,
-    clinicUpdateCaseService,
+    clinicDeleteCaseService,
     getClinicCaseCharges,
     getClinicConfinedCases,
     getClinicConfinement,

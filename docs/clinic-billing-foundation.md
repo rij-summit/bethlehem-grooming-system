@@ -4,27 +4,25 @@
 
 ## Recording services
 
-- `GET /api/admin/clinic-cases/{id}/services`: paginated clinical history, including catalog references and linked charges. All users with Clinic access can view it.
-- `POST /api/admin/clinic-cases/{id}/services`: create or retry an occurrence; requires clinical permission.
-- `PATCH /api/admin/clinic-cases/{id}/services/{caseServiceId}`: update an ordered occurrence or transition its status; requires clinical permission.
+- `GET /api/admin/clinic-cases/{id}/services`: paginated performed services with saved snapshots and linked charges. Confinement entries include a `confinement_exists` flag so their Remove action remains hidden.
+- `POST /api/admin/clinic-cases/{id}/services`: add or retry a completed billable service; requires clinical permission.
+- `DELETE /api/admin/clinic-cases/{id}/services/{caseServiceId}`: remove a manually added service and its charge; requires clinical permission. The manual PATCH/status-transition endpoint has been removed.
 
-Creation requires `clinic_service_id`, a UUID `request_key`, and `status` (`ordered`, `performed`, or `cancelled`). Optional inputs are `quantity` (defaults to 1), `notes`, and `applied_price`. PATCH requires `status` and accepts those optional inputs, but cannot change the catalog reference or retry key.
+Creation requires `clinic_service_id` and a UUID `request_key`. Optional inputs are `notes` and `applied_price` for services requiring a final price. Client status and quantity inputs are prohibited. The backend records the service as performed with quantity 1; Confinement continues calculating its own quantity during discharge.
 
 ```json
 {
   "clinic_service_id": 12,
   "request_key": "44a22f36-3636-4ca3-bc8c-5fbcbfab068e",
-  "status": "ordered",
-  "quantity": 1,
-  "notes": "CBC ordered"
+  "notes": "Blood test requested"
 }
 ```
 
-The clinical UI must generate and retain one request key for each intended occurrence, including across retries and reloads. A new key represents a separate occurrence; the same catalog service may legitimately be performed more than once. A key cannot be reused for another case or catalog service. A successful new occurrence returns 201; retries and updates return 200.
+The clinical UI generates and retains one request key for each intended occurrence, including across retries and reloads. A new key represents a separate occurrence; the same catalog service may legitimately be provided more than once. A key cannot be reused for another case or catalog service. A successful new occurrence returns 201; retries return 200 without rewriting timestamps, snapshots or financial lines.
 
-An ordered occurrence has no charge. Transitioning it to performed resolves its current catalog price and creates exactly one linked charge in the same transaction as the clinical record and case total. A unique database constraint on `clinic_charges.clinic_case_service_id` prevents a second financial line. Operations lock the case, matching existing clinical and payment transaction conventions.
+Adding a service resolves its current catalog price and creates exactly one linked charge in the same transaction as the clinical record and case total. A unique database constraint on `clinic_charges.clinic_case_service_id` prevents a second financial line. Operations lock the case, matching existing clinical and payment transaction conventions. Service-generated financial lines remain read-only in Billing.
 
-Cancelling an order retains its original timestamp, recording user, notes, cancellation time and cancellation user, without creating a charge. Performed and cancelled occurrences are terminal. Repeated requests return the existing occurrence without rewriting timestamps, snapshots, or financial lines. A delayed POST of the original order cannot undo a terminal transition. Service-generated financial lines remain read-only in Billing.
+Removal uses the shared confirmation dialog, then deletes the linked charge and case service and recalculates the case total in one transaction. Paid, archived and otherwise locked cases reject removal. Case-scoped lookup prevents deleting another case's service. Any active or historical Confinement-linked entry is protected. Internal status fields and historical timestamps remain available for Confinement and existing records.
 
 New clinical writes follow existing case-stage rules: checked in or in consultation, plus the existing admin exception for cases awaiting payment. Paid and archived cases cannot be mutated. A retry of an already completed transition can still return the historical occurrence.
 
@@ -37,17 +35,17 @@ New clinical writes follow existing case-stage rules: checked in or in consultat
 - Range: performance requires an `applied_price` between configured minimum and maximum, inclusive.
 - Starting at: performance requires an `applied_price` at least equal to the configured starting price, within the existing technical Clinic monetary limit. There are no Grooming-style +₱500 or +₱200 caps. The technical limit is not presented as a customer-facing service price range.
 
-Range and starting-at services can be ordered before a final price is known. Performance and charge creation succeed together only when that price is supplied. Billing units remain catalog metadata and are preserved in the performance snapshot. Line amount is applied unit price multiplied by quantity, rounded to two decimal places.
+Manual range and starting-at services require a final price before adding. Service and charge creation succeed together only when that price is supplied. Billing units remain catalog metadata and are preserved in the performance snapshot. Line amount is applied unit price multiplied by quantity, rounded to two decimal places.
 
 The occurrence saves its applied price and historical service metadata at performance, including case weight and derived size for tiered services. Its quantity and applied price determine the linked financial line. Subsequent changes to catalogue names, prices, pricing methods, tiers, active status, species, patient weight, and payment do not recalculate historical performed-service snapshots or charges.
 
 ## Case workspace
 
-The existing patient record dialog in `pages/admin/clinic.html` includes Services Performed and Billing tabs alongside Medical Record and Treatment. Services use a compact history table with Ordered, Performed and Cancelled badges. Performed rows display historical snapshots, never current catalogue prices. The Billing table displays all existing charge types and the server's case total without maintaining another invoice calculation.
+The existing patient record dialog in `pages/admin/clinic.html` includes Services alongside Medical Record and Treatment, with contextual Billing review. The Services table has fixed column sizes for Service, Notes, Price and Remove. Blank notes display "-". Rows display saved names and applied prices, without status badges, catalogue metadata, staff attribution or timestamps. The Billing table displays all existing charge types and the server's case total without maintaining another invoice calculation.
 
 Clinical users select active services through `GET /api/admin/clinic-service-options`, which reuses the existing catalogue query and always restricts it to active services. Catalogue administration remains admin-only. `GET /api/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}` returns catalogue information and a pricing preview from the backend resolver; it requires clinical permission and does not create any records or charges.
 
-Only Range and Starting At display a Final Price input when marking Performed. Their frontend validation provides guidance; the backend validates the configured rule authoritatively. Fixed shows the configured price read-only. Tiered shows saved case weight, derived size and resolved price read-only, or an error with a link back to Vitals. Unsaved Medical Record weight is not used for pricing. Ordered services resolve the current catalogue rule and current saved case weight when performed.
+The selected service area shows its name, resolved price, optional notes and Add Service. Services requiring a final price show the input and allowed amount. Frontend validation provides guidance; the backend validates the configured rule authoritatively. Tiered services show the resolved price, or an error with a link back to Vitals. Unsaved Medical Record weight is not used for pricing. Adding or removing refreshes Services and Billing and shows "Service added." or "Service removed.".
 
 The workspace keeps a draft and request key in session storage scoped to the acting user and case. An unconfirmed submission retains its exact payload and offers a retry, including after reopening or reloading the case. Submission buttons are disabled while saving. Recoverable validation errors retain entered values. Clinical history, catalogue configuration, Billing and Payment remain separate responsibilities. Before opening the existing payment dialog, Billing includes any remaining charge pages and passes the complete reviewed breakdown with the server total. Payment continues validating that total inside its existing transaction.
 

@@ -16,7 +16,7 @@ function clinicCaseWorkspace() {
     chargeRows: [], chargePage: 0, chargeLastPage: 1, billingLoading: false, billingError: '', billingTotal: null,
     searchQuery: '', searchRows: [], searchPage: 0, searchLastPage: 1, searchLoading: false, searchError: '',
     selectedService: null, servicePricing: null, pricingLoading: false,
-    serviceForm: null, serviceErrors: {}, serviceError: '', serviceSaving: false, pendingPayload: null,
+    serviceForm: null, serviceErrors: {}, serviceError: '', serviceSaving: false, serviceRemovingId: null, pendingPayload: null,
     _generation: 0, _servicesRequest: 0, _billingRequest: 0, _searchRequest: 0, _selectionRequest: 0, _searchTimer: null, _savedWeight: null,
 
     get canMutateServices() {
@@ -29,14 +29,14 @@ function clinicCaseWorkspace() {
       return !!this.$store.clinicAccess.permissions.payment && this.workspaceAppointment?.status === 'for_payment'
         && !this.workspaceAppointment?.paid && !this.workspaceAppointment?.archived_at;
     },
-    get needsFinalPrice() { return this.serviceForm?.status === 'performed' && !!this.servicePricing?.requires_final_price; },
+    get needsFinalPrice() { return !!this.servicePricing?.requires_final_price; },
     get draftStorageKey() { return `clinic-service-draft:${this.$store.clinicAccess.user?.user_id}:${this.workspaceCaseId}`; },
     money(value) { return value == null ? '—' : Number(value).toLocaleString('en-PH', {style: 'currency', currency: 'PHP'}); },
     sizeLabel(size) { return ({small: 'Small', medium: 'Medium', large: 'Large', extra_large: 'Extra Large'})[size] || '—'; },
     methodLabel(method) { return ({fixed: 'Fixed', range: 'Range', starting_at: 'Starting At', tiered: 'Tiered'})[method] || method; },
     serviceInfo(entry) { return entry.service_snapshot || entry.clinic_service || {}; },
-    isConfinementBase(entry) { return this.workspaceAppointment?.confinement?.clinic_case_service_id === entry.id; },
-    categoryLabel(service) { return typeof service?.category === 'string' ? service.category : service?.category?.name; },
+    serviceNotes(entry) { return entry.notes?.trim() ? entry.notes : '-'; },
+    canRemoveService(entry) { return this.canMutateServices && entry.status === 'performed' && !entry.confinement_exists; },
     cataloguePrice(service) {
       if (service.pricing_method === 'range') return `${this.money(service.min_price)} – ${this.money(service.max_price)}`;
       if (service.pricing_method === 'starting_at') return `Starting at ${this.money(service.price)}`;
@@ -48,14 +48,6 @@ function clinicCaseWorkspace() {
       if (this.selectedService?.pricing_method === 'starting_at') return `Starting at ${this.money(this.servicePricing?.min_price)}`;
       return this.money(this.servicePricing?.resolved_price);
     },
-    serviceDate(entry) {
-      const value = entry.performed_at || entry.cancelled_at || entry.ordered_at;
-      return value ? new Date(value).toLocaleString('en-PH', {dateStyle: 'medium', timeStyle: 'short'}) : '—';
-    },
-    statusClass(status) {
-      return ({ordered: 'border-amber-200 bg-amber-50 text-amber-800', performed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-        cancelled: 'border-slate-200 bg-slate-50 text-slate-600'})[status];
-    },
     syncWorkspace(open, appt, section) {
       if (!open) {
         if (this.workspaceCaseId !== null) { ++this._generation; ++this._selectionRequest; ++this._searchRequest; }
@@ -65,7 +57,7 @@ function clinicCaseWorkspace() {
         this.workspaceSection = '';
         return;
       }
-      if (!['services', 'billing'].includes(section) || !appt?.id) {
+      if (!appt?.id) {
         clearTimeout(this._searchTimer);
         this.workspaceSection = '';
         return;
@@ -86,12 +78,14 @@ function clinicCaseWorkspace() {
         this.selectedService = null; this.servicePricing = null; this.serviceForm = null; this.pendingPayload = null;
         this.searchRows = []; this.searchQuery = ''; this.searchError = ''; this.serviceError = ''; this.serviceErrors = {};
         this.pricingLoading = false; this.searchLoading = false;
-        this.restoreDraft();
       }
       this._savedWeight = weight;
       this.workspaceSection = section;
-      if (section === 'services') this.loadServices();
-      else if (this.$store.clinicAccess.permissions.billing) this.loadBilling();
+      if (section === 'services') {
+        if (!this.serviceForm) this.restoreDraft();
+        this.loadServices();
+      }
+      else if (section === 'billing' && this.$store.clinicAccess.permissions.billing) this.loadBilling();
     },
     destroy() { clearTimeout(this._searchTimer); ++this._generation; ++this._searchRequest; ++this._selectionRequest; },
     async loadServices(page = 1) {
@@ -114,6 +108,7 @@ function clinicCaseWorkspace() {
         this.chargeRows = page === 1 ? response.charges.data : [...this.chargeRows, ...response.charges.data];
         this.chargePage = response.charges.current_page; this.chargeLastPage = response.charges.last_page;
         this.billingTotal = response.total_amount;
+        window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id, total_amount: response.total_amount}}));
       } catch (error) { if (generation === this._generation && request === this._billingRequest) this.billingError = error.message || 'Could not load billing.'; }
       finally { if (generation === this._generation && request === this._billingRequest) this.billingLoading = false; }
     },
@@ -122,7 +117,7 @@ function clinicCaseWorkspace() {
       this._searchTimer = setTimeout(() => this.loadOptions(), 250);
     },
     async loadOptions(page = 1) {
-      if (!this.canMutateServices || this.pendingPayload) return;
+      if (!this.canMutateServices || this.serviceSaving || this.serviceRemovingId !== null || this.pendingPayload) return;
       const generation = this._generation, request = ++this._searchRequest;
       this.searchLoading = true; this.searchError = '';
       try {
@@ -132,15 +127,19 @@ function clinicCaseWorkspace() {
       } catch (error) { if (generation === this._generation && request === this._searchRequest) this.searchError = error.message || 'Could not search the catalogue.'; }
       finally { if (generation === this._generation && request === this._searchRequest) this.searchLoading = false; }
     },
-    async selectService(service, entry = null) {
-      if (!this.canMutateServices || this.serviceSaving || this.pendingPayload) return;
+    async selectService(service) {
+      if (!this.canMutateServices || this.serviceSaving || this.serviceRemovingId !== null || this.pendingPayload) return;
+      const composer = this.$refs.serviceComposer, generation = this._generation;
       clearTimeout(this._searchTimer); ++this._searchRequest; this.searchLoading = false;
-      this.serviceForm = {service_id: service.id, occurrence_id: entry?.id || null, request_key: entry?.request_key || crypto.randomUUID(),
-        status: 'performed', quantity: entry?.quantity || '1', notes: entry?.notes || '', applied_price: ''};
+      this.serviceForm = {service_id: service.id, request_key: crypto.randomUUID(), notes: '', applied_price: ''};
       this.selectedService = service; this.serviceError = ''; this.serviceErrors = {}; this.searchRows = [];
       this.persistDraft();
       await this.refreshPricing(service.id);
-      this.$nextTick?.(() => this.$refs.serviceComposer?.scrollIntoView({block: 'nearest'}));
+      if (generation !== this._generation || this.selectedService?.id !== service.id) return;
+      this.$nextTick?.(() => {
+        composer?.scrollIntoView({block: 'nearest'});
+        composer?.querySelector('input, textarea')?.focus();
+      });
     },
     async refreshPricing(serviceId) {
       const generation = this._generation, request = ++this._selectionRequest;
@@ -179,9 +178,6 @@ function clinicCaseWorkspace() {
     },
     validateService() {
       this.serviceErrors = {};
-      const quantity = String(this.serviceForm?.quantity ?? '');
-      if (!/^\d+(?:\.\d{1,2})?$/.test(quantity) || Number(quantity) < 0.01 || Number(quantity) > 99999999.99)
-        this.serviceErrors.quantity = 'Enter a quantity greater than zero, with no more than 2 decimal places.';
       if (this.needsFinalPrice) {
         const error = clinicFinalPriceError(this.serviceForm.applied_price, this.servicePricing, this.money);
         if (error) this.serviceErrors.applied_price = error;
@@ -189,25 +185,26 @@ function clinicCaseWorkspace() {
       return Object.keys(this.serviceErrors).length === 0;
     },
     async submitService() {
-      if (!this.canMutateServices || this.serviceSaving || !this.serviceForm) return;
+      if (!this.canMutateServices || this.serviceSaving || this.serviceRemovingId !== null || !this.serviceForm) return;
       if (!this.pendingPayload && (this.pricingLoading || !this.servicePricing || !this.validateService()
-        || (this.serviceForm.status === 'performed' && this.servicePricing.error))) return;
+        || this.servicePricing.error)) return;
       const id = this.workspaceCaseId, generation = this._generation, form = this.serviceForm;
-      const payload = this.pendingPayload || {status: form.status, quantity: form.quantity, notes: form.notes,
-        ...(!form.occurrence_id ? {clinic_service_id: form.service_id, request_key: form.request_key} : {}),
+      const payload = this.pendingPayload || {notes: form.notes, clinic_service_id: form.service_id, request_key: form.request_key,
         ...(this.needsFinalPrice ? {applied_price: form.applied_price.trim()} : {})};
       this.pendingPayload = payload;
       if (!this.persistDraft()) { this.pendingPayload = null; return; }
       this.serviceSaving = true; this.serviceError = '';
       window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
       try {
-        if (form.occurrence_id) await API.clinicUpdateCaseService(id, form.occurrence_id, payload);
-        else await API.clinicCreateCaseService(id, payload);
+        await API.clinicCreateCaseService(id, payload);
         sessionStorage.removeItem(this.draftStorageKey);
         if (generation !== this._generation) return;
         this.pendingPayload = null; this.serviceForm = null; this.selectedService = null; this.servicePricing = null;
-        await this.loadServices();
-        this.$store.clinicFeedback.notify(payload.status === 'performed' ? 'Service performed. Billing charge created.' : 'Service ordered.');
+        clearTimeout(this._searchTimer); ++this._searchRequest;
+        this.searchQuery = ''; this.searchRows = []; this.searchPage = 0; this.searchLoading = false; this.searchError = '';
+        await Promise.all([this.loadServices(), this.loadBilling()]);
+        if (generation !== this._generation) return;
+        this.$store.clinicFeedback.notify('Service added.');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
       } catch (error) {
         if (generation !== this._generation) return;
@@ -222,20 +219,29 @@ function clinicCaseWorkspace() {
         window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: false}}));
       }
     },
-    async cancelOrderedService(entry) {
-      if (!this.canMutateServices || this.serviceSaving || this.pendingPayload || entry.status !== 'ordered') return;
+    async removeService(entry) {
+      if (!this.canRemoveService(entry) || this.serviceSaving || this.serviceRemovingId !== null || this.pendingPayload) return;
       const id = this.workspaceCaseId, generation = this._generation;
-      const confirmed = await this.$store.clinicFeedback.confirm({title: 'Cancel this service order?',
-        message: this.serviceInfo(entry).name, confirmLabel: 'Cancel Order', cancelLabel: 'Keep Order', danger: true});
-      if (!confirmed || generation !== this._generation || !this.canMutateServices) return;
-      this.serviceSaving = true;
-      window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
+      this.serviceRemovingId = entry.id;
+      let removing = false;
       try {
-        await API.clinicUpdateCaseService(id, entry.id, {status: 'cancelled'});
-        await this.loadServices();
-        this.$store.clinicFeedback.notify('Service order cancelled.');
-      } catch (error) { this.servicesError = error.message || 'Could not cancel this service order.'; }
-      finally { this.serviceSaving = false; window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: false}})); }
+        const confirmed = await this.$store.clinicFeedback.confirm({title: 'Remove service?',
+          message: `Remove "${this.serviceInfo(entry).name}" from this case? Its ${this.money(entry.charge?.amount ?? entry.applied_price)} charge will also be removed from Billing.`,
+          confirmLabel: 'Remove Service', cancelLabel: 'Cancel', danger: true});
+        if (!confirmed || generation !== this._generation || !this.canRemoveService(entry)) return;
+        removing = true; this.servicesError = '';
+        window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
+        await API.clinicDeleteCaseService(id, entry.id);
+        if (generation !== this._generation) return;
+        await Promise.all([this.loadServices(), this.loadBilling()]);
+        if (generation !== this._generation) return;
+        this.$store.clinicFeedback.notify('Service removed.');
+        window.dispatchEvent(new CustomEvent('clinic-case-updated'));
+      } catch (error) { if (generation === this._generation) this.servicesError = error.message || 'Could not remove this service.'; }
+      finally {
+        this.serviceRemovingId = null;
+        if (removing) window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: false}}));
+      }
     },
     async requestCasePayment() {
       if (!this.canRecordCasePayment || this.billingLoading || this.billingError || this.billingTotal == null) return;

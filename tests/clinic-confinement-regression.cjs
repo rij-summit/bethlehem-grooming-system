@@ -83,11 +83,14 @@ function component(permission = true, id = 1) {
   await pageState.loadConfinedCases(2); assert.equal(pageState.confinedCount, 23); assert.equal(pageState.confinedPage, 2);
   assert.equal(pageState.confinedCases.length, 1, 'Count comes from the server, not loaded page length');
   assert.equal(sandbox.clinicConfinementDuration('2026-10-13T00:00:00Z', '2026-10-14T01:02:00Z'), '1d 1h 2m');
+  assert.equal(state.methodLabel('fixed'), 'Fixed', 'Shared formatting used in Confinement remains available');
+  assert.equal(state.sizeLabel('medium'), 'Medium');
+  assert.equal(state.cataloguePrice({pricing_method: 'fixed', price: '500.00'}), state.money(500));
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
   assert.match(page, /Confined \(<span x-text="confinedCount"/);
-  assert.match(page, /clinicConfinementWorkspace\(\)/); assert.match(page, /Published treatment · read-only/);
+  assert.match(page, /clinicConfinementWorkspace\(\)/); assert.match(page, /charge\.vaccination_record_id \? 'Treatment'/);
   assert.match(page, /dischargePreview\?\.pricing.requires_final_price/);
-  assert.match(page, /!isConfinementBase\(entry\)/);
+  assert.match(page, /x-show="canRemoveService\(entry\)"/);
   assert.equal(/x-model="(?:dischargeForm\.quantity|dischargeForm\.billable_days)"/.test(page), false);
   console.log('Clinic confinement admission, monitoring, discharge, retry, pricing and permission regressions passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

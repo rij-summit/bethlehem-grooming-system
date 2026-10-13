@@ -19,7 +19,7 @@ class ClinicCaseServiceRecorder
         $data = Validator::make($data, [
             'clinic_service_id' => $caseServiceId ? 'prohibited' : 'required|integer',
             'request_key' => $caseServiceId ? 'prohibited' : 'required|uuid',
-            'status' => ['required', Rule::in(ClinicCaseService::STATUSES)],
+            'status' => ['required', Rule::in(['ordered', 'performed'])],
             'quantity' => 'sometimes|numeric|decimal:0,2|min:0.01|max:99999999.99',
             'applied_price' => 'nullable|numeric|decimal:0,2|min:0|max:'.ClinicService::MAX_PRICE,
             'notes' => 'nullable|string|max:5000',
@@ -34,12 +34,11 @@ class ClinicCaseServiceRecorder
                 || (! $caseServiceId && (int) $entry->clinic_service_id !== (int) $data['clinic_service_id']))) {
                 throw ValidationException::withMessages(['request_key' => 'This service request has already been used.']);
             }
-            // A delayed ordered request must not undo a completed transition.
             if ($entry && $entry->status !== 'ordered') {
-                if ($entry->status === $data['status'] || (! $caseServiceId && $data['status'] === 'ordered')) {
+                if ($entry->status === $data['status']) {
                     return $entry->load('charge');
                 }
-                throw ValidationException::withMessages(['status' => 'Performed and cancelled services cannot be changed. Review the billing charge for financial corrections.']);
+                throw ValidationException::withMessages(['status' => 'This service can no longer be finalized.']);
             }
             if ($entry && ! $finalizingConfinement && \Illuminate\Support\Facades\Schema::hasTable('clinic_confinements')
                 && $entry->confinement()->exists()) {
@@ -50,7 +49,7 @@ class ClinicCaseServiceRecorder
             }
             $service = ClinicService::with('category')->whereKey($entry?->clinic_service_id ?? $data['clinic_service_id'])
                 ->lockForUpdate()->firstOrFail();
-            if (! $service->is_active && $data['status'] !== 'cancelled') {
+            if (! $service->is_active) {
                 throw ValidationException::withMessages(['clinic_service_id' => 'Choose an active Clinic service.']);
             }
             if (! $entry) {
@@ -68,8 +67,6 @@ class ClinicCaseServiceRecorder
                     'performed_at' => now(), 'performed_by_user_id' => $actor->user_id,
                     'applied_price' => $pricing['price'], 'service_snapshot' => $pricing['snapshot'],
                 ]);
-            } elseif ($data['status'] === 'cancelled') {
-                $entry->forceFill(['cancelled_at' => now(), 'cancelled_by_user_id' => $actor->user_id]);
             }
             $entry->save();
             if ($entry->status === 'performed') {
@@ -83,6 +80,27 @@ class ClinicCaseServiceRecorder
                 app(ClinicBillingService::class)->updateTotal($appointment);
             }
             return $entry->load('charge');
+        });
+    }
+
+    public function remove(int $appointmentId, int $caseServiceId, User $actor): void
+    {
+        abort_unless($actor->clinicPermissions()['clinical'], 403);
+        DB::transaction(function () use ($appointmentId, $caseServiceId, $actor) {
+            $appointment = ClinicAppointment::whereKey($appointmentId)->lockForUpdate()->firstOrFail();
+            $entry = $appointment->caseServices()->whereKey($caseServiceId)->firstOrFail();
+            if ($appointment->paid || $appointment->archived_at || ! $appointment->clinicalContentEditableFor($actor)) {
+                throw ValidationException::withMessages(['services' => 'Services cannot be removed at this case stage.']);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('clinic_confinements') && $entry->confinement()->exists()) {
+                throw ValidationException::withMessages(['services' => 'Confinement services cannot be removed here.']);
+            }
+            if ($entry->status !== 'performed') {
+                throw ValidationException::withMessages(['services' => 'Only manually added services can be removed here.']);
+            }
+            $entry->charge()->delete();
+            $entry->delete();
+            app(ClinicBillingService::class)->updateTotal($appointment);
         });
     }
 }

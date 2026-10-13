@@ -193,7 +193,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/clinic-service-options', [ClinicServiceController::class, 'caseOptions'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}', [ClinicCaseServiceController::class, 'pricing'])->middleware('clinic:clinical');
         Route::post('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'store'])->middleware('clinic:clinical');
-        Route::patch('/admin/clinic-cases/{id}/services/{caseServiceId}', [ClinicCaseServiceController::class, 'update'])->middleware('clinic:clinical');
+        Route::delete('/admin/clinic-cases/{id}/services/{caseServiceId}', [ClinicCaseServiceController::class, 'destroy'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/charges', [ClinicBillingController::class, 'index'])->middleware('clinic:billing');
         Route::patch('/admin/clinic-cases/{id}/charges/{chargeId}', [ClinicBillingController::class, 'update'])->middleware('clinic:billing');
 

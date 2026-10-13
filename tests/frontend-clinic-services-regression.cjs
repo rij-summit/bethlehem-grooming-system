@@ -12,7 +12,7 @@ function setup() {
     location: {hash: '#services'}, history: {replaceState(_, __, hash) {context.location.hash = hash;}},
     scrollTo() {}, addEventListener: (name, listener) => listeners.set(name, listener),
     removeEventListener: name => listeners.delete(name),
-    adminClinicPage: () => ({init() {calls.push('cases:init');}}),
+    adminClinicPage: () => ({tab: 'active-cases', init() {calls.push('cases:init');}, loadAllRecords() {calls.push('records:load');}}),
     API: {getUserRole: () => 'admin', adminRequest: async (method, url, payload) => {
       calls.push([method, url, payload]);
       return url.endsWith('/options') ? {categories: [{id: 2, name: 'Laboratory'}], types: ['In House']}
@@ -69,6 +69,12 @@ async function navigation() {
   assert.equal(services.q, 'CBC', 'Cached section preserves filters');
   await app.visit('#unknown');
   assert.equal(app.context.location.hash, '#cases');
+  await app.visit('#records');
+  assert.equal(app.shell.activeSection, 'records');
+  await app.visit('#cases');
+  await app.visit('#records');
+  assert.equal(app.calls.filter(call => call === 'records:load').length, 1, 'Records load only on their first visit');
+  assert.equal(app.calls.filter(call => call === 'cases:init').length, 1, 'Records reuse the Clinic workspace');
   app.shell.destroy();
   assert.equal(app.listeners.has('hashchange'), false);
   const retry = setup();

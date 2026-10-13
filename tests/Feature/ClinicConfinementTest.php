@@ -161,8 +161,27 @@ class ClinicConfinementTest extends TestCase
         foreach (['/api/admin/clinic-cases/1/finish', '/api/admin/clinic-appointments/1/finish-consultation'] as $url)
             $this->postJson($url)->assertUnprocessable()->assertJsonValidationErrors('status');
         $id = ClinicCaseService::first()->id;
-        foreach (['performed', 'cancelled'] as $status) $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => $status])->assertUnprocessable();
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable()->assertJsonValidationErrors('services');
+        $entry = ClinicCaseService::findOrFail($id);
+        $this->postJson('/api/admin/clinic-cases/1/services', ['clinic_service_id' => $entry->clinic_service_id,
+            'request_key' => $entry->request_key])->assertUnprocessable();
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()->assertJsonPath('total', 0);
+        $this->assertSame('ordered', $entry->fresh()->status);
         $this->assertDatabaseCount('clinic_charges', 0);
+    }
+
+    public function test_discharged_confinement_service_cannot_be_removed_through_services_tab(): void
+    {
+        $this->admit();
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
+        $id = ClinicCaseService::first()->id;
+        $this->signIn('admin');
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable()->assertJsonValidationErrors('services');
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()->assertJsonPath('data.0.confinement_exists', true);
+        $this->assertDatabaseHas('clinic_case_services', ['id' => $id, 'status' => 'performed']);
+        $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $id, 'amount' => 500]);
+        $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
+        $this->assertNotNull(ClinicConfinement::first()->discharged_at);
     }
 
     public function test_discharge_finalizes_one_service_one_charge_and_one_payment_due_transition(): void

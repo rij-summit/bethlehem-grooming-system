@@ -12,7 +12,8 @@ const starting = {id: 3, name: 'Procedure', pricing_method: 'starting_at', price
 const tiered = {id: 4, name: 'Lab test', pricing_method: 'tiered'};
 const services = [fixed, range, starting, tiered];
 const storage = new Map();
-const submissions = [], events = [];
+const submissions = [], removals = [], events = [], notifications = [], confirmations = [];
+let serviceLoads = 0, billingLoads = 0, confirmRemoval = true, delayedRemoval = null;
 let role = 'staff', permission = {clinical: true, billing: true, payment: false};
 let failSubmission = false, delayedOptions = null;
 const preview = service => ({requires_final_price: ['range', 'starting_at'].includes(service.pricing_method),
@@ -25,22 +26,22 @@ const sandbox = {
   window: {dispatchEvent: event => events.push(event)},
   API: {
     getUserRole: () => role,
-    getClinicCaseServices: async () => ({data: [], current_page: 1, last_page: 1}),
-    getClinicCaseCharges: async () => ({total_amount: '1734.00', charges: {data: [
+    getClinicCaseServices: async () => {++serviceLoads; return {data: [], current_page: 1, last_page: 1};},
+    getClinicCaseCharges: async () => {++billingLoads; return {total_amount: '1734.00', charges: {data: [
       {id: 1, description: 'Performed consultation', clinic_case_service_id: 1, quantity: 1, unit_price: 500, amount: 500},
       {id: 2, description: 'Medicine', kind: 'medicine', quantity: 1, unit_price: 1234, amount: 1234},
-    ], current_page: 1, last_page: 1}}),
+    ], current_page: 1, last_page: 1}};},
     clinicCaseServiceOptions: async () => delayedOptions || ({data: services, current_page: 1, last_page: 1}),
     clinicCaseServicePricing: async (id, serviceId) => {const service = services.find(row => row.id === serviceId); return {data: service, pricing: preview(service)};},
     clinicCreateCaseService: async (id, payload) => {submissions.push({id, payload: {...payload}}); if (failSubmission) throw new Error('timeout'); return {data: {id: 5}};},
-    clinicUpdateCaseService: async (id, occurrenceId, payload) => {submissions.push({id, occurrenceId, payload: {...payload}}); return {data: {id: occurrenceId}};},
+    clinicDeleteCaseService: async (id, serviceId) => {removals.push({id, serviceId}); return delayedRemoval || {message: 'Service removed.'};},
   },
 };
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox);
 function component(id = 1) {
   const state = sandbox.clinicCaseWorkspace();
-  state.$store = {clinicAccess: {permissions: permission, user: {user_id: 7}}, clinicFeedback: {notify() {}, confirm: async () => true}};
+  state.$store = {clinicAccess: {permissions: permission, user: {user_id: 7}}, clinicFeedback: {notify: message => notifications.push(message), confirm: async options => {confirmations.push(options); return confirmRemoval;}}};
   state.$refs = {}; state.$nextTick = callback => callback();
   state.syncWorkspace(true, {id, status: 'in_consultation', vitals: {weight_kg: 18.4}, pet: {size: 'small', weight: 1}}, 'services');
   return state;
@@ -52,10 +53,18 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   await state.selectService(fixed);
   assert.equal(state.needsFinalPrice, false);
   assert.equal(state.servicePricing.resolved_price, '500.00');
+  state.serviceForm.notes = 'Provided during visit';
   state.serviceForm.applied_price = '400';
   await state.submitService();
+  assert.equal('quantity' in submissions.at(-1).payload, false, 'The backend supplies quantity one');
+  assert.equal('status' in submissions.at(-1).payload, false, 'The backend knows the service was performed');
+  assert.equal(submissions.at(-1).payload.notes, 'Provided during visit');
+  assert.equal(notifications.at(-1), 'Service added.');
+  assert.ok(billingLoads > 0, 'Addition refreshes Billing');
   assert.equal('applied_price' in submissions.at(-1).payload, false, 'Fixed does not send a manual price');
   assert.equal(state.serviceForm, null);
+  assert.equal(state.searchQuery, '');
+  assert.equal(state.searchPage, 0, 'Clearing the form does not display a stale empty search result');
 
   await state.selectService(range);
   assert.equal(state.needsFinalPrice, true);
@@ -69,11 +78,9 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
     assert.equal(state.serviceForm.applied_price, invalid, 'Validation retains entered values');
   }
   for (const valid of ['800', '1250', '1500']) {state.serviceForm.applied_price = valid; assert.equal(state.validateService(), true);}
-  state.serviceForm.status = 'ordered';
-  assert.equal(state.needsFinalPrice, false);
+  state.serviceForm.applied_price = '1250';
   await state.submitService();
-  assert.equal(submissions.at(-1).payload.status, 'ordered');
-  assert.equal('applied_price' in submissions.at(-1).payload, false);
+  assert.equal(submissions.at(-1).payload.applied_price, '1250');
 
   await state.selectService(starting);
   assert.equal(state.needsFinalPrice, true);
@@ -94,16 +101,9 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   const beforeTiered = submissions.length;
   await state.submitService();
   assert.equal(submissions.length, beforeTiered);
-  state.serviceForm.status = 'ordered';
+  state.servicePricing.error = null;
   await state.submitService();
   assert.equal('applied_price' in submissions.at(-1).payload, false, 'Tiered has no client price');
-
-  await state.selectService(range, {id: 22, request_key: 'existing-key', quantity: '2.00', notes: 'Ordered earlier'});
-  state.serviceForm.applied_price = '850';
-  await state.submitService();
-  assert.equal(submissions.at(-1).occurrenceId, 22);
-  assert.equal(submissions.at(-1).payload.quantity, '2.00');
-  assert.equal('request_key' in submissions.at(-1).payload, false, 'Ordered transitions use the existing occurrence');
 
   await state.selectService(fixed);
   const key = state.serviceForm.request_key;
@@ -122,6 +122,57 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(submissions.at(-1).payload.request_key, submissions.at(-2).payload.request_key);
   assert.equal(storage.size, 0, 'Confirmed success clears the retry draft');
 
+  await reloaded.selectService(fixed);
+  const createService = sandbox.API.clinicCreateCaseService;
+  let completeAdd;
+  sandbox.API.clinicCreateCaseService = async (id, payload) => {
+    submissions.push({id, payload}); return new Promise(resolve => {completeAdd = resolve;});
+  };
+  const adding = reloaded.submitService();
+  const countWhileAdding = submissions.length;
+  await reloaded.submitService();
+  assert.equal(submissions.length, countWhileAdding, 'Duplicate clicks submit once');
+  assert.equal(reloaded.serviceSaving, true);
+  completeAdd({data: {id: 9}});
+  await adding;
+  assert.equal(reloaded.serviceSaving, false);
+  sandbox.API.clinicCreateCaseService = createService;
+
+  const entry = {id: 9, status: 'performed', notes: null, applied_price: '650.00', charge: {amount: '650.00'},
+    service_snapshot: {name: 'Anti Rabies'}, confinement_exists: false};
+  assert.equal(reloaded.serviceNotes(entry), '-');
+  assert.equal(reloaded.serviceNotes({...entry, notes: ''}), '-');
+  assert.equal(reloaded.serviceNotes({...entry, notes: '   '}), '-');
+  assert.equal(reloaded.serviceNotes({...entry, notes: 'Blood test requested'}), 'Blood test requested');
+  assert.equal(reloaded.canRemoveService({...entry, confinement_exists: true}), false, 'Historical Confinement stays protected');
+  confirmRemoval = false;
+  await reloaded.removeService(entry);
+  assert.equal(removals.length, 0, 'Dismissing confirmation does not remove a service');
+  assert.equal(reloaded.serviceRemovingId, null);
+  assert.equal(confirmations.at(-1).title, 'Remove service?');
+  assert.equal(confirmations.at(-1).message, `Remove "Anti Rabies" from this case? Its ${reloaded.money('650')} charge will also be removed from Billing.`);
+  assert.equal(confirmations.at(-1).confirmLabel, 'Remove Service');
+  confirmRemoval = true;
+  let completeRemove;
+  delayedRemoval = new Promise(resolve => {completeRemove = resolve;});
+  const servicesBeforeRemove = serviceLoads, billingBeforeRemove = billingLoads;
+  const removing = reloaded.removeService(entry);
+  await settle();
+  assert.equal(reloaded.serviceRemovingId, entry.id);
+  await reloaded.removeService(entry);
+  assert.equal(removals.length, 1, 'Duplicate removal clicks send one request');
+  completeRemove({message: 'Service removed.'});
+  await removing;
+  assert.equal(reloaded.serviceRemovingId, null);
+  assert.equal(serviceLoads, servicesBeforeRemove + 1);
+  assert.equal(billingLoads, billingBeforeRemove + 1);
+  assert.equal(notifications.at(-1), 'Service removed.');
+  delayedRemoval = null;
+  sandbox.API.clinicDeleteCaseService = async () => {throw new Error('Services cannot be removed at this case stage.');};
+  await reloaded.removeService(entry);
+  assert.equal(reloaded.serviceRemovingId, null, 'Failure unlocks the action');
+  assert.match(reloaded.servicesError, /cannot be removed/);
+
   const historical = {service_snapshot: {name: 'Original name', pet_size: 'medium', pet_weight_kg: '18.40'}, clinic_service: {name: 'Renamed service'}};
   assert.equal(state.serviceInfo(historical).name, 'Original name');
   await state.loadBilling();
@@ -135,7 +186,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   const beforeReceptionist = submissions.length;
   await receptionist.selectService(fixed);
   await receptionist.submitService();
-  await receptionist.cancelOrderedService({status: 'ordered'});
+  await receptionist.removeService({id: 5, status: 'performed'});
   assert.equal(submissions.length, beforeReceptionist);
   receptionist.workspaceAppointment = {id: 2, status: 'for_payment', charges: []};
   await receptionist.loadBilling();
@@ -167,15 +218,24 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   await pending;
   assert.equal(stale.searchRows.length, 0, 'Closed case ignores an in-flight catalogue response');
 
-  const billingMarkup = page.slice(page.indexOf('<section id="case-billing-panel"'), page.indexOf('<section id="case-confinement-panel"'));
+  const billingMarkup = page.slice(page.indexOf('<section id="case-billing-panel"'), page.indexOf('<section :inert="chargesOpen" id="case-confinement-panel"'));
   assert.equal(/<input|<select|Edit Price|Discount/.test(billingMarkup), false, 'Billing has no pricing editor');
   assert.match(page, /<template x-if="needsFinalPrice">/);
-  assert.match(page, /x-show="selectedService\?\.pricing_method === 'tiered'/);
-  assert.match(page, /Saved case weight/);
-  assert.match(page, /Pricing tier/);
   assert.match(page, /Go to Vitals/);
   assert.match(page, /x-show="canRecordCasePayment"/);
   assert.match(page, /x-show="\$store\.clinicAccess\.permissions\.billing"/);
+  const serviceHistory = page.slice(page.indexOf('aria-label="Case service history"'), page.indexOf('Load more services'));
+  assert.equal(/>Qty<|>Status<|>Recorded<|Staff #|serviceDate|statusClass|categoryLabel|entry\.quantity/.test(serviceHistory), false);
+  assert.match(serviceHistory, /table-fixed/);
+  assert.match(serviceHistory, /<colgroup>/);
+  assert.match(serviceHistory, /x-text="serviceNotes\(entry\)"/);
+  assert.match(serviceHistory, /x-text="money\(entry.applied_price\)"/);
+  assert.match(serviceHistory, /@click="removeService\(entry\)"/);
+  const servicesPanel = page.slice(page.indexOf('<section id="case-services-panel"'), page.indexOf('Load more services'));
+  assert.equal(/Order for Later|Record Performed|Mark Performed|Cancel Order|serviceForm.status|categoryLabel|methodLabel|billing_unit|Saved case weight|Pricing tier|case-service-quantity/.test(servicesPanel), false);
+  assert.match(servicesPanel, /'Add Service'/);
+  assert.match(servicesPanel, /No services added yet\./);
+  assert.equal(/role="tab"[^>]*aria-controls="case-billing-panel"/.test(page), false, 'Charges is contextual, not a clinical tab');
   assert.match(source, /service_snapshot \|\| entry.clinic_service/);
   assert.equal(/sizeFor|groomingSize|\+ 500|\+ 200/.test(source), false, 'JS does not recreate size or pricing rules');
   console.log('Clinic case workspace pricing, history, retry, billing and permission regressions passed');

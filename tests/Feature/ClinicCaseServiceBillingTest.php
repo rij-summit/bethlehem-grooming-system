@@ -7,11 +7,13 @@ use App\Models\ClinicCaseService;
 use App\Models\ClinicCharge;
 use App\Models\ClinicService;
 use App\Models\User;
+use App\Services\ClinicBillingService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -76,36 +78,92 @@ class ClinicCaseServiceBillingTest extends TestCase
         ], $changes));
     }
 
-    private function payload(ClinicService $service, string $status = 'performed', array $changes = []): array
+    private function payload(ClinicService $service, array $changes = []): array
     {
-        return array_replace(['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid(), 'status' => $status], $changes);
+        return array_replace(['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid()], $changes);
     }
 
-    public function test_ordered_service_and_cancelled_order_preserve_history_without_charges(): void
+    public function test_manual_service_is_performed_immediately_with_notes_and_server_price(): void
     {
-        $payload = $this->payload($this->catalog(), 'ordered', ['notes' => 'Order CBC']);
-        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()->json('data.id');
-        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
+        $service = $this->catalog();
+        $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$service->id)->assertOk()
+            ->assertJsonPath('pricing.resolved_price', '500.00');
+        $service->update(['price' => 650]);
+        $payload = $this->payload($service, ['notes' => 'Blood test requested', 'applied_price' => 1]);
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()
+            ->assertJsonPath('data.status', 'performed')->assertJsonPath('data.quantity', '1.00')
+            ->assertJsonPath('data.notes', 'Blood test requested')->assertJsonPath('data.applied_price', '650.00')
+            ->assertJsonPath('data.charge.amount', '650.00')->json('data.id');
+        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.id', $id);
         $this->assertDatabaseCount('clinic_case_services', 1);
-        $this->assertDatabaseCount('clinic_charges', 0);
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'cancelled'])->assertOk();
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $id, 'amount' => 650]);
         $entry = ClinicCaseService::findOrFail($id);
-        $this->assertNotNull($entry->ordered_at);
-        $this->assertNotNull($entry->cancelled_at);
-        $this->assertSame(1, $entry->cancelled_by_user_id);
-        $this->assertSame('Order CBC', $entry->notes);
-        $this->assertNull($entry->applied_price);
-        $this->assertDatabaseCount('clinic_charges', 0);
-        $this->assertEquals(0, ClinicAppointment::find(1)->total_amount);
-        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.status', 'cancelled');
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertUnprocessable();
+        $this->assertNull($entry->ordered_at);
+        $this->assertNotNull($entry->performed_at);
+        $this->assertEquals(650, ClinicAppointment::find(1)->total_amount);
     }
 
-    public function test_direct_cancelled_service_creates_no_charge(): void
+    public function test_manual_api_rejects_client_status_and_quantity_and_has_no_transition_endpoint(): void
     {
-        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($this->catalog(), 'cancelled'))
-            ->assertCreated()->assertJsonPath('data.status', 'cancelled');
+        $service = $this->catalog();
+        foreach (['ordered', 'performed', 'cancelled'] as $status) {
+            $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, ['status' => $status]))
+                ->assertUnprocessable()->assertJsonValidationErrors('status');
+        }
+        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, ['quantity' => 2]))
+            ->assertUnprocessable()->assertJsonValidationErrors('quantity');
+        $this->patchJson('/api/admin/clinic-cases/1/services/1', ['status' => 'performed'])->assertStatus(405);
+        $this->assertDatabaseCount('clinic_case_services', 0);
         $this->assertDatabaseCount('clinic_charges', 0);
+    }
+
+    public function test_removing_manual_service_deletes_only_its_charge_and_recalculates_total(): void
+    {
+        $service = $this->catalog();
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertCreated()->json('data.id');
+        $otherId = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertCreated()->json('data.id');
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertOk()->assertJsonPath('message', 'Service removed.');
+        $this->assertDatabaseMissing('clinic_case_services', ['id' => $id]);
+        $this->assertDatabaseMissing('clinic_charges', ['clinic_case_service_id' => $id]);
+        $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $otherId, 'amount' => 500]);
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 500);
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertNotFound();
+        $this->assertDatabaseCount('clinic_case_services', 1);
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$otherId)->assertOk();
+        $this->assertEquals(0, ClinicAppointment::find(1)->total_amount);
+    }
+
+    public function test_paid_archived_and_locked_cases_cannot_remove_a_service(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($this->catalog()))->assertCreated()->json('data.id');
+        $this->signIn('admin');
+        foreach ([['paid' => true], ['archived_at' => now()], ['status' => 'completed'], ['status' => 'cancelled'],
+            ['status' => 'no_show'], ['status' => 'expired'], ['status' => 'pending']] as $lock) {
+            ClinicAppointment::find(1)->update(['paid' => false, 'archived_at' => null, 'status' => 'in_consultation', ...$lock]);
+            $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable();
+            $this->assertDatabaseHas('clinic_case_services', ['id' => $id]);
+            $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $id, 'amount' => 500]);
+            $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
+        }
+        ClinicAppointment::find(1)->update(['status' => 'for_payment']);
+        $this->signIn();
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable();
+        $this->signIn('admin');
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertOk();
+    }
+
+    public function test_removal_rolls_back_both_records_when_total_update_fails(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($this->catalog()))->assertCreated()->json('data.id');
+        $this->mock(ClinicBillingService::class)->shouldReceive('updateTotal')->once()
+            ->andThrow(ValidationException::withMessages(['charges' => 'Unable to update total.']));
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable();
+        $this->assertDatabaseHas('clinic_case_services', ['id' => $id]);
+        $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $id, 'amount' => 500]);
+        $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
     }
 
     public function test_fixed_service_generates_one_charge_and_retries_after_payment_do_not_duplicate_it(): void
@@ -114,32 +172,12 @@ class ClinicCaseServiceBillingTest extends TestCase
         $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()
             ->assertJsonPath('data.applied_price', '500.00')->assertJsonPath('data.charge.amount', '500.00')->json('data.id');
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertOk();
         ClinicAppointment::find(1)->update(['status' => 'completed', 'paid' => true]);
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
         $this->assertDatabaseCount('clinic_case_services', 1);
         $this->assertDatabaseCount('clinic_charges', 1);
         $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
         $this->assertSame(1, ClinicCaseService::find($id)->performed_by_user_id);
-    }
-
-    public function test_ordered_to_performed_uses_price_at_performance_and_delayed_order_retry_cannot_undo_it(): void
-    {
-        $service = $this->catalog();
-        $payload = $this->payload($service, 'ordered', ['quantity' => 2]);
-        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->json('data.id');
-        $service->update(['price' => 750]);
-        $this->signIn(id: 2);
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])
-            ->assertOk()->assertJsonPath('data.charge.amount', '1500.00');
-        $this->postJson('/api/admin/clinic-cases/1/services', array_replace($payload, ['status' => 'performed']))->assertOk();
-        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.status', 'performed');
-        $this->assertDatabaseCount('clinic_charges', 1);
-        $entry = ClinicCaseService::find($id);
-        $this->assertSame(1, $entry->recorded_by_user_id);
-        $this->assertSame(2, $entry->performed_by_user_id);
-        $this->assertNotNull($entry->ordered_at);
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'cancelled'])->assertUnprocessable();
     }
 
     public function test_catalog_changes_preserve_completed_case_charge_and_clinical_snapshots(): void
@@ -151,6 +189,8 @@ class ClinicCaseServiceBillingTest extends TestCase
         ClinicAppointment::find(1)->update(['status' => 'completed', 'paid' => true]);
         $service->update(['name' => 'New CBC', 'price' => 900, 'type' => null, 'billing_unit' => 'pet', 'is_active' => false]);
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()
+            ->assertJsonPath('data.0.service_snapshot.name', 'CBC')->assertJsonPath('data.0.applied_price', '500.00');
         $this->assertSame($snapshot, ClinicCaseService::find($id)->service_snapshot);
         $this->assertDatabaseHas('clinic_charges', ['description' => 'CBC', 'unit_price' => 500, 'amount' => 500]);
         $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
@@ -182,12 +222,8 @@ class ClinicCaseServiceBillingTest extends TestCase
                 $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, changes: ['applied_price' => $price]))
                     ->assertUnprocessable()->assertJsonValidationErrors('applied_price');
             }
-            $ordered = $this->payload($service, 'ordered');
-            $id = $this->postJson('/api/admin/clinic-cases/1/services', $ordered)->assertCreated()->json('data.id');
-            $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertUnprocessable();
-            $this->assertSame('ordered', ClinicCaseService::find($id)->status);
-            $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed', 'applied_price' => 650, 'quantity' => 1.5])
-                ->assertOk()->assertJsonPath('data.charge.amount', '975.00');
+            $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, ['applied_price' => 650]))
+                ->assertCreated()->assertJsonPath('data.charge.amount', '650.00');
         }
         $this->assertDatabaseCount('clinic_charges', 2);
     }
@@ -242,20 +278,6 @@ class ClinicCaseServiceBillingTest extends TestCase
             $this->patchJson('/api/admin/clinic-cases/1/charges/'.$chargeId, ['unit_price' => 1200])->assertUnprocessable();
             $this->assertDatabaseHas('clinic_charges', ['id' => $chargeId, 'unit_price' => $price, 'amount' => $price]);
         }
-    }
-
-    public function test_ordered_tiered_service_resolves_current_vital_weight_at_performance_time(): void
-    {
-        $service = $this->catalog(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size',
-            'tiers' => [['size' => 'medium', 'price' => 600], ['size' => 'large', 'price' => 800]]]);
-        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 1, 'weight_kg' => 18.4]);
-        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, 'ordered'))->assertCreated()->json('data.id');
-        DB::table('clinic_vitals')->where('clinic_appointment_id', 1)->update(['weight_kg' => 30]);
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertOk()
-            ->assertJsonPath('data.applied_price', '800.00')->assertJsonPath('data.service_snapshot.pet_size', 'large');
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed', 'quantity' => 2, 'applied_price' => 0])->assertOk()
-            ->assertJsonPath('data.quantity', '1.00')->assertJsonPath('data.charge.amount', '800.00');
-        $this->assertDatabaseCount('clinic_charges', 1);
     }
 
     public function test_tiered_without_valid_saved_case_weight_cannot_use_profile_weight_or_size(): void
@@ -317,7 +339,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->signIn('clinic_receptionist');
         $this->getJson('/api/admin/clinic-cases/1/services')->assertOk();
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertForbidden();
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'cancelled'])->assertForbidden();
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertForbidden();
         $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnosis' => 'Unauthorized'])->assertForbidden();
         $this->signIn('grooming_receptionist');
         $this->getJson('/api/admin/clinic-cases/1/services')->assertForbidden();
@@ -336,7 +358,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertDatabaseCount('clinic_charges', 1);
     }
 
-    public function test_inactive_services_request_key_collisions_and_cross_case_updates_are_rejected(): void
+    public function test_inactive_services_request_key_collisions_and_cross_case_removals_are_rejected(): void
     {
         $service = $this->catalog();
         $payload = $this->payload($service);
@@ -344,25 +366,11 @@ class ClinicCaseServiceBillingTest extends TestCase
         ClinicAppointment::create(['status' => 'checked_in', 'pet_id' => 1]);
         $this->postJson('/api/admin/clinic-cases/2/services', $payload)->assertUnprocessable();
         $this->postJson('/api/admin/clinic-cases/1/services', array_replace($payload, ['clinic_service_id' => $this->catalog()->id]))->assertUnprocessable();
-        $this->patchJson('/api/admin/clinic-cases/2/services/'.$id, ['status' => 'performed'])->assertNotFound();
+        $this->deleteJson('/api/admin/clinic-cases/2/services/'.$id)->assertNotFound();
         $this->patchJson('/api/admin/clinic-cases/2/charges/1', ['unit_price' => 0])->assertNotFound();
         $service->update(['is_active' => false]);
         $this->postJson('/api/admin/clinic-cases/1/services', array_replace($payload, ['request_key' => (string) Str::uuid()]))->assertUnprocessable();
         $this->assertDatabaseCount('clinic_charges', 1);
-    }
-
-    public function test_overflow_rolls_back_clinical_transition_charge_and_case_total(): void
-    {
-        $payload = $this->payload($this->catalog(), 'ordered', ['quantity' => 99999999.99]);
-        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->json('data.id');
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed'])->assertUnprocessable();
-        $this->assertDatabaseHas('clinic_case_services', ['id' => $id, 'status' => 'ordered', 'applied_price' => null, 'performed_at' => null]);
-        $this->assertDatabaseCount('clinic_charges', 0);
-        $this->assertEquals(0, ClinicAppointment::find(1)->total_amount);
-        $this->patchJson('/api/admin/clinic-cases/1/services/'.$id, ['status' => 'performed', 'quantity' => 1])->assertOk();
-        $this->patchJson('/api/admin/clinic-cases/1/charges/1', ['quantity' => 99999999.99])->assertUnprocessable();
-        $this->assertDatabaseHas('clinic_charges', ['quantity' => 1, 'amount' => 500]);
-        $this->assertEquals(500, ClinicAppointment::find(1)->total_amount);
     }
 
     public function test_database_prevents_two_charges_for_the_same_service_occurrence(): void
@@ -413,7 +421,7 @@ class ClinicCaseServiceBillingTest extends TestCase
     {
         foreach ([
             ['POST', 'api/admin/clinic-cases/{id}/services', 'clinic:clinical'],
-            ['PATCH', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'clinic:clinical'],
+            ['DELETE', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'clinic:clinical'],
             ['GET', 'api/admin/clinic-cases/{id}/charges', 'clinic:billing'],
             ['PATCH', 'api/admin/clinic-cases/{id}/charges/{chargeId}', 'clinic:billing'],
             ['POST', 'api/admin/clinic-appointments/{id}/pay', 'clinic:payment'],

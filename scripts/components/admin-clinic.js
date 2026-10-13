@@ -154,6 +154,7 @@ function adminClinicModal() {
     apptId:     null,
     currentAppt: null,
     activeSection: "medical",
+    chargesOpen: false,
     formErrors: {},
     veterinarians: [], optionsLoading: false, optionsError: "",
     vetDropdownOpen: false,
@@ -192,6 +193,9 @@ function adminClinicModal() {
       });
       window.addEventListener('clinic-case-patch', (event) => {
         if (this.open && event.detail.id === this.apptId) this.currentAppt = {...this.currentAppt, ...event.detail};
+      });
+      window.addEventListener('clinic-review-payment', (event) => {
+        if (this.open && event.detail.id === this.apptId) this.closeModal();
       });
     },
 
@@ -326,7 +330,8 @@ function adminClinicModal() {
       });
     },
     trapFocus(event) {
-      const controls = [...event.currentTarget.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
+      const scope = this.chargesOpen ? event.currentTarget.querySelector('#case-billing-panel') : event.currentTarget;
+      const controls = [...scope.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
         .filter(element => !element.disabled && element.getClientRects().length);
       const first = controls[0], last = controls.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -383,6 +388,7 @@ function adminClinicModal() {
       this.optionsLoading = false;
       this._clinicalOptionsLoaded = false;
       this.activeSection = "medical";
+      this.chargesOpen = false;
       this.modalError = "";
       this.title      = `Patient Record — ${appt.ownerName}${appt.pet?.name ? " / " + appt.pet.name : ""}`;
       const r = appt.record  || {};
@@ -433,8 +439,8 @@ function adminClinicModal() {
 
     selectSection(section) {
       if (this.saving || this.attachmentBusy || this.workspaceSaving) return;
-      if (section === "billing" && !this.$store.clinicAccess.permissions.billing) return;
-      this.activeSection = ["vaccinations", "services", "billing", "confinement"].includes(section) ? section : "medical";
+      if (section === "billing") { this.openCharges(); return; }
+      this.activeSection = ["vaccinations", "services", "confinement"].includes(section) ? section : "medical";
       if (this.activeSection === "medical" && this.canEditClinical && !this._clinicalOptionsLoaded && !this.optionsLoading) {
         this.loadClinicalOptions();
       }
@@ -446,9 +452,20 @@ function adminClinicModal() {
       }
     },
 
+    openCharges() {
+      if (!this.$store.clinicAccess.permissions.billing || !this.currentAppt?.id || this.saving || this.attachmentBusy || this.workspaceSaving) return;
+      this.chargesOpen = true;
+      this.$nextTick?.(() => this.$el.closest('[x-data="adminClinicModal()"]')?.querySelector('[aria-label="Close charges"]')?.focus());
+    },
+    closeCharges() {
+      this.chargesOpen = false;
+      this.$nextTick?.(() => this.$el.closest('[x-data="adminClinicModal()"]')?.querySelector('[aria-controls="case-billing-panel"]')?.focus());
+      if (this.activeSection === 'medical') this.selectSection('medical');
+    },
     closeModal() {
       if (this.saving || this.attachmentBusy || this.workspaceSaving) return;
       this.open = false;
+      this.chargesOpen = false;
       this.vetDropdownOpen = false;
       ++this._optionsRequest;
       this.optionsLoading = false;
@@ -616,7 +633,9 @@ function adminClinicPage() {
     caseBusyId: null,
     accessError: "",
     payment: { open: false, case: null, method: "cash", saving: false, error: "" },
-    tab: "records",
+    paymentReturnFocus: null,
+    tab: "active-cases",
+    _recordsLoaded: false,
     addCustomer: { open: false, saving: false, error: "", form: {} },
 
     // Patient profile panel
@@ -652,8 +671,8 @@ function adminClinicPage() {
         }
       } catch (error) { this.accessError = error.message || "Could not verify Clinic access."; return; }
       if (new URLSearchParams(window.location.search).get("tab") === "active-cases") this.tab = "active-cases";
+      if (new URLSearchParams(window.location.search).get("tab") === "for-payment") this.tab = "for-payment";
       if (new URLSearchParams(window.location.search).get("tab") === "confined") { this.tab = "confined"; this.loadConfinedCases(); }
-      this.loadAllRecords();
       this.loadActiveCases();
       window.addEventListener("clinic-case-updated", () => {
         this.loadActiveCases();
@@ -675,8 +694,11 @@ function adminClinicPage() {
     },
 
     get visibleActiveCases() {
-      return this.tab === "active-cases" ? this.activeCases : this.activeCases.slice(0, 3);
+      return this.activeCases.filter(item => this.tab === 'for-payment' ? item.status === 'for_payment'
+        : item.status !== 'for_payment' && !(item.confinement && !item.confinement.discharged_at));
     },
+    get activeCount() { return this.activeCases.filter(item => item.status !== 'for_payment' && !(item.confinement && !item.confinement.discharged_at)).length; },
+    get forPaymentCount() { return this.activeCases.filter(item => item.status === 'for_payment').length; },
     async loadConfinedCases(page = 1) {
       const request = ++this._confinedRequest;
       this.confinedLoading = true; this.confinedError = '';
@@ -696,6 +718,7 @@ function adminClinicPage() {
       this.tab = tab;
       const url = new URL(window.location.href);
       if (tab === "active-cases") url.searchParams.set("tab", "active-cases");
+      else if (tab === 'for-payment') url.searchParams.set('tab', 'for-payment');
       else if (tab === 'confined') { url.searchParams.set('tab', 'confined'); this.loadConfinedCases(); }
       else url.searchParams.delete("tab");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
@@ -705,6 +728,19 @@ function adminClinicPage() {
 
     caseLabel(item) { return ({ online_request: "Online request", consultation: "Consultation", vaccination: "Vaccination" })[item.case_type] || "Clinic case"; },
     caseStatus(item) { return ({ waiting_to_arrive: "Waiting for Arrival", checked_in: "Checked In", in_consultation: "In Consultation", for_payment: "For Payment" })[item.status] || item.status; },
+    caseActionLabel(item) {
+      if (item.status === 'waiting_to_arrive' && this.permissions.intake) return 'Check In';
+      if (item.status === 'checked_in' && this.permissions.clinical) return 'Start Consultation';
+      if (item.status === 'for_payment' && this.permissions.payment) return 'Review & Collect Payment';
+      return 'Open Case';
+    },
+    runCaseAction(item) {
+      if (this.caseBusyId !== null) return;
+      if (item.status === 'waiting_to_arrive' && this.permissions.intake) return this.checkInCase(item);
+      if (item.status === 'checked_in' && this.permissions.clinical) return this.startCase(item);
+      if (item.status === 'for_payment' && this.permissions.payment) return this.reviewPayment(item);
+      this.openCase(item);
+    },
     get permissions() { return this.$store.clinicAccess.permissions; },
     money(value) { return Number(value || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" }); },
     async checkInCase(item) {
@@ -716,7 +752,20 @@ function adminClinicPage() {
     },
     reviewPayment(item) {
       if (!this.permissions.payment || item.status !== "for_payment") return;
+      this.paymentReturnFocus = document.activeElement;
       this.payment = { open: true, case: item, method: "cash", saving: false, error: "" };
+      this.$nextTick?.(() => document.getElementById('clinic-payment-method')?.focus());
+    },
+    trapPaymentFocus(event) {
+      const controls = [...event.currentTarget.querySelectorAll('button, select')].filter(element => !element.disabled);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    },
+    closePayment() {
+      if (this.payment.saving) return;
+      this.payment.open = false;
+      this.paymentReturnFocus?.focus();
     },
     async recordPayment() {
       if (!this.permissions.payment || this.payment.saving) return;
