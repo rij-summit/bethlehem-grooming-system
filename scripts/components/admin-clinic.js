@@ -646,12 +646,17 @@ function adminClinicPage() {
       owner: null,
       records: [],
     },
+    _profileRequest: 0,
+    profileReturnFocus: null,
+    profilePageOverflow: null,
+    profileScrollPosition: 0,
+    profileRecordTrigger: null,
 
     // Owner's pet list (opened by View)
     petPicker: { open: false, owner: null, pets: [] },
 
     // Read-only consultation detail
-    detail: { open: false, record: null },
+    detail: { record: null },
     detailAttachmentBusyId: null,
     detailAttachmentError: "",
 
@@ -947,8 +952,15 @@ function adminClinicPage() {
       this.loadAllRecords();
     },
 
-    async openProfile(row) {
+    async openProfile(row, trigger = document.activeElement) {
       if (!row.pet?.id) return;
+      const request = ++this._profileRequest;
+      if (!this.profile.open) {
+        this.profileReturnFocus = trigger;
+        this.profilePageOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+      }
+      this.detail = { record: null };
       this.profile = {
         open: true,
         loading: true,
@@ -957,20 +969,76 @@ function adminClinicPage() {
         owner: row.owner,
         records: [],
       };
-      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick?.(() => {
+        if (this.$refs.profileBody) this.$refs.profileBody.scrollTop = 0;
+        this.$refs.profileClose?.focus();
+        if (window.lucide) window.lucide.createIcons();
+      });
       try {
-        const data = await API.adminGetPetProfile(row.pet.id);
+        const [data, ownerData] = await Promise.all([
+          API.adminGetPetProfile(row.pet.id),
+          row.owner.recordType === 'unregistered'
+            ? API.getUnregisteredCustomerDetails(row.owner.id)
+            : API.getCustomerDetails(row.owner.id),
+        ]);
+        if (request !== this._profileRequest) return;
+        const pet = ownerData.customer?.pets?.find(pet => String(pet.id) === String(row.pet.id));
+        if (!pet) throw new Error('Patient information could not be found. Please reopen the profile.');
+        this.profile.pet = pet;
+        this.profile.owner = { ...row.owner, ...ownerData.customer };
         this.profile.records = data.medical_records || [];
       } catch (err) {
+        if (request !== this._profileRequest) return;
         this.profile.error = err.message || "Failed to load pet profile.";
       } finally {
-        this.profile.loading = false;
-        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+        if (request === this._profileRequest) {
+          this.profile.loading = false;
+          this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+        }
       }
     },
 
     closeProfile() {
+      this._profileRequest++;
       this.profile.open = false;
+      this.detail = { record: null };
+      if (this.profilePageOverflow !== null) {
+        document.body.style.overflow = this.profilePageOverflow;
+        this.profilePageOverflow = null;
+      }
+      this.$nextTick?.(() => this.profileReturnFocus?.focus());
+    },
+
+    trapProfileFocus(event) {
+      const controls = [...event.currentTarget.querySelectorAll('button, a[href], [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    },
+
+    get patientName() { return this.profile.pet?.petName || this.profile.pet?.name || 'Patient'; },
+    get patientConditions() { return String(this.profile.pet?.medicalConditions ?? this.profile.pet?.medical_conditions ?? '').trim(); },
+    patientInformation() {
+      const pet = this.profile.pet || {};
+      const label = value => value ? String(value).replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase()) : '—';
+      const status = value => value == null ? '—' : (value === true || value === 1 || value === '1' ? 'Yes' : 'No');
+      const neutered = pet.isNeutered ?? pet.is_neutered;
+      const deceased = pet.isDeceased ?? pet.is_deceased;
+      return [
+        {label: 'Species', value: label(pet.species)},
+        {label: 'Breed', value: pet.breed || '—'},
+        {label: 'Gender', value: label(pet.gender)},
+        {label: 'Birthdate / Age', value: pet.birthdate ? `${this.fmtDate(pet.birthdate)} · ${this.petAge(pet)}` : '—'},
+        {label: 'Weight', value: pet.weight != null && pet.weight !== '' ? `${pet.weight} kg` : '—'},
+        {label: 'Size', value: pet.size ? `${label(pet.size)}${pet.sizeVerified ? ' · Clinic verified' : ''}` : '—'},
+        {label: 'Color', value: pet.color || '—'},
+        {label: 'Fur Type', value: label(pet.furType ?? pet.fur_type)},
+        {label: 'Neutered / Spayed', value: status(neutered)},
+        ...(status(neutered) === 'Yes' ? [{label: 'Neutered Date', value: this.fmtDate(pet.neuteredDate ?? pet.neutered_date)}] : []),
+        {label: 'Deceased', value: status(deceased)},
+        ...(status(deceased) === 'Yes' ? [{label: 'Deceased Date', value: this.fmtDate(pet.deceasedDate ?? pet.deceased_date)}] : []),
+      ];
     },
 
     openPetPicker(row) {
@@ -1067,10 +1135,24 @@ function adminClinicPage() {
       window.location.href = "./walk-in-pet-details.html";
     },
 
-    viewDetail(record) {
-      this.detail = { open: true, record };
+    viewDetail(record, trigger = document.activeElement) {
+      this.profileScrollPosition = this.$refs.profileBody?.scrollTop || 0;
+      this.profileRecordTrigger = trigger?.querySelector?.('button') || trigger;
+      this.detail = { record };
       this.detailAttachmentError = "";
-      this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick?.(() => {
+        if (this.$refs.profileBody) this.$refs.profileBody.scrollTop = 0;
+        this.$refs.profileBack?.focus();
+        if (window.lucide) window.lucide.createIcons();
+      });
+    },
+
+    backToProfile() {
+      this.detail = { record: null };
+      this.$nextTick?.(() => {
+        if (this.$refs.profileBody) this.$refs.profileBody.scrollTop = this.profileScrollPosition;
+        this.profileRecordTrigger?.focus({ preventScroll: true });
+      });
     },
 
     formatFileSize: formatClinicFileSize,

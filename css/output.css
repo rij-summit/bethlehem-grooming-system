@@ -1907,6 +1907,11 @@ video {
        column-gap: 1.25rem;
 }
 
+.gap-x-6 {
+  -moz-column-gap: 1.5rem;
+       column-gap: 1.5rem;
+}
+
 .gap-x-8 {
   -moz-column-gap: 2rem;
        column-gap: 2rem;
@@ -4348,6 +4353,11 @@ video {
 
 .hover\:bg-white\/70:hover {
   background-color: rgb(255 255 255 / 0.7);
+}
+
+.hover\:text-\[\#274864\]:hover {
+  --tw-text-opacity: 1;
+  color: rgb(39 72 100 / var(--tw-text-opacity, 1));
 }
 
 .hover\:text-\[\#274a66\]:hover {
