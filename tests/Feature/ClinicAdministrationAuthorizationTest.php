@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\AdminClinicController;
+use App\Models\ClinicService;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -479,6 +481,69 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $this->postJson($uri)->assertOk();
             $this->assertDatabaseHas('clinic_appointments', ['id' => $index + 1, 'status' => 'for_payment', 'paid' => false]);
             $this->postJson('/api/admin/clinic-appointments/'.($index + 1).'/pay', ['total_amount' => 0, 'payment_method' => 'card'])->assertOk();
+        }
+    }
+
+    public function test_manual_services_feed_the_current_total_through_finish_payment_and_history(): void
+    {
+        $catalogMigration = require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php');
+        $caseServiceMigration = require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php');
+        $catalogMigration->up();
+        $caseServiceMigration->up();
+        try {
+            $this->authenticateAs('staff');
+            $this->insertClinicAppointment('checked_in');
+            $this->postJson('/api/admin/clinic-cases/1/start')->assertOk();
+            $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('cases.0.status', 'in_consultation');
+            DB::table('clinic_charges')->insert([
+                'clinic_appointment_id' => 1, 'kind' => 'existing', 'description' => 'Existing clinical charge',
+                'quantity' => 1, 'unit_price' => 350, 'amount' => 350,
+            ]);
+            $entries = [];
+            foreach (['CBC' => 990, 'Anti Rabies' => 650] as $name => $price) {
+                $service = ClinicService::create([
+                    'name' => $name, 'category_id' => 2, 'identity_key' => hash('sha256', Str::uuid()),
+                    'pricing_method' => 'fixed', 'price' => $price, 'is_active' => true,
+                ]);
+                $entries[$name] = $this->postJson('/api/admin/clinic-cases/1/services', [
+                    'clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid(),
+                    'notes' => $name === 'CBC' ? 'Blood test requested' : '', 'applied_price' => 1,
+                ])->assertCreated()->assertJsonPath('data.applied_price', number_format($price, 2, '.', ''))->json('data.id');
+            }
+            $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1990);
+            $this->deleteJson('/api/admin/clinic-cases/1/services/'.$entries['CBC'])->assertOk();
+            $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1000);
+            $this->assertDatabaseMissing('clinic_charges', ['clinic_case_service_id' => $entries['CBC']]);
+            $this->assertDatabaseHas('clinic_charges', ['description' => 'Existing clinical charge', 'amount' => 350]);
+
+            $this->postJson('/api/admin/clinic-appointments/1/record', ['finish_case' => true])
+                ->assertUnprocessable()->assertJsonValidationErrors(['weight_kg', 'temperature_c', 'heart_rate_bpm', 'respiratory_rate_bpm']);
+            $this->postJson('/api/admin/clinic-appointments/1/record', [
+                'diagnosis' => 'Healthy', 'finish_case' => true,
+                'weight_kg' => 4.5, 'temperature_c' => 38.5, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20,
+            ])->assertOk();
+            $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases')
+                ->assertJsonPath('cases.0.status', 'for_payment')->assertJsonPath('cases.0.paid', false)
+                ->assertJsonPath('cases.0.total_amount', 1000);
+            $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'for_payment', 'paid' => false, 'total_amount' => 1000]);
+            $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1000, 'payment_method' => 'cash'])->assertForbidden();
+
+            $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+            $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1000);
+            $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1990, 'payment_method' => 'cash'])
+                ->assertUnprocessable()->assertJsonValidationErrors('total_amount');
+            $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1000, 'payment_method' => 'cash'])->assertOk();
+            $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
+            $this->getJson('/api/admin/clinic-appointments/archived')->assertOk()
+                ->assertJsonPath('archived.0.status', 'completed')->assertJsonPath('archived.0.total_amount', 1000)
+                ->assertJsonPath('archived.0.paid', true);
+            $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'completed', 'paid' => true, 'total_amount' => 1000]);
+            $this->authenticateAs('staff');
+            $this->deleteJson('/api/admin/clinic-cases/1/services/'.$entries['Anti Rabies'])->assertUnprocessable();
+            $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $entries['Anti Rabies'], 'amount' => 650]);
+        } finally {
+            $caseServiceMigration->down();
+            $catalogMigration->down();
         }
     }
 

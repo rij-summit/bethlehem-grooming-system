@@ -5203,6 +5203,10 @@ video {
     margin-left: 280px;
   }
 
+  .lg\:ml-auto {
+    margin-left: auto;
+  }
+
   .lg\:flex {
     display: flex;
   }

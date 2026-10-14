@@ -146,6 +146,13 @@ function permissions(clinical, payment, queue, customers) {
     assert.equal(sidebar.staffRoleLabel, label);
   }
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
+  const filters = page.slice(page.indexOf('aria-label="Case status filters"'), page.indexOf('<section x-show="[\'active-cases\''));
+  const filterOrder = [...filters.matchAll(/@click="setTab\('([^']+)'\)"/g)].map(match => match[1]);
+  assert.deepEqual(filterOrder, ['active-cases', 'confined', 'for-payment']);
+  assert.match(filters, /class="[^"]*lg:ml-auto"[^>]*:class="tab === 'for-payment'/);
+  assert.equal(filters.includes('justify-between'), false, 'Small screens use natural spacing and wrapping');
+  assert.equal((page.match(/Save &amp; Send to Payment/g) || []).length, 2);
+  assert.match(page, /x-show="caseItem.status === 'for_payment'"[^>]*x-text="money\(caseItem.total_amount\)"/);
   for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }
