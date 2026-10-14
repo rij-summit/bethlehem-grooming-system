@@ -1111,6 +1111,10 @@ var API = (() => {
     return request("GET", `/admin/pets/${encodeURIComponent(petId)}/profile${query}`, null, getAdminToken());
   }
 
+  function adminGetPetCaseDetails(petId, caseId) {
+    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/cases/${encodeURIComponent(caseId)}/details`, null, getAdminToken());
+  }
+
   async function resendVerification(email) {
     // POST /api/email/resend  { email }
     return request("POST", "/email/resend", { email });
@@ -2281,6 +2285,7 @@ var API = (() => {
     verifyEmail,
     updatePendingRegistration,
     adminGetPetProfile,
+    adminGetPetCaseDetails,
     resendVerification,
     resendLoginCode,
     confirmLoginCode,

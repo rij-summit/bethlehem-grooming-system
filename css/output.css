@@ -1588,6 +1588,10 @@ video {
   min-width: 180px;
 }
 
+.min-w-\[480px\] {
+  min-width: 480px;
+}
+
 .min-w-\[580px\] {
   min-width: 580px;
 }

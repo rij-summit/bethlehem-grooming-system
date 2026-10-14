@@ -269,22 +269,7 @@ class AdminPetProfileTest extends TestCase
         $this->insertPet(101, 'Mochi');
         $this->insertPet(202, 'Other Pet');
         $this->authenticate(20, 'staff');
-        Schema::create('clinic_services', function (Blueprint $table) {
-            $table->id(); $table->string('name');
-        });
-        Schema::create('clinic_charges', function (Blueprint $table) {
-            $table->id(); $table->unsignedBigInteger('clinic_case_service_id'); $table->decimal('amount', 10, 2);
-        });
-        Schema::create('clinic_case_services', function (Blueprint $table) {
-            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_service_id');
-            $table->string('status'); $table->json('service_snapshot'); $table->text('notes')->nullable();
-            $table->decimal('applied_price', 10, 2); $table->decimal('quantity', 10, 2)->default(1); $table->timestamp('performed_at');
-        });
-        Schema::create('clinic_confinements', function (Blueprint $table) {
-            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_case_service_id');
-            $table->timestamp('admitted_at'); $table->timestamp('discharged_at')->nullable(); $table->text('reason');
-            $table->text('discharge_note')->nullable();
-        });
+        $this->createCaseHistoryTables();
         DB::table('clinic_services')->insert(['id' => 1, 'name' => 'Renamed catalogue service']);
         foreach (range(1, 23) as $id) {
             DB::table('clinic_appointments')->insert(['id' => $id, 'pet_id' => $id === 23 ? 202 : 101,
@@ -311,6 +296,74 @@ class AdminPetProfileTest extends TestCase
         $this->authenticate(10, 'customer');
         $this->getJson('/api/admin/pets/101/profile?history=services')->assertForbidden();
         $this->getJson('/api/admin/pets/101/profile?history=confinement')->assertForbidden();
+    }
+
+    public function test_case_details_share_existing_formats_and_are_case_and_pet_scoped(): void
+    {
+        $this->insertPet(101, 'Mochi');
+        $this->insertPet(202, 'Other Pet');
+        $this->authenticate(20, 'admin');
+        $this->createCaseHistoryTables();
+        foreach ([701 => 101, 702 => 101, 703 => 202] as $id => $petId) {
+            DB::table('clinic_appointments')->insert(['id' => $id, 'pet_id' => $petId,
+                'appointment_reference' => 'CL-20261014-'.$id, 'appointment_date' => '2026-10-01', 'status' => 'completed']);
+        }
+        $recordId = DB::table('clinic_records')->insertGetId(['clinic_appointment_id' => 701, 'diagnosis' => 'Dermatitis', 'findings' => 'Redness']);
+        DB::table('clinic_attachments')->insert(['clinic_record_id' => $recordId, 'file_name' => 'sample-result.pdf',
+            'file_path' => 'sample-result.pdf', 'label' => 'Sample result']);
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 701, 'weight_kg' => 12.5]);
+        foreach ([701, 701, 702, null] as $index => $caseId) {
+            DB::table('vaccination_records')->insert(['pet_id' => 101, 'clinic_appointment_id' => $caseId,
+                'vaccine_name' => 'Treatment '.$index, 'administered_date' => '2026-10-01',
+                'published_at' => $index === 0 ? '2026-10-01 12:00:00' : null]);
+        }
+        DB::table('clinic_services')->insert(['id' => 1, 'name' => 'Renamed service']);
+        foreach (range(1, 24) as $id) {
+            DB::table('clinic_case_services')->insert(['id' => $id, 'clinic_appointment_id' => $id === 24 ? 702 : 701,
+                'clinic_service_id' => 1, 'status' => $id === 23 ? 'cancelled' : 'performed',
+                'service_snapshot' => json_encode(['name' => 'Saved service '.$id]), 'notes' => 'Saved note',
+                'applied_price' => 500, 'performed_at' => '2026-10-01 10:00:00']);
+        }
+        DB::table('clinic_confinements')->insert(['id' => 1, 'clinic_appointment_id' => 701, 'clinic_case_service_id' => 1,
+            'admitted_at' => '2026-10-01 10:00:00', 'discharged_at' => '2026-10-02 10:00:00', 'reason' => 'Observation', 'discharge_note' => 'Recovered']);
+        $this->getJson('/api/admin/pets/101/cases/701/details')->assertOk()
+            ->assertJsonPath('case.appointment_reference', 'CL-20261014-701')
+            ->assertJsonPath('case.appointment_date', '2026-10-01')
+            ->assertJsonPath('medical_record.appointment_id', 701)->assertJsonPath('medical_record.diagnosis', 'Dermatitis')
+            ->assertJsonPath('medical_record.attachments.0.file_name', 'sample-result.pdf')
+            ->assertJsonPath('medical_record.vitals.weight_kg', '12.50')->assertJsonCount(2, 'treatments')
+            ->assertJsonPath('treatments.0.clinic_appointment_id', 701)->assertJsonPath('treatments.0.state', 'draft')
+            ->assertJsonPath('treatments.1.state', 'published')->assertJsonCount(22, 'services')
+            ->assertJsonPath('services.0.service_snapshot.name', 'Saved service 22')
+            ->assertJsonPath('confinement.discharge_note', 'Recovered');
+        $this->getJson('/api/admin/pets/101/cases/702/details')->assertOk()->assertJsonPath('medical_record', null)
+            ->assertJsonCount(1, 'treatments')->assertJsonCount(1, 'services')->assertJsonPath('confinement', null);
+        $this->getJson('/api/admin/pets/101/cases/703/details')->assertNotFound();
+        $this->getJson('/api/admin/pets/101/cases/999/details')->assertNotFound();
+        $this->authenticate(30, 'staff');
+        $this->getJson('/api/admin/pets/101/cases/701/details')->assertForbidden();
+        $this->authenticate(10, 'customer');
+        $this->getJson('/api/admin/pets/101/cases/701/details')->assertForbidden();
+    }
+
+    private function createCaseHistoryTables(): void
+    {
+        Schema::create('clinic_services', function (Blueprint $table) {
+            $table->id(); $table->string('name');
+        });
+        Schema::create('clinic_charges', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_case_service_id'); $table->decimal('amount', 10, 2);
+        });
+        Schema::create('clinic_case_services', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_service_id');
+            $table->string('status'); $table->json('service_snapshot'); $table->text('notes')->nullable();
+            $table->decimal('applied_price', 10, 2); $table->decimal('quantity', 10, 2)->default(1); $table->timestamp('performed_at');
+        });
+        Schema::create('clinic_confinements', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_case_service_id');
+            $table->timestamp('admitted_at'); $table->timestamp('discharged_at')->nullable(); $table->text('reason');
+            $table->text('discharge_note')->nullable();
+        });
     }
 
     private function insertPet(int $petId, string $name): void

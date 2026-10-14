@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class AdminVaccinationController extends Controller
 {
-    private const RESPONSE_RELATIONS = [
+    public const RESPONSE_RELATIONS = [
         'clinicAppointment:id,appointment_reference',
         'inventoryItem:item_id,item_name,category,unit',
         'recordedBy:user_id,first_name,last_name',
@@ -527,7 +527,7 @@ class AdminVaccinationController extends Controller
         ];
     }
 
-    private function formatRecord(VaccinationRecord $record): array
+    public function formatRecord(VaccinationRecord $record): array
     {
         return [
             'id' => $record->id,

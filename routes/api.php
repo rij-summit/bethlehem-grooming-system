@@ -174,6 +174,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Clinic administration — available only to the project's staff/admin roles.
     Route::middleware(['role:admin,staff', 'clinic:access'])->group(function () {
+        Route::get('/admin/pets/{petId}/cases/{caseId}/details', [AdminPetProfileController::class, 'caseDetails']);
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store'])->middleware('clinic:intake');
 
         Route::get('/admin/clinic-records', [AdminClinicController::class, 'records']);

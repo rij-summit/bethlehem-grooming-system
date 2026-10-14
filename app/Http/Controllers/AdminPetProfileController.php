@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClinicCaseService;
+use App\Models\ClinicAppointment;
 use App\Models\ClinicConfinement;
 use App\Models\Pet;
 use App\Services\PetProfileHistoryService;
@@ -10,6 +11,26 @@ use Illuminate\Http\Request;
 
 class AdminPetProfileController extends Controller
 {
+    public function caseDetails(int $petId, int $caseId, PetProfileHistoryService $history, AdminVaccinationController $treatments)
+    {
+        $case = ClinicAppointment::query()->where('pet_id', $petId)->with([
+            'record.attachments', 'vitals',
+            'vaccinationRecords' => fn ($query) => $query->where('pet_id', $petId)
+                ->with(AdminVaccinationController::RESPONSE_RELATIONS)->orderByDesc('administered_date')->orderByDesc('id'),
+            'caseServices' => fn ($query) => $query->where('status', 'performed')->with('clinicService')
+                ->orderByDesc('performed_at')->orderByDesc('id'),
+            'confinement.caseService.clinicService',
+        ])->findOrFail($caseId);
+
+        return response()->json([
+            'case' => [...$case->only(['id', 'appointment_reference', 'status']), 'appointment_date' => $case->appointment_date?->toDateString()],
+            'medical_record' => $case->record ? $history->formatMedicalRecord($case) : null,
+            'treatments' => $case->vaccinationRecords->map(fn ($record) => $treatments->formatRecord($record))->values(),
+            'services' => $case->caseServices,
+            'confinement' => $case->confinement,
+        ]);
+    }
+
     public function show(
         Request $request,
         int $petId,

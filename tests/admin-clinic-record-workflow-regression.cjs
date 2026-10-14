@@ -134,14 +134,15 @@ const product = {item_id: 5, item_name: 'Rabies', available_quantity: 10, unit: 
   profile.selectHistory('medical');profile.selectHistory('services');await settle();assert.equal(historyReads.length,2,'Revisiting a loaded history tab does not refetch');
   await profile.loadHistory('services',2);assert.equal(profile.histories.services.rows.length,2);
   profile.selectHistory('treatment');await settle();assert.equal(profile.histories.treatment.rows[0].treatment_type,'medicine');
-  profile.viewDetail(profile.histories.treatment.rows[0],null,'treatment');assert.equal(profile.historyDetailFields().find(field => field.label==='Notes').value,'Saved medicine');profile.backToProfile();assert.equal(profile.historyTab,'treatment');
+  await profile.viewDetail(profile.histories.treatment.rows[0],null,'treatment');assert.equal(profile.treatmentDetails(profile.detail.record).find(field => field.label==='Notes').value,'Saved medicine');profile.backToProfile();assert.equal(profile.historyTab,'treatment');
   const delayed = deferred();context.API.adminGetPetProfile = () => delayed.promise;
   profile.selectHistory('confinement');profile.closeProfile();
   context.API.adminGetPetProfile = async () => ({medical_records:[]});await profile.openProfile({pet:{id:7},owner});
   delayed.resolve({data:[{id:100}],current_page:1,last_page:1});await settle();
   assert.equal(profile.histories.confinement.rows.length,0,'A closed profile response cannot populate a new profile');
   const monitoring = deferred();context.API.getClinicConfinementObservations = () => monitoring.promise;
-  profile.viewDetail({id:1,clinic_appointment_id:80},null,'confinement');profile.backToProfile();
+  context.API.adminGetPetCaseDetails = async () => ({case:{id:80},confinement:{id:1}});
+  await profile.viewDetail({id:1,clinic_appointment_id:80},null,'confinement');profile.backToProfile();
   monitoring.resolve({data:[{id:1}],current_page:1,last_page:1});await settle();assert.equal(profile.detail.record,null,'Late monitoring never reopens a closed detail');
   console.log('Patient Record separation, case isolation, working visits, shared finalization, reset, retry, permissions and lazy history checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

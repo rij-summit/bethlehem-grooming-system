@@ -111,7 +111,7 @@ class PetProfileHistoryService
         };
     }
 
-    private function formatMedicalRecord(ClinicAppointment $appointment): array
+    public function formatMedicalRecord(ClinicAppointment $appointment): array
     {
         $record = $appointment->record;
         $vitals = $appointment->vitals;

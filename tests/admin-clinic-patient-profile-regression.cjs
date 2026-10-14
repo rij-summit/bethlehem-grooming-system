@@ -22,6 +22,7 @@ function setup() {
     CustomEvent: class {constructor(type, options) {this.type = type; this.detail = options?.detail;}},
     API: {
       adminGetPetProfile: async id => {calls.push(['history', id]); return {medical_records: [record]};},
+      adminGetPetCaseDetails: async (petId, caseId) => {calls.push(['case', petId, caseId]); return {case: {id: caseId}, medical_record: record};},
       getCustomerDetails: async id => {calls.push(['registered', id]); return {customer: {...owner, pets: [pet]}};},
       getUnregisteredCustomerDetails: async id => {calls.push(['unregistered', id]); return {customer: {...owner, pets: [pet]}};},
     },
@@ -60,13 +61,13 @@ function setup() {
 
   app.state.$refs.profileBody.scrollTop = 340;
   const rowButton = {focus: () => app.focused.push('record')};
-  app.state.viewDetail(record, {querySelector: () => rowButton});
+  await app.state.viewDetail(record, {querySelector: () => rowButton});
   assert.equal(app.state.detail.record, record);
   assert.equal(app.state.profile.open, true, 'Drill-down stays inside the same workspace');
   assert.equal('open' in app.state.detail, false, 'There is no second detail-modal state');
   assert.equal(app.state.$refs.profileBody.scrollTop, 0);
   assert.equal(app.focused.at(-1), 'back');
-  assert.equal(app.calls.length, 2, 'Opening a historical visit does not fetch or mutate a case');
+  assert.deepEqual(app.calls.at(-1), ['case', 7, 10], 'Details read the selected case through the pet-scoped API');
   app.state.backToProfile();
   assert.equal(app.state.detail.record, null);
   assert.equal(app.state.profile.records.length, 1);

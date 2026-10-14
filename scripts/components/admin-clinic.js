@@ -706,6 +706,8 @@ function adminClinicPage() {
 
     // Read-only consultation detail
     detail: { record: null },
+    _caseDetails: {},
+    _caseObservations: {},
     detailAttachmentBusyId: null,
     detailAttachmentError: "",
 
@@ -1021,6 +1023,8 @@ function adminClinicPage() {
         document.body.style.overflow = 'hidden';
       }
       this.detail = { record: null };
+      this._caseDetails = {};
+      this._caseObservations = {};
       this.profileVisit = null;
       this.profileActionError = '';
       this.profileEditing = false;
@@ -1080,8 +1084,14 @@ function adminClinicPage() {
       const controls = [...event.currentTarget.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
         .filter(element => !element.disabled && element.getClientRects().length);
       const first = controls[0], last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      const active = document.activeElement;
+      // Section headings receive programmatic focus but are outside the Tab sequence.
+      const atBoundary = event.shiftKey ? active === first : active === last;
+      const hasNextControl = controls.some(element => active?.compareDocumentPosition?.(element) & (event.shiftKey ? 2 : 4));
+      if (atBoundary || (!controls.includes(active) && !hasNextControl)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      }
     },
 
     get patientName() { return this.profile.pet?.petName || this.profile.pet?.name || 'Patient'; },
@@ -1241,56 +1251,111 @@ function adminClinicPage() {
     historyPrice(value) { return value == null ? '—' : this.money(value); },
     historyDuration(episode) { return clinicConfinementDuration(episode.admitted_at, episode.discharged_at || this.$store.clinicConfinementClock?.now || Date.now()); },
     historyTime(value) { return value ? new Date(value).toLocaleString('en-PH', {dateStyle: 'medium', timeStyle: 'short'}) : '—'; },
-    get profileDetailTitle() { return ({medical: 'Medical Record', treatment: 'Treatment Record', services: 'Service Record', confinement: 'Confinement Record'})[this.detail.kind || 'medical']; },
-    historyDetailFields() {
-      const record = this.detail.record;
-      if (!record || !this.detail.kind || this.detail.kind === 'medical') return [];
-      if (this.detail.kind === 'treatment') return this.treatmentDetails(record);
-      if (this.detail.kind === 'services') return [
-        {label: 'Service', value: this.historyService(record).name},
-        {label: 'Date', value: this.historyTime(record.performed_at || record.ordered_at)},
-        {label: 'Price', value: this.historyPrice(record.applied_price)},
-        {label: 'Quantity', value: record.quantity},
-        {label: 'Total', value: this.historyPrice(record.charge?.amount)},
-        {label: 'Case', value: record.appointment?.appointment_reference},
-        {label: 'Notes', value: record.notes},
-      ];
+    historyCaseId(record) { return record?.appointment_id || record?.clinic_appointment_id || record?.appointment?.id || null; },
+    historyCaseReference(record) {
+      return record?.appointment_reference || record?.clinic_appointment_reference || record?.appointment?.appointment_reference
+        || (this.historyCaseId(record) ? this.profile.records.find(item => String(item.appointment_id) === String(this.historyCaseId(record)))?.appointment_reference : null);
+    },
+    historyCaseLabel(record) { return this.historyCaseReference(record) || (this.historyCaseId(record) ? 'Case #' + this.historyCaseId(record) : 'Historical record'); },
+    historyViewLabel(record, kind) {
+      return this.historyCaseId(record) ? `View ${kind} for case ${this.historyCaseLabel(record)}` : 'View historical treatment record';
+    },
+    get profileDetailTitle() { return this.detail.caseId ? 'Case Details' : 'Treatment Record'; },
+    get caseDetailStatus() {
+      return ({completed: 'Completed', cancelled: 'Cancelled', no_show: 'Expired', expired: 'Expired'})[this.detail.case?.status]
+        || this.caseStatus(this.detail.case || {});
+    },
+    get profileDetailSubtitle() {
+      if (!this.detail.record) return '';
+      if (!this.detail.caseId) return this.fmtDate(this.detail.record.administered_date);
+      const medical = this.profile.records.find(record => String(record.appointment_id) === String(this.detail.caseId));
+      const date = this.detail.case?.appointment_date || medical?.appointment_date;
+      return [this.detail.case?.appointment_reference || this.historyCaseLabel(this.detail.record), date ? this.fmtDate(date) : null].filter(Boolean).join(' · ');
+    },
+    caseTreatmentFields(record) {
+      return this.treatmentDetails(record).filter(field => !['Treatment', 'Case', 'Recorded By', 'Administration Date',
+        'Published', 'Published By', 'Voided', 'Voided By'].includes(field.label));
+    },
+    confinementDetailFields(record) {
+      if (!record) return [];
       return [
         {label: 'Confinement', value: this.historyService(record.case_service).name},
         {label: 'Status', value: record.discharged_at ? 'Discharged' : 'Confined'},
         {label: 'Admitted', value: this.historyTime(record.admitted_at)},
-        {label: 'Discharged', value: this.historyTime(record.discharged_at)},
+        ...(record.discharged_at ? [{label: 'Discharged', value: this.historyTime(record.discharged_at)}] : []),
         {label: 'Duration', value: this.historyDuration(record)},
-        {label: 'Attending Veterinarian', value: record.attending_veterinarian_name},
+        ...(record.attending_veterinarian_name && record.attending_veterinarian_name !== this.detail.medical?.primary_veterinarian_name
+          ? [{label: 'Attending Veterinarian', value: record.attending_veterinarian_name}] : []),
         {label: 'Reason', value: record.reason}, {label: 'Notes', value: record.notes},
         {label: 'Discharge Note', value: record.discharge_note},
-        {label: 'Case', value: record.appointment?.appointment_reference},
-      ];
+      ].filter(field => field.value != null && field.value !== '');
     },
     async loadHistoryObservations(page = 1) {
-      const detail = this.detail, request = this._profileRequest;
-      if (detail.loading) return;
-      detail.loading = true; detail.error = '';
+      const detail = this.detail, request = this._profileRequest, cache = this._caseObservations;
+      if (detail.observationsLoading || !detail.confinement) return;
+      detail.observationsLoading = true; detail.observationsError = '';
       try {
-        const response = await API.getClinicConfinementObservations(detail.record.clinic_appointment_id, page);
+        const key = `${detail.caseId}:${page}`;
+        cache[key] ??= API.getClinicConfinementObservations(detail.caseId, page);
+        const response = await cache[key];
         if (request !== this._profileRequest || this.detail !== detail) return;
         detail.observations = page === 1 ? response.data : [...detail.observations, ...response.data];
         detail.page = response.current_page; detail.lastPage = response.last_page;
-      } catch (error) { if (request === this._profileRequest && this.detail === detail) detail.error = error.message || 'Could not load monitoring history.'; }
-      finally { if (request === this._profileRequest && this.detail === detail) detail.loading = false; }
+      } catch (error) {
+        delete cache[`${detail.caseId}:${page}`];
+        if (request === this._profileRequest && this.detail === detail) detail.observationsError = error.message || 'Could not load monitoring history.';
+      }
+      finally { if (request === this._profileRequest && this.detail === detail) detail.observationsLoading = false; }
     },
 
-    viewDetail(record, trigger = document.activeElement, kind = 'medical') {
+    async viewDetail(record, trigger = document.activeElement, kind = 'medical') {
       this.profileScrollPosition = this.$refs.profileBody?.scrollTop || 0;
       this.profileRecordTrigger = trigger?.querySelector?.('button') || trigger;
-      this.detail = { record, kind, observations: [], loading: false, error: '', page: 0, lastPage: 1 };
-      if (kind === 'confinement') this.loadHistoryObservations();
+      const caseId = this.historyCaseId(record);
+      this.detail = { record, kind, caseId, case: null, medical: null, treatments: [], services: [], confinement: null,
+        observations: [], observationsLoading: false, observationsError: '', loading: !!caseId, error: '', page: 0, lastPage: 1 };
       this.detailAttachmentError = "";
       this.$nextTick?.(() => {
         if (this.$refs.profileBody) this.$refs.profileBody.scrollTop = 0;
         this.$refs.profileBack?.focus();
         if (window.lucide) window.lucide.createIcons();
       });
+      if (caseId) await this.loadCaseDetail();
+    },
+
+    async loadCaseDetail() {
+      const detail = this.detail, request = this._profileRequest, cache = this._caseDetails;
+      detail.loading = true; detail.error = '';
+      try {
+        cache[detail.caseId] ??= API.adminGetPetCaseDetails(this.profile.pet.id, detail.caseId);
+        const data = await cache[detail.caseId];
+        if (request !== this._profileRequest || this.detail !== detail) return;
+        Object.assign(detail, {case: data.case, medical: data.medical_record, treatments: data.treatments || [],
+          services: data.services || [], confinement: data.confinement, loading: false});
+        if (detail.confinement) this.loadHistoryObservations();
+        this.$nextTick?.(() => {
+          window.lucide?.createIcons();
+          this.scrollCaseDetail(detail);
+        });
+      } catch (error) {
+        delete cache[detail.caseId];
+        if (request === this._profileRequest && this.detail === detail) {
+          detail.error = error.message || 'Could not load case details.';
+          detail.loading = false;
+        }
+      }
+    },
+
+    scrollCaseDetail(detail) {
+      if (this.detail !== detail) return;
+      const body = this.$refs.profileBody;
+      const entry = body?.querySelector(`[data-case-entry="${detail.kind}-${Number(detail.record.id)}"]`);
+      const section = body?.querySelector(`[data-case-section="${detail.kind}"]`);
+      const target = entry || section;
+      if (!target) return;
+      (target.querySelector?.('h3, h4') || target).focus({preventScroll: true});
+      body.scrollTo({top: detail.kind === 'medical' ? 0 : Math.max(0, body.scrollTop + target.getBoundingClientRect().top - body.getBoundingClientRect().top - 20),
+        behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
     },
 
     backToProfile() {
@@ -1307,7 +1372,7 @@ function adminClinicPage() {
       this.detailAttachmentBusyId = attachment.id;
       this.detailAttachmentError = "";
       try {
-        await downloadClinicAttachment(this.detail.record.appointment_id, attachment);
+        await downloadClinicAttachment(this.detail.caseId, attachment);
       } catch (error) {
         this.detailAttachmentError = error.message || "Failed to download attachment.";
       } finally {
