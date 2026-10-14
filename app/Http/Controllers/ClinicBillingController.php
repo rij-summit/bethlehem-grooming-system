@@ -9,12 +9,15 @@ use Illuminate\Http\Request;
 
 class ClinicBillingController extends Controller
 {
-    public function index(int $id): JsonResponse
+    public function index(Request $request, int $id): JsonResponse
     {
+        $request->validate(['scope' => 'nullable|in:treatment']);
         $appointment = ClinicAppointment::findOrFail($id);
+        $charges = $appointment->charges();
+        if ($request->input('scope') === 'treatment') $charges->whereIn('kind', ['medicine', 'vaccine']);
         return response()->json([
             'total_amount' => $appointment->total_amount, 'paid' => $appointment->paid,
-            'charges' => $appointment->charges()->with('caseService')->orderBy('id')->paginate(20),
+            'charges' => $charges->with('caseService')->orderBy('id')->paginate(20),
         ]);
     }
 

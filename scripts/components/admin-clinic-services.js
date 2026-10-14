@@ -12,7 +12,7 @@ function clinicServicePriceError(value) {
 
 function emptyClinicService() {
   return {
-    name: '', category_id: '', type: '', pricing_method: 'fixed', billing_unit: '',
+    name: '', category_id: '', pricing_method: 'fixed', billing_unit: '',
     notes: '', price: '', min_price: '', max_price: '', tier_basis: 'pet_size',
     tiers: ['small', 'medium', 'large', 'extra_large'].map(size => ({size, enabled: true, price: ''})),
   };
@@ -38,7 +38,7 @@ function clinicServicePricing(service) {
 
 function adminClinicServices() {
   return {
-    rows: [], categories: [], types: [], q: '', category: '', type: '', status: 'active',
+    rows: [], categories: [], q: '', category: '', status: 'active',
     total: 0, currentPage: 1, lastPage: 1,
     loading: false, error: '', loaded: false, optionsLoaded: false,
     _requestId: 0, _searchTimer: null, _activation: null,
@@ -53,7 +53,7 @@ function adminClinicServices() {
     },
     pricing: clinicServicePricing,
     tierLabel(size) { return ({small: 'Small', medium: 'Medium', large: 'Large', extra_large: 'Extra Large'})[size]; },
-    get filtersActive() { return !!(this.q.trim() || this.category || this.type || this.status !== 'active'); },
+    get filtersActive() { return !!(this.q.trim() || this.category || this.status !== 'active'); },
     async load(page = 1) {
       clearTimeout(this._searchTimer);
       const requestId = ++this._requestId;
@@ -62,7 +62,6 @@ function adminClinicServices() {
       const params = new URLSearchParams({page, status: this.status});
       if (this.q.trim()) params.set('q', this.q.trim());
       if (this.category) params.set('category_id', this.category);
-      if (this.type) params.set('type', this.type);
       try {
         const [response, options] = await Promise.all([
           API.adminRequest('GET', `/admin/clinic-services?${params}`, null, {force: true}),
@@ -71,7 +70,6 @@ function adminClinicServices() {
         if (requestId !== this._requestId) return;
         if (options) {
           this.categories = options.categories;
-          this.types = options.types;
           this.optionsLoaded = true;
         }
         if (page > response.last_page) { await this.load(response.last_page); return; }
@@ -90,7 +88,7 @@ function adminClinicServices() {
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => this.load(), 300);
     },
-    clearFilters() { this.q = ''; this.category = ''; this.type = ''; this.status = 'active'; return this.load(); },
+    clearFilters() { this.q = ''; this.category = ''; this.status = 'active'; return this.load(); },
     openDetails(service, event) {
       this.details = service;
       this._detailsTrigger = event.currentTarget;
@@ -129,7 +127,7 @@ function adminClinicServices() {
     payload() {
       const f = this.form;
       const payload = {
-        name: f.name.trim(), category_id: f.category_id, type: f.type.trim() || null,
+        name: f.name.trim(), category_id: f.category_id,
         pricing_method: f.pricing_method, billing_unit: f.billing_unit || null,
         notes: f.notes || null,
       };
@@ -193,7 +191,7 @@ function adminClinicServices() {
       const active = !service.is_active;
       if (!await this.$store.clinicFeedback.confirm({
         title: `${active ? 'Reactivate' : 'Deactivate'} service?`,
-        message: `${service.name}${service.type ? ' · ' + service.type : ''}. ${active ? 'This service will be available in the catalog.' : 'This service will become inactive. Existing case charges are preserved.'}`,
+        message: `${service.name}. ${active ? 'This service will be available in the catalog.' : 'This service will become inactive. Existing case charges are preserved.'}`,
         confirmLabel: active ? 'Reactivate' : 'Deactivate', danger: !active, dismissOnEscape: false,
       })) return;
       this.busyId = service.id;

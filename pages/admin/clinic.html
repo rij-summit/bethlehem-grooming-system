@@ -820,7 +820,7 @@
       @keydown.escape.window="if (open && !$store.clinicFeedback.dialog.open) { if (chargesOpen) { $event.stopImmediatePropagation(); closeCharges(); } else if (activeSection !== 'vaccinations') closeModal(); }"
       class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
     >
-      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace class="relative flex max-h-[calc(100dvh-4rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" @keydown.tab="trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
+      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace @clinic-treatment-updated.window="if (workspaceCaseId && $store.clinicAccess.permissions.billing) loadBilling()" class="relative flex max-h-[calc(100dvh-4rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" @keydown.tab="trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div :inert="chargesOpen" class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
           <h2 id="patient-record-title" class="min-w-0 break-words text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
           <div class="ml-auto flex shrink-0 items-center gap-2">
@@ -846,7 +846,7 @@
             <button type="button" id="case-services-tab" role="tab" :tabindex="activeSection === 'services' ? 0 : -1" :aria-selected="activeSection === 'services'" aria-controls="case-services-panel" @click="selectSection('services')" :disabled="workspaceSaving"
               class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
               :class="activeSection === 'services' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
-              <i data-lucide="clipboard-list" class="h-4 w-4"></i> Services
+              <i data-lucide="clipboard-list" class="h-4 w-4"></i> Billing
             </button>
             <button x-show="currentAppt?.confinement || ($store.clinicAccess.permissions.clinical && currentAppt?.status === 'in_consultation' && !currentAppt?.paid && !currentAppt?.archived_at)" type="button" id="case-confinement-tab" role="tab" :tabindex="activeSection === 'confinement' ? 0 : -1" :aria-selected="activeSection === 'confinement'" aria-controls="case-confinement-panel" @click="selectSection('confinement')" :disabled="workspaceSaving" class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50" :class="activeSection === 'confinement' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Confinement</button>
           </div>
@@ -1277,9 +1277,9 @@
         </form>
 
         <div :inert="chargesOpen" x-show="activeSection === 'services'" @keydown.capture="window.InventoryMoneyInput?.handle($event)" @beforeinput.capture="window.InventoryMoneyInput?.handle($event)" @paste.capture="window.InventoryMoneyInput?.handle($event)" @input.capture="window.InventoryMoneyInput?.handle($event)" class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-          <section id="case-services-panel" aria-labelledby="case-services-tab" role="tabpanel" aria-label="Services" x-show="activeSection === 'services'" class="space-y-4">
+          <section id="case-services-panel" aria-labelledby="case-services-tab" role="tabpanel" aria-label="Billing" x-show="activeSection === 'services'" class="space-y-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <h3 class="text-base font-bold text-[#2f4b66]">Services</h3>
+              <h3 class="text-base font-bold text-[#2f4b66]">Clinic Services</h3>
               <button type="button" @click="loadServices()" :disabled="servicesLoading || serviceSaving || serviceRemovingId !== null" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
             </div>
             <div x-show="canMutateServices && !pendingPayload" class="space-y-2">
@@ -1331,6 +1331,21 @@
               </tbody></table>
             </div></div>
             <button x-show="servicePage < serviceLastPage" type="button" @click="loadServices(servicePage + 1)" :disabled="servicesLoading" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Load more services</button>
+            <section x-show="$store.clinicAccess.permissions.billing" aria-labelledby="treatment-charges-heading" class="space-y-3 border-t border-slate-200 pt-5">
+              <h3 id="treatment-charges-heading" class="text-base font-bold text-[#2f4b66]">Treatment Charges</h3>
+              <p class="text-xs text-slate-500">Charges from recorded Treatment. Make corrections in the Treatment tab.</p>
+              <p x-show="billingLoading" role="status" class="text-sm text-slate-500">Loading charges…</p>
+              <p x-show="billingError" role="alert" class="text-sm text-red-600"><span x-text="billingError"></span> <button type="button" @click="loadBilling()" class="font-semibold underline">Retry</button></p>
+              <p x-show="!billingLoading && !billingError && !treatmentCharges.length && chargePage >= chargeLastPage" class="text-sm text-slate-500">No treatment charges yet.</p>
+              <ul x-show="treatmentCharges.length" aria-label="Treatment charges" class="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                <template x-for="charge in treatmentCharges" :key="charge.id"><li class="flex items-start justify-between gap-4 px-3 py-3 text-sm">
+                  <span class="min-w-0 break-words font-semibold text-[#2f4b66]" x-text="charge.description"></span>
+                  <span class="shrink-0 tabular-nums text-slate-700" x-text="money(charge.amount)"></span>
+                </li></template>
+              </ul>
+              <button x-show="chargePage < chargeLastPage" type="button" @click="loadBilling(chargePage + 1)" :disabled="billingLoading" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Load more charges</button>
+              <div class="flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-sm font-bold text-[#2f4b66]"><span>Case Total</span><span class="tabular-nums" x-text="money(billingTotal)"></span></div>
+            </section>
           </section>
 
         </div>
@@ -1575,7 +1590,7 @@
                   <button type="button" @click="openDetails(record)" class="rounded-lg px-2 py-1 text-xs font-semibold text-[#315b7e] hover:bg-[#eef5fb]">View</button>
                   <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="openEditForm(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg border border-[#bfd2e4] px-2 py-1 text-xs font-semibold text-[#315b7e] disabled:opacity-50">Edit</button>
                   <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="publishRecord(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg bg-[#315b7e] px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" x-text="actionBusyId === record.id ? 'Publishing…' : 'Publish'"></button>
-                  <button x-show="canEditClinical && record.state === 'published'" type="button" @click="openVoidDialog(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 disabled:opacity-50">Void</button>
+                  <button x-show="canEditClinical && record.state === 'published' && (!record.clinic_appointment_id || caseOngoing())" type="button" @click="openVoidDialog(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 disabled:opacity-50">Void</button>
                 </div>
               </li></template>
             </ul>
@@ -1673,14 +1688,14 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=services-20261014&clinic-products=20261010&medical-record=20261012&patient-history=20261014"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261012&patient-history=20261014"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-record-workflow"></script>
-    <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261014-provided&case-flow=20261013-v5"></script>
+    <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261014-billing-v1&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261013"></script>
-    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=case-entry-20261014"></script>
+    <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=case-entry-20261014"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
-    <script src="../../scripts/components/admin-clinic-shell.js?v=20261013-service-pricing-v3&case-flow=20261013-v5&unified-cases=20261014"></script>
+    <script src="../../scripts/components/admin-clinic-shell.js?v=20261014-service-billing-v4&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

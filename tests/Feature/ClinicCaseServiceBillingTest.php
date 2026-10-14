@@ -53,6 +53,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         (require database_path('migrations/2026_10_10_000001_create_clinic_charges_table.php'))->up();
         (require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php'))->up();
         (require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php'))->up();
+        (require database_path('migrations/2026_10_14_000001_remove_clinic_service_type.php'))->up();
         DB::table('pets')->insert(['pet_id' => 1, 'species' => 'dog', 'weight' => 15, 'size' => 'small']);
         ClinicAppointment::create(['status' => 'in_consultation', 'pet_id' => 1]);
         $this->signIn();
@@ -73,7 +74,7 @@ class ClinicCaseServiceBillingTest extends TestCase
     private function catalog(array $changes = []): ClinicService
     {
         return ClinicService::create(array_replace([
-            'name' => 'CBC', 'category_id' => 2, 'type' => 'In House', 'identity_key' => hash('sha256', Str::uuid()),
+            'name' => 'CBC', 'category_id' => 2, 'identity_key' => hash('sha256', Str::uuid()),
             'pricing_method' => 'fixed', 'billing_unit' => 'sample', 'price' => 500, 'is_active' => true,
         ], $changes));
     }
@@ -99,6 +100,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertDatabaseCount('clinic_charges', 1);
         $this->assertDatabaseHas('clinic_charges', ['clinic_case_service_id' => $id, 'amount' => 650]);
         $entry = ClinicCaseService::findOrFail($id);
+        $this->assertArrayNotHasKey('type', $entry->service_snapshot);
         $this->assertNull($entry->ordered_at);
         $this->assertNotNull($entry->performed_at);
         $this->assertEquals(650, ClinicAppointment::find(1)->total_amount);
@@ -116,6 +118,96 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->patchJson('/api/admin/clinic-cases/1/services/1', ['status' => 'performed'])->assertStatus(405);
         $this->assertDatabaseCount('clinic_case_services', 0);
         $this->assertDatabaseCount('clinic_charges', 0);
+    }
+
+    public function test_cbc_cpv_and_anti_rabies_certificate_only_create_service_charges(): void
+    {
+        Schema::create('clinic_records', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_appointment_id');
+            $table->text('diagnosis')->nullable();
+        });
+        DB::table('clinic_records')->insert(['clinic_appointment_id' => 1, 'diagnosis' => 'Vet-entered clinical information']);
+        $medical = DB::table('clinic_records')->first();
+        foreach ([['CBC', 2], ['CPV', 3], ['Anti Rabies', 7]] as [$name, $category]) {
+            $service = $this->catalog(['name' => $name, 'category_id' => $category]);
+            $payload = $this->payload($service);
+            $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated();
+            $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
+        }
+        $this->assertDatabaseCount('clinic_case_services', 3);
+        $this->assertDatabaseCount('clinic_charges', 3);
+        $this->assertEquals($medical, DB::table('clinic_records')->first());
+        $this->assertEquals(1500, ClinicAppointment::find(1)->total_amount);
+        $this->assertSame(['service'], ClinicCharge::distinct()->pluck('kind')->all());
+        $this->assertSame(0, ClinicCharge::whereNotNull('inventory_item_id')->count());
+        $this->assertSame(0, ClinicCharge::whereNotNull('vaccination_record_id')->count());
+    }
+
+    public function test_treatment_charge_scope_is_paginated_independently_with_the_full_case_total(): void
+    {
+        for ($i = 0; $i < 25; $i++) {
+            ClinicAppointment::find(1)->charges()->create([
+                'kind' => 'service', 'description' => 'Clinic service', 'quantity' => 1, 'unit_price' => 10, 'amount' => 10,
+            ]);
+        }
+        foreach (['medicine', 'vaccine'] as $kind) ClinicAppointment::find(1)->charges()->create([
+            'kind' => $kind, 'description' => $kind, 'quantity' => 1, 'unit_price' => 480, 'amount' => 480,
+        ]);
+        app(ClinicBillingService::class)->updateTotal(ClinicAppointment::find(1));
+        $this->getJson('/api/admin/clinic-cases/1/charges?scope=treatment')->assertOk()
+            ->assertJsonPath('charges.total', 2)->assertJsonPath('charges.data.0.kind', 'medicine')
+            ->assertJsonPath('charges.data.1.kind', 'vaccine')->assertJsonPath('total_amount', 1210);
+        $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('charges.total', 27);
+    }
+
+    public function test_type_cleanup_preserves_historical_references_prices_and_json(): void
+    {
+        $migration = require database_path('migrations/2026_10_14_000001_remove_clinic_service_type.php');
+        $migration->down();
+        DB::table('clinic_service_categories')->where('id', 3)->update(['name' => 'Diagnostics']);
+        DB::table('clinic_service_categories')->where('id', 6)->update(['name' => 'Boarding & Lodging']);
+        Schema::create('inventory_items', function (Blueprint $table) {
+            $table->id(); $table->string('item_name'); $table->string('category');
+        });
+        DB::table('inventory_items')->insert([
+            ['item_name' => 'Anti Rabies', 'category' => 'vaccine'],
+            ['item_name' => 'Cefalexin', 'category' => 'medicine'],
+        ]);
+        $cbc = $this->catalog();
+        $duplicate = $this->catalog();
+        $cpv = $this->catalog(['name' => 'CPV']);
+        $certificate = $this->catalog(['name' => 'Anti Rabies', 'category_id' => 7]);
+        $medicine = $this->catalog(['name' => 'Triamcinolone Injectable', 'category_id' => 5]);
+        $antibiotic = $this->catalog(['name' => 'Cefalexin', 'category_id' => 5]);
+        $boarding = $this->catalog(['name' => 'Daily boarding', 'category_id' => 6]);
+        $imaging = $this->catalog(['name' => 'X-Ray', 'category_id' => 4]);
+        DB::table('clinic_services')->where('id', $cpv->id)->update(['type' => 'Test Kit']);
+        DB::table('clinic_services')->where('id', $duplicate->id)->update(['type' => 'Send Out']);
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($medicine))->json('data.id');
+        $entry = ClinicCaseService::findOrFail($id);
+        $entry->forceFill(['service_snapshot' => [...$entry->service_snapshot, 'type' => 'In House']])->save();
+        $beforeEntry = $entry->getAttributes();
+        $beforeCharge = ClinicCharge::first()->getAttributes();
+        ClinicAppointment::find(1)->update(['status' => 'completed', 'paid' => true]);
+        $migration->up();
+        $this->assertFalse(Schema::hasColumn('clinic_services', 'type'));
+        $this->assertDatabaseCount('clinic_services', 8);
+        foreach ([$duplicate, $medicine, $antibiotic, $boarding] as $obsolete) {
+            $this->assertFalse($obsolete->fresh()->is_active);
+        }
+        foreach ([$cbc, $cpv, $certificate, $imaging] as $active) $this->assertTrue($active->fresh()->is_active);
+        $this->assertSame('Diagnostic Tests', $cpv->fresh()->category->name);
+        $this->assertSame('Certificates & Forms', $certificate->fresh()->category->name);
+        $this->assertSame($beforeEntry, $entry->fresh()->getAttributes());
+        $this->assertSame($beforeCharge, ClinicCharge::first()->getAttributes());
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()
+            ->assertJsonPath('data.0.service_snapshot.type', 'In House')->assertJsonPath('data.0.applied_price', '500.00');
+        $this->getJson('/api/admin/clinic-service-options?q=Triamcinolone')->assertOk()->assertJsonPath('total', 0);
+        $this->signIn('admin');
+        $this->postJson('/api/admin/clinic-services', [
+            'name' => 'CBC', 'category_id' => 2, 'pricing_method' => 'fixed', 'price' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('name');
     }
 
     public function test_removing_manual_service_deletes_only_its_charge_and_recalculates_total(): void
@@ -187,7 +279,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->json('data.id');
         $snapshot = ClinicCaseService::find($id)->service_snapshot;
         ClinicAppointment::find(1)->update(['status' => 'completed', 'paid' => true]);
-        $service->update(['name' => 'New CBC', 'price' => 900, 'type' => null, 'billing_unit' => 'pet', 'is_active' => false]);
+        $service->update(['name' => 'New CBC', 'price' => 900, 'billing_unit' => 'pet', 'is_active' => false]);
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk();
         $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()
             ->assertJsonPath('data.0.service_snapshot.name', 'CBC')->assertJsonPath('data.0.applied_price', '500.00');

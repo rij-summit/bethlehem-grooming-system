@@ -45,6 +45,35 @@ class ClinicInventoryPricingTest extends TestCase
         Sanctum::actingAs(User::create(['role' => 'admin']));
     }
 
+    // Exercise the existing Treatment charge service without using Medical Record as a billing source.
+    private function saveMedicineCharges(ClinicAppointment $appointment, array $entries): \Illuminate\Testing\TestResponse
+    {
+        try {
+            DB::transaction(function () use ($appointment, $entries) {
+                $case = ClinicAppointment::whereKey($appointment->id)->lockForUpdate()->firstOrFail();
+                app(\App\Services\ClinicMedicineChargeService::class)->save($case, $entries, auth()->user());
+            });
+            return \Illuminate\Testing\TestResponse::fromBaseResponse(response()->json([], 200));
+        } catch (\Illuminate\Validation\ValidationException $error) {
+            return \Illuminate\Testing\TestResponse::fromBaseResponse(response()->json(['errors' => $error->errors()], 422));
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            return \Illuminate\Testing\TestResponse::fromBaseResponse(response()->json(['message' => $error->getMessage()], $error->getStatusCode()));
+        }
+    }
+
+    public function test_medical_record_rejects_medicine_charge_payloads_and_preserves_clinical_content(): void
+    {
+        $item = $this->item(); $appt = $this->appointment();
+        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['diagnosis' => 'Vet-entered diagnosis'])->assertOk();
+        $record = DB::table('clinic_records')->first();
+        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', [
+            'diagnosis' => 'Must not overwrite', 'medicines' => [$this->charge($item)],
+        ])->assertUnprocessable()->assertJsonValidationErrors('medicines');
+        $this->assertEquals($record, DB::table('clinic_records')->first());
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->assertDatabaseCount('inventory_transactions', 0);
+    }
+
     public function test_product_units_are_physical_and_legacy_measured_units_remain_readable_and_unchanged(): void
     {
         foreach (['vial', 'bottle', 'tablet', 'ampoule', 'syringe', 'tube', 'bag', 'dose kit', 'custom carton'] as $unit) {
@@ -207,17 +236,13 @@ class ClinicInventoryPricingTest extends TestCase
         ]]);
         foreach ([[40, 650], [40.01, 800], [41, 800]] as [$weight, $price]) {
             $appointment = $this->appointment($weight);
-            $this->postJson('/api/admin/clinic-appointments/'.$appointment->id.'/record', [
-                'weight_kg' => (string) $weight, 'medicines' => [$this->charge($item, $price, $weight)],
-            ])->assertOk();
+            $this->saveMedicineCharges($appointment, [$this->charge($item, $price, $weight)])->assertOk();
         }
         $this->putJson('/api/inventory/items/'.$item->item_id, $this->product([
             'weight_pricing_mode' => 'catalog', 'weight_prices' => [['min_weight_kg' => 31, 'max_weight_kg' => 40, 'price' => 650]],
         ]))->assertOk();
         $appointment = $this->appointment(40.01);
-        $this->postJson('/api/admin/clinic-appointments/'.$appointment->id.'/record', [
-            'weight_kg' => '40.01', 'medicines' => [$this->charge($item, 650, 40.01)],
-        ])->assertUnprocessable();
+        $this->saveMedicineCharges($appointment, [$this->charge($item, 650, 40.01)])->assertUnprocessable();
         $this->assertDatabaseCount('clinic_charges', 3);
     }
 
@@ -311,14 +336,14 @@ class ClinicInventoryPricingTest extends TestCase
         $item = $this->item(['weight_pricing_mode' => 'threshold', 'weight_prices' => $ranges]);
         foreach ([[0.5, 200], [4.10, 250], [4.99, 250], [5, 300], [10.50, 300], [10.99, 300], [11, 350], [52.35, 750]] as [$weight, $price]) {
             $appt = $this->appointment($weight);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, $price, $weight)]])
+            $this->saveMedicineCharges($appt, [$this->charge($item, $price, $weight)])
                 ->assertOk();
             $this->assertDatabaseHas('clinic_charges', ['clinic_appointment_id' => $appt->id, 'amount' => $price, 'pet_weight_kg' => $weight]);
         }
         $ranges[4]['max_weight_kg'] = 50;
         $this->putJson('/api/inventory/items/'.$item->item_id, $this->product(['weight_pricing_mode' => 'threshold', 'weight_prices' => $ranges]))->assertOk();
         $appt = $this->appointment(50.01);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 750, 50.01)]])
+        $this->saveMedicineCharges($appt, [$this->charge($item, 750, 50.01)])
             ->assertUnprocessable()->assertJsonValidationErrors('medicine');
         $this->assertSame(0, $appt->charges()->count());
         $this->assertDatabaseCount('inventory_transactions', 0);
@@ -374,7 +399,7 @@ class ClinicInventoryPricingTest extends TestCase
         foreach (['legacy', 'ranges'] as $mode) {
             $item->update(['weight_pricing_mode' => $mode]);
             $appt = $this->appointment(41);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 900, 41)]])
+            $this->saveMedicineCharges($appt, [$this->charge($item, 900, 41)])
                 ->assertUnprocessable()->assertJsonValidationErrors('medicine');
             $this->assertSame(0, $appt->charges()->count());
         }
@@ -532,10 +557,10 @@ class ClinicInventoryPricingTest extends TestCase
         foreach ([[1, 200], [5, 200], [5.1, 400], [10, 400], [10.1, 700], [12.4, 700], [15, 700], [41, 900]] as [$weight, $price]) {
             $appt = $this->appointment($weight);
             $entry = $this->charge($item, $price, $weight);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
+            $this->saveMedicineCharges($appt, [$entry])->assertOk();
             $this->assertDatabaseHas('clinic_charges', ['clinic_appointment_id' => $appt->id, 'amount' => $price, 'pet_weight_kg' => $weight, 'quantity' => 1]);
             $this->assertDatabaseCount('inventory_transactions', 0);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
+            $this->saveMedicineCharges($appt, [$entry])->assertOk();
             $this->assertSame(1, $appt->charges()->count());
         }
     }
@@ -545,12 +570,12 @@ class ClinicInventoryPricingTest extends TestCase
         $item = $this->item();
         foreach ([null, 0] as $weight) {
             $appt = $this->appointment($weight);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item)]])->assertUnprocessable();
+            $this->saveMedicineCharges($appt, [$this->charge($item)])->assertUnprocessable();
             $this->assertSame(0, $appt->charges()->count());
         }
         foreach ([0.5, 5.05, 10.05, 15.05, 50.01] as $weight) {
             $appt = $this->appointment($weight);
-            $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item)]])
+            $this->saveMedicineCharges($appt, [$this->charge($item)])
                 ->assertUnprocessable()->assertJsonPath('errors.medicine.0', "No price is configured for this pet's weight. Correct the pricing configuration or pet weight.");
             $this->assertSame(0, $appt->charges()->count());
             $this->assertDatabaseCount('inventory_transactions', 0);
@@ -561,14 +586,16 @@ class ClinicInventoryPricingTest extends TestCase
     {
         $item = $this->item(); $appt = $this->appointment(4);
         $entry = $this->charge($item);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['weight_kg' => 12.4, 'medicines' => [$entry]])->assertOk();
+        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['weight_kg' => 12.4])->assertOk();
+        $medical = DB::table('clinic_records')->first();
+        $this->saveMedicineCharges($appt, [$entry])->assertOk();
         $this->assertDatabaseHas('clinic_charges', ['clinic_appointment_id' => $appt->id, 'pet_weight_kg' => 12.4, 'amount' => 700]);
         $entry = $this->charge($item, 950);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['diagnosis' => 'must roll back', 'medicines' => [$entry]])->assertUnprocessable();
-        $this->assertDatabaseMissing('clinic_records', ['diagnosis' => 'must roll back']);
+        $this->saveMedicineCharges($appt, [$entry])->assertUnprocessable();
+        $this->assertEquals($medical, DB::table('clinic_records')->first());
         $this->assertSame(1, $appt->charges()->count());
         $vaccine = $this->item(['category' => 'vaccine', 'medicine_type' => null, 'pricing_method' => 'flat', 'weight_prices' => [], 'selling_price' => 950]);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($vaccine, 950)]])->assertUnprocessable();
+        $this->saveMedicineCharges($appt, [$this->charge($vaccine, 950)])->assertUnprocessable();
     }
 
     public function test_manual_stock_use_enforces_expiry_and_retries_do_not_deduct_twice(): void
@@ -578,14 +605,14 @@ class ClinicInventoryPricingTest extends TestCase
             'item_id' => $item->item_id, 'quantity' => 2, 'reason' => 'purchase', 'expiry_date' => today()->addYear()->toDateString(), 'batch_number' => 'M-1',
         ]]])->assertCreated();
         $entry = $this->charge($item, 700, 12.4, 1);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$entry]])->assertOk();
+        $this->saveMedicineCharges($appt, [$entry])->assertOk();
+        $this->saveMedicineCharges($appt, [$entry])->assertOk();
         $this->assertSame('1.00', $item->fresh()->quantity_on_hand);
         $this->assertSame(1, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
         $this->assertDatabaseHas('inventory_transactions', ['reference_type' => 'clinic', 'reference_id' => $appt->id, 'quantity' => 1, 'selling_price_at_time' => 700]);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 700, 12.4, 2)]])->assertUnprocessable();
+        $this->saveMedicineCharges($appt, [$this->charge($item, 700, 12.4, 2)])->assertUnprocessable();
         DB::table('inventory_transactions')->where('type', 'stock_in')->update(['expiry_date' => today()->subDay()]);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item, 700, 12.4, 1)]])->assertUnprocessable();
+        $this->saveMedicineCharges($appt, [$this->charge($item, 700, 12.4, 1)])->assertUnprocessable();
         $this->assertSame(1, $appt->charges()->count());
         $this->assertSame('1.00', $item->fresh()->quantity_on_hand);
     }
@@ -598,7 +625,7 @@ class ClinicInventoryPricingTest extends TestCase
         $this->getJson('/api/admin/clinic-medicine-options?q=Clinic')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.is_active', false);
         $appt = $this->appointment(); $item->update(['is_active' => true]);
         $appt->update(['status' => 'completed']);
-        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item)]])->assertStatus(409);
+        $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['diagnosis' => 'Locked case'])->assertStatus(409);
         Sanctum::actingAs(User::create(['role' => 'customer']));
         $this->getJson('/api/admin/clinic-medicine-options?q=Clinic')->assertForbidden();
         $this->postJson('/api/admin/clinic-appointments/'.$appt->id.'/record', ['medicines' => [$this->charge($item)]])->assertForbidden();

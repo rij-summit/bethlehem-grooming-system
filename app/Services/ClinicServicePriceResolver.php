@@ -25,7 +25,7 @@ class ClinicServicePriceResolver
         return [
             'price' => number_format((float) $price, 2, '.', ''),
             'snapshot' => [
-                'name' => $service->name, 'category' => $service->category->name, 'type' => $service->type,
+                'name' => $service->name, 'category' => $service->category->name,
                 'pricing_method' => $service->pricing_method, 'billing_unit' => $service->billing_unit,
                 'configured_price' => $service->price, 'min_price' => $service->min_price,
                 'max_price' => $service->max_price, 'tier_basis' => $service->tier_basis,

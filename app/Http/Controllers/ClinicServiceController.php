@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicService;
 use App\Models\ClinicServiceCategory;
+use App\Models\InventoryItem;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,6 @@ class ClinicServiceController extends Controller
     {
         return response()->json([
             'categories' => ClinicServiceCategory::orderBy('id')->get(),
-            'types' => ClinicService::TYPES,
         ]);
     }
 
@@ -30,7 +30,6 @@ class ClinicServiceController extends Controller
     {
         $filters = $request->validate([
             'q' => 'nullable|string|max:200', 'category_id' => 'nullable|integer|exists:clinic_service_categories,id',
-            'type' => ['nullable', 'string', Rule::in(['__none__', ...ClinicService::TYPES])],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'all'])],
             'page' => 'nullable|integer|min:1',
         ]);
@@ -39,9 +38,6 @@ class ClinicServiceController extends Controller
         if ($status !== 'all') $query->where('is_active', $status === 'active');
         if (!empty($filters['q'])) $query->where('name', 'like', '%'.$filters['q'].'%');
         if (!empty($filters['category_id'])) $query->where('category_id', $filters['category_id']);
-        if (!empty($filters['type'])) {
-            $filters['type'] === '__none__' ? $query->whereNull('type') : $query->where('type', $filters['type']);
-        }
         return response()->json($query->orderBy('name')->orderBy('id')->paginate(10));
     }
 
@@ -69,22 +65,22 @@ class ClinicServiceController extends Controller
 
     public function status(Request $request, ClinicService $clinicService): JsonResponse
     {
-        $clinicService->update($request->validate(['is_active' => 'required|boolean']));
+        $data = $request->validate(['is_active' => 'required|boolean']);
+        if ($data['is_active']) $this->assertServiceIsNotTreatment($clinicService->name, $clinicService->category_id);
+        $clinicService->update($data);
         return response()->json(['data' => $clinicService->load('category')]);
     }
 
     private function validated(Request $request, ?ClinicService $service = null): array
     {
-        // Normalize the identity, including omitted Type, before validation and uniqueness checks.
+        // Normalize the identity before validation and uniqueness checks.
         $normalize = fn ($value) => is_string($value) ? preg_replace('/\s+/u', ' ', trim($value)) : $value;
-        $type = $normalize($request->input('type'));
-        $request->merge(['name' => $normalize($request->input('name')), 'type' => $type === '' ? null : $type]);
+        $request->merge(['name' => $normalize($request->input('name'))]);
         $method = $request->input('pricing_method');
         $money = ['required', 'numeric', 'min:0', 'max:'.ClinicService::MAX_PRICE, 'decimal:0,2'];
         $maximumPriceMessage = 'Price must be ₱'.number_format(ClinicService::MAX_PRICE, 2).' or less.';
         $data = $request->validate([
             'name' => 'required|string|max:200', 'category_id' => 'required|integer|exists:clinic_service_categories,id',
-            'type' => ['nullable', Rule::in(ClinicService::TYPES)],
             'pricing_method' => ['required', Rule::in(['fixed', 'range', 'starting_at', 'tiered'])],
             'billing_unit' => ['nullable', Rule::in(['service', 'visit', 'day', 'sample', 'pet'])],
             'is_active' => 'sometimes|boolean', 'notes' => 'nullable|string|max:5000',
@@ -103,7 +99,10 @@ class ClinicServiceController extends Controller
             'tiers.*.price.max' => $maximumPriceMessage,
         ]);
         $data += ['price' => null, 'min_price' => null, 'max_price' => null, 'tier_basis' => null, 'tiers' => null];
-        $data['identity_key'] = hash('sha256', json_encode([mb_strtolower($data['name']), (int) $data['category_id'], mb_strtolower($data['type'] ?? '')]));
+        if ($data['is_active'] ?? $service?->is_active ?? true) {
+            $this->assertServiceIsNotTreatment($data['name'], (int) $data['category_id']);
+        }
+        $data['identity_key'] = hash('sha256', json_encode([mb_strtolower($data['name']), (int) $data['category_id']]));
         $duplicate = ClinicService::where('identity_key', $data['identity_key']);
         if ($service) $duplicate->whereKeyNot($service->id);
         if ($duplicate->exists()) $this->duplicateError();
@@ -112,6 +111,20 @@ class ClinicServiceController extends Controller
 
     private function duplicateError(): never
     {
-        throw ValidationException::withMessages(['name' => 'A service with this name, category and type already exists. Edit the existing service instead.']);
+        throw ValidationException::withMessages(['name' => 'A service with this name and category already exists. Edit the existing service instead.']);
+    }
+
+    private function assertServiceIsNotTreatment(string $name, int $categoryId): void
+    {
+        $normalize = fn ($value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim($value)));
+        $name = $normalize($name);
+        // Anti Rabies is also an Inventory vaccine name; the certificate is a distinct service.
+        if (preg_match('/^anti[ -]?rabies(?: certificate| certification)?$/u', $name)
+            && ClinicServiceCategory::whereKey($categoryId)->value('name') === 'Certificates & Forms') return;
+        if (preg_match('/\b(triamcinolone|vincristine)\b|\bvaccines?$/u', $name)
+            || InventoryItem::whereIn('category', ['medicine', 'vaccine'])->pluck('item_name')
+                ->contains(fn ($product) => $normalize($product) === $name)) {
+            throw ValidationException::withMessages(['name' => 'Record medicines and vaccines from Inventory through Treatment instead of Clinic Services.']);
+        }
     }
 }

@@ -362,7 +362,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['POST', '/api/admin/clinic-cases/1/start'],
             ['POST', '/api/admin/clinic-cases/1/finish'],
             ['POST', '/api/admin/clinic-cases/1/services'],
-            ['PATCH', '/api/admin/clinic-cases/1/services/1'],
+            ['DELETE', '/api/admin/clinic-cases/1/services/1'],
             ['POST', '/api/admin/clinic-appointments/1/start-consultation'],
             ['POST', '/api/admin/clinic-appointments/1/finish-consultation'],
             ['POST', '/api/admin/clinic-appointments/1/record'],

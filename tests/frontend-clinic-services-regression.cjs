@@ -15,8 +15,8 @@ function setup() {
     adminClinicPage: () => ({tab: 'active-cases', init() {calls.push('cases:init');}, loadAllRecords() {calls.push('records:load');}}),
     API: {getUserRole: () => 'admin', adminRequest: async (method, url, payload) => {
       calls.push([method, url, payload]);
-      return url.endsWith('/options') ? {categories: [{id: 2, name: 'Laboratory'}], types: ['In House']}
-        : method !== 'GET' ? {data: {type: payload?.type}}
+      return url.endsWith('/options') ? {categories: [{id: 2, name: 'Laboratory'}]}
+        : method !== 'GET' ? {data: {}}
         : {data: [], total: 0, current_page: 1, last_page: 1};
     }},
     fetch: async () => {calls.push('services:markup'); return {ok: !failMarkup, text: async () => ''};},
@@ -94,33 +94,21 @@ async function workflow() {
   await app.shell.showSection();
   const state = app.panels[0].state;
   assert.equal(state.status, 'active');
-  state.q = 'CBC'; state.category = '2'; state.type = 'Send Out'; state.status = 'inactive';
+  state.q = 'CBC'; state.category = '2'; state.status = 'inactive';
   await state.load(2);
   assert.equal(state.filtersActive, true);
-  assert.ok(app.calls.some(call => Array.isArray(call) && /q=CBC.*category_id=2.*type=Send\+Out/.test(call[1])));
+  assert.ok(app.calls.some(call => Array.isArray(call) && /q=CBC.*category_id=2/.test(call[1])));
+  assert.equal(new URLSearchParams(app.calls.at(-1)[1].split('?')[1]).has('type'), false);
   await state.clearFilters();
   assert.equal(state.filtersActive, false);
-  state.type = '__none__';
-  await state.load();
-  assert.equal(state.filtersActive, true, 'Not Applicable is an active filter');
-  const notApplicableQuery = new URLSearchParams(app.calls.at(-1)[1].split('?')[1]);
-  assert.equal(notApplicableQuery.get('type'), '__none__', 'Not Applicable requests only services with an empty Type');
-  assert.equal(notApplicableQuery.get('page'), '1', 'Changing the Type filter starts on page one');
-  await state.clearFilters();
-  const allTypesQuery = new URLSearchParams(app.calls.at(-1)[1].split('?')[1]);
-  assert.equal(state.type, '');
-  assert.equal(allTypesQuery.has('type'), false, 'All types removes the Type restriction');
   state.openModal();
   assert.equal('is_active' in state.form, false, 'Status is not part of the service form');
   assert.equal('is_active' in state.payload(), false, 'Creation uses the active database default');
-  assert.equal(state.form.type, '', 'New services default to Not Applicable');
-  assert.equal(state.payload().type, null, 'Not Applicable saves an empty Type');
+  assert.equal('type' in state.form, false);
+  assert.equal('type' in state.payload(), false);
   state.openModal({id: 1, name: 'CBC', type: 'Send Out'});
-  assert.equal(state.form.type, 'Send Out', 'Editing preselects the saved Type');
-  state.form.type = '';
-  assert.equal(state.payload().type, null, 'Editing can clear a previously selected Type');
-  state.openModal({id: 2, name: 'Consultation', type: null});
-  assert.equal(state.form.type, '', 'An empty saved Type preselects Not Applicable');
+  assert.equal('type' in state.form, false, 'Legacy Type is ignored when editing');
+  assert.equal('type' in state.payload(), false);
   const inactive = {id: 3, name: 'Boarding', is_active: false, pricing_method: 'tiered', tiers: [{size: 'small', price: 500}]};
   let focused = false;
   const beforeDetails = app.calls.length;
@@ -172,10 +160,7 @@ async function workflow() {
 
 function formatting() {
   const markup = read('pages/admin/clinic/sections/services.html');
-  assert.match(markup, /<select x-model="form\.type"/);
-  assert.match(markup, /<option value="">Not Applicable<\/option>/);
-  assert.match(markup, /<option value="__none__">Not Applicable<\/option>/);
-  assert.doesNotMatch(markup, /<input[^>]*x-model="form\.type"|<datalist/);
+  assert.doesNotMatch(markup, /form\.type|service\.type|details\.type|All types|>Type</);
   assert.doesNotMatch(markup, /x-model="form\.is_active"/);
   for (const dialog of markup.matchAll(/<dialog\b[^>]*>/g)) {
     assert.ok(dialog[0].includes('@cancel.prevent @pointerdown.self.prevent'), 'Outside pointer events and Escape must not dismiss or blur');
@@ -191,7 +176,6 @@ function formatting() {
   assert.match(markup, /@click\.stop="changeStatus\(service\)"/);
   assert.match(markup, /@keydown\.enter\.self\.prevent="openDetails/);
   assert.match(markup, /@keydown\.space\.self\.prevent="openDetails/);
-  assert.ok(markup.includes("service.type || '—'"), 'Empty Type displays an em dash in the table');
   const context = {setTimeout, clearTimeout};
   vm.createContext(context);
   vm.runInContext(read('scripts/components/admin-clinic-services.js'), context);

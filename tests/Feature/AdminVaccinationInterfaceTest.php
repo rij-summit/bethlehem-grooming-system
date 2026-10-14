@@ -111,7 +111,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             $this->clinicPage,
         );
         $this->assertStringContainsString(
-            'x-show="canEditClinical && record.state === \'published\'"',
+            'x-show="canEditClinical && record.state === \'published\' && (!record.clinic_appointment_id || caseOngoing())"',
             $this->clinicPage,
         );
         $this->assertStringContainsString(

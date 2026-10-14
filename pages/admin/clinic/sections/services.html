@@ -15,12 +15,6 @@
         <template x-for="item in categories" :key="item.id"><option :value="item.id" x-text="item.name"></option></template>
       </select>
     </label>
-    <label class="min-w-[120px] flex-1 sm:flex-none"><span class="sr-only">Type</span>
-      <select x-model="type" @change="load()" class="w-full rounded-xl border border-[#cfe0ee] bg-white px-3 py-3 text-sm outline-none focus:border-[#315b7e]">
-        <option value="">All types</option><option value="__none__">Not Applicable</option>
-        <template x-for="item in types" :key="item"><option :value="item" x-text="item"></option></template>
-      </select>
-    </label>
     <label class="min-w-[120px] flex-1 sm:flex-none"><span class="sr-only">Status</span>
       <select x-model="status" @change="load()" class="w-full rounded-xl border border-[#cfe0ee] bg-white px-3 py-3 text-sm outline-none focus:border-[#315b7e]">
         <option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All statuses</option>
@@ -39,19 +33,18 @@
       <table class="w-full min-w-[800px] text-left text-sm">
         <caption class="sr-only">Clinic Services catalog, pricing and status</caption>
         <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>
-          <th scope="col" class="px-4 py-3">Service</th><th scope="col" class="px-4 py-3">Category</th><th scope="col" class="px-4 py-3">Type</th><th scope="col" class="px-4 py-3">Pricing</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="w-px whitespace-nowrap px-4 py-3 text-right">Actions</th>
+          <th scope="col" class="px-4 py-3">Service</th><th scope="col" class="px-4 py-3">Category</th><th scope="col" class="px-4 py-3">Price</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="w-px whitespace-nowrap px-4 py-3 text-right">Actions</th>
         </tr></thead>
         <tbody class="divide-y divide-slate-100">
           <template x-for="service in (!loading && !error ? rows : [])" :key="service.id">
-            <tr tabindex="0" @click="openDetails(service, $event)" @keydown.enter.self.prevent="openDetails(service, $event)" @keydown.space.self.prevent="openDetails(service, $event)" :aria-label="'View details for ' + service.name + (service.type ? ' · ' + service.type : '')" aria-haspopup="dialog" class="cursor-pointer hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e] focus-visible:-outline-offset-2">
+            <tr tabindex="0" @click="openDetails(service, $event)" @keydown.enter.self.prevent="openDetails(service, $event)" @keydown.space.self.prevent="openDetails(service, $event)" :aria-label="'View details for ' + service.name" aria-haspopup="dialog" class="cursor-pointer hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e] focus-visible:-outline-offset-2">
               <th scope="row" class="max-w-[260px] break-words px-4 py-4 font-semibold text-[#2f4b66]" x-text="service.name"></th>
               <td class="px-4 py-4 text-slate-600" x-text="service.category.name"></td>
-              <td class="px-4 py-4 text-slate-600" x-text="service.type || '—'"></td>
               <td class="whitespace-nowrap px-4 py-4 font-medium text-slate-700" x-text="pricing(service)"></td>
               <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="service.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="service.is_active ? 'Active' : 'Inactive'"></span></td>
               <td class="w-px whitespace-nowrap px-4 py-3"><div class="flex items-center justify-end gap-2">
-                <button type="button" @click.stop="openModal(service)" :disabled="busyId !== null" :aria-label="'Edit ' + service.name + (service.type ? ' · ' + service.type : '')" class="rounded-lg border border-[#d0e4f2] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-slate-100 disabled:opacity-50">Edit</button>
-                <button type="button" @click.stop="changeStatus(service)" :disabled="busyId !== null" :title="service.is_active ? 'Deactivate service' : 'Reactivate service'" :aria-label="(busyId === service.id ? 'Updating ' : service.is_active ? 'Deactivate ' : 'Reactivate ') + service.name + (service.type ? ' · ' + service.type : '')" :aria-busy="busyId === service.id" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e] disabled:opacity-50" :class="service.is_active ? 'text-red-600' : 'text-[#315b7e]'">
+                <button type="button" @click.stop="openModal(service)" :disabled="busyId !== null" :aria-label="'Edit ' + service.name" class="rounded-lg border border-[#d0e4f2] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-slate-100 disabled:opacity-50">Edit</button>
+                <button type="button" @click.stop="changeStatus(service)" :disabled="busyId !== null" :title="service.is_active ? 'Deactivate service' : 'Reactivate service'" :aria-label="(busyId === service.id ? 'Updating ' : service.is_active ? 'Deactivate ' : 'Reactivate ') + service.name" :aria-busy="busyId === service.id" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#315b7e] disabled:opacity-50" :class="service.is_active ? 'text-red-600' : 'text-[#315b7e]'">
                   <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false" class="h-5 w-5" :class="{'animate-spin': busyId === service.id}"><use :href="'../../assets/icons/phosphor.svg#' + (busyId === service.id ? 'spinner-gap' : service.is_active ? 'x-circle' : 'arrow-counter-clockwise')"></use></svg>
                 </button>
               </div></td>
@@ -83,7 +76,6 @@
       <fieldset :disabled="saving" class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
         <label class="sm:col-span-2"><span class="mb-1 block text-sm font-medium text-slate-600">Service Name <span aria-hidden="true" class="text-red-600">*</span></span><input x-ref="serviceName" x-model="form.name" required maxlength="200" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]" /></label>
         <label><span class="mb-1 block text-sm font-medium text-slate-600">Category <span aria-hidden="true" class="text-red-600">*</span></span><select x-model="form.category_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]"><option value="">Select category</option><template x-for="item in categories" :key="item.id"><option :value="item.id" x-text="item.name"></option></template></select></label>
-        <label><span class="mb-1 block text-sm font-medium text-slate-600">Type</span><select x-model="form.type" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]"><option value="">Not Applicable</option><template x-for="item in types" :key="item"><option :value="item" x-text="item"></option></template></select><span class="mt-1 block text-xs text-slate-500">Choose Not Applicable when a type does not apply.</span></label>
         <label><span class="mb-1 block text-sm font-medium text-slate-600">Pricing Method</span><select x-model="form.pricing_method" @change="formError = ''; priceErrors = {}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]"><option value="fixed">Fixed</option><option value="range">Range</option><option value="starting_at">Starting At</option><option value="tiered">Tiered</option></select></label>
         <label><span class="mb-1 block text-sm font-medium text-slate-600">Billing Unit</span><select x-model="form.billing_unit" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]"><option value="">None</option><option value="service">Per service</option><option value="visit">Per visit</option><option value="day">Per day</option><option value="sample">Per sample</option><option value="pet">Per pet</option></select></label>
         <template x-if="form.pricing_method === 'fixed' || form.pricing_method === 'starting_at'"><label class="sm:col-span-2"><span class="mb-1 block text-sm font-medium text-slate-600" x-text="form.pricing_method === 'fixed' ? 'Price (₱)' : 'Starting Price (₱)'"></span><input data-money-input inputmode="decimal" type="number" x-model="form.price" required min="0" :max="maximumPrice" step="0.01" class="w-full rounded-xl border bg-white px-3 py-2 text-sm outline-none" @blur="validatePrice('price')" @input="priceInput('price')" :aria-invalid="Boolean(priceErrors.price)" aria-describedby="service-price-error" :class="priceErrors.price ? 'border-red-500 focus:border-red-500' : 'border-slate-300 focus:border-[#315b7e]'" /><span id="service-price-error" x-show="priceErrors.price" x-text="priceErrors.price" class="mt-1 block text-xs text-red-600" aria-live="polite"></span></label></template>
@@ -120,7 +112,6 @@
         </div>
         <dl class="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <div><dt class="text-xs text-slate-500">Category</dt><dd class="mt-1 break-words text-slate-800" x-text="details.category.name"></dd></div>
-          <div><dt class="text-xs text-slate-500">Type</dt><dd class="mt-1 text-slate-800" x-text="details.type || 'Not Applicable'"></dd></div>
         </dl>
       </section>
       <section aria-labelledby="clinic-service-pricing-heading">

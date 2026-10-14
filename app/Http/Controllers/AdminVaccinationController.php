@@ -356,11 +356,24 @@ class AdminVaccinationController extends Controller
                 return $this->conflict('This vaccination record has already been voided.');
             }
 
+            $case = $record->clinic_appointment_id !== null
+                ? ClinicAppointment::whereKey($record->clinic_appointment_id)->lockForUpdate()->firstOrFail()
+                : null;
+            if ($case && ($case->paid || $case->archived_at || ! $case->clinicalContentEditableFor($request->user()))) {
+                return $this->conflict('This case is no longer eligible for clinical changes.');
+            }
+
             $record->forceFill([
                 'voided_at' => now(),
                 'voided_by_user_id' => $request->user()->user_id,
                 'void_reason' => $validated['void_reason'],
             ])->save();
+
+            if ($case) {
+                // Voiding corrects the bill; physical stock usage and its audit remain recorded.
+                $case->charges()->where('vaccination_record_id', $record->id)->delete();
+                app(ClinicBillingService::class)->updateTotal($case);
+            }
 
             return response()->json([
                 'success' => true,

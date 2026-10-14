@@ -14,6 +14,7 @@ const services = [fixed, range, starting, tiered];
 const storage = new Map();
 const submissions = [], removals = [], events = [], notifications = [], confirmations = [];
 let serviceLoads = 0, billingLoads = 0, confirmRemoval = true, delayedRemoval = null;
+const billingScopes = [];
 let role = 'staff', permission = {clinical: true, billing: true, payment: false};
 let failSubmission = false, delayedOptions = null;
 const preview = service => ({requires_final_price: ['range', 'starting_at'].includes(service.pricing_method),
@@ -27,7 +28,7 @@ const sandbox = {
   API: {
     getUserRole: () => role,
     getClinicCaseServices: async () => {++serviceLoads; return {data: [], current_page: 1, last_page: 1};},
-    getClinicCaseCharges: async () => {++billingLoads; return {total_amount: '1734.00', charges: {data: [
+    getClinicCaseCharges: async (id, page, scope) => {++billingLoads; billingScopes.push(scope); return {total_amount: '1734.00', charges: {data: [
       {id: 1, description: 'Performed consultation', clinic_case_service_id: 1, quantity: 1, unit_price: 500, amount: 500},
       {id: 2, description: 'Medicine', kind: 'medicine', quantity: 1, unit_price: 1234, amount: 1234},
     ], current_page: 1, last_page: 1}};},
@@ -177,6 +178,9 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(state.serviceInfo(historical).name, 'Original name');
   await state.loadBilling();
   assert.equal(state.billingTotal, '1734.00', 'Uses server total instead of calculating another total');
+  assert.equal(billingScopes.at(-1), 'treatment', 'Billing requests Treatment charges independently from services');
+  assert.equal(state.treatmentCharges.length, 1);
+  assert.equal(state.treatmentCharges[0].description, 'Medicine');
   assert.equal(state.chargeRows[1].kind, 'medicine');
   state.requestCasePayment();
   assert.equal(events.some(event => event.type === 'clinic-review-payment'), false, 'Vet cannot open payment');
@@ -191,6 +195,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   receptionist.workspaceAppointment = {id: 2, status: 'for_payment', charges: []};
   await receptionist.loadBilling();
   await receptionist.requestCasePayment();
+  assert.equal(billingScopes.at(-1), '', 'Payment still receives the complete charge breakdown');
   assert.equal(events.at(-1).type, 'clinic-review-payment');
   assert.equal(events.at(-1).detail.total_amount, '1734.00');
   assert.equal(events.at(-1).detail.charges.length, 2, 'Payment receives the reviewed charges instead of a stale case array');
@@ -235,6 +240,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(/Order for Later|Record Performed|Mark Performed|Cancel Order|serviceForm.status|categoryLabel|methodLabel|billing_unit|Saved case weight|Pricing tier|case-service-quantity/.test(servicesPanel), false);
   assert.match(servicesPanel, /'Add Service'/);
   assert.match(servicesPanel, /No services added yet\./);
+  const treatmentChargesMarkup = page.slice(page.indexOf('<section x-show="$store.clinicAccess.permissions.billing" aria-labelledby="treatment-charges-heading"'), page.indexOf('<div x-show="chargesOpen"'));
+  assert.match(treatmentChargesMarkup, /Treatment Charges/);
+  assert.match(treatmentChargesMarkup, /x-text="charge.description"/);
+  assert.match(treatmentChargesMarkup, /x-text="money\(charge.amount\)"/);
+  assert.doesNotMatch(treatmentChargesMarkup, /Remove|@click="remove|<input|<select|request_key|inventory_item_id|pricing_method/);
+  assert.match(page, /clipboard-list[^\n]* Billing/);
   assert.equal(/role="tab"[^>]*aria-controls="case-billing-panel"/.test(page), false, 'Charges is contextual, not a clinical tab');
   assert.match(source, /service_snapshot \|\| entry.clinic_service/);
   assert.equal(/sizeFor|groomingSize|\+ 500|\+ 200/.test(source), false, 'JS does not recreate size or pricing rules');

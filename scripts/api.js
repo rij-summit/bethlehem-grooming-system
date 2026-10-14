@@ -1904,8 +1904,8 @@ var API = (() => {
     return request("DELETE", `/admin/clinic-cases/${id}/services/${serviceId}`, null, getAdminToken());
   }
 
-  function getClinicCaseCharges(id, page = 1) {
-    return request("GET", `/admin/clinic-cases/${id}/charges?page=${page}`, null, getAdminToken());
+  function getClinicCaseCharges(id, page = 1, scope = '') {
+    return request("GET", `/admin/clinic-cases/${id}/charges?page=${page}${scope === 'treatment' ? '&scope=treatment' : ''}`, null, getAdminToken());
   }
 
   function getClinicConfinedCases(page = 1) {

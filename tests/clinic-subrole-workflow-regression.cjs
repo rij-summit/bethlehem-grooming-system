@@ -157,7 +157,7 @@ function permissions(clinical, payment, queue, customers) {
   for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }
-  assert.match(page, /aria-label="Services"/);
+  assert.match(page, /aria-label="Billing"/);
   assert.match(page, /Attachments<\/h3>/);
   assert.match(page, /Follow-up<\/h3>/);
   assert.equal((page.match(/x-for="caseItem in caseRows"/g) || []).length, 1);

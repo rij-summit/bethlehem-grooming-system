@@ -1381,21 +1381,21 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertSame(1, DB::table('inventory_transactions')->where('vaccination_record_id', $id)->count());
     }
 
-    public function test_vaccine_publication_updates_total_immediately_and_preserves_price_stock_and_audit_when_voided(): void
+    public function test_vaccine_void_removes_its_charge_and_preserves_stock_usage_and_audit(): void
     {
         $this->medicineStock(); $this->insertRabiesStock(302);
         $id = $this->insertFinalizableDraft(302, 201);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'in_consultation', 'total_amount' => 250]);
         $this->assertDatabaseHas('inventory_transactions', ['vaccination_record_id' => $id, 'quantity' => 1, 'batch_number' => 'LOT-EARLY']);
-        $charge = DB::table('clinic_charges')->first();
         $movement = DB::table('inventory_transactions')->where('vaccination_record_id', $id)->first();
         DB::table('inventory_items')->where('item_id', 302)->update(['selling_price' => 800]);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/void", ['void_reason' => 'Audit correction'])->assertOk();
-        $this->assertEquals($charge, DB::table('clinic_charges')->first());
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->assertDatabaseHas('vaccination_records', ['id' => $id, 'void_reason' => 'Audit correction']);
         $this->assertEquals($movement, DB::table('inventory_transactions')->where('vaccination_record_id', $id)->first());
         $this->assertStockOnHand(302, '5');
-        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'total_amount' => 250]);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'total_amount' => 0]);
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertConflict();
     }
 
@@ -1423,6 +1423,78 @@ class AdminVaccinationApiTest extends TestCase
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'for_payment', 'total_amount' => 2000]);
         $this->assertDatabaseCount('clinic_appointments', 1); $this->assertDatabaseCount('clinic_charges', 4);
         $this->assertSame(2, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
+    }
+
+    public function test_triamcinolone_uses_case_weight_and_void_replacement_keeps_charge_ownership(): void
+    {
+        $this->medicineStock();
+        (require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php'))->up();
+        (require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php'))->up();
+        (require database_path('migrations/2026_10_14_000001_remove_clinic_service_type.php'))->up();
+        DB::table('inventory_items')->where('item_id', 301)->update([
+            'item_name' => 'Triamcinolone Injectable', 'pricing_method' => 'weight_based', 'weight_pricing_mode' => 'ranges',
+        ]);
+        DB::table('inventory_item_weight_prices')->insert(['item_id' => 301, 'min_weight_kg' => 1, 'max_weight_kg' => 5, 'price' => 480]);
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 201, 'weight_kg' => 4.1]);
+        DB::table('clinic_records')->insert(['clinic_appointment_id' => 201, 'primary_veterinarian_id' => 2]);
+        $medical = DB::table('clinic_records')->first();
+        $payload = $this->medicineTreatment(['expected_price' => 480, 'expected_weight_kg' => 4.1]);
+        $id = $this->postJson('/api/admin/pets/101/vaccinations', $payload)->assertCreated()->json('vaccination.id');
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
+        $this->postJson('/api/admin/pets/101/vaccinations', $payload)->assertOk()->assertJsonPath('vaccination.id', $id);
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertConflict();
+        $this->assertDatabaseCount('vaccination_records', 1);
+        $this->assertDatabaseCount('clinic_case_services', 0);
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $this->assertDatabaseHas('clinic_charges', ['vaccination_record_id' => $id, 'pet_weight_kg' => 4.1, 'amount' => 480]);
+        $this->getJson('/api/admin/clinic-cases/201/charges?scope=treatment')->assertOk()
+            ->assertJsonPath('charges.data.0.description', 'Triamcinolone Injectable')->assertJsonPath('total_amount', 480);
+        $movement = DB::table('inventory_transactions')->where('vaccination_record_id', $id)->first();
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/void", ['void_reason' => 'Correct administration record'])->assertOk();
+        $this->assertEquals($movement, DB::table('inventory_transactions')->where('vaccination_record_id', $id)->first());
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->getJson('/api/admin/clinic-cases/201/charges?scope=treatment')->assertOk()->assertJsonPath('total_amount', 0);
+        $replacement = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment([
+            'expected_price' => 480, 'expected_weight_kg' => 4.1,
+        ]))->assertCreated()->json('vaccination.id');
+        $this->postJson("/api/admin/pets/101/vaccinations/{$replacement}/publish")->assertOk();
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $this->assertDatabaseHas('clinic_charges', ['vaccination_record_id' => $replacement, 'amount' => 480]);
+        $this->assertEquals($medical, DB::table('clinic_records')->first());
+        $this->assertDatabaseCount('clinic_case_services', 0);
+        $this->assertStockOnHand(301, '0');
+        (require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php'))->down();
+        (require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php'))->down();
+    }
+
+    public function test_case_linked_treatment_cannot_be_voided_after_payment_archive_or_lock(): void
+    {
+        $this->medicineStock();
+        Schema::table('clinic_appointments', function (Blueprint $table) {
+            $table->boolean('paid')->default(false); $table->timestamp('archived_at')->nullable();
+        });
+        $id = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertCreated()->json('vaccination.id');
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
+        $charge = DB::table('clinic_charges')->first();
+        foreach ([['paid' => true], ['archived_at' => now()], ['status' => 'completed'], ['status' => 'cancelled'], ['status' => 'for_payment']] as $lock) {
+            DB::table('clinic_appointments')->where('id', 201)->update(['paid' => false, 'archived_at' => null, 'status' => 'in_consultation', ...$lock]);
+            $this->postJson("/api/admin/pets/101/vaccinations/{$id}/void", ['void_reason' => 'Correction'])->assertConflict();
+            $this->assertDatabaseHas('vaccination_records', ['id' => $id, 'voided_at' => null]);
+            $this->assertEquals($charge, DB::table('clinic_charges')->first());
+        }
+    }
+
+    public function test_treatment_void_rolls_back_when_the_charge_total_cannot_be_updated(): void
+    {
+        $this->medicineStock();
+        $id = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertCreated()->json('vaccination.id');
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
+        $this->mock(\App\Services\ClinicBillingService::class)->shouldReceive('updateTotal')->once()
+            ->andThrow(\Illuminate\Validation\ValidationException::withMessages(['charges' => 'Unable to update total.']));
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/void", ['void_reason' => 'Correction'])->assertUnprocessable();
+        $this->assertDatabaseHas('vaccination_records', ['id' => $id, 'voided_at' => null]);
+        $this->assertDatabaseHas('clinic_charges', ['vaccination_record_id' => $id, 'amount' => 250]);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'total_amount' => 250]);
     }
 
     public function test_database_prevents_a_second_stock_movement_for_a_published_treatment(): void

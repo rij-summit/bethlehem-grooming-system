@@ -666,6 +666,7 @@ function adminClinicVaccinations() {
         }
         await this.loadVaccinations();
         this.loadOptions();
+        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
         this.showToast(finishCase ? 'Treatment saved and stock deducted. Case is For Payment.' : 'Treatment recorded.');
         if (this.inline) this.resetInlineForm();
@@ -760,6 +761,7 @@ function adminClinicVaccinations() {
         const response = await API.publishAdminPetVaccination(this.pet.id, record.id, { consumeInventory: usesInventory });
         await this.loadVaccinations();
         this.loadOptions();
+        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
         this.showToast(response.message || "Treatment record published.");
         if (this.inline && this.formModal.recordId === record.id) this.resetInlineForm();
@@ -821,6 +823,8 @@ function adminClinicVaccinations() {
         this.voidModal.open = false;
         this.$nextTick(() => this.voidReturnFocus?.focus());
         await this.loadVaccinations();
+        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
+        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
         this.showToast(response.message || "Treatment record voided.");
       } catch (error) {
         const reasonErrors = error.errors?.void_reason;

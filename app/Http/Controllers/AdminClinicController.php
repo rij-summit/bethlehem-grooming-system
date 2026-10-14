@@ -528,13 +528,7 @@ class AdminClinicController extends Controller
             'follow_up_notes' => ['nullable', 'string', 'max:1000'],
             'vet_notes' => ['nullable', 'string', 'max:2000'],
             'finish_case' => ['sometimes', 'boolean'],
-            'medicines' => ['sometimes', 'array', 'max:100'],
-            'medicines.*' => ['array:inventory_item_id,inventory_quantity,expected_price,expected_weight_kg,request_key'],
-            'medicines.*.inventory_item_id' => ['required', 'integer'],
-            'medicines.*.inventory_quantity' => ['nullable', 'integer', 'min:1', 'max:99999999'],
-            'medicines.*.expected_price' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
-            'medicines.*.expected_weight_kg' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
-            'medicines.*.request_key' => ['required', 'uuid', 'distinct'],
+            'medicines' => ['prohibited'],
             // Vitals
             'weight_kg' => ['nullable', 'required_if_accepted:finish_case', new \App\Rules\ValidPetWeight(requireSpecies: false)],
             'temperature_c' => ['nullable', 'required_if_accepted:finish_case', 'numeric', 'decimal:0,1', 'min:0', 'max:999.9'],
@@ -543,6 +537,7 @@ class AdminClinicController extends Controller
             'body_condition_score' => ['nullable', 'integer', 'min:1', 'max:9'],
 
         ], [
+            'medicines.prohibited' => 'Record medicines from Inventory through Treatment. Medical Record does not create treatment charges.',
             'follow_up_date.after_or_equal' => 'The follow-up date cannot be in the past.',
             'follow_up_date.before_or_equal' => 'The follow-up date must be within 3 months from today.',
         ]);
@@ -612,7 +607,6 @@ class AdminClinicController extends Controller
                 );
             }
 
-            app(\App\Services\ClinicMedicineChargeService::class)->save($appt, $data['medicines'] ?? [], request()->user());
             if (! empty($data['finish_case'])) {
                 $appt->setRelation('record', $record);
                 $appt->prepareForPayment();

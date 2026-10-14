@@ -17,7 +17,7 @@ function clinicCaseWorkspace() {
     searchQuery: '', searchRows: [], searchPage: 0, searchLastPage: 1, searchLoading: false, searchError: '',
     selectedService: null, servicePricing: null, pricingLoading: false,
     serviceForm: null, serviceErrors: {}, serviceError: '', serviceSaving: false, serviceRemovingId: null, pendingPayload: null,
-    _generation: 0, _servicesRequest: 0, _billingRequest: 0, _searchRequest: 0, _selectionRequest: 0, _searchTimer: null, _savedWeight: null,
+    _generation: 0, _servicesRequest: 0, _billingRequest: 0, _billingScope: '', _searchRequest: 0, _selectionRequest: 0, _searchTimer: null, _savedWeight: null,
 
     get canMutateServices() {
       const appt = this.workspaceAppointment;
@@ -29,6 +29,7 @@ function clinicCaseWorkspace() {
       return !!this.$store.clinicAccess.permissions.payment && this.workspaceAppointment?.status === 'for_payment'
         && !this.workspaceAppointment?.paid && !this.workspaceAppointment?.archived_at;
     },
+    get treatmentCharges() { return this.chargeRows.filter(charge => ['medicine', 'vaccine'].includes(charge.kind)); },
     get needsFinalPrice() { return !!this.servicePricing?.requires_final_price; },
     get draftStorageKey() { return `clinic-service-draft:${this.$store.clinicAccess.user?.user_id}:${this.workspaceCaseId}`; },
     money(value) { return value == null ? '—' : Number(value).toLocaleString('en-PH', {style: 'currency', currency: 'PHP'}); },
@@ -84,6 +85,7 @@ function clinicCaseWorkspace() {
       if (section === 'services') {
         if (!this.serviceForm) this.restoreDraft();
         this.loadServices();
+        if (this.$store.clinicAccess.permissions.billing) this.loadBilling();
       }
       else if (section === 'billing' && this.$store.clinicAccess.permissions.billing) this.loadBilling();
     },
@@ -99,14 +101,15 @@ function clinicCaseWorkspace() {
       } catch (error) { if (generation === this._generation && request === this._servicesRequest) this.servicesError = error.message || 'Could not load case services.'; }
       finally { if (generation === this._generation && request === this._servicesRequest) this.servicesLoading = false; }
     },
-    async loadBilling(page = 1) {
+    async loadBilling(page = 1, scope = this.workspaceSection === 'services' ? 'treatment' : '') {
       const generation = this._generation, id = this.workspaceCaseId, request = ++this._billingRequest;
       this.billingLoading = true; this.billingError = '';
       try {
-        const response = await API.getClinicCaseCharges(id, page);
+        const response = await API.getClinicCaseCharges(id, page, scope);
         if (generation !== this._generation || request !== this._billingRequest) return;
         this.chargeRows = page === 1 ? response.charges.data : [...this.chargeRows, ...response.charges.data];
         this.chargePage = response.charges.current_page; this.chargeLastPage = response.charges.last_page;
+        this._billingScope = scope;
         this.billingTotal = response.total_amount;
         window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id, total_amount: response.total_amount}}));
       } catch (error) { if (generation === this._generation && request === this._billingRequest) this.billingError = error.message || 'Could not load billing.'; }
@@ -246,9 +249,13 @@ function clinicCaseWorkspace() {
     async requestCasePayment() {
       if (!this.canRecordCasePayment || this.billingLoading || this.billingError || this.billingTotal == null) return;
       const generation = this._generation;
+      if (this._billingScope === 'treatment') {
+        await this.loadBilling(1, '');
+        if (generation !== this._generation || this.billingError) return;
+      }
       // The existing payment dialog must receive the complete reviewed breakdown.
       while (this.chargePage < this.chargeLastPage) {
-        await this.loadBilling(this.chargePage + 1);
+        await this.loadBilling(this.chargePage + 1, '');
         if (generation !== this._generation || this.billingError) return;
       }
       if (!this.canRecordCasePayment) return;
