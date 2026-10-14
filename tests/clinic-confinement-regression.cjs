@@ -5,7 +5,8 @@ const vm = require('node:vm');
 const {webcrypto} = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const storage = new Map(), requests = [], events = [];
-let episode = null, timeout = false, variable = false;
+let episode = null, timeout = false, variable = false, confirmResult = true, saveFails = false;
+const confirmations = [], prerequisiteSaves = [];
 const service = {id: 10, name: 'Inpatient care', pricing_method: 'fixed', price: '500.00', billing_unit: 'day'};
 const pricing = () => ({requires_final_price: variable, min_price: 500, max_price: 900, resolved_price: variable ? null : '500.00', error: null});
 const sandbox = {console, crypto: webcrypto, Date, setTimeout, clearTimeout, document: {addEventListener() {}},
@@ -13,6 +14,11 @@ const sandbox = {console, crypto: webcrypto, Date, setTimeout, clearTimeout, doc
   CustomEvent: class {constructor(type, options) {this.type = type; this.detail = options?.detail;}},
   window: {dispatchEvent: e => events.push(e)},
   API: {
+    clinicSaveRecord: async (id, payload) => {
+      prerequisiteSaves.push({id, payload: {...payload}});
+      if (saveFails) throw Error('Record save unavailable');
+      return {record: {primary_veterinarian_id: payload.primary_veterinarian_id, primary_veterinarian_name: 'Angela Santiago'}};
+    },
     adminRequest: async (method, url, payload) => {
       if (method === 'GET') return {data: service, pricing: pricing()};
       requests.push({kind: 'extra', method, url, payload: {...payload}});
@@ -38,16 +44,69 @@ for (const file of ['admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-
   vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox);
 function component(permission = true, id = 1) {
   const state = sandbox.clinicConfinementWorkspace();
-  state.$store = {clinicAccess: {permissions: {clinical: permission, billing: true}, user: {user_id: 7}}, clinicFeedback: {notify() {}}};
+  state.$store = {clinicAccess: {permissions: {clinical: permission, billing: true}, user: {user_id: 7}},
+    clinicFeedback: {notify() {}, confirm: async dialog => {confirmations.push(dialog); return confirmResult;}}};
   state.selectSection = section => {state.section = section;};
   state.confinementCase = {id, status: 'in_consultation', paid: false, pet: {name: 'Mochi'}}; state.confinementCaseId = id;
+  const modal = sandbox.adminClinicModal(); modal.apptId = id; modal.currentAppt = state.confinementCase; modal.open = true;
+  modal.form.primary_veterinarian_id = '9'; modal.form.weight_kg = '18.4';
+  state.medicalForm = modal.form; state.selectedVeterinarians = [{user_id: 9, name: 'Angela Santiago'}];
+  state.persistConfinementPrerequisites = () => modal.persistConfinementPrerequisites();
+  state.modal = modal;
   return state;
 }
 (async () => {
+  const invalid = component(true, 90); await invalid.openAdmission();
+  invalid.selectedService.pricing_method = 'tiered'; invalid.medicalForm.primary_veterinarian_id = ''; invalid.medicalForm.weight_kg = '';
+  await invalid.submitAdmission();
+  assert.match(invalid.admissionErrors.primary_veterinarian_id, /Medical Record/);
+  assert.match(invalid.admissionErrors.weight_kg, /Vitals/); assert.equal(invalid.admissionErrors.reason, 'Enter a reason for admission.');
+  assert.equal(confirmations.length, 0); assert.equal(requests.length, 0); assert.equal(prerequisiteSaves.length, 0);
+  invalid.medicalForm.primary_veterinarian_id = '9'; invalid.medicalForm.weight_kg = '18.4'; invalid.admissionForm.reason = 'Observation';
+  confirmResult = false; await invalid.submitAdmission();
+  assert.equal(requests.length, 0); assert.equal(prerequisiteSaves.length, 0); assert.equal(invalid.admissionPending, null);
+  assert.equal(confirmations.at(-1).danger, false); assert.match(confirmations.at(-1).message, /Angela Santiago/);
+  invalid.admissionForm.reason = 'Observation '.repeat(150); await invalid.submitAdmission();
+  assert.ok(confirmations.at(-1).message.length < 600, 'Confirmation summarizes long reasons so actions remain reachable');
+  assert.equal(invalid.admissionForm.reason.length, 1800, 'Confirmation keeps the complete admission reason');
+  invalid.admissionForm.reason = 'Observation';
+  confirmResult = true; saveFails = true; await invalid.submitAdmission();
+  assert.equal(requests.length, 0); assert.match(invalid.error, /Could not save the admission information/);
+  assert.equal(invalid.admissionPending, null); assert.equal(invalid.modal.open, true); saveFails = false;
+  storage.clear(); service.pricing_method = 'fixed';
+
+  const double = component(true, 91); await double.openAdmission(); double.admissionForm.reason = 'Observe';
+  let answer;
+  double.$store.clinicFeedback.confirm = () => new Promise(resolve => {answer = resolve;});
+  const firstClick = double.submitAdmission();
+  assert.equal(double.confirming, true); const savesBefore = prerequisiteSaves.length;
+  await double.submitAdmission(); assert.equal(prerequisiteSaves.length, savesBefore);
+  answer(false); await firstClick; assert.equal(double.confirming, false);
+  double.$store.clinicFeedback.confirm = async dialog => {confirmations.push(dialog); return true;};
+  let finishSave;
+  double.persistConfinementPrerequisites = () => new Promise(resolve => {finishSave = resolve;});
+  const confirmedClick = double.submitAdmission(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(double.busy, true); const requestsBefore = requests.length;
+  await double.submitAdmission(); assert.equal(requests.length, requestsBefore);
+  finishSave(); await confirmedClick;
+  assert.equal(requests.length, requestsBefore + 1, 'Duplicate clicks during persistence create only one admission request');
+  episode = null; storage.clear(); requests.length = 0;
+
+  const returning = component(true, 92);
+  returning.admissionErrors = {primary_veterinarian_id: 'Missing veterinarian', weight_kg: 'Missing weight'};
+  returning.loadConfinement = () => {};
+  returning.syncConfinement(true, returning.confinementCase, 'confinement', returning.medicalForm);
+  assert.equal(Object.keys(returning.admissionErrors).length, 0, 'Returning from Medical Record clears stale prerequisite errors');
+
   const state = component();
   await state.openAdmission(); assert.equal(state.selectedService.id, 10, 'Base is resolved by server'); assert.equal('clinic_service_id' in state.admissionForm, false);
   state.admissionForm.reason = 'Observe'; timeout = true;
   await state.submitAdmission(); const original = JSON.stringify(requests.at(-1).payload);
+  assert.equal(prerequisiteSaves.at(-1).payload.primary_veterinarian_id, '9');
+  assert.equal(prerequisiteSaves.at(-1).payload.weight_kg, '18.4');
+  assert.equal(prerequisiteSaves.at(-1).payload.finish_case, false);
+  assert.equal('diagnostics' in prerequisiteSaves.at(-1).payload, false, 'Admission does not validate unrelated unsaved medical rows');
+  assert.equal(state.modal.open, true, 'Automatic prerequisite save keeps Patient Record open');
   assert.ok(state.admissionPending); assert.equal(state.busy, false);
   const reload = component(); await reload.loadConfinement(); assert.equal(reload.admissionForm.reason, 'Observe');
   timeout = false; await reload.submitAdmission(); assert.equal(JSON.stringify(requests.at(-1).payload), original);
@@ -75,6 +134,10 @@ function component(permission = true, id = 1) {
   assert.equal(reload.billableDays('2026-10-13T00:00:00Z', '2026-10-14T00:01:00Z'), 2);
 
   await reload.openDischarge(); assert.equal(reload.dischargePreview.quantity, 2);
+  confirmResult = false; const beforeCancel = requests.length; await reload.submitDischarge();
+  assert.equal(requests.length, beforeCancel); assert.equal(reload.dischargePending, null); assert.equal(reload.activeConfinement, true);
+  assert.equal(confirmations.at(-1).title, 'Discharge patient?'); assert.match(confirmations.at(-1).message, /Billable days: 2/);
+  confirmResult = true;
   reload.dischargeForm.applied_price = '1'; timeout = true; await reload.submitDischarge();
   assert.equal('quantity' in requests.at(-1).payload, false); assert.equal('applied_price' in requests.at(-1).payload, false, 'Fixed never sends a manual price');
   const discharge = JSON.stringify(requests.at(-1).payload); timeout = false; await reload.submitDischarge();
@@ -84,7 +147,8 @@ function component(permission = true, id = 1) {
   episode = {...episode, discharged_at: null}; variable = true;
   const range = component(true, 2); range.episode = episode; await range.openDischarge();
   for (const value of ['', '499.99', '900.01', '500.001', '1e3']) {
-    range.dischargeForm.applied_price = value; const before = requests.length; await range.submitDischarge();
+    range.dischargeForm.applied_price = value; const before = requests.length, dialogsBefore = confirmations.length; await range.submitDischarge();
+    assert.equal(confirmations.length, dialogsBefore, 'Invalid discharge never asks for confirmation');
     assert.equal(requests.length, before); assert.ok(range.priceError); assert.equal(range.dischargeForm.applied_price, value);
   }
   range.dischargeForm.applied_price = '700'; await range.submitDischarge(); assert.equal(requests.at(-1).payload.applied_price, '700');
@@ -112,5 +176,6 @@ function component(permission = true, id = 1) {
   assert.match(page, /dischargePreview\?\.pricing.requires_final_price/);
   assert.match(page, /x-show="canRemoveService\(entry\)"/);
   assert.equal(/x-model="(?:dischargeForm\.quantity|dischargeForm\.billable_days)"/.test(page), false);
+  assert.equal(page.includes('!confinementCase?.record?.primary_veterinarian_id'), false, 'Unsaved attending veterinarian does not disable Admit Patient');
   console.log('Clinic confinement admission, monitoring, discharge, retry, pricing and permission regressions passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

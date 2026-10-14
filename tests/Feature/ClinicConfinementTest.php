@@ -215,6 +215,21 @@ class ClinicConfinementTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk()->assertJsonPath('data.case_service.charge.amount', '1000.00');
     }
 
+    public function test_admission_preview_uses_live_weight_without_saving_it(): void
+    {
+        $this->service();
+        DB::table('clinic_vitals')->update(['weight_kg' => null]);
+        $this->getJson('/api/admin/clinic-cases/1/confinement/admission-preview?weight_kg=18.4')->assertOk()
+            ->assertJsonPath('pricing.pet_size', 'medium')->assertJsonPath('pricing.resolved_price', '500.00');
+        $this->assertDatabaseHas('clinic_vitals', ['clinic_appointment_id' => 1, 'weight_kg' => null]);
+        $this->assertDatabaseCount('clinic_confinements', 0);
+        $this->getJson('/api/admin/clinic-cases/1/confinement/admission-preview?weight_kg=0')
+            ->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
+        DB::table('clinic_vitals')->update(['weight_kg' => 18.4]);
+        $response = $this->getJson('/api/admin/clinic-cases/1/confinement/admission-preview?weight_kg=')->assertOk();
+        $this->assertNotNull($response->json('pricing.error'), 'A cleared live weight does not fall back to saved weight');
+    }
+
     public function test_automatic_base_selection_weight_resolution_and_historical_prices(): void
     {
         $service = $this->service();

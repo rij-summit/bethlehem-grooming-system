@@ -13,6 +13,7 @@ function clinicConfinementWorkspace() {
     extraForm: null, extraPricing: null, extraPending: null, episodePricing: null,
     options: [], optionsPage: 0, optionsLastPage: 1, optionsLoading: false,
     admissionForm: null, admissionPending: null, selectedService: null, pricing: null, pricingLoading: false,
+    medicalForm: null, admissionErrors: {}, confirming: false,
     monitoringOpen: false, monitoringForm: null, monitoringPending: null,
     observations: [], observationPage: 0, observationLastPage: 1, observationsLoading: false,
     dischargeForm: null, dischargePending: null, dischargePreview: null, priceError: '',
@@ -28,10 +29,11 @@ function clinicConfinementWorkspace() {
     get confinementStoragePrefix() { return `clinic-confinement:${this.$store.clinicAccess.user?.user_id}:${this.confinementCaseId}:`; },
     formatConfinementTime(value) { return value ? new Date(value).toLocaleString('en-PH', {dateStyle: 'medium', timeStyle: 'short'}) : '—'; },
     duration() { return clinicConfinementDuration(this.episode?.admitted_at, this.episode?.discharged_at || this.$store.clinicConfinementClock?.now || Date.now()); },
-    syncConfinement(open, appt, section) {
+    syncConfinement(open, appt, section, medicalForm) {
       if (!open) { if (this.confinementCaseId != null) ++this._generation; this.confinementCaseId = null; this._visible = false; return; }
       if (section !== 'confinement' || !appt?.id) { this._visible = false; return; }
       this.confinementCase = appt;
+      this.medicalForm = medicalForm;
       if (this.confinementCaseId === appt.id && this._visible) return;
       if (this.confinementCaseId !== appt.id) {
         ++this._generation; ++this._pricingRequest;
@@ -39,8 +41,10 @@ function clinicConfinementWorkspace() {
         this.admissionForm = null; this.admissionPending = null; this.monitoringForm = null; this.monitoringPending = null;
         this.monitoringOpen = false; this.dischargeForm = null; this.dischargePending = null;
         this.selectedService = null; this.pricing = null; this.observations = [];
+        this.admissionErrors = {}; this.confirming = false;
         this.extraForm = null; this.extraPending = null; this.extraPricing = null; this.episodePricing = null;
       }
+      this.admissionErrors = {};
       this._visible = true;
       this.loadConfinement();
     },
@@ -109,7 +113,7 @@ function clinicConfinementWorkspace() {
     async openAdmission() {
       if (!this.canAdmitConfinement || this.busy) return;
       this.admissionForm = {reason: '', notes: '', request_key: crypto.randomUUID()};
-      this.admissionPending = null; this.error = ''; this.persistAdmission();
+      this.admissionPending = null; this.admissionErrors = {}; this.error = ''; this.persistAdmission();
       this.$nextTick?.(() => this.$refs.confinementReason?.focus());
       await this.previewAdmissionService();
     },
@@ -117,23 +121,73 @@ function clinicConfinementWorkspace() {
       const generation = this._generation, request = ++this._pricingRequest;
       this.pricingLoading = true; this.pricing = null; this.selectedService = null; this.error = ''; this.persistAdmission();
       try {
-        const response = await API.adminRequest('GET', `/admin/clinic-cases/${this.confinementCaseId}/confinement/admission-preview`);
+        const weight = this.medicalForm ? `?weight_kg=${encodeURIComponent(String(this.medicalForm.weight_kg ?? '').trim())}` : '';
+        const response = await API.adminRequest('GET', `/admin/clinic-cases/${this.confinementCaseId}/confinement/admission-preview${weight}`);
         if (generation !== this._generation || request !== this._pricingRequest) return;
         this.selectedService = response.data; this.pricing = response.pricing;
       } catch (error) { if (generation === this._generation && request === this._pricingRequest) this.error = error.message || 'Could not preview this service.'; }
       finally { if (generation === this._generation && request === this._pricingRequest) this.pricingLoading = false; }
     },
-    async submitAdmission() {
-      if (!this.canAdmitConfinement || this.busy || !this.admissionForm) return;
-      if (!this.admissionPending && (!this.pricing || this.pricing.error || !this.admissionForm.reason.trim())) {
-        this.error = 'Resolve the confinement rate and enter the reason for admission.'; return;
+    get admissionVeterinarianName() {
+      const id = this.medicalForm?.primary_veterinarian_id;
+      if (this.medicalForm && !id) return 'Set in Medical Record';
+      return this.selectedVeterinarians?.find(vet => String(vet.user_id) === String(id))?.name
+        || this.confinementCase?.record?.primary_veterinarian_name || 'Set in Medical Record';
+    },
+    validateAdmission() {
+      const errors = {};
+      const vet = this.medicalForm ? this.medicalForm.primary_veterinarian_id : this.confinementCase?.record?.primary_veterinarian_id;
+      if (!vet) errors.primary_veterinarian_id = 'Select a primary attending veterinarian in Medical Record before admitting this patient.';
+      if (!this.admissionForm?.reason.trim()) errors.reason = 'Enter a reason for admission.';
+      const weight = this.medicalForm ? this.medicalForm.weight_kg : this.confinementCase?.vitals?.weight_kg;
+      if (this.selectedService?.pricing_method === 'tiered' && String(weight ?? '').trim() === '') {
+        errors.weight_kg = "Record the pet's weight in Medical Record > Vitals before admitting this patient.";
+      } else if (String(weight ?? '').trim() !== '') {
+        const error = this.weightTools?.getWeightValueValidationMessage(weight);
+        if (error) errors.weight_kg = error;
       }
+      if (!errors.weight_kg && (!this.pricing || this.pricing.error)) errors.rate = this.pricing?.error || this.error || 'Resolve the confinement rate before admitting this patient.';
+      this.admissionErrors = errors;
+      return !Object.keys(errors).length;
+    },
+    showAdmissionError(error, savingPrerequisites = false) {
+      const errors = error.errors || {};
+      if (errors.primary_veterinarian_id) this.admissionErrors.primary_veterinarian_id = 'Select an available primary attending veterinarian in Medical Record before admitting this patient.';
+      if (errors.weight_kg) this.admissionErrors.weight_kg = errors.weight_kg.join(' ');
+      if (errors.reason) this.admissionErrors.reason = errors.reason.join(' ');
+      this.error = savingPrerequisites
+        ? 'Could not save the admission information. ' + (Object.values(errors).flat().join(' ') || error.message || 'Try again before admitting this patient.')
+        : Object.values(errors).flat().join(' ') || error.message || 'Admission could not be confirmed. Retry this same request safely.';
+    },
+    async submitAdmission() {
+      if (!this.canAdmitConfinement || this.busy || this.confirming || this.pricingLoading || !this.admissionForm) return;
+      if (!this.admissionPending && !this.validateAdmission()) return;
       const payload = this.admissionPending || {...this.admissionForm};
-      this.admissionPending = payload;
-      if (!this.retain('admission', {form: this.admissionForm, pending: payload})) { this.admissionPending = null; return; }
       const id = this.confinementCaseId, generation = this._generation;
-      this.setConfinementBusy(true, id); this.error = '';
+      this.confirming = true;
+      let confirmed;
       try {
+        confirmed = await this.$store.clinicFeedback.confirm({title: 'Admit patient for confinement?',
+          message: [`Admit ${this.confinementCase?.pet?.name || 'this patient'} for confinement?`,
+            `Attending veterinarian: ${this.admissionVeterinarianName}`,
+            this.pricing?.resolved_price != null ? `Confinement rate: ${this.money(this.pricing.resolved_price)}/day` : '',
+            `Reason: ${payload.reason.length > 240 ? payload.reason.slice(0, 240).trimEnd() + '…' : payload.reason}`].filter(Boolean).join('\n'),
+          cancelLabel: 'Cancel', confirmLabel: 'Admit Patient', danger: false});
+      } finally { this.confirming = false; }
+      if (!confirmed || generation !== this._generation || !this.canAdmitConfinement) return;
+      this.setConfinementBusy(true, id); this.error = '';
+      let savingPrerequisites = false;
+      try {
+        if (!this.admissionPending) {
+          savingPrerequisites = true;
+          await this.persistConfinementPrerequisites();
+          savingPrerequisites = false;
+          if (generation !== this._generation) return;
+          await this.previewAdmissionService();
+          if (generation !== this._generation || !this.validateAdmission()) return;
+          this.admissionPending = payload;
+          if (!this.retain('admission', {form: this.admissionForm, pending: payload})) { this.admissionPending = null; return; }
+        }
         const response = await API.clinicAdmitConfinement(id, payload);
         if (generation !== this._generation) return;
         this.clearRetained('admission');
@@ -144,7 +198,7 @@ function clinicConfinementWorkspace() {
       } catch (error) {
         if (generation !== this._generation) return;
         if (error.errors || error.status === 422) { this.admissionPending = null; this.persistAdmission(); }
-        this.error = error.message || 'Admission could not be confirmed. Retry this same request safely.';
+        this.showAdmissionError(error, savingPrerequisites);
       } finally { this.setConfinementBusy(false, id); }
     },
     get visibleConfinementCharges() { return (this.episode?.confinement_charges || []).filter(extra => !extra.removed_at); },
@@ -283,7 +337,7 @@ function clinicConfinementWorkspace() {
       this.persistDischarge(); await this.loadDischargePreview();
     },
     async submitDischarge() {
-      if (!this.canCareForConfinement || this.busy || !this.dischargeForm || this.pricingLoading) return;
+      if (!this.canCareForConfinement || this.busy || this.confirming || !this.dischargeForm || this.pricingLoading) return;
       const pricing = this.dischargePreview?.pricing;
       if (!this.dischargePending && (!pricing || pricing.error)) return;
       if (!this.dischargePending) {
@@ -299,9 +353,20 @@ function clinicConfinementWorkspace() {
       const payload = this.dischargePending || {discharge_note: this.dischargeForm.discharge_note,
         charge_prices: this.dischargeForm.charge_prices || {},
         ...(pricing.requires_final_price ? {applied_price: this.dischargeForm.applied_price.trim()} : {})};
+      const id = this.confinementCaseId, generation = this._generation;
+      this.confirming = true;
+      let confirmed;
+      try {
+        const rate = pricing?.requires_final_price ? payload.applied_price : pricing?.resolved_price;
+        confirmed = await this.$store.clinicFeedback.confirm({title: 'Discharge patient?',
+          message: ['Discharge this patient from confinement and send the finalized charges to billing?',
+            this.dischargePreview ? `Billable days: ${this.dischargePreview.quantity}` : '',
+            rate != null ? `Estimated confinement amount: ${this.money(Number(rate) * this.dischargePreview.quantity)}` : ''].filter(Boolean).join('\n'),
+          cancelLabel: 'Cancel', confirmLabel: 'Discharge & Send to Billing', danger: false});
+      } finally { this.confirming = false; }
+      if (!confirmed || generation !== this._generation || !this.canCareForConfinement) return;
       this.dischargePending = payload;
       if (!this.retain('discharge', {form: this.dischargeForm, pending: payload})) { this.dischargePending = null; return; }
-      const id = this.confinementCaseId, generation = this._generation;
       this.setConfinementBusy(true, id); this.error = ''; let succeeded = false;
       try {
         const response = await API.clinicDischargeConfinement(id, payload);

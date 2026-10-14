@@ -420,6 +420,33 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         }
     }
 
+    public function test_partial_admission_prerequisite_save_preserves_other_record_fields_and_vitals(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('in_consultation');
+        $url = '/api/admin/clinic-appointments/1/record';
+        $this->postJson($url, [
+            'chief_complaint' => 'Observe patient', 'vet_notes' => 'Existing notes', 'treatment_given' => 'Existing care',
+            'follow_up_date' => now()->addWeek()->toDateString(), 'follow_up_notes' => 'Review later',
+            'weight_kg' => '8.2', 'temperature_c' => 38.4, 'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20,
+            'body_condition_score' => 5,
+        ])->assertOk();
+        $this->postJson($url, ['primary_veterinarian_id' => 1, 'weight_kg' => '18.4', 'finish_case' => false])->assertOk();
+        $this->assertDatabaseHas('clinic_records', [
+            'clinic_appointment_id' => 1, 'primary_veterinarian_id' => 1, 'chief_complaint' => 'Observe patient',
+            'vet_notes' => 'Existing notes', 'treatment_given' => 'Existing care', 'follow_up_notes' => 'Review later',
+            'follow_up_date' => now()->addWeek()->startOfDay()->toDateTimeString(),
+        ]);
+        $this->assertDatabaseHas('clinic_vitals', [
+            'clinic_appointment_id' => 1, 'weight_kg' => 18.4, 'temperature_c' => 38.4,
+            'heart_rate_bpm' => 80, 'respiratory_rate_bpm' => 20, 'body_condition_score' => 5,
+        ]);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'in_consultation']);
+        $this->postJson($url, ['vet_notes' => null, 'temperature_c' => null])->assertOk();
+        $this->assertDatabaseHas('clinic_records', ['clinic_appointment_id' => 1, 'vet_notes' => null]);
+        $this->assertDatabaseHas('clinic_vitals', ['clinic_appointment_id' => 1, 'weight_kg' => 18.4, 'temperature_c' => null]);
+    }
+
     public function test_receptionist_creates_a_checked_in_case_without_starting_the_assessment(): void
     {
         $this->authenticateAs('staff', subrole: 'clinic_receptionist');

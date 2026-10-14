@@ -576,7 +576,7 @@ class AdminClinicController extends Controller
             $record = ClinicRecord::updateOrCreate(
                 ['clinic_appointment_id' => $appt->id],
                 [
-                    'chief_complaint' => $data['chief_complaint'] ?? $appt->chief_complaint,
+                    'chief_complaint' => array_key_exists('chief_complaint', $data) ? ($data['chief_complaint'] ?? $appt->chief_complaint) : ($existing?->chief_complaint ?? $appt->chief_complaint),
                     ...$clinical,
                     'primary_veterinarian_id' => $primary?->user_id,
                     'primary_veterinarian_name' => $primary ? $name($primary) : null,
@@ -584,10 +584,10 @@ class AdminClinicController extends Controller
                     'recorded_by_name' => $name($actor),
                     'diagnosis' => $clinical['working_diagnosis'],
                     'findings' => $clinical['physical_exam_findings'],
-                    'treatment_given' => $data['treatment_given'] ?? null,
-                    'follow_up_date' => $data['follow_up_date'] ?? null,
-                    'follow_up_notes' => $data['follow_up_notes'] ?? null,
-                    'vet_notes' => $data['vet_notes'] ?? null,
+                    'treatment_given' => array_key_exists('treatment_given', $data) ? $data['treatment_given'] : $existing?->treatment_given,
+                    'follow_up_date' => array_key_exists('follow_up_date', $data) ? $data['follow_up_date'] : $existing?->follow_up_date,
+                    'follow_up_notes' => array_key_exists('follow_up_notes', $data) ? $data['follow_up_notes'] : $existing?->follow_up_notes,
+                    'vet_notes' => array_key_exists('vet_notes', $data) ? $data['vet_notes'] : $existing?->vet_notes,
                 ]
             );
 
@@ -602,11 +602,11 @@ class AdminClinicController extends Controller
                 ClinicVital::updateOrCreate(
                     ['clinic_appointment_id' => $appt->id],
                     [
-                        'weight_kg' => $data['weight_kg'] ?? null,
-                        'temperature_c' => $data['temperature_c'] ?? null,
-                        'heart_rate_bpm' => $data['heart_rate_bpm'] ?? null,
-                        'respiratory_rate_bpm' => $data['respiratory_rate_bpm'] ?? null,
-                        'body_condition_score' => $data['body_condition_score'] ?? null,
+                        'weight_kg' => array_key_exists('weight_kg', $data) ? $data['weight_kg'] : $appt->vitals?->weight_kg,
+                        'temperature_c' => array_key_exists('temperature_c', $data) ? $data['temperature_c'] : $appt->vitals?->temperature_c,
+                        'heart_rate_bpm' => array_key_exists('heart_rate_bpm', $data) ? $data['heart_rate_bpm'] : $appt->vitals?->heart_rate_bpm,
+                        'respiratory_rate_bpm' => array_key_exists('respiratory_rate_bpm', $data) ? $data['respiratory_rate_bpm'] : $appt->vitals?->respiratory_rate_bpm,
+                        'body_condition_score' => array_key_exists('body_condition_score', $data) ? $data['body_condition_score'] : $appt->vitals?->body_condition_score,
                     ]
                 );
             }

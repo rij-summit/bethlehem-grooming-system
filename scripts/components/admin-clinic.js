@@ -565,6 +565,27 @@ function adminClinicModal() {
       }
     },
 
+    async persistConfinementPrerequisites() {
+      const weight = String(this.form.weight_kg ?? '').trim();
+      const response = await API.clinicSaveRecord(this.apptId, {
+        primary_veterinarian_id: this.form.primary_veterinarian_id || null,
+        additional_veterinarian_ids: this.form.additional_veterinarian_ids,
+        weight_kg: weight || null,
+        finish_case: false,
+      });
+      this.currentAppt = {...this.currentAppt, record: response.record,
+        vitals: {...this.currentAppt.vitals, weight_kg: weight || null}};
+      this.recordedByName = response.record.recorded_by_name;
+    },
+
+    focusAdmissionMedicalField(field) {
+      this.selectSection('medical');
+      this.$nextTick?.(() => {
+        const target = field === 'weight_kg' ? this.$refs.medicalWeight : this.$refs.vetTrigger;
+        target?.focus(); target?.scrollIntoView?.({block: 'nearest'});
+      });
+    },
+
     async saveRecord(finishCase = false) {
       if (!this.canEditClinical || this.saving || this.workspaceSaving || this.attachmentBusy || this.optionsLoading || (finishCase && !this.canFinish)) return;
       this.saving = true;
