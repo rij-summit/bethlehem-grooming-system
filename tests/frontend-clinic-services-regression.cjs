@@ -251,6 +251,22 @@ async function priceValidation() {
   assert.ok(app.calls.slice(before).some(call => call[0] === 'POST'), 'Unused prices and disabled tiers do not block saving');
 }
 
+async function confinementConfiguration() {
+  const app = setup();
+  await app.shell.showSection();
+  const state = app.context.adminClinicServices();
+  state.categories = [{id: 6, name: 'Confinement'}];
+  state.form.category_id = '6'; state.form.charge_behavior = 'base_confinement';
+  state.form.pricing_method = 'fixed'; state.form.billing_unit = 'sample';
+  state.form.tiers.forEach(tier => {tier.enabled = false; tier.price = '100';});
+  state.configureConfinement();
+  assert.equal(state.form.pricing_method, 'tiered'); assert.equal(state.form.billing_unit, 'day');
+  assert.equal(state.form.tier_basis, 'pet_size'); assert.equal(state.payload().tiers.length, 4);
+  assert.equal(state.payload().charge_behavior, 'base_confinement');
+  state.form.category_id = 2; state.configureConfinement();
+  assert.equal('charge_behavior' in state.payload(), false);
+}
+
 async function confirmationDismissal() {
   const stores = {};
   const context = {document: {addEventListener: (_, callback) => callback()}, Alpine: {store: (name, store) => {stores[name] = store;}}};
@@ -267,4 +283,4 @@ async function confirmationDismissal() {
   assert.equal(await answer, true);
 }
 
-(async () => {await navigation(); await workflow(); await priceValidation(); await confirmationDismissal(); formatting(); console.log('Clinic Services navigation, pricing and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});
+(async () => {await navigation(); await workflow(); await priceValidation(); await confirmationDismissal(); await confinementConfiguration(); formatting(); console.log('Clinic Services navigation, pricing and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});

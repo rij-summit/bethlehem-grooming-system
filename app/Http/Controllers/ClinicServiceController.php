@@ -8,6 +8,7 @@ use App\Models\InventoryItem;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -34,6 +35,9 @@ class ClinicServiceController extends Controller
             'page' => 'nullable|integer|min:1',
         ]);
         $query = ClinicService::with('category');
+        if ($request->is('api/admin/clinic-service-options')) {
+            $query->whereDoesntHave('category', fn ($q) => $q->where('name', 'Confinement'));
+        }
         $status = $filters['status'] ?? 'active';
         if ($status !== 'all') $query->where('is_active', $status === 'active');
         if (!empty($filters['q'])) $query->where('name', 'like', '%'.$filters['q'].'%');
@@ -43,32 +47,41 @@ class ClinicServiceController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $data = $this->validated($request);
-        try {
-            $service = ClinicService::create($data);
-        } catch (UniqueConstraintViolationException $error) {
-            $this->duplicateError();
-        }
-        return response()->json(['data' => $service->load('category')], 201);
+        return DB::transaction(function () use ($request) {
+            $data = $this->validated($request);
+            try {
+                $service = ClinicService::create($data);
+            } catch (UniqueConstraintViolationException $error) {
+                $this->duplicateError();
+            }
+            return response()->json(['data' => $service->load('category')], 201);
+        });
     }
 
     public function update(Request $request, ClinicService $clinicService): JsonResponse
     {
-        $data = $this->validated($request, $clinicService);
-        try {
-            $clinicService->update($data);
-        } catch (UniqueConstraintViolationException $error) {
-            $this->duplicateError();
-        }
-        return response()->json(['data' => $clinicService->load('category')]);
+        return DB::transaction(function () use ($request, $clinicService) {
+            $data = $this->validated($request, $clinicService);
+            try {
+                $clinicService->update($data);
+            } catch (UniqueConstraintViolationException $error) {
+                $this->duplicateError();
+            }
+            return response()->json(['data' => $clinicService->load('category')]);
+        });
     }
 
     public function status(Request $request, ClinicService $clinicService): JsonResponse
     {
-        $data = $request->validate(['is_active' => 'required|boolean']);
-        if ($data['is_active']) $this->assertServiceIsNotTreatment($clinicService->name, $clinicService->category_id);
-        $clinicService->update($data);
-        return response()->json(['data' => $clinicService->load('category')]);
+        return DB::transaction(function () use ($request, $clinicService) {
+            $data = $request->validate(['is_active' => 'required|boolean']);
+            if ($data['is_active']) $this->assertServiceIsNotTreatment($clinicService->name, $clinicService->category_id);
+            if ($data['is_active'] && $clinicService->charge_behavior === 'base_confinement') {
+                $this->assertSingleBase($clinicService->category_id, $clinicService->id);
+            }
+            $clinicService->update($data);
+            return response()->json(['data' => $clinicService->load('category')]);
+        });
     }
 
     private function validated(Request $request, ?ClinicService $service = null): array
@@ -76,11 +89,15 @@ class ClinicServiceController extends Controller
         // Normalize the identity before validation and uniqueness checks.
         $normalize = fn ($value) => is_string($value) ? preg_replace('/\s+/u', ' ', trim($value)) : $value;
         $request->merge(['name' => $normalize($request->input('name'))]);
+        $confinement = ClinicServiceCategory::whereKey($request->input('category_id'))->value('name') === 'Confinement';
+        $base = $confinement && $request->input('charge_behavior') === 'base_confinement';
+        if ($base) $request->merge(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'billing_unit' => 'day']);
         $method = $request->input('pricing_method');
         $money = ['required', 'numeric', 'min:0', 'max:'.ClinicService::MAX_PRICE, 'decimal:0,2'];
         $maximumPriceMessage = 'Price must be ₱'.number_format(ClinicService::MAX_PRICE, 2).' or less.';
         $data = $request->validate([
             'name' => 'required|string|max:200', 'category_id' => 'required|integer|exists:clinic_service_categories,id',
+            'charge_behavior' => [Rule::excludeIf(! $confinement), 'required', Rule::in(['base_confinement', 'admission_charge', 'additional_charge'])],
             'pricing_method' => ['required', Rule::in(['fixed', 'range', 'starting_at', 'tiered'])],
             'billing_unit' => ['nullable', Rule::in(['service', 'visit', 'day', 'sample', 'pet'])],
             'is_active' => 'sometimes|boolean', 'notes' => 'nullable|string|max:5000',
@@ -88,7 +105,7 @@ class ClinicServiceController extends Controller
             'min_price' => [Rule::excludeIf($method !== 'range'), ...$money],
             'max_price' => [Rule::excludeIf($method !== 'range'), ...$money, 'gte:min_price'],
             'tier_basis' => [Rule::excludeIf($method !== 'tiered'), 'required', Rule::in(['pet_size'])],
-            'tiers' => [Rule::excludeIf($method !== 'tiered'), 'required', 'array', 'min:1', 'max:4'],
+            'tiers' => [Rule::excludeIf($method !== 'tiered'), 'required', 'array', 'min:'.($base ? 4 : 1), 'max:4'],
             'tiers.*' => 'array:size,price',
             'tiers.*.size' => ['required', 'distinct', Rule::in(['small', 'medium', 'large', 'extra_large'])],
             'tiers.*.price' => $money,
@@ -98,7 +115,14 @@ class ClinicServiceController extends Controller
             'max_price.max' => $maximumPriceMessage,
             'tiers.*.price.max' => $maximumPriceMessage,
         ]);
-        $data += ['price' => null, 'min_price' => null, 'max_price' => null, 'tier_basis' => null, 'tiers' => null];
+        $data += ['price' => null, 'min_price' => null, 'max_price' => null, 'tier_basis' => null, 'tiers' => null, 'charge_behavior' => null];
+        if ($confinement && $data['charge_behavior'] === 'additional_charge'
+            && ! in_array($data['billing_unit'] ?? null, [null, 'service', 'day'], true)) {
+            throw ValidationException::withMessages(['billing_unit' => 'Use None, Per service or Per day for additional confinement charges.']);
+        }
+        if ($base && ($data['is_active'] ?? $service?->is_active ?? true)) {
+            $this->assertSingleBase((int) $data['category_id'], $service?->id);
+        }
         if ($data['is_active'] ?? $service?->is_active ?? true) {
             $this->assertServiceIsNotTreatment($data['name'], (int) $data['category_id']);
         }
@@ -112,6 +136,15 @@ class ClinicServiceController extends Controller
     private function duplicateError(): never
     {
         throw ValidationException::withMessages(['name' => 'A service with this name and category already exists. Edit the existing service instead.']);
+    }
+
+    private function assertSingleBase(int $categoryId, ?int $except = null): void
+    {
+        ClinicServiceCategory::whereKey($categoryId)->lockForUpdate()->firstOrFail();
+        if (ClinicService::where('category_id', $categoryId)->where('is_active', true)
+            ->where('charge_behavior', 'base_confinement')->when($except, fn ($q) => $q->whereKeyNot($except))->exists()) {
+            throw ValidationException::withMessages(['charge_behavior' => 'There is already an active Base Confinement service. Edit or deactivate it first.']);
+        }
     }
 
     private function assertServiceIsNotTreatment(string $name, int $categoryId): void

@@ -37,7 +37,7 @@ function clinicCaseWorkspace() {
     methodLabel(method) { return ({fixed: 'Fixed', range: 'Range', starting_at: 'Starting At', tiered: 'Tiered'})[method] || method; },
     serviceInfo(entry) { return entry.service_snapshot || entry.clinic_service || {}; },
     serviceNotes(entry) { return entry.notes?.trim() ? entry.notes : '-'; },
-    canRemoveService(entry) { return this.canMutateServices && entry.status === 'performed' && !entry.confinement_exists; },
+    canRemoveService(entry) { return this.canMutateServices && entry.status === 'performed' && !entry.confinement_exists && !entry.confinement_charge_exists; },
     cataloguePrice(service) {
       if (service.pricing_method === 'range') return `${this.money(service.min_price)} – ${this.money(service.max_price)}`;
       if (service.pricing_method === 'starting_at') return `Starting at ${this.money(service.price)}`;

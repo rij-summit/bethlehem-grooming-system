@@ -41,7 +41,8 @@ class ClinicCaseServiceRecorder
                 throw ValidationException::withMessages(['status' => 'This service can no longer be finalized.']);
             }
             if ($entry && ! $finalizingConfinement && \Illuminate\Support\Facades\Schema::hasTable('clinic_confinements')
-                && $entry->confinement()->exists()) {
+                && ($entry->confinement()->exists()
+                    || (\Illuminate\Support\Facades\Schema::hasTable('clinic_confinement_charges') && $entry->confinementCharge()->exists()))) {
                 throw ValidationException::withMessages(['status' => 'Finalize the base confinement service through Discharge & Send to Billing.']);
             }
             if ($appointment->paid || $appointment->archived_at || ! $appointment->clinicalContentEditableFor($actor)) {
@@ -49,7 +50,10 @@ class ClinicCaseServiceRecorder
             }
             $service = ClinicService::with('category')->whereKey($entry?->clinic_service_id ?? $data['clinic_service_id'])
                 ->lockForUpdate()->firstOrFail();
-            if (! $service->is_active) {
+            if (! $finalizingConfinement && $service->category?->name === ClinicConfinementService::CATEGORY) {
+                throw ValidationException::withMessages(['clinic_service_id' => 'Add confinement charges through the Confinement tab.']);
+            }
+            if (! $service->is_active && ! ($finalizingConfinement && $entry)) {
                 throw ValidationException::withMessages(['clinic_service_id' => 'Choose an active Clinic service.']);
             }
             if (! $entry) {
@@ -92,7 +96,8 @@ class ClinicCaseServiceRecorder
             if ($appointment->paid || $appointment->archived_at || ! $appointment->clinicalContentEditableFor($actor)) {
                 throw ValidationException::withMessages(['services' => 'Services cannot be removed at this case stage.']);
             }
-            if (\Illuminate\Support\Facades\Schema::hasTable('clinic_confinements') && $entry->confinement()->exists()) {
+            if (\Illuminate\Support\Facades\Schema::hasTable('clinic_confinements') && ($entry->confinement()->exists()
+                || (\Illuminate\Support\Facades\Schema::hasTable('clinic_confinement_charges') && $entry->confinementCharge()->exists()))) {
                 throw ValidationException::withMessages(['services' => 'Confinement services cannot be removed here.']);
             }
             if ($entry->status !== 'performed') {

@@ -26,6 +26,7 @@ class ClinicServiceCatalogTest extends TestCase
         });
         (require base_path('database/migrations/2026_10_13_000001_create_clinic_services_table.php'))->up();
         (require database_path('migrations/2026_10_14_000001_remove_clinic_service_type.php'))->up();
+        Schema::table('clinic_services', fn (Blueprint $table) => $table->string('charge_behavior', 30)->nullable());
         $this->signIn('admin');
     }
 
@@ -185,6 +186,22 @@ class ClinicServiceCatalogTest extends TestCase
         $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertOk();
         $this->assertDatabaseHas('clinic_charges', ['clinic_service_id' => $id, 'description' => 'CBC · In House', 'unit_price' => 990]);
         $this->assertNotNull(ClinicService::find($id));
+    }
+
+    public function test_confinement_behavior_configures_base_and_enforces_complete_unique_active_base(): void
+    {
+        $category = ClinicServiceCategory::where('name', 'Confinement')->value('id');
+        $base = $this->payload(['name' => 'Sample stay', 'category_id' => $category, 'charge_behavior' => 'base_confinement',
+            'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 100], ['small', 'medium', 'large', 'extra_large'])]);
+        $id = $this->postJson('/api/admin/clinic-services', $base)->assertCreated()->assertJsonPath('data.pricing_method', 'tiered')
+            ->assertJsonPath('data.billing_unit', 'day')->assertJsonPath('data.tier_basis', 'pet_size')->json('data.id');
+        $this->postJson('/api/admin/clinic-services', [...$base, 'name' => 'Second base'])->assertUnprocessable()->assertJsonValidationErrors('charge_behavior');
+        $this->putJson('/api/admin/clinic-services/'.$id, [...$base, 'tiers' => [['size' => 'medium', 'price' => 100]]])->assertUnprocessable();
+        $second = $this->postJson('/api/admin/clinic-services', [...$base, 'name' => 'Inactive base', 'is_active' => false])->assertCreated()->json('data.id');
+        $this->patchJson('/api/admin/clinic-services/'.$second.'/status', ['is_active' => true])->assertUnprocessable();
+        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Extra', 'category_id' => $category]))->assertUnprocessable();
+        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Extra', 'category_id' => $category,
+            'charge_behavior' => 'additional_charge', 'billing_unit' => 'day']))->assertCreated();
     }
 
     public function test_staff_and_customers_cannot_read_or_mutate_catalog(): void

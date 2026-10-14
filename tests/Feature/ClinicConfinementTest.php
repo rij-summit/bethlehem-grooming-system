@@ -55,7 +55,8 @@ class ClinicConfinementTest extends TestCase
         });
         Schema::create('clinic_attachments', function (Blueprint $table) { $table->id(); $table->unsignedBigInteger('clinic_record_id'); });
         foreach (['2026_10_10_000001_create_clinic_charges_table.php', '2026_10_13_000001_create_clinic_services_table.php',
-            '2026_10_13_000002_create_clinic_case_services_table.php', '2026_10_13_000004_create_clinic_confinements.php'] as $migration) {
+            '2026_10_13_000002_create_clinic_case_services_table.php', '2026_10_13_000004_create_clinic_confinements.php',
+            '2026_10_14_000001_remove_clinic_service_type.php', '2026_10_14_000002_configure_confinement_charges.php'] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
         $this->signIn();
@@ -84,14 +85,17 @@ class ClinicConfinementTest extends TestCase
     private function service(array $changes = []): ClinicService
     {
         return ClinicService::create(array_replace(['name' => 'Confinement',
-            'category_id' => ClinicServiceCategory::where('name', 'Boarding & Lodging')->value('id'),
-            'identity_key' => hash('sha256', Str::uuid()), 'pricing_method' => 'fixed', 'billing_unit' => 'day',
-            'price' => 500, 'is_active' => true], $changes));
+            'category_id' => ClinicServiceCategory::where('name', 'Confinement')->value('id'),
+            'identity_key' => hash('sha256', Str::uuid()), 'pricing_method' => 'tiered', 'billing_unit' => 'day',
+            'charge_behavior' => 'base_confinement', 'tier_basis' => 'pet_size',
+            'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 500], ['small', 'medium', 'large', 'extra_large']),
+            'price' => null, 'is_active' => true], $changes));
     }
 
     private function admit(?ClinicService $service = null): array
     {
-        $payload = ['clinic_service_id' => ($service ?? $this->service())->id, 'request_key' => (string) Str::uuid(), 'reason' => 'Observation'];
+        $service ??= $this->service();
+        $payload = ['request_key' => (string) Str::uuid(), 'reason' => 'Observation'];
         $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertCreated();
         return $payload;
     }
@@ -111,7 +115,7 @@ class ClinicConfinementTest extends TestCase
     public function test_admission_requires_ongoing_case_primary_veterinarian_and_appropriate_catalogue_configuration(): void
     {
         $service = $this->service();
-        $payload = ['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid(), 'reason' => 'Observation'];
+        $payload = ['request_key' => (string) Str::uuid(), 'reason' => 'Observation'];
         foreach (['checked_in', 'for_payment', 'completed'] as $status) {
             ClinicAppointment::find(1)->update(['status' => $status]);
             $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertUnprocessable();
@@ -128,7 +132,7 @@ class ClinicConfinementTest extends TestCase
         foreach ([['billing_unit' => 'sample'], ['billing_unit' => 'day', 'is_active' => false],
             ['is_active' => true, 'category_id' => ClinicServiceCategory::where('name', 'Laboratory')->value('id')]] as $change) {
             $service->update($change);
-            $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertUnprocessable()->assertJsonValidationErrors('clinic_service_id');
+            $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertUnprocessable()->assertJsonValidationErrors('confinement');
         }
         $this->assertDatabaseCount('clinic_confinements', 0); $this->assertDatabaseCount('clinic_case_services', 0);
     }
@@ -196,14 +200,11 @@ class ClinicConfinementTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/confinement/observations', ['request_key' => (string) Str::uuid(), 'notes' => 'Late'])->assertUnprocessable();
     }
 
-    public function test_exact_elapsed_duration_rules_and_one_time_units(): void
+    public function test_exact_elapsed_duration_rules(): void
     {
         $rule = app(\App\Services\ConfinementBillingDuration::class); $start = now();
-        foreach ([6 * 3600 => 1, 86400 => 1, 86460 => 2, 172800 => 2] as $seconds => $days)
+        foreach ([0 => 1, 6 * 3600 => 1, 86400 => 1, 86460 => 2, 172800 => 2] as $seconds => $days)
             $this->assertSame($days, $rule->billableDays($start, $start->copy()->addSeconds($seconds)));
-        $this->admit($this->service(['billing_unit' => 'visit'])); Carbon::setTestNow(now()->addDays(3));
-        $this->getJson('/api/admin/clinic-cases/1/confinement/discharge-preview')->assertOk()->assertJsonPath('quantity', 1);
-        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk()->assertJsonPath('data.case_service.quantity', '1.00');
     }
 
     public function test_day_quantity_is_derived_by_server_and_cannot_be_supplied_by_client(): void
@@ -214,36 +215,87 @@ class ClinicConfinementTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk()->assertJsonPath('data.case_service.charge.amount', '1000.00');
     }
 
-    public function test_variable_discharge_prices_follow_existing_range_and_starting_at_rules(): void
+    public function test_automatic_base_selection_weight_resolution_and_historical_prices(): void
     {
-        $service = $this->service(['pricing_method' => 'range', 'price' => null, 'min_price' => 800, 'max_price' => 1500]);
-        $this->admit($service);
-        foreach ([null, 799.99, 1500.01, '1000.001'] as $price)
-            $this->postJson('/api/admin/clinic-cases/1/confinement/discharge', ['applied_price' => $price])->assertUnprocessable();
-        $this->assertNull(ClinicConfinement::first()->discharged_at); $this->assertDatabaseCount('clinic_charges', 0);
-        $service->update(['pricing_method' => 'starting_at', 'price' => 1000]);
-        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge', ['applied_price' => 999.99])->assertUnprocessable();
-        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge', ['applied_price' => 1800])->assertOk()->assertJsonPath('data.case_service.applied_price', '1800.00');
-    }
-
-    public function test_tiered_discharge_uses_saved_case_weight_and_preserves_historical_snapshot_after_payment(): void
-    {
-        $service = $this->service(['pricing_method' => 'tiered', 'price' => null, 'tier_basis' => 'pet_size', 'tiers' => [['size' => 'medium', 'price' => 600]]]);
-        $payload = $this->admit($service);
+        $service = $this->service();
+        $this->getJson('/api/admin/clinic-cases/1/confinement/admission-preview')->assertOk()
+            ->assertJsonPath('data.id', $service->id)->assertJsonPath('pricing.pet_size', 'medium');
         DB::table('clinic_vitals')->update(['weight_kg' => null]);
-        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertUnprocessable();
+        $payload = ['request_key' => (string) Str::uuid(), 'reason' => 'Sample'];
+        $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertUnprocessable();
         DB::table('clinic_vitals')->update(['weight_kg' => 18.4]);
-        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge', ['applied_price' => 1])->assertOk()
-            ->assertJsonPath('data.case_service.applied_price', '600.00')->assertJsonPath('data.case_service.service_snapshot.pet_size', 'medium');
-        $this->signIn('clinic_receptionist');
-        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 600, 'payment_method' => 'cash'])->assertOk();
+        $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertCreated();
+        $service->update(['tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 650], ['small', 'medium', 'large', 'extra_large']), 'is_active' => false]);
+        $this->service(['name' => 'Replacement base']);
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk()
+            ->assertJsonPath('data.case_service.clinic_service_id', $service->id)
+            ->assertJsonPath('data.case_service.applied_price', '650.00')->assertJsonPath('data.case_service.service_snapshot.pet_size', 'medium');
         $snapshot = ClinicCaseService::first()->service_snapshot;
-        $service->update(['pricing_method' => 'fixed', 'price' => 900, 'is_active' => false]); DB::table('clinic_vitals')->update(['weight_kg' => 4]);
-        $this->signIn('admin');
+        $service->update(['pricing_method' => 'fixed', 'price' => 900, 'name' => 'Renamed']);
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
         $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertOk();
         $this->assertSame($snapshot, ClinicCaseService::first()->service_snapshot);
-        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 600]);
+        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 650]);
+    }
+
+    public function test_missing_duplicate_and_invalid_base_configuration_blocks_admission(): void
+    {
+        $url = '/api/admin/clinic-cases/1/confinement';
+        $payload = ['request_key' => (string) Str::uuid(), 'reason' => 'Sample'];
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $base = $this->service(); $other = $this->service(['name' => 'Another base']);
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $other->update(['is_active' => false]); $base->update(['tiers' => [['size' => 'medium', 'price' => 500]]]);
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('clinic_confinements', 0);
+    }
+
+    public function test_admission_extras_and_retry_protection_preserve_other_case_charges(): void
+    {
+        $this->service(['name' => 'Automatic A', 'charge_behavior' => 'admission_charge', 'pricing_method' => 'fixed', 'price' => 450, 'billing_unit' => null]);
+        $this->service(['name' => 'Automatic B', 'charge_behavior' => 'admission_charge', 'pricing_method' => 'fixed', 'price' => 200]);
+        $one = $this->service(['name' => 'Optional', 'charge_behavior' => 'additional_charge', 'pricing_method' => 'fixed', 'price' => 350, 'billing_unit' => null]);
+        $daily = $this->service(['name' => 'Daily', 'charge_behavior' => 'additional_charge', 'pricing_method' => 'fixed', 'price' => 800]);
+        $payload = $this->admit();
+        $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertOk();
+        $this->assertDatabaseCount('clinic_charges', 2);
+        $url = '/api/admin/clinic-cases/1/confinement/charges';
+        $add = ['clinic_service_id' => $one->id, 'request_key' => (string) Str::uuid()];
+        $id = $this->postJson($url, $add)->assertCreated()->json('data.id');
+        $this->postJson($url, $add)->assertOk();
+        $this->deleteJson($url.'/'.$id)->assertOk(); $this->deleteJson($url.'/'.$id)->assertOk();
+        $this->postJson($url, $add)->assertOk(); // Removed requests remain tombstoned.
+        $this->assertDatabaseCount('clinic_charges', 2);
+        $add = ['clinic_service_id' => $daily->id, 'request_key' => (string) Str::uuid()];
+        $id = $this->postJson($url, $add)->assertCreated()->json('data.id');
+        $this->postJson($url, $add)->assertOk();
+        $this->postJson($url, [...$add, 'request_key' => (string) Str::uuid()])->assertUnprocessable();
+        $this->postJson($url, [...$add, 'quantity' => 3])->assertUnprocessable();
+        Carbon::setTestNow(now()->addDay()->addMinute());
+        $this->postJson($url.'/'.$id.'/stop')->assertOk()->assertJsonPath('data.case_service.quantity', '2.00');
+        $this->postJson($url.'/'.$id.'/stop')->assertOk();
+        $daily->update(['price' => 900]);
+        $this->postJson($url, ['clinic_service_id' => $daily->id, 'request_key' => (string) Str::uuid()])->assertCreated();
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
+        $this->assertDatabaseCount('clinic_charges', 5);
+        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 800, 'quantity' => 2, 'amount' => 1600]);
+        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 900, 'quantity' => 1, 'amount' => 900]);
+        $this->assertSame(0, \App\Models\ClinicConfinementCharge::whereNotNull('started_at')->whereNull('stopped_at')->whereNull('removed_at')->count());
+        $this->assertDatabaseHas('clinic_appointments', ['total_amount' => 4150, 'status' => 'for_payment']);
+    }
+
+    public function test_variable_extras_require_final_price_only_when_finalized(): void
+    {
+        $service = $this->service(['charge_behavior' => 'additional_charge', 'pricing_method' => 'range', 'min_price' => 500, 'max_price' => 1000]);
+        $this->admit();
+        $url = '/api/admin/clinic-cases/1/confinement/charges';
+        $id = $this->postJson($url, ['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid()])->assertCreated()->json('data.id');
+        $this->postJson($url.'/'.$id.'/stop')->assertUnprocessable();
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertUnprocessable();
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge', ['charge_prices' => [$id => 750]])->assertOk();
+        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 750]);
     }
 
     public function test_failed_discharge_rolls_back_episode_service_charge_and_total(): void
@@ -277,11 +329,11 @@ class ClinicConfinementTest extends TestCase
 
     public function test_catalogue_options_filter_category_active_state_and_supported_units_without_name_matching(): void
     {
-        $eligible = $this->service(['name' => 'Renamed hospital stay']);
-        $this->service(['is_active' => false]); $this->service(['billing_unit' => 'sample']);
+        $eligible = $this->service(['name' => 'Renamed hospital stay', 'charge_behavior' => 'additional_charge']);
+        $this->service(['is_active' => false]); $this->service(['charge_behavior' => 'additional_charge', 'billing_unit' => 'sample']);
         $this->service(['category_id' => ClinicServiceCategory::where('name', 'Laboratory')->value('id')]);
         $this->getJson('/api/admin/clinic-confinement-service-options')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $eligible->id);
-        $this->signIn('admin'); $this->admit($eligible);
+        $this->signIn('admin'); $this->admit();
         $this->postJson('/api/admin/clinic-cases/1/confinement/observations', ['request_key' => (string) Str::uuid(), 'notes' => 'Admin monitoring'])->assertCreated();
         $this->postJson('/api/admin/clinic-appointments/1/cancel')->assertUnprocessable()->assertJsonValidationErrors('status');
     }

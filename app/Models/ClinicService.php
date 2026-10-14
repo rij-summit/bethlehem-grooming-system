@@ -11,7 +11,7 @@ class ClinicService extends Model
 
     protected $fillable = [
         'name', 'category_id', 'identity_key', 'pricing_method', 'billing_unit',
-        'price', 'min_price', 'max_price', 'tier_basis', 'tiers', 'is_active', 'notes',
+        'price', 'min_price', 'max_price', 'tier_basis', 'tiers', 'is_active', 'notes', 'charge_behavior',
     ];
 
     protected $casts = [

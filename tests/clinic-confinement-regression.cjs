@@ -13,6 +13,12 @@ const sandbox = {console, crypto: webcrypto, Date, setTimeout, clearTimeout, doc
   CustomEvent: class {constructor(type, options) {this.type = type; this.detail = options?.detail;}},
   window: {dispatchEvent: e => events.push(e)},
   API: {
+    adminRequest: async (method, url, payload) => {
+      if (method === 'GET') return {data: service, pricing: pricing()};
+      requests.push({kind: 'extra', method, url, payload: {...payload}});
+      if (timeout) throw Error('timeout');
+      return {data: {}};
+    },
     getClinicConfinement: async () => ({data: episode}),
     clinicConfinementOptions: async () => ({data: [service], total: 1, current_page: 1, last_page: 1}),
     clinicCaseServicePricing: async () => ({data: service, pricing: pricing()}),
@@ -39,7 +45,7 @@ function component(permission = true, id = 1) {
 }
 (async () => {
   const state = component();
-  await state.openAdmission(); assert.equal(state.admissionForm.clinic_service_id, 10, 'Only eligible service is auto-selected');
+  await state.openAdmission(); assert.equal(state.selectedService.id, 10, 'Base is resolved by server'); assert.equal('clinic_service_id' in state.admissionForm, false);
   state.admissionForm.reason = 'Observe'; timeout = true;
   await state.submitAdmission(); const original = JSON.stringify(requests.at(-1).payload);
   assert.ok(state.admissionPending); assert.equal(state.busy, false);
@@ -53,6 +59,20 @@ function component(permission = true, id = 1) {
   const monitoring = JSON.stringify(requests.at(-1).payload); timeout = false; await reload.submitMonitoring();
   assert.equal(JSON.stringify(requests.at(-1).payload), monitoring); assert.equal(reload.monitoringOpen, false);
   assert.equal('recorded_at' in requests.at(-1).payload, false, 'Monitoring time is server-owned');
+
+  await reload.openExtra(); reload.extraForm.clinic_service_id = 10; await reload.previewExtra();
+  timeout = true; await reload.submitExtra();
+  const extraPayload = JSON.stringify(requests.at(-1).payload);
+  assert.ok(reload.extraPending); assert.equal('quantity' in requests.at(-1).payload, false);
+  assert.equal('applied_price' in requests.at(-1).payload, false, 'Daily start has no final-price input');
+  timeout = false; await reload.submitExtra(); assert.equal(JSON.stringify(requests.at(-1).payload), extraPayload);
+  assert.equal(reload.extraPending, null);
+  const running = {id: 11, started_at: '2026-10-13T10:00:00Z', case_service: {clinic_service: service}, pricing: pricing()};
+  await reload.openExtra(running);
+  assert.match(requests.at(-1).url, /charges\/11\/stop$/);
+  assert.equal('stopped_at' in requests.at(-1).payload, false, 'Stop time is server-owned');
+  assert.equal(reload.extraForm, null, 'Fixed daily charges stop without an extra confirmation form');
+  assert.equal(reload.billableDays('2026-10-13T00:00:00Z', '2026-10-14T00:01:00Z'), 2);
 
   await reload.openDischarge(); assert.equal(reload.dischargePreview.quantity, 2);
   reload.dischargeForm.applied_price = '1'; timeout = true; await reload.submitDischarge();

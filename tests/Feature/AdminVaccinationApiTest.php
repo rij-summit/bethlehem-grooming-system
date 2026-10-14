@@ -116,6 +116,7 @@ class AdminVaccinationApiTest extends TestCase
     protected function tearDown(): void
     {
         if (Schema::hasTable('clinic_confinements')) {
+            if (Schema::hasTable('clinic_confinement_charges')) (require database_path('migrations/2026_10_14_000002_configure_confinement_charges.php'))->down();
             (require database_path('migrations/2026_10_13_000004_create_clinic_confinements.php'))->down();
             (require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php'))->down();
             (require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php'))->down();
@@ -1403,12 +1404,13 @@ class AdminVaccinationApiTest extends TestCase
     public function test_mixed_confinement_care_reuses_treatment_stock_services_and_billing_on_the_same_case(): void
     {
         $this->medicineStock(); $this->insertRabiesStock(302);
+        DB::table('clinic_vitals')->insert(['clinic_appointment_id' => 201, 'weight_kg' => 4.5, 'temperature_c' => 38.5, 'heart_rate_bpm' => 90, 'respiratory_rate_bpm' => 20]);
         DB::table('clinic_records')->insert(['clinic_appointment_id' => 201, 'primary_veterinarian_id' => 2]);
         foreach (['2026_10_13_000001_create_clinic_services_table.php', '2026_10_13_000002_create_clinic_case_services_table.php',
-            '2026_10_13_000004_create_clinic_confinements.php'] as $migration) (require database_path('migrations/'.$migration))->up();
-        $service = \App\Models\ClinicService::create(['name' => 'Inpatient care', 'category_id' => DB::table('clinic_service_categories')->where('name', 'Boarding & Lodging')->value('id'),
-            'identity_key' => hash('sha256', 'inpatient'), 'pricing_method' => 'fixed', 'price' => 500, 'billing_unit' => 'day', 'is_active' => true]);
-        $this->postJson('/api/admin/clinic-cases/201/confinement', ['clinic_service_id' => $service->id, 'reason' => 'Observe', 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+            '2026_10_13_000004_create_clinic_confinements.php', '2026_10_14_000001_remove_clinic_service_type.php', '2026_10_14_000002_configure_confinement_charges.php'] as $migration) (require database_path('migrations/'.$migration))->up();
+        $service = \App\Models\ClinicService::create(['name' => 'Inpatient care', 'category_id' => DB::table('clinic_service_categories')->where('name', 'Confinement')->value('id'),
+            'identity_key' => hash('sha256', 'inpatient'), 'pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'charge_behavior' => 'base_confinement', 'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 500], ['small', 'medium', 'large', 'extra_large']), 'billing_unit' => 'day', 'is_active' => true]);
+        $this->postJson('/api/admin/clinic-cases/201/confinement', ['reason' => 'Observe', 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
         $id = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertCreated()->json('vaccination.id');
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish", ['finish_case' => true])->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertDatabaseCount('clinic_charges', 0); $this->assertStockOnHand(301, '2');
@@ -1416,7 +1418,8 @@ class AdminVaccinationApiTest extends TestCase
         $vaccineId = $this->insertFinalizableDraft(302, 201);
         $this->postJson("/api/admin/pets/101/vaccinations/{$vaccineId}/publish")->assertOk();
         $this->postJson('/api/admin/clinic-cases/201/confinement/observations', ['request_key' => (string) \Illuminate\Support\Str::uuid(), 'notes' => 'Stable'])->assertCreated();
-        $this->postJson('/api/admin/clinic-cases/201/services', ['clinic_service_id' => $service->id, 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+        $ordinary = \App\Models\ClinicService::create(['name' => 'Sample procedure', 'category_id' => 5, 'identity_key' => hash('sha256', 'sample-procedure'), 'pricing_method' => 'fixed', 'price' => 500, 'is_active' => true]);
+        $this->postJson('/api/admin/clinic-cases/201/services', ['clinic_service_id' => $ordinary->id, 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'in_consultation', 'total_amount' => 1000]);
         Carbon::setTestNow(now()->addDay()->addMinute());
         $this->postJson('/api/admin/clinic-cases/201/confinement/discharge')->assertOk()->assertJsonPath('data.case_service.quantity', '2.00');

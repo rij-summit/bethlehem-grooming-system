@@ -24,6 +24,7 @@ class ClinicCaseServiceController extends Controller
         $appointment = ClinicAppointment::findOrFail($id);
         $services = $appointment->caseServices()->where('status', 'performed')->with(['clinicService', 'charge']);
         if (Schema::hasTable('clinic_confinements')) $services->withExists('confinement');
+        if (Schema::hasTable('clinic_confinement_charges')) $services->withExists('confinementCharge');
         return response()->json($services->orderBy('id')->paginate(20));
     }
 

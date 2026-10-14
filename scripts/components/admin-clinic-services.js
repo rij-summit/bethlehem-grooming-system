@@ -12,7 +12,7 @@ function clinicServicePriceError(value) {
 
 function emptyClinicService() {
   return {
-    name: '', category_id: '', pricing_method: 'fixed', billing_unit: '',
+    name: '', category_id: '', charge_behavior: '', pricing_method: 'fixed', billing_unit: '',
     notes: '', price: '', min_price: '', max_price: '', tier_basis: 'pet_size',
     tiers: ['small', 'medium', 'large', 'extra_large'].map(size => ({size, enabled: true, price: ''})),
   };
@@ -53,6 +53,17 @@ function adminClinicServices() {
     },
     pricing: clinicServicePricing,
     tierLabel(size) { return ({small: 'Small', medium: 'Medium', large: 'Large', extra_large: 'Extra Large'})[size]; },
+    behaviorLabel(value) { return ({base_confinement: 'Base Confinement', admission_charge: 'Admission Charge', additional_charge: 'Additional Charge'})[value] || 'Not configured'; },
+    get isConfinementService() { return this.categories.some(c => String(c.id) === String(this.form.category_id) && c.name === 'Confinement'); },
+    get isBaseConfinement() { return this.isConfinementService && this.form.charge_behavior === 'base_confinement'; },
+    configureConfinement() {
+      if (!this.isConfinementService) this.form.charge_behavior = '';
+      if (this.isBaseConfinement) {
+        Object.assign(this.form, {pricing_method: 'tiered', tier_basis: 'pet_size', billing_unit: 'day'});
+        this.form.tiers.forEach(tier => { tier.enabled = true; });
+      }
+      this.formError = ''; this.priceErrors = {};
+    },
     get filtersActive() { return !!(this.q.trim() || this.category || this.status !== 'active'); },
     async load(page = 1) {
       clearTimeout(this._searchTimer);
@@ -115,6 +126,7 @@ function adminClinicServices() {
       }
       this.formError = '';
       this.priceErrors = {};
+      this.configureConfinement();
       this.modalOpen = true;
       this.$refs.serviceDialog.showModal();
       this.$nextTick(() => this.$refs.serviceName.focus());
@@ -130,6 +142,7 @@ function adminClinicServices() {
         name: f.name.trim(), category_id: f.category_id,
         pricing_method: f.pricing_method, billing_unit: f.billing_unit || null,
         notes: f.notes || null,
+        ...(this.isConfinementService ? {charge_behavior: f.charge_behavior} : {}),
       };
       if (f.pricing_method === 'range') Object.assign(payload, {min_price: f.min_price, max_price: f.max_price});
       else if (f.pricing_method === 'tiered') Object.assign(payload, {

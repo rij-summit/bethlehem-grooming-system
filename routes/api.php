@@ -187,6 +187,10 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/clinic-confinement-service-options', [ClinicConfinementController::class, 'options'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/confinement', [ClinicConfinementController::class, 'show']);
         Route::post('/admin/clinic-cases/{id}/confinement', [ClinicConfinementController::class, 'admit'])->middleware('clinic:clinical');
+        Route::get('/admin/clinic-cases/{id}/confinement/admission-preview', [ClinicConfinementController::class, 'admissionPreview'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-cases/{id}/confinement/charges', [ClinicConfinementController::class, 'addCharge'])->middleware('clinic:clinical');
+        Route::post('/admin/clinic-cases/{id}/confinement/charges/{chargeId}/stop', [ClinicConfinementController::class, 'stopCharge'])->middleware('clinic:clinical');
+        Route::delete('/admin/clinic-cases/{id}/confinement/charges/{chargeId}', [ClinicConfinementController::class, 'removeCharge'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/confinement/observations', [ClinicConfinementController::class, 'observations']);
         Route::post('/admin/clinic-cases/{id}/confinement/observations', [ClinicConfinementController::class, 'recordObservation'])->middleware('clinic:clinical');
         Route::get('/admin/clinic-cases/{id}/confinement/discharge-preview', [ClinicConfinementController::class, 'preview'])->middleware('clinic:clinical');

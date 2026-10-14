@@ -24,4 +24,9 @@ class ClinicConfinement extends Model
     {
         return $this->hasMany(ClinicConfinementObservation::class);
     }
+
+    public function confinementCharges()
+    {
+        return $this->hasMany(ClinicConfinementCharge::class);
+    }
 }

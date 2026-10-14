@@ -12,7 +12,15 @@ class ClinicConfinementController extends Controller
     public function show(int $id)
     {
         $case = ClinicAppointment::findOrFail($id);
-        return response()->json(['data' => $case->confinement()->with(['caseService.clinicService.category', 'caseService.charge'])->first()]);
+        $episode = $case->confinement()->with(ClinicConfinementService::RELATIONS)->first();
+        $pricing = $episode && ! $episode->discharged_at
+            ? app(\App\Services\ClinicServicePriceResolver::class)->preview($episode->caseService->clinicService, $case) : null;
+        if ($episode) foreach ($episode->confinementCharges as $extra) {
+            if (! $extra->removed_at && $extra->caseService->status === 'ordered') {
+                $extra->setAttribute('pricing', app(\App\Services\ClinicServicePriceResolver::class)->preview($extra->caseService->clinicService, $case));
+            }
+        }
+        return response()->json(['data' => $episode, 'pricing' => $pricing]);
     }
 
     public function options(Request $request)
@@ -20,7 +28,8 @@ class ClinicConfinementController extends Controller
         $data = $request->validate(['q' => 'nullable|string|max:200', 'page' => 'nullable|integer|min:1']);
         return response()->json(ClinicService::with('category')->where('is_active', true)
             ->whereHas('category', fn ($q) => $q->where('name', ClinicConfinementService::CATEGORY))
-            ->where(fn ($q) => $q->whereNull('billing_unit')->orWhereIn('billing_unit', ClinicConfinementService::BILLING_UNITS))
+            ->where('charge_behavior', 'additional_charge')
+            ->where(fn ($q) => $q->whereNull('billing_unit')->orWhereIn('billing_unit', ['service', 'day']))
             ->when(! empty($data['q']), fn ($q) => $q->where('name', 'like', '%'.$data['q'].'%'))
             ->orderBy('name')->orderBy('id')->paginate(10));
     }
@@ -29,6 +38,28 @@ class ClinicConfinementController extends Controller
     {
         $episode = $service->admit($id, $request->all(), $request->user());
         return response()->json(['data' => $episode], $episode->wasRecentlyCreated ? 201 : 200);
+    }
+
+    public function admissionPreview(int $id, ClinicConfinementService $service)
+    {
+        return response()->json($service->admissionPreview(ClinicAppointment::with(['vitals', 'pet'])->findOrFail($id)));
+    }
+
+    public function addCharge(Request $request, int $id, ClinicConfinementService $service)
+    {
+        $extra = $service->addCharge($id, $request->all(), $request->user());
+        return response()->json(['data' => $extra], $extra->wasRecentlyCreated ? 201 : 200);
+    }
+
+    public function stopCharge(Request $request, int $id, int $chargeId, ClinicConfinementService $service)
+    {
+        return response()->json(['data' => $service->stopCharge($id, $chargeId, $request->all(), $request->user())]);
+    }
+
+    public function removeCharge(Request $request, int $id, int $chargeId, ClinicConfinementService $service)
+    {
+        $service->removeCharge($id, $chargeId, $request->user());
+        return response()->json(['message' => 'Additional charge removed.']);
     }
 
     public function observations(int $id)
