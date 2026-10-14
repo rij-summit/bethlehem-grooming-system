@@ -316,6 +316,7 @@ function adminClinicModal() {
       }[name] || "Check this value.";
     },
     showValidationErrors(errors) {
+      this.activeSection = 'medical';
       this.formErrors = errors;
       const missingOnly = Object.values(errors).every(messages => this.isMissingFieldError(messages[0]));
       this.modalError = missingOnly ? "Complete the required fields marked *." : "Check the highlighted fields.";
@@ -431,6 +432,7 @@ function adminClinicModal() {
         }
       }
       this.selectSection(section);
+      if (this.canEditClinical && !this._clinicalOptionsLoaded && !this.optionsLoading) this.loadClinicalOptions();
       this.$nextTick?.(() => {
         this.$el.querySelector('[aria-label="Close patient record"]')?.focus();
         window.lucide?.createIcons();
@@ -446,10 +448,14 @@ function adminClinicModal() {
       }
 
       if (this.activeSection === "vaccinations" && this.currentAppt) {
-        window.dispatchEvent(new CustomEvent("clinic-vaccinations-open", {
-          detail: { appt: this.currentAppt },
-        }));
+        this.syncTreatmentAppointment();
       }
+    },
+
+    syncTreatmentAppointment() {
+      window.dispatchEvent(new CustomEvent('clinic-vaccinations-open', {detail: {
+        appt: {...this.currentAppt, vitals: {...this.currentAppt?.vitals, weight_kg: this.form.weight_kg}},
+      }}));
     },
 
     caseTabKeydown(event) {
@@ -560,33 +566,48 @@ function adminClinicModal() {
     },
 
     async saveRecord(finishCase = false) {
-      if (!this.canEditClinical || this.saving || this.attachmentBusy || this.optionsLoading || (finishCase && !this.canFinish)) return;
-      this.formErrors = {};
-      this.modalError = "";
-      this.weightTools = await loadClinicPetWeightTools();
-      const weightError = this.weightTools.getWeightValueValidationMessage(this.form.weight_kg);
-      if (weightError) {
-        this.showValidationErrors({ weight_kg: [weightError] });
-        return;
-      }
-      if (finishCase) {
-        const errors = {};
-        for (const field of ["primary_veterinarian_id", "weight_kg", "temperature_c", "heart_rate_bpm", "respiratory_rate_bpm"]) {
-          if (String(this.form[field] ?? "").trim() === "") errors[field] = ["Required"];
-        }
-        if (Object.keys(errors).length) {
-          this.showValidationErrors(errors);
+      if (!this.canEditClinical || this.saving || this.workspaceSaving || this.attachmentBusy || this.optionsLoading || (finishCase && !this.canFinish)) return;
+      this.saving = true;
+      try {
+        const preparation = {id: this.apptId, finishCase, promise: null};
+        window.dispatchEvent(new CustomEvent('clinic-treatment-prepare', {detail: preparation}));
+        const treatmentReady = await (preparation.promise || Promise.resolve(true));
+        if (!treatmentReady) {
+          this.activeSection = 'vaccinations';
+          this.syncTreatmentAppointment();
+          window.dispatchEvent(new CustomEvent('clinic-treatment-focus', {detail: {id: this.apptId,
+            message: finishCase ? 'Add or discard the current treatment before sending this case to payment.' : 'Check the current treatment before saving.'}}));
           return;
         }
-      }
-      const followUp = this.form.follow_up_date;
-      if (followUp && (followUp < this.followUpMinDate || followUp > this.followUpMaxDate)) {
-        this.showValidationErrors({ follow_up_date: ["Invalid date"] });
-        return;
-      }
-      this.saving     = true;
-      this.modalError = "";
-      try {
+        this.formErrors = {};
+        this.modalError = "";
+        this.weightTools = await loadClinicPetWeightTools();
+        const weightError = this.weightTools.getWeightValueValidationMessage(this.form.weight_kg);
+        if (weightError) {
+          this.showValidationErrors({ weight_kg: [weightError] });
+          return;
+        }
+        if (finishCase) {
+          const errors = {};
+          for (const field of ["primary_veterinarian_id", "weight_kg", "temperature_c", "heart_rate_bpm", "respiratory_rate_bpm"]) {
+            if (String(this.form[field] ?? "").trim() === "") errors[field] = ["Required"];
+          }
+          if (Object.keys(errors).length) {
+            this.showValidationErrors(errors);
+            return;
+          }
+        }
+        const followUp = this.form.follow_up_date;
+        if (followUp && (followUp < this.followUpMinDate || followUp > this.followUpMaxDate)) {
+          this.showValidationErrors({ follow_up_date: ["Invalid date"] });
+          return;
+        }
+        if (finishCase) {
+          const confirmed = await this.$store.clinicFeedback.confirm({title: 'Send case to payment?',
+            message: 'This will finalize the current visit and move the case to For Payment.',
+            cancelLabel: 'Cancel', confirmLabel: 'Send to Payment'});
+          if (!confirmed) return;
+        }
         const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
         const payload = {
           chief_complaint:      this.form.chief_complaint      || null,
@@ -613,9 +634,16 @@ function adminClinicModal() {
         await API.clinicSaveRecord(this.apptId, payload);
         this.open = false;
         this.returnFocus?.focus();
+        window.dispatchEvent(new CustomEvent('clinic-record-closed'));
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (e) {
-        if (e.errors) this.showValidationErrors(e.errors);
+        if (Object.keys(e.errors || {}).some(key => key.startsWith('treatments.'))) {
+          this.activeSection = 'vaccinations';
+          this.syncTreatmentAppointment();
+          const message = Object.values(e.errors).flat().join(' ');
+          this.modalError = message;
+          window.dispatchEvent(new CustomEvent('clinic-treatment-focus', {detail: {id: this.apptId, message}}));
+        } else if (e.errors) this.showValidationErrors(e.errors);
         else this.modalError = e.message || "Unable to save the record. Try again.";
       } finally {
         this.saving = false;

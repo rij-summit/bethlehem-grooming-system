@@ -249,6 +249,21 @@ class AdminPetProfileTest extends TestCase
             ->assertJsonPath('message', 'Pet not found.');
     }
 
+    public function test_finalized_medical_history_is_available_before_payment_and_excludes_unfinished_visits(): void
+    {
+        $this->insertPet(101, 'Mochi');
+        $this->authenticate(20, 'staff');
+        foreach (['in_consultation', 'for_payment', 'completed'] as $index => $status) {
+            $id = 700 + $index;
+            DB::table('clinic_appointments')->insert(['id' => $id, 'appointment_reference' => 'CL-'.$id,
+                'appointment_date' => '2026-08-02', 'status' => $status, 'pet_id' => 101]);
+            DB::table('clinic_records')->insert(['clinic_appointment_id' => $id, 'diagnosis' => $status]);
+        }
+        $this->getJson('/api/admin/pets/101/profile')->assertOk()->assertJsonCount(2, 'medical_records')
+            ->assertJsonPath('medical_records.0.appointment_id', 702)
+            ->assertJsonPath('medical_records.1.appointment_id', 701);
+    }
+
     public function test_service_and_confinement_history_are_paginated_pet_scoped_saved_snapshots(): void
     {
         $this->insertPet(101, 'Mochi');

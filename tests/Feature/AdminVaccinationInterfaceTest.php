@@ -32,8 +32,8 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('Medical Record', $this->clinicPage);
         $this->assertStringContainsString("selectSection('vaccinations')", $this->clinicPage);
         $this->assertStringContainsString('x-data="adminClinicVaccinations()"', $this->clinicPage);
-        $this->assertStringNotContainsString('Add Treatment', $this->clinicPage);
-        $this->assertStringContainsString('Record Treatment', $this->clinicPage);
+        $this->assertStringContainsString('Add Treatment', $this->clinicPage);
+        $this->assertStringNotContainsString('Record Treatment', $this->clinicPage);
         $this->assertStringContainsString('No treatments recorded for this case.', $this->clinicPage);
         $this->assertStringContainsString('Loading treatments…', $this->clinicPage);
         $this->assertStringContainsString('@click="loadVaccinations()"', $this->clinicPage);
@@ -43,7 +43,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             $this->clinicComponent,
         );
         $this->assertStringContainsString(
-            'detail: { appt: this.currentAppt }',
+            'weight_kg: this.form.weight_kg',
             $this->clinicComponent,
         );
     }
@@ -79,7 +79,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         );
     }
 
-    public function test_component_uses_only_the_central_api_and_refreshes_after_draft_changes(): void
+    public function test_component_uses_only_the_central_api_and_reuses_saved_treatment_responses(): void
     {
         $this->assertStringNotContainsString('fetch(', $this->vaccinationComponent);
         $this->assertStringContainsString(
@@ -87,7 +87,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
-            'API.createAdminPetVaccination(this.pet.id, payload)',
+            'API.createAdminPetVaccination(petId, payload)',
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
@@ -95,7 +95,7 @@ class AdminVaccinationInterfaceTest extends TestCase
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
-            'await this.loadVaccinations();',
+            'this.records.unshift(saved.vaccination);',
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
@@ -104,40 +104,17 @@ class AdminVaccinationInterfaceTest extends TestCase
         );
     }
 
-    public function test_lifecycle_controls_are_state_specific_and_never_hard_delete_records(): void
+    public function test_current_visit_controls_use_edit_remove_and_row_details(): void
     {
-        $this->assertStringContainsString(
-            'x-show="canEditClinical && caseOngoing() && record.state === \'draft\'"',
-            $this->clinicPage,
-        );
-        $this->assertStringContainsString(
-            'x-show="canEditClinical && record.state === \'published\' && (!record.clinic_appointment_id || caseOngoing())"',
-            $this->clinicPage,
-        );
-        $this->assertStringContainsString(
-            'record?.state !== "draft"',
-            $this->vaccinationComponent,
-        );
-        $this->assertStringContainsString(
-            'record?.state !== "published"',
-            $this->vaccinationComponent,
-        );
-        $this->assertStringContainsString(
-            'will be deducted from clinic inventory.',
-            $this->vaccinationComponent,
-        );
-        $this->assertStringContainsString(
-            'The record will be published and can no longer be edited.',
-            $this->vaccinationComponent,
-        );
-        $this->assertStringContainsString(
-            'Voiding preserves this treatment as historical information.',
-            $this->clinicPage,
-        );
-        $this->assertStringNotContainsString(
-            'deleteAdminPetVaccination',
-            $this->apiLayer.$this->vaccinationComponent,
-        );
+        $form = $this->sourceBetween($this->clinicPage, '<!-- Current-case treatment entry -->', '<!-- Vaccination detail dialog -->');
+        $this->assertStringContainsString('<table', $form);
+        $this->assertStringContainsString('@click="openDetails(record)"', $form);
+        $this->assertStringContainsString('@click.stop="openEditForm(record)"', $form);
+        $this->assertStringContainsString('@click.stop="removeTreatment(record)"', $form);
+        $this->assertStringNotContainsString('publishRecord(', $form);
+        $this->assertStringNotContainsString('openVoidDialog(', $form);
+        $this->assertStringNotContainsString('stateBadgeClass(', $form);
+        $this->assertStringContainsString('deleteAdminPetVaccination', $this->apiLayer.$this->vaccinationComponent);
     }
 
     public function test_form_mirrors_validation_and_does_not_send_server_managed_fields(): void
@@ -155,7 +132,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $payloadBuilder = $this->sourceBetween(
             $this->vaccinationComponent,
             'buildPayload() {',
-            'async saveDraft() {',
+            'hasUnfinishedTreatment() {',
         );
 
         foreach ([
@@ -218,7 +195,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $payloadBuilder = $this->sourceBetween(
             $this->vaccinationComponent,
             'buildPayload() {',
-            'async saveDraft() {',
+            'hasUnfinishedTreatment() {',
         );
 
         $this->assertStringNotContainsString('administered_by_', $form.$payloadBuilder);
@@ -245,18 +222,13 @@ class AdminVaccinationInterfaceTest extends TestCase
         }
     }
 
-    public function test_save_and_finish_case_finalizes_through_publish_instead_of_a_separate_case_call(): void
+    public function test_case_level_save_is_the_only_finalization_boundary(): void
     {
-        $finish = $this->sourceBetween(
-            $this->vaccinationComponent,
-            'saveAndFinishCase() {',
-            'confirmDeduction(vaccine, confirmLabel, medicine = false, quantity = this.form.inventory_quantity) {',
-        );
-
-        $this->assertStringContainsString('{ finishCase, consumeInventory: usesInventory }', $finish);
-        $this->assertStringNotContainsString('finishClinicCase', $finish);
-        $this->assertStringContainsString('finishCase ? { finish_case: true } : {}', $this->apiLayer);
+        $this->assertStringContainsString('Send case to payment?', $this->clinicComponent);
+        $this->assertStringContainsString('clinic-treatment-prepare', $this->clinicComponent.$this->vaccinationComponent);
+        $this->assertStringNotContainsString('publishAdminPetVaccination(', $this->vaccinationComponent);
         $this->assertStringNotContainsString('stockOut(', $this->vaccinationComponent);
+        $this->assertStringContainsString('finalizeVisit', file_get_contents(base_path('app/Models/ClinicAppointment.php')));
     }
 
     public function test_existing_medical_and_customer_vaccination_interfaces_remain_separate(): void

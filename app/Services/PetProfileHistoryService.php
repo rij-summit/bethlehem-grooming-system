@@ -70,7 +70,7 @@ class PetProfileHistoryService
                 'chief_complaint',
             ])
             ->where('pet_id', $pet->pet_id)
-            ->where('status', 'completed')
+            ->whereIn('status', ['for_payment', 'completed'])
             ->whereHas('record')
             ->with([
                 'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',

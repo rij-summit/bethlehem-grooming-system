@@ -62,8 +62,8 @@ function permissions(clinical, payment, queue, customers) {
   receptionistVaccines.pet = { id: 1 };
   receptionistVaccines.appointment = { id: 1, status: 'in_consultation' };
   receptionistVaccines.openCreateForm();
-  await receptionistVaccines.saveDraft();
-  await receptionistVaccines.publishRecord({});
+  await receptionistVaccines.saveTreatment();
+  await receptionistVaccines.removeTreatment({});
   assert.equal(receptionistVaccines.formModal.open, false);
   assert.deepEqual(calls, []);
 
@@ -152,7 +152,7 @@ function permissions(clinical, payment, queue, customers) {
   assert.deepEqual(filterOrder, ['active-cases', 'confined', 'for-payment']);
   assert.match(filters, /class="[^"]*lg:ml-auto"[^>]*:class="tab === 'for-payment'/);
   assert.equal(filters.includes('justify-between'), false, 'Small screens use natural spacing and wrapping');
-  assert.equal((page.match(/Save &amp; Send to Payment/g) || []).length, 2);
+  assert.equal((page.match(/Save &amp; Send to Payment/g) || []).length, 1);
   assert.match(page, /x-show="caseItem.status === 'for_payment'"[^>]*x-text="money\(caseItem.total_amount\)"/);
   for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);

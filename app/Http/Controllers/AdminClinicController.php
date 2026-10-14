@@ -547,6 +547,10 @@ class AdminClinicController extends Controller
                 ->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            if (! empty($data['finish_case']) && $appt->status === 'for_payment' && ! $appt->paid && ! $appt->archived_at) {
+                // A lost response must not repeat clinical finalization or overwrite the saved visit.
+                return response()->json(['success' => true, 'record' => $this->formatRecord($appt->record, $appt->id)]);
+            }
             $this->assertClinicalContentEditable($appt);
 
             $existing = $appt->record;

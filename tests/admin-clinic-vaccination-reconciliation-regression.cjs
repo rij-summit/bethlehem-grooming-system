@@ -86,7 +86,7 @@ const draft = {
   for (const field of ["administered_by_user_id", "administered_by_name"]) assert.equal(Object.hasOwn(payload, field), false);
 
   const historical = component();
-  historical.openEditForm({ ...draft, administered_date: "2020-01-01", manufacturer: "Original", batch_number: "OLD", administered_by_user_id: null, administered_by_name: "External vet" });
+  historical.openEditForm({ ...draft, inventory_item_id: null, administered_date: "2020-01-01", manufacturer: "Original", batch_number: "OLD", administered_by_user_id: null, administered_by_name: "External vet" });
   assert.equal(historical.recordKind, "historical");
   historical.form.next_due_date = "2020-02-01";
   historical.form.dose_amount = "";
@@ -111,18 +111,9 @@ const draft = {
   current.loadVaccinations = async () => {};
   current.loadOptions = async () => {};
   sandbox.API.updateAdminPetVaccination = async () => ({ vaccination: { id: draft.id } });
-  await current.saveAndFinishCase();
-  assert.equal(publications.length, 1);
-  assert.equal(publications[0][2].finishCase, true);
-  assert.equal(publications[0][2].consumeInventory, true);
-
-  publications = [];
-  historical.pet = { id: 101 };
-  historical.loadVaccinations = async () => {};
-  historical.loadOptions = async () => {};
-  await historical.publishRecord({ ...draft, inventory_item_id: null, administered_date: "2020-01-01", administered_by_user_id: null, administered_by_name: "External vet", dose_amount: null, dose_unit: null });
-  assert.equal(publications.length, 1);
-  assert.equal(publications[0][2].consumeInventory, false);
+  await current.saveTreatment();
+  assert.equal(publications.length, 0);
+  assert.equal(current.appointment.status, "in_consultation");
 
   const medicine = { item_id: 302, item_name: "Medicine", unit: "bottle", available_quantity: 2, quantity_on_hand: 2, is_active: true, stock_status: "available", next_batch: { batch_number: "MED", expiry_date: "2027-12-01" },
     strength_concentration: "10 mg/mL", pricing_method: "weight_based", weight_pricing_mode: "ranges",
@@ -159,9 +150,9 @@ const draft = {
     if (retries.length === 1) throw new Error("Lost response");
     return { vaccination: { id: 12 } };
   };
-  await treatment.saveDraft();
+  await treatment.saveTreatment();
   assert.equal(treatment.formModal.open, true);
-  await treatment.saveDraft();
+  await treatment.saveTreatment();
   assert.equal(retries[0], retries[1]);
 
   sandbox.API.clinicMedicineOptions = async () => ({ data: [medicine] });
@@ -174,13 +165,6 @@ const draft = {
   assert.equal(treatment.form.request_key, medicinePayload.request_key);
   assert.equal(treatment.validateForm(), true);
   assert.equal(treatment.buildPayload().expected_price, 250);
-
-  // A vaccine confirmation must use vaccine stock policy even if the last form was medicine.
-  let confirmation;
-  treatment.$store.clinicFeedback.confirm = async details => { confirmation = details; return true; };
-  await treatment.confirmDeduction(vaccine, "Publish");
-  assert.match(confirmation.message, /^1 vial of Rabies/);
-  assert.equal(confirmation.message.includes("medicine charge"), false);
 
   treatment.recordKind = "historical";
   treatment.changeSource();
@@ -196,18 +180,18 @@ const draft = {
   treatment.changeTreatmentType("vaccine");
   assert.equal(treatment.selectedMedicine, null);
   assert.equal(treatment.form.inventory_item_id, "");
-  assert.equal(treatment.form.inventory_quantity, "");
+  assert.equal(treatment.form.inventory_quantity, 1);
 
   const page = fs.readFileSync(path.join(root, "pages/admin/clinic.html"), "utf8");
   assert.ok(page.includes("No treatments recorded for this case."));
   assert.ok(!page.includes("Create a draft to begin this patient's"));
-  assert.ok(!page.includes("Add Treatment"));
-  assert.ok(page.includes("Record Treatment"));
+  assert.ok(page.includes("Add Treatment"));
+  assert.ok(!page.includes("Record Treatment"));
   assert.ok(page.includes("Current Visit Treatments"));
   assert.ok(page.includes(':aria-pressed="treatmentType'));
 
   const css = fs.readFileSync(path.join(root, "css/output.css"), "utf8");
-  for (const layer of [200, 210, 230, 240, 250, 270]) {
+  for (const layer of [200, 210, 230, 250, 270]) {
     const selector = `.z-\\[${layer}\\] {`;
     const offset = css.indexOf(selector);
     assert.ok(offset >= 0, `Compiled CSS must include ${selector}`);

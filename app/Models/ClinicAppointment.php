@@ -123,6 +123,9 @@ class ClinicAppointment extends Model
             throw ValidationException::withMessages(['status' => 'Start the consultation before finishing it.']);
         }
         $this->assertCompletionVitals();
+        if (\Illuminate\Support\Facades\Schema::hasTable('vaccination_records')) {
+            app(\App\Services\ClinicTreatmentFinalizer::class)->finalizeVisit($this, auth()->user());
+        }
         $total = (float) $this->charges()->sum('amount');
         if ($total > 99999999.99) {
             throw ValidationException::withMessages(['charges' => 'The case charges exceed the supported total.']);

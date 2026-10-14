@@ -2046,6 +2046,10 @@ var API = (() => {
     );
   }
 
+  async function deleteAdminPetVaccination(petId, vaccinationId) {
+    return request("DELETE", `/admin/pets/${encodeURIComponent(petId)}/vaccinations/${encodeURIComponent(vaccinationId)}`, null, getAdminToken());
+  }
+
   async function publishAdminPetVaccination(petId, vaccinationId, { finishCase = false, consumeInventory = null } = {}) {
     return request(
       "POST",
@@ -2269,6 +2273,7 @@ var API = (() => {
     getAdminPetVaccination,
     createAdminPetVaccination,
     updateAdminPetVaccination,
+    deleteAdminPetVaccination,
     publishAdminPetVaccination,
     voidAdminPetVaccination,
     getAdminVaccinationOptions,

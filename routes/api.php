@@ -216,6 +216,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::post('/admin/pets/{petId}/vaccinations', [AdminVaccinationController::class, 'store'])->middleware('clinic:clinical');
         Route::get('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'show']);
         Route::patch('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'update'])->middleware('clinic:clinical');
+        Route::delete('/admin/pets/{petId}/vaccinations/{vaccinationId}', [AdminVaccinationController::class, 'destroy'])->middleware('clinic:clinical');
         Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/publish', [AdminVaccinationController::class, 'publish'])->middleware('clinic:clinical');
         Route::post('/admin/pets/{petId}/vaccinations/{vaccinationId}/void', [AdminVaccinationController::class, 'void'])->middleware('clinic:clinical');
     });

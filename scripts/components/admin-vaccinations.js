@@ -110,16 +110,22 @@ function adminClinicVaccinations() {
       record: null,
     },
 
-    voidModal: {
-      open: false,
-      saving: false,
-      error: "",
-      reason: "",
-      record: null,
-    },
-
-
     init() {
+      window.addEventListener('clinic-treatment-prepare', event => {
+        const {id, finishCase} = event.detail;
+        if (id !== this.appointment?.id) return;
+        event.detail.promise = finishCase
+          ? Promise.resolve(!this.hasUnfinishedTreatment())
+          : this.hasUnfinishedTreatment() ? this.saveTreatment(false) : Promise.resolve(true);
+      });
+      window.addEventListener('clinic-treatment-focus', event => {
+        if (event.detail.id !== this.appointment?.id) return;
+        this.formErrorSummary = event.detail.message;
+        this.$nextTick(() => {
+          this.$refs.treatmentForm?.scrollIntoView({block: 'start'});
+          this.$refs.treatmentForm?.querySelector('input, button')?.focus();
+        });
+      });
       window.addEventListener("clinic-vaccinations-open", (event) => {
         this.openForAppointment(event.detail?.appt);
       });
@@ -179,7 +185,6 @@ function adminClinicVaccinations() {
       this.clearMedicine();
       this.formModal.open = false;
       this.detailModal.open = false;
-      this.voidModal.open = false;
     },
 
     async loadVaccinations() {
@@ -202,7 +207,7 @@ function adminClinicVaccinations() {
           species: response.pet?.species ?? this.pet.species,
         };
         this.records = Array.isArray(response.vaccinations)
-          ? response.vaccinations.filter(record => requestedCaseId == null || String(record.clinic_appointment_id) === String(requestedCaseId))
+          ? response.vaccinations.filter(record => record.state !== "voided" && (requestedCaseId == null || String(record.clinic_appointment_id) === String(requestedCaseId)))
           : [];
       } catch (error) {
         if (request !== this._recordsRequest || this.appointment?.id !== requestedCaseId || Number(this.pet?.id) !== requestedPetId) return;
@@ -242,8 +247,7 @@ function adminClinicVaccinations() {
     caseOngoing() {
       if (this.appointment?.paid || this.appointment?.archived_at) return false;
       return !this.appointment?.id
-        || ["checked_in", "in_consultation"].includes(this.appointment.status)
-        || (API.getUserRole?.() === "admin" && this.appointment.status === "for_payment");
+        || ["checked_in", "in_consultation"].includes(this.appointment.status);
     },
 
     openCreateForm() {
@@ -300,7 +304,7 @@ function adminClinicVaccinations() {
       };
       this.treatmentType = record.treatment_type || "vaccine";
       this.clearMedicine();
-      this.recordKind = record.inventory_item_id && record.administered_date === vaccinationToday() ? "inventory" : "historical";
+      this.recordKind = record.inventory_item_id ? "inventory" : "historical";
       this.selectedVaccine = null;
       this.vaccineQuery = "";
       if (!this.optionsLoading && !this.optionsError && this.recordKind === "inventory") this.restoreVaccineSelection();
@@ -412,7 +416,8 @@ function adminClinicVaccinations() {
       this.treatmentType = type;
       this.clearVaccine();
       this.clearMedicine();
-      for (const field of ["vaccine_name", "product_name", "manufacturer", "batch_number", "product_expiry_date", "next_due_date", "dose_amount", "dose_unit", "inventory_quantity"]) this.form[field] = "";
+      for (const field of ["vaccine_name", "product_name", "manufacturer", "batch_number", "product_expiry_date", "next_due_date", "dose_amount", "dose_unit"]) this.form[field] = "";
+      this.form.inventory_quantity = 1;
       this.formErrors = {};
       this.formErrorSummary = "";
     },
@@ -556,7 +561,7 @@ function adminClinicVaccinations() {
     },
 
     buildPayload() {
-      if (this.treatmentType === "medicine" && !this.form.request_key) this.form.request_key = crypto.randomUUID();
+      if (!this.form.request_key) this.form.request_key = crypto.randomUUID();
       const nullableText = (field) => {
         const text = String(this.form[field] ?? "").trim();
         return text || null;
@@ -595,100 +600,61 @@ function adminClinicVaccinations() {
       };
     },
 
-    async saveDraft() {
-      if (!this.canEditClinical) return;
-      if (this.inline && !this.caseOngoing()) return;
-      if (this.actionBusyId !== null) return;
-      if (this.formModal.saving || !this.validateForm()) return;
-
-      this.formModal.saving = true;
-      this.formErrors = {};
-      this.formErrorSummary = "";
-
-      try {
-        const payload = this.buildPayload();
-        const editing = this.formModal.mode === "edit";
-        const response = editing
-          ? await API.updateAdminPetVaccination(
-              this.pet.id,
-              this.formModal.recordId,
-              payload,
-            )
-          : await API.createAdminPetVaccination(this.pet.id, payload);
-
-        this.formModal.open = false;
-        await this.loadVaccinations();
-        if (this.inline) this.resetInlineForm();
-        this.showToast(
-          response.message || (editing
-            ? "Treatment draft updated."
-            : "Treatment draft created."),
-        );
-      } catch (error) {
-        this.applyBackendValidation(error, "Treatment draft could not be saved.");
-      } finally {
-        this.formModal.saving = false;
-      }
+    hasUnfinishedTreatment() {
+      if (!this.formModal.open) return false;
+      if (this.formModal.mode === 'edit') return true;
+      const blank = emptyVaccinationDraftForm();
+      return !!this.productQuery.trim() || Object.keys(blank).some(key => key !== 'request_key'
+        && String(this.form[key] ?? '').trim() !== String(blank[key] ?? '').trim());
     },
 
-    saveAndFinishCase() { return this.recordTreatment(true); },
-
-    async recordTreatment(finishCase = false) {
-      if (finishCase && this.appointment?.confinement && !this.appointment.confinement.discharged_at) {
-        this.formErrorSummary = 'Discharge the confined patient before sending this case to Billing.';
-        return;
-      }
-      if (!this.canEditClinical) return;
-      const usesInventory = this.recordKind === 'inventory';
-      if (finishCase && (!usesInventory || this.appointment?.status !== 'in_consultation')) return;
-      if (!this.caseOngoing() || this.formModal.saving || this.actionBusyId !== null || !this.validateForm(true)) return;
-      const confirmed = usesInventory
-        ? await this.confirmDeduction(this.selectedProduct, finishCase ? 'Deduct and Finish Case' : 'Record Treatment', this.treatmentType === 'medicine')
-        : await this.$store.clinicFeedback.confirm({title: 'Publish historical or external record?', message: 'No current Inventory stock will be deducted. The record will be published and can no longer be edited.', confirmLabel: 'Record Treatment'});
-      if (!confirmed) return;
-
+    async saveTreatment(requireComplete = true) {
+      if (!this.canEditClinical || !this.caseOngoing() || this.actionBusyId !== null
+        || this.formModal.saving || !this.validateForm(requireComplete)) return false;
+      const id = this.appointment?.id, petId = this.pet.id;
       this.formModal.saving = true;
+      this.formErrors = {}; this.formErrorSummary = '';
       try {
+        const editing = this.formModal.mode === 'edit';
         const payload = this.buildPayload();
-        const editing = this.formModal.mode === "edit";
         const saved = await (editing
-          ? API.updateAdminPetVaccination(this.pet.id, this.formModal.recordId, payload)
-          : API.createAdminPetVaccination(this.pet.id, payload));
-        // A retry after a failed finalize must update this draft, not create another.
-        this.formModal.mode = "edit";
-        this.formModal.recordId = saved.vaccination?.id ?? this.formModal.recordId;
-
-        await API.publishAdminPetVaccination(this.pet.id, this.formModal.recordId, { finishCase, consumeInventory: usesInventory });
-        this.formModal.open = false;
-        if (finishCase) {
-          this.appointment.status = "for_payment";
-          window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id: this.appointment.id, status: 'for_payment'}}));
-        }
-        await this.loadVaccinations();
-        this.loadOptions();
-        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
-        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
-        this.showToast(finishCase ? 'Treatment saved and stock deducted. Case is For Payment.' : 'Treatment recorded.');
-        if (this.inline) this.resetInlineForm();
+          ? API.updateAdminPetVaccination(petId, this.formModal.recordId, payload)
+          : API.createAdminPetVaccination(petId, payload));
+        if (id !== this.appointment?.id || petId !== this.pet?.id) return false;
+        ++this._recordsRequest;
+        this.loading = false;
+        this.error = '';
+        const index = this.records.findIndex(record => record.id === saved.vaccination.id);
+        if (index < 0) this.records.unshift(saved.vaccination);
+        else this.records.splice(index, 1, saved.vaccination);
+        this.resetInlineForm();
+        this.showToast(editing ? 'Treatment updated.' : 'Treatment added.');
+        return true;
       } catch (error) {
-        this.loadVaccinations();
-        this.applyBackendValidation(error, "The treatment could not be finalized. The case remains active.");
-      } finally {
-        this.formModal.saving = false;
-      }
+        if (id === this.appointment?.id) this.applyBackendValidation(error, 'Treatment could not be saved.');
+        return false;
+      } finally { this.formModal.saving = false; }
     },
 
-    confirmDeduction(vaccine, confirmLabel, medicine = false, quantity = this.form.inventory_quantity) {
-      const name = vaccine?.item_name || "the selected vaccine";
-      const unit = vaccine?.unit || "unit";
-      const batch = vaccine?.next_batch?.batch_number;
-      return this.$store.clinicFeedback.confirm({
-        title: "Deduct from clinic inventory?",
-        message: `${quantity} ${unit} of ${name}${batch ? ` (batch ${batch})` : ""} will be deducted from clinic inventory.\n\n`
-          + (medicine ? `A medicine charge of ${this.medicineMoney(this.medicineQuote?.price)} will be added to this case.\n\n` : "")
-          + "The record will be published and can no longer be edited.",
-        confirmLabel,
-      });
+    async removeTreatment(record) {
+      if (!this.canEditClinical || !this.caseOngoing() || record.state !== 'draft'
+        || this.formModal.saving || this.actionBusyId !== null) return;
+      const id = this.appointment.id, petId = this.pet.id;
+      this.actionBusyId = record.id;
+      try {
+        const confirmed = await this.$store.clinicFeedback.confirm({title: 'Remove treatment?',
+          message: 'Remove this treatment from the current visit?', cancelLabel: 'Cancel', confirmLabel: 'Remove', danger: true});
+        if (!confirmed || id !== this.appointment?.id || !this.caseOngoing()) return;
+        await API.deleteAdminPetVaccination(petId, record.id);
+        if (id !== this.appointment?.id) return;
+        ++this._recordsRequest;
+        this.loading = false;
+        this.error = '';
+        this.records = this.records.filter(row => row.id !== record.id);
+        if (this.formModal.recordId === record.id) this.resetInlineForm();
+        this.showToast('Treatment removed.');
+      } catch (error) { if (id === this.appointment?.id) this.error = error.message || 'Treatment could not be removed.'; }
+      finally { this.actionBusyId = null; }
     },
 
     applyBackendValidation(error, fallback) {
@@ -714,129 +680,6 @@ function adminClinicVaccinations() {
         firstInvalid?.scrollIntoView({ block: "center", behavior: "smooth" });
         (firstInvalid || this.$refs.vaccinationValidationSummary)?.focus();
       });
-    },
-
-    async publishRecord(record) {
-      if (!this.canEditClinical) return;
-      if (this.inline && (!this.caseOngoing() || String(record.clinic_appointment_id) !== String(this.appointment?.id))) return;
-      if (record?.state !== "draft" || this.actionBusyId) return;
-
-      const usesInventory = Boolean(record.inventory_item_id);
-      if (!record.vaccine_name || !record.administered_date
-        || (usesInventory && (record.administered_date !== vaccinationToday() || !Number.isInteger(Number(record.inventory_quantity)) || Number(record.inventory_quantity) < 1))) {
-        this.openEditForm(record);
-        this.formErrors = !record.vaccine_name ? { vaccine_name: "required" }
-          : !record.administered_date ? { administered_date: "required" }
-          : record.administered_date !== vaccinationToday() ? { administered_date: "Save this as a historical or external record to preserve its date without deducting current stock." }
-          : { inventory_quantity: "Enter a whole number of physical inventory units, at least 1." };
-        this.formErrorSummary = "Complete the required fields marked *.";
-        this.focusValidationSummary();
-        return;
-      }
-
-      if (record.treatment_type === "medicine" && usesInventory) {
-        const confirmed = await this.$store.clinicFeedback.confirm({
-          title: "Publish medicine treatment?",
-          message: `${record.inventory_quantity} ${this.inventoryUnitLabel({unit: record.inventory_unit}, record.inventory_quantity)} of ${record.treatment_name || record.vaccine_name} will be deducted and a medicine charge of ${this.medicineMoney(record.expected_price)} added to this case. The record can no longer be edited.`,
-          confirmLabel: "Charge, Deduct and Publish",
-        });
-        if (!confirmed) return;
-        await this.publishDraft(record, true);
-        return;
-      }
-      const vaccine = this.vaccineOptions.find(
-        (item) => Number(item.item_id) === Number(record.inventory_item_id),
-      ) || { item_name: record.vaccine_name };
-      const confirmed = usesInventory
-        ? await this.confirmDeduction(vaccine, "Deduct and Publish", false, record.inventory_quantity)
-        : await this.$store.clinicFeedback.confirm({ title: "Publish historical or external record?", message: "No current Inventory stock will be deducted. The record will be published and can no longer be edited.", confirmLabel: "Publish Record" });
-      if (!confirmed) return;
-
-      await this.publishDraft(record, usesInventory);
-    },
-
-    async publishDraft(record, usesInventory) {
-      this.actionBusyId = record.id;
-      try {
-        const response = await API.publishAdminPetVaccination(this.pet.id, record.id, { consumeInventory: usesInventory });
-        await this.loadVaccinations();
-        this.loadOptions();
-        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
-        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
-        this.showToast(response.message || "Treatment record published.");
-        if (this.inline && this.formModal.recordId === record.id) this.resetInlineForm();
-      } catch (error) {
-        this.showToast(error.message || "Treatment record could not be published.", false);
-      } finally {
-        this.actionBusyId = null;
-      }
-    },
-
-    openVoidDialog(record) {
-      if (!this.canEditClinical) return;
-      if (record?.state !== "published" || this.actionBusyId) return;
-      this.voidReturnFocus = document.activeElement;
-      this.voidModal = {
-        open: true,
-        saving: false,
-        error: "",
-        reason: "",
-        record,
-      };
-      this.refreshIcons();
-      this.$nextTick(() => this.$refs.treatmentVoidReason?.focus());
-    },
-
-    closeVoidDialog() {
-      if (this.voidModal.saving) return;
-      this.voidModal.open = false;
-      this.voidModal.error = "";
-      this.voidModal.reason = "";
-      this.voidModal.record = null;
-      this.$nextTick(() => this.voidReturnFocus?.focus());
-    },
-
-    async submitVoid() {
-      if (!this.canEditClinical) return;
-      const reason = String(this.voidModal.reason || "").trim();
-      if (!reason) {
-        this.voidModal.error = "A reason is required to void this published record.";
-        return;
-      }
-      if (reason.length > 500) {
-        this.voidModal.error = "The void reason must not exceed 500 characters.";
-        return;
-      }
-      if (this.voidModal.saving) return;
-
-      const record = this.voidModal.record;
-      this.voidModal.saving = true;
-      this.voidModal.error = "";
-      this.actionBusyId = record.id;
-
-      try {
-        const response = await API.voidAdminPetVaccination(
-          this.pet.id,
-          record.id,
-          reason,
-        );
-        this.voidModal.open = false;
-        this.$nextTick(() => this.voidReturnFocus?.focus());
-        await this.loadVaccinations();
-        window.dispatchEvent(new CustomEvent("clinic-treatment-updated"));
-        window.dispatchEvent(new CustomEvent("clinic-case-updated"));
-        this.showToast(response.message || "Treatment record voided.");
-      } catch (error) {
-        const reasonErrors = error.errors?.void_reason;
-        this.voidModal.error = (Array.isArray(reasonErrors)
-          ? reasonErrors.join(" ")
-          : reasonErrors)
-          || error.message
-          || "Treatment record could not be voided.";
-      } finally {
-        this.voidModal.saving = false;
-        this.actionBusyId = null;
-      }
     },
 
     async openDetails(record) {
@@ -876,22 +719,6 @@ function adminClinicVaccinations() {
       this.detailModal.record = null;
       this.detailModal.error = "";
       this.$nextTick(() => this.detailReturnFocus?.focus());
-    },
-
-    stateLabel(state) {
-      return {
-        draft: "Draft",
-        published: "Published",
-        voided: "Voided",
-      }[state] || "Unknown state";
-    },
-
-    stateBadgeClass(state) {
-      return {
-        draft: "border-amber-200 bg-amber-50 text-amber-800",
-        published: "border-emerald-200 bg-emerald-50 text-emerald-700",
-        voided: "border-red-200 bg-red-50 text-red-700",
-      }[state] || "border-slate-200 bg-slate-50 text-slate-600";
     },
 
     dueLabel(status) {
@@ -944,14 +771,20 @@ function adminClinicVaccinations() {
 
     doseLabel(record) {
       if (record?.dose_amount === null || record?.dose_amount === undefined || record?.dose_amount === "") {
-        return "Not provided";
+        return "—";
       }
-      return `${record.dose_amount}${record.dose_unit ? ` ${record.dose_unit}` : ""}`;
+      return `${Number(record.dose_amount)}${record.dose_unit ? ` ${record.dose_unit}` : ""}`;
     },
 
     typeLabel(record) { return record?.treatment_type === "medicine" ? "Medicine" : "Vaccine"; },
     treatmentSummary: clinicTreatmentSummary,
-    treatmentDetails: clinicTreatmentDetails,
+    treatmentDetails(record) {
+      return clinicTreatmentDetails(record).filter(field => !['Status', 'Published', 'Published By', 'Voided', 'Voided By', 'Void Reason'].includes(field.label));
+    },
+    routeSite(record) {
+      return [this.administrationRoutes.find(route => route.value === record.route)?.label || record.route,
+        record.administration_site].filter(Boolean).join(' / ') || '—';
+    },
     trapTreatmentFocus(event) {
       const controls = [...event.currentTarget.querySelectorAll('button, input, textarea, [tabindex="0"]')]
         .filter(element => !element.disabled && element.getClientRects().length);

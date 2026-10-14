@@ -6,10 +6,11 @@ const {webcrypto} = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const deferred = () => {let resolve; const promise = new Promise(done => {resolve = done;}); return {promise, resolve};};
 const settle = () => new Promise(resolve => setImmediate(resolve));
-const events = [], writes = [];
+const events = [], writes = [], listeners = new Map();
 const context = {console, setTimeout, clearTimeout, crypto: webcrypto,
   document: {addEventListener() {}, body: {style: {overflow: 'auto'}}},
-  window: {addEventListener() {}, dispatchEvent: event => events.push(event)},
+  window: {addEventListener(type, listener) {listeners.set(type, [...(listeners.get(type) || []), listener]);},
+    dispatchEvent(event) {events.push(event); for (const listener of listeners.get(event.type) || []) listener(event);}},
   CustomEvent: class {constructor(type, options) {this.type = type; this.detail = options?.detail;}},
   API: {getUserRole: () => 'staff'},
 };
@@ -25,7 +26,7 @@ const attach = state => {
 const appt = id => ({id, pet: {id: 7, name: 'Mochi'}, status: 'in_consultation', vitals: {weight_kg: 12}});
 const product = {item_id: 5, item_name: 'Rabies', available_quantity: 10, unit: 'vial'};
 (async () => {
-  const state = attach(context.adminClinicVaccinations()); state.inline = true;
+  const state = attach(context.adminClinicVaccinations()); state.inline = true; state.init();
   context.API.getAdminVaccinationOptions = async () => ({vaccines: [product]});
   const reads = [], older = deferred();
   context.API.getAdminPetVaccinations = async (pet, id) => {
@@ -47,36 +48,75 @@ const product = {item_id: 5, item_name: 'Rabies', available_quantity: 10, unit: 
   assert.deepEqual(Array.from(state.records, row => row.id), [2], 'An old visit response cannot replace the current visit');
   assert.deepEqual(reads, [[7,90],[7,91]]);
 
-  context.API.getAdminPetVaccinations = async () => ({vaccinations: []});
-  context.API.createAdminPetVaccination = async (pet, payload) => {writes.push(['create',pet,payload]); return {vaccination:{id:10}};};
-  let failPublish = true;
-  context.API.publishAdminPetVaccination = async (pet,id,options) => {writes.push(['publish',pet,id,options]); if (failPublish) throw new Error('Publish failed'); return {};};
-  context.API.updateAdminPetVaccination = async (pet,id,payload) => {writes.push(['update',pet,id,payload]); return {vaccination:{id}};};
+  let savedRecords = [], failCreate = true;
+  context.API.getAdminPetVaccinations = async () => ({vaccinations: savedRecords});
+  context.API.createAdminPetVaccination = async (pet, payload) => {
+    writes.push(['create',pet,payload]);
+    if (failCreate) throw new Error('Lost response');
+    const vaccination = {id:10, state:'draft', ...payload}; savedRecords = [vaccination]; return {vaccination};
+  };
+  context.API.publishAdminPetVaccination = async () => {throw new Error('Individual treatments must not be published');};
+  context.API.updateAdminPetVaccination = async (pet,id,payload) => {
+    writes.push(['update',pet,id,payload]); const vaccination = {id,state:'draft',...payload}; savedRecords = [vaccination]; return {vaccination};
+  };
   state.selectVaccine(product);state.form.notes = 'Current visit';
-  await state.recordTreatment();
+  assert.equal(state.hasUnfinishedTreatment(),true);
+  await state.saveTreatment();
   assert.equal(state.formModal.open,true);
-  assert.equal(state.formModal.mode,'edit');
-  assert.equal(state.formModal.recordId,10,'Failed publishing retains the saved draft for retry');
-  failPublish = false;await state.recordTreatment();
-  assert.deepEqual(writes.map(call => call[0]), ['create','publish','update','publish'], 'Retry updates the same draft');
+  assert.equal(state.formModal.mode,'create');
+  const retryKey = writes[0][2].request_key;
+  failCreate = false;await state.saveTreatment();
+  assert.deepEqual(writes.map(call => call[0]), ['create','create']);
+  assert.equal(writes[1][2].request_key,retryKey,'Lost responses retry the same vaccine identity');
   assert.equal(writes[0][2].clinic_appointment_id,91);
-  assert.equal(writes[3][2],10);
-  assert.equal(writes[3][3].finishCase,false,'Recording treatment keeps the consultation open');
-  assert.equal(writes[3][3].consumeInventory,true);
+  assert.equal(state.records.length,2,'Adding preserves existing treatments');
   assert.equal(state.appointment.status,'in_consultation');
-  assert.equal(state.formModal.open,true,'Entry remains ready for the next treatment');
   assert.equal(state.formModal.mode,'create');assert.equal(state.form.notes,'');assert.equal(state.selectedProduct,null);
+  assert.equal(state.hasUnfinishedTreatment(),false);
+  state.openEditForm(state.records[0]);state.form.notes = 'Edited';await state.saveTreatment();
+  assert.equal(writes.at(-1)[0],'update');assert.equal(state.records[0].notes,'Edited');
+  assert.equal(state.treatmentDetails(state.records[0]).some(field=>field.label==='Status'),false);
+  assert.equal(state.doseLabel({}),'—');
 
+  // The case footer blocks unfinished entries, confirms once, and submits the whole medical record.
+  vm.runInContext(`clinicPetWeightToolsReady = Promise.resolve({getWeightValueValidationMessage: () => ''});`,context);
+  const modal = attach(context.adminClinicModal());modal.$el = {querySelector: () => null};modal.apptId=91;
+  modal.currentAppt=appt(91);modal.open=true;
+  Object.assign(modal.form,{primary_veterinarian_id:1,weight_kg:'12',temperature_c:38.5,heart_rate_bpm:80,respiratory_rate_bpm:20});
+  const confirmations = [], caseSaves=[];
+  modal.$store.clinicFeedback.confirm = async dialog => {confirmations.push(dialog);return false;};
+  context.API.clinicSaveRecord = async (id,payload) => {caseSaves.push([id,payload]);};
+  modal.form.weight_kg='13';modal.selectSection('vaccinations');
+  assert.equal(state.appointment.weight_kg,'13','Treatment pricing uses the current Medical Record weight');
+  modal.form.weight_kg='12';
+  state.form.notes='Unadded';await modal.saveRecord(true);
+  assert.equal(caseSaves.length,0);assert.equal(confirmations.length,0);
+  assert.equal(modal.activeSection,'vaccinations');assert.match(state.formErrorSummary,/Add or discard/);
+  state.resetInlineForm();await modal.saveRecord(true);
+  assert.equal(caseSaves.length,0,'Cancel confirmation never finalizes');
+  assert.equal(confirmations[0].title,'Send case to payment?');
+  modal.$store.clinicFeedback.confirm = async () => true;await modal.saveRecord(true);
+  assert.equal(caseSaves[0][1].finish_case,true);assert.equal(caseSaves[0][1].weight_kg,'12');
+  assert.equal(modal.saving,false);
+  state.openForAppointment(appt(91));await settle();modal.open=true;modal.form.weight_kg='';
+  await modal.saveRecord(true);assert.equal(caseSaves.length,1);assert.equal(modal.activeSection,'medical');
+  modal.form.weight_kg='12';state.form.notes='Unfinished draft';
+  await modal.saveRecord();assert.equal(caseSaves.at(-1)[1].finish_case,false,'Draft saves never transition');
+  assert.equal(writes.at(-1)[2].notes,'Unfinished draft','Save as Draft retains the current treatment entry');
+
+  state.openForAppointment(appt(91));await settle();
+  let confirmRemove=false;
+  state.$store.clinicFeedback.confirm=async dialog=>{assert.equal(dialog.title,'Remove treatment?');return confirmRemove;};
+  context.API.deleteAdminPetVaccination=async (pet,id)=>{writes.push(['delete',pet,id]);};
+  await state.removeTreatment(state.records[0]);assert.notEqual(writes.at(-1)[0],'delete');
+  confirmRemove=true;await state.removeTreatment(state.records[0]);assert.equal(writes.at(-1)[0],'delete');
+  assert.equal(state.records.length,0);
   state.recordKind='historical';state.changeSource();state.form.vaccine_name='External vaccine';state.form.administered_date='2020-01-01';
-  await state.recordTreatment();
-  assert.equal(writes.at(-1)[3].consumeInventory,false);
-  assert.equal(writes.at(-2)[2].inventory_item_id,null);
-  assert.equal(writes.at(-2)[2].clinic_appointment_id,91);
-  const count = writes.length;
-  state.$store.clinicAccess.permissions.clinical = false;await state.saveDraft();await state.recordTreatment();
-  assert.equal(writes.length,count,'Read-only roles cannot record or save drafts');
-  state.$store.clinicAccess.permissions.clinical = true;state.appointment.paid = true;
-  await state.recordTreatment();await state.saveDraft();assert.equal(writes.length,count,'Paid cases cannot receive treatment entries');
+  await state.saveTreatment();assert.equal(writes.at(-1)[2].inventory_item_id,null);
+  const count=writes.length;state.$store.clinicAccess.permissions.clinical=false;await state.saveTreatment();
+  assert.equal(writes.length,count,'Read-only roles cannot add treatments');
+  state.$store.clinicAccess.permissions.clinical=true;state.appointment.paid=true;
+  await state.saveTreatment();assert.equal(writes.length,count,'Paid cases cannot receive treatment entries');
 
   assert.equal(context.clinicTreatmentSummary({dose_amount:'0.500',dose_unit:'mL',route:'intramuscular'}),'0.5 mL \u00b7 IM');
   assert.equal(context.clinicTreatmentSummary({route:'oral'}),'Oral');
@@ -103,5 +143,5 @@ const product = {item_id: 5, item_name: 'Rabies', available_quantity: 10, unit: 
   const monitoring = deferred();context.API.getClinicConfinementObservations = () => monitoring.promise;
   profile.viewDetail({id:1,clinic_appointment_id:80},null,'confinement');profile.backToProfile();
   monitoring.resolve({data:[{id:1}],current_page:1,last_page:1});await settle();assert.equal(profile.detail.record,null,'Late monitoring never reopens a closed detail');
-  console.log('Patient Record separation, case isolation, explicit publishing, reset, retry, permissions and lazy history checks passed');
+  console.log('Patient Record separation, case isolation, working visits, shared finalization, reset, retry, permissions and lazy history checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
