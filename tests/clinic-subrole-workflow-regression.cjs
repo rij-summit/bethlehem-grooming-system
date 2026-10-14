@@ -52,11 +52,12 @@ function permissions(clinical, payment, queue, customers) {
   const receptionist = component('adminClinicPage');
   await receptionist.startCase({ id: 1 });
   receptionist.profile = { pet: { id: 7, petName: 'Mochi' }, owner: { fullName: 'Ana Santos' }, open: true };
-  let historyPet;
-  receptionist.openCase = (appt, section) => { historyPet = appt.pet.id; assert.equal(section, 'vaccinations'); };
-  sandbox.API.createClinicCase = async () => { throw new Error('Viewing history must not create a case'); };
-  await receptionist.openVaccinations();
-  assert.equal(historyPet, 7);
+  let openedPet;
+  receptionist.activeCases = [{id: 1, status: 'checked_in', pet: {id: 7}}];
+  receptionist.openCase = appt => {openedPet = appt.pet.id;};
+  sandbox.API.createClinicCase = async () => { throw new Error('Viewing must not create a case'); };
+  receptionist.openProfileCase();
+  assert.equal(openedPet, 7);
   const receptionistVaccines = component('adminClinicVaccinations');
   receptionistVaccines.pet = { id: 1 };
   receptionistVaccines.appointment = { id: 1, status: 'in_consultation' };
@@ -159,7 +160,7 @@ function permissions(clinical, payment, queue, customers) {
   assert.match(page, /aria-label="Services"/);
   assert.match(page, /Attachments<\/h3>/);
   assert.match(page, /Follow-up<\/h3>/);
-  assert.equal((page.match(/x-for="caseItem in visibleActiveCases"/g) || []).length, 1);
+  assert.equal((page.match(/x-for="caseItem in caseRows"/g) || []).length, 1);
   const clinicSource = fs.readFileSync(path.join(root, 'scripts/components/admin-clinic.js'), 'utf8');
   assert.match(clinicSource, /item\.status === 'for_payment' && this\.permissions\.payment/);
   assert.match(clinicSource, /item\.status === 'waiting_to_arrive' && this\.permissions\.intake/);

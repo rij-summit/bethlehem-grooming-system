@@ -651,6 +651,12 @@ function adminClinicPage() {
     profilePageOverflow: null,
     profileScrollPosition: 0,
     profileRecordTrigger: null,
+    profileVisit: null,
+    profileBusy: false,
+    profileActionError: '',
+    profileEditing: false,
+    profileEditorLoading: false,
+    profileEditorSaving: false,
 
     // Owner's pet list (opened by View)
     petPicker: { open: false, owner: null, pets: [] },
@@ -690,19 +696,24 @@ function adminClinicPage() {
       this.activeCasesLoading = true;
       try {
         const response = await API.getActiveClinicCases();
+        const visitWasListed = this.activeCases.some(item => item.id === this.profileVisit?.id);
         this.activeCases = response.cases || [];
         this.confinedCount = response.confined_count || 0;
+        if (visitWasListed && !this.activeCases.some(item => item.id === this.profileVisit?.id)) this.profileVisit = null;
         window.dispatchEvent(new CustomEvent("clinic-cases-loaded", { detail: this.activeCases }));
+        return true;
       }
       catch { this.activeCases = []; }
       finally { this.activeCasesLoading = false; }
     },
 
     get visibleActiveCases() {
-      return this.activeCases.filter(item => this.tab === 'for-payment' ? item.status === 'for_payment'
-        : item.status !== 'for_payment' && !(item.confinement && !item.confinement.discharged_at));
+      return this.tab === 'for-payment' ? this.activeCases.filter(item => item.status === 'for_payment') : this.currentActiveCases;
     },
-    get activeCount() { return this.activeCases.filter(item => item.status !== 'for_payment' && !(item.confinement && !item.confinement.discharged_at)).length; },
+    get currentActiveCases() { return this.activeCases.filter(item => ['checked_in', 'in_consultation'].includes(item.status) && !(item.confinement && !item.confinement.discharged_at)); },
+    get activeCount() { return this.currentActiveCases.length; },
+    get waitingCases() { return this.activeCases.filter(item => item.status === 'waiting_to_arrive'); },
+    get caseRows() { return this.tab === 'for-payment' ? this.visibleActiveCases : [...this.visibleActiveCases, ...this.waitingCases]; },
     get forPaymentCount() { return this.activeCases.filter(item => item.status === 'for_payment').length; },
     async loadConfinedCases(page = 1) {
       const request = ++this._confinedRequest;
@@ -811,7 +822,7 @@ function adminClinicPage() {
     },
     openCase(item, section) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } })); },
     async startCase(item) {
-      if (!this.permissions.clinical || this.caseBusyId) return;
+      if (!this.permissions.clinical || this.caseBusyId || item.status !== 'checked_in') return;
       this.caseBusyId = item.id;
       try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
@@ -961,6 +972,9 @@ function adminClinicPage() {
         document.body.style.overflow = 'hidden';
       }
       this.detail = { record: null };
+      this.profileVisit = null;
+      this.profileActionError = '';
+      this.profileEditing = false;
       this.profile = {
         open: true,
         loading: true,
@@ -999,6 +1013,7 @@ function adminClinicPage() {
     },
 
     closeProfile() {
+      if (this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
       this._profileRequest++;
       this.profile.open = false;
       this.detail = { record: null };
@@ -1010,7 +1025,7 @@ function adminClinicPage() {
     },
 
     trapProfileFocus(event) {
-      const controls = [...event.currentTarget.querySelectorAll('button, a[href], [tabindex="0"]')]
+      const controls = [...event.currentTarget.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
         .filter(element => !element.disabled && element.getClientRects().length);
       const first = controls[0], last = controls.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -1051,88 +1066,90 @@ function adminClinicPage() {
       this.petPicker.open = false;
     },
 
-    // One ongoing case per pet: a consultation and a vaccination share the same
-    // case through its Medical Record and Vaccinations tabs.
-    async openOrResumeCase(caseType) {
-      if (!this.permissions.intake) return;
-      const section = caseType === "vaccination" ? "vaccinations" : "medical";
+    get currentClinicVisit() {
+      return this.activeCases.find(item => String(item.pet?.id) === String(this.profile.pet?.id)) || this.profileVisit;
+    },
+    get profileActionLabel() { return this.currentClinicVisit ? 'Open Active Case' : 'Check In Patient'; },
+    openProfileCase() {
+      const visit = this.currentClinicVisit;
+      if (!visit || this.profileBusy) return;
+      this.closeProfile();
+      this.closePetPicker();
+      this.openCase(visit);
+    },
+    async checkInPatient() {
+      if (!this.permissions.intake || !this.profile.pet?.id || this.profileBusy) return;
+      if (this.currentClinicVisit?.status !== 'waiting_to_arrive' && this.currentClinicVisit) return;
+      this.profileBusy = true;
+      this.profileActionError = '';
       try {
-        let caseItem;
-        try {
-          caseItem = (await API.createClinicCase({ pet_id: this.profile.pet.id, case_type: caseType })).case;
-        } catch (error) {
-          if (error.code !== "active_case_exists" || !error.data?.case) throw error;
-          const tabName = section === "vaccinations" ? "Treatment" : "Medical Record";
-          const confirmed = await this.$store.clinicFeedback.confirm({
-            title: "Ongoing case found",
-            message: this.permissions.clinical
-              ? `${error.message}\n\nOpen it and continue on the ${tabName} tab? You can record both the consultation and the vaccination in the same case.`
-              : `${error.message}\n\nOpen this case to view patient information and monitor its status?`,
-            confirmLabel: "Open Case",
-          });
-          if (!confirmed) return;
-          caseItem = error.data.case;
+        if (!await this.loadActiveCases()) throw new Error('Could not verify the current clinic visit. Please try again.');
+        let visit = this.currentClinicVisit;
+        if (visit && visit.status !== 'waiting_to_arrive') return;
+        if (visit) {
+          visit = (await API.clinicCheckIn(visit.id)).appointment;
+        } else {
+          try {
+            visit = (await API.createClinicCase({ pet_id: this.profile.pet.id, case_type: 'consultation' })).case;
+          } catch (error) {
+            if (error.code !== 'active_case_exists' || !error.data?.case) throw error;
+            this.profileVisit = error.data.case;
+            await this.loadActiveCases();
+            return;
+          }
         }
-        if (caseItem.status === "waiting_to_arrive") caseItem = (await API.clinicCheckIn(caseItem.id)).appointment;
-        if (caseItem.status === "checked_in" && this.permissions.clinical) caseItem = (await API.startClinicCase(caseItem.id)).case;
-        await this.loadActiveCases(); this.closeProfile(); this.closePetPicker(); this.openCase(caseItem, section);
-      } catch (error) { this.$store.clinicFeedback.notify(error.message || `Could not open a ${caseType} case.`, false); }
+        this.profileVisit = visit;
+        await this.loadActiveCases();
+      } catch (error) {
+        this.profileActionError = error.message || 'Could not check in this patient.';
+      } finally { this.profileBusy = false; }
     },
-
-    async openVaccinations() {
-      if (!this.profile.pet?.id) return;
-      if (!this.permissions.clinical) {
-        const { pet, owner } = this.profile;
-        const appt = this.activeCases.find((item) => item.pet?.id === pet.id) || {
-          pet: { id: pet.id, name: pet.petName || pet.name, species: pet.species },
-          ownerName: owner?.fullName || "—",
-        };
-        this.closeProfile();
-        this.openCase(appt, "vaccinations");
-        return;
+    async editPatient() {
+      if (!this.permissions.access || this.profileEditorLoading || this.profileBusy) return;
+      this.profileEditing = true;
+      this.profileEditorLoading = true;
+      this.profileActionError = '';
+      try {
+        await loadClinicPatientEditor();
+        let panel = this.$refs.patientEditor.firstElementChild;
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.setAttribute('x-data', 'adminClinicPatientEditor()');
+          panel.innerHTML = `<p x-show="petModal.saveError" role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" x-text="petModal.saveError"></p>
+            <button type="button" @click="cancelEditPet()" :disabled="petModal.saving" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Cancel</button>
+            <div x-ref="petEditForm"></div>`;
+          Alpine.mutateDom(() => { this.$refs.patientEditor.appendChild(panel); Alpine.initTree(panel); });
+        }
+        const editor = Alpine.$data(panel);
+        editor.petModal.pet = this.profile.pet;
+        editor.petModal.creating = false;
+        editor.detailModal.customer = this.profile.owner;
+        await editor.startEditPet();
+        this.$nextTick?.(() => {
+          this.$refs.profileBody.scrollTop = 0;
+          panel.querySelector('#adminPetName')?.focus();
+        });
+      } catch (error) { this.profileActionError = error.message || 'Could not open patient editing.'; }
+      finally { this.profileEditorLoading = false; }
+    },
+    cancelPatientEdit() {
+      if (this.profileEditorLoading || this.profileEditorSaving) return;
+      const panel = this.$refs.patientEditor.firstElementChild;
+      if (panel) Alpine.$data(panel).cancelEditPet();
+      else this.finishPatientEdit();
+    },
+    finishPatientEdit(pet) {
+      if (pet) {
+        this.profile.pet = pet;
+        for (const row of this.searchRows) {
+          const existing = row.pets?.find(item => String(item.id) === String(pet.id));
+          if (existing) Object.assign(existing, pet);
+        }
+        const existing = this.petPicker.pets?.find(item => String(item.id) === String(pet.id));
+        if (existing) Object.assign(existing, pet);
       }
-      await this.openOrResumeCase("vaccination");
-    },
-
-    async newConsultation() {
-      const { pet, owner } = this.profile;
-      if (!pet?.id || !owner) return;
-
-      await this.openOrResumeCase("consultation");
-      return;
-
-      // Build the owner draft in exactly the same format that walk-in-owner-step.js
-      // saveOwnerDraft() produces, so the pet step can read it without modification.
-      const middleInitial = owner.middleName
-        ? String(owner.middleName).trim().replace(/\.+$/, "").toUpperCase().charAt(0)
-        : "";
-      const ownerDraft = {
-        firstName:              owner.firstName  || "",
-        lastName:               owner.lastName   || "",
-        middleInitial,
-        phone:                  owner.phone      || "",
-        email:                  owner.email      || "",
-        fullName:               owner.fullName   || "",
-        bookingType:            "walk_in",
-        appointmentType:        "clinic",
-        ownerRecordType:        owner.recordType || "registered",
-        customerUserId:         owner.recordType === "registered"   ? owner.id : null,
-        unregisteredCustomerId: owner.recordType === "unregistered" ? owner.id : null,
-        existingPets:           Array.isArray(owner.pets) ? owner.pets : [],
-        // Flag so the pet step Back button returns to clinic, not Step 1
-        directEntry:            "clinic",
-      };
-
-      // Clear any stale walk-in continuation data before setting the new draft
-      ["walkInPetStep", "walkInConsentStep", "walkInReviewStep", "walkInBookingConfirmation"]
-        .forEach(k => sessionStorage.removeItem(k));
-
-      sessionStorage.setItem("walkInOwnerStep", JSON.stringify(ownerDraft));
-      // Tell the pet step which pet to pre-select
-      sessionStorage.setItem("clinicPreselectedPetId", String(pet.id));
-
-      // Skip Step 1 entirely — go straight to pet details
-      window.location.href = "./walk-in-pet-details.html";
+      this.profileEditing = false;
+      this.$nextTick?.(() => this.$refs.editPatient?.focus());
     },
 
     viewDetail(record, trigger = document.activeElement) {
@@ -1190,4 +1207,37 @@ function adminClinicPage() {
       catch { return d; }
     },
   };
+}
+
+let clinicPatientEditorScript;
+function loadClinicPatientEditor() {
+  return clinicPatientEditorScript ??= new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '../../scripts/components/admin-customers.js?v=customer-actions-20260927&pet-weight=pet-weight-size-20261011-v3&shared-editor=20261014';
+    script.onload = resolve;
+    script.onerror = () => { clinicPatientEditorScript = null; script.remove(); reject(new Error('Could not load patient editing. Please try again.')); };
+    document.head.appendChild(script);
+  });
+}
+
+function adminClinicPatientEditor() {
+  const editor = adminCustomers();
+  const save = editor.saveEditPet;
+  const cancel = editor.cancelEditPet;
+  return Object.assign(editor, {
+    init() {},
+    async saveEditPet() {
+      if (!this.$store.clinicAccess.permissions.access) return;
+      this.$dispatch('clinic-patient-edit-saving', true);
+      try {
+        await save.call(this);
+        if (!this.petModal.editing && !this.petModal.saveError) this.$dispatch('clinic-patient-edit-finished', {pet: this.petModal.pet});
+      } finally { this.$dispatch('clinic-patient-edit-saving', false); }
+    },
+    cancelEditPet() {
+      if (this.petModal.saving) return;
+      cancel.call(this);
+      this.$dispatch('clinic-patient-edit-finished', {});
+    },
+  });
 }

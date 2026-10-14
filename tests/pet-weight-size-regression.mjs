@@ -78,7 +78,7 @@ for (const file of ['my-pets', 'booking-pet-step', 'walk-in-pet-step', 'admin-cu
   assert.doesNotMatch(source, /showWeightRangeInField|weightFieldMode|resetWeightFieldForEntry/);
   assert.match(source, /(?:sizeCombobox|controls\.size)\.getValue\(\)/);
 }
-for (const [file, id] of [['pages/client/my-pets.html', 'petWeight'], ['pages/admin/clients.html', 'adminPetWeight'], ['pages/client/booking-pet-details.html', 'weight'], ['pages/client/grooming-pre-registration.html', 'weight'], ['pages/admin/walk-in-pet-details.html', 'weight']]) {
+for (const [file, id] of [['pages/client/my-pets.html', 'petWeight'], ['pages/admin/pet-edit-form.html', 'adminPetWeight'], ['pages/client/booking-pet-details.html', 'weight'], ['pages/client/grooming-pre-registration.html', 'weight'], ['pages/admin/walk-in-pet-details.html', 'weight']]) {
   const html = fs.readFileSync(file, 'utf8');
   assert.match(html, new RegExp(`for="${id}"`));
   assert.match(html, new RegExp(`aria-describedby="${id}Error"`));

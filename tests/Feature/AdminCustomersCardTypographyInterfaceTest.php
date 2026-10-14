@@ -276,11 +276,8 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
         $page = file_get_contents(base_path('pages/admin/clients.html'));
         $component = file_get_contents(base_path('scripts/components/admin-customers.js'));
         $controller = file_get_contents(base_path('app/Http/Controllers/PetController.php'));
-        $petForm = $this->sourceBetween(
-            $page,
-            '<!-- Edit mode -->',
-            '<!-- Footer -->',
-        );
+        $petForm = file_get_contents(base_path('pages/admin/pet-edit-form.html'));
+        $this->assertStringContainsString('x-ref="petEditForm"', $page);
 
         foreach ([
             'adminPetSpeciesCombobox',

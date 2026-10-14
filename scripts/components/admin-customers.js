@@ -93,6 +93,7 @@ function adminCustomers() {
       medicalRecords: [],
       vaccinations: [],
     },
+    _petEditMarkupReady: null,
 
     // ── Init ──────────────────────────────────────────────
 
@@ -495,7 +496,20 @@ function adminCustomers() {
       if (adminCustomerPetFields) return true;
 
       try {
+        if (!this.$refs.petEditForm.firstElementChild) {
+          await (this._petEditMarkupReady ??= (async () => {
+            const response = await fetch('./pet-edit-form.html?v=20261014');
+            if (!response.ok) throw new Error('Pet editing form could not be loaded.');
+            const form = document.createElement('div');
+            form.innerHTML = await response.text();
+            Alpine.mutateDom(() => {
+              this.$refs.petEditForm.appendChild(form);
+              Alpine.initTree(form);
+            });
+          })().finally(() => { this._petEditMarkupReady = null; }));
+        }
         const tools = await adminCustomerPetFieldModulesReady;
+        if (adminCustomerPetFields) return true;
         adminCustomerPetTools = tools;
         const elements = {
           species: document.getElementById("adminPetSpecies"),
