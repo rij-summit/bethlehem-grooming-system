@@ -264,7 +264,7 @@ class AdminPetProfileTest extends TestCase
             ->assertJsonPath('medical_records.1.appointment_id', 701);
     }
 
-    public function test_service_and_confinement_history_are_paginated_pet_scoped_saved_snapshots(): void
+    public function test_service_case_summaries_and_confinement_history_are_paginated_and_pet_scoped(): void
     {
         $this->insertPet(101, 'Mochi');
         $this->insertPet(202, 'Other Pet');
@@ -281,12 +281,30 @@ class AdminPetProfileTest extends TestCase
             DB::table('clinic_confinements')->insert(['id' => $id, 'clinic_appointment_id' => $id, 'clinic_case_service_id' => $id,
                 'admitted_at' => '2026-10-01 10:00:00', 'discharged_at' => '2026-10-02 10:00:00', 'reason' => 'Observation', 'discharge_note' => 'Recovered']);
         }
-        $this->getJson('/api/admin/pets/101/profile?history=services')->assertOk()->assertJsonPath('total', 21)
-            ->assertJsonCount(20, 'data')->assertJsonPath('data.0.id', 21)
-            ->assertJsonPath('data.0.service_snapshot.name', 'Saved service')
-            ->assertJsonPath('data.0.appointment.appointment_reference', 'CL-21')
-            ->assertJsonPath('data.0.charge.amount', '500.00')->assertJsonPath('data.0.notes', 'Saved note');
-        $this->getJson('/api/admin/pets/101/profile?history=services&page=2')->assertOk()->assertJsonCount(1, 'data');
+        // More than one old page of services belongs to a single case, including repeated services.
+        foreach (range(100, 124) as $id) {
+            DB::table('clinic_case_services')->insert(['id' => $id, 'clinic_appointment_id' => 21, 'clinic_service_id' => 1,
+                'status' => 'performed', 'service_snapshot' => json_encode(['name' => 'Saved service']),
+                'quantity' => 2.5, 'applied_price' => 20, 'performed_at' => '2026-10-02 10:00:00']);
+        }
+        foreach (['ordered', 'cancelled'] as $status) {
+            DB::table('clinic_case_services')->insert(['clinic_appointment_id' => 21, 'clinic_service_id' => 1,
+                'status' => $status, 'service_snapshot' => '{}', 'applied_price' => 9999, 'performed_at' => '2026-10-03 10:00:00']);
+        }
+        $first = $this->getJson('/api/admin/pets/101/profile?history=services')->assertOk()->assertJsonPath('total', 21)
+            ->assertJsonPath('last_page', 2)->assertJsonCount(20, 'data')
+            ->assertJsonPath('data.0.appointment_id', 21)->assertJsonPath('data.0.appointment_reference', 'CL-21')
+            ->assertJsonPath('data.0.service_count', 26)->assertJsonPath('data.0.service_total', '1750.00')
+            ->assertJsonPath('data.1.service_count', 1)->assertJsonPath('data.1.service_total', '500.00');
+        $second = $this->getJson('/api/admin/pets/101/profile?history=services&page=2')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.appointment_id', 1);
+        $ids = [...array_column($first->json('data'), 'appointment_id'), ...array_column($second->json('data'), 'appointment_id')];
+        $this->assertCount(21, array_unique($ids));
+        $this->assertSame(range(21, 1), $ids);
+        $this->authenticate(20, 'admin');
+        $this->getJson('/api/admin/pets/101/cases/21/details')->assertOk()->assertJsonCount(26, 'services')
+            ->assertJsonPath('services.0.service_snapshot.name', 'Saved service')
+            ->assertJsonPath('services.1.service_snapshot.name', 'Saved service');
         $this->getJson('/api/admin/pets/101/profile?history=confinement')->assertOk()->assertJsonPath('total', 22)
             ->assertJsonCount(20, 'data')->assertJsonPath('data.0.id', 22)
             ->assertJsonPath('data.0.discharge_note', 'Recovered')
@@ -296,6 +314,22 @@ class AdminPetProfileTest extends TestCase
         $this->authenticate(10, 'customer');
         $this->getJson('/api/admin/pets/101/profile?history=services')->assertForbidden();
         $this->getJson('/api/admin/pets/101/profile?history=confinement')->assertForbidden();
+    }
+
+    public function test_service_case_summary_uses_saved_line_totals_and_handles_empty_history(): void
+    {
+        $this->insertPet(101, 'Mochi'); $this->authenticate(20, 'admin'); $this->createCaseHistoryTables();
+        $this->getJson('/api/admin/pets/101/profile?history=services')->assertOk()->assertJsonPath('total', 0)->assertJsonCount(0, 'data');
+        DB::table('clinic_appointments')->insert(['id' => 1, 'pet_id' => 101, 'appointment_reference' => 'CL-20261014-001',
+            'appointment_date' => '2026-10-14', 'status' => 'completed']);
+        DB::table('clinic_services')->insert(['id' => 1, 'name' => 'Edited catalogue name']);
+        foreach ([1, 2] as $id) {
+            DB::table('clinic_case_services')->insert(['id' => $id, 'clinic_appointment_id' => 1, 'clinic_service_id' => 1,
+                'status' => 'performed', 'service_snapshot' => json_encode(['name' => 'Saved service']),
+                'quantity' => 0.5, 'applied_price' => 0.03, 'performed_at' => '2026-10-14 10:00:00']);
+        }
+        $this->getJson('/api/admin/pets/101/profile?history=services')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.service_count', 2)->assertJsonPath('data.0.service_total', '0.04');
     }
 
     public function test_case_details_share_existing_formats_and_are_case_and_pet_scoped(): void

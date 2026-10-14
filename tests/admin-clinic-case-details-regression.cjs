@@ -93,6 +93,25 @@ async function run() {
   await reduced.state.viewDetail(all.services[1], null, 'services');
   assert.equal(reduced.scroll.at(-1).behavior, 'instant');
   assert.equal(app.scroll.find(item => item.behavior)?.behavior, 'smooth');
+  const summary = setup();
+  const summaryRow = {appointment_id: 900104, appointment_reference: 'CL-20261014-004', service_count: 2, service_total: '750.00'};
+  summary.context.API.adminGetPetCaseDetails = async (petId, id) => {
+    summary.calls.push(['case', petId, id]);
+    const data = structuredClone(cases[id]);
+    data.services.forEach(service => {service.service_snapshot.name = 'Repeated service';});
+    return data;
+  };
+  summary.state.$refs.profileBody.querySelector = selector => {
+    summary.scroll.push(selector);
+    return selector === '[data-case-section="services"]'
+      ? {focus: () => summary.focus.push('services'), getBoundingClientRect: () => ({top: 450})} : null;
+  };
+  await summary.state.viewDetail(summaryRow, null, 'services');
+  assert.deepEqual(summary.calls[0], ['case', pet.id, 900104], 'Case summaries use the existing details endpoint');
+  assert.equal(summary.state.profileDetailTitle, 'Case Details');
+  assert.equal(summary.state.detail.services.length, 2, 'Repeated services remain separate in Case Details');
+  assert.equal(summary.state.detail.services[0].service_snapshot.name, summary.state.detail.services[1].service_snapshot.name);
+  assert.equal(summary.focus.at(-1), 'services', 'A case summary opens the Services section without targeting an individual service');
   const stale = setup(); let finish;
   stale.context.API.adminGetPetCaseDetails = () => new Promise(resolve => {finish = resolve;});
   const opening = stale.state.viewDetail(all.medical_record);

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ClinicCaseService;
 use App\Models\ClinicAppointment;
 use App\Models\ClinicConfinement;
 use App\Models\Pet;
@@ -57,11 +56,15 @@ class AdminPetProfileController extends Controller
             'page' => 'sometimes|integer|min:1',
         ]);
         if (($data['history'] ?? null) === 'services') {
-            return response()->json(ClinicCaseService::query()
-                ->whereHas('appointment', fn ($query) => $query->where('pet_id', $petId))
-                ->where('status', 'performed')
-                ->with(['appointment:id,appointment_reference', 'clinicService', 'charge'])
-                ->orderByDesc('performed_at')->orderByDesc('id')->paginate(20));
+            return response()->json(ClinicAppointment::query()
+                ->join('clinic_case_services as services', 'services.clinic_appointment_id', '=', 'clinic_appointments.id')
+                ->where('clinic_appointments.pet_id', $petId)->where('services.status', 'performed')
+                ->selectRaw('clinic_appointments.id as appointment_id, clinic_appointments.appointment_reference,
+                    COUNT(*) as service_count, SUM(ROUND(services.quantity * services.applied_price, 2)) as service_total')
+                ->groupBy('clinic_appointments.id', 'clinic_appointments.appointment_reference')
+                ->orderByRaw('MAX(services.performed_at) DESC')->orderByDesc('clinic_appointments.id')
+                ->withCasts(['appointment_id' => 'integer', 'service_count' => 'integer', 'service_total' => 'decimal:2'])
+                ->paginate(20));
         }
         if (($data['history'] ?? null) === 'confinement') {
             return response()->json(ClinicConfinement::query()
