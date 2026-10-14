@@ -1,5 +1,4 @@
 function getClinicSection(hash = window.location.hash) {
-  if (hash === '#records') return 'records';
   return hash === '#services' && API.getUserRole() === 'admin' ? 'services' : 'cases';
 }
 
@@ -62,7 +61,7 @@ function adminClinicShell() {
       this.activeSection = section;
       this.sectionError = '';
       this.sectionLoading = section === 'services' && !this.$refs.services.firstElementChild;
-      document.title = `${section === 'records' ? 'Patient Records' : 'Clinic ' + (section === 'services' ? 'Services' : 'Cases')} | Bethlehem Animal Clinic`;
+      document.title = `Clinic ${section === 'services' ? 'Services' : 'Cases'} | Bethlehem Animal Clinic`;
       try {
         const panel = section === 'services' ? await this.mountServices() : this.$refs.cases.firstElementChild;
         if (getClinicSection() !== section) return;
@@ -84,19 +83,11 @@ function adminClinicCasesSection() {
   return Object.assign(component, {
     _initialized: false,
     init() {},
-    async activate(section = 'cases') {
+    async activate() {
       if (!this._initialized) {
         this._initialized = true;
         await initialize.call(this);
       }
-      if (getClinicSection() !== section) return;
-      if (section === 'records') {
-        this.tab = 'records';
-        if (!this._recordsLoaded && !this.accessError) {
-          this._recordsLoaded = true;
-          await this.loadAllRecords();
-        }
-      } else if (this.tab === 'records') this.tab = 'active-cases';
     },
   });
 }

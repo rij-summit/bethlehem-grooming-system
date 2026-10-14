@@ -112,7 +112,7 @@ function installAdminInventoryNavigation() {
 }
 
 function getAdminClinicSection() {
-  return ({'#services': 'services', '#records': 'records'})[window.location.hash] || 'cases';
+  return window.location.hash === '#services' ? 'services' : 'cases';
 }
 
 function installAdminClinicNavigation() {
@@ -134,7 +134,7 @@ function installAdminClinicNavigation() {
   submenu.className = 'admin-inventory-submenu';
   submenu.setAttribute('x-show', 'clinicExpanded');
   submenu.setAttribute('x-cloak', '');
-  for (const [section, label] of Object.entries({cases: 'Cases', records: 'Patient Records', services: 'Services'})) {
+  for (const [section, label] of Object.entries({cases: 'Cases', services: 'Services'})) {
     const child = document.createElement('a');
     child.href = `${url.pathname}#${section}`;
     child.textContent = label;

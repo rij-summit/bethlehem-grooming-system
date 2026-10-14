@@ -70,10 +70,12 @@ async function navigation() {
   await app.visit('#unknown');
   assert.equal(app.context.location.hash, '#cases');
   await app.visit('#records');
-  assert.equal(app.shell.activeSection, 'records');
+  assert.equal(app.shell.activeSection, 'cases');
+  assert.equal(app.context.location.hash, '#cases', 'Legacy Records links normalize to Cases');
+  assert.equal(app.context.document.title, 'Clinic Cases | Bethlehem Animal Clinic');
   await app.visit('#cases');
   await app.visit('#records');
-  assert.equal(app.calls.filter(call => call === 'records:load').length, 1, 'Records load only on their first visit');
+  assert.equal(app.calls.filter(call => call === 'records:load').length, 0, 'The shell no longer has a separate Records activation');
   assert.equal(app.calls.filter(call => call === 'cases:init').length, 1, 'Records reuse the Clinic workspace');
   app.shell.destroy();
   assert.equal(app.listeners.has('hashchange'), false);

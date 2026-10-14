@@ -635,7 +635,6 @@ function adminClinicPage() {
     payment: { open: false, case: null, method: "cash", saving: false, error: "" },
     paymentReturnFocus: null,
     tab: "active-cases",
-    _recordsLoaded: false,
     addCustomer: { open: false, saving: false, error: "", form: {} },
 
     // Patient profile panel
@@ -674,6 +673,7 @@ function adminClinicPage() {
       if (new URLSearchParams(window.location.search).get("tab") === "for-payment") this.tab = "for-payment";
       if (new URLSearchParams(window.location.search).get("tab") === "confined") { this.tab = "confined"; this.loadConfinedCases(); }
       this.loadActiveCases();
+      this.loadAllRecords();
       window.addEventListener("clinic-case-updated", () => {
         this.loadActiveCases();
         if (this.tab === 'confined') this.loadConfinedCases();
@@ -846,21 +846,26 @@ function adminClinicPage() {
     },
 
     async loadAllRecords(append = false) {
+      const rid = ++this._reqId;
       this.searching = true;
       this.noResults = false;
       const page = append ? this.recordsPage + 1 : 1;
       try {
         const res = await API.getClinicRecords(page);
+        if (rid !== this._reqId) return;
         this.recordsPage = page;
         this.hasMoreRecords = !!res.has_more;
         this.searchRows = append ? this.searchRows.concat(res.rows || []) : (res.rows || []);
         this.noResults = this.searchRows.length === 0;
       } catch {
+        if (rid !== this._reqId) return;
         if (!append) this.searchRows = [];
         this.noResults = false;
       } finally {
-        this.searching = false;
-        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+        if (rid === this._reqId) {
+          this.searching = false;
+          this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
+        }
       }
     },
 
@@ -904,22 +909,19 @@ function adminClinicPage() {
 
     async onSearchInput() {
       const q = this.searchQuery.trim();
+      clearTimeout(this._timer);
+      const rid = ++this._reqId;
       if (q.length === 0) {
-        clearTimeout(this._timer);
-        this._reqId++;
         await this.loadAllRecords();
         return;
       }
       if (q.length < 2) {
-        clearTimeout(this._timer);
-        this._reqId++;
         this.searchRows = [];
         this.noResults  = false;
+        this.searching  = false;
         return;
       }
-      clearTimeout(this._timer);
       this._timer = setTimeout(async () => {
-        const rid = ++this._reqId;
         this.searching = true;
         try {
           const res = await API.searchWalkInCustomers(q);
