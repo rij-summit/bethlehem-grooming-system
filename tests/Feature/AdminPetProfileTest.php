@@ -128,6 +128,7 @@ class AdminPetProfileTest extends TestCase
     protected function tearDown(): void
     {
         foreach ([
+            'clinic_confinements', 'clinic_case_services', 'clinic_charges', 'clinic_services',
             'vaccination_records',
             'clinic_attachments',
             'clinic_medications',
@@ -246,6 +247,55 @@ class AdminPetProfileTest extends TestCase
         $this->getJson('/api/admin/pets/999/profile')
             ->assertNotFound()
             ->assertJsonPath('message', 'Pet not found.');
+    }
+
+    public function test_service_and_confinement_history_are_paginated_pet_scoped_saved_snapshots(): void
+    {
+        $this->insertPet(101, 'Mochi');
+        $this->insertPet(202, 'Other Pet');
+        $this->authenticate(20, 'staff');
+        Schema::create('clinic_services', function (Blueprint $table) {
+            $table->id(); $table->string('name');
+        });
+        Schema::create('clinic_charges', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_case_service_id'); $table->decimal('amount', 10, 2);
+        });
+        Schema::create('clinic_case_services', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_service_id');
+            $table->string('status'); $table->json('service_snapshot'); $table->text('notes')->nullable();
+            $table->decimal('applied_price', 10, 2); $table->decimal('quantity', 10, 2)->default(1); $table->timestamp('performed_at');
+        });
+        Schema::create('clinic_confinements', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('clinic_appointment_id'); $table->unsignedBigInteger('clinic_case_service_id');
+            $table->timestamp('admitted_at'); $table->timestamp('discharged_at')->nullable(); $table->text('reason');
+            $table->text('discharge_note')->nullable();
+        });
+        DB::table('clinic_services')->insert(['id' => 1, 'name' => 'Renamed catalogue service']);
+        foreach (range(1, 23) as $id) {
+            DB::table('clinic_appointments')->insert(['id' => $id, 'pet_id' => $id === 23 ? 202 : 101,
+                'appointment_reference' => 'CL-'.$id, 'appointment_date' => '2026-10-01', 'status' => 'completed']);
+            DB::table('clinic_case_services')->insert(['id' => $id, 'clinic_appointment_id' => $id, 'clinic_service_id' => 1,
+                'status' => $id === 22 ? 'cancelled' : 'performed', 'service_snapshot' => json_encode(['name' => 'Saved service']),
+                'notes' => 'Saved note', 'applied_price' => 500, 'performed_at' => '2026-10-01 10:00:00']);
+            DB::table('clinic_charges')->insert(['clinic_case_service_id' => $id, 'amount' => 500]);
+            DB::table('clinic_confinements')->insert(['id' => $id, 'clinic_appointment_id' => $id, 'clinic_case_service_id' => $id,
+                'admitted_at' => '2026-10-01 10:00:00', 'discharged_at' => '2026-10-02 10:00:00', 'reason' => 'Observation', 'discharge_note' => 'Recovered']);
+        }
+        $this->getJson('/api/admin/pets/101/profile?history=services')->assertOk()->assertJsonPath('total', 21)
+            ->assertJsonCount(20, 'data')->assertJsonPath('data.0.id', 21)
+            ->assertJsonPath('data.0.service_snapshot.name', 'Saved service')
+            ->assertJsonPath('data.0.appointment.appointment_reference', 'CL-21')
+            ->assertJsonPath('data.0.charge.amount', '500.00')->assertJsonPath('data.0.notes', 'Saved note');
+        $this->getJson('/api/admin/pets/101/profile?history=services&page=2')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/admin/pets/101/profile?history=confinement')->assertOk()->assertJsonPath('total', 22)
+            ->assertJsonCount(20, 'data')->assertJsonPath('data.0.id', 22)
+            ->assertJsonPath('data.0.discharge_note', 'Recovered')
+            ->assertJsonPath('data.0.case_service.service_snapshot.name', 'Saved service');
+        $this->getJson('/api/admin/pets/101/profile?history=confinement&page=2')->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson('/api/admin/pets/101/profile?history=unknown')->assertUnprocessable();
+        $this->authenticate(10, 'customer');
+        $this->getJson('/api/admin/pets/101/profile?history=services')->assertForbidden();
+        $this->getJson('/api/admin/pets/101/profile?history=confinement')->assertForbidden();
     }
 
     private function insertPet(int $petId, string $name): void

@@ -199,9 +199,11 @@ const draft = {
   assert.equal(treatment.form.inventory_quantity, "");
 
   const page = fs.readFileSync(path.join(root, "pages/admin/clinic.html"), "utf8");
-  assert.ok(page.includes("No treatments recorded for this pet."));
+  assert.ok(page.includes("No treatments recorded for this case."));
   assert.ok(!page.includes("Create a draft to begin this patient's"));
-  assert.ok(page.includes("Add Treatment"));
+  assert.ok(!page.includes("Add Treatment"));
+  assert.ok(page.includes("Record Treatment"));
+  assert.ok(page.includes("Current Visit Treatments"));
   assert.ok(page.includes(':aria-pressed="treatmentType'));
 
   const css = fs.readFileSync(path.join(root, "css/output.css"), "utf8");

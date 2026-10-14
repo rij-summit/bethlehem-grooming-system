@@ -32,9 +32,10 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('Medical Record', $this->clinicPage);
         $this->assertStringContainsString("selectSection('vaccinations')", $this->clinicPage);
         $this->assertStringContainsString('x-data="adminClinicVaccinations()"', $this->clinicPage);
-        $this->assertStringContainsString('Add Treatment', $this->clinicPage);
-        $this->assertStringContainsString('No treatments recorded for this pet.', $this->clinicPage);
-        $this->assertStringContainsString('Loading treatment history…', $this->clinicPage);
+        $this->assertStringNotContainsString('Add Treatment', $this->clinicPage);
+        $this->assertStringContainsString('Record Treatment', $this->clinicPage);
+        $this->assertStringContainsString('No treatments recorded for this case.', $this->clinicPage);
+        $this->assertStringContainsString('Loading treatments…', $this->clinicPage);
         $this->assertStringContainsString('@click="loadVaccinations()"', $this->clinicPage);
 
         $this->assertStringContainsString(
@@ -65,7 +66,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            '`/admin/pets/${encodeURIComponent(petId)}/vaccinations`',
+            '`/admin/pets/${encodeURIComponent(petId)}/vaccinations${query}`',
             $this->apiLayer,
         );
         $this->assertStringContainsString(
@@ -82,7 +83,7 @@ class AdminVaccinationInterfaceTest extends TestCase
     {
         $this->assertStringNotContainsString('fetch(', $this->vaccinationComponent);
         $this->assertStringContainsString(
-            'API.getAdminPetVaccinations(requestedPetId)',
+            'API.getAdminPetVaccinations(requestedPetId, requestedCaseId)',
             $this->vaccinationComponent,
         );
         $this->assertStringContainsString(
@@ -173,7 +174,7 @@ class AdminVaccinationInterfaceTest extends TestCase
     {
         $form = $this->sourceBetween(
             $this->clinicPage,
-            '<!-- Vaccination form dialog (create / edit) -->',
+            '<!-- Current-case treatment entry -->',
             '<!-- Vaccination detail dialog -->',
         );
 
@@ -211,7 +212,7 @@ class AdminVaccinationInterfaceTest extends TestCase
     {
         $form = $this->sourceBetween(
             $this->clinicPage,
-            '<!-- Vaccination form dialog (create / edit) -->',
+            '<!-- Current-case treatment entry -->',
             '<!-- Vaccination detail dialog -->',
         );
         $payloadBuilder = $this->sourceBetween(
@@ -227,7 +228,7 @@ class AdminVaccinationInterfaceTest extends TestCase
         $this->assertStringContainsString('step="1"', $form);
 
         $this->assertStringContainsString('id="vaccination-administered-date" type="text" readonly', $form);
-        $this->assertStringContainsString('New administrations use today; existing dates are preserved.', $form);
+        $this->assertStringContainsString('id="historical-administered-date" type="date"', $form);
         $this->assertStringContainsString('this.recordKind === "historical" ? {', $payloadBuilder);
         $this->assertStringContainsString('administered_date: nullableText("administered_date")', $payloadBuilder);
 
@@ -248,11 +249,11 @@ class AdminVaccinationInterfaceTest extends TestCase
     {
         $finish = $this->sourceBetween(
             $this->vaccinationComponent,
-            'async saveAndFinishCase() {',
+            'saveAndFinishCase() {',
             'confirmDeduction(vaccine, confirmLabel, medicine = false, quantity = this.form.inventory_quantity) {',
         );
 
-        $this->assertStringContainsString('{ finishCase: true, consumeInventory: true }', $finish);
+        $this->assertStringContainsString('{ finishCase, consumeInventory: usesInventory }', $finish);
         $this->assertStringNotContainsString('finishClinicCase', $finish);
         $this->assertStringContainsString('finishCase ? { finish_case: true } : {}', $this->apiLayer);
         $this->assertStringNotContainsString('stockOut(', $this->vaccinationComponent);

@@ -814,6 +814,8 @@ class AdminClinicController extends Controller
             'owner_account_deleted' => $ownerAccountDeleted,
             'isWalkin' => $walkin !== null,
             'owner' => [
+                'id' => $pet?->user_id ?? $pet?->unregistered_customer_id,
+                'recordType' => $pet?->user_id ? 'registered' : 'unregistered',
                 'name' => $ownerName,
                 'contact_number' => $contactNumber,
                 'email' => $ownerEmail,

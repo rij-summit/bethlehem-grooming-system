@@ -1106,8 +1106,9 @@ var API = (() => {
     return data;
   }
 
-  async function adminGetPetProfile(petId) {
-    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/profile`, null, getAdminToken());
+  async function adminGetPetProfile(petId, history = null, page = 1) {
+    const query = history ? `?history=${encodeURIComponent(history)}&page=${page}` : '';
+    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/profile${query}`, null, getAdminToken());
   }
 
   async function resendVerification(email) {
@@ -1999,10 +2000,11 @@ var API = (() => {
     );
   }
 
-  async function getAdminPetVaccinations(petId) {
+  async function getAdminPetVaccinations(petId, clinicAppointmentId = null) {
+    const query = clinicAppointmentId == null ? '' : `?clinic_appointment_id=${encodeURIComponent(clinicAppointmentId)}`;
     return request(
       "GET",
-      `/admin/pets/${encodeURIComponent(petId)}/vaccinations`,
+      `/admin/pets/${encodeURIComponent(petId)}/vaccinations${query}`,
       null,
       getAdminToken(),
     );

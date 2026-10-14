@@ -452,6 +452,16 @@ function adminClinicModal() {
       }
     },
 
+    caseTabKeydown(event) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || this.workspaceSaving) return;
+      const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')].filter(tab => !tab.disabled && tab.getClientRects().length);
+      const index = tabs.indexOf(event.target);
+      if (index < 0) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+      tabs[next]?.click(); tabs[next]?.focus();
+    },
+
     openCharges() {
       if (!this.$store.clinicAccess.permissions.billing || !this.currentAppt?.id || this.saving || this.attachmentBusy || this.workspaceSaving) return;
       this.chargesOpen = true;
@@ -471,6 +481,7 @@ function adminClinicModal() {
       this.optionsLoading = false;
       this.returnFocus?.focus();
       this.activeSection = "medical";
+      window.dispatchEvent(new CustomEvent('clinic-record-closed'));
     },
 
     selectAttachment(event) {
@@ -647,6 +658,9 @@ function adminClinicPage() {
       records: [],
     },
     _profileRequest: 0,
+    historyTab: 'medical',
+    historyTabs: [{id: 'medical', label: 'Medical Records'}, {id: 'treatment', label: 'Treatment'}, {id: 'services', label: 'Services'}, {id: 'confinement', label: 'Confinement'}],
+    histories: {},
     profileReturnFocus: null,
     profilePageOverflow: null,
     profileScrollPosition: 0,
@@ -660,6 +674,7 @@ function adminClinicPage() {
 
     // Owner's pet list (opened by View)
     petPicker: { open: false, owner: null, pets: [] },
+    petPickerReturnFocus: null,
 
     // Read-only consultation detail
     detail: { record: null },
@@ -963,6 +978,12 @@ function adminClinicPage() {
       this.loadAllRecords();
     },
 
+    openCaseProfile(item, trigger) {
+      if (this.caseBusyId !== null) return;
+      return this.openProfile({pet: item.pet, owner: {...item.owner,
+        fullName: item.ownerName, phone: item.contactNumber}}, trigger);
+    },
+
     async openProfile(row, trigger = document.activeElement) {
       if (!row.pet?.id) return;
       const request = ++this._profileRequest;
@@ -975,6 +996,9 @@ function adminClinicPage() {
       this.profileVisit = null;
       this.profileActionError = '';
       this.profileEditing = false;
+      this.historyTab = 'medical';
+      this.histories = Object.fromEntries(['treatment', 'services', 'confinement'].map(tab =>
+        [tab, {rows: [], loaded: false, loading: false, error: '', page: 0, lastPage: 1}]));
       this.profile = {
         open: true,
         loading: true,
@@ -991,7 +1015,7 @@ function adminClinicPage() {
       try {
         const [data, ownerData] = await Promise.all([
           API.adminGetPetProfile(row.pet.id),
-          row.owner.recordType === 'unregistered'
+          !row.owner?.id ? Promise.resolve({customer: {pets: [row.pet]}}) : row.owner.recordType === 'unregistered'
             ? API.getUnregisteredCustomerDetails(row.owner.id)
             : API.getCustomerDetails(row.owner.id),
         ]);
@@ -1012,7 +1036,7 @@ function adminClinicPage() {
       }
     },
 
-    closeProfile() {
+    closeProfile(restoreFocus = true) {
       if (this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
       this._profileRequest++;
       this.profile.open = false;
@@ -1021,7 +1045,7 @@ function adminClinicPage() {
         document.body.style.overflow = this.profilePageOverflow;
         this.profilePageOverflow = null;
       }
-      this.$nextTick?.(() => this.profileReturnFocus?.focus());
+      if (restoreFocus) this.$nextTick?.(() => this.profileReturnFocus?.focus());
     },
 
     trapProfileFocus(event) {
@@ -1056,14 +1080,16 @@ function adminClinicPage() {
       ];
     },
 
-    openPetPicker(row) {
+    openPetPicker(row, trigger = document.activeElement) {
       if (!row.pets?.length) return;
+      this.petPickerReturnFocus = trigger?.querySelector?.('button') || trigger;
       this.petPicker = { open: true, owner: row.owner, pets: row.pets };
       this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
     },
 
-    closePetPicker() {
+    closePetPicker(restoreFocus = true) {
       this.petPicker.open = false;
+      if (restoreFocus) this.$nextTick?.(() => this.petPickerReturnFocus?.focus());
     },
 
     get currentClinicVisit() {
@@ -1072,10 +1098,11 @@ function adminClinicPage() {
     get profileActionLabel() { return this.currentClinicVisit ? 'Open Active Case' : 'Check In Patient'; },
     openProfileCase() {
       const visit = this.currentClinicVisit;
-      if (!visit || this.profileBusy) return;
-      this.closeProfile();
-      this.closePetPicker();
-      this.openCase(visit);
+      if (!visit || this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
+      const trigger = this.petPicker.open ? this.petPickerReturnFocus : this.profileReturnFocus;
+      this.closeProfile(false);
+      this.closePetPicker(false);
+      this.$nextTick?.(() => { trigger?.focus(); this.openCase(visit); });
     },
     async checkInPatient() {
       if (!this.permissions.intake || !this.profile.pet?.id || this.profileBusy) return;
@@ -1152,10 +1179,84 @@ function adminClinicPage() {
       this.$nextTick?.(() => this.$refs.editPatient?.focus());
     },
 
-    viewDetail(record, trigger = document.activeElement) {
+    selectHistory(tab) {
+      this.historyTab = tab;
+      if (tab !== 'medical' && !this.histories[tab].loaded && !this.histories[tab].loading) this.loadHistory(tab);
+    },
+    historyKeydown(event) {
+      const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      const index = this.historyTabs.findIndex(tab => tab.id === this.historyTab);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? 3 : (index + (event.key === 'ArrowRight' ? 1 : 3)) % 4;
+      this.selectHistory(this.historyTabs[next].id);
+      event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus();
+    },
+    async loadHistory(tab, page = 1) {
+      const state = this.histories[tab], request = this._profileRequest, petId = this.profile.pet.id;
+      if (state.loading) return;
+      state.loading = true; state.error = '';
+      try {
+        const response = tab === 'treatment' ? await API.getAdminPetVaccinations(petId)
+          : await API.adminGetPetProfile(petId, tab, page);
+        if (request !== this._profileRequest) return;
+        const rows = tab === 'treatment' ? response.vaccinations || [] : response.data;
+        state.rows = page === 1 ? rows : [...state.rows, ...rows];
+        state.page = response.current_page || 1; state.lastPage = response.last_page || 1;
+        state.loaded = true;
+      } catch (error) { if (request === this._profileRequest) state.error = error.message || 'Could not load patient history.'; }
+      finally { if (request === this._profileRequest) { state.loading = false; this.$nextTick?.(() => window.lucide?.createIcons()); } }
+    },
+    treatmentSummary: record => clinicTreatmentSummary(record),
+    treatmentDetails: record => clinicTreatmentDetails(record),
+    historyService(entry) { return entry?.service_snapshot || entry?.clinic_service || {}; },
+    historyPrice(value) { return value == null ? '—' : this.money(value); },
+    historyDuration(episode) { return clinicConfinementDuration(episode.admitted_at, episode.discharged_at || this.$store.clinicConfinementClock?.now || Date.now()); },
+    historyTime(value) { return value ? new Date(value).toLocaleString('en-PH', {dateStyle: 'medium', timeStyle: 'short'}) : '—'; },
+    get profileDetailTitle() { return ({medical: 'Medical Record', treatment: 'Treatment Record', services: 'Service Record', confinement: 'Confinement Record'})[this.detail.kind || 'medical']; },
+    historyDetailFields() {
+      const record = this.detail.record;
+      if (!record || !this.detail.kind || this.detail.kind === 'medical') return [];
+      if (this.detail.kind === 'treatment') return this.treatmentDetails(record);
+      if (this.detail.kind === 'services') return [
+        {label: 'Service', value: this.historyService(record).name},
+        {label: 'Date', value: this.historyTime(record.performed_at || record.ordered_at)},
+        {label: 'Price', value: this.historyPrice(record.applied_price)},
+        {label: 'Quantity', value: record.quantity},
+        {label: 'Total', value: this.historyPrice(record.charge?.amount)},
+        {label: 'Case', value: record.appointment?.appointment_reference},
+        {label: 'Notes', value: record.notes},
+      ];
+      return [
+        {label: 'Confinement', value: this.historyService(record.case_service).name},
+        {label: 'Status', value: record.discharged_at ? 'Discharged' : 'Confined'},
+        {label: 'Admitted', value: this.historyTime(record.admitted_at)},
+        {label: 'Discharged', value: this.historyTime(record.discharged_at)},
+        {label: 'Duration', value: this.historyDuration(record)},
+        {label: 'Attending Veterinarian', value: record.attending_veterinarian_name},
+        {label: 'Reason', value: record.reason}, {label: 'Notes', value: record.notes},
+        {label: 'Discharge Note', value: record.discharge_note},
+        {label: 'Case', value: record.appointment?.appointment_reference},
+      ];
+    },
+    async loadHistoryObservations(page = 1) {
+      const detail = this.detail, request = this._profileRequest;
+      if (detail.loading) return;
+      detail.loading = true; detail.error = '';
+      try {
+        const response = await API.getClinicConfinementObservations(detail.record.clinic_appointment_id, page);
+        if (request !== this._profileRequest || this.detail !== detail) return;
+        detail.observations = page === 1 ? response.data : [...detail.observations, ...response.data];
+        detail.page = response.current_page; detail.lastPage = response.last_page;
+      } catch (error) { if (request === this._profileRequest && this.detail === detail) detail.error = error.message || 'Could not load monitoring history.'; }
+      finally { if (request === this._profileRequest && this.detail === detail) detail.loading = false; }
+    },
+
+    viewDetail(record, trigger = document.activeElement, kind = 'medical') {
       this.profileScrollPosition = this.$refs.profileBody?.scrollTop || 0;
       this.profileRecordTrigger = trigger?.querySelector?.('button') || trigger;
-      this.detail = { record };
+      this.detail = { record, kind, observations: [], loading: false, error: '', page: 0, lastPage: 1 };
+      if (kind === 'confinement') this.loadHistoryObservations();
       this.detailAttachmentError = "";
       this.$nextTick?.(() => {
         if (this.$refs.profileBody) this.$refs.profileBody.scrollTop = 0;

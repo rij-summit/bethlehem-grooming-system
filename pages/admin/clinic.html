@@ -5,10 +5,10 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Cases | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-record-workflow" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
     <style>
-      :is([x-data="adminClinicCasesSection()"], [aria-labelledby="patient-record-title"]) :is(button, input, select, textarea):focus-visible {
+      :is([x-data="adminClinicCasesSection()"], [aria-labelledby="patient-record-title"]) :is(button, input, select, textarea, [tabindex="0"]):focus-visible {
         outline: 2px solid #315b7e;
         outline-offset: 2px;
       }
@@ -144,7 +144,11 @@
               <template x-for="caseItem in caseRows" :key="caseItem.id">
                 <div>
                   <div x-show="tab === 'active-cases' && caseItem.status === 'waiting_to_arrive' && caseItem.id === waitingCases[0]?.id" class="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-bold text-[#2f4b66]">Waiting for Arrival <span class="text-xs font-semibold text-slate-500" x-text="waitingCases.length"></span></div>
-                  <div class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" :class="tab === 'active-cases' ? 'cursor-pointer transition hover:bg-[#f0f7fd]' : ''"
+                    :tabindex="tab === 'active-cases' && caseItem.pet?.id ? 0 : -1" role="group" :aria-label="tab === 'active-cases' ? 'View Patient Profile for ' + (caseItem.pet?.name || 'patient') : null"
+                    @click="if (tab === 'active-cases' && !$event.target.closest('button, a, input, select, textarea, [role=menu]')) openCaseProfile(caseItem, $event.currentTarget)"
+                    @keydown.enter="if ($event.target === $event.currentTarget && tab === 'active-cases') { $event.preventDefault(); openCaseProfile(caseItem, $event.currentTarget) }"
+                    @keydown.space="if ($event.target === $event.currentTarget && tab === 'active-cases') { $event.preventDefault(); openCaseProfile(caseItem, $event.currentTarget) }">
                     <div><p class="font-semibold text-slate-800" x-text="caseItem.pet?.name || 'Patient'"></p><p class="text-xs text-slate-500" x-text="(caseItem.ownerName || 'Owner') + ' · ' + caseLabel(caseItem)"></p><p class="text-xs text-slate-400" x-text="(caseItem.chief_complaint ? caseItem.chief_complaint + ' · ' : '') + 'Opened ' + caseOpened(caseItem)"></p></div>
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700" x-text="caseStatus(caseItem)"></span>
@@ -257,7 +261,7 @@
                   <tr
                     class="border-b border-slate-100 last:border-0 transition"
                     :class="row.pets?.length ? 'hover:bg-[#f0f7fd] cursor-pointer' : 'hover:bg-slate-50'"
-                    @click="openPetPicker(row)"
+                    @click="openPetPicker(row, $event.currentTarget)"
                   >
                     <td class="px-4 py-3">
                       <div class="flex items-center gap-3">
@@ -291,7 +295,7 @@
                     <td class="px-4 py-3 text-right">
                       <template x-if="row.pets?.length">
                         <button
-                          @click.stop="openPetPicker(row)"
+                          @click.stop="openPetPicker(row, $event.currentTarget)"
                           type="button"
                           class="inline-flex items-center gap-1 rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-3 py-1.5 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5]">
                           View <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i>
@@ -371,9 +375,9 @@
                     <i data-lucide="paw-print" class="h-6 w-6 text-[#315b7e]" aria-hidden="true"></i>
                   </div>
                   <div class="min-w-0">
-                    <h2 id="patient-profile-title" class="break-words text-lg font-bold text-[#2f4b66]" x-text="detail.record ? 'Medical Record' : profileEditing ? 'Edit Patient' : patientName"></h2>
+                    <h2 id="patient-profile-title" class="break-words text-lg font-bold text-[#2f4b66]" x-text="detail.record ? profileDetailTitle : profileEditing ? 'Edit Patient' : patientName"></h2>
                     <p x-show="!detail.record && !profileEditing" class="text-xs text-slate-400">Patient Profile</p>
-                    <p x-show="detail.record" class="mt-0.5 text-xs text-slate-500" x-text="[fmtDate(detail.record?.appointment_date), detail.record?.appointment_reference].filter(Boolean).join(' · ')"></p>
+                    <p x-show="detail.record" class="mt-0.5 text-xs text-slate-500" x-text="[fmtDate(detail.record?.appointment_date || detail.record?.administered_date || detail.record?.performed_at || detail.record?.admitted_at), detail.record?.appointment_reference || detail.record?.clinic_appointment_reference || detail.record?.appointment?.appointment_reference].filter(Boolean).join(' · ')"></p>
                   </div>
                 </div>
               </div>
@@ -404,7 +408,7 @@
                     <div class="flex flex-wrap gap-2">
                       <button x-show="permissions.intake || currentClinicVisit" @click="currentClinicVisit ? openProfileCase() : checkInPatient()" :disabled="profileBusy" type="button"
                         class="rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="profileBusy ? 'Checking In…' : profileActionLabel"></button>
-                      <button x-ref="editPatient" x-show="permissions.access" @click="editPatient()" :disabled="profileBusy" type="button"
+                      <button x-ref="editPatient" x-show="permissions.access && profile.owner?.id" @click="editPatient()" :disabled="profileBusy" type="button"
                         class="rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Edit Patient</button>
                     </div>
                   </div>
@@ -446,15 +450,13 @@
                 </section>
 
                 <section aria-label="Patient history" class="min-w-0 border-t border-slate-200 pt-5">
-                  <div role="tablist" aria-label="Patient history" class="mb-5 flex gap-2 overflow-x-auto"
-                    @keydown="if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes($event.key)) { $event.preventDefault(); $refs.medicalHistoryTab.focus() }">
-                    <button id="profile-medical-tab" x-ref="medicalHistoryTab" role="tab" type="button" aria-selected="true" aria-controls="profile-medical-history" tabindex="0"
-                      class="shrink-0 whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white shadow-sm">Medical Records</button>
-                    <button role="tab" type="button" aria-selected="false" aria-disabled="true" tabindex="-1" disabled class="shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 disabled:cursor-not-allowed">Treatment</button>
-                    <button role="tab" type="button" aria-selected="false" aria-disabled="true" tabindex="-1" disabled class="shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 disabled:cursor-not-allowed">Services</button>
-                    <button role="tab" type="button" aria-selected="false" aria-disabled="true" tabindex="-1" disabled class="shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 disabled:cursor-not-allowed">Confinement</button>
+                  <div role="tablist" aria-label="Patient history" class="mb-5 flex gap-2 overflow-x-auto" @keydown="historyKeydown($event)">
+                    <template x-for="tab in historyTabs" :key="tab.id">
+                      <button :id="'profile-' + tab.id + '-tab'" role="tab" type="button" :aria-selected="historyTab === tab.id" :aria-controls="'profile-' + tab.id + '-history'" :tabindex="historyTab === tab.id ? 0 : -1" @click="selectHistory(tab.id)"
+                        class="shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition" :class="historyTab === tab.id ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'" x-text="tab.label"></button>
+                    </template>
                   </div>
-                  <div id="profile-medical-history" role="tabpanel" aria-labelledby="profile-medical-tab">
+                  <div id="profile-medical-history" x-show="historyTab === 'medical'" role="tabpanel" aria-labelledby="profile-medical-tab">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                       <div class="flex items-center gap-2">
                         <h3 class="text-sm font-bold text-[#2f4b66]">Medical Records</h3>
@@ -470,7 +472,8 @@
                           </thead>
                           <tbody class="divide-y divide-slate-100">
                             <template x-for="(rec, i) in profile.records" :key="rec.appointment_id || i">
-                              <tr class="cursor-pointer transition hover:bg-[#f0f7fd]" @click="viewDetail(rec, $event.currentTarget)">
+                              <tr class="cursor-pointer transition hover:bg-[#f0f7fd]" tabindex="0" @click="viewDetail(rec, $event.currentTarget)"
+                                @keydown.enter="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget) }" @keydown.space="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget) }">
                                 <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700" x-text="fmtDate(rec.appointment_date)"></td>
                                 <td class="truncate px-4 py-3 text-slate-600" :title="rec.chief_complaint" x-text="rec.chief_complaint || '—'"></td>
                                 <td class="truncate px-4 py-3 text-slate-600" :title="rec.working_diagnosis ?? rec.diagnosis" x-text="(rec.working_diagnosis ?? rec.diagnosis) || '—'"></td>
@@ -483,10 +486,85 @@
                       </div>
                     </div>
                   </div>
+                  <div id="profile-treatment-history" x-show="historyTab === 'treatment'" role="tabpanel" aria-labelledby="profile-treatment-tab">
+                    <h3 class="mb-3 text-sm font-bold text-[#2f4b66]">Treatment</h3>
+                    <template x-if="histories.treatment"><div :aria-busy="histories.treatment.loading">
+                      <p x-show="histories.treatment.loading" role="status" class="py-4 text-sm text-slate-500">Loading records…</p>
+                      <div x-show="histories.treatment.error" role="alert" class="mb-3 text-sm text-red-600"><span x-text="histories.treatment.error"></span> <button type="button" @click="loadHistory('treatment', histories.treatment.page + 1)" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
+                      <div class="overflow-hidden rounded-2xl border border-slate-200"><div class="overflow-x-auto" role="region" aria-label="Treatment history" tabindex="0">
+                        <table class="w-full min-w-[640px] table-fixed text-left text-sm"><caption class="sr-only">Treatment history for this patient</caption>
+                          <thead class="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th scope="col" class="w-[20%] px-4 py-3">Date</th><th scope="col" class="w-[35%] px-4 py-3">Treatment</th><th scope="col" class="w-[30%] px-4 py-3">Details</th><th scope="col" class="w-[15%] px-4 py-3 text-right">View</th></tr></thead>
+                          <tbody class="divide-y divide-slate-100">
+                            <template x-for="rec in histories.treatment.rows" :key="rec.id">
+                              <tr tabindex="0" class="cursor-pointer transition hover:bg-[#f0f7fd]" @click="viewDetail(rec, $event.currentTarget, 'treatment')"
+                                @keydown.enter="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'treatment') }" @keydown.space="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'treatment') }"><td class="truncate px-4 py-3 text-slate-600" :title="fmtDate(rec.administered_date)" x-text="fmtDate(rec.administered_date)"></td><td class="truncate px-4 py-3 text-slate-600" :title="rec.treatment_name || rec.vaccine_name || '—'" x-text="rec.treatment_name || rec.vaccine_name || '—'"></td><td class="truncate px-4 py-3 text-slate-600" :title="treatmentSummary(rec)" x-text="treatmentSummary(rec)"></td><td class="px-4 py-3 text-right"><button type="button" @click.stop="viewDetail(rec, $event.currentTarget, 'treatment')" :aria-label="'View treatment record from ' + fmtDate(rec.administered_date)" class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-[#315b7e] hover:bg-[#eef5fb]">View<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button></td></tr>
+                            </template>
+                            <tr x-show="histories.treatment.loaded && !histories.treatment.rows.length && !histories.treatment.error"><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">No treatment records yet.</td></tr>
+                          </tbody>
+                        </table>
+                      </div></div>
+                      <button x-show="histories.treatment.page < histories.treatment.lastPage" type="button" @click="loadHistory('treatment', histories.treatment.page + 1)" :disabled="histories.treatment.loading" class="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Load more</button>
+                    </div></template>
+                  </div>
+                  <div id="profile-services-history" x-show="historyTab === 'services'" role="tabpanel" aria-labelledby="profile-services-tab">
+                    <h3 class="mb-3 text-sm font-bold text-[#2f4b66]">Services</h3>
+                    <template x-if="histories.services"><div :aria-busy="histories.services.loading">
+                      <p x-show="histories.services.loading" role="status" class="py-4 text-sm text-slate-500">Loading records…</p>
+                      <div x-show="histories.services.error" role="alert" class="mb-3 text-sm text-red-600"><span x-text="histories.services.error"></span> <button type="button" @click="loadHistory('services', histories.services.page + 1)" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
+                      <div class="overflow-hidden rounded-2xl border border-slate-200"><div class="overflow-x-auto" role="region" aria-label="Services history" tabindex="0">
+                        <table class="w-full min-w-[640px] table-fixed text-left text-sm"><caption class="sr-only">Services history for this patient</caption>
+                          <thead class="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th scope="col" class="w-[20%] px-4 py-3">Date</th><th scope="col" class="w-[35%] px-4 py-3">Service</th><th scope="col" class="w-[30%] px-4 py-3">Price</th><th scope="col" class="w-[15%] px-4 py-3 text-right">View</th></tr></thead>
+                          <tbody class="divide-y divide-slate-100">
+                            <template x-for="rec in histories.services.rows" :key="rec.id">
+                              <tr tabindex="0" class="cursor-pointer transition hover:bg-[#f0f7fd]" @click="viewDetail(rec, $event.currentTarget, 'services')"
+                                @keydown.enter="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'services') }" @keydown.space="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'services') }"><td class="truncate px-4 py-3 text-slate-600" :title="fmtDate(rec.performed_at || rec.ordered_at)" x-text="fmtDate(rec.performed_at || rec.ordered_at)"></td><td class="truncate px-4 py-3 text-slate-600" :title="historyService(rec).name || '—'" x-text="historyService(rec).name || '—'"></td><td class="truncate px-4 py-3 text-slate-600" :title="historyPrice(rec.applied_price)" x-text="historyPrice(rec.applied_price)"></td><td class="px-4 py-3 text-right"><button type="button" @click.stop="viewDetail(rec, $event.currentTarget, 'services')" :aria-label="'View services record from ' + fmtDate(rec.performed_at || rec.ordered_at)" class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-[#315b7e] hover:bg-[#eef5fb]">View<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button></td></tr>
+                            </template>
+                            <tr x-show="histories.services.loaded && !histories.services.rows.length && !histories.services.error"><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">No service records yet.</td></tr>
+                          </tbody>
+                        </table>
+                      </div></div>
+                      <button x-show="histories.services.page < histories.services.lastPage" type="button" @click="loadHistory('services', histories.services.page + 1)" :disabled="histories.services.loading" class="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Load more</button>
+                    </div></template>
+                  </div>
+                  <div id="profile-confinement-history" x-show="historyTab === 'confinement'" role="tabpanel" aria-labelledby="profile-confinement-tab">
+                    <h3 class="mb-3 text-sm font-bold text-[#2f4b66]">Confinement</h3>
+                    <template x-if="histories.confinement"><div :aria-busy="histories.confinement.loading">
+                      <p x-show="histories.confinement.loading" role="status" class="py-4 text-sm text-slate-500">Loading records…</p>
+                      <div x-show="histories.confinement.error" role="alert" class="mb-3 text-sm text-red-600"><span x-text="histories.confinement.error"></span> <button type="button" @click="loadHistory('confinement', histories.confinement.page + 1)" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
+                      <div class="overflow-hidden rounded-2xl border border-slate-200"><div class="overflow-x-auto" role="region" aria-label="Confinement history" tabindex="0">
+                        <table class="w-full min-w-[640px] table-fixed text-left text-sm"><caption class="sr-only">Confinement history for this patient</caption>
+                          <thead class="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th scope="col" class="w-[20%] px-4 py-3">Date</th><th scope="col" class="w-[35%] px-4 py-3">Confinement / Status</th><th scope="col" class="w-[30%] px-4 py-3">Duration</th><th scope="col" class="w-[15%] px-4 py-3 text-right">View</th></tr></thead>
+                          <tbody class="divide-y divide-slate-100">
+                            <template x-for="rec in histories.confinement.rows" :key="rec.id">
+                              <tr tabindex="0" class="cursor-pointer transition hover:bg-[#f0f7fd]" @click="viewDetail(rec, $event.currentTarget, 'confinement')"
+                                @keydown.enter="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'confinement') }" @keydown.space="if ($event.target === $event.currentTarget) { $event.preventDefault(); viewDetail(rec, $event.currentTarget, 'confinement') }"><td class="truncate px-4 py-3 text-slate-600" :title="fmtDate(rec.admitted_at)" x-text="fmtDate(rec.admitted_at)"></td><td class="truncate px-4 py-3 text-slate-600" :title="(historyService(rec.case_service).name || 'Confinement') + ' · ' + (rec.discharged_at ? 'Discharged' : 'Confined')" x-text="(historyService(rec.case_service).name || 'Confinement') + ' · ' + (rec.discharged_at ? 'Discharged' : 'Confined')"></td><td class="truncate px-4 py-3 text-slate-600" :title="historyDuration(rec)" x-text="historyDuration(rec)"></td><td class="px-4 py-3 text-right"><button type="button" @click.stop="viewDetail(rec, $event.currentTarget, 'confinement')" :aria-label="'View confinement record from ' + fmtDate(rec.admitted_at)" class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-[#315b7e] hover:bg-[#eef5fb]">View<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button></td></tr>
+                            </template>
+                            <tr x-show="histories.confinement.loaded && !histories.confinement.rows.length && !histories.confinement.error"><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">No confinement records yet.</td></tr>
+                          </tbody>
+                        </table>
+                      </div></div>
+                      <button x-show="histories.confinement.page < histories.confinement.lastPage" type="button" @click="loadHistory('confinement', histories.confinement.page + 1)" :disabled="histories.confinement.loading" class="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Load more</button>
+                    </div></template>
+                  </div>
                 </section>
               </div>
 
-        <div x-show="detail.record" class="space-y-6">
+        <div x-show="detail.record && detail.kind && detail.kind !== 'medical'" class="space-y-5">
+          <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <template x-for="field in historyDetailFields()" :key="field.label"><div class="min-w-0"><dt class="text-xs font-semibold text-slate-400" x-text="field.label"></dt><dd class="mt-1 whitespace-pre-wrap break-words font-medium text-slate-700" x-text="field.value ?? '—'"></dd></div></template>
+          </dl>
+          <div x-show="detail.kind === 'confinement'" class="border-t border-slate-200 pt-4">
+            <h3 class="mb-3 text-sm font-bold text-[#2f4b66]">Monitoring</h3>
+            <p x-show="detail.loading" role="status" class="py-3 text-sm text-slate-500">Loading monitoring…</p>
+            <div x-show="detail.error" role="alert" class="text-sm text-red-600"><span x-text="detail.error"></span><button type="button" @click="loadHistoryObservations(detail.page + 1)" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
+            <div class="overflow-x-auto rounded-2xl border border-slate-200" role="region" aria-label="Historical confinement monitoring" tabindex="0"><table class="w-full min-w-[660px] text-left text-sm">
+              <caption class="sr-only">Saved confinement observations</caption><thead class="border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500"><tr><th scope="col" class="px-4 py-3">Recorded</th><th scope="col" class="px-4 py-3">Temp °C</th><th scope="col" class="px-4 py-3">Heart bpm</th><th scope="col" class="px-4 py-3">Resp. bpm</th><th scope="col" class="px-4 py-3">Observation</th><th scope="col" class="px-4 py-3">Recorded by</th></tr></thead>
+              <tbody class="divide-y divide-slate-100"><template x-for="entry in (detail.observations || [])" :key="entry.id"><tr><td class="px-4 py-3" x-text="historyTime(entry.recorded_at)"></td><td class="px-4 py-3" x-text="entry.temperature_c ?? '—'"></td><td class="px-4 py-3" x-text="entry.heart_rate_bpm ?? '—'"></td><td class="px-4 py-3" x-text="entry.respiratory_rate_bpm ?? '—'"></td><td class="max-w-xs whitespace-pre-wrap break-words px-4 py-3" x-text="entry.notes || '—'"></td><td class="px-4 py-3" x-text="'Staff #' + entry.recorded_by_user_id"></td></tr></template><tr x-show="!detail.loading && !detail.error && !(detail.observations || []).length"><td colspan="6" class="px-4 py-8 text-center text-slate-500">No monitoring records yet.</td></tr></tbody>
+            </table></div>
+            <button x-show="detail.page < detail.lastPage" type="button" @click="loadHistoryObservations(detail.page + 1)" :disabled="detail.loading" class="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Load more observations</button>
+          </div>
+        </div>
+        <div x-show="detail.record && (!detail.kind || detail.kind === 'medical')" class="space-y-6">
           <section class="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2">
             <div>
               <p class="text-xs font-medium text-slate-500">Primary Attending Veterinarian</p>
@@ -742,7 +820,7 @@
       @keydown.escape.window="if (open && !$store.clinicFeedback.dialog.open) { if (chargesOpen) { $event.stopImmediatePropagation(); closeCharges(); } else if (activeSection !== 'vaccinations') closeModal(); }"
       class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
     >
-      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace class="relative w-full overflow-hidden rounded-3xl bg-white shadow-2xl" :class="chargesOpen || activeSection !== 'vaccinations' ? 'flex max-h-[calc(100dvh-4rem)] max-w-6xl flex-col' : 'max-w-5xl'" @keydown.tab="if (chargesOpen || activeSection !== 'vaccinations') trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
+      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace class="relative flex max-h-[calc(100dvh-4rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" @keydown.tab="trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div :inert="chargesOpen" class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
           <h2 id="patient-record-title" class="min-w-0 break-words text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
           <div class="ml-auto flex shrink-0 items-center gap-2">
@@ -754,27 +832,27 @@
 
         </div>
         <div :inert="chargesOpen" class="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
-          <div class="flex gap-2 overflow-x-auto" role="tablist">
-            <button type="button" role="tab" :aria-selected="activeSection === 'medical'" @click="selectSection('medical')"
+          <div class="flex gap-2 overflow-x-auto" role="tablist" aria-label="Current Patient Record" @keydown="caseTabKeydown($event)">
+            <button type="button" id="case-medical-tab" role="tab" :tabindex="activeSection === 'medical' ? 0 : -1" :aria-selected="activeSection === 'medical'" aria-controls="medical-record-form" :disabled="workspaceSaving" @click="selectSection('medical')"
               class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
               :class="activeSection === 'medical' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
               <i data-lucide="stethoscope" class="h-4 w-4"></i> Medical Record
             </button>
-            <button type="button" role="tab" :aria-selected="activeSection === 'vaccinations'" @click="selectSection('vaccinations')"
+            <button type="button" id="case-treatment-tab" role="tab" :tabindex="activeSection === 'vaccinations' ? 0 : -1" :aria-selected="activeSection === 'vaccinations'" aria-controls="case-treatment-panel" :disabled="workspaceSaving" @click="selectSection('vaccinations')"
               class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition"
               :class="activeSection === 'vaccinations' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
               <i data-lucide="syringe" class="h-4 w-4"></i> Treatment
             </button>
-            <button type="button" role="tab" :aria-selected="activeSection === 'services'" aria-controls="case-services-panel" @click="selectSection('services')" :disabled="workspaceSaving"
+            <button type="button" id="case-services-tab" role="tab" :tabindex="activeSection === 'services' ? 0 : -1" :aria-selected="activeSection === 'services'" aria-controls="case-services-panel" @click="selectSection('services')" :disabled="workspaceSaving"
               class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
               :class="activeSection === 'services' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">
               <i data-lucide="clipboard-list" class="h-4 w-4"></i> Services
             </button>
-            <button x-show="currentAppt?.confinement || ($store.clinicAccess.permissions.clinical && currentAppt?.status === 'in_consultation' && !currentAppt?.paid && !currentAppt?.archived_at)" type="button" role="tab" :aria-selected="activeSection === 'confinement'" aria-controls="case-confinement-panel" @click="selectSection('confinement')" :disabled="workspaceSaving" class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50" :class="activeSection === 'confinement' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Confinement</button>
+            <button x-show="currentAppt?.confinement || ($store.clinicAccess.permissions.clinical && currentAppt?.status === 'in_consultation' && !currentAppt?.paid && !currentAppt?.archived_at)" type="button" id="case-confinement-tab" role="tab" :tabindex="activeSection === 'confinement' ? 0 : -1" :aria-selected="activeSection === 'confinement'" aria-controls="case-confinement-panel" @click="selectSection('confinement')" :disabled="workspaceSaving" class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50" :class="activeSection === 'confinement' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Confinement</button>
           </div>
         </div>
 
-        <form id="medical-record-form" :inert="chargesOpen" x-show="activeSection === 'medical'" @submit.prevent="saveRecord()" novalidate class="flex min-h-0 flex-1 flex-col">
+        <form id="medical-record-form" role="tabpanel" aria-labelledby="case-medical-tab" :inert="chargesOpen" x-show="activeSection === 'medical'" @submit.prevent="saveRecord()" novalidate class="flex min-h-0 flex-1 flex-col">
           <div class="min-h-0 space-y-7 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
             <p :hidden="canEditClinical" class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Patient record is available for viewing.</p>
             <p id="medical-required-legend" :hidden="!canEditClinical" class="text-xs text-slate-500"><span class="text-red-600" aria-hidden="true">*</span> Required to finish case</p>
@@ -1199,7 +1277,7 @@
         </form>
 
         <div :inert="chargesOpen" x-show="activeSection === 'services'" @keydown.capture="window.InventoryMoneyInput?.handle($event)" @beforeinput.capture="window.InventoryMoneyInput?.handle($event)" @paste.capture="window.InventoryMoneyInput?.handle($event)" @input.capture="window.InventoryMoneyInput?.handle($event)" class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
-          <section id="case-services-panel" role="tabpanel" aria-label="Services" x-show="activeSection === 'services'" class="space-y-4">
+          <section id="case-services-panel" aria-labelledby="case-services-tab" role="tabpanel" aria-label="Services" x-show="activeSection === 'services'" class="space-y-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <h3 class="text-base font-bold text-[#2f4b66]">Services</h3>
               <button type="button" @click="loadServices()" :disabled="servicesLoading || serviceSaving || serviceRemovingId !== null" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
@@ -1267,7 +1345,7 @@
             <div class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4"><div><p class="text-xs text-slate-500" x-text="workspaceAppointment?.paid ? 'Paid case total' : 'Case total'"></p><p class="mt-1 text-xl font-bold tabular-nums text-[#2f4b66]" x-text="money(billingTotal)"></p></div><button x-show="canRecordCasePayment" type="button" @click="requestCasePayment()" :disabled="billingLoading || !!billingError || billingTotal == null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#274864] disabled:opacity-50">Review &amp; Collect Payment</button></div>
           </section>
 
-        <section :inert="chargesOpen" id="case-confinement-panel" x-data="clinicConfinementWorkspace()" x-effect="syncConfinement(open, currentAppt, activeSection)" x-show="activeSection === 'confinement'" role="tabpanel" aria-label="Confinement" @keydown.capture="window.InventoryMoneyInput?.handle($event)" @beforeinput.capture="window.InventoryMoneyInput?.handle($event)" @paste.capture="window.InventoryMoneyInput?.handle($event)" @input.capture="window.InventoryMoneyInput?.handle($event)" class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+        <section :inert="chargesOpen" id="case-confinement-panel" aria-labelledby="case-confinement-tab" x-data="clinicConfinementWorkspace()" x-effect="syncConfinement(open, currentAppt, activeSection)" x-show="activeSection === 'confinement'" role="tabpanel" aria-label="Confinement" @keydown.capture="window.InventoryMoneyInput?.handle($event)" @beforeinput.capture="window.InventoryMoneyInput?.handle($event)" @paste.capture="window.InventoryMoneyInput?.handle($event)" @input.capture="window.InventoryMoneyInput?.handle($event)" class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
           <div class="flex flex-wrap items-center justify-between gap-3"><h3 class="text-base font-bold text-[#2f4b66]">Confinement</h3><button type="button" @click="loadConfinement()" :disabled="loading || busy" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Refresh</button></div>
           <p x-show="loading" role="status" class="text-sm text-slate-500">Loading confinement…</p><p x-show="error" role="alert" x-text="error" class="rounded-xl bg-red-50 p-3 text-sm text-red-700"></p>
           <div x-show="!loading && !episode && !admissionForm" class="space-y-3"><p class="text-sm text-slate-500">No confinement episode for this case.</p><button x-show="canAdmitConfinement" type="button" @click="openAdmission()" class="rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white">Admit for Confinement</button></div>
@@ -1300,113 +1378,22 @@
           </div></template>
         </section>
 
-        <!-- Vaccination section (same as before) -->
+        <!-- Current-case treatment entry -->
         <section
-          x-data="adminClinicVaccinations()"
+          x-data="adminClinicVaccinations()" x-init="inline = true" x-ref="treatmentPane"
+          x-effect="$dispatch('clinic-workspace-busy', {id: appointment?.id, saving: formModal.saving || actionBusyId !== null || voidModal.saving})"
+          @keydown.escape.window="if (open && activeSection === 'vaccinations' && !$store.clinicFeedback.dialog.open) { $event.stopImmediatePropagation(); if (voidModal.open) closeVoidDialog(); else if (detailModal.open) closeDetails(); else closeModal() }"
           :inert="chargesOpen"
           x-show="activeSection === 'vaccinations'"
-          class="px-4 py-5 sm:px-6"
-          role="tabpanel"
-          aria-label="Treatment records"
+          class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6"
+          role="tabpanel" id="case-treatment-panel" aria-labelledby="case-treatment-tab"
+          aria-label="Treatment"
         >
-          <div class="mb-5 flex flex-col gap-4 rounded-2xl border border-[#d7e3ef] bg-[#eef5fb] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex min-w-0 items-center gap-3">
-              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#315b7e] shadow-sm">
-                <i data-lucide="paw-print" class="h-5 w-5"></i>
-              </div>
-              <div class="min-w-0">
-                <p class="truncate text-base font-bold text-[#2f4b66]" x-text="pet?.name || 'Selected patient'"></p>
-                <p class="mt-0.5 text-xs text-slate-500">
-                  <span x-text="pet?.species || 'Species not provided'"></span>
-                  <span aria-hidden="true"> · </span>
-                  <span x-text="appointment?.appointment_reference || 'No appointment linked'"></span>
-                </p>
-              </div>
-            </div>
-            <button x-show="canEditClinical" type="button" @click="openCreateForm()" :disabled="loading || petNotFound || !pet?.id || !caseOngoing()"
-              class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50">
-              <i data-lucide="plus" class="h-4 w-4"></i> Add Treatment
-            </button>
-          </div>
-          <p x-show="pet?.id && !caseOngoing()" class="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">This case is no longer ongoing. Start a new case to add treatments.</p>
-
-          <div x-show="loading" class="rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center" aria-live="polite">
-            <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>
-            <p class="mt-3 text-sm font-semibold text-slate-600">Loading treatment history…</p>
-          </div>
-
-          <div x-show="!loading && error" class="rounded-2xl border px-5 py-8 text-center"
-            :class="petNotFound ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'" role="alert">
-            <i :data-lucide="petNotFound ? 'paw-print' : 'circle-alert'" class="mx-auto h-7 w-7" :class="petNotFound ? 'text-amber-700' : 'text-red-600'"></i>
-            <p class="mt-3 text-sm font-bold" :class="petNotFound ? 'text-amber-800' : 'text-red-700'" x-text="petNotFound ? 'Patient record unavailable' : 'Treatment history could not be loaded'"></p>
-            <p class="mx-auto mt-1 max-w-lg text-sm" :class="petNotFound ? 'text-amber-700' : 'text-red-600'" x-text="error"></p>
-            <button x-show="!petNotFound" type="button" @click="loadVaccinations()"
-              class="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
-              <i data-lucide="refresh-cw" class="h-4 w-4"></i> Retry
-            </button>
-          </div>
-
-          <div x-show="!loading && !error && records.length === 0" class="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
-            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-              <i data-lucide="syringe" class="h-6 w-6"></i>
-            </div>
-            <p class="mt-4 text-sm font-bold text-slate-700">No treatments recorded for this pet.</p>
-          </div>
-
-          <div x-show="!loading && !error && records.length > 0" class="grid gap-4 lg:grid-cols-2">
-            <template x-for="record in records" :key="record.id">
-              <article class="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div class="min-w-0">
-                    <p class="break-words text-base font-bold text-[#2f4b66]" x-text="record.treatment_name || record.vaccine_name"></p>
-                    <p x-show="record.treatment_type !== 'medicine'" class="mt-0.5 break-words text-sm text-slate-500" x-text="record.batch_number ? `Batch ${record.batch_number}` : 'Batch not recorded'"></p>
-                  </div>
-                  <div class="flex flex-wrap gap-2 sm:justify-end">
-                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700" x-text="typeLabel(record)"></span>
-                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" :class="stateBadgeClass(record.state)" x-text="stateLabel(record.state)"></span>
-                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold" x-show="record.treatment_type !== 'medicine'" :class="dueBadgeClass(record.due_status)" x-text="dueLabel(record.due_status)"></span>
-                  </div>
-                </div>
-                <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <div><dt class="text-xs font-semibold text-slate-400">Administered</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.administered_date)"></dd></div>
-                  <div x-show="record.treatment_type !== 'medicine'"><dt class="text-xs font-semibold text-slate-400">Next Due</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="formatDate(record.next_due_date)"></dd></div>
-                  <div x-show="record.treatment_type === 'medicine'"><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-0.5 font-medium capitalize text-slate-700" x-text="displayValue(record.route)"></dd></div>
-                  <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-0.5 font-medium text-slate-700" x-text="doseLabel(record)"></dd></div>
-                </dl>
-                <div x-show="record.published_at" class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                  <p class="text-xs font-bold text-emerald-700">Published record</p>
-                  <p class="mt-1 text-[11px] text-emerald-600" x-text="`${formatDateTime(record.published_at)}${record.published_by_user_name ? ' · ' + record.published_by_user_name : ''}`"></p>
-                </div>
-                <div x-show="record.state === 'voided'" class="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
-                  <p class="text-xs font-bold text-red-700">Voided historical record</p>
-                  <p class="mt-1 break-words text-xs text-red-600" x-text="record.void_reason || 'Reason not provided'"></p>
-                </div>
-                <div class="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-                  <button type="button" @click="openDetails(record)" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Details</button>
-                  <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="openEditForm(record)" :disabled="actionBusyId === record.id" class="rounded-xl border border-[#bfd2e4] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Edit</button>
-                  <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="publishRecord(record)" :disabled="actionBusyId === record.id" class="rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="actionBusyId === record.id ? 'Publishing…' : 'Publish'"></button>
-                  <button x-show="canEditClinical && record.state === 'published'" type="button" @click="openVoidDialog(record)" :disabled="actionBusyId === record.id" class="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50">Void</button>
-                </div>
-              </article>
-            </template>
-          </div>
-
-          <!-- Vaccination form dialog (create / edit) -->
-          <div x-cloak x-show="formModal.open" style="display:none" x-transition
-            class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
-            @keydown.escape.window="if (formModal.open) closeForm()">
-            <div class="w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-form-title">
-              <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
-                <div>
-                  <h3 id="vaccination-form-title" class="text-lg font-bold text-[#2f4b66]" x-text="formModal.mode === 'edit' ? 'Edit Treatment Draft' : 'Add Treatment'"></h3>
-                  <p class="mt-1 text-xs text-slate-500">Patient: <span class="font-semibold text-slate-700" x-text="pet?.name || 'Unavailable'"></span><template x-if="appointment?.appointment_reference"><span> · Case <span class="font-semibold text-slate-700" x-text="appointment.appointment_reference"></span></span></template> · Saving creates a draft.</p>
-                </div>
-                <button type="button" @click="closeForm()" :disabled="formModal.saving" aria-label="Close treatment form" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 disabled:opacity-50">
-                  <i data-lucide="x" class="h-5 w-5"></i>
-                </button>
-              </div>
+          <p x-show="pet?.id && !caseOngoing()" class="mb-4 text-sm text-amber-700">This case is no longer ongoing.</p>
+          <div x-show="formModal.open && canEditClinical && caseOngoing()" class="space-y-4" aria-labelledby="vaccination-form-title">
+            <h3 id="vaccination-form-title" class="text-sm font-bold text-[#2f4b66]" x-text="formModal.mode === 'edit' ? 'Edit Treatment Draft' : 'Record Treatment'"></h3>
               <form x-ref="treatmentForm" @submit.prevent="saveDraft()" novalidate>
-                <div class="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+                <fieldset :disabled="formModal.saving || actionBusyId !== null || voidModal.saving" class="min-w-0 space-y-6 pb-5">
                   <div x-show="formErrorSummary" x-ref="vaccinationValidationSummary" tabindex="-1"
                     class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 outline-none" role="alert">
                     <p class="font-bold">Please review the treatment form.</p>
@@ -1425,7 +1412,7 @@
                       <option value="inventory">Bethlehem inventory</option>
                       <option value="historical">Historical / external</option>
                     </select>
-                    <p class="mt-2 text-xs text-slate-500" x-show="recordKind === 'historical'">Preserve the actual clinical details. Publication does not deduct current inventory or create current medicine charges.</p>
+
                   </div>
                   <section x-show="recordKind === 'inventory'" class="space-y-3">
                     <h4 class="text-sm font-semibold text-slate-700">Inventory usage</h4>
@@ -1465,12 +1452,12 @@
                           </div>
                           <p x-show="fieldError('inventory_quantity')" role="alert" class="mt-1 text-xs text-red-600" x-text="fieldError('inventory_quantity')"></p>
                         </div>
-                        <p class="text-xs text-slate-500">Finalizing deducts this number of physical units. Clinical dose is recorded separately.</p>
+
                         <dl class="grid gap-3 sm:grid-cols-2">
                           <div><dt class="text-xs text-slate-500">Batch / Lot</dt><dd class="mt-1 break-words text-sm text-slate-700" x-text="displayValue(selectedProduct.next_batch?.batch_number)"></dd></div>
                           <div><dt class="text-xs text-slate-500">Expiration</dt><dd class="mt-1 text-sm text-slate-700" x-text="formatDate(selectedProduct.next_batch?.expiry_date)"></dd></div>
                         </dl>
-                        <p class="text-xs text-slate-500">Batches are assigned automatically from unexpired stock in expiry order.</p>
+
                         <template x-if="treatmentType === 'medicine'"><div class="space-y-1 border-t border-slate-200 pt-3 text-sm text-slate-700">
                           <p x-show="selectedMedicine.strength_concentration" class="text-xs text-slate-500" x-text="selectedMedicine.strength_concentration"></p>
                           <p x-show="medicineQuote?.error" role="alert" class="text-red-600" x-text="medicineQuote?.error"></p>
@@ -1510,7 +1497,7 @@
                   </section>
                   <section>
                     <h4 class="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Clinical details</h4>
-                    <p class="mb-3 text-xs text-slate-500">Dose, route, and site are optional patient details. They do not change inventory quantity.</p>
+
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label for="vaccination-administered-date" class="mb-1 block text-xs font-semibold text-slate-600">Administration Date <span class="text-red-600" aria-hidden="true">*</span></label>
@@ -1520,7 +1507,7 @@
                         </div>
                         <label x-show="recordKind === 'historical'" for="historical-administered-date" class="sr-only">Actual administration date</label>
                         <input x-show="recordKind === 'historical'" id="historical-administered-date" type="date" x-model="form.administered_date" :max="vaccinationToday()" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[#315b7e]" :aria-invalid="Boolean(formErrors.administered_date)" :class="formErrors.administered_date ? 'border-red-400' : 'border-slate-300'">
-                        <p x-show="recordKind === 'inventory'" class="mt-1 text-xs text-slate-400">New administrations use today; existing dates are preserved.</p>
+
                         <p class="mt-1 text-xs text-red-600" x-text="fieldError('administered_date')"></p>
                       </div>
                       <div x-show="treatmentType === 'vaccine'">
@@ -1563,29 +1550,47 @@
                       </div>
                     </div>
                   </section>
-                </div>
-                <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-                  <button type="button" @click="closeForm()" :disabled="formModal.saving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                  <button type="submit" :disabled="formModal.saving" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-60">
+                </fieldset>
+                <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 py-4">
+                  <button type="button" @click="closeForm()" :disabled="formModal.saving || actionBusyId !== null" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Clear</button>
+                  <button type="submit" :disabled="formModal.saving || actionBusyId !== null" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
                     <span x-text="formModal.saving ? 'Saving Draft…' : (formModal.mode === 'edit' ? 'Save Draft Changes' : 'Save as Draft')"></span>
                   </button>
+                  <button type="button" @click="recordTreatment()" :disabled="formModal.saving || actionBusyId !== null" class="rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="formModal.saving ? 'Saving…' : 'Record Treatment'"></button>
                   <button type="button" x-show="recordKind === 'inventory' && appointment?.status === 'in_consultation' && !(appointment?.confinement && !appointment.confinement.discharged_at)" @click="saveAndFinishCase()" :disabled="formModal.saving || !appointment?.id" class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">Save &amp; Send to Payment</button>
                 </div>
               </form>
-            </div>
           </div>
+
+          <section class="mt-5 border-t border-slate-200 pt-4" aria-labelledby="current-treatment-title" :aria-busy="loading">
+            <h3 id="current-treatment-title" class="mb-3 text-sm font-bold text-[#2f4b66]">Current Visit Treatments</h3>
+            <p x-show="loading" role="status" class="py-3 text-sm text-slate-500">Loading treatments…</p>
+            <div x-show="error" role="alert" class="py-3 text-sm text-red-600"><span x-text="error"></span><button x-show="!petNotFound" type="button" @click="loadVaccinations()" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
+            <p x-show="!loading && !error && !records.length" class="py-4 text-sm text-slate-500">No treatments recorded for this case.</p>
+            <ul class="divide-y divide-slate-100">
+              <template x-for="record in records" :key="record.id"><li class="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div class="min-w-0"><p class="break-words text-sm font-semibold text-[#2f4b66]" x-text="record.treatment_name || record.vaccine_name || '—'"></p><p class="mt-1 text-xs text-slate-500" x-text="treatmentSummary(record)"></p></div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full border px-2.5 py-1 text-xs font-semibold" :class="stateBadgeClass(record.state)" x-text="stateLabel(record.state)"></span>
+                  <button type="button" @click="openDetails(record)" class="rounded-lg px-2 py-1 text-xs font-semibold text-[#315b7e] hover:bg-[#eef5fb]">View</button>
+                  <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="openEditForm(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg border border-[#bfd2e4] px-2 py-1 text-xs font-semibold text-[#315b7e] disabled:opacity-50">Edit</button>
+                  <button x-show="canEditClinical && caseOngoing() && record.state === 'draft'" type="button" @click="publishRecord(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg bg-[#315b7e] px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" x-text="actionBusyId === record.id ? 'Publishing…' : 'Publish'"></button>
+                  <button x-show="canEditClinical && record.state === 'published'" type="button" @click="openVoidDialog(record)" :disabled="formModal.saving || actionBusyId !== null" class="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 disabled:opacity-50">Void</button>
+                </div>
+              </li></template>
+            </ul>
+          </section>
 
           <!-- Vaccination detail dialog -->
           <div x-cloak x-show="detailModal.open" style="display:none" x-transition
-            class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8"
-            @keydown.escape.window="if (detailModal.open) closeDetails()">
-            <div class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-detail-title">
+            class="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-900/70 px-3 py-5 sm:px-4 sm:py-8">
+            <div class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vaccination-detail-title" @keydown.tab.stop="trapTreatmentFocus($event)">
               <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
                 <div>
                   <h3 id="vaccination-detail-title" class="text-lg font-bold text-[#2f4b66]">Treatment Record Details</h3>
                   <p class="mt-1 text-xs text-slate-500" x-text="pet?.name || 'Selected patient'"></p>
                 </div>
-                <button type="button" @click="closeDetails()" aria-label="Close treatment details" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
+                <button type="button" x-ref="treatmentDetailClose" @click="closeDetails()" aria-label="Close treatment details" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100">
                   <i data-lucide="x" class="h-5 w-5"></i>
                 </button>
               </div>
@@ -1593,19 +1598,11 @@
                 <i data-lucide="loader-circle" class="mx-auto h-7 w-7 animate-spin text-[#315b7e]"></i>
                 <p class="mt-3 text-sm text-slate-500">Loading complete record…</p>
               </div>
+              <div x-show="detailModal.error" role="alert" class="px-5 py-4 text-sm text-red-600"><span x-text="detailModal.error"></span><button type="button" @click="retryDetails()" class="rounded-lg px-2 py-1 font-semibold">Retry</button></div>
               <div x-show="!detailModal.loading && detailModal.record" class="max-h-[75vh] overflow-y-auto px-5 py-5 sm:px-6">
                 <template x-if="detailModal.record">
                   <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div><dt class="text-xs font-semibold text-slate-400">Treatment type</dt><dd class="mt-1 text-sm font-medium text-slate-700" x-text="typeLabel(detailModal.record)"></dd></div>
-                    <div x-show="detailModal.record?.strength_concentration"><dt class="text-xs font-semibold text-slate-400">Strength / concentration</dt><dd class="mt-1 text-sm text-slate-700" x-text="detailModal.record.strength_concentration"></dd></div>
-                    <div x-show="detailModal.record?.inventory_quantity"><dt class="text-xs font-semibold text-slate-400">Inventory Quantity Used</dt><dd class="mt-1 text-sm text-slate-700" x-text="detailModal.record.inventory_quantity + (detailModal.record.inventory_unit ? ' ' + detailModal.record.inventory_unit : '')"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400" x-text="typeLabel(detailModal.record) + ' Name'"></dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="detailModal.record.vaccine_name"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400">Administration Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.administered_date)"></dd></div>
-                    <div x-show="detailModal.record?.treatment_type !== 'medicine'"><dt class="text-xs font-semibold text-slate-400">Next Due Date</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="formatDate(detailModal.record.next_due_date)"></dd></div>
-                    <div x-show="detailModal.record?.treatment_type !== 'medicine'"><dt class="text-xs font-semibold text-slate-400">Batch Number</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.batch_number)"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400">Dose</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="doseLabel(detailModal.record)"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400">Route</dt><dd class="mt-1 break-words text-sm font-medium capitalize text-slate-700" x-text="displayValue(detailModal.record.route).replace('_', ' ')"></dd></div>
-                    <div><dt class="text-xs font-semibold text-slate-400">Administration Site</dt><dd class="mt-1 break-words text-sm font-medium text-slate-700" x-text="displayValue(detailModal.record.administration_site)"></dd></div>
+                    <template x-for="field in treatmentDetails(detailModal.record)" :key="field.label"><div class="min-w-0"><dt class="text-xs font-semibold text-slate-400" x-text="field.label"></dt><dd class="mt-1 whitespace-pre-wrap break-words text-sm font-medium text-slate-700" x-text="field.value || '—'"></dd></div></template>
                   </dl>
                 </template>
               </div>
@@ -1617,9 +1614,8 @@
 
           <!-- Void dialog -->
           <div x-cloak x-show="voidModal.open" style="display:none" x-transition
-            class="fixed inset-0 z-[240] flex items-center justify-center bg-slate-900/75 px-4"
-            @keydown.escape.window="if (voidModal.open) closeVoidDialog()">
-            <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="vaccination-void-title">
+            class="fixed inset-0 z-[240] flex items-center justify-center bg-slate-900/75 px-4">
+            <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="vaccination-void-title" @keydown.tab.stop="trapTreatmentFocus($event)">
               <div class="px-6 py-5">
                 <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                   <i data-lucide="circle-alert" class="h-6 w-6"></i>
@@ -1628,7 +1624,7 @@
                 <p class="mt-2 text-sm leading-6 text-slate-600">Voiding preserves this treatment as historical information. It cannot be published again.</p>
                 <p class="mt-2 text-sm font-semibold text-[#315b7e]" x-text="voidModal.record?.vaccine_name"></p>
                 <label for="vaccination-void-reason" class="mt-4 block text-xs font-semibold text-slate-600">Void Reason <span class="text-red-600" aria-hidden="true">*</span></label>
-                <textarea id="vaccination-void-reason" rows="3" maxlength="500" required x-model="voidModal.reason" class="mt-1 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-red-500"></textarea>
+                <textarea id="vaccination-void-reason" x-ref="treatmentVoidReason" rows="3" maxlength="500" required x-model="voidModal.reason" class="mt-1 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-red-500"></textarea>
                 <p x-show="voidModal.error" class="mt-2 text-xs font-semibold text-red-600" x-text="voidModal.error" role="alert"></p>
               </div>
               <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
@@ -1677,12 +1673,12 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=services-20261014&clinic-products=20261010&medical-record=20261012"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=services-20261014&clinic-products=20261010&medical-record=20261012&patient-history=20261014"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261012-ui3&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-record-workflow"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261014-provided&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261013"></script>
-    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=confinement-20261013"></script>
+    <script src="../../scripts/components/admin-vaccinations.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=20261010&treatments=case-entry-20261014"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
     <script src="../../scripts/components/admin-clinic-shell.js?v=20261013-service-pricing-v3&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

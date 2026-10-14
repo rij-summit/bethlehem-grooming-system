@@ -285,6 +285,25 @@ class AdminVaccinationApiTest extends TestCase
         );
     }
 
+    public function test_current_visit_treatments_exclude_other_cases_and_unlinked_history(): void
+    {
+        $this->authenticateAs('staff', 2);
+        $this->insertPet(101, 'Mochi', 'cat');
+        $this->insertPet(102, 'Zeus', 'dog');
+        DB::table('clinic_appointments')->insert([
+            ['id' => 201, 'pet_id' => 101, 'appointment_reference' => 'CL-201'],
+            ['id' => 202, 'pet_id' => 101, 'appointment_reference' => 'CL-202'],
+        ]);
+        $current = $this->insertVaccination(101, 'Current medicine', '2026-07-23', ['clinic_appointment_id' => 201, 'treatment_type' => 'medicine']);
+        $this->insertVaccination(101, 'Earlier visit', '2026-07-23', ['clinic_appointment_id' => 202]);
+        $this->insertVaccination(101, 'External record', '2020-01-01');
+        $this->insertVaccination(102, 'Other pet', '2026-07-23', ['clinic_appointment_id' => 201]);
+        $this->getJson('/api/admin/pets/101/vaccinations?clinic_appointment_id=201')->assertOk()
+            ->assertJsonCount(1, 'vaccinations')->assertJsonPath('vaccinations.0.id', $current)
+            ->assertJsonPath('vaccinations.0.clinic_appointment_id', 201);
+        $this->getJson('/api/admin/pets/101/vaccinations')->assertOk()->assertJsonCount(3, 'vaccinations');
+    }
+
     public function test_vaccination_under_the_wrong_pet_returns_the_generic_not_found_response(): void
     {
         $this->authenticateAs('staff', 2);
@@ -1396,7 +1415,7 @@ class AdminVaccinationApiTest extends TestCase
         $vaccineId = $this->insertFinalizableDraft(302, 201);
         $this->postJson("/api/admin/pets/101/vaccinations/{$vaccineId}/publish")->assertOk();
         $this->postJson('/api/admin/clinic-cases/201/confinement/observations', ['request_key' => (string) \Illuminate\Support\Str::uuid(), 'notes' => 'Stable'])->assertCreated();
-        $this->postJson('/api/admin/clinic-cases/201/services', ['clinic_service_id' => $service->id, 'status' => 'performed', 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
+        $this->postJson('/api/admin/clinic-cases/201/services', ['clinic_service_id' => $service->id, 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'in_consultation', 'total_amount' => 1000]);
         Carbon::setTestNow(now()->addDay()->addMinute());
         $this->postJson('/api/admin/clinic-cases/201/confinement/discharge')->assertOk()->assertJsonPath('data.case_service.quantity', '2.00');

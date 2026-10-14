@@ -70,12 +70,14 @@ class AdminVaccinationController extends Controller
         return response()->json(['success' => true, 'vaccines' => $vaccines]);
     }
 
-    public function index(int $petId)
+    public function index(Request $request, int $petId)
     {
         $pet = $this->findPet($petId);
+        $data = $request->validate(['clinic_appointment_id' => 'sometimes|integer|min:1']);
 
         $records = VaccinationRecord::query()
             ->where('pet_id', $pet->pet_id)
+            ->when(isset($data['clinic_appointment_id']), fn ($query) => $query->where('clinic_appointment_id', $data['clinic_appointment_id']))
             ->with(self::RESPONSE_RELATIONS)
             ->orderByDesc('administered_date')
             ->orderByDesc('id')
