@@ -211,7 +211,7 @@ function clinicCaseWorkspace() {
         this.searchQuery = ''; this.searchRows = []; this.searchPage = 0; this.searchLoading = false; this.searchError = '';
         await Promise.all([this.loadServices(), this.loadBilling()]);
         if (generation !== this._generation) return;
-        this.$store.clinicFeedback.notify('Service added.');
+        this.$store.clinicFeedback.notify('Service added.', 'success');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
       } catch (error) {
         if (generation !== this._generation) return;
@@ -244,7 +244,7 @@ function clinicCaseWorkspace() {
         if (this.attachments) this.attachments = this.attachments.map(file => Number(file.clinic_case_service_id) === entry.id ? {...file, clinic_case_service_id: null} : file);
         await Promise.all([this.loadServices(), this.loadBilling()]);
         if (generation !== this._generation) return;
-        this.$store.clinicFeedback.notify('Service removed.');
+        this.$store.clinicFeedback.notify('Service removed.', 'success');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
         return true;
       } catch (error) { if (generation === this._generation) this.servicesError = error.message || 'Could not remove this service.'; }
@@ -361,7 +361,7 @@ function clinicImagingWorkspace() {
         this.imagingPending = null; this.imagingSelected = null; this.imagingPricing = null;
         this.imagingQuery = ''; this.imagingNotes = ''; this.imagingShots = 1; this.imagingOptionsPage = 0;
         await Promise.all([this.loadImagingServices(), this.loadServices(), this.loadBilling()]);
-        this.$store.clinicFeedback.notify('Imaging added.');
+        this.$store.clinicFeedback.notify('Imaging added.', 'success');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
       } catch (error) {
         if (generation !== this._imagingGeneration) return;
@@ -400,7 +400,7 @@ function clinicImagingWorkspace() {
         const result = await API.clinicUploadAttachment(id, file, '', entry.id);
         if (generation !== this._imagingGeneration) return;
         this.attachments.push(result.attachment);
-        this.$store.clinicFeedback.notify('Imaging file uploaded.');
+        this.$store.clinicFeedback.notify('Imaging file uploaded.', 'success');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
       } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.errors ? Object.values(error.errors).flat()[0] : error.message || 'Could not upload the imaging file.'; }
       finally { event.target.value = ''; if (generation === this._imagingGeneration) this.attachmentBusy = false; }

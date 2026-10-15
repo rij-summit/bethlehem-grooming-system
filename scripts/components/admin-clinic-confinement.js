@@ -195,7 +195,7 @@ function clinicConfinementWorkspace() {
         this.episode = response.data; this.admissionForm = null; this.admissionPending = null;
         await this.loadConfinement();
         this.updateConfinementCase();
-        this.$store.clinicFeedback.notify('Patient admitted for confinement.');
+        this.$store.clinicFeedback.notify('Patient admitted for confinement.', 'success');
       } catch (error) {
         if (generation !== this._generation) return;
         if (error.errors || error.status === 422) { this.admissionPending = null; this.persistAdmission(); }
@@ -277,7 +277,7 @@ function clinicConfinementWorkspace() {
         if (generation !== this._generation) return;
         this.extraForm = null; this.extraPending = null; this.clearRetained('extra');
         await this.loadConfinement(); this.updateConfinementCase(this.episode?.discharged_at ? 'for_payment' : 'in_consultation');
-        this.$store.clinicFeedback.notify(pending.kind === 'remove' ? 'Additional charge removed.' : pending.kind === 'stop' ? 'Daily charge stopped.' : 'Additional charge added.');
+        this.$store.clinicFeedback.notify(pending.kind === 'remove' ? 'Additional charge removed.' : pending.kind === 'stop' ? 'Daily charge stopped.' : 'Additional charge added.', 'success');
         this.$nextTick?.(() => this.$refs.addConfinementCharge?.focus());
       } catch (error) {
         if (generation !== this._generation) return;
@@ -318,7 +318,7 @@ function clinicConfinementWorkspace() {
         this.clearRetained('monitoring');
         this.monitoringForm = null; this.monitoringPending = null; this.monitoringOpen = false;
         await this.loadObservations();
-        this.$store.clinicFeedback.notify('Monitoring recorded.');
+        this.$store.clinicFeedback.notify('Monitoring recorded.', 'success');
       } catch (error) {
         if (generation !== this._generation) return;
         if (error.errors || error.status === 422) { this.monitoringPending = null; this.persistMonitoring(); }
@@ -378,7 +378,7 @@ function clinicConfinementWorkspace() {
         this.clearRetained('discharge');
         this.episode = response.data; this.dischargeForm = null; this.dischargePending = null;
         this.updateConfinementCase('for_payment');
-        this.$store.clinicFeedback.notify('Patient discharged. The case is ready for Billing.'); succeeded = true;
+        this.$store.clinicFeedback.notify('Patient discharged. The case is ready for Billing.', 'success'); succeeded = true;
       } catch (error) {
         if (generation !== this._generation) return;
         if (error.errors || error.status === 422) { this.dischargePending = null; this.persistDischarge(); }

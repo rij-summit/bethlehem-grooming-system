@@ -48,7 +48,8 @@ document.addEventListener("alpine:init", () => {
 
   Alpine.store("clinicFeedback", {
     dialog: { open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false },
-    toast: { show: false, message: "", ok: true },
+    toast: { show: false, message: "", variant: "success" },
+    toastDuration: 3500,
 
     confirm({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false, dismissOnEscape = true }) {
       resolveDialog?.(false);
@@ -62,10 +63,12 @@ document.addEventListener("alpine:init", () => {
       resolveDialog = null;
     },
 
-    notify(message, ok = true) {
+    notify(message, variant = "success") {
       clearTimeout(toastTimer);
-      this.toast = { show: true, message, ok };
-      toastTimer = setTimeout(() => { this.toast.show = false; }, 3500);
+      // Keep legacy boolean callers, including cached components, compatible.
+      if (typeof variant === "boolean") variant = variant ? "success" : "error";
+      this.toast = { show: true, message, variant };
+      toastTimer = setTimeout(() => { this.toast.show = false; }, this.toastDuration);
     },
   });
 });
@@ -723,7 +726,7 @@ function adminClinicPage() {
       if (!this.permissions.intake || this.caseBusyId || item.status !== 'waiting_to_arrive') return;
       this.caseBusyId = item.id;
       try { await API.clinicCheckIn(item.id); await this.loadActiveCases(); }
-      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not check in this patient.", false); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not check in this patient.", "error"); }
       finally { this.caseBusyId = null; }
     },
     reviewPayment(item) {
@@ -832,7 +835,7 @@ function adminClinicPage() {
       });
       if (!confirmed) return;
       try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
-      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", false); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", "error"); }
     },
     openCase(item, section) {
       if (!this.permissions.access || !['checked_in', 'in_consultation', 'for_payment'].includes(item.status)) return;
@@ -847,7 +850,7 @@ function adminClinicPage() {
         if (this.profile.open) this.openProfileCase(response.case);
         else this.openCase(response.case);
       }
-      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
+      catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", "error"); }
       finally { this.caseBusyId = null; }
     },
     startWalkIn() {

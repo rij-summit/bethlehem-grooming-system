@@ -1,12 +1,13 @@
 /* =========================================================
-   Reusable Success Toast
+   Reusable Toast (legacy success classes retained for existing consumers)
    ========================================================= */
 
+.app-toast,
 .app-success-toast {
   position: fixed;
   right: 1.25rem;
   bottom: 1.25rem;
-  z-index: 100;
+  z-index: var(--app-toast-z-index, 100);
 
   display: flex;
   align-items: center;
@@ -43,6 +44,7 @@
 
 
 /* Left accent bar */
+.app-toast::before,
 .app-success-toast::before {
   content: '';
   position: absolute;
@@ -50,12 +52,13 @@
   top: 0;
   bottom: 0;
   width: 0.25rem;
-  background: #2f658f;
+  background: var(--app-toast-accent, #2f658f);
   border-radius: 0.875rem 0 0 0.875rem;
 }
 
 
 /* Visible state */
+.app-toast.is-visible,
 .app-success-toast.is-visible {
   opacity: 1;
   visibility: visible;
@@ -64,7 +67,8 @@
 }
 
 
-/* Checkmark circle */
+/* Status icon circle */
+.app-toast__icon,
 .app-success-toast__icon {
   display: inline-flex;
   align-items: center;
@@ -78,10 +82,11 @@
 
   border-radius: 9999px;
 
-  background: #2f658f;
+  background: var(--app-toast-accent, #2f658f);
   color: #ffffff;
 }
 
+.app-toast__icon svg,
 .app-success-toast__icon svg {
   width: 1.125rem;
   height: 1.125rem;
@@ -94,6 +99,7 @@
 
 
 /* Toast message */
+.app-toast__message,
 .app-success-toast__message {
   flex: 1;
   min-width: 0;
@@ -107,6 +113,7 @@
 
 
 /* Progress bar */
+.app-toast__progress,
 .app-success-toast__progress {
   position: absolute;
   left: 0;
@@ -116,13 +123,20 @@
   background: #dce9f3;
 }
 
+.app-toast__progress-fill,
 .app-success-toast__progress-fill {
   height: 100%;
-  background: #2f658f;
+  background: var(--app-toast-accent, #2f658f);
   width: 100%;
   transform-origin: left;
   transition: width linear;
 }
+
+/* Semantic variants change only the accent, icon circle and progress fill. */
+.app-toast--success { --app-toast-accent: #15803d; }
+.app-toast--error { --app-toast-accent: #dc2626; }
+.app-toast--warning { --app-toast-accent: #b45309; }
+.app-toast--info { --app-toast-accent: #2563eb; }
 
 
 /* =========================================================
@@ -130,6 +144,7 @@
    ========================================================= */
 
 @media (max-width: 639px) {
+  .app-toast,
   .app-success-toast {
     right: 0.75rem;
     bottom: 0.75rem;
@@ -141,10 +156,12 @@
     border-radius: 0.75rem;
   }
 
+  .app-toast::before,
   .app-success-toast::before {
     border-radius: 0.75rem 0 0 0.75rem;
   }
 
+  .app-toast__icon,
   .app-success-toast__icon {
     margin-left: 0.875rem;
 
@@ -153,11 +170,13 @@
     flex-basis: 2.25rem;
   }
 
+  .app-toast__icon svg,
   .app-success-toast__icon svg {
     width: 1rem;
     height: 1rem;
   }
 
+  .app-toast__message,
   .app-success-toast__message {
     font-size: 0.875rem;
   }
@@ -169,11 +188,13 @@
    ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
+  .app-toast,
   .app-success-toast {
     transition: opacity 150ms ease, visibility 150ms ease;
     transform: none;
   }
 
+  .app-toast__progress-fill,
   .app-success-toast__progress-fill {
     transition: none;
   }

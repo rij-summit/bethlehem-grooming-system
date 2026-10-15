@@ -628,7 +628,7 @@ function adminClinicVaccinations() {
         if (index < 0) this.records.unshift(saved.vaccination);
         else this.records.splice(index, 1, saved.vaccination);
         this.resetInlineForm();
-        this.showToast(editing ? 'Treatment updated.' : 'Treatment added.');
+        this.showToast(editing ? 'Treatment updated.' : 'Treatment added.', 'success');
         return true;
       } catch (error) {
         if (id === this.appointment?.id) this.applyBackendValidation(error, 'Treatment could not be saved.');
@@ -652,7 +652,7 @@ function adminClinicVaccinations() {
         this.error = '';
         this.records = this.records.filter(row => row.id !== record.id);
         if (this.formModal.recordId === record.id) this.resetInlineForm();
-        this.showToast('Treatment removed.');
+        this.showToast('Treatment removed.', 'success');
       } catch (error) { if (id === this.appointment?.id) this.error = error.message || 'Treatment could not be removed.'; }
       finally { this.actionBusyId = null; }
     },
@@ -793,8 +793,8 @@ function adminClinicVaccinations() {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     },
 
-    showToast(message, ok = true) {
-      this.$store.clinicFeedback.notify(message, ok);
+    showToast(message, variant = 'success') {
+      this.$store.clinicFeedback.notify(message, variant);
     },
 
     refreshIcons() {

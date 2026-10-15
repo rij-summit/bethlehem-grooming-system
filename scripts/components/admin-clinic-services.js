@@ -215,7 +215,7 @@ function adminClinicServices() {
         await API.adminRequest(this.editingId ? 'PUT' : 'POST',
           `/admin/clinic-services${this.editingId ? '/' + this.editingId : ''}`, payload);
         this.closeModal(true);
-        this.$store.clinicFeedback.notify(this.editingId ? 'Service updated.' : 'Service added.');
+        this.$store.clinicFeedback.notify(this.editingId ? 'Service updated.' : 'Service added.', 'success');
         await this.load(this.editingId ? this.currentPage : 1);
       } catch (error) {
         this.formError = error.errors ? Object.values(error.errors).flat().join(' ') : error.message || 'Unable to save service.';
@@ -233,9 +233,9 @@ function adminClinicServices() {
       this.busyId = service.id;
       try {
         await API.adminRequest('PATCH', `/admin/clinic-services/${service.id}/status`, {is_active: active});
-        this.$store.clinicFeedback.notify(active ? 'Service reactivated.' : 'Service deactivated.');
+        this.$store.clinicFeedback.notify(active ? 'Service reactivated.' : 'Service deactivated.', 'success');
         await this.load(this.currentPage);
-      } catch (error) { this.$store.clinicFeedback.notify(error.message || 'Unable to update service status.', false); }
+      } catch (error) { this.$store.clinicFeedback.notify(error.message || 'Unable to update service status.', 'error'); }
       finally { this.busyId = null; }
     },
   };

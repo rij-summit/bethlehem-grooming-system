@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3&clinic-payment=20261015-v2" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
     <link rel="stylesheet" href="../../css/components/print-information.css?v=clinic-invoice-20261015" />
+    <link rel="stylesheet" href="../../css/components/toast.css?v=semantic-toast-20261015" />
     <style>
       :is([x-data="adminClinicCasesSection()"], [aria-labelledby="patient-record-title"]) :is(button, input, select, textarea, [tabindex="0"]):focus-visible {
         outline: 2px solid #315b7e;
@@ -1659,12 +1660,25 @@
         </div>
       </div>
 
-      <div x-show="$store.clinicFeedback.toast.show" style="display:none" x-transition
-        class="fixed right-4 top-20 z-[270] flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
-        :class="$store.clinicFeedback.toast.ok ? 'bg-emerald-600' : 'bg-red-600'" role="status" aria-live="polite">
-        <span x-show="$store.clinicFeedback.toast.ok" class="shrink-0"><i data-lucide="check-circle" class="h-5 w-5"></i></span>
-        <span x-show="!$store.clinicFeedback.toast.ok" class="shrink-0"><i data-lucide="circle-alert" class="h-5 w-5"></i></span>
-        <span x-text="$store.clinicFeedback.toast.message"></span>
+      <div class="app-toast" style="--app-toast-z-index: 270"
+        :class="{ ['app-toast--' + $store.clinicFeedback.toast.variant]: true, 'is-visible': $store.clinicFeedback.toast.show }"
+        role="status" aria-live="polite" aria-atomic="true">
+        <span class="app-toast__icon" aria-hidden="true">
+          <i x-show="$store.clinicFeedback.toast.variant === 'success'" data-lucide="check"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'error'" data-lucide="circle-alert"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'warning'" data-lucide="triangle-alert"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'info'" data-lucide="info"></i>
+        </span>
+        <span class="app-toast__message" x-text="$store.clinicFeedback.toast.message"></span>
+        <div class="app-toast__progress" aria-hidden="true">
+          <div class="app-toast__progress-fill"
+            x-effect="$el.style.transitionDuration = '0ms'; $el.style.width = '100%';
+              if ($store.clinicFeedback.toast.show) {
+                void $el.offsetWidth;
+                $el.style.transitionDuration = $store.clinicFeedback.toastDuration + 'ms';
+                $el.style.width = '0%';
+              }"></div>
+        </div>
       </div>
     </div>
 
@@ -1674,7 +1688,7 @@
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="../../scripts/components/clinic-attachments.js?v=20261015"></script>
-    <script src="../../scripts/components/admin-clinic.js?attachments=shared-20261015&v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015&walk-in=entry-context-20261015"></script>
+    <script src="../../scripts/components/admin-clinic.js?toast=semantic-20261015&attachments=shared-20261015&v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015&walk-in=entry-context-20261015"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>
