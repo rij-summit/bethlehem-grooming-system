@@ -207,6 +207,8 @@ function adminClinicModal() {
           || (API.getUserRole() === "admin" && this.currentAppt?.status === "for_payment"));
     },
 
+    get isPreRegistered() { return this.currentAppt?.appointment_type === 'pre_registered'; },
+
     get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"
       && !(this.currentAppt?.confinement && !this.currentAppt.confinement.discharged_at); },
     get isVeterinarian() { return this.$store.clinicAccess.user?.staff_subrole === "veterinarian" && this.$store.clinicAccess.user?.role === "staff"; },
@@ -391,7 +393,7 @@ function adminClinicModal() {
       this.formErrors = {};
       this.recordedByName = r.recorded_by_name || "—";
       this.form = {
-        chief_complaint:      r.chief_complaint      || appt.chief_complaint || "",
+        chief_complaint: this.isPreRegistered ? (appt.chief_complaint ?? "") : (r.chief_complaint || appt.chief_complaint || ""),
         relevant_history: r.relevant_history || "",
         reported_signs: r.reported_signs || "",
         physical_exam_findings: r.physical_exam_findings ?? r.findings ?? "",
@@ -554,7 +556,7 @@ function adminClinicModal() {
         }
         const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
         const payload = {
-          chief_complaint:      this.form.chief_complaint      || null,
+          ...(!this.isPreRegistered ? { chief_complaint: this.form.chief_complaint || null } : {}),
           relevant_history: this.form.relevant_history || null,
           reported_signs: this.form.reported_signs || null,
           physical_exam_findings: this.form.physical_exam_findings || null,
@@ -614,8 +616,10 @@ function adminClinicPage() {
     _confinedRequest: 0,
     caseBusyId: null,
     accessError: "",
-    payment: { open: false, case: null, method: "cash", saving: false, error: "" },
+    payment: { open: false, case: null, method: "cash", amountPaid: "", touched: false, saving: false, error: "", recorded: false },
+    receiptModal: null,
     paymentReturnFocus: null,
+    paymentPageOverflow: null,
     tab: "active-cases",
     addCustomer: { open: false, saving: false, error: "", form: {} },
 
@@ -759,36 +763,91 @@ function adminClinicPage() {
       finally { this.caseBusyId = null; }
     },
     reviewPayment(item) {
-      if (!this.permissions.payment || item.status !== "for_payment") return;
+      if (!this.permissions.payment || item.status !== "for_payment" || this.payment.open) return;
       this.paymentReturnFocus = document.activeElement;
-      this.payment = { open: true, case: item, method: "cash", saving: false, error: "" };
-      this.$nextTick?.(() => document.getElementById('clinic-payment-method')?.focus());
+      this.paymentPageOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      this.receiptModal = null;
+      this.payment = { open: true, case: item, method: "cash", amountPaid: "", touched: false, saving: false, error: "", recorded: false };
+      this.$nextTick?.(() => document.getElementById('clinic-cash-received')?.focus());
+    },
+    get paymentTotalDue() { return Number(this.payment.case?.total_amount); },
+    get paymentCashError() { return window.CashPayment.error(this.payment.amountPaid, this.paymentTotalDue); },
+    get paymentMaximumAmount() { return Math.min(999999, window.CashPayment.maximumFor(this.paymentTotalDue)); },
+    get paymentChange() { return window.CashPayment.change(this.payment.amountPaid, this.paymentTotalDue); },
+    get canConfirmPayment() {
+      return this.permissions.payment && this.payment.open && !this.payment.recorded && !this.payment.saving
+        && this.payment.method === 'cash' && Number.isFinite(this.paymentTotalDue) && this.paymentTotalDue >= 0 && !this.paymentCashError;
+    },
+    updatePaymentCash() {
+      this.payment.amountPaid = window.CashPayment.capInput(this.payment.amountPaid, this.paymentTotalDue);
+      this.payment.error = '';
+    },
+    paymentChargeQuantity(charge) {
+      return charge.quantity == null ? '—' : Number(charge.quantity).toLocaleString('en-PH', {maximumFractionDigits: 2});
+    },
+    paymentChargeDetail(charge) {
+      return charge.quantity != null && charge.unit_price != null ? `${this.paymentChargeQuantity(charge)} × ${this.money(charge.unit_price)}` : '';
+    },
+    formatClinicPaidAt(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString('en-PH', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila'});
+    },
+    formatInvoicePeso(value) { return window.PaymentInvoice.formatPeso(value); },
+    formatInvoiceDate(value) { return window.PaymentInvoice.formatDate(value); },
+    printClinicInvoice() {
+      if (this.payment.recorded && this.receiptModal) window.PaymentInvoice.print('clinicPaymentInvoice');
     },
     trapPaymentFocus(event) {
-      const controls = [...event.currentTarget.querySelectorAll('button, select')].filter(element => !element.disabled);
+      const controls = [...event.currentTarget.querySelectorAll('button, input, select, [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length);
       const first = controls[0], last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     },
     closePayment() {
       if (this.payment.saving) return;
       this.payment.open = false;
-      this.paymentReturnFocus?.focus();
+      document.body.style.overflow = this.paymentPageOverflow ?? '';
+      this.$nextTick?.(() => {
+        if (this.paymentReturnFocus?.isConnected && this.paymentReturnFocus.getClientRects().length) this.paymentReturnFocus.focus();
+        else document.getElementById('clinic-for-payment-filter')?.focus();
+      });
     },
     async recordPayment() {
-      if (!this.permissions.payment || this.payment.saving) return;
+      this.payment.touched = true;
+      if (!this.canConfirmPayment) return;
       this.payment.saving = true; this.payment.error = "";
       try {
-        await API.clinicRecordPayment(this.payment.case.id, {
-          total_amount: this.payment.case.total_amount, payment_method: this.payment.method,
+        const response = await API.clinicRecordPayment(this.payment.case.id, {
+          total_amount: this.payment.case.total_amount, payment_method: 'cash', amount_paid: Number(this.payment.amountPaid),
         });
-        window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id: this.payment.case.id, paid: true, status: 'completed'}}));
-        this.payment.open = false;
-        await this.loadActiveCases();
-        this.$store.clinicFeedback.notify("Payment recorded. Visit completed.");
+        const recorded = response.appointment;
+        this.receiptModal = {
+          caseReference: recorded.appointment_reference,
+          ownerName: recorded.ownerName,
+          contactNumber: recorded.contactNumber === '—' ? '' : recorded.contactNumber,
+          patientName: recorded.pet?.name || 'Patient',
+          patientInfo: [recorded.pet?.species, recorded.pet?.breed, recorded.pet?.gender].filter(Boolean).join(' · '),
+          charges: recorded.charges || [],
+          finalPrice: Number(recorded.total_amount),
+          paymentMethod: recorded.payment_method === 'cash' ? 'Cash' : recorded.payment_method,
+          amountPaid: recorded.cash_received,
+          change: recorded.change,
+          paidAt: recorded.paid_at,
+          processedBy: recorded.processed_by?.name || '—',
+        };
+        this.payment.recorded = true;
+        this.$nextTick?.(() => {
+          document.getElementById('clinic-payment-recorded-title')?.focus();
+          window.lucide?.createIcons();
+        });
+        window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id: recorded.id, paid: recorded.paid, status: recorded.status}}));
+        this.activeCases = this.activeCases.filter(item => item.id !== recorded.id);
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (error) {
-        this.payment.error = error.message || "Could not record payment.";
+        this.payment.error = Object.values(error.errors || {}).flat().join(' ') || error.message || "Could not record payment.";
         if (error.errors?.total_amount) {
           await this.loadActiveCases();
           const current = this.activeCases.find((item) => item.id === this.payment.case.id);

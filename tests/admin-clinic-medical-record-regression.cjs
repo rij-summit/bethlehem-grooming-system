@@ -160,5 +160,50 @@ function component(user) {
   admin.toggleVeterinarian = id => { toggle(id); delete admin.$refs.vetTrigger; };
   admin.removeVeterinarian(4);
   assert.equal(focused, 'vet-picker', 'Removing a chip retains its focus target before the chip leaves the DOM');
+  for (const user of [
+    { user_id: 1, role: 'staff', staff_subrole: 'veterinarian' },
+    { user_id: 3, role: 'staff', staff_subrole: 'clinic_receptionist' },
+    { user_id: 3, role: 'admin' },
+  ]) {
+    sandbox.API.getUserRole = () => user.role;
+    for (const appointment_type of ['pre_registered', 'walk_in']) {
+      const state = component(user);
+      state.$store.clinicFeedback = { confirm: async () => true };
+      const appt = { id: 103, status: 'in_consultation', appointment_type, ownerName: 'Owner',
+        chief_complaint: 'Original owner statement\nVomiting since yesterday.', record: { chief_complaint: 'Later record statement' } };
+      const preRegistered = appointment_type === 'pre_registered';
+      await state.openModal({ appt });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(state.isPreRegistered, preRegistered);
+      assert.equal(state.form.chief_complaint, preRegistered ? appt.chief_complaint : appt.record.chief_complaint);
+      sandbox.API.clinicSaveRecord = async (id, payload) => { adminPayload = payload; };
+      for (const finishCase of [false, true]) {
+        Object.assign(state.form, {chief_complaint: 'Edited complaint', relevant_history: 'Updated history',
+          working_diagnosis: 'Updated diagnosis', primary_veterinarian_id: '2',
+          weight_kg: 24, temperature_c: 38.5, heart_rate_bpm: 80, respiratory_rate_bpm: 20});
+        await state.saveRecord(finishCase);
+        assert.equal(Object.hasOwn(adminPayload, 'chief_complaint'), !preRegistered, `${appointment_type} payload for ${user.role}`);
+        if (!preRegistered) assert.equal(adminPayload.chief_complaint, 'Edited complaint');
+        assert.equal(adminPayload.relevant_history, 'Updated history');
+        assert.equal(adminPayload.working_diagnosis, 'Updated diagnosis');
+        assert.equal(adminPayload.finish_case, finishCase);
+        await state.openModal({ appt: {...appt, record: {...appt.record, chief_complaint: 'Edited complaint'}} });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(state.form.chief_complaint, preRegistered ? appt.chief_complaint : 'Edited complaint');
+      }
+      if (preRegistered) {
+        for (const chief_complaint of [null, '']) {
+          await state.openModal({ appt: {...appt, chief_complaint} });
+          await new Promise(resolve => setImmediate(resolve));
+          assert.equal(state.form.chief_complaint, '', 'An empty original must not fall back to a later record value');
+        }
+      }
+    }
+  }
+  const html = fs.readFileSync(path.join(__dirname, '../pages/admin/clinic.html'), 'utf8');
+  const complaintField = html.match(/<textarea id="medical-chief_complaint"[^>]*>/)[0];
+  assert.ok(complaintField.includes(':readonly="isPreRegistered"'));
+  assert.ok(complaintField.includes(':disabled="!isPreRegistered && (!canEditClinical || saving)"'));
+  assert.ok(html.includes('Submitted by the pet owner during pre-registration.'));
   console.log('Medical Record frontend workflow regression checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

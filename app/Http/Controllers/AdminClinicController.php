@@ -376,6 +376,7 @@ class AdminClinicController extends Controller
         $request->validate([
             'total_amount' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'payment_method' => ['required', 'in:cash,gcash,maya,card'],
+            'amount_paid' => ['required_if:payment_method,cash', 'nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:999999'],
         ]);
 
         $appt = DB::transaction(function () use ($id, $request) {
@@ -395,11 +396,25 @@ class AdminClinicController extends Controller
                 ]);
             }
 
+            if ($request->payment_method === 'cash') {
+                $received = (float) $request->amount_paid;
+                if (round($received * 100) < round($total * 100)) {
+                    throw ValidationException::withMessages(['amount_paid' => 'Cash received is less than the amount due.']);
+                }
+                $maximum = \App\Support\PaymentAmountLimit::maximumFor($total);
+                if ($received > $maximum) {
+                    throw ValidationException::withMessages([
+                        'amount_paid' => 'Amount paid cannot exceed ₱'.number_format($maximum, 2).'.',
+                    ]);
+                }
+            }
+
             $appointment->update([
                 'status' => 'completed',
                 'total_amount' => $total,
                 'paid' => true,
                 'payment_method' => $request->payment_method,
+                'cash_received' => $request->payment_method === 'cash' ? $request->amount_paid : null,
                 'paid_by_user_id' => $request->user()->user_id,
                 'paid_at' => now(),
             ]);
@@ -416,7 +431,13 @@ class AdminClinicController extends Controller
             return response()->json(['success' => false, 'message' => 'Appointment is not For Payment.'], 422);
         }
 
-        return response()->json(['success' => true, 'appointment' => $this->formatAppointment($appt->fresh(['user', 'walkin', 'pet', 'timeWindow', 'vitals', 'record']))]);
+        $recorded = $this->formatAppointment($appt->fresh($this->appointmentRelations()));
+        // The processor comes from the authenticated request, never a submitted ID.
+        $recorded['processed_by'] = [
+            'name' => trim(($request->user()->first_name ?? '').' '.($request->user()->last_name ?? '')),
+        ];
+
+        return response()->json(['success' => true, 'appointment' => $recorded]);
     }
 
     public function cancel(Request $request, int $id)
@@ -474,7 +495,8 @@ class AdminClinicController extends Controller
 
     public function saveRecord(Request $request, int $id)
     {
-        $existing = ClinicRecord::where('clinic_appointment_id', $id)->first();
+        $appointment = ClinicAppointment::findOrFail($id);
+        $existing = $appointment->record;
         $actor = $request->user();
         $veterinarians = User::activeVeterinarian()->get(['user_id', 'first_name', 'last_name'])->keyBy('user_id');
         $request->merge(['primary_veterinarian_id' => $actor->isVeterinarian()
@@ -502,7 +524,7 @@ class AdminClinicController extends Controller
                     if ((float) $value <= 0 || (float) $value > 99999999.99) $fail('Quantity must be a positive amount, optionally followed by a unit (e.g. 14 tablets).');
                 }],
             'prescriptions.*.instructions' => ['nullable', 'string', 'max:2000'],
-            'chief_complaint' => ['nullable', 'string', 'max:1200'],
+            'chief_complaint' => [Rule::excludeIf($appointment->appointment_type === 'pre_registered'), 'nullable', 'string', 'max:1200'],
             'diagnosis' => ['nullable', 'string', 'max:2000'],
             'findings' => ['nullable', 'string', 'max:2000'],
             'treatment_given' => ['nullable', 'string', 'max:2000'],
@@ -559,7 +581,9 @@ class AdminClinicController extends Controller
             $record = ClinicRecord::updateOrCreate(
                 ['clinic_appointment_id' => $appt->id],
                 [
-                    'chief_complaint' => array_key_exists('chief_complaint', $data) ? ($data['chief_complaint'] ?? $appt->chief_complaint) : ($existing?->chief_complaint ?? $appt->chief_complaint),
+                    'chief_complaint' => $appt->appointment_type === 'pre_registered'
+                        ? $appt->chief_complaint
+                        : (array_key_exists('chief_complaint', $data) ? ($data['chief_complaint'] ?? $appt->chief_complaint) : ($existing?->chief_complaint ?? $appt->chief_complaint)),
                     ...$clinical,
                     'primary_veterinarian_id' => $primary?->user_id,
                     'primary_veterinarian_name' => $primary ? $name($primary) : null,
@@ -791,6 +815,8 @@ class AdminClinicController extends Controller
             'confinement' => $a->relationLoaded('confinement') ? $a->confinement : null,
             'paid' => $a->paid,
             'payment_method' => $a->payment_method,
+            'cash_received' => $a->cash_received,
+            'change' => $a->cash_received !== null ? round((float) $a->cash_received - (float) $a->total_amount, 2) : null,
             'paid_at' => $a->paid_at?->toIso8601String(),
             'notes' => $a->notes,
             'checked_in_at' => $a->checked_in_at?->toIso8601String(),

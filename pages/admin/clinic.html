@@ -5,8 +5,9 @@
     <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic Cases | Bethlehem Animal Clinic</title>
-    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3" />
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3&clinic-payment=20261015-v2" />
     <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../css/components/print-information.css?v=clinic-invoice-20261015" />
     <style>
       :is([x-data="adminClinicCasesSection()"], [aria-labelledby="patient-record-title"]) :is(button, input, select, textarea, [tabindex="0"]):focus-visible {
         outline: 2px solid #315b7e;
@@ -138,10 +139,10 @@
             </div>
           </header>
 
-          <div class="mt-5 flex flex-wrap gap-2" role="group" aria-label="Case status filters">
-            <button type="button" :aria-pressed="tab === 'active-cases'" @click="setTab('active-cases')" class="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition" :class="tab === 'active-cases' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Active (<span x-text="activeCount"></span>)</button>
-            <button type="button" :aria-pressed="tab === 'confined'" @click="setTab('confined')" class="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition" :class="tab === 'confined' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Confined (<span x-text="confinedCount"></span>)</button>
-            <button type="button" :aria-pressed="tab === 'for-payment'" @click="setTab('for-payment')" class="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition lg:ml-auto" :class="tab === 'for-payment' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">For Payment (<span x-text="forPaymentCount"></span>)</button>
+          <div class="mt-5 flex w-fit max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100 p-1" role="group" aria-label="Case status filters">
+            <button type="button" :aria-pressed="tab === 'active-cases'" @click="setTab('active-cases')" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition" :class="tab === 'active-cases' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Active <span class="min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs tabular-nums" :class="tab === 'active-cases' ? 'bg-white/20 text-white' : 'bg-white text-slate-600'" x-text="activeCount"></span></button>
+            <button type="button" :aria-pressed="tab === 'confined'" @click="setTab('confined')" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition" :class="tab === 'confined' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">Confined <span class="min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs tabular-nums" :class="tab === 'confined' ? 'bg-white/20 text-white' : 'bg-white text-slate-600'" x-text="confinedCount"></span></button>
+            <button id="clinic-for-payment-filter" type="button" :aria-pressed="tab === 'for-payment'" @click="setTab('for-payment')" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition" :class="tab === 'for-payment' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-slate-600 hover:bg-white'">For Payment <span class="min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs tabular-nums" :class="forPaymentCount > 0 ? 'bg-amber-100 text-amber-800' : (tab === 'for-payment' ? 'bg-white/20 text-white' : 'bg-white text-slate-600')" x-text="forPaymentCount"></span></button>
           </div>
 
           <section x-show="['active-cases', 'for-payment'].includes(tab)" class="mt-5 rounded-2xl border border-[#cfe0ee] bg-white shadow-sm">
@@ -163,7 +164,7 @@
                     <div><p class="font-semibold text-slate-800" x-text="casePatientLabel(caseItem)"></p><p class="text-xs text-slate-500" x-text="(caseItem.ownerName || 'Owner') + ' · ' + caseLabel(caseItem)"></p><p x-show="caseItem.chief_complaint" class="mt-1 text-xs text-slate-500" x-text="caseItem.chief_complaint"></p></div>
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700" x-text="caseStatus(caseItem)"></span>
-                      <span x-show="caseItem.status === 'for_payment'" class="text-sm font-semibold tabular-nums text-slate-700" :aria-label="'Amount due: ' + money(caseItem.total_amount)" x-text="money(caseItem.total_amount)"></span>
+                      <div x-show="caseItem.status === 'for_payment'" class="px-2 sm:text-right"><span class="block text-xs text-slate-500">Amount due</span><strong class="text-lg tabular-nums text-[#2f4b66]" x-text="money(caseItem.total_amount)"></strong></div>
                       <button x-show="caseItem.status === 'for_payment' && permissions.access && permissions.payment" type="button" @click="openCase(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-slate-100 disabled:opacity-50">Open Case</button>
                       <button x-show="caseActionLabel(caseItem)" type="button" @click="runCaseAction(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="caseBusyId === caseItem.id ? 'Working…' : caseActionLabel(caseItem)"></button>
                       <div x-data="{menuOpen: false}" x-show="permissions.queue && !(caseItem.confinement && !caseItem.confinement.discharged_at)" class="relative" @click.outside="menuOpen = false" @keydown.escape.stop="menuOpen = false; $refs.trigger.focus()">
@@ -331,20 +332,86 @@
         </main>
 
         <div x-cloak x-show="payment.open" @keydown.escape.window="if (payment.open) closePayment()" class="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/60 px-4 py-8">
-          <div class="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="clinic-payment-title" @keydown.tab="trapPaymentFocus($event)">
-            <div class="border-b border-slate-200 px-6 py-5"><h3 id="clinic-payment-title" class="text-lg font-bold text-[#2f4b66]">Review Payment</h3><p class="mt-1 text-sm text-slate-500" x-text="payment.case?.pet?.name + ' · ' + payment.case?.appointment_reference"></p></div>
-            <form @submit.prevent="recordPayment()" class="max-h-[75vh] space-y-4 overflow-y-auto px-6 py-5">
-              <p class="text-xs text-slate-500">Review the recorded charges for this clinic case.</p>
-              <template x-for="charge in (payment.case?.charges || [])" :key="charge.id">
-                <div class="flex justify-between gap-3 border-b border-slate-100 pb-2 text-sm"><div class="min-w-0"><p class="break-words font-semibold text-slate-700" x-text="charge.description"></p><p class="text-xs text-slate-400" x-text="charge.quantity + ' × ' + money(charge.unit_price)"></p><p x-show="charge.pet_weight_kg != null" class="text-xs text-slate-500" x-text="'Pet weight: ' + charge.pet_weight_kg + ' kg · ' + clinicPriceRange(charge)"></p></div><span class="shrink-0 font-semibold text-slate-700" x-text="money(charge.amount)"></span></div>
-              </template>
-              <p x-show="!payment.case?.charges?.length" class="text-sm text-slate-500">No chargeable items recorded.</p>
-              <div class="flex justify-between font-bold text-[#2f4b66]"><span>Total</span><span x-text="money(payment.case?.total_amount)"></span></div>
-              <label class="block text-xs font-semibold text-slate-600" for="clinic-payment-method">Payment Method</label>
-              <select id="clinic-payment-method" x-model="payment.method" :disabled="payment.saving" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><option value="cash">Cash</option><option value="gcash">GCash</option><option value="maya">Maya</option><option value="card">Card</option></select>
-              <p x-show="payment.error" class="text-sm text-red-600" role="alert" x-text="payment.error"></p>
-              <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-4"><button type="button" @click="closePayment()" :disabled="payment.saving" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600">Close</button><button type="submit" :disabled="payment.saving" class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" x-text="payment.saving ? 'Recording…' : 'Record Payment'"></button></div>
-            </form>
+          <div class="receipt-modal-card w-full overflow-hidden bg-white shadow-2xl" role="dialog" aria-modal="true" :aria-labelledby="payment.recorded ? 'clinic-payment-recorded-title' : 'clinic-payment-title'" @keydown.tab="trapPaymentFocus($event)">
+            <template x-if="!payment.recorded">
+              <form @submit.prevent="recordPayment()" class="flex min-h-0 flex-col" :aria-busy="payment.saving">
+                <header class="shrink-0 border-b border-slate-200 px-6 py-5">
+                  <h3 id="clinic-payment-title" class="text-lg font-bold text-[#2f4b66]">Collect Payment</h3>
+                  <p class="mt-1 break-words text-sm font-semibold text-slate-700" x-text="[payment.case?.pet?.name, payment.case?.appointment_reference].filter(Boolean).join(' · ')"></p>
+                  <p class="mt-1 text-sm text-slate-500" x-text="payment.case?.ownerName || 'Owner'"></p>
+                </header>
+                <div class="receipt-modal-scroll space-y-5 px-6 py-5">
+                  <section aria-labelledby="clinic-breakdown-title">
+                    <h4 id="clinic-breakdown-title" class="text-sm font-bold text-[#2f4b66]">Payment Breakdown</h4>
+                    <p class="mb-3 mt-1 text-xs text-slate-500">Finalized charges from Clinic Billing.</p>
+                    <div class="divide-y divide-slate-100">
+                      <template x-for="charge in (payment.case?.charges || [])" :key="charge.id">
+                        <div class="flex justify-between gap-3 py-2 text-sm">
+                          <div class="min-w-0"><p class="break-words font-semibold text-slate-700" x-text="charge.description"></p><p class="mt-1 text-xs text-slate-500" x-text="paymentChargeDetail(charge)"></p><p x-show="charge.pet_weight_kg != null" class="text-xs text-slate-500" x-text="'Pet weight: ' + charge.pet_weight_kg + ' kg · ' + clinicPriceRange(charge)"></p></div>
+                          <strong class="shrink-0 tabular-nums text-slate-700" x-text="money(charge.amount)"></strong>
+                        </div>
+                      </template>
+                    </div>
+                    <p x-show="!payment.case?.charges?.length" class="text-sm text-slate-500">No chargeable items recorded.</p>
+                  </section>
+                  <div class="payment-total-due"><span>Total Due</span><strong x-text="money(paymentTotalDue)"></strong></div>
+                  <fieldset :disabled="payment.saving">
+                    <legend class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Payment Method</legend>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                      <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-[#315b7e] bg-[#eef5fb] px-3 py-3 text-sm font-semibold text-[#315b7e]"><input type="radio" name="clinic-payment-method" value="cash" x-model="payment.method" class="accent-[#315b7e]" />Cash</label>
+                      <label class="flex cursor-not-allowed items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500"><input type="radio" name="clinic-payment-method" disabled aria-label="Online Payment coming soon" /><span>Online Payment</span><span class="ml-auto whitespace-nowrap rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold">Coming soon</span></label>
+                    </div>
+                  </fieldset>
+                  <div x-show="payment.method === 'cash'" class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label for="clinic-cash-received" class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">Cash Received</label>
+                      <input id="clinic-cash-received" type="number" inputmode="decimal" step="0.01" :min="paymentTotalDue" :max="paymentMaximumAmount" required x-model="payment.amountPaid" @input="updatePaymentCash()" @blur="payment.touched = true" :disabled="payment.saving" :aria-invalid="payment.touched && !!paymentCashError" aria-describedby="clinic-cash-help clinic-cash-error" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm tabular-nums disabled:opacity-60" :class="payment.touched && paymentCashError ? 'border-red-400' : ''" placeholder="0.00" />
+                      <p id="clinic-cash-help" class="mt-1 text-xs text-slate-500" x-text="'Maximum ' + money(paymentMaximumAmount)"></p>
+                      <p id="clinic-cash-error" x-show="payment.touched && paymentCashError" class="mt-1 text-xs text-red-600" role="alert" x-text="paymentCashError"></p>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 px-4 py-3"><p class="text-xs font-bold uppercase tracking-wide text-slate-500">Change</p><p class="mt-2 text-2xl font-bold tabular-nums text-[#2f4b66]" aria-live="polite" x-text="money(paymentChange)"></p></div>
+                  </div>
+                  <p x-show="payment.error" class="text-sm text-red-600" role="alert" x-text="payment.error"></p>
+                </div>
+                <footer class="receipt-modal-actions flex flex-wrap justify-end gap-3 border-t border-slate-200 px-6 py-4">
+                  <button type="button" @click="closePayment()" :disabled="payment.saving" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                  <button type="submit" :disabled="!canConfirmPayment" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#274864] disabled:cursor-not-allowed disabled:opacity-50" x-text="payment.saving ? 'Recording…' : 'Confirm Payment'"></button>
+                </footer>
+              </form>
+            </template>
+            <template x-if="payment.recorded && receiptModal">
+              <div class="flex min-h-0 flex-col">
+                <header class="receipt-success-header">
+                  <div class="receipt-success-icon"><i data-lucide="check" class="h-6 w-6" aria-hidden="true"></i></div>
+                  <h3 id="clinic-payment-recorded-title" tabindex="-1" class="receipt-success-title">Payment recorded</h3>
+                  <p class="receipt-success-amount" x-text="money(receiptModal.finalPrice)"></p><p class="receipt-success-label">Amount paid</p>
+                  <div class="receipt-success-reference"><span>Case reference</span><strong x-text="receiptModal.caseReference"></strong></div>
+                </header>
+                <div class="receipt-modal-scroll receipt-success-body">
+                  <section class="receipt-success-section">
+                    <h5>Payment Breakdown</h5>
+                    <template x-for="charge in receiptModal.charges" :key="charge.id"><div class="receipt-success-service"><span class="min-w-0 break-words"><span x-text="charge.description"></span><small class="block text-slate-500" x-text="paymentChargeDetail(charge)"></small></span><strong x-text="money(charge.amount)"></strong></div></template>
+                  </section>
+                  <section class="receipt-success-section">
+                    <h5>Payment Details</h5>
+                    <dl class="receipt-success-details">
+                      <div><dt>Pet owner</dt><dd x-text="receiptModal.ownerName"></dd></div>
+                      <div><dt>Patient</dt><dd x-text="receiptModal.patientName"></dd></div>
+                      <div><dt>Payment method</dt><dd x-text="receiptModal.paymentMethod"></dd></div>
+                      <div><dt>Cash received</dt><dd x-text="money(receiptModal.amountPaid)"></dd></div>
+                      <div><dt>Change</dt><dd x-text="money(receiptModal.change)"></dd></div>
+                      <div><dt>Paid at</dt><dd x-text="formatClinicPaidAt(receiptModal.paidAt)"></dd></div>
+                      <div><dt>Processed by</dt><dd x-text="receiptModal.processedBy"></dd></div>
+                    </dl>
+                  </section>
+                </div>
+                <div class="receipt-print-source" aria-hidden="true"><div x-html="window.PaymentInvoice.clinicTemplate"></div></div>
+                <footer class="receipt-modal-actions flex gap-3 border-t border-slate-200 px-6 py-4">
+                  <button type="button" @click="printClinicInvoice()" class="receipt-print-button flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50"><i data-lucide="printer" class="h-4 w-4" aria-hidden="true"></i>Print Invoice</button>
+                  <button type="button" @click="closePayment()" class="flex-1 rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#274864]">Done</button>
+                </footer>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -983,9 +1050,10 @@
             </section>
             <section class="space-y-3">
               <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">History</h3>
-              <div x-show="canEditClinical || form.chief_complaint">
+              <div x-show="isPreRegistered || canEditClinical || form.chief_complaint">
                 <label for="medical-chief_complaint" class="mb-1 block text-xs font-medium text-slate-600">Chief Complaint</label>
-                <textarea id="medical-chief_complaint" :disabled="!canEditClinical || saving" rows="2" maxlength="1200" x-model="form.chief_complaint" placeholder="e.g. Vomiting since last night" :aria-invalid="hasFieldError('chief_complaint')" aria-errormessage="medical-validation-summary" aria-describedby="medical-chief_complaintError" :class="hasFieldError('chief_complaint') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <textarea id="medical-chief_complaint" :readonly="isPreRegistered" :disabled="!isPreRegistered && (!canEditClinical || saving)" rows="2" maxlength="1200" x-model="form.chief_complaint" :placeholder="isPreRegistered ? '' : 'e.g. Vomiting since last night'" :aria-invalid="hasFieldError('chief_complaint')" aria-errormessage="medical-validation-summary" :aria-describedby="isPreRegistered ? 'medical-chief_complaintHelp medical-chief_complaintError' : 'medical-chief_complaintError'" :class="[hasFieldError('chief_complaint') ? 'border-red-400' : 'border-slate-300', isPreRegistered ? 'bg-slate-50 text-slate-700' : '']" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
+                <p id="medical-chief_complaintHelp" x-show="isPreRegistered" class="mt-1 text-xs text-slate-500">Submitted by the pet owner during pre-registration.</p>
                 <p id="medical-chief_complaintError" role="alert" x-show="fieldError('chief_complaint')" x-text="fieldError('chief_complaint')" class="mt-1 text-xs text-red-600"></p>
               </div>
               <div x-show="canEditClinical || form.relevant_history">
@@ -1620,9 +1688,11 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
+    <script src="../../scripts/components/payment-invoice.js?v=clinic-invoice-20261015"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>

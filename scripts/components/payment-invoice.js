@@ -1,4 +1,4 @@
-// Shared recorded invoice for grooming payments and transaction history.
+// Shared recorded invoice shell for Grooming, Clinic, and transaction history.
 window.PaymentInvoice = (() => {
   const currency = new Intl.NumberFormat("en-PH", {
     style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -50,7 +50,9 @@ window.PaymentInvoice = (() => {
       window.print();
       window.setTimeout(restorePrintClass, 1000);
     },
-    template: `<section id="paymentInvoice">
+    templateFor(type = 'grooming') {
+      const clinic = type === 'clinic';
+      return `<section id="${clinic ? 'clinicPaymentInvoice' : 'paymentInvoice'}">
   <header class="payment-invoice-header">
     <div class="payment-invoice-brand">
       <img src="../../assets/images/clinic/Bethlehem_Logo-256.png" alt="Bethlehem Animal Clinic logo" class="payment-invoice-logo" />
@@ -63,16 +65,39 @@ window.PaymentInvoice = (() => {
   </header>
 
   <dl class="payment-invoice-meta">
-    <div><dt>Booking reference</dt><dd x-text="receiptModal.bookingReference"></dd></div>
+    <div><dt>${clinic ? 'Case reference' : 'Booking reference'}</dt><dd x-text="receiptModal.${clinic ? 'caseReference' : 'bookingReference'}"></dd></div>
     <div><dt>Invoice date</dt><dd x-text="formatInvoiceDate(receiptModal.paidAt)"></dd></div>
   </dl>
 
   <section class="payment-invoice-section payment-invoice-customer">
     <h2>Bill to</h2>
     <p class="payment-invoice-customer-name" x-text="receiptModal.ownerName"></p>
-    <p x-show="receiptModal.contactNumber" x-text="receiptModal.contactNumber ? formatMobileNumber(receiptModal.contactNumber) : ''"></p>
+    <p x-show="receiptModal.contactNumber" x-text="${clinic ? 'receiptModal.contactNumber' : "receiptModal.contactNumber ? formatMobileNumber(receiptModal.contactNumber) : ''"}"></p>
   </section>
 
+  ${clinic ? `<section class="payment-invoice-section">
+    <h2>Patient</h2>
+    <header class="payment-invoice-pet-header">
+      <h3 x-text="receiptModal.patientName"></h3>
+      <p x-text="receiptModal.patientInfo"></p>
+    </header>
+  </section>
+  <section class="payment-invoice-section">
+    <h2>Clinic Charges</h2>
+    <table class="payment-invoice-table">
+      <thead><tr><th scope="col">Description</th><th scope="col">Qty</th><th scope="col">Unit Price</th><th scope="col">Amount</th></tr></thead>
+      <tbody>
+        <template x-for="charge in receiptModal.charges" :key="charge.id">
+          <tr>
+            <td x-text="charge.description"></td>
+            <td x-text="paymentChargeQuantity(charge)"></td>
+            <td x-text="charge.unit_price == null ? '—' : formatInvoicePeso(charge.unit_price)"></td>
+            <td x-text="formatInvoicePeso(charge.amount)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </section>` : `
   <section class="payment-invoice-section">
     <h2>Grooming Services</h2>
     <template x-for="pet in receiptModal.pets" :key="'invoice-' + pet.id">
@@ -126,7 +151,7 @@ window.PaymentInvoice = (() => {
     <div x-show="receiptModal.products.length > 1" class="payment-invoice-category-total payment-invoice-products-total">
       <span>Product Add-ons</span><strong x-text="formatInvoicePeso(receiptModal.productsSubtotal)"></strong>
     </div>
-  </section>
+  </section>`}
 
   <dl class="payment-invoice-totals">
     <div><dt>Invoice total</dt><dd x-text="formatInvoicePeso(receiptModal.finalPrice)"></dd></div>
@@ -141,14 +166,18 @@ window.PaymentInvoice = (() => {
         <div><dt>Payment method</dt><dd x-text="receiptModal.paymentMethod"></dd></div>
         <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Cash received</dt><dd x-text="formatInvoicePeso(receiptModal.amountPaid)"></dd></div>
         <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Change</dt><dd x-text="formatInvoicePeso(receiptModal.change)"></dd></div>
-        <div><dt>Paid at</dt><dd x-text="receiptModal.paidAt"></dd></div>
+        <div><dt>Paid at</dt><dd x-text="${clinic ? 'formatClinicPaidAt(receiptModal.paidAt)' : 'receiptModal.paidAt'}"></dd></div>
+        ${clinic ? '<div><dt>Processed by</dt><dd x-text="receiptModal.processedBy"></dd></div>' : ''}
       </dl>
     </div>
-    <div x-show="receiptModal.notes" class="payment-invoice-notes">
+    ${clinic ? '' : `<div x-show="receiptModal.notes" class="payment-invoice-notes">
       <p class="payment-invoice-notes-label">Notes</p>
       <p x-text="receiptModal.notes"></p>
-    </div>
+    </div>`}
   </section>
-</section>`,
+</section>`;
+    },
+    get template() { return this.templateFor(); },
+    get clinicTemplate() { return this.templateFor('clinic'); },
   };
 })();
