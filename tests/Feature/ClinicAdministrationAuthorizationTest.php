@@ -773,6 +773,30 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     {
         $this->authenticateAs('admin');
 
+        Schema::create('vaccination_records', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_appointment_id');
+            $table->timestamp('published_at')->nullable();
+            $table->timestamp('voided_at')->nullable();
+        });
+        Schema::create('clinic_case_services', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_appointment_id');
+            $table->string('status');
+        });
+        DB::table('vaccination_records')->insert([
+            ['clinic_appointment_id' => 1, 'published_at' => now(), 'voided_at' => null],
+            ['clinic_appointment_id' => 1, 'published_at' => null, 'voided_at' => null],
+            ['clinic_appointment_id' => 1, 'published_at' => now(), 'voided_at' => now()],
+            ['clinic_appointment_id' => 2, 'published_at' => now(), 'voided_at' => null],
+        ]);
+        DB::table('clinic_case_services')->insert([
+            ['clinic_appointment_id' => 1, 'status' => 'performed'],
+            ['clinic_appointment_id' => 1, 'status' => 'cancelled'],
+            ['clinic_appointment_id' => 1, 'status' => 'ordered'],
+            ['clinic_appointment_id' => 2, 'status' => 'performed'],
+        ]);
+
         DB::table('users')->insert([
             'user_id' => 10,
             'first_name' => 'Maria',
@@ -843,6 +867,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.appointment_type_label', 'Pre-Registered')
             ->assertJsonPath('archived.0.time_window.window_label', '8:00 AM - 9:00 AM')
             ->assertJsonPath('archived.0.final_status_label', 'Completed')
+            ->assertJsonPath('archived.0.treatment_count', 1)
+            ->assertJsonPath('archived.0.service_count', 1)
             ->assertJsonPath('archived.0.payment_status_label', 'Paid')
             ->assertJsonPath('archived.0.owner.name', 'Maria Santos')
             ->assertJsonPath('archived.0.owner.account_deleted', true)
@@ -858,6 +884,15 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('archived.0.activity.created_by_name', null);
 
         $this->assertNotContains(4, collect($response->json('archived'))->pluck('id')->all());
+
+        DB::table('clinic_records')->where('id', $recordId)->update([
+            'chief_complaint' => 'Itching around ears',
+            'working_diagnosis' => 'Otitis externa',
+        ]);
+        foreach (['Itching around ears', 'Otitis externa'] as $search) {
+            $this->getJson('/api/admin/clinic-appointments/archived?search='.urlencode($search))
+                ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('archived.0.id', 1);
+        }
 
         $this->getJson('/api/admin/clinic-appointments/archived?search=Mochi')
             ->assertOk()

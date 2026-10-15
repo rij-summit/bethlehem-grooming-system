@@ -18,6 +18,12 @@ function adminArchive() {
     detailsBooking: null,
     clinicDetailsModalOpen: false,
     detailsClinicRecord: null,
+    clinicCare: null,
+    clinicCareLoading: false,
+    clinicCareError: "",
+    clinicAttachmentBusyId: null,
+    clinicAttachmentError: "",
+    _clinicRequest: 0,
 
     async init() {
       this._restoreOnPageShow = (event) => {
@@ -311,15 +317,200 @@ function adminArchive() {
       } }, "");
     },
 
-    viewClinicRecord(record) {
+    viewClinicRecord(record, trigger = document.activeElement) {
+      this._clinicTrigger = trigger;
       this.detailsClinicRecord = record;
+      this.clinicCare = null;
+      this.clinicCareError = "";
+      this.clinicAttachmentError = "";
+      this.clinicAttachmentBusyId = null;
       this.clinicDetailsModalOpen = true;
+      this._clinicBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      this.$nextTick(() => {
+        this.$refs.clinicVisitBody.scrollTop = 0;
+        this.$refs.clinicVisitClose.focus({preventScroll: true});
+      });
+      this.loadClinicCare();
       this.refreshIcons();
     },
 
+    async loadClinicCare() {
+      const record = this.detailsClinicRecord, request = ++this._clinicRequest;
+      if (record.treatment_count === 0 && record.service_count === 0 && !record.confinement) {
+        this.clinicCare = {treatments: [], services: [], confinement: null};
+        this.clinicCareLoading = false;
+        return;
+      }
+      this.clinicCareLoading = true;
+      this.clinicCareError = "";
+      try {
+        const data = await API.adminGetPetCaseDetails(record.pet.id, record.id);
+        if (request !== this._clinicRequest) return;
+        this.clinicCare = {
+          treatments: (data.treatments || []).filter(item => item.state === 'published' && !item.voided_at),
+          services: (data.services || []).filter(item => item.status === 'performed'),
+          confinement: data.confinement,
+        };
+      } catch (error) {
+        if (request === this._clinicRequest) this.clinicCareError = error.message || "Could not load care provided.";
+      } finally {
+        if (request === this._clinicRequest) this.clinicCareLoading = false;
+      }
+    },
+
     closeClinicRecord() {
+      if (!this.clinicDetailsModalOpen) return;
+      ++this._clinicRequest;
       this.clinicDetailsModalOpen = false;
       this.detailsClinicRecord = null;
+      this.clinicCare = null;
+      this.clinicCareLoading = false;
+      document.body.style.overflow = this._clinicBodyOverflow;
+      this._clinicTrigger?.focus({preventScroll: true});
+      this._clinicTrigger = null;
+    },
+
+    trapClinicFocus(event) {
+      const targets = [...this.$refs.clinicVisitDialog.querySelectorAll('button, a[href], [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length);
+      const first = targets[0], last = targets[targets.length - 1];
+      if (event.shiftKey && event.target === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && event.target === last) {
+        event.preventDefault(); first.focus();
+      }
+    },
+
+    clinicText(value) {
+      return this.isArchiveValueMissing(value) ? '' : String(value).trim();
+    },
+
+    clinicReason(visit) {
+      return this.clinicText(visit?.record?.chief_complaint) || this.clinicText(visit?.chief_complaint)
+        || (visit?.common_concerns || []).filter(value => this.clinicText(value)).join(', ');
+    },
+
+    clinicDiagnosis(visit) {
+      return this.clinicText(visit?.record?.working_diagnosis);
+    },
+
+    clinicCareSummary(visit) {
+      const parts = [];
+      if (visit.treatment_count) parts.push(`${visit.treatment_count} treatment${visit.treatment_count === 1 ? '' : 's'}`);
+      if (visit.service_count) parts.push(`${visit.service_count} service${visit.service_count === 1 ? '' : 's'}`);
+      if (!parts.length && this.clinicText(visit.record?.treatment_given)) parts.push('Treatment');
+      if (visit.confinement) parts.push('Confinement');
+      return parts.join(' · ');
+    },
+
+    clinicHasPayment(visit) {
+      return !!visit && (visit.status === 'completed' || visit.paid || Number(visit.total_amount) > 0);
+    },
+
+    clinicMoney(value) {
+      return this.clinicText(value) ? Number(value).toLocaleString('en-PH', {style: 'currency', currency: 'PHP'}) : '';
+    },
+
+    get clinicSummaryFields() {
+      const visit = this.detailsClinicRecord, record = visit?.record;
+      return [
+        {label: 'Chief Complaint', value: this.clinicReason(visit)},
+        {label: 'Relevant Patient History', value: record?.relevant_history},
+        {label: 'Reported Signs', value: record?.reported_signs},
+        {label: 'Physical Examination', value: record?.physical_exam_findings},
+        {label: 'Working Diagnosis', value: record?.working_diagnosis},
+        {label: 'Differential Diagnoses', value: record?.differential_diagnoses},
+        {label: 'Veterinarian Notes', value: record?.vet_notes},
+        {label: 'Visit Notes', value: visit?.status === 'cancelled' ? visit.notes : ''},
+      ].filter(field => this.clinicText(field.value));
+    },
+
+    get clinicVitals() {
+      const vitals = this.detailsClinicRecord?.vitals;
+      return [
+        ['Weight', 'weight_kg', 'kg'], ['Temperature', 'temperature_c', '°C'],
+        ['Heart rate', 'heart_rate_bpm', 'bpm'], ['Respiratory rate', 'respiratory_rate_bpm', 'breaths/min'],
+        ['Body condition score', 'body_condition_score', ''],
+      ].filter(([, key]) => this.clinicText(vitals?.[key]))
+        .map(([label, key, unit]) => ({label, value: `${vitals[key]} ${unit}`.trim()}));
+    },
+
+    clinicServiceName(entry) {
+      return entry?.service_snapshot?.name || entry?.clinic_service?.name || '';
+    },
+
+    clinicServicePrice(entry) {
+      return entry.applied_price == null ? '' : this.clinicMoney(Number(entry.applied_price) * Number(entry.quantity ?? 1));
+    },
+
+    clinicServiceAttachments(entry) {
+      return (this.detailsClinicRecord?.record?.attachments || [])
+        .filter(file => String(file.clinic_case_service_id) === String(entry.id));
+    },
+
+    get clinicMedicalAttachments() {
+      // Keep unmatched files discoverable even if the linked service is no longer present.
+      const serviceIds = new Set((this.clinicCare?.services || []).map(entry => String(entry.id)));
+      return (this.detailsClinicRecord?.record?.attachments || [])
+        .filter(file => !file.clinic_case_service_id || !serviceIds.has(String(file.clinic_case_service_id)));
+    },
+
+    async openClinicAttachment(file) {
+      const request = this._clinicRequest;
+      this.clinicAttachmentBusyId = file.id;
+      this.clinicAttachmentError = '';
+      try {
+        await viewClinicAttachment(this.detailsClinicRecord.id, file);
+      } catch (error) {
+        if (request === this._clinicRequest) this.clinicAttachmentError = error.message || 'Could not open attachment. Try again.';
+      } finally {
+        if (request === this._clinicRequest) this.clinicAttachmentBusyId = null;
+      }
+    },
+
+    clinicTreatmentFields(item) {
+      const route = ({subcutaneous: 'Subcutaneous', intramuscular: 'Intramuscular', intranasal: 'Intranasal', oral: 'Oral', other: 'Other'})[item.route] || item.route;
+      return [
+        {label: 'Product', value: item.product_name},
+        {label: 'Strength / concentration', value: item.strength_concentration},
+        {label: 'Dose', value: this.clinicText(item.dose_amount) ? `${item.dose_amount} ${item.dose_unit || ''}`.trim() : ''},
+        {label: 'Route', value: route}, {label: 'Administration site', value: item.administration_site},
+        {label: 'Administered', value: item.administered_date ? this.formatAppointmentDate(item.administered_date, '') : ''},
+        {label: 'Next due', value: item.next_due_date ? this.formatAppointmentDate(item.next_due_date, '') : ''},
+        {label: 'Batch / Lot', value: item.batch_number}, {label: 'Notes', value: item.notes},
+      ].filter(field => this.clinicText(field.value));
+    },
+
+    get clinicPrescriptions() {
+      return (this.detailsClinicRecord?.record?.prescriptions || []).filter(item => this.clinicText(item.medicine));
+    },
+
+    clinicPrescriptionText(item) {
+      return [item.strength_concentration, item.dose, item.route, item.frequency, item.duration, item.instructions]
+        .filter(value => this.clinicText(value)).join(' · ');
+    },
+
+    get clinicDiagnostics() {
+      return (this.detailsClinicRecord?.record?.diagnostics || [])
+        .filter(item => this.clinicText(item.diagnostic) || this.clinicText(item.result) || this.clinicText(item.notes));
+    },
+
+    get clinicHasCare() {
+      return !!(this.clinicCare?.treatments.length || this.clinicCare?.services.length || this.clinicCare?.confinement
+        || this.clinicText(this.detailsClinicRecord?.record?.treatment_given) || this.clinicPrescriptions.length || this.clinicDiagnostics.length);
+    },
+
+    get clinicConfinementFields() {
+      const episode = this.clinicCare?.confinement;
+      if (!episode) return [];
+      return [
+        {label: 'Admitted', value: episode.admitted_at ? this.formatDateTime(episode.admitted_at, '') : ''},
+        {label: 'Discharged', value: episode.discharged_at ? this.formatDateTime(episode.discharged_at, '') : ''},
+        {label: 'Attending veterinarian', value: episode.attending_veterinarian_name},
+        {label: 'Reason', value: episode.reason}, {label: 'Notes', value: episode.notes},
+        {label: 'Discharge instructions', value: episode.discharge_note},
+      ].filter(field => this.clinicText(field.value));
     },
 
     displayArchiveValue(value, fallback = null) {
@@ -392,21 +583,6 @@ function adminArchive() {
 
       const date = this.formatAppointmentDate(appointmentDate, fallback);
       return time ? `${date} • ${time}` : date;
-    },
-
-    formatClinicWeight(record, fallback = null) {
-      fallback ??= this.clinicDetailsModalOpen ? "Not recorded" : unavailableText;
-      const weight = record?.vitals?.weight_kg ?? record?.pet?.weight;
-      return weight === null || weight === undefined || weight === ""
-        ? fallback
-        : `${weight} kg`;
-    },
-
-    formatClinicAmount(amount, fallback = null) {
-      fallback ??= this.clinicDetailsModalOpen ? "Not recorded" : unavailableText;
-      return amount === null || amount === undefined || amount === ""
-        ? fallback
-        : this.formatPeso(amount);
     },
 
     clinicStatusClass(status) {

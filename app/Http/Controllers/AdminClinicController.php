@@ -257,6 +257,13 @@ class AdminClinicController extends Controller
         $query = ClinicAppointment::with($this->appointmentRelations())
             ->whereIn('status', ['completed', 'cancelled', 'no_show', 'expired']);
 
+        if (Schema::hasTable('vaccination_records')) {
+            $query->withCount(['vaccinationRecords as treatment_count' => fn ($query) => $query->published()->notVoided()]);
+        }
+        if (Schema::hasTable('clinic_case_services')) {
+            $query->withCount(['caseServices as service_count' => fn ($query) => $query->where('status', 'performed')]);
+        }
+
         if ($date !== '') {
             $query->whereDate('appointment_date', $date);
         }
@@ -268,6 +275,9 @@ class AdminClinicController extends Controller
                 $archiveQuery
                     ->where('appointment_reference', 'like', $like)
                     ->orWhere('chief_complaint', 'like', $like)
+                    ->orWhereHas('record', fn ($query) => $query
+                        ->where('chief_complaint', 'like', $like)
+                        ->orWhere('working_diagnosis', 'like', $like))
                     ->orWhereHas('user', function ($userQuery) use ($like) {
                         $userQuery
                             ->where('first_name', 'like', $like)
@@ -295,7 +305,11 @@ class AdminClinicController extends Controller
             ->orderByDesc('appointment_date')
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn (ClinicAppointment $appointment) => $this->formatAppointment($appointment))
+            ->map(fn (ClinicAppointment $appointment) => [
+                ...$this->formatAppointment($appointment),
+                'treatment_count' => $appointment->treatment_count ?? 0,
+                'service_count' => $appointment->service_count ?? 0,
+            ])
             ->values();
 
         return response()->json([
