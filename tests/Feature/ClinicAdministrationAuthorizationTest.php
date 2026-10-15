@@ -460,6 +460,69 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/start')->assertOk()->assertJsonPath('case.status', 'in_consultation');
     }
 
+    public function test_both_start_endpoints_require_check_in_and_queue_numbers_reset_by_clinic_date(): void
+    {
+        $this->authenticateAs('staff');
+        $this->insertClinicAppointment('checked_in', id: 10);
+        DB::table('clinic_appointments')->where('id', 10)->update(['appointment_date' => now()->subDay()->toDateString(), 'queue_number' => 30]);
+        foreach (['/api/admin/clinic-cases/1/start', '/api/admin/clinic-appointments/2/start-consultation'] as $index => $url) {
+            $id = $index + 1;
+            $this->insertClinicAppointment('waiting_to_arrive', id: $id);
+            DB::table('clinic_appointments')->where('id', $id)->update(['queue_number' => null]);
+            $this->postJson($url)->assertUnprocessable();
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $id, 'status' => 'waiting_to_arrive', 'queue_number' => null, 'consultation_started_at' => null]);
+            $this->postJson('/api/admin/clinic-appointments/'.$id.'/check-in')->assertOk()
+                ->assertJsonPath('appointment.status', 'checked_in')->assertJsonPath('appointment.queue_number', $id);
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $id, 'consultation_started_at' => null]);
+            $this->postJson($url)->assertOk();
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $id, 'status' => 'in_consultation', 'queue_number' => $id]);
+            $started = DB::table('clinic_appointments')->where('id', $id)->value('consultation_started_at');
+            $this->postJson($url)->assertUnprocessable();
+            $this->assertSame($started, DB::table('clinic_appointments')->where('id', $id)->value('consultation_started_at'));
+            DB::table('clinic_appointments')->where('id', $id)->update(['status' => 'for_payment']);
+            $this->postJson($url)->assertUnprocessable();
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $id, 'status' => 'for_payment']);
+        }
+        Carbon::setTestNow(now()->addDay());
+        $this->insertClinicAppointment('waiting_to_arrive', id: 3);
+        DB::table('clinic_appointments')->where('id', 3)->update(['queue_number' => null]);
+        $this->postJson('/api/admin/clinic-appointments/3/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 1);
+    }
+
+    public function test_active_outpatients_are_today_only_without_losing_payment_or_multiday_confinement(): void
+    {
+        $this->authenticateAs('admin');
+        foreach ([1 => 'checked_in', 2 => 'in_consultation', 3 => 'for_payment', 4 => 'completed',
+            5 => 'waiting_to_arrive', 6 => 'checked_in', 7 => 'waiting_to_arrive', 8 => 'in_consultation'] as $id => $status) {
+            $this->insertClinicAppointment($status, id: $id);
+            DB::table('clinic_appointments')->where('id', $id)->update([
+                'appointment_date' => in_array($id, [5, 6]) ? now()->toDateString() : ($id === 7 ? now()->addDay()->toDateString() : now()->subDay()->toDateString()),
+            ]);
+        }
+        $migrations = array_map(fn ($file) => require database_path('migrations/'.$file), [
+            '2026_10_13_000001_create_clinic_services_table.php', '2026_10_13_000002_create_clinic_case_services_table.php',
+            '2026_10_13_000004_create_clinic_confinements.php',
+        ]);
+        foreach ($migrations as $migration) $migration->up();
+        try {
+            $serviceId = DB::table('clinic_services')->insertGetId([
+                'name' => 'Inpatient care', 'category_id' => 6, 'identity_key' => hash('sha256', 'inpatient'), 'pricing_method' => 'fixed', 'price' => 500,
+            ]);
+            $entryId = DB::table('clinic_case_services')->insertGetId([
+                'clinic_appointment_id' => 8, 'clinic_service_id' => $serviceId, 'request_key' => (string) Str::uuid(), 'status' => 'ordered',
+            ]);
+            DB::table('clinic_confinements')->insert([
+                'clinic_appointment_id' => 8, 'clinic_case_service_id' => $entryId, 'admitted_at' => now()->subDay(), 'reason' => 'Observe overnight',
+            ]);
+            $response = $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 1);
+            $this->assertEqualsCanonicalizing([3, 5, 6, 8], array_column($response->json('cases'), 'id'));
+            $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('data.0.id', 8);
+            $this->assertDatabaseCount('clinic_appointments', 8);
+        } finally {
+            foreach (array_reverse($migrations) as $migration) $migration->down();
+        }
+    }
+
     public function test_charge_migration_preserves_existing_pending_payment_amounts(): void
     {
         $migration = require base_path('database/migrations/2026_10_10_000001_create_clinic_charges_table.php');
@@ -773,7 +836,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
 
     public function test_clinic_vitals_share_precision_limits_and_preserve_records_on_invalid_input(): void
     {
-        $this->insertClinicAppointment('checked_in');
+        $this->insertClinicAppointment('in_consultation');
         $cases = json_decode(file_get_contents(base_path('tests/Fixtures/weight-rules.json')), true);
         foreach (['admin', 'staff'] as $role) {
             $this->authenticateAs($role);
@@ -988,6 +1051,12 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('case.id', 1);
         $this->assertSame('waiting_to_arrive', DB::table('clinic_appointments')->where('id', 1)->value('status'));
 
+        $this->postJson('/api/admin/clinic-cases/1/start')
+            ->assertUnprocessable();
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'waiting_to_arrive', 'queue_number' => null, 'consultation_started_at' => null]);
+        $this->postJson('/api/admin/clinic-appointments/1/check-in')->assertOk()
+            ->assertJsonPath('appointment.status', 'checked_in')->assertJsonPath('appointment.queue_number', 1);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'consultation_started_at' => null]);
         $this->postJson('/api/admin/clinic-cases/1/start')
             ->assertOk()
             ->assertJsonPath('case.status', 'in_consultation')
@@ -2293,7 +2362,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $message = 'Clinical records can only be modified while the appointment is Checked In, In Consultation, or For Payment.';
+        $message = 'Start the consultation before modifying clinical records. For Payment corrections are limited to administrators.';
         $this->postJson('/api/admin/clinic-appointments/1/record', [
             'diagnosis' => 'Forbidden replacement',
             'weight_kg' => 9.99,
@@ -2328,6 +2397,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     {
         return [
             'waiting to arrive' => ['waiting_to_arrive'],
+            'checked in' => ['checked_in'],
             'completed' => ['completed'],
             'cancelled' => ['cancelled'],
             'legacy unused' => ['no_show'],
@@ -2365,7 +2435,6 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     public static function editableClinicalHistoryStatuses(): array
     {
         return [
-            'checked in' => ['checked_in'],
             'in consultation' => ['in_consultation'],
             'for payment' => ['for_payment'],
         ];
@@ -2488,6 +2557,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $this->assertTrue(app(\App\Services\OperationalCapacity::class)->snapshot()['is_full']);
             Carbon::setTestNow(now()->setTime(16, 0));
             $this->postJson('/api/admin/clinic-appointments/2/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 1);
+            $this->postJson('/api/admin/clinic-cases/1/start')->assertUnprocessable();
+            $this->postJson('/api/admin/clinic-appointments/1/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 2);
             $this->postJson('/api/admin/clinic-cases/1/start')->assertOk()->assertJsonPath('case.queue_number', 2);
             $this->postJson('/api/admin/clinic-appointments/2/start-consultation')->assertOk();
             $this->assertSame(20, app(\App\Services\OperationalCapacity::class)->snapshot()['used']);

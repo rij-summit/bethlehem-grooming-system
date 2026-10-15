@@ -117,7 +117,7 @@ function setup() {
     return {case: visit};
   };
   workflow.context.API.clinicCheckIn = async () => {throw new Error('A newly created checked-in case needs no second check-in');};
-  workflow.context.API.startClinicCase = async id => {transitions.push(['start', id]); return {case: {...ongoing[0], status: 'in_consultation'}};};
+  workflow.context.API.startClinicCase = async id => {transitions.push(['start', id]); ongoing = [{...ongoing[0], status: 'in_consultation'}]; return {case: ongoing[0]};};
   await workflow.state.checkInPatient();
   assert.deepEqual(transitions, [['create', 7, 'consultation']], 'Check-in never automatically starts consultation');
   assert.equal(workflow.state.currentClinicVisit.status, 'checked_in');
@@ -125,14 +125,28 @@ function setup() {
   assert.equal(workflow.state.activeCount, 1);
   assert.equal(workflow.events.some(event => event.type === 'clinic-open-modal'), false);
   assert.equal(workflow.state.profile.open, true, 'Check-in keeps patient/history and the operational case separate');
-  assert.equal(workflow.state.profileActionLabel, 'Open Active Case');
+  assert.equal(workflow.state.profileActionLabel, 'Start Consultation');
   await workflow.state.checkInPatient();
   assert.equal(transitions.length, 1, 'An ongoing case prevents repeat creation');
   workflow.state.openProfileCase();
-  assert.equal(workflow.events.at(-1).type, 'clinic-open-modal');
-  assert.equal(transitions.length, 1, 'Open Active Case does not transition its status');
-  await workflow.state.startCase(ongoing[0]);
-  assert.deepEqual(transitions.at(-1), ['start', 90], 'Start Consultation remains a separate explicit action');
+  assert.equal(workflow.events.some(event => event.type === 'clinic-open-modal'), false, 'Checked-in patients cannot bypass Start Consultation');
+  await workflow.state.runProfileAction();
+  assert.deepEqual(transitions.at(-1), ['start', 90]);
+  assert.equal(workflow.events.at(-1).type, 'clinic-open-modal', 'Starting from the profile opens the returned active case automatically');
+  assert.equal(workflow.events.at(-1).detail.appt.status, 'in_consultation');
+  assert.equal(workflow.state.profile.open, false);
+  assert.equal(workflow.state.profileActionLabel, 'Open Case');
+  assert.equal(workflow.state.caseActionLabel(ongoing[0]), 'Open Case');
+  const starts = transitions.length;
+  workflow.state.openProfileCase();
+  assert.equal(transitions.length, starts, 'Reopening does not start consultation again');
+  ongoing = [{...ongoing[0], status: 'for_payment'}];
+  workflow.state.activeCases = ongoing;
+  assert.equal(workflow.state.profileActionLabel, '');
+  const openedEvents = workflow.events.length;
+  workflow.state.openProfileCase();
+  await workflow.state.runProfileAction();
+  assert.equal(workflow.events.length, openedEvents, 'For Payment has no profile clinical shortcut');
 
   const waiting = setup();
   await waiting.state.openProfile({pet: {id: 7}, owner}, waiting.trigger);
@@ -154,7 +168,7 @@ function setup() {
   race.context.API.createClinicCase = async () => {throw {code: 'active_case_exists', data: {case: {id: 3, status: 'in_consultation', pet: {id: 7}}}};};
   race.context.API.clinicCheckIn = race.context.API.startClinicCase = async () => {throw new Error('An existing case conflict must not change status');};
   await race.state.checkInPatient();
-  assert.equal(race.state.profileActionLabel, 'Open Active Case');
+  assert.equal(race.state.profileActionLabel, 'Open Case');
   assert.equal(race.state.currentClinicVisit.status, 'in_consultation');
   assert.equal(race.state.profile.open, true);
 
@@ -164,6 +178,23 @@ function setup() {
   denied.context.API.createClinicCase = async () => {throw new Error('No intake permission');};
   await denied.state.checkInPatient();
   assert.equal(denied.state.currentClinicVisit, null);
+  assert.equal(denied.state.profileActionLabel, '');
+  denied.state.activeCases = [{id: 1, pet: {id: 7}, status: 'checked_in'}];
+  denied.state.$store.clinicAccess.permissions.clinical = false;
+  assert.equal(denied.state.profileActionLabel, '');
+  await denied.state.runProfileAction();
+  denied.state.openProfileCase();
+  assert.equal(denied.events.some(event => event.type === 'clinic-open-modal'), false);
+  assert.equal(denied.state.caseActionLabel({status: 'checked_in'}), '');
+  denied.state.runCaseAction({id: 1, status: 'checked_in'});
+  denied.state.runCaseAction({id: 1, status: 'waiting_to_arrive'});
+  denied.state.runCaseAction({id: 1, status: 'for_payment'});
+  assert.equal(denied.events.some(event => event.type === 'clinic-open-modal'), false, 'Denied row actions never fall back to opening a case');
+
+  assert.equal(denied.state.casePatientLabel({status: 'waiting_to_arrive', queue_number: 8}), 'Patient');
+  assert.equal(denied.state.casePatientLabel({status: 'checked_in', queue_number: 5, pet: {name: 'Max'}}), '#5 · Max');
+  const markup = fs.readFileSync(path.join(__dirname, '../pages/admin/clinic.html'), 'utf8');
+  assert.doesNotMatch(markup, /Current Clinic Visit|Open Active Case|caseOpened\(/);
 
   const filtering = setup();
   filtering.state.activeCases = ['waiting_to_arrive', 'checked_in', 'in_consultation', 'for_payment', 'completed'].map((status, id) => ({id, status}));

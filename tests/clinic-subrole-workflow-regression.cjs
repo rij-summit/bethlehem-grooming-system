@@ -57,6 +57,10 @@ function permissions(clinical, payment, queue, customers) {
   receptionist.openCase = appt => {openedPet = appt.pet.id;};
   sandbox.API.createClinicCase = async () => { throw new Error('Viewing must not create a case'); };
   receptionist.openProfileCase();
+  assert.equal(openedPet, undefined, 'Reception cannot open a checked-in case as a fallback');
+  assert.equal(receptionist.caseActionLabel(receptionist.activeCases[0]), '');
+  receptionist.activeCases[0].status = 'in_consultation';
+  receptionist.openProfileCase();
   assert.equal(openedPet, 7);
   const receptionistVaccines = component('adminClinicVaccinations');
   receptionistVaccines.pet = { id: 1 };
@@ -188,7 +192,12 @@ function permissions(clinical, payment, queue, customers) {
   assert.equal(casePage.visibleActiveCases.length, 1);
   assert.equal(casePage.visibleActiveCases[0].id, 2);
   permissions(false, false, false, false);
-  assert.equal(casePage.caseActionLabel({status: 'for_payment'}), 'Open Case', 'Read-only staff do not receive payment actions');
+  assert.equal(casePage.caseActionLabel({status: 'for_payment'}), '', 'Read-only staff do not receive a fallback clinical action');
+  assert.equal(casePage.caseActionLabel({status: 'checked_in'}), '', 'No Open Case fallback before consultation');
+  const actionCount = actions.length;
+  casePage.runCaseAction({id: 1, status: 'checked_in'});
+  casePage.runCaseAction({id: 1, status: 'for_payment'});
+  assert.equal(actions.length, actionCount);
   const chargesModal = component('adminClinicModal');
   chargesModal.$nextTick = () => {};
   chargesModal.currentAppt = {id: 1, status: 'for_payment'};

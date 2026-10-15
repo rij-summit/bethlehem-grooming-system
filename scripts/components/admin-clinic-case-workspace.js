@@ -22,7 +22,7 @@ function clinicCaseWorkspace() {
     get canMutateServices() {
       const appt = this.workspaceAppointment;
       return !!this.$store.clinicAccess.permissions.clinical && !appt?.paid && !appt?.archived_at
-        && (['checked_in', 'in_consultation'].includes(appt?.status)
+        && (appt?.status === 'in_consultation'
           || (API.getUserRole() === 'admin' && appt?.status === 'for_payment'));
     },
     get canRecordCasePayment() {

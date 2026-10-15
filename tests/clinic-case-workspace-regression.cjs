@@ -208,10 +208,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(events.at(-1).detail.total_amount, '2000.00');
   permission = {clinical: true, billing: true, payment: true}; role = 'admin';
   const admin = component(3);
-  for (const locked of [{status: 'completed'}, {status: 'in_consultation', paid: true}, {status: 'in_consultation', archived_at: '2026-10-13'}]) {
+  for (const locked of [{status: 'checked_in'}, {status: 'waiting_to_arrive'}, {status: 'completed'}, {status: 'in_consultation', paid: true}, {status: 'in_consultation', archived_at: '2026-10-13'}]) {
     admin.workspaceAppointment = {id: 3, ...locked};
     assert.equal(admin.canMutateServices, false);
   }
+  admin.workspaceAppointment = {id: 3, status: 'for_payment'};
+  assert.equal(admin.canMutateServices, true, 'Intentional admin payment-stage corrections are preserved');
 
   permission = {clinical: true, billing: true, payment: false}; role = 'staff';
   const stale = component(4);

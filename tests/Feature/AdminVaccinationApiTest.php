@@ -1093,6 +1093,24 @@ class AdminVaccinationApiTest extends TestCase
         $this->insertStockIn(301, 2, 'MED-1', $expiry, '2026-06-01 08:00:00');
     }
 
+    public function test_checked_in_patient_cannot_record_or_publish_treatment_until_consultation_starts(): void
+    {
+        $this->medicineStock();
+        DB::table('clinic_appointments')->where('id', 201)->update(['status' => 'checked_in']);
+        $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertUnprocessable();
+        $this->assertDatabaseCount('vaccination_records', 0);
+        DB::table('clinic_appointments')->where('id', 201)->update(['status' => 'in_consultation']);
+        $id = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertCreated()->json('vaccination.id');
+        DB::table('clinic_appointments')->where('id', 201)->update(['status' => 'checked_in']);
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertConflict();
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $this->assertSame(0, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
+        DB::table('clinic_appointments')->where('id', 201)->update(['status' => 'in_consultation']);
+        $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertOk();
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $this->assertSame(1, DB::table('inventory_transactions')->where('type', 'stock_out')->count());
+    }
+
     public function test_medicine_treatment_drafts_and_retries_publish_one_charge_and_stock_out(): void
     {
         $this->medicineStock();

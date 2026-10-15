@@ -247,7 +247,7 @@ function adminClinicVaccinations() {
     caseOngoing() {
       if (this.appointment?.paid || this.appointment?.archived_at) return false;
       return !this.appointment?.id
-        || ["checked_in", "in_consultation"].includes(this.appointment.status);
+        || this.appointment.status === 'in_consultation';
     },
 
     openCreateForm() {

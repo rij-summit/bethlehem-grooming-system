@@ -84,6 +84,17 @@ class ClinicCaseServiceBillingTest extends TestCase
         return array_replace(['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid()], $changes);
     }
 
+    public function test_checked_in_cases_cannot_add_services_until_consultation_starts(): void
+    {
+        $service = $this->catalog();
+        ClinicAppointment::find(1)->update(['status' => 'checked_in']);
+        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertUnprocessable();
+        $this->assertDatabaseCount('clinic_case_services', 0);
+        $this->assertDatabaseCount('clinic_charges', 0);
+        ClinicAppointment::find(1)->update(['status' => 'in_consultation']);
+        $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service))->assertCreated();
+    }
+
     public function test_manual_service_is_performed_immediately_with_notes_and_server_price(): void
     {
         $service = $this->catalog();

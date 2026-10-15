@@ -150,7 +150,7 @@
               <span class="rounded-full bg-[#eef5fb] px-2.5 py-1 text-xs font-bold text-[#315b7e]" x-text="visibleActiveCases.length"></span>
             </div>
             <div x-show="activeCasesLoading" class="px-4 py-5 text-sm text-slate-500">Loading active cases…</div>
-            <div x-show="!activeCasesLoading && visibleActiveCases.length === 0" class="px-4 py-5 text-sm text-slate-400" x-text="tab === 'for-payment' ? 'No cases for payment.' : 'No active cases.'"></div>
+            <div x-show="!activeCasesLoading && caseRows.length === 0" class="px-4 py-5 text-sm text-slate-400" x-text="tab === 'for-payment' ? 'No cases for payment.' : 'No active cases.'"></div>
             <div x-show="!activeCasesLoading && caseRows.length" class="divide-y divide-slate-100">
               <template x-for="caseItem in caseRows" :key="caseItem.id">
                 <div>
@@ -160,11 +160,11 @@
                     @click="if (tab === 'active-cases' && !$event.target.closest('button, a, input, select, textarea, [role=menu]')) openCaseProfile(caseItem, $event.currentTarget)"
                     @keydown.enter="if ($event.target === $event.currentTarget && tab === 'active-cases') { $event.preventDefault(); openCaseProfile(caseItem, $event.currentTarget) }"
                     @keydown.space="if ($event.target === $event.currentTarget && tab === 'active-cases') { $event.preventDefault(); openCaseProfile(caseItem, $event.currentTarget) }">
-                    <div><p class="font-semibold text-slate-800" x-text="caseItem.pet?.name || 'Patient'"></p><p class="text-xs text-slate-500" x-text="(caseItem.ownerName || 'Owner') + ' · ' + caseLabel(caseItem)"></p><p class="text-xs text-slate-400" x-text="(caseItem.chief_complaint ? caseItem.chief_complaint + ' · ' : '') + 'Opened ' + caseOpened(caseItem)"></p></div>
+                    <div><p class="font-semibold text-slate-800" x-text="casePatientLabel(caseItem)"></p><p class="text-xs text-slate-500" x-text="(caseItem.ownerName || 'Owner') + ' · ' + caseLabel(caseItem)"></p><p x-show="caseItem.chief_complaint" class="mt-1 text-xs text-slate-500" x-text="caseItem.chief_complaint"></p></div>
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700" x-text="caseStatus(caseItem)"></span>
                       <span x-show="caseItem.status === 'for_payment'" class="text-sm font-semibold tabular-nums text-slate-700" :aria-label="'Amount due: ' + money(caseItem.total_amount)" x-text="money(caseItem.total_amount)"></span>
-                      <button type="button" @click="runCaseAction(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="caseBusyId === caseItem.id ? 'Working…' : caseActionLabel(caseItem)"></button>
+                      <button x-show="caseActionLabel(caseItem)" type="button" @click="runCaseAction(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="caseBusyId === caseItem.id ? 'Working…' : caseActionLabel(caseItem)"></button>
                       <div x-data="{menuOpen: false}" x-show="permissions.queue && !(caseItem.confinement && !caseItem.confinement.discharged_at)" class="relative" @click.outside="menuOpen = false" @keydown.escape.stop="menuOpen = false; $refs.trigger.focus()">
                         <button type="button" x-ref="trigger" @click="menuOpen = !menuOpen; if (menuOpen) $nextTick(() => $refs.cancel.focus())" :aria-expanded="menuOpen" :aria-label="'More actions for ' + (caseItem.pet?.name || 'patient')" :disabled="caseBusyId !== null" class="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"><i data-lucide="ellipsis" class="h-4 w-4"></i></button>
                         <div x-show="menuOpen" x-cloak class="absolute right-0 z-40 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"><button type="button" x-ref="cancel" @click="menuOpen = false; cancelCase(caseItem)" class="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Cancel Case</button></div>
@@ -395,8 +395,8 @@
               <div x-show="!profile.loading && !profile.error && !detail.record && !profileEditing" class="clinic-profile-actions flex flex-wrap gap-2">
                 <button x-ref="editPatient" x-show="permissions.access && profile.owner?.id" @click="editPatient()" :disabled="profileBusy" type="button"
                         class="rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-4 py-2.5 text-sm font-semibold text-[#315b7e] transition hover:bg-[#dceaf5] disabled:opacity-50">Edit Patient</button>
-                <button x-show="permissions.intake || currentClinicVisit" @click="currentClinicVisit ? openProfileCase() : checkInPatient()" :disabled="profileBusy" type="button"
-                        class="rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="profileBusy ? 'Checking In…' : profileActionLabel"></button>
+                <button x-show="profileActionLabel" @click="runProfileAction()" :disabled="profileBusy || caseBusyId !== null" type="button"
+                        class="rounded-xl bg-[#315b7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="profileBusy ? 'Checking In…' : caseBusyId !== null ? 'Starting…' : profileActionLabel"></button>
               </div>
               <button x-ref="profileClose" @click="closeProfile()" :disabled="profileBusy || profileEditorSaving || profileEditorLoading" type="button" aria-label="Close patient profile"
                 class="clinic-profile-close rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -429,17 +429,6 @@
                       </div>
                     </template>
                   </dl>
-                </section>
-
-                <section x-show="currentClinicVisit" aria-labelledby="profile-visit-title" class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                  <div>
-                    <h3 id="profile-visit-title" class="text-sm font-bold text-[#2f4b66]">Current Clinic Visit</h3>
-                    <p class="mt-1 text-sm text-slate-600" x-text="[caseStatus(currentClinicVisit || {}), currentClinicVisit?.queue_number ? 'Queue #' + currentClinicVisit.queue_number : currentClinicVisit?.appointment_reference].filter(Boolean).join(' · ')"></p>
-                  </div>
-                  <div class="flex flex-wrap gap-3">
-                    <button x-show="permissions.intake && currentClinicVisit?.status === 'waiting_to_arrive'" @click="checkInPatient()" :disabled="profileBusy" type="button" class="rounded-xl bg-[#315b7e] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Check In Patient</button>
-                    <button @click="openProfileCase()" :disabled="profileBusy" type="button" class="text-sm font-semibold text-[#315b7e] disabled:opacity-50">Open Active Case <span aria-hidden="true">&rarr;</span></button>
-                  </div>
                 </section>
 
                 <section aria-labelledby="profile-owner-title" class="border-t border-slate-100 pt-5">
@@ -1632,7 +1621,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>

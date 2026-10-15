@@ -26,6 +26,14 @@ const attach = state => {
 const appt = id => ({id, pet: {id: 7, name: 'Mochi'}, status: 'in_consultation', vitals: {weight_kg: 12}});
 const product = {item_id: 5, item_name: 'Rabies', available_quantity: 10, unit: 'vial'};
 (async () => {
+  const intakeRecord = attach(context.adminClinicModal());
+  const intakeTreatment = attach(context.adminClinicVaccinations());
+  for (const status of ['waiting_to_arrive', 'checked_in', 'in_consultation']) {
+    intakeRecord.currentAppt = {id: 90, status};
+    intakeTreatment.appointment = {id: 90, status};
+    assert.equal(intakeRecord.canEditClinical, status === 'in_consultation');
+    assert.equal(intakeTreatment.caseOngoing(), status === 'in_consultation');
+  }
   const state = attach(context.adminClinicVaccinations()); state.inline = true; state.init();
   context.API.getAdminVaccinationOptions = async () => ({vaccines: [product]});
   const reads = [], older = deferred();

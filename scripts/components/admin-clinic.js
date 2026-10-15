@@ -199,7 +199,7 @@ function adminClinicModal() {
     get canEditClinical() {
       return !!this.$store.clinicAccess.permissions.clinical
         && !this.currentAppt?.paid && !this.currentAppt?.archived_at
-        && (["checked_in", "in_consultation"].includes(this.currentAppt?.status)
+        && (this.currentAppt?.status === "in_consultation"
           || (API.getUserRole() === "admin" && this.currentAppt?.status === "for_payment"));
     },
 
@@ -728,23 +728,27 @@ function adminClinicPage() {
 
     caseLabel(item) { return ({ online_request: "Online request", consultation: "Consultation", vaccination: "Vaccination" })[item.case_type] || "Clinic case"; },
     caseStatus(item) { return ({ waiting_to_arrive: "Waiting for Arrival", checked_in: "Checked In", in_consultation: "In Consultation", for_payment: "For Payment" })[item.status] || item.status; },
+    casePatientLabel(item) {
+      return (item.status !== 'waiting_to_arrive' && item.queue_number ? `#${item.queue_number} · ` : '') + (item.pet?.name || 'Patient');
+    },
     caseActionLabel(item) {
       if (item.status === 'waiting_to_arrive' && this.permissions.intake) return 'Check In';
       if (item.status === 'checked_in' && this.permissions.clinical) return 'Start Consultation';
       if (item.status === 'for_payment' && this.permissions.payment) return 'Review & Collect Payment';
-      return 'Open Case';
+      if (item.status === 'in_consultation' && this.permissions.access) return 'Open Case';
+      return '';
     },
     runCaseAction(item) {
       if (this.caseBusyId !== null) return;
       if (item.status === 'waiting_to_arrive' && this.permissions.intake) return this.checkInCase(item);
       if (item.status === 'checked_in' && this.permissions.clinical) return this.startCase(item);
       if (item.status === 'for_payment' && this.permissions.payment) return this.reviewPayment(item);
-      this.openCase(item);
+      if (item.status === 'in_consultation' && this.permissions.access) this.openCase(item);
     },
     get permissions() { return this.$store.clinicAccess.permissions; },
     money(value) { return Number(value || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" }); },
     async checkInCase(item) {
-      if (!this.permissions.intake || this.caseBusyId) return;
+      if (!this.permissions.intake || this.caseBusyId || item.status !== 'waiting_to_arrive') return;
       this.caseBusyId = item.id;
       try { await API.clinicCheckIn(item.id); await this.loadActiveCases(); }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not check in this patient.", false); }
@@ -789,7 +793,6 @@ function adminClinicPage() {
       }
       finally { this.payment.saving = false; }
     },
-    caseOpened(item) { return item.created_at ? new Date(item.created_at).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—"; },
     async cancelCase(item) {
       if (!this.permissions.queue) return;
       if (item.confinement && !item.confinement.discharged_at) return;
@@ -804,11 +807,19 @@ function adminClinicPage() {
       try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", false); }
     },
-    openCase(item, section) { window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } })); },
+    openCase(item, section) {
+      if (!this.permissions.access || item.status !== 'in_consultation') return;
+      window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } }));
+    },
     async startCase(item) {
       if (!this.permissions.clinical || this.caseBusyId || item.status !== 'checked_in') return;
       this.caseBusyId = item.id;
-      try { const response = await API.startClinicCase(item.id); await this.loadActiveCases(); this.openCase(response.case); }
+      try {
+        const response = await API.startClinicCase(item.id);
+        await this.loadActiveCases();
+        if (this.profile.open) this.openProfileCase(response.case);
+        else this.openCase(response.case);
+      }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
       finally { this.caseBusyId = null; }
     },
@@ -1072,10 +1083,22 @@ function adminClinicPage() {
     get currentClinicVisit() {
       return this.activeCases.find(item => String(item.pet?.id) === String(this.profile.pet?.id)) || this.profileVisit;
     },
-    get profileActionLabel() { return this.currentClinicVisit ? 'Open Active Case' : 'Check In Patient'; },
-    openProfileCase() {
+    get profileActionLabel() {
       const visit = this.currentClinicVisit;
-      if (!visit || this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
+      if (!visit || visit.status === 'waiting_to_arrive') return this.permissions.intake ? 'Check In Patient' : '';
+      if (visit.status === 'for_payment') return '';
+      return this.caseActionLabel(visit);
+    },
+    runProfileAction() {
+      if (!this.profileActionLabel || this.profileBusy || this.caseBusyId !== null || this.profileEditorSaving || this.profileEditorLoading) return;
+      const visit = this.currentClinicVisit;
+      if (!visit || visit.status === 'waiting_to_arrive') return this.checkInPatient();
+      if (visit.status === 'checked_in') return this.startCase(visit);
+      return this.openProfileCase();
+    },
+    openProfileCase(visit = this.currentClinicVisit) {
+      if (!visit || visit.status !== 'in_consultation' || !this.permissions.access
+        || this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
       const trigger = this.petPicker.open ? this.petPickerReturnFocus : this.profileReturnFocus;
       this.closeProfile(false);
       this.closePetPicker(false);

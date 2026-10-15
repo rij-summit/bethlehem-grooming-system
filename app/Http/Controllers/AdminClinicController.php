@@ -138,6 +138,12 @@ class AdminClinicController extends Controller
         $cases = ClinicAppointment::query()
             ->with($this->appointmentRelations())
             ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
+            ->where(function ($query) {
+                $query->whereDate('appointment_date', now()->toDateString())->orWhere('status', 'for_payment');
+                if ($this->hasConfinements) {
+                    $query->orWhereHas('confinement', fn ($episode) => $episode->whereNull('discharged_at'));
+                }
+            })
             ->orderByRaw("CASE WHEN status = 'waiting_to_arrive' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
             ->limit(100)
@@ -212,27 +218,22 @@ class AdminClinicController extends Controller
     public function startCase(int $id)
     {
         app(\App\Services\PreRegistrationExpiry::class)->expire();
-        return app(\App\Services\DailyPetQueue::class)->runForDate(now()->toDateString(), function () use ($id) {
+        $case = $this->beginConsultation($id);
+        return response()->json(['success' => true, 'case' => $this->formatAppointment($case)]);
+    }
+
+    private function beginConsultation(int $id): ClinicAppointment
+    {
+        return DB::transaction(function () use ($id) {
             $case = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
-            if ($case->status === 'waiting_to_arrive') {
-                if ($case->appointment_date->toDateString() !== now()->toDateString()) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['check_in' => 'Check-in is only allowed on the pre-registration date.']);
-                }
-                app(\App\Services\OperationalCapacity::class)->assertCanAccept('clinic', 1);
-                $case->update([
-                    'status' => 'in_consultation',
-                    'queue_number' => app(ClinicAppointmentSequence::class)->nextQueueNumber(now()->toDateString()),
-                    'checked_in_at' => now(),
-                    'consultation_started_at' => now(),
-                ]);
-            }
-            if ($case->status === 'checked_in') {
-                $case->update(['status' => 'in_consultation', 'consultation_started_at' => now()]);
-            }
             if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
-                return response()->json(['success' => false, 'message' => 'This case is already closed.'], 409);
+                throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
             }
-            return response()->json(['success' => true, 'case' => $this->formatAppointment($case->fresh())]);
+            if ($case->status !== 'checked_in') {
+                throw ValidationException::withMessages(['status' => 'Appointment must be checked in before starting consultation.']);
+            }
+            $case->update(['status' => 'in_consultation', 'consultation_started_at' => now()]);
+            return $case->fresh($this->appointmentRelations());
         });
     }
 
@@ -347,21 +348,12 @@ class AdminClinicController extends Controller
 
     public function startConsultation(int $id)
     {
-        $appt = ClinicAppointment::findOrFail($id);
-
-        if ($appt->status !== 'checked_in') {
-            return response()->json(['success' => false, 'message' => 'Appointment must be checked in first.'], 422);
-        }
-
-        $appt->update([
-            'status' => 'in_consultation',
-            'consultation_started_at' => now(),
-        ]);
+        $appt = $this->beginConsultation($id);
 
         return response()->json([
             'success' => true,
             'message' => 'Clinic consultation started.',
-            'appointment' => $this->formatAppointment($appt->fresh($this->appointmentRelations())),
+            'appointment' => $this->formatAppointment($appt),
         ]);
     }
 
@@ -1028,7 +1020,7 @@ class AdminClinicController extends Controller
 
         throw new HttpResponseException(response()->json([
             'success' => false,
-            'message' => 'Clinical records can only be modified while the appointment is Checked In, In Consultation, or For Payment.',
+            'message' => 'Start the consultation before modifying clinical records. For Payment corrections are limited to administrators.',
         ], 409));
     }
 }

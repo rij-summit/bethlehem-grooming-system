@@ -8,7 +8,6 @@ use Illuminate\Validation\ValidationException;
 class ClinicAppointment extends Model
 {
     public const CLINICAL_CONTENT_EDITABLE_STATUSES = [
-        'checked_in',
         'in_consultation',
     ];
 
