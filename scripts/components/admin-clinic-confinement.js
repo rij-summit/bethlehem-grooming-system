@@ -134,15 +134,16 @@ function clinicConfinementWorkspace() {
       return this.selectedVeterinarians?.find(vet => String(vet.user_id) === String(id))?.name
         || this.confinementCase?.record?.primary_veterinarian_name || 'Set in Medical Record';
     },
+    get admissionRecordedWeight() { return this.medicalForm ? this.medicalForm.weight_kg : this.confinementCase?.vitals?.weight_kg; },
     validateAdmission() {
       const errors = {};
       const vet = this.medicalForm ? this.medicalForm.primary_veterinarian_id : this.confinementCase?.record?.primary_veterinarian_id;
       if (!vet) errors.primary_veterinarian_id = 'Select a primary attending veterinarian in Medical Record before admitting this patient.';
       if (!this.admissionForm?.reason.trim()) errors.reason = 'Enter a reason for admission.';
-      const weight = this.medicalForm ? this.medicalForm.weight_kg : this.confinementCase?.vitals?.weight_kg;
-      if (this.selectedService?.pricing_method === 'tiered' && String(weight ?? '').trim() === '') {
-        errors.weight_kg = "Record the pet's weight in Medical Record > Vitals before admitting this patient.";
-      } else if (String(weight ?? '').trim() !== '') {
+      const weight = this.admissionRecordedWeight;
+      if (!Number.isFinite(Number(weight)) || Number(weight) <= 0) {
+        errors.weight_kg = "Record the patient's weight in Medical Record first.";
+      } else {
         const error = this.weightTools?.getWeightValueValidationMessage(weight);
         if (error) errors.weight_kg = error;
       }
@@ -202,11 +203,14 @@ function clinicConfinementWorkspace() {
       } finally { this.setConfinementBusy(false, id); }
     },
     get visibleConfinementCharges() { return (this.episode?.confinement_charges || []).filter(extra => !extra.removed_at); },
+    get admissionCharges() { return this.visibleConfinementCharges.filter(extra => extra.charge_behavior === 'admission_charge'); },
+    get additionalConfinementCharges() { return this.visibleConfinementCharges.filter(extra => extra.charge_behavior === 'additional_charge'); },
+    weightLabel(weight) { return weight != null && Number.isFinite(Number(weight)) && Number(weight) > 0 ? Number(weight).toFixed(2) + ' kg' : '—'; },
     billableDays(start = this.episode?.admitted_at, end = this.episode?.discharged_at || this.$store.clinicConfinementClock?.now || Date.now()) {
       return Math.max(1, Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000));
     },
-    get baseRate() { return this.activeConfinement ? this.episodePricing?.resolved_price : this.episode?.case_service?.applied_price; },
-    get baseSize() { return this.activeConfinement ? this.episodePricing?.pet_size : this.episode?.case_service?.service_snapshot?.pet_size; },
+    get baseRate() { return this.episode?.case_service?.applied_price; },
+    get baseSize() { return this.episode?.case_service?.service_snapshot?.pet_size; },
     async previewExtra() {
       this.extraPricing = null;
       if (!this.extraForm?.clinic_service_id) return;

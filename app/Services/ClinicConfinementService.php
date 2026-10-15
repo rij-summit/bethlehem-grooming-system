@@ -35,12 +35,10 @@ class ClinicConfinementService
                 : 'More than one active Base Confinement service exists. Ask an admin to keep only one active in Clinic Services.']);
         }
         $service = $services->first();
-        $tiers = collect($service->tiers);
-        if ($service->pricing_method !== 'tiered' || $service->tier_basis !== 'pet_size' || $service->billing_unit !== 'day'
-            || $tiers->count() !== 4 || $tiers->pluck('size')->sort()->values()->all() !== ['extra_large', 'large', 'medium', 'small']
-            || $tiers->contains(fn ($tier) => ! is_numeric($tier['price'] ?? null) || $tier['price'] < 0 || $tier['price'] > ClinicService::MAX_PRICE)) {
-            throw ValidationException::withMessages(['confinement' => 'Complete all four pet-size daily prices for Base Confinement in Clinic Services.']);
+        if ($service->pricing_method !== 'tiered' || $service->tier_basis !== 'weight_kg' || $service->billing_unit !== 'day') {
+            throw ValidationException::withMessages(['confinement' => 'Configure confinement weight cutoffs and daily prices in Clinic Services first.']);
         }
+        \App\Support\ConfinementWeightPricing::normalize($service->tiers ?? []);
         return $service;
     }
 
@@ -71,13 +69,14 @@ class ClinicConfinementService
                 throw ValidationException::withMessages(['primary_veterinarian_id' => 'Complete the Primary Attending Veterinarian in the Medical Record before admission.']);
             }
             $service = $this->baseService();
-            app(ClinicServicePriceResolver::class)->resolve($service, $case);
+            $pricing = app(ClinicServicePriceResolver::class)->resolve($service, $case);
             $entry = app(ClinicCaseServiceRecorder::class)->save($case->id, [
                 'clinic_service_id' => $service->id, 'request_key' => $data['request_key'], 'status' => 'ordered', 'quantity' => 1,
             ], $actor, finalizingConfinement: true);
             if (! $entry->wasRecentlyCreated) {
                 throw ValidationException::withMessages(['request_key' => 'Use a new request key for this confinement admission.']);
             }
+            $entry->forceFill(['applied_price' => $pricing['price'], 'service_snapshot' => $pricing['snapshot']])->save();
             $episode = $case->confinement()->create([
                 'clinic_case_service_id' => $entry->id, 'admitted_at' => now(),
                 'reason' => $data['reason'], 'notes' => $data['notes'] ?? null,
@@ -134,7 +133,7 @@ class ClinicConfinementService
         $end = now();
         return [
             'data' => $episode, 'service' => $service,
-            'pricing' => app(ClinicServicePriceResolver::class)->preview($service, $case),
+            'pricing' => app(ClinicServicePriceResolver::class)->confinementPreview($episode->caseService),
             'quantity' => app(ConfinementBillingDuration::class)->billableDays($episode->admitted_at, $end),
             'duration_seconds' => max(0, $end->getTimestamp() - $episode->admitted_at->getTimestamp()),
             'charges' => $episode->confinementCharges->filter(fn ($extra) => ! $extra->removed_at && $extra->caseService->status === 'ordered')
@@ -250,7 +249,7 @@ class ClinicConfinementService
             app(ClinicCaseServiceRecorder::class)->save($case->id, [
                 'status' => 'performed', 'quantity' => app(ConfinementBillingDuration::class)->billableDays($episode->admitted_at, $end),
                 'applied_price' => $data['applied_price'] ?? null,
-            ], $actor, $episode->clinic_case_service_id, finalizingConfinement: true);
+            ], $actor, $episode->clinic_case_service_id, finalizingConfinement: true, useAdmissionRate: true);
             foreach ($episode->confinementCharges()->with('caseService')->get() as $extra) {
                 $this->finalizeCharge($case, $extra, $end, $data['charge_prices'][$extra->id] ?? null, $actor);
             }

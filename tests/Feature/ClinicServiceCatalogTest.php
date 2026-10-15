@@ -192,9 +192,21 @@ class ClinicServiceCatalogTest extends TestCase
     {
         $category = ClinicServiceCategory::where('name', 'Confinement')->value('id');
         $base = $this->payload(['name' => 'Sample stay', 'category_id' => $category, 'charge_behavior' => 'base_confinement',
-            'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 100], ['small', 'medium', 'large', 'extra_large'])]);
+            'tiers' => array_map(fn ($size, $max) => ['size' => $size, 'price' => 100, 'max_weight_kg' => $max],
+                ['small', 'medium', 'large', 'extra_large'], [8.5, 22, 38, null])]);
         $id = $this->postJson('/api/admin/clinic-services', $base)->assertCreated()->assertJsonPath('data.pricing_method', 'tiered')
-            ->assertJsonPath('data.billing_unit', 'day')->assertJsonPath('data.tier_basis', 'pet_size')->json('data.id');
+            ->assertJsonPath('data.billing_unit', 'day')->assertJsonPath('data.tier_basis', 'weight_kg')->json('data.id');
+        foreach (['', 0, -1, 'invalid', 8.5, 7] as $cutoff) {
+            $invalid = $base; $invalid['tiers'][1]['max_weight_kg'] = $cutoff;
+            $this->putJson('/api/admin/clinic-services/'.$id, $invalid)->assertUnprocessable()->assertJsonValidationErrors('tiers.1.max_weight_kg');
+        }
+        $invalid = $base; unset($invalid['tiers'][0]['max_weight_kg']);
+        $this->putJson('/api/admin/clinic-services/'.$id, $invalid)->assertUnprocessable()->assertJsonValidationErrors('tiers.0.max_weight_kg');
+        $invalid = $base; $invalid['tiers'][3]['max_weight_kg'] = 50;
+        $this->putJson('/api/admin/clinic-services/'.$id, $invalid)->assertUnprocessable()->assertJsonValidationErrors('tiers.3.max_weight_kg');
+        $this->putJson('/api/admin/clinic-services/'.$id, [...$base, 'tiers' => array_reverse($base['tiers'])])->assertOk()
+            ->assertJsonPath('data.tiers.0.size', 'small')->assertJsonPath('data.tiers.0.max_weight_kg', 8.5)
+            ->assertJsonPath('data.tiers.3.max_weight_kg', null);
         $this->postJson('/api/admin/clinic-services', [...$base, 'name' => 'Second base'])->assertUnprocessable()->assertJsonValidationErrors('charge_behavior');
         $this->putJson('/api/admin/clinic-services/'.$id, [...$base, 'tiers' => [['size' => 'medium', 'price' => 100]]])->assertUnprocessable();
         $second = $this->postJson('/api/admin/clinic-services', [...$base, 'name' => 'Inactive base', 'is_active' => false])->assertCreated()->json('data.id');

@@ -14,7 +14,7 @@ class ClinicConfinementController extends Controller
         $case = ClinicAppointment::findOrFail($id);
         $episode = $case->confinement()->with(ClinicConfinementService::RELATIONS)->first();
         $pricing = $episode && ! $episode->discharged_at
-            ? app(\App\Services\ClinicServicePriceResolver::class)->preview($episode->caseService->clinicService, $case) : null;
+            ? app(\App\Services\ClinicServicePriceResolver::class)->confinementPreview($episode->caseService) : null;
         if ($episode) foreach ($episode->confinementCharges as $extra) {
             if (! $extra->removed_at && $extra->caseService->status === 'ordered') {
                 $extra->setAttribute('pricing', app(\App\Services\ClinicServicePriceResolver::class)->preview($extra->caseService->clinicService, $case));

@@ -261,10 +261,23 @@ async function confinementConfiguration() {
   state.form.tiers.forEach(tier => {tier.enabled = false; tier.price = '100';});
   state.configureConfinement();
   assert.equal(state.form.pricing_method, 'tiered'); assert.equal(state.form.billing_unit, 'day');
-  assert.equal(state.form.tier_basis, 'pet_size'); assert.equal(state.payload().tiers.length, 4);
+  assert.equal(state.form.tier_basis, 'weight_kg'); assert.equal(state.payload().tiers.length, 4);
+  assert.equal(state.validateCutoffs(), false, 'No default clinic cutoffs are invented');
+  state.form.tiers.forEach((tier, i) => {tier.max_weight_kg = [8.5, 22, 38, ''][i];});
+  assert.equal(state.validateCutoffs(), true);
+  assert.equal(state.payload().tiers[3].max_weight_kg, null);
+  for (const cutoff of ['', '0', '-1', 'invalid', '8.5', '7']) {
+    state.form.tiers[1].max_weight_kg = cutoff;
+    assert.equal(state.validateCutoffs(), false);
+    assert.ok(state.weightErrors.medium);
+  }
+  state.form.tiers[1].max_weight_kg = 22;
+  assert.equal(state.validateCutoffs(), true);
   assert.equal(state.payload().charge_behavior, 'base_confinement');
   state.form.category_id = 2; state.configureConfinement();
   assert.equal('charge_behavior' in state.payload(), false);
+  assert.equal(state.payload().tier_basis, 'pet_size', 'Leaving Base Confinement restores existing size pricing');
+  assert.equal('max_weight_kg' in state.payload().tiers[0], false, 'Other services do not receive confinement cutoffs');
 }
 
 async function confirmationDismissal() {

@@ -91,7 +91,7 @@ class ClinicServiceController extends Controller
         $request->merge(['name' => $normalize($request->input('name'))]);
         $confinement = ClinicServiceCategory::whereKey($request->input('category_id'))->value('name') === 'Confinement';
         $base = $confinement && $request->input('charge_behavior') === 'base_confinement';
-        if ($base) $request->merge(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'billing_unit' => 'day']);
+        if ($base) $request->merge(['pricing_method' => 'tiered', 'tier_basis' => 'weight_kg', 'billing_unit' => 'day']);
         $method = $request->input('pricing_method');
         $money = ['required', 'numeric', 'min:0', 'max:'.ClinicService::MAX_PRICE, 'decimal:0,2'];
         $maximumPriceMessage = 'Price must be ₱'.number_format(ClinicService::MAX_PRICE, 2).' or less.';
@@ -104,9 +104,9 @@ class ClinicServiceController extends Controller
             'price' => [Rule::excludeIf(!in_array($method, ['fixed', 'starting_at'])), ...$money],
             'min_price' => [Rule::excludeIf($method !== 'range'), ...$money],
             'max_price' => [Rule::excludeIf($method !== 'range'), ...$money, 'gte:min_price'],
-            'tier_basis' => [Rule::excludeIf($method !== 'tiered'), 'required', Rule::in(['pet_size'])],
+            'tier_basis' => [Rule::excludeIf($method !== 'tiered'), 'required', Rule::in([$base ? 'weight_kg' : 'pet_size'])],
             'tiers' => [Rule::excludeIf($method !== 'tiered'), 'required', 'array', 'min:'.($base ? 4 : 1), 'max:4'],
-            'tiers.*' => 'array:size,price',
+            'tiers.*' => $base ? 'array:size,price,max_weight_kg' : 'array:size,price',
             'tiers.*.size' => ['required', 'distinct', Rule::in(['small', 'medium', 'large', 'extra_large'])],
             'tiers.*.price' => $money,
         ], [
@@ -115,6 +115,7 @@ class ClinicServiceController extends Controller
             'max_price.max' => $maximumPriceMessage,
             'tiers.*.price.max' => $maximumPriceMessage,
         ]);
+        if ($base) $data['tiers'] = \App\Support\ConfinementWeightPricing::normalize($data['tiers']);
         $data += ['price' => null, 'min_price' => null, 'max_price' => null, 'tier_basis' => null, 'tiers' => null, 'charge_behavior' => null];
         if ($confinement && $data['charge_behavior'] === 'additional_charge'
             && ! in_array($data['billing_unit'] ?? null, [null, 'service', 'day'], true)) {

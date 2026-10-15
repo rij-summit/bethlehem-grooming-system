@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class ClinicCaseServiceRecorder
 {
-    public function save(int $appointmentId, array $data, User $actor, ?int $caseServiceId = null, bool $finalizingConfinement = false): ClinicCaseService
+    public function save(int $appointmentId, array $data, User $actor, ?int $caseServiceId = null, bool $finalizingConfinement = false, bool $useAdmissionRate = false): ClinicCaseService
     {
         abort_unless($actor->clinicPermissions()['clinical'], 403);
         $data = Validator::make($data, [
@@ -25,7 +25,7 @@ class ClinicCaseServiceRecorder
             'notes' => 'nullable|string|max:5000',
         ])->validate();
 
-        return DB::transaction(function () use ($appointmentId, $data, $actor, $caseServiceId, $finalizingConfinement) {
+        return DB::transaction(function () use ($appointmentId, $data, $actor, $caseServiceId, $finalizingConfinement, $useAdmissionRate) {
             $appointment = ClinicAppointment::whereKey($appointmentId)->lockForUpdate()->firstOrFail();
             $entry = $caseServiceId
                 ? $appointment->caseServices()->whereKey($caseServiceId)->firstOrFail()
@@ -66,7 +66,12 @@ class ClinicCaseServiceRecorder
             $entry->fill(array_intersect_key($data, array_flip(['quantity', 'notes'])));
             $entry->forceFill(['status' => $data['status']]);
             if ($data['status'] === 'performed') {
-                $pricing = app(ClinicServicePriceResolver::class)->resolve($service, $appointment, $data['applied_price'] ?? null);
+                if ($useAdmissionRate && ($entry->applied_price === null || ! $entry->service_snapshot)) {
+                    throw ValidationException::withMessages(['confinement' => 'The admission rate is unavailable. Contact an admin before discharge.']);
+                }
+                $pricing = $useAdmissionRate
+                    ? ['price' => $entry->applied_price, 'snapshot' => $entry->service_snapshot]
+                    : app(ClinicServicePriceResolver::class)->resolve($service, $appointment, $data['applied_price'] ?? null);
                 $entry->forceFill([
                     'performed_at' => now(), 'performed_by_user_id' => $actor->user_id,
                     'applied_price' => $pricing['price'], 'service_snapshot' => $pricing['snapshot'],
@@ -76,7 +81,7 @@ class ClinicCaseServiceRecorder
             if ($entry->status === 'performed') {
                 $charge = $appointment->charges()->make([
                     'kind' => 'service', 'clinic_service_id' => $service->id,
-                    'description' => $service->name,
+                    'description' => $entry->service_snapshot['name'] ?? $service->name,
                     'quantity' => $entry->quantity, 'unit_price' => $entry->applied_price,
                     'amount' => app(ClinicBillingService::class)->lineAmount($entry->quantity, $entry->applied_price),
                 ]);

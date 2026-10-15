@@ -60,7 +60,7 @@ function component(permission = true, id = 1) {
   invalid.selectedService.pricing_method = 'tiered'; invalid.medicalForm.primary_veterinarian_id = ''; invalid.medicalForm.weight_kg = '';
   await invalid.submitAdmission();
   assert.match(invalid.admissionErrors.primary_veterinarian_id, /Medical Record/);
-  assert.match(invalid.admissionErrors.weight_kg, /Vitals/); assert.equal(invalid.admissionErrors.reason, 'Enter a reason for admission.');
+  assert.match(invalid.admissionErrors.weight_kg, /Medical Record/); assert.equal(invalid.admissionErrors.reason, 'Enter a reason for admission.');
   assert.equal(confirmations.length, 0); assert.equal(requests.length, 0); assert.equal(prerequisiteSaves.length, 0);
   invalid.medicalForm.primary_veterinarian_id = '9'; invalid.medicalForm.weight_kg = '18.4'; invalid.admissionForm.reason = 'Observation';
   confirmResult = false; await invalid.submitAdmission();
@@ -169,10 +169,29 @@ function component(permission = true, id = 1) {
   assert.equal(sandbox.clinicConfinementDuration('2026-10-13T00:00:00Z', '2026-10-14T01:02:00Z'), '1d 1h 2m');
   assert.equal(state.methodLabel('fixed'), 'Fixed', 'Shared formatting used in Confinement remains available');
   assert.equal(state.sizeLabel('medium'), 'Medium');
+  const snapshotView = component();
+  snapshotView.episode = {admitted_at: '2026-10-13T00:00:00Z', case_service: {applied_price: '1650.00',
+    service_snapshot: {pet_size: 'medium', pet_weight_kg: '14.20'}}, confinement_charges: [
+      {id: 1, charge_behavior: 'admission_charge'}, {id: 2, charge_behavior: 'additional_charge'},
+      {id: 3, charge_behavior: 'admission_charge', removed_at: '2026-10-13T00:00:00Z'},
+    ]};
+  snapshotView.episodePricing = {resolved_price: '9999.00', pet_size: 'extra_large'};
+  assert.equal(snapshotView.baseRate, '1650.00', 'Display uses the admission rate even while active');
+  assert.equal(snapshotView.baseSize, 'medium');
+  assert.equal(snapshotView.weightLabel('14.20'), '14.20 kg');
+  assert.equal(snapshotView.admissionCharges.length, 1);
+  assert.equal(snapshotView.admissionCharges[0].id, 1);
+  assert.equal(snapshotView.additionalConfinementCharges.length, 1);
+  assert.equal(snapshotView.additionalConfinementCharges[0].id, 2);
+  snapshotView.episode.discharged_at = '2026-10-14T00:00:00Z';
+  assert.equal(snapshotView.baseRate, '1650.00', 'Discharged view retains the same rate');
   assert.equal(state.cataloguePrice({pricing_method: 'fixed', price: '500.00'}), state.money(500));
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
   assert.match(page, /Confined \(<span x-text="confinedCount"/);
   assert.match(page, /clinicConfinementWorkspace\(\)/); assert.match(page, /charge\.vaccination_record_id \? 'Treatment'/);
+  assert.match(page, />Admission Charges<\/h4>/);
+  assert.match(page, />Additional Confinement Charges<\/h4>/);
+  assert.doesNotMatch(page, /extra in visibleConfinementCharges/);
   assert.match(page, /dischargePreview\?\.pricing.requires_final_price/);
   assert.match(page, /x-show="canRemoveService\(entry\)"/);
   assert.equal(/x-model="(?:dischargeForm\.quantity|dischargeForm\.billable_days)"/.test(page), false);

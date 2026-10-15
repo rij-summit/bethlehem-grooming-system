@@ -87,8 +87,9 @@ class ClinicConfinementTest extends TestCase
         return ClinicService::create(array_replace(['name' => 'Confinement',
             'category_id' => ClinicServiceCategory::where('name', 'Confinement')->value('id'),
             'identity_key' => hash('sha256', Str::uuid()), 'pricing_method' => 'tiered', 'billing_unit' => 'day',
-            'charge_behavior' => 'base_confinement', 'tier_basis' => 'pet_size',
-            'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 500], ['small', 'medium', 'large', 'extra_large']),
+            'charge_behavior' => 'base_confinement', 'tier_basis' => 'weight_kg',
+            'tiers' => array_map(fn ($size, $max) => ['size' => $size, 'price' => 500, 'max_weight_kg' => $max],
+                ['small', 'medium', 'large', 'extra_large'], [10, 25, 40, null]),
             'price' => null, 'is_active' => true], $changes));
     }
 
@@ -240,17 +241,64 @@ class ClinicConfinementTest extends TestCase
         $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertUnprocessable();
         DB::table('clinic_vitals')->update(['weight_kg' => 18.4]);
         $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertCreated();
+        $snapshot = ClinicCaseService::first()->service_snapshot;
+        $this->assertSame('medium', $snapshot['pet_size']);
+        $this->assertEquals(18.4, $snapshot['pet_weight_kg']);
+        DB::table('clinic_vitals')->update(['weight_kg' => 50]);
         $service->update(['tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 650], ['small', 'medium', 'large', 'extra_large']), 'is_active' => false]);
         $this->service(['name' => 'Replacement base']);
+        $this->getJson('/api/admin/clinic-cases/1/confinement')->assertOk()
+            ->assertJsonPath('pricing.resolved_price', '500.00')->assertJsonPath('pricing.pet_size', 'medium');
+        $this->getJson('/api/admin/clinic-cases/1/confinement/discharge-preview')->assertOk()
+            ->assertJsonPath('pricing.resolved_price', '500.00')->assertJsonPath('pricing.pet_weight_kg', '18.40');
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk()
             ->assertJsonPath('data.case_service.clinic_service_id', $service->id)
-            ->assertJsonPath('data.case_service.applied_price', '650.00')->assertJsonPath('data.case_service.service_snapshot.pet_size', 'medium');
-        $snapshot = ClinicCaseService::first()->service_snapshot;
+            ->assertJsonPath('data.case_service.applied_price', '500.00')->assertJsonPath('data.case_service.service_snapshot.pet_size', 'medium');
+        $this->assertSame($snapshot, ClinicCaseService::first()->service_snapshot);
         $service->update(['pricing_method' => 'fixed', 'price' => 900, 'name' => 'Renamed']);
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
         $this->postJson('/api/admin/clinic-cases/1/confinement', $payload)->assertOk();
         $this->assertSame($snapshot, ClinicCaseService::first()->service_snapshot);
-        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 650]);
+        $this->assertDatabaseHas('clinic_charges', ['unit_price' => 500]);
+    }
+
+    public function test_clinic_cutoffs_are_inclusive_continuous_and_independent_of_species(): void
+    {
+        $rates = ['small' => 101, 'medium' => 202, 'large' => 303, 'extra_large' => 404];
+        $this->service(['tiers' => array_map(fn ($size, $max) => ['size' => $size, 'price' => $rates[$size], 'max_weight_kg' => $max],
+            ['small', 'medium', 'large', 'extra_large'], [10, 25, 40, null])]);
+        foreach (['dog', 'cat'] as $species) {
+            DB::table('pets')->update(['species' => $species]);
+            foreach (['0.01' => 'small', '10' => 'small', '10.01' => 'medium', '25' => 'medium',
+                '25.01' => 'large', '40' => 'large', '40.01' => 'extra_large', '155.6' => 'extra_large'] as $weight => $size) {
+                DB::table('clinic_vitals')->update(['weight_kg' => $weight]);
+                $this->getJson('/api/admin/clinic-cases/1/confinement/admission-preview')->assertOk()->assertJsonPath('pricing.pet_size', $size)
+                    ->assertJsonPath('pricing.resolved_price', number_format($rates[$size], 2, '.', ''));
+            }
+        }
+        foreach ([null, 0, -1] as $weight) {
+            DB::table('clinic_vitals')->update(['weight_kg' => $weight]);
+            $this->postJson('/api/admin/clinic-cases/1/confinement', ['request_key' => (string) Str::uuid(), 'reason' => 'Observation'])
+                ->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
+        }
+        $this->assertDatabaseCount('clinic_confinements', 0);
+    }
+
+    public function test_upgrade_snapshots_legacy_active_rates_once_without_changing_catalogue_or_billing(): void
+    {
+        $service = $this->service(); $this->admit($service);
+        $entry = ClinicCaseService::first();
+        $entry->forceFill(['applied_price' => null, 'service_snapshot' => null])->save();
+        $service->update(['tier_basis' => 'pet_size', 'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 650],
+            ['small', 'medium', 'large', 'extra_large'])]);
+        $migration = require database_path('migrations/2026_10_15_000001_snapshot_active_confinement_rates.php');
+        $migration->up();
+        $snapshot = $entry->fresh()->service_snapshot;
+        $this->assertSame('650.00', $entry->fresh()->applied_price);
+        $this->assertSame('pet_size', $service->fresh()->tier_basis);
+        $this->assertDatabaseCount('clinic_charges', 0);
+        $service->update(['price' => 900, 'pricing_method' => 'fixed']); $migration->up();
+        $this->assertSame($snapshot, $entry->fresh()->service_snapshot);
     }
 
     public function test_missing_duplicate_and_invalid_base_configuration_blocks_admission(): void

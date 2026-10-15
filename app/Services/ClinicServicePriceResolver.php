@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ClinicAppointment;
 use App\Models\ClinicService;
+use App\Models\ClinicCaseService;
+use App\Support\ConfinementWeightPricing;
 use App\Support\PetWeightSize;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -53,6 +55,14 @@ class ClinicServicePriceResolver
 
     private function tierPrice(ClinicService $service, ClinicAppointment $appointment, ?string &$size): mixed
     {
+        if ($service->charge_behavior === 'base_confinement' && $service->category->name === ClinicConfinementService::CATEGORY) {
+            if ($service->tier_basis !== 'weight_kg') {
+                throw ValidationException::withMessages(['clinic_service_id' => 'Configure confinement weight cutoffs in Clinic Services first.']);
+            }
+            $tier = ConfinementWeightPricing::tierFor($service->tiers ?? [], $appointment->vitals?->weight_kg);
+            $size = $tier['size'];
+            return $tier['price'];
+        }
         $pet = $appointment->pet;
         $weight = $appointment->vitals?->weight_kg;
         if (! PetWeightSize::isValidWeight($weight)) {
@@ -90,5 +100,17 @@ class ClinicServicePriceResolver
             $preview['error'] = collect($error->errors())->flatten()->first();
         }
         return $preview;
+    }
+
+    public function confinementPreview(ClinicCaseService $entry): array
+    {
+        return [
+            'requires_final_price' => false, 'min_price' => null, 'max_price' => null,
+            'technical_max_price' => ClinicService::MAX_PRICE,
+            'resolved_price' => $entry->applied_price,
+            'pet_weight_kg' => $entry->service_snapshot['pet_weight_kg'] ?? null,
+            'pet_size' => $entry->service_snapshot['pet_size'] ?? null,
+            'error' => $entry->applied_price === null ? 'The admission rate is unavailable. Contact an admin before discharge.' : null,
+        ];
     }
 }

@@ -14,7 +14,7 @@ function emptyClinicService() {
   return {
     name: '', category_id: '', charge_behavior: '', pricing_method: 'fixed', billing_unit: '',
     notes: '', price: '', min_price: '', max_price: '', tier_basis: 'pet_size',
-    tiers: ['small', 'medium', 'large', 'extra_large'].map(size => ({size, enabled: true, price: ''})),
+    tiers: ['small', 'medium', 'large', 'extra_large'].map(size => ({size, enabled: true, price: '', max_weight_kg: ''})),
   };
 }
 
@@ -27,7 +27,7 @@ function clinicServicePricing(service) {
     case 'tiered': {
       const prices = service.tiers.map(tier => Number(tier.price));
       const min = Math.min(...prices), max = Math.max(...prices);
-      label = `${money(min)}${min === max ? '' : '–' + money(max)} by size`;
+      label = `${money(min)}${min === max ? '' : '–' + money(max)} by ${service.tier_basis === 'weight_kg' ? 'weight' : 'size'}`;
       break;
     }
     default: label = money(service.price);
@@ -44,7 +44,7 @@ function adminClinicServices() {
     _requestId: 0, _searchTimer: null, _activation: null,
     modalOpen: false, saving: false, busyId: null, editingId: null, formError: '',
     form: emptyClinicService(), details: null, _detailsTrigger: null,
-    maximumPrice: CLINIC_SERVICE_MAX_PRICE, priceErrors: {},
+    maximumPrice: CLINIC_SERVICE_MAX_PRICE, priceErrors: {}, weightErrors: {},
     init() {},
     destroy() { clearTimeout(this._searchTimer); this.$refs.serviceDialog.close(); this.closeDetails(false); },
     async activate() {
@@ -59,10 +59,10 @@ function adminClinicServices() {
     configureConfinement() {
       if (!this.isConfinementService) this.form.charge_behavior = '';
       if (this.isBaseConfinement) {
-        Object.assign(this.form, {pricing_method: 'tiered', tier_basis: 'pet_size', billing_unit: 'day'});
+        Object.assign(this.form, {pricing_method: 'tiered', tier_basis: 'weight_kg', billing_unit: 'day'});
         this.form.tiers.forEach(tier => { tier.enabled = true; });
-      }
-      this.formError = ''; this.priceErrors = {};
+      } else this.form.tier_basis = 'pet_size';
+      this.formError = ''; this.priceErrors = {}; this.weightErrors = {};
     },
     get filtersActive() { return !!(this.q.trim() || this.category || this.status !== 'active'); },
     async load(page = 1) {
@@ -121,7 +121,7 @@ function adminClinicServices() {
         }
         this.form.tiers = emptyClinicService().tiers.map(tier => {
           const saved = service.tiers?.find(row => row.size === tier.size);
-          return {...tier, enabled: !!saved, price: saved?.price ?? ''};
+          return {...tier, enabled: !!saved, price: saved?.price ?? '', max_weight_kg: saved?.max_weight_kg ?? ''};
         });
       }
       this.formError = '';
@@ -147,7 +147,8 @@ function adminClinicServices() {
       if (f.pricing_method === 'range') Object.assign(payload, {min_price: f.min_price, max_price: f.max_price});
       else if (f.pricing_method === 'tiered') Object.assign(payload, {
         tier_basis: f.tier_basis,
-        tiers: f.tiers.filter(tier => tier.enabled).map(({size, price}) => ({size, price})),
+        tiers: f.tiers.filter(tier => tier.enabled).map(({size, price, max_weight_kg}) => ({size, price,
+          ...(this.isBaseConfinement ? {max_weight_kg: size === 'extra_large' ? null : max_weight_kg} : {})})),
       });
       else payload.price = f.price;
       return payload;
@@ -175,13 +176,33 @@ function adminClinicServices() {
       if (this.priceErrors[key]) this.validatePrice(key);
       if (key === 'min_price' && this.priceErrors.max_price) this.validatePrice('max_price');
     },
+    validateCutoffs() {
+      this.weightErrors = {};
+      if (!this.isBaseConfinement) return true;
+      this.form.tiers.slice(0, 3).forEach((tier, index) => {
+        const cutoff = Number(tier.max_weight_kg);
+        if (!Number.isFinite(cutoff) || cutoff <= 0) this.weightErrors[tier.size] = 'Enter a weight greater than 0 kg.';
+        else if (index && cutoff <= Number(this.form.tiers[index - 1].max_weight_kg)) {
+          this.weightErrors[tier.size] = 'Must be greater than the previous cutoff.';
+        }
+      });
+      return !Object.values(this.weightErrors).some(Boolean);
+    },
+    weightRange(tier, service) {
+      if (service.tier_basis !== 'weight_kg') return '';
+      const index = ['small', 'medium', 'large', 'extra_large'].indexOf(tier.size);
+      const previous = service.tiers.find(row => row.size === ['small', 'medium', 'large'][index - 1])?.max_weight_kg;
+      if (index === 3) return `Above ${previous} kg`;
+      return index === 0 ? `Up to ${tier.max_weight_kg} kg` : `Above ${previous}–${tier.max_weight_kg} kg`;
+    },
     async save() {
       if (this.saving) return;
       this.formError = '';
       const payload = this.payload();
       this.priceErrors = {};
       for (const field of this.priceFields()) this.validatePrice(field.key);
-      if (Object.values(this.priceErrors).some(Boolean)) {
+      const validCutoffs = this.validateCutoffs();
+      if (!validCutoffs || Object.values(this.priceErrors).some(Boolean)) {
         this.$nextTick(() => this.$refs.serviceForm.querySelector('[aria-invalid="true"]')?.focus());
         return;
       }
