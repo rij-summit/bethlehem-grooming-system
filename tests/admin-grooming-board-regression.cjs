@@ -71,4 +71,53 @@ ui.groomingWorkload.closing_time = '2026-10-16T18:00:00+08:00';
 ui.groomingWorkload.projected_last_completion = '2026-10-16T18:30:00+08:00';
 assert.match(ui.groomingWorkloadMessage, /Projected completion exceeds grooming hours/);
 assert.match(ui.groomingWorkloadMessage, /6:00 PM/);
+
+ui.groomingWorkload = { state: 'On track', pets: {} };
+ui.queuedList = [];
+ui.inProgressList = [];
+ui.activeGroomingPets = 0;
+assert.equal(ui.showGroomingWorkload, false, 'A groomer count alone does not create a workload row');
+ui.groomingWorkload.state = 'At risk';
+assert.equal(ui.showGroomingWorkload, true, 'Warnings stay visible even when estimates are unavailable');
+ui.groomingWorkload = { state: 'On track', pets: { 7: { projected_completion: '2026-10-16T18:00:00+08:00' } } };
+assert.equal(ui.showGroomingWorkload, true);
+
+context.window.GroomingEstimates.factors = () => [
+  { value: 'thick_coat', label: 'Thick coat' },
+  { value: 'matted_tangled', label: 'Matted / tangled' },
+];
+const selectedPet = { ...pet, groomingEstimate: {
+  preference: 'summer_cut', preferenceLabel: 'Summer Cut', factors: ['matted_tangled', 'thick_coat', 'matted_tangled'],
+  minMinutes: 120, maxMinutes: 240,
+} };
+const snapshot = JSON.stringify(selectedPet);
+assert.equal(JSON.stringify(ui.groomingSelectionLabels(selectedPet)), JSON.stringify(['Summer Cut', 'Matted / tangled', 'Thick coat']));
+assert.equal(JSON.stringify(selectedPet), snapshot, 'Read-only labels never alter saved selections or duration');
+assert.equal(ui.groomingSelectionLabels({}).length, 0);
+assert.equal(ui.groomingSelectionLabels({ groomingEstimate: { preferenceLabel: '—', factors: ['unknown'] } }).length, 0);
+assert.equal(ui.groomingPetIdentity({ ...pet, size: 'large', weight: '12 kg', furType: '—' }), 'Dog · Dachshund · Large · 12 kg');
+
+const record = { ...booking, status: 'queued' };
+for (const control of ['button', 'a', 'input', '[role="menu"]']) {
+  ui.toggleGroomingCardFromPointer({ target: { closest: () => control } }, record);
+  assert.equal(ui.isGroomingBookingExpanded(record), false, `${control} does not toggle disclosure`);
+}
+ui.toggleGroomingCardFromPointer({ target: { closest: () => null } }, record);
+assert.equal(ui.isGroomingBookingExpanded(record), true);
+ui.toggleGroomingCardFromPointer({ target: { closest: () => null } }, record);
+assert.equal(ui.isGroomingBookingExpanded(record), false);
+
+let restoredFocus = 0;
+const event = { currentTarget: { focus() { restoredFocus++; } } };
+ui.openGroomingMenu(record, event);
+assert.equal(ui.groomingMenuBookingId, record.id);
+ui.handleGroomingMenuKeydown({ key: 'Escape', preventDefault() {} });
+assert.equal(ui.groomingMenuBookingId, null);
+assert.equal(restoredFocus, 1);
+ui.openGroomingMenu(record, event);
+ui.toggleGroomingBooking(record);
+assert.equal(ui.groomingMenuBookingId, null, 'Disclosure closes the secondary menu');
+ui.openGroomingMenu(record, event);
+ui.setTab('for-payment');
+assert.equal(ui.groomingMenuBookingId, null, 'Changing stages dismisses any secondary menu');
 console.log('Admin Grooming board regression tests passed.');

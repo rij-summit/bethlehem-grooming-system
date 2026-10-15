@@ -138,7 +138,7 @@ async function main() {
   assert.equal(normalized.groomingWorkload.state, 'Needs staff action');
   ui.groomingWorkload.pets[2].state = 'At risk';
   assert.equal(ui.getPetWorkloadState(second), 'At risk');
-  assert.match(ui.getPetQueueWait(second), /Queue wait: 1 hr 30 min/);
+  assert.equal(ui.petETAs['2'].queueWait, 90);
   first.groomingEstimate = estimate;
   ui.activeGroomingPets = 1;
   assert.equal(ui.isGroomerCapacityFull, true);

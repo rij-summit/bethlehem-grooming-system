@@ -357,6 +357,8 @@ function adminDashboard() {
     localCancelledBookingIds: [],
     expandedQueuedBookingIds: {},
     expandedInProgressBookingIds: {},
+    groomingMenuBookingId: null,
+    _groomingMenuTrigger: null,
     _pollFailures: {},
     // Use local date (not UTC) so the calendar defaults to the correct day in PH
     selectedDate: (() => {
@@ -788,6 +790,7 @@ function adminDashboard() {
 
     // Switches the active dashboard tab and refreshes icons for the new view.
     setTab(tabName) {
+      this.closeGroomingMenu();
       this.activeTab = tabName;
       this.refreshIcons();
     },
@@ -1169,6 +1172,7 @@ function adminDashboard() {
         busy: false,
         error: "",
       };
+      this.$nextTick(() => this.$refs?.groomingActionCancel?.focus());
     },
 
     closeActionConfirmModal(force = false) {
@@ -1929,6 +1933,11 @@ function adminDashboard() {
       return { petsWaiting: waiting.length, avgWaitLabel, lastDoneLabel };
     },
 
+    get showGroomingWorkload() {
+      const summary = this.queueSummary;
+      return summary.avgWaitLabel !== "—" || Boolean(summary.lastDoneLabel || this.groomingWorkloadMessage);
+    },
+
     get isGroomerCapacityFull() { return this.activeGroomingPets >= this.activeGroomers; },
 
     get groomingWorkloadMessage() {
@@ -1950,13 +1959,6 @@ function adminDashboard() {
 
     getPetWorkloadState(pet) {
       return this.groomingWorkload?.pets?.[String(pet.bookingPetId ?? pet.id)]?.state || "";
-    },
-
-    getPetQueueWait(pet) {
-      const forecast = this.groomingWorkload?.pets?.[String(pet.bookingPetId ?? pet.id)];
-      if (!forecast?.projected_start) return "Awaiting groomer availability";
-      const start = new Date(forecast.projected_start).getTime();
-      return `Queue wait: ${window.GroomingEstimates.formatDuration(forecast.queue_wait_minutes)} · Est. start: ${window.GroomingEstimates.formatTimeWindow(start, start)}`;
     },
 
     get operationalBookings() {
@@ -2001,8 +2003,64 @@ function adminDashboard() {
     },
 
     toggleGroomingBooking(booking) {
+      this.closeGroomingMenu();
       if (this.normalizeStatus(booking.status) === "queued") this.toggleQueuedBooking(booking.id);
       else this.toggleInProgressBooking(booking.id);
+    },
+
+    toggleGroomingCardFromPointer(event, booking) {
+      if (!["queued", "in-progress"].includes(this.normalizeStatus(booking.status)) || !booking.pets?.length) return;
+      if (event.target.closest('button, a, input, textarea, select, label, [role="menu"]')) return;
+      this.toggleGroomingBooking(booking);
+    },
+
+    openGroomingMenu(booking, event, focusLast = false) {
+      this.groomingMenuBookingId = booking.id;
+      this._groomingMenuTrigger = event.currentTarget;
+      this.$nextTick(() => {
+        const items = this._groomingMenuTrigger?.parentElement.querySelectorAll('[role="menuitem"]');
+        items?.[focusLast ? items.length - 1 : 0]?.focus();
+      });
+    },
+
+    toggleGroomingMenu(booking, event) {
+      if (this.groomingMenuBookingId === booking.id) this.closeGroomingMenu();
+      else this.openGroomingMenu(booking, event);
+    },
+
+    closeGroomingMenu(restoreFocus = false) {
+      const trigger = this._groomingMenuTrigger;
+      this.groomingMenuBookingId = null;
+      this._groomingMenuTrigger = null;
+      if (restoreFocus) trigger?.focus();
+    },
+
+    handleGroomingMenuKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeGroomingMenu(true);
+      } else if (event.key === "Tab") {
+        this.closeGroomingMenu(true);
+      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]')];
+        const current = items.indexOf(document.activeElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      }
+    },
+
+    groomingSelectionLabels(pet) {
+      const factors = new Map(this.estimateFactorOptions.map((option) => [option.value, option.label]));
+      return [...new Set([pet?.groomingEstimate?.preferenceLabel,
+        ...(pet?.groomingEstimate?.factors || []).map((factor) => factors.get(factor))]
+        .filter((label) => label && label.trim() && label !== "—"))];
+    },
+
+    groomingPetIdentity(pet) {
+      return [pet.species, pet.breed, this.formatPetCardValue(pet.size, ""), pet.weight, pet.furType]
+        .filter((value) => value && value !== "—").join(" · ");
     },
 
     getBookingETA(booking) {
@@ -2576,10 +2634,6 @@ function adminDashboard() {
           left.originalIndex - right.originalIndex,
         )
         .map(({ pet }) => pet);
-    },
-
-    shouldShowOwnerReschedule(booking) {
-      return Boolean(booking?.paid);
     },
 
     shouldShowOwnerRevert(booking) {
