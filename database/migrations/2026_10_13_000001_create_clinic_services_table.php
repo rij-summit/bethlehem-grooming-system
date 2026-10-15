@@ -13,10 +13,14 @@ return new class extends Migration
             $table->id();
             $table->string('name', 100)->unique();
         });
-        DB::table('clinic_service_categories')->insert(array_map(fn ($name) => ['name' => $name], [
-            'Consultation & Fees', 'Laboratory', 'Diagnostics', 'Diagnostic Imaging', 'Procedures',
-            'Boarding & Lodging', 'Certificates & Forms',
-        ]));
+        // Keep existing category IDs stable without seeding retired categories on new installs.
+        DB::table('clinic_service_categories')->insert([
+            ['id' => 1, 'name' => 'Consultation & Fees'],
+            ['id' => 2, 'name' => 'Laboratory'],
+            ['id' => 3, 'name' => 'Diagnostic Tests'],
+            ['id' => 4, 'name' => 'Diagnostic Imaging'],
+            ['id' => 6, 'name' => 'Confinement'],
+        ]);
         Schema::create('clinic_services', function (Blueprint $table) {
             $table->id();
             $table->string('name', 200);

@@ -153,12 +153,12 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertDatabaseCount('clinic_services', 11);
         $migration->down();
         $migration->up();
-        $this->assertDatabaseCount('clinic_service_categories', 7);
+        $this->assertDatabaseCount('clinic_service_categories', 5);
         $this->assertDatabaseCount('clinic_services', 11);
         $this->assertEquals(350, ClinicService::where('billing_unit', 'shot')->sole()->price);
     }
 
-    public function test_cbc_cpv_and_anti_rabies_certificate_only_create_service_charges(): void
+    public function test_supported_catalogue_services_only_create_service_charges(): void
     {
         Schema::create('clinic_records', function (Blueprint $table) {
             $table->id();
@@ -167,7 +167,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         });
         DB::table('clinic_records')->insert(['clinic_appointment_id' => 1, 'diagnosis' => 'Vet-entered clinical information']);
         $medical = DB::table('clinic_records')->first();
-        foreach ([['CBC', 2], ['CPV', 3], ['Anti Rabies', 7]] as [$name, $category]) {
+        foreach ([['CBC', 2], ['CPV', 3], ['Consultation', 1]] as [$name, $category]) {
             $service = $this->catalog(['name' => $name, 'category_id' => $category]);
             $payload = $this->payload($service);
             $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated();
@@ -201,6 +201,10 @@ class ClinicCaseServiceBillingTest extends TestCase
 
     public function test_type_cleanup_preserves_historical_references_prices_and_json(): void
     {
+        // Reconstruct the catalogue that existed before the historical Type migration.
+        DB::table('clinic_service_categories')->insert([
+            ['id' => 5, 'name' => 'Procedures'], ['id' => 7, 'name' => 'Certificates & Forms'],
+        ]);
         $migration = require database_path('migrations/2026_10_14_000001_remove_clinic_service_type.php');
         $migration->down();
         DB::table('clinic_service_categories')->where('id', 3)->update(['name' => 'Diagnostics']);
@@ -246,6 +250,78 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->postJson('/api/admin/clinic-services', [
             'name' => 'CBC', 'category_id' => 2, 'pricing_method' => 'fixed', 'price' => 100,
         ])->assertUnprocessable()->assertJsonValidationErrors('name');
+    }
+
+    public function test_retired_category_cleanup_deletes_catalogue_rows_and_preserves_paid_history(): void
+    {
+        DB::table('clinic_service_categories')->insert([
+            ['id' => 5, 'name' => 'Procedures'], ['id' => 7, 'name' => 'Certificates & Forms'],
+        ]);
+        Schema::create('clinic_attachments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('clinic_case_service_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('path');
+        });
+        $remaining = $this->catalog();
+        $remainingId = $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($remaining))
+            ->assertCreated()->json('data.id');
+        $remainingBefore = $remaining->fresh()->getAttributes();
+        $histories = [];
+        foreach ([5, 7] as $category) {
+            $retired = $this->catalog(['name' => 'Retired '.$category, 'category_id' => $category]);
+            $this->catalog(['name' => 'Inactive '.$category, 'category_id' => $category, 'is_active' => false]);
+            // Reproduce pre-cleanup billing without adding retired services through the current API.
+            $entry = new ClinicCaseService;
+            $entry->forceFill([
+                'clinic_appointment_id' => 1, 'clinic_service_id' => $retired->id,
+                'request_key' => (string) Str::uuid(), 'status' => 'performed', 'quantity' => 1,
+                'applied_price' => 500, 'performed_at' => now(),
+                'service_snapshot' => ['name' => $retired->name, 'category' => $retired->category->name],
+            ])->save();
+            $charge = new ClinicCharge;
+            $charge->forceFill([
+                'clinic_appointment_id' => 1, 'clinic_service_id' => $retired->id, 'clinic_case_service_id' => $entry->id,
+                'kind' => 'service', 'description' => $retired->name, 'quantity' => 1, 'unit_price' => 500, 'amount' => 500,
+            ])->save();
+            DB::table('clinic_attachments')->insert(['clinic_case_service_id' => $entry->id, 'path' => 'history.pdf']);
+            $histories[] = [$entry->id, $entry->fresh()->getAttributes(), $charge->id, $charge->fresh()->getAttributes()];
+        }
+        app(ClinicBillingService::class)->updateTotal(ClinicAppointment::find(1));
+        ClinicAppointment::find(1)->update(['status' => 'completed', 'paid' => true]);
+        $caseBefore = ClinicAppointment::find(1)->getAttributes();
+        $migration = require database_path('migrations/2026_10_15_000003_remove_retired_clinic_service_categories.php');
+        $migration->up();
+        $migration->up(); // Safe if a deployment retries the data cleanup.
+        $this->assertDatabaseCount('clinic_service_categories', 5);
+        $this->assertDatabaseCount('clinic_services', 1);
+        $this->assertSame($remainingBefore, $remaining->fresh()->getAttributes());
+        $this->assertSame($caseBefore, ClinicAppointment::find(1)->getAttributes());
+        $this->assertDatabaseHas('clinic_case_services', ['id' => $remainingId, 'clinic_service_id' => $remaining->id]);
+        foreach ($histories as [$entryId, $beforeEntry, $chargeId, $beforeCharge]) {
+            $this->assertSame([...$beforeEntry, 'clinic_service_id' => null], ClinicCaseService::find($entryId)->getAttributes());
+            $this->assertSame([...$beforeCharge, 'clinic_service_id' => null], ClinicCharge::find($chargeId)->getAttributes());
+            $this->assertDatabaseHas('clinic_attachments', ['clinic_case_service_id' => $entryId, 'path' => 'history.pdf']);
+        }
+        $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()->assertJsonPath('total', 3);
+        $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1500);
+        $this->assertSame([], DB::select('PRAGMA foreign_key_check'));
+        try {
+            $remaining->delete();
+            $this->fail('Remaining service history must still be protected by its foreign key.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('clinic_services', ['id' => $remaining->id]);
+        }
+        $this->signIn('admin');
+        ClinicAppointment::find(1)->update(['status' => 'in_consultation', 'paid' => false]);
+        $this->patchJson('/api/admin/clinic-cases/1/charges/'.$histories[0][2], ['unit_price' => 0])->assertUnprocessable();
+    }
+
+    public function test_retired_category_cleanup_on_a_fresh_catalogue_keeps_five_categories(): void
+    {
+        (require database_path('migrations/2026_10_15_000003_remove_retired_clinic_service_categories.php'))->up();
+        $this->assertSame(\App\Models\ClinicServiceCategory::SUPPORTED_NAMES,
+            DB::table('clinic_service_categories')->orderBy('id')->pluck('name')->all());
+        $this->assertSame([], DB::select('PRAGMA foreign_key_check'));
     }
 
     public function test_removing_manual_service_deletes_only_its_charge_and_recalculates_total(): void

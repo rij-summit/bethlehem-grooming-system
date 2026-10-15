@@ -123,17 +123,16 @@ class ClinicServiceCatalogTest extends TestCase
         $this->putJson('/api/admin/clinic-services/'.$id, $this->payload())->assertOk()->assertJsonPath('data.tiers', null);
     }
 
-    public function test_inventory_products_cannot_be_added_or_reactivated_as_services_but_certification_is_allowed(): void
+    public function test_inventory_products_cannot_be_added_or_reactivated_as_services(): void
     {
         DB::table('inventory_items')->insert([
             ['item_name' => 'Cefalexin', 'category' => 'medicine'],
             ['item_name' => 'Anti Rabies', 'category' => 'vaccine'],
         ]);
-        foreach (['Cefalexin', 'Triamcinolone Injectable', 'Vincristine', 'Anti-Rabies Vaccine'] as $name) {
+        foreach (['Cefalexin', 'Triamcinolone Injectable', 'Vincristine', 'Anti-Rabies Vaccine', 'Anti Rabies'] as $name) {
             $this->postJson('/api/admin/clinic-services', $this->payload(['name' => $name]))
                 ->assertUnprocessable()->assertJsonValidationErrors('name');
         }
-        $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Anti Rabies', 'category_id' => 7]))->assertCreated();
         $id = $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Cefalexin', 'is_active' => false]))
             ->assertCreated()->json('data.id');
         $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => true])
@@ -172,21 +171,55 @@ class ClinicServiceCatalogTest extends TestCase
         }
     }
 
-    public function test_filters_pagination_and_extensible_categories(): void
+    public function test_filters_search_and_pagination_for_supported_categories(): void
     {
-        $category = ClinicServiceCategory::create(['name' => 'Dental']);
-        $this->postJson('/api/admin/clinic-services', $this->payload(['category_id' => $category->id, 'type' => null]))->assertCreated();
-        $this->getJson('/api/admin/clinic-services/options')->assertJsonCount(8, 'categories');
+        $this->postJson('/api/admin/clinic-services', $this->payload(['category_id' => 1]))->assertCreated();
+        $this->getJson('/api/admin/clinic-services/options')->assertJsonCount(5, 'categories');
         for ($i = 0; $i < 26; $i++) {
             $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Test '.$i]))->assertCreated();
         }
-        $this->getJson('/api/admin/clinic-services?category_id='.$category->id.'&type=__none__&q=CBC')->assertJsonPath('total', 1);
-        $this->getJson('/api/admin/clinic-services?category_id='.$category->id)->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-services?category_id=1&q=CBC')->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-services?category_id=2&q=CBC')->assertJsonPath('total', 0);
+        $this->getJson('/api/admin/clinic-services?category_id=1')->assertJsonPath('total', 1);
         foreach ([1 => 10, 2 => 10, 3 => 7] as $page => $count) {
             $this->getJson('/api/admin/clinic-services?page='.$page)
                 ->assertOk()->assertJsonPath('total', 27)->assertJsonPath('per_page', 10)
                 ->assertJsonPath('current_page', $page)->assertJsonPath('last_page', 3)
                 ->assertJsonCount($count, 'data');
+        }
+    }
+
+    public function test_only_five_categories_are_seeded_exposed_and_accepted(): void
+    {
+        $this->assertSame(ClinicServiceCategory::SUPPORTED_NAMES,
+            ClinicServiceCategory::orderBy('id')->pluck('name')->all());
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload())->assertCreated()->json('data.id');
+        // A stale import cannot make retired or arbitrary categories selectable again.
+        foreach ([5 => 'Procedures', 7 => 'Certificates & Forms', 8 => 'Dental'] as $categoryId => $name) {
+            $category = new ClinicServiceCategory;
+            $category->forceFill(['id' => $categoryId, 'name' => $name])->save();
+            foreach ([true, false] as $active) {
+                $payload = $this->payload(['category_id' => $category->id, 'is_active' => $active]);
+                $this->postJson('/api/admin/clinic-services', $payload)->assertUnprocessable()->assertJsonValidationErrors('category_id');
+                $this->putJson('/api/admin/clinic-services/'.$id, $payload)->assertUnprocessable()->assertJsonValidationErrors('category_id');
+            }
+            $this->getJson('/api/admin/clinic-services?category_id='.$category->id)
+                ->assertUnprocessable()->assertJsonValidationErrors('category_id');
+            $stale = ClinicService::create([
+                ...$this->payload(['category_id' => $category->id]), 'identity_key' => hash('sha256', $name),
+            ]);
+            $this->patchJson('/api/admin/clinic-services/'.$stale->id.'/status', ['is_active' => true])->assertNotFound();
+        }
+        $this->assertSame(ClinicServiceCategory::SUPPORTED_NAMES,
+            array_column($this->getJson('/api/admin/clinic-services/options')->assertOk()->json('categories'), 'name'));
+        $this->getJson('/api/admin/clinic-services?status=all')->assertJsonPath('total', 1);
+        $this->getJson('/api/admin/clinic-service-options')->assertJsonPath('total', 1);
+        foreach ([5, 7] as $removedId) {
+            // Seed IDs of retired categories are also rejected when absent.
+            ClinicService::where('category_id', $removedId)->delete();
+            ClinicServiceCategory::whereKey($removedId)->delete();
+            $this->postJson('/api/admin/clinic-services', $this->payload(['category_id' => $removedId]))
+                ->assertUnprocessable()->assertJsonValidationErrors('category_id');
         }
     }
 

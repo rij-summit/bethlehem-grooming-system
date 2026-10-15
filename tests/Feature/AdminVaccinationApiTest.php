@@ -1418,7 +1418,7 @@ class AdminVaccinationApiTest extends TestCase
         $vaccineId = $this->insertFinalizableDraft(302, 201);
         $this->postJson("/api/admin/pets/101/vaccinations/{$vaccineId}/publish")->assertOk();
         $this->postJson('/api/admin/clinic-cases/201/confinement/observations', ['request_key' => (string) \Illuminate\Support\Str::uuid(), 'notes' => 'Stable'])->assertCreated();
-        $ordinary = \App\Models\ClinicService::create(['name' => 'Sample procedure', 'category_id' => 5, 'identity_key' => hash('sha256', 'sample-procedure'), 'pricing_method' => 'fixed', 'price' => 500, 'is_active' => true]);
+        $ordinary = \App\Models\ClinicService::create(['name' => 'Sample service', 'category_id' => 2, 'identity_key' => hash('sha256', 'sample-service'), 'pricing_method' => 'fixed', 'price' => 500, 'is_active' => true]);
         $this->postJson('/api/admin/clinic-cases/201/services', ['clinic_service_id' => $ordinary->id, 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
         $this->assertDatabaseHas('clinic_appointments', ['id' => 201, 'status' => 'in_consultation', 'total_amount' => 1000]);
         Carbon::setTestNow(now()->addDay()->addMinute());

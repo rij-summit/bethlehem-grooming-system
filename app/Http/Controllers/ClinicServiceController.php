@@ -23,19 +23,20 @@ class ClinicServiceController extends Controller
     public function options(): JsonResponse
     {
         return response()->json([
-            'categories' => ClinicServiceCategory::orderBy('id')->get(),
+            'categories' => ClinicServiceCategory::supported()->orderBy('id')->get(),
         ]);
     }
 
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
-            'q' => 'nullable|string|max:200', 'category_id' => 'nullable|integer|exists:clinic_service_categories,id',
+            'q' => 'nullable|string|max:200',
+            'category_id' => ['nullable', 'integer', Rule::exists('clinic_service_categories', 'id')->whereIn('name', ClinicServiceCategory::SUPPORTED_NAMES)],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'all'])],
             'page' => 'nullable|integer|min:1',
             'scope' => 'nullable|in:imaging',
         ]);
-        $query = ClinicService::with('category');
+        $query = ClinicService::with('category')->whereHas('category', fn ($q) => $q->supported());
         if (($filters['scope'] ?? null) === 'imaging') {
             $query->whereHas('category', fn ($q) => $q->where('name', 'Diagnostic Imaging'));
         }
@@ -78,8 +79,9 @@ class ClinicServiceController extends Controller
     public function status(Request $request, ClinicService $clinicService): JsonResponse
     {
         return DB::transaction(function () use ($request, $clinicService) {
+            abort_unless(in_array($clinicService->category?->name, ClinicServiceCategory::SUPPORTED_NAMES, true), 404);
             $data = $request->validate(['is_active' => 'required|boolean']);
-            if ($data['is_active']) $this->assertServiceIsNotTreatment($clinicService->name, $clinicService->category_id);
+            if ($data['is_active']) $this->assertServiceIsNotTreatment($clinicService->name);
             if ($data['is_active'] && $clinicService->charge_behavior === 'base_confinement') {
                 $this->assertSingleBase($clinicService->category_id, $clinicService->id);
             }
@@ -100,7 +102,8 @@ class ClinicServiceController extends Controller
         $money = ['required', 'numeric', 'min:0', 'max:'.ClinicService::MAX_PRICE, 'decimal:0,2'];
         $maximumPriceMessage = 'Price must be ₱'.number_format(ClinicService::MAX_PRICE, 2).' or less.';
         $data = $request->validate([
-            'name' => 'required|string|max:200', 'category_id' => 'required|integer|exists:clinic_service_categories,id',
+            'name' => 'required|string|max:200',
+            'category_id' => ['required', 'integer', Rule::exists('clinic_service_categories', 'id')->whereIn('name', ClinicServiceCategory::SUPPORTED_NAMES)],
             'charge_behavior' => [Rule::excludeIf(! $confinement), 'required', Rule::in(['base_confinement', 'admission_charge', 'additional_charge'])],
             'pricing_method' => ['required', Rule::in(['fixed', 'range', 'starting_at', 'tiered'])],
             'billing_unit' => ['nullable', Rule::in(['service', 'visit', 'day', 'sample', 'pet', 'shot'])],
@@ -129,7 +132,7 @@ class ClinicServiceController extends Controller
             $this->assertSingleBase((int) $data['category_id'], $service?->id);
         }
         if ($data['is_active'] ?? $service?->is_active ?? true) {
-            $this->assertServiceIsNotTreatment($data['name'], (int) $data['category_id']);
+            $this->assertServiceIsNotTreatment($data['name']);
         }
         $data['identity_key'] = hash('sha256', json_encode([mb_strtolower($data['name']), (int) $data['category_id']]));
         $duplicate = ClinicService::where('identity_key', $data['identity_key']);
@@ -152,13 +155,10 @@ class ClinicServiceController extends Controller
         }
     }
 
-    private function assertServiceIsNotTreatment(string $name, int $categoryId): void
+    private function assertServiceIsNotTreatment(string $name): void
     {
         $normalize = fn ($value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim($value)));
         $name = $normalize($name);
-        // Anti Rabies is also an Inventory vaccine name; the certificate is a distinct service.
-        if (preg_match('/^anti[ -]?rabies(?: certificate| certification)?$/u', $name)
-            && ClinicServiceCategory::whereKey($categoryId)->value('name') === 'Certificates & Forms') return;
         if (preg_match('/\b(triamcinolone|vincristine)\b|\bvaccines?$/u', $name)
             || InventoryItem::whereIn('category', ['medicine', 'vaccine'])->pluck('item_name')
                 ->contains(fn ($product) => $normalize($product) === $name)) {
