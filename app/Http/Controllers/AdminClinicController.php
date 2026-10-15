@@ -140,10 +140,9 @@ class AdminClinicController extends Controller
             ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
             ->where(function ($query) {
                 $query->whereDate('appointment_date', now()->toDateString())->orWhere('status', 'for_payment');
-                if ($this->hasConfinements) {
-                    $query->orWhereHas('confinement', fn ($episode) => $episode->whereNull('discharged_at'));
-                }
             })
+            ->when($this->hasConfinements, fn ($query) => $query
+                ->whereDoesntHave('confinement', fn ($episode) => $episode->whereNull('discharged_at')))
             ->orderByRaw("CASE WHEN status = 'waiting_to_arrive' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
             ->limit(100)

@@ -6,18 +6,19 @@ const { webcrypto } = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
 const stores = {};
+const events = [];
 let alpineInit;
 let role = 'staff';
 const sandbox = {
   document: { addEventListener(name, callback) { if (name === 'alpine:init') alpineInit = callback; }, getElementById() { return { focus() {} }; } },
-  window: { addEventListener() {}, dispatchEvent() {}, location: { pathname: '/pages/admin/clinic.html', search: '' } },
+  window: { addEventListener() {}, dispatchEvent(event) { events.push(event); }, location: { pathname: '/pages/admin/clinic.html', search: '' } },
   Alpine: { store(name, value) { stores[name] = value; } },
   CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
   API: { getUserRole: () => role },
   crypto: webcrypto, URLSearchParams, setTimeout, clearTimeout,
 };
 vm.createContext(sandbox);
-for (const file of ['admin-clinic.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
+for (const file of ['admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
   vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox, {
     filename: path.join(root, 'scripts/components', file),
     importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
@@ -47,18 +48,28 @@ function permissions(clinical, payment, queue, customers) {
   receptionistRecord.currentAppt = { status: 'in_consultation' };
   assert.equal(receptionistRecord.canEditClinical, false);
   await receptionistRecord.saveRecord(true);
-  await receptionistRecord.uploadAttachment();
-  await receptionistRecord.deleteAttachment({});
+  const receptionistImaging = component('clinicImagingWorkspace');
+  receptionistImaging.canEditClinical = receptionistRecord.canEditClinical;
+  await receptionistImaging.uploadImagingAttachment({}, {target: {files: [{name: 'image.png', size: 100}]}});
+  await receptionistImaging.removeImagingService({});
   const receptionist = component('adminClinicPage');
   await receptionist.startCase({ id: 1 });
+  for (const status of ['checked_in', 'in_consultation', 'for_payment']) {
+    receptionist.openCase({id: 1, status});
+    assert.equal(events.at(-1).type, 'clinic-open-modal');
+    assert.equal(events.at(-1).detail.appt.status, status);
+    receptionistRecord.currentAppt = {id: 1, status};
+    assert.equal(receptionistRecord.canEditClinical, false);
+    assert.equal(receptionistRecord.canFinish, false);
+  }
   receptionist.profile = { pet: { id: 7, petName: 'Mochi' }, owner: { fullName: 'Ana Santos' }, open: true };
   let openedPet;
   receptionist.activeCases = [{id: 1, status: 'checked_in', pet: {id: 7}}];
   receptionist.openCase = appt => {openedPet = appt.pet.id;};
   sandbox.API.createClinicCase = async () => { throw new Error('Viewing must not create a case'); };
   receptionist.openProfileCase();
-  assert.equal(openedPet, undefined, 'Reception cannot open a checked-in case as a fallback');
-  assert.equal(receptionist.caseActionLabel(receptionist.activeCases[0]), '');
+  assert.equal(openedPet, 7, 'Reception can view an existing checked-in case');
+  assert.equal(receptionist.caseActionLabel(receptionist.activeCases[0]), 'Open Case');
   receptionist.activeCases[0].status = 'in_consultation';
   receptionist.openProfileCase();
   assert.equal(openedPet, 7);
@@ -88,13 +99,13 @@ function permissions(clinical, payment, queue, customers) {
   assert.equal(receptionist.payment.open, false);
   assert.equal(receptionist.payment.error, '');
 
-  permissions(true, false, false, false);
+  permissions(true, true, true, true);
   const vet = component('adminClinicPage');
   vet.loadActiveCases = async () => {};
   await vet.checkInCase({ id: 2, status: 'waiting_to_arrive' });
   assert.equal(checkIns, 2);
   vet.reviewPayment(paymentCase);
-  assert.equal(vet.payment.open, false);
+  assert.equal(vet.payment.open, true);
   await vet.recordPayment();
   await vet.cancelCase({ id: 1 });
   sandbox.API.startClinicCase = async () => ({ case: { id: 1, status: 'in_consultation' } });
@@ -145,11 +156,18 @@ function permissions(clinical, payment, queue, customers) {
     ['clinic', 'veterinarian', 'Veterinarian'], ['clinic', 'clinic_receptionist', 'Clinic Receptionist'],
     ['grooming', 'grooming_receptionist', 'Grooming Receptionist'], ['grooming', null, 'Staff'], [null, null, 'Staff'],
   ]) {
-    sandbox.API.getMe = sandbox.API.getStaffIdentity = async () => ({ user: { first_name: 'Ana', last_name: 'Santos', staff_type, staff_subrole } });
+    const clinic_permissions = {services_view: staff_type === 'clinic', services_manage: false};
+    sandbox.API.getMe = sandbox.API.getStaffIdentity = async () => ({ user: { first_name: 'Ana', last_name: 'Santos', staff_type, staff_subrole, clinic_permissions } });
     const sidebar = sandbox.adminSidebar();
     await sidebar.loadLoggedInIdentity();
     assert.equal(sidebar.staffRoleLabel, label);
+    assert.equal(sidebar.clinicPermissions.services_view, staff_type === 'clinic');
   }
+  const adminSidebar = sandbox.adminSidebar();
+  adminSidebar.isAdmin = true;
+  sandbox.API.getStaffIdentity = async () => ({user: {clinic_permissions: {services_view: true, services_manage: true}}});
+  await adminSidebar.loadLoggedInIdentity();
+  assert.equal(adminSidebar.clinicPermissions.services_view, true);
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
   const filters = page.slice(page.indexOf('aria-label="Case status filters"'), page.indexOf('<section x-show="[\'active-cases\''));
   const filterOrder = [...filters.matchAll(/@click="setTab\('([^']+)'\)"/g)].map(match => match[1]);
@@ -162,7 +180,7 @@ function permissions(clinical, payment, queue, customers) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }
   assert.match(page, /aria-label="Billing"/);
-  assert.match(page, /Attachments<\/h3>/);
+  assert.match(page, /Attachments<\/p>/);
   assert.match(page, /Follow-up<\/h3>/);
   assert.equal((page.match(/x-for="caseItem in caseRows"/g) || []).length, 1);
   const clinicSource = fs.readFileSync(path.join(root, 'scripts/components/admin-clinic.js'), 'utf8');
@@ -192,19 +210,19 @@ function permissions(clinical, payment, queue, customers) {
   assert.equal(casePage.visibleActiveCases.length, 1);
   assert.equal(casePage.visibleActiveCases[0].id, 2);
   permissions(false, false, false, false);
-  assert.equal(casePage.caseActionLabel({status: 'for_payment'}), '', 'Read-only staff do not receive a fallback clinical action');
-  assert.equal(casePage.caseActionLabel({status: 'checked_in'}), '', 'No Open Case fallback before consultation');
+  assert.equal(casePage.caseActionLabel({status: 'for_payment'}), 'Open Case');
+  assert.equal(casePage.caseActionLabel({status: 'checked_in'}), 'Open Case');
   const actionCount = actions.length;
   casePage.runCaseAction({id: 1, status: 'checked_in'});
   casePage.runCaseAction({id: 1, status: 'for_payment'});
-  assert.equal(actions.length, actionCount);
+  assert.equal(actions.length, actionCount + 2, 'Viewing existing cases does not require clinical or payment permission');
   const chargesModal = component('adminClinicModal');
   chargesModal.$nextTick = () => {};
   chargesModal.currentAppt = {id: 1, status: 'for_payment'};
   chargesModal.activeSection = 'services';
   chargesModal.selectSection('billing');
   assert.equal(chargesModal.chargesOpen, false, 'Charges requires billing permission');
-  stores.clinicAccess.permissions.billing = true;
+  stores.clinicAccess.permissions.billing_view = true;
   chargesModal.selectSection('billing');
   assert.equal(chargesModal.chargesOpen, true);
   assert.equal(chargesModal.activeSection, 'services', 'Charges preserves the clinical section');

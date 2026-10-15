@@ -174,6 +174,12 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
     // Clinic administration — available only to the project's staff/admin roles.
     Route::middleware(['role:admin,staff', 'clinic:access'])->group(function () {
+        Route::get('/admin/clinic-services/options', [ClinicServiceController::class, 'options'])->middleware('clinic:services_view');
+        Route::get('/admin/clinic-services', [ClinicServiceController::class, 'index'])->middleware('clinic:services_view');
+        Route::post('/admin/clinic-services', [ClinicServiceController::class, 'store'])->middleware('clinic:services_manage');
+        Route::put('/admin/clinic-services/{clinicService}', [ClinicServiceController::class, 'update'])->middleware('clinic:services_manage');
+        Route::patch('/admin/clinic-services/{clinicService}/status', [ClinicServiceController::class, 'status'])->middleware('clinic:services_manage');
+
         Route::get('/admin/pets/{petId}/cases/{caseId}/details', [AdminPetProfileController::class, 'caseDetails']);
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store'])->middleware('clinic:intake');
 
@@ -199,8 +205,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/clinic-cases/{id}/service-pricing/{clinicServiceId}', [ClinicCaseServiceController::class, 'pricing'])->middleware('clinic:clinical');
         Route::post('/admin/clinic-cases/{id}/services', [ClinicCaseServiceController::class, 'store'])->middleware('clinic:clinical');
         Route::delete('/admin/clinic-cases/{id}/services/{caseServiceId}', [ClinicCaseServiceController::class, 'destroy'])->middleware('clinic:clinical');
-        Route::get('/admin/clinic-cases/{id}/charges', [ClinicBillingController::class, 'index'])->middleware('clinic:billing');
-        Route::patch('/admin/clinic-cases/{id}/charges/{chargeId}', [ClinicBillingController::class, 'update'])->middleware('clinic:billing');
+        Route::get('/admin/clinic-cases/{id}/charges', [ClinicBillingController::class, 'index'])->middleware('clinic:billing_view');
+        Route::patch('/admin/clinic-cases/{id}/charges/{chargeId}', [ClinicBillingController::class, 'update'])->middleware('clinic:billing_edit');
 
         Route::get('/admin/clinic-appointments', [AdminClinicController::class, 'index']);
         Route::get('/admin/clinic-appointments/archived', [AdminClinicController::class, 'archivedIndex']);
@@ -277,12 +283,6 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             ->middleware('throttle:10,1');
         Route::post('/admin/security/credential-changes/{change}/resend', [AdminSecurityController::class, 'resend'])
             ->middleware('throttle:3,10');
-
-        Route::get('/admin/clinic-services/options', [ClinicServiceController::class, 'options']);
-        Route::get('/admin/clinic-services', [ClinicServiceController::class, 'index']);
-        Route::post('/admin/clinic-services', [ClinicServiceController::class, 'store']);
-        Route::put('/admin/clinic-services/{clinicService}', [ClinicServiceController::class, 'update']);
-        Route::patch('/admin/clinic-services/{clinicService}/status', [ClinicServiceController::class, 'status']);
 
         Route::post('/admin/clinic/stop-today', [ClinicClosureController::class, 'stopToday']);
         Route::post('/admin/clinic/reopen-today', [ClinicClosureController::class, 'reopenToday']);

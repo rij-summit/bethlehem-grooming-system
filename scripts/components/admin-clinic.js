@@ -61,7 +61,11 @@ document.addEventListener("alpine:init", () => {
   Alpine.store("clinicAccess", {
     permissions: {},
     user: null,
-    async init() {
+    ready: null,
+    init() {
+      return this.ready ??= this.load();
+    },
+    async load() {
       try {
         const response = await API.getStaffIdentity();
         this.user = response.user || null;
@@ -451,7 +455,7 @@ function adminClinicModal() {
     },
 
     openCharges() {
-      if (!this.$store.clinicAccess.permissions.billing || !this.currentAppt?.id || this.saving || this.attachmentBusy || this.workspaceSaving) return;
+      if (!this.$store.clinicAccess.permissions.billing_view || !this.currentAppt?.id || this.saving || this.attachmentBusy || this.workspaceSaving) return;
       this.chargesOpen = true;
       this.$nextTick?.(() => this.$el.closest('[x-data="adminClinicModal()"]')?.querySelector('[aria-label="Close charges"]')?.focus());
     },
@@ -735,7 +739,7 @@ function adminClinicPage() {
       if (item.status === 'waiting_to_arrive' && this.permissions.intake) return 'Check In';
       if (item.status === 'checked_in' && this.permissions.clinical) return 'Start Consultation';
       if (item.status === 'for_payment' && this.permissions.payment) return 'Review & Collect Payment';
-      if (item.status === 'in_consultation' && this.permissions.access) return 'Open Case';
+      if (['checked_in', 'in_consultation', 'for_payment'].includes(item.status) && this.permissions.access) return 'Open Case';
       return '';
     },
     runCaseAction(item) {
@@ -743,7 +747,7 @@ function adminClinicPage() {
       if (item.status === 'waiting_to_arrive' && this.permissions.intake) return this.checkInCase(item);
       if (item.status === 'checked_in' && this.permissions.clinical) return this.startCase(item);
       if (item.status === 'for_payment' && this.permissions.payment) return this.reviewPayment(item);
-      if (item.status === 'in_consultation' && this.permissions.access) this.openCase(item);
+      if (['checked_in', 'in_consultation', 'for_payment'].includes(item.status) && this.permissions.access) this.openCase(item);
     },
     get permissions() { return this.$store.clinicAccess.permissions; },
     money(value) { return Number(value || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" }); },
@@ -808,7 +812,7 @@ function adminClinicPage() {
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", false); }
     },
     openCase(item, section) {
-      if (!this.permissions.access || item.status !== 'in_consultation') return;
+      if (!this.permissions.access || !['checked_in', 'in_consultation', 'for_payment'].includes(item.status)) return;
       window.dispatchEvent(new CustomEvent("clinic-open-modal", { detail: { appt: item, section: section || (item.case_type === "vaccination" ? "vaccinations" : "medical") } }));
     },
     async startCase(item) {
@@ -1086,18 +1090,18 @@ function adminClinicPage() {
     get profileActionLabel() {
       const visit = this.currentClinicVisit;
       if (!visit || visit.status === 'waiting_to_arrive') return this.permissions.intake ? 'Check In Patient' : '';
-      if (visit.status === 'for_payment') return '';
+      if (visit.status === 'for_payment') return this.permissions.access ? 'Open Case' : '';
       return this.caseActionLabel(visit);
     },
     runProfileAction() {
       if (!this.profileActionLabel || this.profileBusy || this.caseBusyId !== null || this.profileEditorSaving || this.profileEditorLoading) return;
       const visit = this.currentClinicVisit;
       if (!visit || visit.status === 'waiting_to_arrive') return this.checkInPatient();
-      if (visit.status === 'checked_in') return this.startCase(visit);
+      if (visit.status === 'checked_in' && this.permissions.clinical) return this.startCase(visit);
       return this.openProfileCase();
     },
     openProfileCase(visit = this.currentClinicVisit) {
-      if (!visit || visit.status !== 'in_consultation' || !this.permissions.access
+      if (!visit || !['checked_in', 'in_consultation', 'for_payment'].includes(visit.status) || !this.permissions.access
         || this.profileBusy || this.profileEditorSaving || this.profileEditorLoading) return;
       const trigger = this.petPicker.open ? this.petPickerReturnFocus : this.profileReturnFocus;
       this.closeProfile(false);

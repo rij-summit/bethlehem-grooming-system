@@ -46,6 +46,7 @@ function adminClinicServices() {
     form: emptyClinicService(), details: null, _detailsTrigger: null,
     maximumPrice: CLINIC_SERVICE_MAX_PRICE, priceErrors: {}, weightErrors: {},
     init() {},
+    get canManageServices() { return !!this.$store.clinicAccess.permissions.services_manage; },
     destroy() { clearTimeout(this._searchTimer); this.$refs.serviceDialog.close(); this.closeDetails(false); },
     async activate() {
       if (this.loaded) return;
@@ -113,6 +114,7 @@ function adminClinicServices() {
       this._detailsTrigger = null;
     },
     openModal(service = null) {
+      if (!this.canManageServices) return;
       this.editingId = service?.id ?? null;
       this.form = emptyClinicService();
       if (service) {
@@ -196,7 +198,7 @@ function adminClinicServices() {
       return index === 0 ? `Up to ${tier.max_weight_kg} kg` : `Above ${previous}–${tier.max_weight_kg} kg`;
     },
     async save() {
-      if (this.saving) return;
+      if (!this.canManageServices || this.saving) return;
       this.formError = '';
       const payload = this.payload();
       this.priceErrors = {};
@@ -221,7 +223,7 @@ function adminClinicServices() {
       } finally { this.saving = false; }
     },
     async changeStatus(service) {
-      if (this.busyId) return;
+      if (!this.canManageServices || this.busyId) return;
       const active = !service.is_active;
       if (!await this.$store.clinicFeedback.confirm({
         title: `${active ? 'Reactivate' : 'Deactivate'} service?`,

@@ -141,7 +141,7 @@ function installAdminClinicNavigation() {
     child.setAttribute(':class', `activePage === 'clinic' && clinicSection === '${section}' ? 'is-active' : ''`);
     child.setAttribute(':aria-current', `activePage === 'clinic' && clinicSection === '${section}' ? 'page' : null`);
     child.setAttribute('@click', 'sidebarOpen = false');
-    if (section === 'services') child.setAttribute('x-show', 'isAdmin');
+    if (section === 'services') child.setAttribute('x-show', 'clinicPermissions.services_view');
     submenu.appendChild(child);
   }
   group.append(button, submenu);
@@ -166,6 +166,7 @@ function adminSidebar() {
     inventorySection: getAdminInventorySection(),
     clinicExpanded: getAdminSidebarActivePage() === 'clinic',
     clinicSection: getAdminClinicSection(),
+    clinicPermissions: {},
     _inventoryNavigationListener: null,
     isAdmin: false,
     staffDisplayName: "Staff",
@@ -253,11 +254,13 @@ function adminSidebar() {
     },
 
     async loadLoggedInIdentity() {
-      if (this.isAdmin || typeof API.getMe !== "function") return;
+      if (typeof API.getMe !== "function") return;
 
       try {
         const response = await (API.getStaffIdentity ? API.getStaffIdentity() : API.getMe("staff"));
         const user = response?.user;
+        this.clinicPermissions = user?.clinic_permissions || {};
+        if (this.isAdmin) return;
         this.staffRoleLabel = user?.staff_type === "clinic"
           ? ({ veterinarian: "Veterinarian", clinic_receptionist: "Clinic Receptionist" }[user.staff_subrole] || "Clinic Staff")
           : user?.staff_subrole === "grooming_receptionist" ? "Grooming Receptionist" : "Staff";

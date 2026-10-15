@@ -30,10 +30,11 @@ class ClinicServiceCatalogTest extends TestCase
         $this->signIn('admin');
     }
 
-    private function signIn(string $role): void
+    private function signIn(string $role, ?string $subrole = null, string $staffType = 'clinic'): void
     {
         $user = new User;
-        $user->forceFill(['user_id' => 1, 'role' => $role, 'is_active' => true]);
+        $user->forceFill(['user_id' => 1, 'role' => $role, 'is_active' => true,
+            'staff_type' => $role === 'staff' ? $staffType : null, 'staff_subrole' => $subrole]);
         Sanctum::actingAs($user);
     }
 
@@ -261,11 +262,30 @@ class ClinicServiceCatalogTest extends TestCase
             'charge_behavior' => 'additional_charge', 'billing_unit' => 'day']))->assertCreated();
     }
 
-    public function test_staff_and_customers_cannot_read_or_mutate_catalog(): void
+    public function test_clinic_staff_can_browse_catalog_but_only_admin_can_manage_it(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload())->assertCreated()->json('data.id');
+        foreach (['veterinarian', 'clinic_receptionist'] as $subrole) {
+            $this->signIn('staff', $subrole);
+            $this->getJson('/api/admin/clinic-services?q=CBC&category_id=2&status=all&page=1')
+                ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $id);
+            $this->getJson('/api/admin/clinic-services/options')->assertOk()->assertJsonCount(5, 'categories');
+            $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Forbidden']))->assertForbidden();
+            $this->putJson('/api/admin/clinic-services/'.$id, $this->payload(['price' => 1]))->assertForbidden();
+            foreach ([false, true] as $active) {
+                $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => $active])->assertForbidden();
+            }
+            $this->assertDatabaseHas('clinic_services', ['id' => $id, 'price' => 990, 'is_active' => true]);
+            $this->assertDatabaseCount('clinic_services', 1);
+        }
+    }
+
+    public function test_other_staff_and_customers_cannot_read_or_mutate_catalog(): void
     {
         $id = $this->postJson('/api/admin/clinic-services', $this->payload())->json('data.id');
-        foreach (['staff', 'customer'] as $role) {
-            $this->signIn($role);
+        foreach ([['staff', null, 'clinic'], ['staff', 'grooming_receptionist', 'grooming'],
+            ['staff', 'unknown', 'clinic'], ['customer', null, 'clinic']] as [$role, $subrole, $type]) {
+            $this->signIn($role, $subrole, $type);
             $this->getJson('/api/admin/clinic-services')->assertForbidden();
             $this->getJson('/api/admin/clinic-services/options')->assertForbidden();
             $this->postJson('/api/admin/clinic-services', $this->payload())->assertForbidden();

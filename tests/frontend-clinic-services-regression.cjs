@@ -4,8 +4,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 
-function setup() {
+function setup(permissions = {services_view: true, services_manage: true}) {
   const calls = [], panels = [], listeners = new Map();
+  const clinicAccess = {permissions, init: async () => {}};
   let failMarkup = false;
   const context = {
     URLSearchParams, clearTimeout, setTimeout, console,
@@ -26,11 +27,13 @@ function setup() {
       queueMicrotask(script.onload);
     }}, createElement: () => ({style: {}, setAttribute() {}, remove() {}})},
     Alpine: {mutateDom: fn => fn(), initTree(panel) {panel.state = component(context);}, $data: panel => panel.state},
+    clinicAccess,
   };
   context.window = context;
   vm.createContext(context);
   vm.runInContext(read('scripts/components/admin-clinic-shell.js'), context);
   const shell = context.adminClinicShell();
+  shell.$store = {clinicAccess};
   const cases = {state: context.adminClinicCasesSection()};
   shell.$refs = {cases: {firstElementChild: cases}, services: {get firstElementChild() {return panels[0];}, appendChild: panel => panels.push(panel)}};
   shell.$nextTick = fn => fn();
@@ -43,7 +46,7 @@ function component(context) {
   const dialog = () => ({open: false, showModal() {this.open = true;}, close() {this.open = false;}});
   state.$refs = {serviceDialog: dialog(), serviceForm: {querySelector: () => null, reportValidity: () => true}, detailsDialog: dialog(), detailsClose: {focus() {}}, serviceName: {focus() {}}, formError: {focus() {}}};
   state.$nextTick = fn => fn();
-  state.$store = {clinicFeedback: {notify() {}, confirm: async () => true}};
+  state.$store = {clinicAccess: context.clinicAccess, clinicFeedback: {notify() {}, confirm: async () => true}};
   return state;
 }
 
@@ -156,6 +159,50 @@ async function workflow() {
   assert.equal(state.rows[0].name, 'New', 'Late search responses cannot overwrite newer results');
   app.context.API.adminRequest = async () => {throw new Error('Offline');};
   await state.load(); assert.equal(state.error, 'Offline'); assert.equal(state.loading, false);
+}
+
+async function readOnlyAccess() {
+  const service = {id: 1, name: 'CBC', is_active: true, pricing_method: 'fixed', price: 500};
+  for (const subrole of ['veterinarian', 'clinic_receptionist']) {
+    const app = setup({services_view: true, services_manage: false});
+    app.context.API.getUserRole = () => 'staff';
+    await app.shell.showSection();
+    assert.equal(app.shell.activeSection, 'services', subrole + ' can open Services directly');
+    const state = app.panels[0].state;
+    assert.equal(state.canManageServices, false);
+    state.q = 'CBC'; state.category = '2'; state.status = 'all';
+    await state.load(2);
+    assert.ok(app.calls.some(call => Array.isArray(call) && /q=CBC.*category_id=2/.test(call[1])));
+    state.openDetails(service, {currentTarget: {focus() {}}});
+    assert.equal(state.$refs.detailsDialog.open, true);
+    state.openModal(); state.openModal(service);
+    await state.save(); await state.changeStatus(service);
+    assert.equal(state.modalOpen, false);
+    assert.equal(app.calls.some(call => Array.isArray(call) && call[0] !== 'GET'), false);
+  }
+  const denied = setup({services_view: false, services_manage: false});
+  await denied.shell.showSection();
+  assert.equal(denied.shell.activeSection, 'cases');
+  assert.equal(denied.panels.length, 0);
+  const page = read('pages/admin/clinic/sections/services.html');
+  for (const action of ['openModal()', 'openModal(service)', 'changeStatus(service)']) {
+    const tag = page.match(new RegExp('<button[^>]*@click(?:\\.stop)?="' + action.replace(/[()]/g, '\\$&') + '"[^>]*>'))?.[0];
+    assert.ok(tag?.includes('x-show="canManageServices"'), action + ' must be hidden for readers');
+  }
+  assert.ok(page.includes('View clinic services and pricing.'));
+  assert.ok(page.includes('View Details'));
+  assert.ok(read('scripts/components/admin-sidebar.js').includes("child.setAttribute('x-show', 'clinicPermissions.services_view')"));
+
+  const pending = setup({});
+  let finishIdentity;
+  pending.context.clinicAccess.init = () => new Promise(resolve => {finishIdentity = resolve;});
+  const opening = pending.shell.showSection();
+  assert.equal(pending.context.location.hash, '#services', 'Do not redirect while permissions are loading');
+  assert.equal(pending.panels.length, 0);
+  pending.context.clinicAccess.permissions = {services_view: true, services_manage: false};
+  finishIdentity();
+  await opening;
+  assert.equal(pending.shell.activeSection, 'services');
 }
 
 function formatting() {
@@ -296,4 +343,4 @@ async function confirmationDismissal() {
   assert.equal(await answer, true);
 }
 
-(async () => {await navigation(); await workflow(); await priceValidation(); await confirmationDismissal(); await confinementConfiguration(); formatting(); console.log('Clinic Services navigation, pricing and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});
+(async () => {await navigation(); await workflow(); await readOnlyAccess(); await priceValidation(); await confirmationDismissal(); await confinementConfiguration(); formatting(); console.log('Clinic Services navigation, pricing and workflow regressions passed');})().catch(error => {console.error(error); process.exitCode = 1;});

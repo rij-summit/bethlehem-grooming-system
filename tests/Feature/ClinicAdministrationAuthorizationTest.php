@@ -372,6 +372,13 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ['PATCH', '/api/admin/pets/1/vaccinations/1'],
             ['POST', '/api/admin/pets/1/vaccinations/1/publish'],
             ['POST', '/api/admin/pets/1/vaccinations/1/void'],
+            ['POST', '/api/admin/clinic-cases/1/confinement'],
+            ['POST', '/api/admin/clinic-cases/1/confinement/charges'],
+            ['POST', '/api/admin/clinic-cases/1/confinement/charges/1/stop'],
+            ['DELETE', '/api/admin/clinic-cases/1/confinement/charges/1'],
+            ['POST', '/api/admin/clinic-cases/1/confinement/observations'],
+            ['POST', '/api/admin/clinic-cases/1/confinement/discharge'],
+            ['PATCH', '/api/admin/clinic-cases/1/charges/1'],
         ] as [$method, $uri]) {
             $this->json($method, $uri)->assertForbidden()->assertExactJson(self::FORBIDDEN_RESPONSE);
         }
@@ -403,17 +410,26 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('user.staff_type', 'clinic')
             ->assertJsonPath('user.staff_subrole', 'veterinarian')
             ->assertJsonPath('user.clinic_permissions.clinical', true)
-            ->assertJsonPath('user.clinic_permissions.billing', true)
-            ->assertJsonPath('user.clinic_permissions.payment', false);
+            ->assertJsonPath('user.clinic_permissions.billing_view', true)
+            ->assertJsonPath('user.clinic_permissions.billing_edit', true)
+            ->assertJsonPath('user.clinic_permissions.payment', true)
+            ->assertJsonPath('user.clinic_permissions.customers', true)
+            ->assertJsonPath('user.clinic_permissions.queue', true)
+            ->assertJsonPath('user.clinic_permissions.services_view', true)
+            ->assertJsonPath('user.clinic_permissions.services_manage', false);
         $this->authenticateAs('staff', subrole: 'clinic_receptionist');
         $this->getJson('/api/me')->assertOk()
             ->assertJsonPath('user.clinic_permissions.clinical', false)
-            ->assertJsonPath('user.clinic_permissions.billing', true)
-            ->assertJsonPath('user.clinic_permissions.payment', true);
+            ->assertJsonPath('user.clinic_permissions.billing_view', true)
+            ->assertJsonPath('user.clinic_permissions.billing_edit', false)
+            ->assertJsonPath('user.clinic_permissions.payment', true)
+            ->assertJsonPath('user.clinic_permissions.services_view', true)
+            ->assertJsonPath('user.clinic_permissions.services_manage', false);
         $this->authenticateAs('admin');
         $this->getJson('/api/me')->assertOk()->assertJsonPath('user.clinic_permissions', [
-            'access' => true, 'intake' => true, 'clinical' => true, 'billing' => true,
+            'access' => true, 'intake' => true, 'clinical' => true, 'billing_view' => true, 'billing_edit' => true,
             'payment' => true, 'customers' => true, 'queue' => true,
+            'services_view' => true, 'services_manage' => true,
         ]);
         foreach ((new User(['role' => 'admin']))->clinicPermissions() as $permission) {
             $this->assertTrue($permission);
@@ -489,7 +505,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/clinic-appointments/3/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 1);
     }
 
-    public function test_active_outpatients_are_today_only_without_losing_payment_or_multiday_confinement(): void
+    public function test_active_outpatients_are_today_only_with_payment_and_confinement_in_separate_lists(): void
     {
         $this->authenticateAs('admin');
         foreach ([1 => 'checked_in', 2 => 'in_consultation', 3 => 'for_payment', 4 => 'completed',
@@ -515,7 +531,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
                 'clinic_appointment_id' => 8, 'clinic_case_service_id' => $entryId, 'admitted_at' => now()->subDay(), 'reason' => 'Observe overnight',
             ]);
             $response = $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 1);
-            $this->assertEqualsCanonicalizing([3, 5, 6, 8], array_column($response->json('cases'), 'id'));
+            $this->assertEqualsCanonicalizing([3, 5, 6], array_column($response->json('cases'), 'id'));
             $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('data.0.id', 8);
             $this->assertDatabaseCount('clinic_appointments', 8);
         } finally {
@@ -552,7 +568,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'for_payment', 'paid' => false, 'total_amount' => 350]);
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases')
             ->assertJsonPath('cases.0.charges.0.description', 'Previously recorded charge');
-        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 350, 'payment_method' => 'cash'])->assertForbidden();
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1, 'payment_method' => 'cash'])
+            ->assertUnprocessable()->assertJsonValidationErrors('total_amount');
         $this->authenticateAs('staff', subrole: 'clinic_receptionist');
         $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1, 'payment_method' => 'cash'])
             ->assertUnprocessable()->assertJsonValidationErrors('total_amount');
@@ -571,6 +588,20 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $this->postJson($uri)->assertOk();
             $this->assertDatabaseHas('clinic_appointments', ['id' => $index + 1, 'status' => 'for_payment', 'paid' => false]);
             $this->postJson('/api/admin/clinic-appointments/'.($index + 1).'/pay', ['total_amount' => 0, 'payment_method' => 'card'])->assertOk();
+        }
+    }
+
+    public function test_all_clinic_roles_can_record_payment_and_manage_the_clinic_queue(): void
+    {
+        foreach (['admin', 'veterinarian', 'clinic_receptionist'] as $index => $subrole) {
+            $this->authenticateAs($subrole === 'admin' ? 'admin' : 'staff', subrole: $subrole);
+            $id = $index * 2 + 1;
+            $this->insertClinicAppointment('for_payment', id: $id);
+            $this->postJson('/api/admin/clinic-appointments/'.$id.'/pay', ['total_amount' => 0, 'payment_method' => 'cash'])
+                ->assertOk();
+            $this->assertDatabaseHas('clinic_appointments', ['id' => $id, 'paid' => true, 'status' => 'completed']);
+            $this->insertClinicAppointment('checked_in', id: $id + 1);
+            $this->postJson('/api/admin/clinic-appointments/'.($id + 1).'/cancel')->assertOk();
         }
     }
 
@@ -616,7 +647,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
                 ->assertJsonPath('cases.0.status', 'for_payment')->assertJsonPath('cases.0.paid', false)
                 ->assertJsonPath('cases.0.total_amount', 1000);
             $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => 'for_payment', 'paid' => false, 'total_amount' => 1000]);
-            $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1000, 'payment_method' => 'cash'])->assertForbidden();
+            $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 1, 'payment_method' => 'cash'])
+                ->assertUnprocessable()->assertJsonValidationErrors('total_amount');
 
             $this->authenticateAs('staff', subrole: 'clinic_receptionist');
             $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1000);
@@ -2445,17 +2477,21 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $expected = [
             ['POST', 'api/admin/clinic-walk-in', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-records', 'role:admin,staff'],
-            ['GET', 'api/admin/clinic-services/options', 'role:admin'],
-            ['GET', 'api/admin/clinic-services', 'role:admin'],
-            ['POST', 'api/admin/clinic-services', 'role:admin'],
-            ['PUT', 'api/admin/clinic-services/{clinicService}', 'role:admin'],
-            ['PATCH', 'api/admin/clinic-services/{clinicService}/status', 'role:admin'],
+            ['GET', 'api/admin/clinic-services/options', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-services', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-services', 'role:admin,staff'],
+            ['PUT', 'api/admin/clinic-services/{clinicService}', 'role:admin,staff'],
+            ['PATCH', 'api/admin/clinic-services/{clinicService}/status', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-medicine-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-confinements', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-confinement-service-options', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases/{id}/confinement', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/confinement', 'role:admin,staff'],
+            ['GET', 'api/admin/clinic-cases/{id}/confinement/admission-preview', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/confinement/charges', 'role:admin,staff'],
+            ['POST', 'api/admin/clinic-cases/{id}/confinement/charges/{chargeId}/stop', 'role:admin,staff'],
+            ['DELETE', 'api/admin/clinic-cases/{id}/confinement/charges/{chargeId}', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases/{id}/confinement/observations', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-cases/{id}/confinement/observations', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-cases/{id}/confinement/discharge-preview', 'role:admin,staff'],

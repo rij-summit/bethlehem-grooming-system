@@ -1,5 +1,5 @@
-function getClinicSection(hash = window.location.hash) {
-  return hash === '#services' && API.getUserRole() === 'admin' ? 'services' : 'cases';
+function getClinicSection(hash, permissions) {
+  return hash === '#services' && permissions.services_view ? 'services' : 'cases';
 }
 
 let clinicServicesScript;
@@ -20,7 +20,7 @@ function loadClinicServicesScript() {
 function adminClinicShell() {
   let pendingServices;
   return {
-    activeSection: getClinicSection(), sectionLoading: false, sectionError: '',
+    activeSection: 'cases', sectionLoading: false, sectionError: '',
     _navigationListener: null,
     init() {
       this._navigationListener = () => this.showSection();
@@ -48,7 +48,9 @@ function adminClinicShell() {
       })().finally(() => { pendingServices = null; });
     },
     async showSection() {
-      const section = getClinicSection();
+      await this.$store.clinicAccess.init();
+      const currentSection = () => getClinicSection(window.location.hash, this.$store.clinicAccess.permissions);
+      const section = currentSection();
       if (window.location.hash !== `#${section}`) history.replaceState(null, '', `#${section}`);
       if (this.activeSection !== section) {
         const servicePanel = this.$refs.services.firstElementChild;
@@ -64,13 +66,13 @@ function adminClinicShell() {
       document.title = `Clinic ${section === 'services' ? 'Services' : 'Cases'} | Bethlehem Animal Clinic`;
       try {
         const panel = section === 'services' ? await this.mountServices() : this.$refs.cases.firstElementChild;
-        if (getClinicSection() !== section) return;
+        if (currentSection() !== section) return;
         this.sectionLoading = false;
         await Alpine.$data(panel).activate(section);
       } catch (error) {
-        if (getClinicSection() === section) this.sectionError = error.message || 'Unable to open this Clinic section.';
+        if (currentSection() === section) this.sectionError = error.message || 'Unable to open this Clinic section.';
       } finally {
-        if (getClinicSection() === section) this.sectionLoading = false;
+        if (currentSection() === section) this.sectionLoading = false;
       }
     },
   };

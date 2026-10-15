@@ -151,13 +151,14 @@ class ClinicConfinementTest extends TestCase
         $this->assertEquals($before, DB::table('clinic_vitals')->first()); $this->assertDatabaseCount('clinic_charges', 0);
     }
 
-    public function test_receptionist_can_view_but_cannot_admit_monitor_or_discharge_and_vet_cannot_pay(): void
+    public function test_receptionist_can_view_but_cannot_admit_monitor_or_discharge_and_confined_cases_cannot_be_paid(): void
     {
         $this->admit(); $this->signIn('clinic_receptionist');
         $this->getJson('/api/admin/clinic-cases/1/confinement')->assertOk();
         $this->getJson('/api/admin/clinic-cases/1/confinement/observations')->assertOk();
         foreach (['', '/observations', '/discharge'] as $suffix) $this->postJson('/api/admin/clinic-cases/1/confinement'.$suffix)->assertForbidden();
-        $this->signIn(); $this->postJson('/api/admin/clinic-appointments/1/pay')->assertForbidden();
+        $this->signIn();
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 0, 'payment_method' => 'cash'])->assertUnprocessable();
     }
 
     public function test_normal_finish_and_direct_confinement_service_mutations_are_blocked(): void
@@ -379,15 +380,38 @@ class ClinicConfinementTest extends TestCase
     public function test_confined_list_and_count_use_active_episodes_and_discharge_retains_viewable_history(): void
     {
         $this->admit();
+        foreach ([now()->toDateString(), now()->subDay()->toDateString()] as $date) {
+            ClinicAppointment::find(1)->update(['appointment_date' => $date]);
+            $before = ClinicAppointment::find(1)->getAttributes();
+            $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 1)
+                ->assertJsonCount(0, 'cases');
+            $this->assertSame($before, ClinicAppointment::find(1)->getAttributes());
+        }
         $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('total', 1)
             ->assertJsonPath('data.0.id', 1)->assertJsonPath('data.0.status', 'in_consultation')
-            ->assertJsonPath('data.0.confinement.case_service.status', 'ordered');
-        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 1);
+            ->assertJsonPath('data.0.confinement.case_service.status', 'ordered')
+            ->assertJsonPath('data.0.record.primary_veterinarian_id', 1)
+            ->assertJsonPath('data.0.vitals.weight_kg', '18.40');
+        $this->assertDatabaseCount('clinic_appointments', 1);
+        $this->assertDatabaseCount('clinic_records', 1);
+        $this->assertDatabaseCount('clinic_vitals', 1);
+        $this->assertDatabaseHas('clinic_case_services', ['clinic_appointment_id' => 1, 'status' => 'ordered']);
         $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
         $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('total', 0);
         $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 0)->assertJsonPath('cases.0.status', 'for_payment');
         $this->signIn('clinic_receptionist');
         $this->getJson('/api/admin/clinic-cases/1/confinement')->assertOk()->assertJsonPath('data.case_service.status', 'performed');
+    }
+
+    public function test_a_discharged_episode_does_not_exclude_a_current_consultation(): void
+    {
+        $this->admit();
+        $this->postJson('/api/admin/clinic-cases/1/confinement/discharge')->assertOk();
+        ClinicAppointment::find(1)->update(['status' => 'in_consultation', 'appointment_date' => now()->toDateString()]);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 0)
+            ->assertJsonCount(1, 'cases')->assertJsonPath('cases.0.id', 1)
+            ->assertJsonPath('cases.0.status', 'in_consultation');
+        $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('total', 0);
     }
 
     public function test_catalogue_options_filter_category_active_state_and_supported_units_without_name_matching(): void

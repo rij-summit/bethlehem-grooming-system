@@ -107,10 +107,13 @@ class User extends Authenticatable
             'access' => $admin || $vet || $receptionist,
             'intake' => $admin || $vet || $receptionist,
             'clinical' => $admin || $vet,
-            'billing' => $admin || $vet || $receptionist,
-            'payment' => $admin || $receptionist,
-            'customers' => $admin || $receptionist,
-            'queue' => $admin || $receptionist,
+            'billing_view' => $admin || $vet || $receptionist,
+            'billing_edit' => $admin || $vet,
+            'payment' => $admin || $vet || $receptionist,
+            'customers' => $admin || $vet || $receptionist,
+            'queue' => $admin || $vet || $receptionist,
+            'services_view' => $admin || $vet || $receptionist,
+            'services_manage' => $admin,
         ];
     }
 

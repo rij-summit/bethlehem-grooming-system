@@ -13,7 +13,7 @@ class ClinicBillingService
 {
     public function updateCharge(int $appointmentId, int $chargeId, array $data, User $actor): ClinicCharge
     {
-        abort_unless($actor->clinicPermissions()['billing'], 403);
+        abort_unless($actor->clinicPermissions()['billing_edit'], 403);
         $data = Validator::make($data, [
             'quantity' => 'sometimes|required|numeric|decimal:0,2|min:0.01|max:99999999.99',
             'unit_price' => 'sometimes|required|numeric|decimal:0,2|min:0|max:99999999.99',

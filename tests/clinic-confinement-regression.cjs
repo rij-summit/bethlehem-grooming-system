@@ -162,10 +162,14 @@ function component(permission = true, id = 1) {
   modal.currentAppt = {id: 1, status: 'in_consultation', confinement: {...episode, discharged_at: null}};
   assert.equal(modal.canFinish, false, 'Ordinary completion is hidden during active confinement');
   modal.currentAppt.confinement.discharged_at = '2026-10-14T10:01:00Z'; assert.equal(modal.canFinish, true);
-  sandbox.API.getClinicConfinedCases = async () => ({data: [{id: 1, confinement: episode}], total: 23, current_page: 2, last_page: 2});
-  const pageState = sandbox.adminClinicPage(); pageState.$store = state.$store;
+  sandbox.API.getClinicConfinedCases = async () => ({data: [{id: 1, status: 'in_consultation', confinement: episode}], total: 23, current_page: 2, last_page: 2});
+  const pageState = sandbox.adminClinicPage(); pageState.$store = {clinicAccess: {permissions: {access: true}}};
   await pageState.loadConfinedCases(2); assert.equal(pageState.confinedCount, 23); assert.equal(pageState.confinedPage, 2);
   assert.equal(pageState.confinedCases.length, 1, 'Count comes from the server, not loaded page length');
+  pageState.openCase(pageState.confinedCases[0], 'confinement');
+  assert.equal(events.at(-1).type, 'clinic-open-modal');
+  assert.equal(events.at(-1).detail.appt, pageState.confinedCases[0], 'Open Case uses the same confined case');
+  assert.equal(events.at(-1).detail.section, 'confinement');
   assert.equal(sandbox.clinicConfinementDuration('2026-10-13T00:00:00Z', '2026-10-14T01:02:00Z'), '1d 1h 2m');
   assert.equal(state.methodLabel('fixed'), 'Fixed', 'Shared formatting used in Confinement remains available');
   assert.equal(state.sizeLabel('medium'), 'Medium');

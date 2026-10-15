@@ -455,8 +455,9 @@ class ClinicCaseServiceBillingTest extends TestCase
             $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk();
             foreach ([['unit_price' => 400], ['unit_price' => 600], ['unit_price' => 0], ['quantity' => 2],
                 ['amount' => 0, 'clinic_case_service_id' => null]] as $change) {
-                $this->patchJson('/api/admin/clinic-cases/1/charges/1', $change)
-                    ->assertUnprocessable()->assertJsonValidationErrors('charges');
+                $response = $this->patchJson('/api/admin/clinic-cases/1/charges/1', $change);
+                if ($subrole === 'clinic_receptionist') $response->assertForbidden();
+                else $response->assertUnprocessable()->assertJsonValidationErrors('charges');
             }
             $this->assertSame($before, ClinicCaseService::find($id)->getAttributes());
             $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'paid' => false, 'total_amount' => 500]);
@@ -467,7 +468,7 @@ class ClinicCaseServiceBillingTest extends TestCase
 
     public function test_unlinked_medicine_vaccine_and_legacy_charge_behavior_is_preserved(): void
     {
-        $this->signIn('clinic_receptionist');
+        $this->signIn('veterinarian');
         foreach (['medicine', 'vaccine', 'existing'] as $kind) {
             $id = DB::table('clinic_charges')->insertGetId([
                 'clinic_appointment_id' => 1, 'kind' => $kind, 'description' => $kind,
@@ -477,6 +478,29 @@ class ClinicCaseServiceBillingTest extends TestCase
                 ->assertOk()->assertJsonPath('data.amount', '1200.00');
         }
         $this->assertEquals(3600, ClinicAppointment::find(1)->total_amount);
+    }
+
+    public function test_receptionist_can_view_billing_but_cannot_edit_even_an_unlinked_charge(): void
+    {
+        $id = DB::table('clinic_charges')->insertGetId([
+            'clinic_appointment_id' => 1, 'kind' => 'existing', 'description' => 'Exam',
+            'quantity' => 1, 'unit_price' => 500, 'amount' => 500,
+        ]);
+        $this->signIn('clinic_receptionist');
+        $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('charges.data.0.amount', '500.00');
+        $this->patchJson('/api/admin/clinic-cases/1/charges/'.$id, ['unit_price' => 1])->assertForbidden();
+        try {
+            app(ClinicBillingService::class)->updateCharge(1, $id, ['unit_price' => 1], auth()->user());
+            $this->fail('The billing service must reject receptionist edits.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+        $this->assertDatabaseHas('clinic_charges', ['id' => $id, 'unit_price' => 500, 'amount' => 500]);
+        foreach (['veterinarian', 'admin'] as $subrole) {
+            $this->signIn($subrole);
+            $this->patchJson('/api/admin/clinic-cases/1/charges/'.$id, ['unit_price' => 600])
+                ->assertOk()->assertJsonPath('data.amount', '600.00');
+        }
     }
 
     public function test_starting_at_accepts_prices_above_grooming_safety_caps(): void
@@ -534,7 +558,7 @@ class ClinicCaseServiceBillingTest extends TestCase
         $fixed = $this->catalog();
         $this->catalog(['is_active' => false]);
         $this->getJson('/api/admin/clinic-service-options?status=all')->assertOk()->assertJsonPath('total', 1);
-        $this->getJson('/api/admin/clinic-services')->assertForbidden();
+        $this->getJson('/api/admin/clinic-services')->assertOk();
         $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$fixed->id)->assertOk()
             ->assertJsonPath('pricing.requires_final_price', false)->assertJsonPath('pricing.resolved_price', '500.00');
         $tiered = $this->catalog(['pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'tiers' => [['size' => 'medium', 'price' => 600]]]);
@@ -548,11 +572,11 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->getJson('/api/admin/clinic-cases/1/service-pricing/'.$fixed->id)->assertForbidden();
     }
 
-    public function test_receptionist_can_view_services_but_cannot_mutate_them_and_vet_cannot_pay(): void
+    public function test_receptionist_can_view_case_services_but_cannot_mutate_them(): void
     {
         $payload = $this->payload($this->catalog());
         $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->json('data.id');
-        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 500, 'payment_method' => 'cash'])->assertForbidden();
+        $this->postJson('/api/admin/clinic-appointments/1/pay', ['total_amount' => 500, 'payment_method' => 'cash'])->assertUnprocessable();
         $this->signIn('clinic_receptionist');
         $this->getJson('/api/admin/clinic-cases/1/services')->assertOk();
         $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertForbidden();
@@ -639,9 +663,14 @@ class ClinicCaseServiceBillingTest extends TestCase
         foreach ([
             ['POST', 'api/admin/clinic-cases/{id}/services', 'clinic:clinical'],
             ['DELETE', 'api/admin/clinic-cases/{id}/services/{caseServiceId}', 'clinic:clinical'],
-            ['GET', 'api/admin/clinic-cases/{id}/charges', 'clinic:billing'],
-            ['PATCH', 'api/admin/clinic-cases/{id}/charges/{chargeId}', 'clinic:billing'],
+            ['GET', 'api/admin/clinic-cases/{id}/charges', 'clinic:billing_view'],
+            ['PATCH', 'api/admin/clinic-cases/{id}/charges/{chargeId}', 'clinic:billing_edit'],
             ['POST', 'api/admin/clinic-appointments/{id}/pay', 'clinic:payment'],
+            ['GET', 'api/admin/clinic-services/options', 'clinic:services_view'],
+            ['GET', 'api/admin/clinic-services', 'clinic:services_view'],
+            ['POST', 'api/admin/clinic-services', 'clinic:services_manage'],
+            ['PUT', 'api/admin/clinic-services/{clinicService}', 'clinic:services_manage'],
+            ['PATCH', 'api/admin/clinic-services/{clinicService}/status', 'clinic:services_manage'],
         ] as [$method, $uri, $permission]) {
             $route = collect(app('router')->getRoutes()->getRoutes())->first(
                 fn ($route) => $route->uri() === $uri && in_array($method, $route->methods(), true),

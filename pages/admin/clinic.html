@@ -164,6 +164,7 @@
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700" x-text="caseStatus(caseItem)"></span>
                       <span x-show="caseItem.status === 'for_payment'" class="text-sm font-semibold tabular-nums text-slate-700" :aria-label="'Amount due: ' + money(caseItem.total_amount)" x-text="money(caseItem.total_amount)"></span>
+                      <button x-show="caseItem.status === 'for_payment' && permissions.access && permissions.payment" type="button" @click="openCase(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl border border-[#d0e4f2] bg-[#eef5fb] px-3 py-2 text-xs font-semibold text-[#315b7e] hover:bg-slate-100 disabled:opacity-50">Open Case</button>
                       <button x-show="caseActionLabel(caseItem)" type="button" @click="runCaseAction(caseItem)" :disabled="caseBusyId !== null" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#274864] disabled:opacity-50" x-text="caseBusyId === caseItem.id ? 'Working…' : caseActionLabel(caseItem)"></button>
                       <div x-data="{menuOpen: false}" x-show="permissions.queue && !(caseItem.confinement && !caseItem.confinement.discharged_at)" class="relative" @click.outside="menuOpen = false" @keydown.escape.stop="menuOpen = false; $refs.trigger.focus()">
                         <button type="button" x-ref="trigger" @click="menuOpen = !menuOpen; if (menuOpen) $nextTick(() => $refs.cancel.focus())" :aria-expanded="menuOpen" :aria-label="'More actions for ' + (caseItem.pet?.name || 'patient')" :disabled="caseBusyId !== null" class="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"><i data-lucide="ellipsis" class="h-4 w-4"></i></button>
@@ -845,7 +846,7 @@
       @keydown.escape.window="if (open && !$store.clinicFeedback.dialog.open) { if (chargesOpen) { $event.stopImmediatePropagation(); closeCharges(); } else if (activeSection !== 'vaccinations') closeModal(); }"
       class="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8"
     >
-      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace @clinic-treatment-updated.window="if (workspaceCaseId && $store.clinicAccess.permissions.billing) loadBilling()" class="relative flex max-h-[calc(100dvh-4rem)] w-full max-w-6xl flex-col overflow-clip rounded-3xl bg-white shadow-2xl" @keydown.tab="trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
+      <div x-data="clinicCaseWorkspace()" x-effect="syncWorkspace(open, currentAppt, chargesOpen ? 'billing' : activeSection)" data-case-workspace @clinic-treatment-updated.window="if (workspaceCaseId && $store.clinicAccess.permissions.billing_view) loadBilling()" class="relative flex max-h-[calc(100dvh-4rem)] w-full max-w-6xl flex-col overflow-clip rounded-3xl bg-white shadow-2xl" @keydown.tab="trapFocus($event)" role="dialog" aria-modal="true" aria-labelledby="patient-record-title">
         <div :inert="chargesOpen" class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
           <h2 id="patient-record-title" class="min-w-0 break-words text-lg font-bold text-[#2f4b66]" x-text="title">Medical Record</h2>
           <div class="ml-auto flex shrink-0 items-center gap-2">
@@ -1223,7 +1224,7 @@
               </tbody></table>
             </div></div>
             <button x-show="servicePage < serviceLastPage" type="button" @click="loadServices(servicePage + 1)" :disabled="servicesLoading" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Load more services</button>
-            <section x-show="$store.clinicAccess.permissions.billing" aria-labelledby="treatment-charges-heading" class="space-y-3 border-t border-slate-200 pt-5">
+            <section x-show="$store.clinicAccess.permissions.billing_view" aria-labelledby="treatment-charges-heading" class="space-y-3 border-t border-slate-200 pt-5">
               <h3 id="treatment-charges-heading" class="text-base font-bold text-[#2f4b66]">Treatment Charges</h3>
               <p class="text-xs text-slate-500">Charges from recorded Treatment. Make corrections in the Treatment tab.</p>
               <p x-show="billingLoading" role="status" class="text-sm text-slate-500">Loading charges…</p>
@@ -1244,7 +1245,7 @@
         </div>
 
         <div x-show="chargesOpen" x-cloak @click="closeCharges()" aria-hidden="true" class="absolute inset-0 z-10 bg-slate-900/20"></div>
-          <section id="case-billing-panel" role="dialog" aria-modal="true" aria-labelledby="case-charges-title" x-show="chargesOpen && $store.clinicAccess.permissions.billing" x-cloak class="absolute right-0 top-0 z-20 max-h-full w-full max-w-xl space-y-4 overflow-y-auto rounded-bl-2xl border-l border-slate-200 bg-white p-4 shadow-xl sm:p-6">
+          <section id="case-billing-panel" role="dialog" aria-modal="true" aria-labelledby="case-charges-title" x-show="chargesOpen && $store.clinicAccess.permissions.billing_view" x-cloak class="absolute right-0 top-0 z-20 max-h-full w-full max-w-xl space-y-4 overflow-y-auto rounded-bl-2xl border-l border-slate-200 bg-white p-4 shadow-xl sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-3"><h3 id="case-charges-title" class="text-base font-bold text-[#2f4b66]">Charges</h3><button type="button" @click="loadBilling()" :disabled="billingLoading" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh</button><button type="button" @click="closeCharges()" aria-label="Close charges" class="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><i data-lucide="x" class="h-5 w-5"></i></button></div>
             <p x-show="billingLoading" role="status" class="text-sm text-slate-500">Loading charges…</p><p x-show="billingError" role="alert" x-text="billingError" class="text-sm text-red-600"></p>
             <p x-show="!billingLoading && !billingError && !chargeRows.length" class="py-6 text-center text-sm text-slate-500">No chargeable items recorded.</p>

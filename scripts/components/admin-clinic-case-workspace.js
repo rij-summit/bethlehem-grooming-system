@@ -85,9 +85,9 @@ function clinicCaseWorkspace() {
       if (section === 'services') {
         if (!this.serviceForm) this.restoreDraft();
         this.loadServices();
-        if (this.$store.clinicAccess.permissions.billing) this.loadBilling();
+        if (this.$store.clinicAccess.permissions.billing_view) this.loadBilling();
       }
-      else if (section === 'billing' && this.$store.clinicAccess.permissions.billing) this.loadBilling();
+      else if (section === 'billing' && this.$store.clinicAccess.permissions.billing_view) this.loadBilling();
     },
     destroy() { clearTimeout(this._searchTimer); ++this._generation; ++this._searchRequest; ++this._selectionRequest; },
     async loadServices(page = 1) {
