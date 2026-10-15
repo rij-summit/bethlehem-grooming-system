@@ -33,8 +33,12 @@ class ClinicServiceController extends Controller
             'q' => 'nullable|string|max:200', 'category_id' => 'nullable|integer|exists:clinic_service_categories,id',
             'status' => ['nullable', Rule::in(['active', 'inactive', 'all'])],
             'page' => 'nullable|integer|min:1',
+            'scope' => 'nullable|in:imaging',
         ]);
         $query = ClinicService::with('category');
+        if (($filters['scope'] ?? null) === 'imaging') {
+            $query->whereHas('category', fn ($q) => $q->where('name', 'Diagnostic Imaging'));
+        }
         if ($request->is('api/admin/clinic-service-options')) {
             $query->whereDoesntHave('category', fn ($q) => $q->where('name', 'Confinement'));
         }
@@ -99,7 +103,7 @@ class ClinicServiceController extends Controller
             'name' => 'required|string|max:200', 'category_id' => 'required|integer|exists:clinic_service_categories,id',
             'charge_behavior' => [Rule::excludeIf(! $confinement), 'required', Rule::in(['base_confinement', 'admission_charge', 'additional_charge'])],
             'pricing_method' => ['required', Rule::in(['fixed', 'range', 'starting_at', 'tiered'])],
-            'billing_unit' => ['nullable', Rule::in(['service', 'visit', 'day', 'sample', 'pet'])],
+            'billing_unit' => ['nullable', Rule::in(['service', 'visit', 'day', 'sample', 'pet', 'shot'])],
             'is_active' => 'sometimes|boolean', 'notes' => 'nullable|string|max:5000',
             'price' => [Rule::excludeIf(!in_array($method, ['fixed', 'starting_at'])), ...$money],
             'min_price' => [Rule::excludeIf($method !== 'range'), ...$money],

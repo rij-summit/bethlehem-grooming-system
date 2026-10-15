@@ -134,7 +134,7 @@ function clinicCaseWorkspace() {
       if (!this.canMutateServices || this.serviceSaving || this.serviceRemovingId !== null || this.pendingPayload) return;
       const composer = this.$refs.serviceComposer, generation = this._generation;
       clearTimeout(this._searchTimer); ++this._searchRequest; this.searchLoading = false;
-      this.serviceForm = {service_id: service.id, request_key: crypto.randomUUID(), notes: '', applied_price: ''};
+      this.serviceForm = {service_id: service.id, request_key: crypto.randomUUID(), notes: '', applied_price: '', quantity: 1};
       this.selectedService = service; this.serviceError = ''; this.serviceErrors = {}; this.searchRows = [];
       this.persistDraft();
       await this.refreshPricing(service.id);
@@ -181,6 +181,9 @@ function clinicCaseWorkspace() {
     },
     validateService() {
       this.serviceErrors = {};
+      if (this.selectedService?.billing_unit === 'shot' && !/^[1-9]\d*$/.test(String(this.serviceForm.quantity))) {
+        this.serviceErrors.quantity = 'Enter a whole number of shots, minimum 1.';
+      }
       if (this.needsFinalPrice) {
         const error = clinicFinalPriceError(this.serviceForm.applied_price, this.servicePricing, this.money);
         if (error) this.serviceErrors.applied_price = error;
@@ -193,6 +196,7 @@ function clinicCaseWorkspace() {
         || this.servicePricing.error)) return;
       const id = this.workspaceCaseId, generation = this._generation, form = this.serviceForm;
       const payload = this.pendingPayload || {notes: form.notes, clinic_service_id: form.service_id, request_key: form.request_key,
+        ...(this.selectedService?.billing_unit === 'shot' ? {quantity: Number(form.quantity)} : {}),
         ...(this.needsFinalPrice ? {applied_price: form.applied_price.trim()} : {})};
       this.pendingPayload = payload;
       if (!this.persistDraft()) { this.pendingPayload = null; return; }
@@ -236,10 +240,12 @@ function clinicCaseWorkspace() {
         window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
         await API.clinicDeleteCaseService(id, entry.id);
         if (generation !== this._generation) return;
+        if (this.attachments) this.attachments = this.attachments.map(file => Number(file.clinic_case_service_id) === entry.id ? {...file, clinic_case_service_id: null} : file);
         await Promise.all([this.loadServices(), this.loadBilling()]);
         if (generation !== this._generation) return;
         this.$store.clinicFeedback.notify('Service removed.');
         window.dispatchEvent(new CustomEvent('clinic-case-updated'));
+        return true;
       } catch (error) { if (generation === this._generation) this.servicesError = error.message || 'Could not remove this service.'; }
       finally {
         this.serviceRemovingId = null;
@@ -262,6 +268,126 @@ function clinicCaseWorkspace() {
       window.dispatchEvent(new CustomEvent('clinic-review-payment', {detail: {
         ...this.workspaceAppointment, charges: [...this.chargeRows], total_amount: this.billingTotal,
       }}));
+    },
+  };
+}
+
+// Medical Record imaging refers to the same occurrences and charges as Services.
+function clinicImagingWorkspace() {
+  return {
+    imagingCaseId: null, imagingActive: false, imagingRows: [], imagingPage: 0, imagingLastPage: 1,
+    imagingLoading: false, imagingError: '', imagingOptions: [], imagingQuery: '',
+    imagingOptionsPage: 0, imagingOptionsLastPage: 1, imagingOptionsLoading: false,
+    imagingSelected: null, imagingPricing: null, imagingPricingLoading: false,
+    imagingNotes: '', imagingShots: 1, imagingSaving: false, imagingPending: null, imagingRequestKey: null,
+    _imagingGeneration: 0, _imagingRowsRequest: 0, _imagingOptionsRequest: 0, _imagingPriceRequest: 0,
+    _imagingSearchTimer: null,
+    get imagingBusy() { return this.imagingSaving || this.serviceSaving || this.serviceRemovingId !== null || this.saving || this.attachmentBusy; },
+    get validImagingShots() { return this.imagingSelected?.billing_unit !== 'shot' || /^[1-9]\d*$/.test(String(this.imagingShots)); },
+    syncImaging(open, appt, section) {
+      if (!open || !appt?.id) {
+        if (this.imagingCaseId !== null) ++this._imagingGeneration;
+        this.imagingCaseId = null; this.imagingActive = false; return;
+      }
+      if (this.imagingCaseId !== appt.id) {
+        ++this._imagingGeneration; this.imagingCaseId = appt.id; this.imagingActive = false;
+        this.imagingRows = []; this.imagingOptions = []; this.imagingQuery = ''; this.imagingError = '';
+        this.imagingSelected = null; this.imagingPricing = null; this.imagingNotes = ''; this.imagingShots = 1;
+        this.imagingPending = null; this.imagingRequestKey = null;
+        this.imagingSaving = false; this.imagingPricingLoading = false; this.imagingOptionsLoading = false;
+      }
+      if (section === 'medical' && !this.imagingActive) this.loadImagingServices();
+      this.imagingActive = section === 'medical';
+    },
+    destroy() { clearTimeout(this._imagingSearchTimer); ++this._imagingGeneration; },
+    async loadImagingServices(page = 1) {
+      const generation = this._imagingGeneration, request = ++this._imagingRowsRequest;
+      this.imagingLoading = true; this.imagingError = '';
+      try {
+        const response = await API.getClinicCaseServices(this.imagingCaseId, page, 'imaging');
+        if (generation !== this._imagingGeneration || request !== this._imagingRowsRequest) return;
+        this.imagingRows = page === 1 ? response.data : [...this.imagingRows, ...response.data];
+        this.imagingPage = response.current_page; this.imagingLastPage = response.last_page;
+      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not load imaging.'; }
+      finally { if (generation === this._imagingGeneration && request === this._imagingRowsRequest) this.imagingLoading = false; }
+    },
+    searchImagingServices() {
+      clearTimeout(this._imagingSearchTimer); ++this._imagingOptionsRequest;
+      ++this._imagingPriceRequest; this.imagingSelected = null; this.imagingPricing = null; this.imagingPricingLoading = false;
+      this._imagingSearchTimer = setTimeout(() => this.loadImagingOptions(), 250);
+    },
+    async loadImagingOptions(page = 1) {
+      if (!this.canEditClinical || this.imagingBusy || this.imagingPending) return;
+      const generation = this._imagingGeneration, request = ++this._imagingOptionsRequest;
+      this.imagingOptionsLoading = true;
+      try {
+        const response = await API.clinicCaseServiceOptions(this.imagingQuery.trim(), page, 'imaging');
+        if (generation !== this._imagingGeneration || request !== this._imagingOptionsRequest) return;
+        this.imagingOptions = response.data; this.imagingOptionsPage = response.current_page; this.imagingOptionsLastPage = response.last_page;
+      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not load imaging services.'; }
+      finally { if (generation === this._imagingGeneration && request === this._imagingOptionsRequest) this.imagingOptionsLoading = false; }
+    },
+    async selectImagingService(service) {
+      if (!this.canEditClinical || this.imagingBusy || this.imagingPending) return;
+      clearTimeout(this._imagingSearchTimer); ++this._imagingOptionsRequest;
+      const generation = this._imagingGeneration, request = ++this._imagingPriceRequest;
+      this.imagingSelected = service; this.imagingQuery = service.name; this.imagingOptions = []; this.imagingOptionsLoading = false;
+      this.imagingShots = 1; this.imagingRequestKey = crypto.randomUUID();
+      this.imagingPricing = null; this.imagingPricingLoading = true; this.imagingError = '';
+      try {
+        const response = await API.clinicCaseServicePricing(this.imagingCaseId, service.id);
+        if (generation !== this._imagingGeneration || request !== this._imagingPriceRequest) return;
+        this.imagingSelected = response.data; this.imagingPricing = response.pricing;
+        if (response.pricing.requires_final_price) this.imagingError = 'Configure a fixed imaging price in Clinic Services before adding this service.';
+      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not resolve the imaging price.'; }
+      finally { if (generation === this._imagingGeneration && request === this._imagingPriceRequest) this.imagingPricingLoading = false; }
+    },
+    async addImagingService() {
+      if (!this.canEditClinical || this.imagingBusy || !this.imagingSelected) return;
+      if (!this.imagingPending && (!this.imagingPricing || this.imagingPricingLoading || this.imagingPricing.error
+        || this.imagingPricing.requires_final_price || !this.validImagingShots)) return;
+      const id = this.imagingCaseId, generation = this._imagingGeneration;
+      this.imagingPending ||= {clinic_service_id: this.imagingSelected.id, request_key: this.imagingRequestKey, notes: this.imagingNotes,
+        ...(this.imagingSelected.billing_unit === 'shot' ? {quantity: Number(this.imagingShots)} : {})};
+      this.imagingSaving = true; this.imagingError = '';
+      window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
+      try {
+        await API.clinicCreateCaseService(id, this.imagingPending);
+        if (generation !== this._imagingGeneration) return;
+        this.imagingPending = null; this.imagingSelected = null; this.imagingPricing = null;
+        this.imagingQuery = ''; this.imagingNotes = ''; this.imagingShots = 1; this.imagingOptionsPage = 0;
+        await Promise.all([this.loadImagingServices(), this.loadServices(), this.loadBilling()]);
+        this.$store.clinicFeedback.notify('Imaging added.');
+        window.dispatchEvent(new CustomEvent('clinic-case-updated'));
+      } catch (error) {
+        if (generation !== this._imagingGeneration) return;
+        const rejected = (error.status >= 400 && error.status < 500) || error.errors;
+        if (rejected) this.imagingPending = null;
+        this.imagingError = error.errors ? Object.values(error.errors).flat()[0] : rejected ? error.message
+          : 'The result could not be confirmed. Retry Add Imaging to check this same request safely.';
+      } finally {
+        if (generation === this._imagingGeneration) this.imagingSaving = false;
+        window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: false}}));
+      }
+    },
+    async removeImagingService(entry) {
+      if (!this.canEditClinical || this.imagingBusy || this.imagingPending) return;
+      if (await this.removeService(entry)) await this.loadImagingServices();
+    },
+    imagingAttachments(entry) { return this.attachments.filter(file => Number(file.clinic_case_service_id) === entry.id); },
+    async uploadImagingAttachment(entry, event) {
+      const file = event.target.files?.[0];
+      if (!file || !this.canEditClinical || this.imagingBusy) return;
+      const id = this.imagingCaseId, generation = this._imagingGeneration;
+      this.attachmentBusy = true; this.imagingError = '';
+      try {
+        const result = await API.clinicUploadAttachment(id, file, '', entry.id);
+        if (generation !== this._imagingGeneration) return;
+        this.attachments.push(result.attachment);
+        this.$store.clinicFeedback.notify('Imaging file uploaded.');
+        window.dispatchEvent(new CustomEvent('clinic-case-updated'));
+      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.errors ? Object.values(error.errors).flat()[0] : error.message || 'Could not upload the imaging file.'; }
+      finally { event.target.value = ''; if (generation === this._imagingGeneration) this.attachmentBusy = false; }
     },
   };
 }

@@ -1888,12 +1888,12 @@ var API = (() => {
     return request("POST", "/admin/clinic-cases", payload, getAdminToken());
   }
 
-  function getClinicCaseServices(id, page = 1) {
-    return request("GET", `/admin/clinic-cases/${id}/services?page=${page}`, null, getAdminToken());
+  function getClinicCaseServices(id, page = 1, scope = '') {
+    return request("GET", `/admin/clinic-cases/${id}/services?page=${page}${scope === 'imaging' ? '&scope=imaging' : ''}`, null, getAdminToken());
   }
 
-  function clinicCaseServiceOptions(q = "", page = 1) {
-    return request("GET", `/admin/clinic-service-options?q=${encodeURIComponent(q)}&page=${page}`, null, getAdminToken());
+  function clinicCaseServiceOptions(q = "", page = 1, scope = '') {
+    return request("GET", `/admin/clinic-service-options?q=${encodeURIComponent(q)}&page=${page}${scope === 'imaging' ? '&scope=imaging' : ''}`, null, getAdminToken());
   }
 
   function clinicCaseServicePricing(id, serviceId) {
@@ -1972,10 +1972,11 @@ var API = (() => {
     return request("POST", `/admin/clinic-appointments/${id}/record`, payload, getAdminToken());
   }
 
-  async function clinicUploadAttachment(id, file, label = "") {
+  async function clinicUploadAttachment(id, file, label = "", caseServiceId = null) {
     const formData = new FormData();
     formData.append("file", file);
     if (label) formData.append("label", label);
+    if (caseServiceId) formData.append("clinic_case_service_id", caseServiceId);
 
     return request(
       "POST",

@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('name', 100)->unique();
         });
         DB::table('clinic_service_categories')->insert(array_map(fn ($name) => ['name' => $name], [
-            'Consultation & Fees', 'Laboratory', 'Diagnostics', 'Imaging', 'Procedures',
+            'Consultation & Fees', 'Laboratory', 'Diagnostics', 'Diagnostic Imaging', 'Procedures',
             'Boarding & Lodging', 'Certificates & Forms',
         ]));
         Schema::create('clinic_services', function (Blueprint $table) {

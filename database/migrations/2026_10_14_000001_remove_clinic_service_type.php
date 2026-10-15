@@ -31,7 +31,7 @@ return new class extends Migration
             $diagnostics = $category('Diagnostics', 'Diagnostic Tests');
             $category('Boarding & Lodging', 'Confinement');
             $certificates = DB::table('clinic_service_categories')->where('name', 'Certificates & Forms')->value('id');
-            $imaging = DB::table('clinic_service_categories')->where('name', 'Imaging')->value('id');
+            $imaging = DB::table('clinic_service_categories')->whereIn('name', ['Imaging', 'Diagnostic Imaging'])->value('id');
             $products = Schema::hasTable('inventory_items')
                 ? DB::table('inventory_items')->whereIn('category', ['medicine', 'vaccine'])->pluck('item_name')->map($normalize)->all()
                 : [];

@@ -120,6 +120,44 @@ class ClinicCaseServiceBillingTest extends TestCase
         $this->assertDatabaseCount('clinic_charges', 0);
     }
 
+    public function test_shot_quantity_is_validated_and_charged_once_using_the_catalogue_price(): void
+    {
+        $service = $this->catalog(['name' => 'X-ray — Additional Shot', 'billing_unit' => 'shot', 'price' => 350, 'category_id' => 4]);
+        foreach ([null, 0, -1, 1.5, 'two'] as $quantity) {
+            $this->postJson('/api/admin/clinic-cases/1/services', $this->payload($service, ['quantity' => $quantity]))
+                ->assertUnprocessable()->assertJsonValidationErrors('quantity');
+        }
+        $payload = $this->payload($service, ['quantity' => 2, 'applied_price' => 1]);
+        $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()
+            ->assertJsonPath('data.quantity', '2.00')->assertJsonPath('data.charge.amount', '700.00')->json('data.id');
+        $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.id', $id);
+        $this->assertDatabaseCount('clinic_case_services', 1);
+        $this->assertDatabaseCount('clinic_charges', 1);
+        $service->update(['price' => 900]);
+        $this->getJson('/api/admin/clinic-cases/1/services?scope=imaging')->assertOk()->assertJsonPath('data.0.applied_price', '350.00');
+        $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 700);
+        $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertOk();
+        $this->assertEquals(0, ClinicAppointment::find(1)->total_amount);
+    }
+
+    public function test_imaging_catalogue_migration_reuses_ids_and_can_run_again_without_duplicates(): void
+    {
+        Schema::create('clinic_attachments', fn (Blueprint $table) => $table->id());
+        DB::table('clinic_service_categories')->where('id', 4)->update(['name' => 'Imaging']);
+        $service = $this->catalog(['name' => 'X-Ray - Abdominal', 'category_id' => 4, 'price' => 1500]);
+        $migration = require database_path('migrations/2026_10_15_000002_configure_diagnostic_imaging.php');
+        $migration->up();
+        $this->assertDatabaseHas('clinic_service_categories', ['id' => 4, 'name' => 'Diagnostic Imaging']);
+        $this->assertDatabaseMissing('clinic_service_categories', ['name' => 'Imaging']);
+        $this->assertDatabaseHas('clinic_services', ['id' => $service->id, 'name' => 'X-ray — Abdominal', 'price' => 1950]);
+        $this->assertDatabaseCount('clinic_services', 11);
+        $migration->down();
+        $migration->up();
+        $this->assertDatabaseCount('clinic_service_categories', 7);
+        $this->assertDatabaseCount('clinic_services', 11);
+        $this->assertEquals(350, ClinicService::where('billing_unit', 'shot')->sole()->price);
+    }
+
     public function test_cbc_cpv_and_anti_rabies_certificate_only_create_service_charges(): void
     {
         Schema::create('clinic_records', function (Blueprint $table) {

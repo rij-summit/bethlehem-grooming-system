@@ -632,6 +632,7 @@ class AdminClinicController extends Controller
         $data = $request->validate([
             'file' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,pdf,dcm'],
             'label' => ['nullable', 'string', 'max:200'],
+            'clinic_case_service_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         return DB::transaction(function () use ($data, $id) {
@@ -640,6 +641,17 @@ class AdminClinicController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
             $this->assertClinicalContentEditable($appt);
+
+            if (! empty($data['clinic_case_service_id'])) {
+                abort_if($appt->paid || $appt->archived_at, 409, 'Imaging files cannot be changed at this case stage.');
+                $imaging = $appt->caseServices()->whereKey($data['clinic_case_service_id'])
+                    ->where('status', 'performed')->imaging()->exists();
+                if (! $imaging) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'clinic_case_service_id' => 'Choose an imaging service recorded in this clinic case.',
+                    ]);
+                }
+            }
 
             $actor = request()->user();
             $actorName = trim($actor->first_name.' '.$actor->last_name) ?: "User #{$actor->user_id}";
@@ -668,6 +680,7 @@ class AdminClinicController extends Controller
                     'file_type' => $file->getMimeType(),
                     'file_size_bytes' => $file->getSize(),
                     'label' => $data['label'] ?? null,
+                    ...(isset($data['clinic_case_service_id']) ? ['clinic_case_service_id' => $data['clinic_case_service_id']] : []),
                 ]);
             } catch (Throwable $exception) {
                 Storage::disk('local')->delete($path);
@@ -724,6 +737,9 @@ class AdminClinicController extends Controller
             if (! $attachment) {
                 $this->attachmentNotFound();
             }
+
+            abort_if($attachment->clinic_case_service_id && ($appointment->paid || $appointment->archived_at),
+                409, 'Imaging files cannot be changed at this case stage.');
 
             $disk = $this->attachmentDisk($attachment->file_path);
             if ($disk !== null && ! Storage::disk($disk)->delete($attachment->file_path)) {
@@ -949,6 +965,7 @@ class AdminClinicController extends Controller
     {
         return [
             'id' => $attachment->id,
+            'clinic_case_service_id' => $attachment->clinic_case_service_id,
             'file_name' => $attachment->file_name,
             'file_type' => $attachment->file_type,
             'file_size_bytes' => $attachment->file_size_bytes,

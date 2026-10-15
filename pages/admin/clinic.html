@@ -1125,6 +1125,54 @@
                   </div>
                 </template>
               </section>
+              <section x-data="clinicImagingWorkspace()" x-effect="syncImaging(open, currentAppt, activeSection)" aria-labelledby="medical-imaging" class="space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <h4 id="medical-imaging" class="text-sm font-semibold text-slate-700">Diagnostic Imaging</h4>
+                  <button type="button" @click="loadImagingServices()" :disabled="imagingLoading || imagingBusy" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Refresh Imaging</button>
+                </div>
+                <div x-show="canEditClinical" class="space-y-3 rounded-2xl border border-slate-200 p-3">
+                  <fieldset :disabled="imagingBusy || !!imagingPending" class="space-y-3">
+                    <div>
+                      <label for="imaging-service-search" class="mb-1 block text-xs font-medium text-slate-600">Imaging Service <span aria-hidden="true" class="text-red-600">*</span></label>
+                      <input id="imaging-service-search" type="search" x-model="imagingQuery" @input="searchImagingServices()" @focus="if (!imagingSelected) loadImagingOptions()" @keydown.enter.prevent="if (imagingSelected) addImagingService()" aria-required="true" maxlength="200" autocomplete="off" placeholder="Search active imaging services…" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50" />
+                      <p x-show="imagingOptionsLoading" role="status" class="mt-1 text-xs text-slate-500">Searching imaging services…</p>
+                      <p x-show="imagingOptionsPage > 0 && !imagingOptionsLoading && !imagingOptions.length && !imagingSelected" class="mt-1 text-xs text-slate-500">No active imaging services match this search.</p>
+                      <ul x-show="imagingOptions.length" aria-label="Imaging service results" class="mt-2 max-h-56 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200">
+                        <template x-for="service in imagingOptions" :key="service.id"><li><button type="button" @click="selectImagingService(service)" class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-3 text-left hover:bg-slate-50"><span class="min-w-0 break-words text-sm font-semibold text-[#2f4b66]" x-text="service.name"></span><span class="text-xs text-slate-600" x-text="cataloguePrice(service)"></span></button></li></template>
+                      </ul>
+                      <div x-show="imagingOptions.length && imagingOptionsLastPage > 1" class="mt-2 flex items-center justify-end gap-3 text-xs text-slate-500"><button type="button" @click="loadImagingOptions(imagingOptionsPage - 1)" :disabled="imagingOptionsLoading || imagingOptionsPage <= 1" class="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Previous</button><span x-text="imagingOptionsPage + ' / ' + imagingOptionsLastPage"></span><button type="button" @click="loadImagingOptions(imagingOptionsPage + 1)" :disabled="imagingOptionsLoading || imagingOptionsPage >= imagingOptionsLastPage" class="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Next</button></div>
+                    </div>
+                    <div x-show="imagingSelected?.billing_unit === 'shot'">
+                      <label for="imaging-shots" class="mb-1 block text-xs font-medium text-slate-600">Shots <span aria-hidden="true" class="text-red-600">*</span></label>
+                      <input id="imaging-shots" type="number" min="1" step="1" max="99999999" inputmode="numeric" x-model="imagingShots" :required="imagingSelected?.billing_unit === 'shot'" :aria-invalid="!validImagingShots" aria-describedby="imaging-shots-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]" />
+                      <p id="imaging-shots-error" x-show="!validImagingShots" role="alert" class="mt-1 text-xs text-red-600">Enter a whole number of shots, minimum 1.</p>
+                    </div>
+                    <div><label for="imaging-notes" class="mb-1 block text-xs font-medium text-slate-600">Notes <span class="font-normal text-slate-400">(optional)</span></label><textarea id="imaging-notes" x-model="imagingNotes" rows="2" maxlength="5000" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#315b7e]"></textarea></div>
+                  </fieldset>
+                  <p x-show="imagingPricingLoading" role="status" class="text-xs text-slate-500">Resolving price…</p>
+                  <p x-show="imagingPricing?.error" role="alert" x-text="imagingPricing?.error" class="text-sm text-red-600"></p>
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p x-show="imagingPricing?.resolved_price != null" aria-live="polite" class="text-sm font-semibold tabular-nums text-slate-700" x-text="imagingSelected?.billing_unit === 'shot' ? money(imagingPricing?.resolved_price) + ' × ' + imagingShots + ' · Total: ' + (validImagingShots ? money(imagingPricing?.resolved_price * imagingShots) : '—') : money(imagingPricing?.resolved_price)"></p>
+                    <button type="button" @click="addImagingService()" :disabled="imagingBusy || !imagingSelected || (!imagingPending && (imagingPricingLoading || !imagingPricing || !!imagingPricing.error || imagingPricing.requires_final_price || !validImagingShots))" class="whitespace-nowrap rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#274864] disabled:opacity-50" x-text="imagingSaving ? 'Adding…' : imagingPending ? 'Retry Add Imaging' : 'Add Imaging'"></button>
+                  </div>
+                </div>
+                <p x-show="imagingError" role="alert" x-text="imagingError" class="text-sm text-red-600"></p>
+                <p x-show="imagingLoading" role="status" class="text-xs text-slate-500">Loading recorded imaging…</p>
+                <p x-show="!imagingLoading && !imagingRows.length" class="text-sm text-slate-400">No imaging recorded.</p>
+                <div x-show="imagingRows.length" class="overflow-x-auto rounded-xl border border-slate-200">
+                  <table class="w-full text-left text-sm" aria-label="Recorded diagnostic imaging">
+                    <thead class="border-b border-slate-200 bg-slate-50 text-xs text-slate-500"><tr><th scope="col" class="px-3 py-2">Service</th><th scope="col" class="px-3 py-2">Notes</th><th scope="col" class="px-3 py-2">Price</th><th scope="col" class="px-3 py-2">Attachments</th><th scope="col" class="px-3 py-2">Remove</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100"><template x-for="entry in imagingRows" :key="entry.id"><tr>
+                      <td class="px-3 py-3 align-top font-semibold text-[#2f4b66]" x-text="serviceInfo(entry).name"></td>
+                      <td class="break-words px-3 py-3 align-top text-slate-600" x-text="serviceNotes(entry)"></td>
+                      <td class="whitespace-nowrap px-3 py-3 align-top tabular-nums text-slate-700"><p x-show="serviceInfo(entry).billing_unit === 'shot'" class="text-xs text-slate-500" x-text="money(entry.applied_price) + ' × ' + Number(entry.quantity)"></p><span x-text="money(entry.charge?.amount ?? entry.applied_price * entry.quantity)"></span></td>
+                      <td class="space-y-2 px-3 py-3 align-top"><p x-show="!imagingAttachments(entry).length" class="text-slate-400">-</p><template x-for="file in imagingAttachments(entry)" :key="file.id"><div><button type="button" @click="viewAttachment(file)" :disabled="attachmentBusyId === file.id" class="break-words text-left text-xs font-semibold text-[#315b7e] underline" x-text="file.label || file.file_name"></button></div></template><div x-show="canEditClinical"><label :for="'imaging-file-' + entry.id" class="block text-xs font-medium text-slate-600">Upload file</label><input :id="'imaging-file-' + entry.id" type="file" accept=".jpg,.jpeg,.png,.pdf,.dcm" @change="uploadImagingAttachment(entry, $event)" :disabled="imagingBusy || !!imagingPending" class="mt-1 w-full max-w-xs text-xs text-slate-600 disabled:opacity-50" /><p class="mt-1 text-xs text-slate-400">JPG, PNG, PDF or DCM · up to 10 MB</p></div></td>
+                      <td class="px-3 py-3 align-top"><button x-show="canRemoveService(entry)" type="button" @click="removeImagingService(entry)" :disabled="imagingBusy || !!imagingPending" :aria-label="'Remove imaging ' + serviceInfo(entry).name" class="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Remove</button><span x-show="!canRemoveService(entry)" class="text-slate-400">-</span></td>
+                    </tr></template></tbody>
+                  </table>
+                </div>
+                <button x-show="imagingPage < imagingLastPage" type="button" @click="loadImagingServices(imagingPage + 1)" :disabled="imagingLoading" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Load more imaging</button>
+              </section>
               <div x-show="canEditClinical || form.treatment_given">
                 <label for="medical-treatment_given" class="mb-1 block text-xs font-medium text-slate-600">Treatment Given</label>
                 <textarea id="medical-treatment_given" :disabled="!canEditClinical || saving" rows="2" maxlength="2000" x-model="form.treatment_given" placeholder="e.g. Maropitant 1 mg/kg SC" :aria-invalid="hasFieldError('treatment_given')" aria-errormessage="medical-validation-summary" aria-describedby="medical-treatment_givenError" :class="hasFieldError('treatment_given') ? 'border-red-400' : 'border-slate-300'" class="w-full min-w-0 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#315b7e] disabled:bg-slate-50"></textarea>
@@ -1328,6 +1376,7 @@
                     <div class="relative"><span aria-hidden="true" class="pointer-events-none absolute left-3 top-2.5 text-sm text-slate-500">₱</span><input id="case-service-final-price" type="text" inputmode="decimal" data-money-input x-model="serviceForm.applied_price" required :aria-invalid="!!serviceErrors.applied_price" aria-describedby="case-service-price-rule case-service-price-error" class="w-full rounded-xl border border-slate-300 bg-white py-2 pl-7 pr-3 text-sm outline-none focus:border-[#315b7e]" /></div>
                     <p id="case-service-price-rule" class="mt-1 text-xs text-slate-500" x-text="priceRule()"></p><p id="case-service-price-error" x-show="serviceErrors.applied_price" role="alert" x-text="serviceErrors.applied_price" class="mt-1 text-xs text-red-600"></p>
                   </div></template>
+                  <div x-show="selectedService?.billing_unit === 'shot'"><label for="case-service-shots" class="mb-1 block text-xs font-semibold text-slate-600">Shots <span aria-hidden="true" class="text-red-600">*</span></label><input id="case-service-shots" type="number" min="1" step="1" max="99999999" inputmode="numeric" x-model="serviceForm.quantity" :aria-invalid="!!serviceErrors.quantity" aria-describedby="case-service-shots-error" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" /><p id="case-service-shots-error" x-show="serviceErrors.quantity" role="alert" x-text="serviceErrors.quantity" class="mt-1 text-xs text-red-600"></p><p class="mt-1 text-xs text-slate-600" x-text="money(servicePricing?.resolved_price) + ' × ' + serviceForm.quantity + ' · Total: ' + money(servicePricing?.resolved_price * serviceForm.quantity)"></p></div>
                   <div><label for="case-service-notes" class="mb-1 block text-xs font-semibold text-slate-600">Notes <span class="font-normal text-slate-400">(optional)</span></label><textarea id="case-service-notes" rows="2" maxlength="5000" x-model="serviceForm.notes" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"></textarea></div>
                 </fieldset>
                 <p x-show="serviceError" role="alert" x-text="serviceError" class="text-sm text-red-600"></p>
@@ -1344,7 +1393,7 @@
                 <template x-for="entry in serviceRows" :key="entry.id"><tr>
                   <td class="break-words px-3 py-3 align-top font-semibold text-[#2f4b66]" x-text="serviceInfo(entry).name"></td>
                   <td class="break-words whitespace-pre-wrap px-3 py-3 align-top text-slate-600" x-text="serviceNotes(entry)"></td>
-                  <td class="px-3 py-3 text-right align-top tabular-nums" x-text="money(entry.applied_price)"></td>
+                  <td class="px-3 py-3 text-right align-top tabular-nums"><template x-if="serviceInfo(entry).billing_unit === 'shot'"><div><p class="text-xs text-slate-500" x-text="money(entry.applied_price) + ' × ' + Number(entry.quantity)"></p><span x-text="money(entry.charge?.amount ?? entry.applied_price * entry.quantity)"></span></div></template><span x-show="serviceInfo(entry).billing_unit !== 'shot'" x-text="money(entry.applied_price)"></span></td>
                   <td class="px-3 py-3 text-right align-top"><button x-show="canRemoveService(entry)" type="button" @click="removeService(entry)" :disabled="serviceSaving || serviceRemovingId !== null || !!pendingPayload" :aria-label="'Remove ' + serviceInfo(entry).name" class="whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50" x-text="serviceRemovingId === entry.id ? 'Removing…' : 'Remove'"></button></td>
                 </tr></template>
               </tbody></table>
@@ -1745,14 +1794,14 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261012&patient-history=20261014-case-details"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-admission-v1&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3"></script>
-    <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261014-confinement-auto&case-flow=20261013-v5"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261014-case-details-v3"></script>
+    <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
-    <script src="../../scripts/components/admin-clinic-shell.js?v=20261015-confinement-weight-v2&case-flow=20261013-v5&unified-cases=20261014"></script>
+    <script src="../../scripts/components/admin-clinic-shell.js?v=20261015-imaging-v2&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

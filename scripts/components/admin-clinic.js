@@ -211,7 +211,7 @@ function adminClinicModal() {
     get isVeterinarian() { return this.$store.clinicAccess.user?.staff_subrole === "veterinarian" && this.$store.clinicAccess.user?.role === "staff"; },
     get generalAttachments() {
       const resultIds = this.form.diagnostics.map(row => Number(row.result_attachment_id));
-      return this.attachments.filter(file => !resultIds.includes(Number(file.id)));
+      return this.attachments.filter(file => !file.clinic_case_service_id && !resultIds.includes(Number(file.id)));
     },
     get selectedVeterinarianIds() {
       return [...new Set([this.form.primary_veterinarian_id, ...this.form.additional_veterinarian_ids].filter(Boolean).map(String))];

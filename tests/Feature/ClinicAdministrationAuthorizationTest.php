@@ -2589,6 +2589,65 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->assertNull(\App\Models\ClinicRecord::first()->diagnostics[0]['result_attachment_id']);
     }
 
+    public function test_imaging_uses_one_service_and_charge_preserves_files_on_removal_and_locks_with_the_case(): void
+    {
+        $catalogue = require database_path('migrations/2026_10_13_000001_create_clinic_services_table.php');
+        $services = require database_path('migrations/2026_10_13_000002_create_clinic_case_services_table.php');
+        $imaging = require database_path('migrations/2026_10_15_000002_configure_diagnostic_imaging.php');
+        $catalogue->up(); $services->up(); $imaging->up();
+        try {
+            $this->authenticateAs('staff');
+            $this->insertClinicAppointment('in_consultation');
+            $this->insertClinicAppointment('in_consultation', 2);
+            Storage::fake('local');
+            $service = ClinicService::where('name', 'X-ray — Abdominal')->sole();
+            $payload = ['clinic_service_id' => $service->id, 'request_key' => (string) Str::uuid()];
+            $id = $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertCreated()
+                ->assertJsonPath('data.quantity', '1.00')->assertJsonPath('data.charge.amount', '1950.00')->json('data.id');
+            $this->postJson('/api/admin/clinic-cases/1/services', $payload)->assertOk()->assertJsonPath('data.id', $id);
+            $this->getJson('/api/admin/clinic-cases/1/services?scope=imaging')->assertOk()->assertJsonPath('data.0.id', $id);
+            $this->getJson('/api/admin/clinic-cases/1/services')->assertOk()->assertJsonPath('data.0.id', $id);
+            $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 1950);
+            $files = [];
+            foreach (['xray.pdf', 'result.pdf', 'report.pdf'] as $name) {
+                $files[] = $this->postJson('/api/admin/clinic-appointments/1/attachments', [
+                    'file' => UploadedFile::fake()->create($name, 20, 'application/pdf'), 'clinic_case_service_id' => $id,
+                ])->assertOk()->assertJsonPath('attachment.clinic_case_service_id', $id)->json('attachment.id');
+            }
+            $this->assertDatabaseCount('clinic_case_services', 1);
+            $this->assertDatabaseCount('clinic_charges', 1);
+            $this->postJson('/api/admin/clinic-appointments/2/attachments', [
+                'file' => UploadedFile::fake()->create('foreign.pdf', 20, 'application/pdf'), 'clinic_case_service_id' => $id,
+            ])->assertUnprocessable()->assertJsonValidationErrors('clinic_case_service_id');
+            foreach ([['paid' => true], ['archived_at' => now()], ['status' => 'completed']] as $locked) {
+                DB::table('clinic_appointments')->where('id', 1)->update(['paid' => false, 'archived_at' => null, 'status' => 'in_consultation', ...$locked]);
+                $this->postJson('/api/admin/clinic-cases/1/services', [...$payload, 'request_key' => (string) Str::uuid()])->assertUnprocessable();
+                $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertUnprocessable();
+                $this->postJson('/api/admin/clinic-appointments/1/attachments', [
+                    'file' => UploadedFile::fake()->create('locked.pdf', 20, 'application/pdf'), 'clinic_case_service_id' => $id,
+                ])->assertConflict();
+                $this->deleteJson('/api/admin/clinic-appointments/1/attachments/'.$files[0])->assertConflict();
+            }
+            DB::table('clinic_appointments')->where('id', 1)->update(['paid' => false, 'archived_at' => null, 'status' => 'in_consultation']);
+            $this->deleteJson('/api/admin/clinic-cases/1/services/'.$id)->assertOk();
+            $this->assertDatabaseCount('clinic_case_services', 0);
+            $this->assertDatabaseCount('clinic_charges', 0);
+            $this->assertDatabaseCount('clinic_attachments', 3);
+            foreach ($files as $fileId) {
+                $this->assertDatabaseHas('clinic_attachments', ['id' => $fileId, 'clinic_case_service_id' => null]);
+                $this->getJson('/api/admin/clinic-appointments/1/attachments/'.$fileId.'/download')->assertOk();
+            }
+            $this->getJson('/api/admin/clinic-cases/1/charges')->assertOk()->assertJsonPath('total_amount', 0);
+            foreach (['X-ray', 'Ultrasound'] as $name) {
+                $this->postJson('/api/admin/clinic-appointments/1/record', ['diagnostics' => [[
+                    'key' => (string) Str::uuid(), 'diagnostic' => $name, 'status' => 'Completed',
+                ]]])->assertUnprocessable()->assertJsonValidationErrors('diagnostics.0.diagnostic');
+            }
+        } finally {
+            $imaging->down(); $services->down(); $catalogue->down();
+        }
+    }
+
     public function test_medical_record_prescriptions_persist_without_stock_queries_or_charges(): void
     {
         $this->authenticateAs('staff');

@@ -32,7 +32,7 @@ function adminClinicShell() {
       if (this.$refs.services.firstElementChild) return this.$refs.services.firstElementChild;
       return pendingServices ??= (async () => {
         const [response] = await Promise.all([
-          fetch('./clinic/sections/services.html?v=20261015-confinement-weight-v1'), loadClinicServicesScript(),
+          fetch('./clinic/sections/services.html?v=20261015-imaging-v1'), loadClinicServicesScript(),
         ]);
         if (!response.ok) throw new Error('Unable to load Clinic Services. Please try again.');
         const panel = document.createElement('section');

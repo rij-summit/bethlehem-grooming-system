@@ -63,6 +63,18 @@ class ClinicServiceCatalogTest extends TestCase
         $this->postJson('/api/admin/clinic-services', $this->payload(['name' => 'Emergency Fee', 'type' => '  ']))->assertUnprocessable();
     }
 
+    public function test_per_shot_catalogue_unit_and_active_imaging_filter(): void
+    {
+        $id = $this->postJson('/api/admin/clinic-services', $this->payload([
+            'name' => 'X-ray — Additional Shot', 'category_id' => 4, 'billing_unit' => 'shot', 'price' => 350,
+        ]))->assertCreated()->assertJsonPath('data.billing_unit', 'shot')->json('data.id');
+        $this->postJson('/api/admin/clinic-services', $this->payload())->assertCreated();
+        $this->getJson('/api/admin/clinic-service-options?scope=imaging')->assertOk()
+            ->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $id);
+        $this->patchJson('/api/admin/clinic-services/'.$id.'/status', ['is_active' => false])->assertOk();
+        $this->getJson('/api/admin/clinic-service-options?scope=imaging')->assertOk()->assertJsonPath('total', 0);
+    }
+
     public function test_form_saves_without_status_default_to_active_and_preserve_deactivation(): void
     {
         $payload = $this->payload();

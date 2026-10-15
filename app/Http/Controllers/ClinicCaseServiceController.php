@@ -19,10 +19,14 @@ class ClinicCaseServiceController extends Controller
         return response()->json(['data' => $service, 'pricing' => $resolver->preview($service, $appointment)]);
     }
 
-    public function index(int $id): JsonResponse
+    public function index(Request $request, int $id): JsonResponse
     {
+        $request->validate(['scope' => 'nullable|in:imaging']);
         $appointment = ClinicAppointment::findOrFail($id);
         $services = $appointment->caseServices()->where('status', 'performed')->with(['clinicService', 'charge']);
+        if ($request->input('scope') === 'imaging') {
+            $services->imaging();
+        }
         if (Schema::hasTable('clinic_confinements')) $services->withExists('confinement');
         if (Schema::hasTable('clinic_confinement_charges')) $services->withExists('confinementCharge');
         return response()->json($services->orderBy('id')->paginate(20));
@@ -30,10 +34,14 @@ class ClinicCaseServiceController extends Controller
 
     public function store(Request $request, int $id, ClinicCaseServiceRecorder $recorder): JsonResponse
     {
-        $request->validate(['status' => 'prohibited', 'quantity' => 'prohibited']);
+        $request->validate(['status' => 'prohibited', 'clinic_service_id' => 'required|integer']);
+        $service = ClinicService::findOrFail($request->input('clinic_service_id'));
+        $request->validate(['quantity' => $service->billing_unit === 'shot'
+            ? 'required|integer|min:1|max:99999999' : 'prohibited']);
+        // Ordinary case services are immediately billable; ordered is reserved for workflows such as Confinement.
         $entry = $recorder->save($id, [
             ...$request->only(['clinic_service_id', 'request_key', 'notes', 'applied_price']),
-            'status' => 'performed', 'quantity' => 1,
+            'status' => 'performed', 'quantity' => $service->billing_unit === 'shot' ? $request->integer('quantity') : 1,
         ], $request->user());
         return response()->json(['data' => $entry], $entry->wasRecentlyCreated ? 201 : 200);
     }

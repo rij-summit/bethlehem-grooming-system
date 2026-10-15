@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ClinicCaseService extends Model
@@ -30,6 +32,18 @@ class ClinicCaseService extends Model
     public function charge(): HasOne
     {
         return $this->hasOne(ClinicCharge::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ClinicAttachment::class);
+    }
+
+    public function scopeImaging(Builder $query): void
+    {
+        $query->where(fn ($services) => $services
+            ->whereIn('service_snapshot->category', ['Imaging', 'Diagnostic Imaging'])
+            ->orWhereHas('clinicService.category', fn ($category) => $category->where('name', 'Diagnostic Imaging')));
     }
 
     public function confinement(): HasOne
