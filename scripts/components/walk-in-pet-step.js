@@ -46,6 +46,7 @@ const elements = {
   existingPetsLoading: document.getElementById("existingPetsLoading"),
   existingPetCards: document.getElementById("existingPetCards"),
   backBtn: document.getElementById("backBtn"),
+  ownerBackLink: document.getElementById("ownerBackLink"),
   nextBtn: document.getElementById("nextBtn"),
   fieldErrors: {
     petType: document.getElementById("petTypeError"),
@@ -531,9 +532,7 @@ function handleBack() {
     }
   } catch { /* fall through */ }
 
-  window.location.href = getOwnerAppointmentType() === "clinic"
-    ? "./walk-in-booking.html?flow=clinic&source=clinic"
-    : "./walk-in-booking.html";
+  window.location.href = `./walk-in-booking.html?flow=${getOwnerAppointmentType()}`;
 }
 
 function getOwnerAppointmentType() {
@@ -635,6 +634,10 @@ function bindEvents() {
   elements.addPetForm.addEventListener("input", savePetStepDraft);
   elements.addPetForm.addEventListener("change", savePetStepDraft);
   elements.backBtn.addEventListener("click", handleBack);
+  elements.ownerBackLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    handleBack();
+  });
   elements.nextBtn.addEventListener("click", handleNext);
   elements.existingPetCards?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-existing-pet]");

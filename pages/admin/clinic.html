@@ -221,10 +221,10 @@
                 </label>
 
                 <!-- Walk-in -->
-                <button type="button" x-show="permissions.customers" @click="openAddCustomer()"
+                <button type="button" x-show="permissions.intake" @click="startWalkIn()"
                   class="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#274b69] sm:w-auto">
                   <i data-lucide="plus" class="h-4 w-4"></i>
-                  <span>Add Customer</span>
+                  <span>Walk-in</span>
                 </button>
               </div>
             </div>
@@ -412,25 +412,6 @@
                 </footer>
               </div>
             </template>
-          </div>
-        </div>
-
-        <div x-cloak x-show="addCustomer.open" class="fixed inset-0 z-[190] flex items-center justify-center bg-slate-900/60 px-4" @keydown.escape.window="closeAddCustomer()">
-          <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="add-clinic-customer-title">
-            <div class="flex items-start justify-between"><div><h3 id="add-clinic-customer-title" class="text-lg font-bold text-[#2f4b66]">Add Clinic Customer</h3><p class="mt-1 text-sm text-slate-500">This saves a customer and pet record only. It does not open a case.</p></div><button @click="closeAddCustomer()" class="rounded-xl p-2 text-slate-400"><i data-lucide="x" class="h-5 w-5"></i></button></div>
-            <form @submit.prevent="saveCustomerRecord()" class="mt-5 grid gap-3 sm:grid-cols-2">
-              <input required x-model="addCustomer.form.first_name" placeholder="First name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <input required x-model="addCustomer.form.last_name" placeholder="Last name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <input x-model="addCustomer.form.middle_name" placeholder="Middle initial (optional)" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <input required x-model="addCustomer.form.phone" placeholder="09XXXXXXXXX" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <input type="email" x-model="addCustomer.form.email" placeholder="Email (optional)" class="sm:col-span-2 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <div class="sm:col-span-2 mt-2 border-t pt-4 text-xs font-bold uppercase tracking-wide text-slate-400">Initial patient</div>
-              <input required x-model="addCustomer.form.pet_name" placeholder="Pet name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <select required x-model="addCustomer.form.species" class="rounded-xl border border-slate-300 px-3 py-2 text-sm"><option value="">Species</option><option>Dog</option><option>Cat</option></select>
-              <input x-model="addCustomer.form.breed" placeholder="Breed (optional)" class="sm:col-span-2 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <p x-show="addCustomer.error" class="sm:col-span-2 text-sm text-red-600" x-text="addCustomer.error"></p>
-              <div class="sm:col-span-2 mt-2 flex justify-end gap-3"><button type="button" @click="closeAddCustomer()" class="rounded-xl border px-4 py-2 text-sm">Cancel</button><button :disabled="addCustomer.saving" type="submit" class="rounded-xl bg-[#315b7e] px-4 py-2 text-sm font-semibold text-white" x-text="addCustomer.saving ? 'Saving…' : 'Save Customer'">Save Customer</button></div>
-            </form>
           </div>
         </div>
 
@@ -1692,7 +1673,7 @@
     <script src="../../scripts/components/payment-invoice.js?v=clinic-invoice-20261015"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
-    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015"></script>
+    <script src="../../scripts/components/admin-clinic.js?v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261014&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015&walk-in=entry-context-20261015"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>

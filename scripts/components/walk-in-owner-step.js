@@ -12,7 +12,6 @@ const elements = {
   similarOwnerWarningMatches: document.getElementById("similarOwnerWarningMatches"),
   reviewSimilarOwnerButton: document.getElementById("reviewSimilarOwnerBtn"),
   continueSimilarOwnerButton: document.getElementById("continueSimilarOwnerBtn"),
-  existingCustomerSection: document.getElementById("existingCustomerSection"),
   existingCustomerSearch: document.getElementById("existingCustomerSearch"),
   existingCustomerSearchStatus: document.getElementById("existingCustomerSearchStatus"),
   existingCustomerResults: document.getElementById("existingCustomerResults"),
@@ -30,7 +29,14 @@ const WALK_IN_FLOW_STORAGE_KEYS = [
   "walkInConsentStep",
   "walkInReviewStep",
   "walkInBookingConfirmation",
+  "walkInClinicComplaint",
+  "walkInClinicConfirmation",
+  "clinicPreselectedPetId",
 ];
+const flowParams = new URLSearchParams(window.location.search);
+const appointmentType = (flowParams.get("flow") || flowParams.get("source")) === "clinic"
+  ? "clinic"
+  : "grooming";
 let hasSubmittedOnce = false;
 let customerSearchTimer = null;
 let customerSearchRequestId = 0;
@@ -84,38 +90,21 @@ function isValidEmail(value) {
 }
 
 function getAppointmentType() {
-  const checked = document.querySelector('input[name="appointmentType"]:checked');
-  return checked?.value || "grooming";
+  return appointmentType;
 }
 
-function isClinicWalkInEntry() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("source") === "clinic" || params.get("flow") === "clinic";
-}
-
-function handleWalkInBack(event) {
-  if (!isClinicWalkInEntry()) {
-    return;
+function initializeWalkInFlow() {
+  if (flowParams.get("new") === "1") {
+    clearWalkInContinuationDraft();
+    sessionStorage.setItem(WALK_IN_OWNER_STORAGE_KEY, JSON.stringify({ appointmentType }));
+    flowParams.delete("new");
+    window.history.replaceState(null, "", `./walk-in-booking.html?${flowParams}`);
   }
 
-  event.preventDefault();
-  window.location.assign("./clinic.html");
-}
-
-function applyRequestedAppointmentType() {
-  if (!isClinicWalkInEntry()) {
-    return;
-  }
-
-  const clinicType = document.getElementById("typeClinic");
-
-  if (clinicType) {
-    clinicType.checked = true;
-  }
-
+  const isClinic = appointmentType === "clinic";
+  document.getElementById("walkInPageTitle").textContent = isClinic ? "Clinic walk-in" : "Grooming walk-in";
   document.querySelectorAll("[data-walk-in-back-link]").forEach((link) => {
-    link.setAttribute("href", "./clinic.html");
-    link.addEventListener("click", handleWalkInBack);
+    link.setAttribute("href", isClinic ? "./clinic.html" : "./appointments.html");
   });
 }
 
@@ -253,13 +242,6 @@ function selectExistingCustomer(customer) {
   clearWalkInContinuationDraft();
   saveOwnerDraft(values, customer);
   window.location.href = "./walk-in-pet-details.html";
-}
-
-function syncExistingCustomerSearchVisibility() {
-  elements.existingCustomerSection?.classList.remove("hidden");
-  const appointmentType = getAppointmentType();
-  const pageTitle = document.getElementById("walkInPageTitle");
-  if (pageTitle) pageTitle.textContent = appointmentType === "clinic" ? "Clinic walk-in" : "Grooming walk-in";
 }
 
 function validateOwner(values) {
@@ -525,9 +507,6 @@ function bindEvents() {
       elements.firstName.focus();
     }
   });
-  document.querySelectorAll('input[name="appointmentType"]').forEach((input) => {
-    input.addEventListener("change", syncExistingCustomerSearchVisibility);
-  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -535,9 +514,8 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  applyRequestedAppointmentType();
+  initializeWalkInFlow();
   bindEvents();
-  syncExistingCustomerSearchVisibility();
   renderValidationErrors(getFormValues(), { showAll: false });
   syncNextButtonState();
 

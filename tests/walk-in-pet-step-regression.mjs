@@ -47,6 +47,7 @@ function makeElement(initialClasses = []) {
     dataset: {},
     children: [],
     disabled: false,
+    events: {},
     classList: {
       add(...names) { names.forEach((name) => classes.add(name)); },
       remove(...names) { names.forEach((name) => classes.delete(name)); },
@@ -56,7 +57,7 @@ function makeElement(initialClasses = []) {
         else classes.delete(name);
       },
     },
-    addEventListener() {},
+    addEventListener(name, callback) { this.events[name] = callback; },
     setAttribute(name, value) { attributes.set(name, value); },
     getAttribute(name) { return attributes.get(name); },
     appendChild(child) { this.children.push(child); },
@@ -117,7 +118,7 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
       createElement() { return makeElement(); },
       addEventListener() {},
     },
-    window: { lucide: null, location: { href: "" } },
+    window: { lucide: null, location: { href: "" }, history: { pushState(a, b, url) { this.url = url; } } },
     sessionStorage: {
       getItem(key) { return stored.get(key) ?? null; },
       setItem(key, value) { stored.set(key, value); },
@@ -131,16 +132,17 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
     },
   });
 
+  const renderedSteps = [];
   const stubs = {
-    "./walk-in-services-step.js": { renderWalkInServicesStep() {} },
-    "./walk-in-clinic-complaint-step.js": { renderWalkInClinicComplaintStep() {} },
+    "./walk-in-services-step.js": { renderWalkInServicesStep() { renderedSteps.push("grooming"); } },
+    "./walk-in-clinic-complaint-step.js": { renderWalkInClinicComplaintStep() { renderedSteps.push("clinic"); } },
     "./breed-combobox.js": { createBreedCombobox: combobox },
     "./breed-coat-combobox.js": { createBreedCoatCombobox: combobox },
     "./fixed-option-combobox.js": { createFixedOptionCombobox: combobox },
     "../services/booking-draft-service.js": { formatPetSizeLabel: (value) => value },
     "./pet-weight-size.js": weightTools,
   };
-  const main = new vm.SourceTextModule(source + '\nexport { handleAddPetSubmit, syncWeightAndSize };', { context, identifier: "walk-in-pet-step.js" });
+  const main = new vm.SourceTextModule(source + '\nexport { handleAddPetSubmit, syncWeightAndSize, handleBack, handleNext };', { context, identifier: "walk-in-pet-step.js" });
   await main.link((specifier) => {
     if (specifier.startsWith("./pet-selection-tabs.js")) {
       return new vm.SourceTextModule(tabsSource, { context, identifier: specifier });
@@ -158,7 +160,7 @@ async function runStep(owner, { draft = null, apiPets = null } = {}) {
     resolvePets({ customer: { pets: apiPets } });
     await new Promise((resolve) => setImmediate(resolve));
   }
-  return { ui, calls, resolvePets, rejectPets, handlers: main.namespace };
+  return { ui, calls, resolvePets, rejectPets, handlers: main.namespace, window: context.window, renderedSteps };
 }
 
 const savedPet = { id: 42, petName: "Mochi", species: "Dog", breed: "Poodle", size: "small", sizeVerified: true };
@@ -214,6 +216,24 @@ assert.deepEqual(newClinicOwner.calls, []);
 assert.equal(newClinicOwner.ui("petSelectionTabs").classList.contains("hidden"), true);
 assert.equal(newClinicOwner.ui("addPetSection").classList.contains("hidden"), false);
 assert.equal(newClinicOwner.ui("selectedPetCount").textContent, "0 / 1 selected");
+
+for (const appointmentType of ["grooming", "clinic"]) {
+  const flow = await runStep(ownerDraft(null, appointmentType), { draft: { pets: [{
+    id: "new-pet", isNew: true, petName: "Fluffy", petType: "Cat", breed: "",
+    furType: "Long", weight: "", size: "small", medicalNotes: "",
+  }] } });
+  flow.ui("backBtn").events.click();
+  assert.equal(flow.window.location.href, `./walk-in-booking.html?flow=${appointmentType}`);
+  let prevented = false;
+  flow.ui("ownerBackLink").events.click({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(flow.window.location.href, `./walk-in-booking.html?flow=${appointmentType}`);
+  flow.handlers.handleNext();
+  assert.deepEqual(flow.renderedSteps, [appointmentType], "Pet step enters only the originating workflow");
+  assert.equal(flow.window.history.url, appointmentType === "clinic"
+    ? "./walk-in-pet-details.html?step=clinic-complaint"
+    : "./walk-in-grooming-services.html");
+}
 
 for (const appointmentType of ["grooming", "clinic"]) {
   for (const weight of ["4.780", "4.200000", "10.555"]) {

@@ -1,0 +1,150 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const read = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+const ownerSource = read("scripts/components/walk-in-owner-step.js");
+const ownerPage = read("pages/admin/walk-in-booking.html");
+const clinicSource = read("scripts/components/admin-clinic.js");
+const clinicPage = read("pages/admin/clinic.html");
+const continuationKeys = [
+  "walkInPetStep", "walkInConsentStep", "walkInReviewStep", "walkInBookingConfirmation",
+  "walkInClinicComplaint", "walkInClinicConfirmation", "clinicPreselectedPetId",
+];
+
+function element() {
+  const classes = new Set();
+  const attributes = new Map();
+  return {
+    value: "", textContent: "", innerHTML: "", disabled: false,
+    addEventListener() {}, focus() {},
+    setAttribute(key, value) { attributes.set(key, value); },
+    getAttribute(key) { return attributes.get(key); },
+    classList: {
+      add(key) { classes.add(key); }, remove(key) { classes.delete(key); },
+      contains(key) { return classes.has(key); },
+      toggle(key, enabled) { enabled ? classes.add(key) : classes.delete(key); },
+    },
+  };
+}
+
+function ownerFlow(type, { fresh = true, draft = {} } = {}) {
+  const ui = new Map();
+  const get = (id) => {
+    if (!ui.has(id)) ui.set(id, element());
+    return ui.get(id);
+  };
+  const back = [element(), element()];
+  const storage = new Map(continuationKeys.map((key) => [key, "stale"]));
+  storage.set("unrelated", "keep");
+  storage.set("walkInOwnerStep", JSON.stringify({ appointmentType: type === "clinic" ? "grooming" : "clinic", ...draft }));
+  let ready;
+  const window = {
+    location: { search: `?flow=${type}${fresh ? "&new=1" : ""}`, href: "" },
+    history: { replaceState(a, b, url) { window.location.search = new URL(url, "http://localhost").search; } },
+  };
+  const context = vm.createContext({
+    URLSearchParams, window,
+    document: {
+      getElementById: get,
+      querySelectorAll(selector) { assert.equal(selector, "[data-walk-in-back-link]"); return back; },
+      addEventListener(event, callback) { if (event === "DOMContentLoaded") ready = callback; },
+    },
+    API: { getAdminToken: () => "test", getUserRole: () => "admin", validateWalkInNewOwner: async () => ({}) },
+    sessionStorage: {
+      getItem: (key) => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key),
+    },
+  });
+  vm.runInContext(ownerSource, context);
+  ready();
+  return { context, storage, get, back, window };
+}
+
+(async () => {
+  assert.doesNotMatch(ownerPage, /Walk-in Type|typeGrooming|typeClinic|name="appointmentType"/);
+  assert.doesNotMatch(ownerSource, /syncExistingCustomerSearchVisibility|applyRequestedAppointmentType/);
+  assert.match(read("scripts/components/admin-dashboard.js"), /walkInBookingUrl: "\.\/walk-in-booking.html\?flow=grooming&new=1"/);
+
+  for (const type of ["grooming", "clinic"]) {
+    const flow = ownerFlow(type);
+    assert.equal(flow.get("walkInPageTitle").textContent, type === "clinic" ? "Clinic walk-in" : "Grooming walk-in");
+    flow.back.forEach((link) => assert.equal(link.getAttribute("href"), type === "clinic" ? "./clinic.html" : "./appointments.html"));
+    assert.equal(JSON.parse(flow.storage.get("walkInOwnerStep")).appointmentType, type);
+    continuationKeys.forEach((key) => assert.equal(flow.storage.has(key), false, `${type}: clears ${key}`));
+    assert.equal(flow.storage.get("unrelated"), "keep");
+    assert.equal(flow.window.location.search, `?flow=${type}`, "Reload does not restart the draft");
+
+    // Even an old draft written after initialization cannot change this entry's type.
+    flow.storage.set("walkInOwnerStep", JSON.stringify({ appointmentType: "other" }));
+    assert.equal(vm.runInContext("getAppointmentType()", flow.context), type);
+    await vm.runInContext("handleSubmit({ preventDefault() {} })", flow.context);
+    assert.equal(flow.window.location.href, "", "Invalid new owner stays on the owner page");
+    assert.equal(flow.get("ownerFirstNameError").textContent, "First name is required.");
+
+    const values = { firstName: "Test", lastName: "Owner", middleInitial: "", phone: "09171234567", email: "" };
+    flow.context.values = values;
+    flow.context.API.validateWalkInNewOwner = async () => { throw { code: "similar_customer_name", data: { similarCustomers: [{ fullName: "Test Owner" }] } }; };
+    await vm.runInContext("validateNewOwnerAndContinue(values)", flow.context);
+    assert.equal(flow.window.location.href, "", "Similar names require acknowledgement");
+    assert.equal(flow.get("similarOwnerWarning").classList.contains("hidden"), false);
+    flow.context.API.validateWalkInNewOwner = async (payload) => { assert.equal(payload.confirm_similar_name, true); };
+    await vm.runInContext("validateNewOwnerAndContinue(values, true)", flow.context);
+    let owner = JSON.parse(flow.storage.get("walkInOwnerStep"));
+    assert.equal(owner.appointmentType, type);
+    assert.equal(owner.confirmSimilarName, true);
+    assert.equal(owner.ownerRecordType, "new");
+    assert.equal(flow.window.location.href, "./walk-in-pet-details.html");
+
+    for (const recordType of ["registered", "unregistered"]) {
+      flow.context.customer = { ...values, id: 7, recordType, pets: [{ petId: 4 }] };
+      vm.runInContext("selectExistingCustomer(customer)", flow.context);
+      owner = JSON.parse(flow.storage.get("walkInOwnerStep"));
+      assert.equal(owner.appointmentType, type);
+      assert.equal(owner.ownerRecordType, recordType);
+      assert.equal(owner[recordType === "registered" ? "customerUserId" : "unregisteredCustomerId"], 7);
+      assert.equal(owner.existingPets[0].petId, 4);
+    }
+
+    const resume = ownerFlow(type, { fresh: false, draft: { appointmentType: type, firstName: "Saved" } });
+    assert.equal(JSON.parse(resume.storage.get("walkInOwnerStep")).firstName, "Saved");
+    assert.equal(resume.storage.get("walkInPetStep"), "stale", "Returning from pet step preserves draft");
+  }
+
+  const clinic = vm.createContext({ document: { addEventListener() {} }, window: { location: {} } });
+  vm.runInContext(clinicSource, clinic);
+  const cases = clinic.adminClinicPage();
+  cases.$store = { clinicAccess: { permissions: { intake: false, customers: true } } };
+  cases.startWalkIn();
+  assert.equal(clinic.window.location.href, undefined);
+  cases.$store.clinicAccess.permissions = { intake: true, customers: false };
+  cases.startWalkIn();
+  assert.equal(clinic.window.location.href, "./walk-in-booking.html?flow=clinic&new=1");
+  assert.match(clinicPage, /x-show="permissions.intake" @click="startWalkIn\(\)"/);
+  assert.doesNotMatch(clinicSource + clinicPage, /addCustomer|openAddCustomer|closeAddCustomer|saveCustomerRecord|createUnregisteredCustomer|adminAddCustomerPet/);
+  assert.match(read("routes/api.php"), /post\('\/admin\/clinic-walk-in',[^\n]+middleware\('clinic:intake'\)/);
+
+  // Exercise the unchanged dedicated Customers creation path with an API stub.
+  const customerContext = vm.createContext({});
+  const customerSource = read("scripts/components/admin-customers.js");
+  vm.runInContext(customerSource.slice(customerSource.indexOf("function adminCustomers()")), customerContext);
+  const customers = customerContext.adminCustomers();
+  customers.refreshIcons = () => {};
+  customers.setCustomerDetailScrollLock = () => {};
+  let refreshed = false;
+  customers.loadCustomers = async () => { refreshed = true; };
+  let payload;
+  customerContext.API = { createUnregisteredCustomer: async (value) => { payload = value; } };
+  customers.openAddCustomerModal();
+  Object.assign(customers.addCustomerModal.form, { first_name: " Test ", last_name: " Customer ", phone: "09171234567" });
+  await customers.submitUnregisteredCustomer();
+  assert.equal(payload.first_name, "Test");
+  assert.equal(payload.last_name, "Customer");
+  assert.equal(customers.addCustomerModal.open, false);
+  assert.equal(customers.statusFilter, "unregistered");
+  assert.equal(refreshed, true);
+  assert.match(read("scripts/api.js"), /createUnregisteredCustomer/);
+  assert.match(read("pages/admin/clients.html"), /@click="openAddCustomerModal\(\)"/);
+  console.log("Walk-in entry context, stale drafts, owner validation, intake permissions and dedicated Customers creation passed.");
+})().catch((error) => { console.error(error); process.exitCode = 1; });

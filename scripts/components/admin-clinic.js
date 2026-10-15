@@ -621,7 +621,6 @@ function adminClinicPage() {
     paymentReturnFocus: null,
     paymentPageOverflow: null,
     tab: "active-cases",
-    addCustomer: { open: false, saving: false, error: "", form: {} },
 
     // Patient profile panel
     profile: {
@@ -886,37 +885,9 @@ function adminClinicPage() {
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not start this case.", false); }
       finally { this.caseBusyId = null; }
     },
-    openAddCustomer() {
-      if (!this.permissions.customers) return;
-      this.addCustomer = { open: true, saving: false, error: "", form: { first_name: "", last_name: "", middle_name: "", phone: "", email: "", pet_name: "", species: "", breed: "" } };
-    },
-    closeAddCustomer() { if (!this.addCustomer.saving) this.addCustomer.open = false; },
-    async saveCustomerRecord(confirmSimilarName = false) {
-      if (!this.permissions.customers) return;
-      this.addCustomer.saving = true; this.addCustomer.error = "";
-      try {
-        const form = this.addCustomer.form;
-        const owner = await API.createUnregisteredCustomer({ first_name: form.first_name, last_name: form.last_name, middle_name: form.middle_name || null, phone: form.phone, email: form.email || null, confirm_similar_name: confirmSimilarName });
-        const petResponse = await API.adminAddCustomerPet("unregistered", owner.customer.id, { pet_name: form.pet_name, species: form.species, breed: form.breed || null });
-        const pet = petResponse.pet;
-        this.searchRows.unshift({ owner: owner.customer, pets: [{ id: pet.pet_id, petName: pet.pet_name, species: pet.species, breed: pet.breed }] });
-        this.noResults = false;
-        this.addCustomer.open = false;
-        this.$nextTick?.(() => { if (window.lucide) window.lucide.createIcons(); });
-      } catch (error) {
-        if (error.code === "similar_customer_name" && !confirmSimilarName) {
-          const confirmed = await this.$store.clinicFeedback.confirm({
-            title: "Similar customer found",
-            message: error.message,
-            confirmLabel: "Save Anyway",
-          });
-          if (confirmed) {
-            this.addCustomer.saving = false;
-            return this.saveCustomerRecord(true);
-          }
-        }
-        this.addCustomer.error = error.errors ? Object.values(error.errors).flat().join(" ") : (error.message || "Customer record could not be saved.");
-      } finally { this.addCustomer.saving = false; }
+    startWalkIn() {
+      if (!this.permissions.intake) return;
+      window.location.href = "./walk-in-booking.html?flow=clinic&new=1";
     },
 
     async loadAllRecords(append = false) {

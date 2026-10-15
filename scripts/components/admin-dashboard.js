@@ -449,7 +449,7 @@ function adminDashboard() {
       bootstrap: null,
       endpoints: {},
       handlers: {},
-      walkInBookingUrl: "./walk-in-booking.html",
+      walkInBookingUrl: "./walk-in-booking.html?flow=grooming&new=1",
       detailPageUrl: "",
       enableOptimisticUpdates: false,
       includeFutureAppointments: false,
