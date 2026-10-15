@@ -6,9 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClinicRecord extends Model
 {
-    public const DIAGNOSTIC_OPTIONS = ['CBC', 'Blood Chemistry', 'Urinalysis', 'Fecal Examination',
-        'Heartworm Test', 'Skin Scraping', 'Cytology', 'Other'];
-
     protected $table = 'clinic_records';
 
     protected $fillable = [

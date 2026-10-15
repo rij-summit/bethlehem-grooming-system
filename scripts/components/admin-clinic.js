@@ -159,22 +159,19 @@ function adminClinicModal() {
     veterinarians: [], optionsLoading: false, optionsError: "",
     vetDropdownOpen: false,
     vetSearch: "",
-    administrationRoutes: [], diagnosticOptions: [],
+    administrationRoutes: [],
     recordedByName: "",
     returnFocus: null,
     _optionsRequest: 0,
     _clinicalOptionsLoaded: false,
     attachments: [],
-    attachmentFile: null,
-    attachmentLabel: "",
-    attachmentDiagnosticKey: "",
     attachmentBusy: false,
     attachmentBusyId: null,
     attachmentError: "",
     form: {
       chief_complaint: "", relevant_history: "", reported_signs: "", physical_exam_findings: "",
       differential_diagnoses: "", working_diagnosis: "", treatment_given: "",
-      primary_veterinarian_id: "", additional_veterinarian_ids: [], diagnostics: [], prescriptions: [],
+      primary_veterinarian_id: "", additional_veterinarian_ids: [], prescriptions: [],
       vet_notes: "", follow_up_date: "", follow_up_notes: "",
       weight_kg: "", temperature_c: "", heart_rate_bpm: "",
       respiratory_rate_bpm: "", body_condition_score: "",
@@ -209,10 +206,6 @@ function adminClinicModal() {
     get canFinish() { return this.canEditClinical && this.currentAppt?.status === "in_consultation"
       && !(this.currentAppt?.confinement && !this.currentAppt.confinement.discharged_at); },
     get isVeterinarian() { return this.$store.clinicAccess.user?.staff_subrole === "veterinarian" && this.$store.clinicAccess.user?.role === "staff"; },
-    get generalAttachments() {
-      const resultIds = this.form.diagnostics.map(row => Number(row.result_attachment_id));
-      return this.attachments.filter(file => !file.clinic_case_service_id && !resultIds.includes(Number(file.id)));
-    },
     get selectedVeterinarianIds() {
       return [...new Set([this.form.primary_veterinarian_id, ...this.form.additional_veterinarian_ids].filter(Boolean).map(String))];
     },
@@ -307,12 +300,10 @@ function adminClinicModal() {
         respiratory_rate_bpm: "Enter a whole number from 0 to 65,535.",
         body_condition_score: "Select a score from 1 to 9.",
         follow_up_date: "Choose a follow-up date within the allowed range.",
-        diagnostic: "Select a diagnostic.", custom_name: "Enter a test name.", status: "Select a status.",
-        result_attachment_id: "Select an available result file.",
         medicine: "Enter a medicine name.", strength_concentration: "Enter a valid strength or concentration.",
         dose: "Enter a valid dose.", route: "Select a route.", frequency: "Enter a valid frequency.",
         duration: "Enter a valid duration.", quantity: "Enter a positive quantity, e.g. 14 tablets.",
-        diagnostics: "Check the diagnostic entries.", prescriptions: "Check the prescription entries.",
+        prescriptions: "Check the prescription entries.",
       }[name] || "Check this value.";
     },
     showValidationErrors(errors) {
@@ -339,10 +330,6 @@ function adminClinicModal() {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     },
     routeLabel(route) { return route ? route[0].toUpperCase() + route.slice(1) : "—"; },
-    diagnosticName(row) { return row.diagnostic === "Other" ? row.custom_name || "Other" : row.diagnostic || "Unnamed diagnostic"; },
-    addDiagnostic() {
-      this.form.diagnostics.push({ key: crypto.randomUUID(), diagnostic: "", custom_name: "", status: "Ordered", notes: "", result_attachment_id: "", result_reference: "" });
-    },
     addPrescription() {
       this.form.prescriptions.push({ medicine: "", strength_concentration: "", dose: "", route: "", frequency: "", duration: "", quantity: "", instructions: "" });
     },
@@ -356,7 +343,6 @@ function adminClinicModal() {
         if (request !== this._optionsRequest || !this.open) return;
         this.veterinarians = response.veterinarians || [];
         this.administrationRoutes = response.administration_routes || [];
-        this.diagnosticOptions = response.diagnostic_options || [];
         this._clinicalOptionsLoaded = true;
         if (!this.currentAppt?.record?.recorded_by_name) this.recordedByName = response.current_user_name || "—";
         if (this.canEditClinical && response.current_user_is_veterinarian) {
@@ -395,9 +381,6 @@ function adminClinicModal() {
       const r = appt.record  || {};
       const v = appt.vitals  || {};
       this.attachments = (r.attachments || []).map((attachment) => ({ ...attachment }));
-      this.attachmentFile = null;
-      this.attachmentLabel = "";
-      this.attachmentDiagnosticKey = "";
       this.attachmentBusy = false;
       this.attachmentBusyId = null;
       this.attachmentError = "";
@@ -412,7 +395,6 @@ function adminClinicModal() {
         working_diagnosis: r.working_diagnosis ?? r.diagnosis ?? "",
         primary_veterinarian_id: String(r.primary_veterinarian_id || ""),
         additional_veterinarian_ids: (r.additional_veterinarians || []).map(vet => String(vet.user_id)),
-        diagnostics: (r.diagnostics || []).map(row => ({ ...row, result_attachment_id: String(row.result_attachment_id || "") })),
         prescriptions: (r.prescriptions || []).map(row => ({ ...row })),
         treatment_given:      r.treatment_given      || "",
         vet_notes:            r.vet_notes            || "",
@@ -490,44 +472,6 @@ function adminClinicModal() {
       window.dispatchEvent(new CustomEvent('clinic-record-closed'));
     },
 
-    selectAttachment(event) {
-      this.attachmentFile = event.target.files?.[0] || null;
-      this.attachmentError = "";
-    },
-
-    formatFileSize: formatClinicFileSize,
-
-    async uploadAttachment() {
-      if (!this.canEditClinical || this.saving || this.attachmentBusy) return;
-      if (!this.attachmentFile) {
-        this.attachmentError = "Choose a JPG, PNG, PDF, or DCM file first.";
-        return;
-      }
-
-      this.attachmentBusy = true;
-      this.attachmentError = "";
-      try {
-        const result = await API.clinicUploadAttachment(
-          this.apptId,
-          this.attachmentFile,
-          this.attachmentLabel.trim(),
-        );
-        this.attachments.push(result.attachment);
-        const diagnostic = this.form.diagnostics.find(row => row.key === this.attachmentDiagnosticKey);
-        if (diagnostic) diagnostic.result_attachment_id = String(result.attachment.id);
-        this.attachmentDiagnosticKey = "";
-        this.attachmentFile = null;
-        this.attachmentLabel = "";
-        if (this.$refs.attachmentFile) this.$refs.attachmentFile.value = "";
-      } catch (error) {
-        this.attachmentError = error.errors
-          ? (error.errors.file ? "Use a JPG, PNG, PDF or DCM file up to 10 MB." : "Keep the label within 200 characters.")
-          : (error.message || "Failed to upload attachment.");
-      } finally {
-        this.attachmentBusy = false;
-      }
-    },
-
     async viewAttachment(attachment) {
       this.attachmentBusyId = attachment.id;
       this.attachmentError = "";
@@ -535,31 +479,6 @@ function adminClinicModal() {
         await viewClinicAttachment(this.apptId, attachment);
       } catch (error) {
         this.attachmentError = error.message || "Failed to open attachment.";
-      } finally {
-        this.attachmentBusyId = null;
-      }
-    },
-
-    async deleteAttachment(attachment) {
-      if (!this.canEditClinical || this.saving) return;
-      const confirmed = await this.$store.clinicFeedback.confirm({
-        title: "Remove attachment?",
-        message: `${attachment.file_name} will be removed. This cannot be undone.`,
-        confirmLabel: "Remove",
-        danger: true,
-      });
-      if (!confirmed) return;
-
-      this.attachmentBusyId = attachment.id;
-      this.attachmentError = "";
-      try {
-        await API.clinicDeleteAttachment(this.apptId, attachment.id);
-        this.attachments = this.attachments.filter((item) => item.id !== attachment.id);
-        this.form.diagnostics.forEach(row => {
-          if (Number(row.result_attachment_id) === Number(attachment.id)) row.result_attachment_id = "";
-        });
-      } catch (error) {
-        this.attachmentError = error.message || "Failed to remove attachment.";
       } finally {
         this.attachmentBusyId = null;
       }
@@ -639,7 +558,6 @@ function adminClinicModal() {
           working_diagnosis: this.form.working_diagnosis || null,
           primary_veterinarian_id: this.form.primary_veterinarian_id || null,
           additional_veterinarian_ids: this.form.additional_veterinarian_ids,
-          diagnostics: this.form.diagnostics.map(row => ({ ...row, custom_name: row.diagnostic === "Other" ? row.custom_name : null, result_attachment_id: row.result_attachment_id || null })),
           prescriptions: this.form.prescriptions,
           treatment_given:      this.form.treatment_given       || null,
           vet_notes:            this.form.vet_notes             || null,

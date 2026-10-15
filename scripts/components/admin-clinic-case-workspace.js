@@ -226,14 +226,15 @@ function clinicCaseWorkspace() {
         window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: false}}));
       }
     },
-    async removeService(entry) {
+    async removeService(entry, clinical = false) {
       if (!this.canRemoveService(entry) || this.serviceSaving || this.serviceRemovingId !== null || this.pendingPayload) return;
       const id = this.workspaceCaseId, generation = this._generation;
       this.serviceRemovingId = entry.id;
       let removing = false;
       try {
         const confirmed = await this.$store.clinicFeedback.confirm({title: 'Remove service?',
-          message: `Remove "${this.serviceInfo(entry).name}" from this case? Its ${this.money(entry.charge?.amount ?? entry.applied_price)} charge will also be removed from Billing.`,
+          message: clinical ? `Remove "${this.serviceInfo(entry).name}" from this case? Its linked Billing charge will also be removed. Images will be preserved in the patient history.`
+            : `Remove "${this.serviceInfo(entry).name}" from this case? Its ${this.money(entry.charge?.amount ?? entry.applied_price)} charge will also be removed from Billing.`,
           confirmLabel: 'Remove Service', cancelLabel: 'Cancel', danger: true});
         if (!confirmed || generation !== this._generation || !this.canRemoveService(entry)) return;
         removing = true; this.servicesError = '';
@@ -276,7 +277,8 @@ function clinicCaseWorkspace() {
 function clinicImagingWorkspace() {
   return {
     imagingCaseId: null, imagingActive: false, imagingRows: [], imagingPage: 0, imagingLastPage: 1,
-    imagingLoading: false, imagingError: '', imagingOptions: [], imagingQuery: '',
+    imagingLoading: false, imagingError: '', imagingRetry: null,
+    imagingSetupMessage: 'This imaging service cannot be added because its billing setup is incomplete. Ask an administrator to check Clinic Services.', imagingOptions: [], imagingQuery: '',
     imagingOptionsPage: 0, imagingOptionsLastPage: 1, imagingOptionsLoading: false,
     imagingSelected: null, imagingPricing: null, imagingPricingLoading: false,
     imagingNotes: '', imagingShots: 1, imagingSaving: false, imagingPending: null, imagingRequestKey: null,
@@ -291,7 +293,9 @@ function clinicImagingWorkspace() {
       }
       if (this.imagingCaseId !== appt.id) {
         ++this._imagingGeneration; this.imagingCaseId = appt.id; this.imagingActive = false;
-        this.imagingRows = []; this.imagingOptions = []; this.imagingQuery = ''; this.imagingError = '';
+        this.imagingRows = []; this.imagingPage = 0; this.imagingLastPage = 1;
+        this.imagingOptions = []; this.imagingOptionsPage = 0; this.imagingOptionsLastPage = 1;
+        this.imagingQuery = ''; this.imagingError = ''; this.imagingRetry = null;
         this.imagingSelected = null; this.imagingPricing = null; this.imagingNotes = ''; this.imagingShots = 1;
         this.imagingPending = null; this.imagingRequestKey = null;
         this.imagingSaving = false; this.imagingPricingLoading = false; this.imagingOptionsLoading = false;
@@ -302,13 +306,13 @@ function clinicImagingWorkspace() {
     destroy() { clearTimeout(this._imagingSearchTimer); ++this._imagingGeneration; },
     async loadImagingServices(page = 1) {
       const generation = this._imagingGeneration, request = ++this._imagingRowsRequest;
-      this.imagingLoading = true; this.imagingError = '';
+      this.imagingLoading = true; this.imagingError = ''; this.imagingRetry = null;
       try {
         const response = await API.getClinicCaseServices(this.imagingCaseId, page, 'imaging');
         if (generation !== this._imagingGeneration || request !== this._imagingRowsRequest) return;
         this.imagingRows = page === 1 ? response.data : [...this.imagingRows, ...response.data];
         this.imagingPage = response.current_page; this.imagingLastPage = response.last_page;
-      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not load imaging.'; }
+      } catch (error) { if (generation === this._imagingGeneration && request === this._imagingRowsRequest) { this.imagingError = 'Could not load imaging.'; this.imagingRetry = {action: 'rows', page}; } }
       finally { if (generation === this._imagingGeneration && request === this._imagingRowsRequest) this.imagingLoading = false; }
     },
     searchImagingServices() {
@@ -319,12 +323,12 @@ function clinicImagingWorkspace() {
     async loadImagingOptions(page = 1) {
       if (!this.canEditClinical || this.imagingBusy || this.imagingPending) return;
       const generation = this._imagingGeneration, request = ++this._imagingOptionsRequest;
-      this.imagingOptionsLoading = true;
+      this.imagingOptionsLoading = true; this.imagingError = ''; this.imagingRetry = null;
       try {
         const response = await API.clinicCaseServiceOptions(this.imagingQuery.trim(), page, 'imaging');
         if (generation !== this._imagingGeneration || request !== this._imagingOptionsRequest) return;
         this.imagingOptions = response.data; this.imagingOptionsPage = response.current_page; this.imagingOptionsLastPage = response.last_page;
-      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not load imaging services.'; }
+      } catch (error) { if (generation === this._imagingGeneration && request === this._imagingOptionsRequest) { this.imagingError = 'Could not load imaging services.'; this.imagingRetry = {action: 'options', page}; } }
       finally { if (generation === this._imagingGeneration && request === this._imagingOptionsRequest) this.imagingOptionsLoading = false; }
     },
     async selectImagingService(service) {
@@ -333,13 +337,13 @@ function clinicImagingWorkspace() {
       const generation = this._imagingGeneration, request = ++this._imagingPriceRequest;
       this.imagingSelected = service; this.imagingQuery = service.name; this.imagingOptions = []; this.imagingOptionsLoading = false;
       this.imagingShots = 1; this.imagingRequestKey = crypto.randomUUID();
-      this.imagingPricing = null; this.imagingPricingLoading = true; this.imagingError = '';
+      this.imagingPricing = null; this.imagingPricingLoading = true; this.imagingError = ''; this.imagingRetry = null;
       try {
         const response = await API.clinicCaseServicePricing(this.imagingCaseId, service.id);
         if (generation !== this._imagingGeneration || request !== this._imagingPriceRequest) return;
         this.imagingSelected = response.data; this.imagingPricing = response.pricing;
-        if (response.pricing.requires_final_price) this.imagingError = 'Configure a fixed imaging price in Clinic Services before adding this service.';
-      } catch (error) { if (generation === this._imagingGeneration) this.imagingError = error.message || 'Could not resolve the imaging price.'; }
+        if (response.pricing.error || response.pricing.requires_final_price) this.imagingError = this.imagingSetupMessage;
+      } catch (error) { if (generation === this._imagingGeneration && request === this._imagingPriceRequest) { this.imagingError = 'Could not check this imaging service.'; this.imagingRetry = {action: 'selection'}; } }
       finally { if (generation === this._imagingGeneration && request === this._imagingPriceRequest) this.imagingPricingLoading = false; }
     },
     async addImagingService() {
@@ -349,7 +353,7 @@ function clinicImagingWorkspace() {
       const id = this.imagingCaseId, generation = this._imagingGeneration;
       this.imagingPending ||= {clinic_service_id: this.imagingSelected.id, request_key: this.imagingRequestKey, notes: this.imagingNotes,
         ...(this.imagingSelected.billing_unit === 'shot' ? {quantity: Number(this.imagingShots)} : {})};
-      this.imagingSaving = true; this.imagingError = '';
+      this.imagingSaving = true; this.imagingError = ''; this.imagingRetry = null;
       window.dispatchEvent(new CustomEvent('clinic-workspace-busy', {detail: {id, saving: true}}));
       try {
         await API.clinicCreateCaseService(id, this.imagingPending);
@@ -363,7 +367,8 @@ function clinicImagingWorkspace() {
         if (generation !== this._imagingGeneration) return;
         const rejected = (error.status >= 400 && error.status < 500) || error.errors;
         if (rejected) this.imagingPending = null;
-        this.imagingError = error.errors ? Object.values(error.errors).flat()[0] : rejected ? error.message
+        this.imagingError = error.errors?.clinic_service_id || error.errors?.applied_price ? this.imagingSetupMessage
+          : error.errors ? Object.values(error.errors).flat()[0] : rejected ? 'This imaging service could not be added.'
           : 'The result could not be confirmed. Retry Add Imaging to check this same request safely.';
       } finally {
         if (generation === this._imagingGeneration) this.imagingSaving = false;
@@ -372,14 +377,25 @@ function clinicImagingWorkspace() {
     },
     async removeImagingService(entry) {
       if (!this.canEditClinical || this.imagingBusy || this.imagingPending) return;
-      if (await this.removeService(entry)) await this.loadImagingServices();
+      if (await this.removeService(entry, true)) await this.loadImagingServices();
+      else if (this.servicesError) this.imagingError = 'Could not remove this imaging service. Try removing it again.';
+    },
+    async retryImaging() {
+      const retry = this.imagingRetry;
+      if (retry?.action === 'rows') await this.loadImagingServices(retry.page);
+      else if (retry?.action === 'options') await this.loadImagingOptions(retry.page);
+      else if (retry?.action === 'selection' && this.imagingSelected) await this.selectImagingService(this.imagingSelected);
     },
     imagingAttachments(entry) { return this.attachments.filter(file => Number(file.clinic_case_service_id) === entry.id); },
     async uploadImagingAttachment(entry, event) {
       const file = event.target.files?.[0];
-      if (!file || !this.canEditClinical || this.imagingBusy) return;
+      if (!file || !this.canEditClinical || this.imagingBusy || this.imagingPending) return;
+      if (!/\.(jpe?g|png|dcm)$/i.test(file.name) || file.size > 10 * 1024 * 1024) {
+        this.imagingError = 'Use a JPG, JPEG, PNG or DCM file up to 10 MB.'; this.imagingRetry = null;
+        event.target.value = ''; return;
+      }
       const id = this.imagingCaseId, generation = this._imagingGeneration;
-      this.attachmentBusy = true; this.imagingError = '';
+      this.attachmentBusy = true; this.imagingError = ''; this.imagingRetry = null;
       try {
         const result = await API.clinicUploadAttachment(id, file, '', entry.id);
         if (generation !== this._imagingGeneration) return;

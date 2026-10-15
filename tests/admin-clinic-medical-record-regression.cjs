@@ -38,7 +38,7 @@ function component(user) {
   const vet = component({ user_id: 1, role: 'staff', staff_subrole: 'veterinarian' });
   await vet.openModal({ appt: { id: 100, status: 'in_consultation', ownerName: 'Owner', record: {
     primary_veterinarian_id: 2, additional_veterinarians: [{ user_id: 1 }],
-    findings: 'Legacy exam', diagnosis: 'Legacy diagnosis',
+    findings: 'Legacy exam', diagnosis: 'Legacy diagnosis', diagnostics: [{diagnostic: 'CBC', status: 'Completed'}],
   } } });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(vet.form.primary_veterinarian_id, '1');
@@ -46,20 +46,16 @@ function component(user) {
   assert.equal(vet.form.physical_exam_findings, 'Legacy exam');
   assert.equal(vet.form.working_diagnosis, 'Legacy diagnosis');
   assert.equal(optionsCalls[0], true, 'Medical Record requests provider options without vaccine inventory');
-  vet.addDiagnostic();
-  vet.form.diagnostics[0].diagnostic = 'CBC';
-  assert.equal(vet.form.diagnostics[0].status, 'Ordered');
+  assert.equal(Object.hasOwn(vet.form, 'diagnostics'), false);
+  assert.equal(vet.addDiagnostic, undefined);
+  assert.equal(vet.uploadAttachment, undefined);
   await vet.saveRecord();
-  assert.equal(saves[0].diagnostics[0].result_attachment_id, null);
+  assert.equal(Object.hasOwn(saves[0], 'diagnostics'), false, 'Saving clinical fields leaves historical diagnostics untouched');
   assert.equal(Object.hasOwn(saves[0], 'medicines'), false);
   assert.equal(Object.hasOwn(saves[0], 'recorded_by_user_id'), false);
   assert.equal(saves[0].finish_case, false);
 
   vet.open = true;
-  vet.attachments = [{ id: 10, file_name: 'CBC.pdf' }, { id: 11, file_name: 'General.pdf' }];
-  vet.form.diagnostics[0].result_attachment_id = '10';
-  assert.equal(vet.generalAttachments.length, 1);
-  assert.equal(vet.generalAttachments[0].id, 11);
   vet.form.temperature_c = 38.5;
   vet.form.heart_rate_bpm = 80;
   vet.form.respiratory_rate_bpm = 20;
@@ -70,10 +66,9 @@ function component(user) {
   assert.equal(vet.modalError, 'Complete the required fields marked *.');
   assert.equal(vet.open, true);
   vet.form.weight_kg = 24;
-  sandbox.API.clinicSaveRecord = async () => { throw { errors: { 'diagnostics.0.custom_name': ['Enter a test name.'] } }; };
+  sandbox.API.clinicSaveRecord = async () => { throw { errors: { 'prescriptions.0.medicine': ['Enter a medicine name.'] } }; };
   await vet.saveRecord();
-  assert.equal(vet.fieldError('diagnostics.0.custom_name'), 'Enter a test name.');
-  assert.equal(vet.form.diagnostics.length, 1, 'Validation preserves unsaved clinical rows');
+  assert.equal(vet.fieldError('prescriptions.0.medicine'), 'Enter a medicine name.');
   assert.equal(vet.open, true);
 
   sandbox.API.getAdminVaccinationOptions = async () => ({ veterinarians: [{ user_id: 2, name: 'Vet' }], current_user_id: 3, current_user_is_veterinarian: false });
@@ -128,11 +123,9 @@ function component(user) {
   clean.form.prescriptions = [{ medicine: 'Entered medicine' }];
   assert.equal(clean.fieldError('prescriptions.0.medicine'), '', 'Typing after a failed save does not introduce a new message');
   clean.showValidationErrors({ 'prescriptions.0.quantity': ['The prescriptions.0.quantity format is invalid.'],
-    'diagnostics.0.diagnostic': ['The selected diagnostics.0.diagnostic is invalid.'],
     follow_up_date: ['The follow up date field must be a date after or equal to today.'] });
   assert.equal(clean.modalError, 'Check the highlighted fields.');
   assert.equal(clean.fieldError('prescriptions.0.quantity'), 'Enter a positive quantity, e.g. 14 tablets.');
-  assert.equal(clean.fieldError('diagnostics.0.diagnostic'), 'Select a diagnostic.');
   assert.equal(clean.fieldError('follow_up_date'), 'Choose a follow-up date within the allowed range.');
   clean.showValidationErrors({ 'prescriptions.0.medicine': ['The prescriptions.0.medicine field must not be greater than 200 characters.'] });
   assert.equal(clean.fieldError('prescriptions.0.medicine'), 'Use up to 200 characters.');

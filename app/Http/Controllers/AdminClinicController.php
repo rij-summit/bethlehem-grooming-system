@@ -486,7 +486,6 @@ class AdminClinicController extends Controller
         $existing = ClinicRecord::where('clinic_appointment_id', $id)->first();
         $actor = $request->user();
         $veterinarians = User::activeVeterinarian()->get(['user_id', 'first_name', 'last_name'])->keyBy('user_id');
-        $attachmentIds = $request->has('diagnostics') && $existing ? $existing->attachments()->pluck('id')->all() : [];
         $request->merge(['primary_veterinarian_id' => $actor->isVeterinarian()
             ? $actor->user_id : $request->input('primary_veterinarian_id', $existing?->primary_veterinarian_id)]);
         $data = $request->validate([
@@ -498,15 +497,7 @@ class AdminClinicController extends Controller
             'physical_exam_findings' => ['nullable', 'string', 'max:2000'],
             'differential_diagnoses' => ['nullable', 'string', 'max:2000'],
             'working_diagnosis' => ['nullable', 'string', 'max:2000'],
-            'diagnostics' => ['sometimes', 'array', 'list', 'max:100'],
-            'diagnostics.*' => ['required', 'array:key,diagnostic,custom_name,status,notes,result_attachment_id,result_reference'],
-            'diagnostics.*.key' => ['required', 'uuid', 'distinct'],
-            'diagnostics.*.diagnostic' => ['required', Rule::in(ClinicRecord::DIAGNOSTIC_OPTIONS)],
-            'diagnostics.*.custom_name' => ['nullable', 'required_if:diagnostics.*.diagnostic,Other', 'string', 'max:200'],
-            'diagnostics.*.status' => ['required', 'in:Ordered,Completed'],
-            'diagnostics.*.notes' => ['nullable', 'string', 'max:2000'],
-            'diagnostics.*.result_reference' => ['nullable', 'string', 'max:500'],
-            'diagnostics.*.result_attachment_id' => ['nullable', 'integer', 'distinct', Rule::in($attachmentIds)],
+            'diagnostics' => ['prohibited'],
             'prescriptions' => ['sometimes', 'array', 'list', 'max:100'],
             'prescriptions.*' => ['required', 'array:medicine,strength_concentration,dose,route,frequency,duration,quantity,instructions'],
             'prescriptions.*.medicine' => ['required', 'string', 'max:200'],
@@ -537,6 +528,7 @@ class AdminClinicController extends Controller
             'body_condition_score' => ['nullable', 'integer', 'min:1', 'max:9'],
 
         ], [
+            'diagnostics.prohibited' => 'Add diagnostic services through Billing > Clinic Services. Record imaging in Diagnostic Imaging.',
             'medicines.prohibited' => 'Record medicines from Inventory through Treatment. Medical Record does not create treatment charges.',
             'follow_up_date.after_or_equal' => 'The follow-up date cannot be in the past.',
             'follow_up_date.before_or_equal' => 'The follow-up date must be within 3 months from today.',
@@ -557,7 +549,7 @@ class AdminClinicController extends Controller
             $name = fn (User $user) => trim($user->first_name.' '.$user->last_name) ?: "User #{$user->user_id}";
             $primary = $veterinarians->get($data['primary_veterinarian_id'] ?? null);
             $clinical = [];
-            foreach (['relevant_history', 'reported_signs', 'physical_exam_findings', 'differential_diagnoses', 'working_diagnosis', 'diagnostics', 'prescriptions'] as $field) {
+            foreach (['relevant_history', 'reported_signs', 'physical_exam_findings', 'differential_diagnoses', 'working_diagnosis', 'prescriptions'] as $field) {
                 if (array_key_exists($field, $data)) $clinical[$field] = $data[$field];
             }
             if (array_key_exists('additional_veterinarian_ids', $data)) {
@@ -630,9 +622,9 @@ class AdminClinicController extends Controller
     public function uploadAttachment(Request $request, int $id)
     {
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,pdf,dcm'],
+            'file' => ['required', 'file', 'max:10240', 'extensions:jpg,jpeg,png,dcm', 'mimes:jpg,jpeg,png,dcm'],
             'label' => ['nullable', 'string', 'max:200'],
-            'clinic_case_service_id' => ['nullable', 'integer', 'min:1'],
+            'clinic_case_service_id' => ['required', 'integer', 'min:1'],
         ]);
 
         return DB::transaction(function () use ($data, $id) {
@@ -642,15 +634,13 @@ class AdminClinicController extends Controller
                 ->firstOrFail();
             $this->assertClinicalContentEditable($appt);
 
-            if (! empty($data['clinic_case_service_id'])) {
-                abort_if($appt->paid || $appt->archived_at, 409, 'Imaging files cannot be changed at this case stage.');
-                $imaging = $appt->caseServices()->whereKey($data['clinic_case_service_id'])
-                    ->where('status', 'performed')->imaging()->exists();
-                if (! $imaging) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'clinic_case_service_id' => 'Choose an imaging service recorded in this clinic case.',
-                    ]);
-                }
+            abort_if($appt->paid || $appt->archived_at, 409, 'Imaging files cannot be changed at this case stage.');
+            $imaging = $appt->caseServices()->whereKey($data['clinic_case_service_id'])
+                ->where('status', 'performed')->imaging()->exists();
+            if (! $imaging) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'clinic_case_service_id' => 'Choose an imaging service recorded in this clinic case.',
+                ]);
             }
 
             $actor = request()->user();
@@ -680,7 +670,7 @@ class AdminClinicController extends Controller
                     'file_type' => $file->getMimeType(),
                     'file_size_bytes' => $file->getSize(),
                     'label' => $data['label'] ?? null,
-                    ...(isset($data['clinic_case_service_id']) ? ['clinic_case_service_id' => $data['clinic_case_service_id']] : []),
+                    'clinic_case_service_id' => $data['clinic_case_service_id'],
                 ]);
             } catch (Throwable $exception) {
                 Storage::disk('local')->delete($path);

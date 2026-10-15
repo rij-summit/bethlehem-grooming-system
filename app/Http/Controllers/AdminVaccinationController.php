@@ -45,7 +45,6 @@ class AdminVaccinationController extends Controller
                 'current_user_name' => $this->formatUserName($actor),
                 'current_user_is_veterinarian' => $actor->isVeterinarian(),
                 'administration_routes' => VaccinationRecord::ADMINISTRATION_ROUTES,
-                'diagnostic_options' => \App\Models\ClinicRecord::DIAGNOSTIC_OPTIONS,
             ]);
         }
         $items = InventoryItem::query()
