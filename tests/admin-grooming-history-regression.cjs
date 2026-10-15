@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const modalBody = { scrollTop: 0 };
 const dialog = { querySelector: (selector) => selector.includes('Close') ? { focus() {} } : modalBody };
-const context = { Date, Intl, URLSearchParams, window: {}, document: { querySelector: () => dialog } };
+const context = { Date, Intl, URLSearchParams, window: {}, document: { body: { style: { overflow: '' } }, querySelector: () => dialog } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/admin-archive.js'), 'utf8'), context);
 const ui = context.adminArchive();
 ui.$nextTick = (callback) => callback();
@@ -52,6 +52,7 @@ assert.equal(ui.sessionTime(repeat), 'Time not recorded');
 assert.equal(ui.sessionTime({ startedAt: '11:59 PM', completedAt: '1:00 AM', startedAtIso: '2026-10-03T23:59:00+08:00', completedAtIso: '2026-10-04T01:00:00+08:00' }), '11:59 PM – 1:00 AM (Sun, Oct 4, 2026)');
 assert.equal(ui.sessionTime({ startedAt: '11:59 PM', completedAt: '1:00 AM', startedAtIso: '2026-10-03T23:59:00+08:00', completedAtIso: '2026-10-05T01:00:00+08:00' }), '11:59 PM – 1:00 AM (Mon, Oct 5, 2026)');
 ui.viewDetails(session);
+assert.equal(context.document.body.style.overflow, 'hidden', 'The page stays still while the modal body scrolls');
 assert.equal(ui.servicesForPet(session.pets[0]).map((line) => line.id).join(','), '1,2');
 assert.equal(ui.formatServiceAvailedPrice(session.services[0]), '₱650.00');
 assert.equal(ui.formatServiceAvailedPrice(session.services[1]), '₱0.00');
@@ -60,6 +61,7 @@ assert.equal(ui.paymentAmount(), '₱2200.00');
 assert.equal(ui.paymentMethod(), 'Cash');
 assert.equal(ui.formatServicesAvailedTotal(), '₱2050.00');
 ui.closeDetails();
+assert.equal(context.document.body.style.overflow, '', 'Closing restores the page scrolling state');
 ui.viewDetails(repeat);
 assert.equal(ui.servicesForPet(repeat.pets[0])[0].id, 5);
 assert.equal(ui.servicesForPet(session.pets[0]).length, 0);
@@ -80,6 +82,23 @@ assert.equal(ui.filteredList[0].id, 1);
 ui.sortOrder = 'newest';
 assert.equal(ui.filteredList[0].id, 2);
 assert.equal(JSON.stringify([session, repeat]), original, 'Displaying history must never mutate stored records');
+
+// Sparse historical records omit absent details without discarding real content or zero values.
+for (const value of [null, undefined, '', '  ', '-', '—', 'Not recorded', 'None provided', 'No staff note added.']) {
+  assert.equal(ui.groomingText(value), '');
+}
+assert.equal(ui.groomingText('Keep the tail long.'), 'Keep the tail long.');
+assert.equal(ui.groomingText(0), '0');
+assert.equal(ui.groomingText('None'), 'None', 'An actual recorded medical answer is retained');
+assert.equal(ui.groomingTimelineFields({ groomingStartedAt: '—', groomingFinishedAt: 'Not recorded' }).length, 0);
+assert.equal(ui.groomingTimelineFields({ groomingStartedAt: '9:15 AM' })[0].value, '9:15 AM');
+assert.equal(ui.groomingTimelineFields({ groomingFinishedAtIso: '2026-10-03T09:45:00+08:00' })[0].label, 'Finished');
+ui.detailsBooking = { bookingType: 'Walk-In', appointmentTime: '8:00 AM - 9:00 AM', queueNumber: 0 };
+assert.equal(ui.groomingSessionFields.length, 0, 'Walk-ins keep the existing arrival-window rule; absent queue and date are omitted');
+ui.detailsBooking = session;
+assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Pre-Register Date,Arrival Window,Session Grooming Started,Session Finished');
+ui.detailsBooking = repeat;
+assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Walk-In Date');
 
 const single = {
   startedAtIso: '2026-10-03T08:00:00+08:00', completedAtIso: '2026-10-03T09:00:00+08:00',
@@ -125,7 +144,7 @@ assert.equal(prevented, 2, 'Tab can reach the transaction link normally');
   context.window.addEventListener = () => {};
   context.window.removeEventListener = () => {};
   context.window.scrollTo = (x, y) => { restoredScroll = y; };
-  context.document = { querySelector: (selector) => selector.includes('data-history-booking') ? { focus: () => focused++ } : dialog };
+  context.document = { body: { style: { overflow: '' } }, querySelector: (selector) => selector.includes('data-history-booking') ? { focus: () => focused++ } : dialog };
   context.API = { getArchivedBookings: async (query) => {
     assert.equal(query.search, 'Owner');
     return { archived: [session, repeat], total: 2 };

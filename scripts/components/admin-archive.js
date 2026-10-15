@@ -234,6 +234,10 @@ function adminArchive() {
     },
 
     viewDetails(booking, trigger = null, scrollTop = 0) {
+      if (!this.detailsModalOpen) {
+        this._detailsBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+      }
       this._detailsTrigger = trigger;
       this.detailsBooking = booking;
       this.detailsModalOpen = true;
@@ -250,6 +254,7 @@ function adminArchive() {
       if (!this.detailsModalOpen) return;
       this.detailsModalOpen = false;
       this.detailsBooking = null;
+      document.body.style.overflow = this._detailsBodyOverflow;
       this._detailsTrigger?.focus();
       this._detailsTrigger = null;
     },
@@ -279,6 +284,32 @@ function adminArchive() {
         if (iso && petIso) return Number.isFinite(Date.parse(iso)) && Date.parse(iso) === Date.parse(petIso);
         return !iso && !petIso && !this.isArchiveValueMissing(time) && time === petTime;
       });
+    },
+
+    groomingText(value) {
+      const text = String(value ?? '').trim();
+      return /^(?:[-—–]|not recorded|none provided|no staff note added\.?)$/i.test(text) ? '' : text;
+    },
+
+    get groomingSessionFields() {
+      const booking = this.detailsBooking;
+      if (!booking) return [];
+      return [
+        {label: `${booking.bookingType ?? 'Pre-Register'} Date`, value: this.groomingText(booking.appointmentDate) ? this.formatAppointmentDate(booking.appointmentDate, '') : ''},
+        {label: 'Arrival Window', value: booking.bookingType !== 'Walk-In' ? booking.appointmentTime : ''},
+        {label: 'Queue Number', value: booking.queueNumber || ''},
+        {label: 'Dropped Off', value: this.groomingText(booking.dropOffAtIso) ? this.formatDateTime(booking.dropOffAtIso, '') : booking.dropOffTime},
+        {label: 'Session Grooming Started', value: this.showSessionTime('start') ? (this.groomingText(booking.startedAtIso) ? this.formatDateTime(booking.startedAtIso, '') : booking.startedAt) : ''},
+        {label: 'Session Finished', value: this.showSessionTime('finish') ? (this.groomingText(booking.completedAtIso) ? this.formatDateTime(booking.completedAtIso, '') : booking.completedAt) : ''},
+      ].filter(field => this.groomingText(field.value));
+    },
+
+    groomingTimelineFields(pet) {
+      return [
+        {label: 'Started', iso: pet.groomingStartedAtIso, time: pet.groomingStartedAt},
+        {label: 'Finished', iso: pet.groomingFinishedAtIso, time: pet.groomingFinishedAt},
+      ].map(field => ({label: field.label, value: this.groomingText(field.iso) ? this.formatDateTime(field.iso, '') : field.time}))
+        .filter(field => this.groomingText(field.value));
     },
 
     petSize(pet) {
