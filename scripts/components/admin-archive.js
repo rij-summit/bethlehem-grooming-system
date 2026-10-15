@@ -408,6 +408,12 @@ function adminArchive() {
       return !!visit && (visit.status === 'completed' || visit.paid || Number(visit.total_amount) > 0);
     },
 
+    clinicTransactionUrl(visit = this.detailsClinicRecord) {
+      if (!visit?.paid || visit.status !== 'completed') return "";
+      const params = new URLSearchParams({clinic: visit.id, reference: visit.appointment_reference});
+      return `./transactions.html?${params}`;
+    },
+
     clinicMoney(value) {
       return this.clinicText(value) ? Number(value).toLocaleString('en-PH', {style: 'currency', currency: 'PHP'}) : '';
     },

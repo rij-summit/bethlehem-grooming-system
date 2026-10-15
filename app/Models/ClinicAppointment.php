@@ -63,6 +63,11 @@ class ClinicAppointment extends Model
         return $this->belongsTo(Walkin::class, 'walkin_id', 'id');
     }
 
+    public function paidBy()
+    {
+        return $this->belongsTo(User::class, 'paid_by_user_id', 'user_id');
+    }
+
     public function pet()
     {
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');

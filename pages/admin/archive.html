@@ -781,6 +781,7 @@
                 </section>
                 <section class="clinic-visit-section clinic-visit-payment" x-show="clinicHasPayment(detailsClinicRecord)" aria-labelledby="clinic-payment-title">
                   <h5 id="clinic-payment-title">Payment</h5><p class="history-amount" x-show="clinicMoney(detailsClinicRecord?.total_amount)" x-text="clinicMoney(detailsClinicRecord?.total_amount)"></p><p class="clinic-visit-note" x-text="detailsClinicRecord?.payment_status_label"></p>
+                  <a x-show="clinicTransactionUrl()" :href="clinicTransactionUrl()" class="history-transaction-link">View Full Transaction →</a>
                 </section>
               </div>
             </div>
@@ -795,6 +796,6 @@
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010&clinic-services=20261013"></script>
     <script src="../../scripts/components/clinic-attachments.js?v=20261015"></script>
-    <script src="../../scripts/components/admin-archive.js?v=clinic-visit-20261015"></script>
+    <script src="../../scripts/components/admin-archive.js?v=clinic-transactions-20261015"></script>
   </body>
 </html>

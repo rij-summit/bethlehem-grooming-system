@@ -6,6 +6,7 @@ use App\Exceptions\PaymentLimitExceededException;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use App\Models\ClinicAppointment;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Models\PosTransaction;
@@ -470,7 +471,7 @@ class PaymentController extends Controller
         $month = (string) $request->query('month', '');
         $year = (string) $request->query('year', '');
         $type = (string) $request->query('transaction_type', 'all');
-        if (! in_array($type, ['all', 'grooming_payment', 'product_sale'], true)) {
+        if (! in_array($type, ['all', 'grooming_payment', 'clinic_payment', 'product_sale'], true)) {
             return response()->json(['success' => false, 'message' => 'Please provide a valid transaction type.'], 422);
         }
 
@@ -530,27 +531,53 @@ class PaymentController extends Controller
             });
         }
 
+        $clinicQuery = ClinicAppointment::query()->where('paid', true)->where('status', 'completed');
+        $this->applyPeriodFilter($clinicQuery, $period, $date, $week, $month, $year);
+        if ($search !== '') {
+            $nameTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+            $clinicQuery->where(function ($query) use ($search, $nameTerms) {
+                $query->whereRaw('LOWER(appointment_reference) LIKE ?', ["%{$search}%"])
+                    ->orWhereHas('pet', fn ($pet) => $pet->whereRaw('LOWER(pet_name) LIKE ?', ["%{$search}%"]));
+                foreach (['user' => ['first_name', 'last_name'], 'walkin' => ['fname', 'lname'],
+                    'pet.unregisteredCustomer' => ['first_name', 'last_name']] as $relation => $columns) {
+                    $query->orWhereHas($relation, function ($owner) use ($nameTerms, $columns) {
+                        foreach ($nameTerms as $term) {
+                            $owner->where(fn ($name) => $name->whereRaw("LOWER({$columns[0]}) LIKE ?", ["%{$term}%"])
+                                ->orWhereRaw("LOWER({$columns[1]}) LIKE ?", ["%{$term}%"]));
+                        }
+                    });
+                }
+            });
+        }
+
         // Page common financial fields first, then hydrate only the visible records.
         $paymentKey = (new Payment)->getKeyName();
         $groomingRows = $query->reorder()->selectRaw("{$paymentKey} as transaction_id, 'grooming_payment' as transaction_type, paid_at, total_amount")
-            ->when($type === 'product_sale', fn ($q) => $q->whereRaw('1 = 0'))->toBase();
+            ->when(! in_array($type, ['all', 'grooming_payment'], true), fn ($q) => $q->whereRaw('1 = 0'))->toBase();
         $posRows = $posQuery->selectRaw("pos_id as transaction_id, 'product_sale' as transaction_type, created_at as paid_at, total_amount")
-            ->when($type === 'grooming_payment', fn ($q) => $q->whereRaw('1 = 0'))->toBase();
-        $combined = DB::query()->fromSub($groomingRows->unionAll($posRows), 'financial_transactions');
+            ->when(! in_array($type, ['all', 'product_sale'], true), fn ($q) => $q->whereRaw('1 = 0'))->toBase();
+        $clinicRows = $clinicQuery->selectRaw("id as transaction_id, 'clinic_payment' as transaction_type, paid_at, total_amount")
+            ->when(! in_array($type, ['all', 'clinic_payment'], true), fn ($q) => $q->whereRaw('1 = 0'))->toBase();
+        $combined = DB::query()->fromSub($groomingRows->unionAll($posRows)->unionAll($clinicRows), 'financial_transactions');
         $collectionTotal = (float) (clone $combined)->sum('total_amount');
         $page = (clone $combined)->orderByDesc('paid_at')->orderBy('transaction_type')->orderByDesc('transaction_id')
             ->paginate(50, ['*'], 'page', max(1, (int) $request->query('page', 1)));
         $rows = $page->getCollection();
-        $dateTotals = (clone $combined)->whereIn(DB::raw('DATE(paid_at)'), $rows->pluck('paid_at')->map(fn ($at) => substr($at, 0, 10))->unique())
-            ->selectRaw('DATE(paid_at) as date_key, SUM(total_amount) as total')
-            ->groupByRaw('DATE(paid_at)')->pluck('total', 'date_key');
+        $dateGroup = "COALESCE(DATE(paid_at), 'unknown')";
+        $dateTotals = (clone $combined)->whereIn(DB::raw($dateGroup), $rows->pluck('paid_at')->map(fn ($at) => $at ? substr($at, 0, 10) : 'unknown')->unique())
+            ->selectRaw("{$dateGroup} as date_key, SUM(total_amount) as total")
+            ->groupByRaw($dateGroup)->pluck('total', 'date_key');
         $payments = Payment::with(['booking.user', 'products', 'processedBy'])
             ->whereKey($rows->where('transaction_type', 'grooming_payment')->pluck('transaction_id'))->get()->keyBy($paymentKey);
         $sales = PosTransaction::with(['items.item', 'cashier'])
             ->whereKey($rows->where('transaction_type', 'product_sale')->pluck('transaction_id'))->get()->keyBy('pos_id');
-        $transactions = $rows->map(fn ($row) => $row->transaction_type === 'product_sale'
-            ? $this->formatProductSale($sales->get($row->transaction_id))
-            : $this->formatTransaction($payments->get($row->transaction_id)));
+        $clinicPayments = ClinicAppointment::with(['user', 'walkin', 'pet.unregisteredCustomer', 'charges', 'paidBy'])
+            ->whereKey($rows->where('transaction_type', 'clinic_payment')->pluck('transaction_id'))->get()->keyBy('id');
+        $transactions = $rows->map(fn ($row) => match ($row->transaction_type) {
+            'product_sale' => $this->formatProductSale($sales->get($row->transaction_id)),
+            'clinic_payment' => $this->formatClinicPayment($clinicPayments->get($row->transaction_id)),
+            default => $this->formatTransaction($payments->get($row->transaction_id)),
+        });
 
         return response()->json([
             'success' => true,
@@ -649,6 +676,47 @@ class PaymentController extends Controller
                 'quantity' => $line->quantity,
                 'priceAtSale' => (float) $line->price_at_sale,
                 'subtotal' => (float) $line->subtotal,
+            ])->values(),
+        ];
+    }
+
+    private function formatClinicPayment(ClinicAppointment $appointment): array
+    {
+        $user = $appointment->user;
+        $walkin = $appointment->walkin;
+        $pet = $appointment->pet;
+        $petOwner = $pet?->unregisteredCustomer;
+        $ownerName = $user ? trim($user->first_name.' '.$user->last_name)
+            : ($walkin ? trim($walkin->fname.' '.$walkin->lname)
+                : ($petOwner ? trim($petOwner->first_name.' '.$petOwner->last_name) : '—'));
+
+        return [
+            'id' => $appointment->id,
+            'key' => 'clinic-'.$appointment->id,
+            'transactionType' => 'clinic_payment',
+            'transactionTypeLabel' => 'Clinic Payment',
+            'reference' => $appointment->appointment_reference,
+            'ownerName' => $ownerName,
+            'petName' => $pet?->pet_name ?? '—',
+            'finalPrice' => (float) $appointment->total_amount,
+            'amountPaid' => $appointment->cash_received !== null ? (float) $appointment->cash_received : null,
+            'changeGiven' => $appointment->cash_received !== null
+                ? round((float) $appointment->cash_received - (float) $appointment->total_amount, 2) : null,
+            'paymentMethod' => $appointment->payment_method,
+            'paymentMethodLabel' => match ($appointment->payment_method) {
+                'gcash' => 'GCash', 'maya' => 'Maya', default => ucfirst((string) $appointment->payment_method),
+            },
+            'processedBy' => $appointment->paid_by_user_id,
+            'processedByName' => $appointment->paidBy
+                ? trim($appointment->paidBy->first_name.' '.$appointment->paidBy->last_name) : null,
+            'paidAt' => $appointment->paid_at?->format('Y-m-d H:i:s'),
+            'dateKey' => $appointment->paid_at?->toDateString() ?? 'unknown',
+            'charges' => $appointment->charges->map(fn ($charge) => [
+                'id' => $charge->id,
+                'description' => $charge->description,
+                'quantity' => $charge->quantity,
+                'unit_price' => $charge->unit_price,
+                'amount' => $charge->amount,
             ])->values(),
         ];
     }

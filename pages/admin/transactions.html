@@ -206,7 +206,7 @@
                 <label class="flex items-center gap-2 rounded-xl bg-white border border-[#c9d9e8] px-3 py-2.5">
                   <span class="sr-only">Transaction type</span>
                   <select x-model="transactionType" @change="loadTransactions()" class="text-sm font-semibold text-[#1f3850] bg-transparent outline-none cursor-pointer">
-                    <option value="all">All Transactions</option><option value="grooming_payment">Grooming Payments</option><option value="product_sale">Product Sales</option>
+                    <option value="all">All Transactions</option><option value="grooming_payment">Grooming Payments</option><option value="clinic_payment">Clinic Payments</option><option value="product_sale">Product Sales</option>
                   </select>
                 </label>
                 <!-- Period filter -->
@@ -298,7 +298,7 @@
                 <svg class="ph-icon h-8 w-8" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#clipboard-text"></use></svg>
               </div>
               <p class="mt-4 text-lg font-bold text-[#2f4b66]">No transactions yet</p>
-              <p class="mt-2 text-sm text-slate-500">Completed grooming payments and product sales will appear here.</p>
+              <p class="mt-2 text-sm text-slate-500">Completed grooming payments, clinic payments, and product sales will appear here.</p>
             </div>
           </template>
 
@@ -358,7 +358,7 @@
               <div class="transaction-dialog-layout">
                 <header class="transaction-dialog-header">
                   <div class="transaction-dialog-title-row">
-                    <h2 id="transaction-details-title" x-text="isProductSale(selectedTransaction) ? 'Product Sale' : 'Transaction Details'">Transaction Details</h2>
+                    <h2 id="transaction-details-title" x-text="isClinicPayment(selectedTransaction) ? 'Clinic Payment' : isProductSale(selectedTransaction) ? 'Product Sale' : 'Transaction Details'">Transaction Details</h2>
                     <button type="button" class="transaction-close" aria-label="Close Transaction Details" @click="closeDetails()" autofocus>
                       <svg class="ph-icon" viewBox="0 0 256 256" aria-hidden="true"><use href="../../assets/icons/phosphor.svg#x"></use></svg>
                     </button>
@@ -375,12 +375,12 @@
                     <dl class="transaction-metadata">
                       <template x-if="!isProductSale(selectedTransaction)"><div><dt>Pet Owner</dt><dd x-text="selectedTransaction.ownerName || '—'"></dd></div></template>
                       <template x-if="!isProductSale(selectedTransaction)"><div><dt>Pet</dt><dd x-text="petNames(selectedTransaction).join(', ') || '—'"></dd></div></template>
-                      <div><dt>Reference</dt><dd x-text="selectedTransaction.reference"></dd></div>
+                      <div><dt x-text="isClinicPayment(selectedTransaction) ? 'Clinic Reference' : 'Reference'">Reference</dt><dd x-text="selectedTransaction.reference"></dd></div>
                       <div><dt>Transaction Date</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
-                      <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
+                      <div x-show="!isClinicPayment(selectedTransaction)"><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
                     </dl>
                   </section>
-                  <template x-if="!isProductSale(selectedTransaction)">
+                  <template x-if="!isProductSale(selectedTransaction) && !isClinicPayment(selectedTransaction)">
                   <section class="transaction-detail-section" aria-labelledby="transaction-breakdown-title">
                     <h3 id="transaction-breakdown-title">Payment Breakdown</h3>
                     <h4 class="transaction-category-title">Grooming Services</h4>
@@ -408,6 +408,16 @@
                     </template>
                   </section>
                   </template>
+                  <template x-if="isClinicPayment(selectedTransaction)">
+                    <section class="transaction-detail-section" aria-labelledby="transaction-clinic-breakdown-title">
+                      <h3 id="transaction-clinic-breakdown-title">Payment Breakdown</h3>
+                      <dl class="transaction-line-items">
+                        <template x-for="charge in selectedTransaction.charges || []" :key="charge.id">
+                          <div><dt><span x-text="charge.description"></span><small x-show="Number(charge.quantity) > 1" x-text="'Qty ' + paymentChargeQuantity(charge)"></small></dt><dd x-text="formatInvoicePeso(charge.amount)"></dd></div>
+                        </template>
+                      </dl>
+                    </section>
+                  </template>
                   <template x-if="isProductSale(selectedTransaction)">
                     <section class="transaction-detail-section" aria-labelledby="transaction-products-title">
                       <h3 id="transaction-products-title">Products</h3>
@@ -423,16 +433,17 @@
                     <dl class="transaction-line-items transaction-payment">
                       <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
                       <div><dt>Amount Due</dt><dd x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></dd></div>
-                      <div><dt>Cash Received</dt><dd x-text="formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
-                      <div><dt>Change</dt><dd x-text="formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
-                      <div x-show="selectedTransaction.processedByName"><dt>Processed By</dt><dd x-text="selectedTransaction.processedByName"></dd></div>
+                      <div><dt>Cash Received</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.amountPaid == null ? '—' : formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
+                      <div><dt>Change</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.changeGiven == null ? '—' : formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
+                      <div x-show="isClinicPayment(selectedTransaction) || selectedTransaction.processedByName"><dt>Processed By</dt><dd x-text="selectedTransaction.processedByName || '—'"></dd></div>
                       <div><dt>Paid At</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
                     </dl>
                     <div class="transaction-paid-total"><span>Total Paid</span><strong x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></strong></div>
                     <div x-show="selectedTransaction.notes" class="transaction-notes"><h4>Notes</h4><p x-text="selectedTransaction.notes"></p></div>
                   </section>
                 </div>
-                <template x-if="!isProductSale(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.template"></div></template>
+                <template x-if="!isProductSale(selectedTransaction) && !isClinicPayment(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.template"></div></template>
+                <template x-if="isClinicPayment(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-html="window.PaymentInvoice.clinicTemplate"></div></template>
                 <template x-if="isProductSale(selectedTransaction)"><div class="receipt-print-source" aria-hidden="true" x-data="{ receipt: selectedTransaction.receipt }" x-html="window.ProductSaleInvoice.template"></div></template>
                 <footer class="transaction-dialog-footer">
                   <button type="button" class="transaction-button transaction-button-secondary" @click="closeDetails()">Close</button>
@@ -453,8 +464,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=pos-20261007&auth=session-scope-20261006&clinic=roles-20261010"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010&clinic-services=20261013"></script>
-    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003&release=pos-20261007"></script>
+    <script src="../../scripts/components/payment-invoice.js?v=clinic-payments-20261015&release=pos-20261007"></script>
     <script src="../../scripts/components/product-sale-invoice.js?v=pos-20261007"></script>
-    <script src="../../scripts/components/admin-transactions.js?v=pos-20261007"></script>
+    <script src="../../scripts/components/admin-transactions.js?v=clinic-payments-20261015"></script>
   </body>
 </html>

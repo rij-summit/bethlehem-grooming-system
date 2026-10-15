@@ -67,12 +67,48 @@ assert.equal(ui.groupedTransactions[0].dateKey, "2026-10-03");
 assert.equal(ui.groupedTransactions[0].total, 2010);
 assert.equal(ui.groupedTransactions[1].total, 700);
 
+const clinicTx = {
+  id: 2, key: 'clinic-2', transactionType: 'clinic_payment', reference: 'CL-20261003-002',
+  ownerName: 'Erwin Francisco', petName: 'Mark', dateKey: '2026-10-03', paidAt: '2026-10-03 14:00:00',
+  paymentMethod: 'cash', paymentMethodLabel: 'Cash', processedByName: 'Admin Bethlehem',
+  finalPrice: 725.50, amountPaid: 1000, changeGiven: 274.50,
+  charges: [{id: 10, description: 'Consultation', quantity: '1.00', unit_price: '500.00', amount: '500.00'},
+    {id: 11, description: 'Clinic supplies', quantity: '2.00', unit_price: '112.75', amount: '225.50'}],
+};
+const clinicBefore = JSON.stringify(clinicTx);
+assert.equal(ui.transactionName(clinicTx), 'Erwin Francisco');
+assert.equal(ui.transactionDetails(clinicTx), 'Mark');
+ui.openDetails(clinicTx, {focus() {}});
+assert.equal(ui.receiptModal.caseReference, clinicTx.reference);
+assert.equal(ui.receiptModal.patientName, 'Mark');
+assert.equal(ui.receiptModal.charges[1].amount, '225.50');
+assert.equal(ui.receiptModal.processedBy, 'Admin Bethlehem');
+assert.equal(ui.receiptModal.finalPrice, 725.50);
+assert.equal(ui.receiptModal.amountPaid, 1000);
+assert.equal(ui.receiptModal.pets, undefined);
+assert.equal(ui.paymentChargeQuantity(clinicTx.charges[1]), '2');
+context.window.PaymentInvoice.print = id => assert.equal(id, 'clinicPaymentInvoice');
+ui.printInvoice();
+assert.equal(JSON.stringify(clinicTx), clinicBefore);
+ui.closeDetails();
+assert.equal(ui.formatTransactionDate({paidAt: null, dateKey: 'unknown'}), '—');
+ui.transactions = [{...clinicTx, dateKey: 'unknown', paidAt: null}, clinicTx];
+assert.equal(ui.groupedTransactions[0].dateKey, '2026-10-03');
+assert.equal(ui.groupedTransactions[1].dateKey, 'unknown');
+
 const html = fs.readFileSync(path.join(__dirname, "../pages/admin/transactions.html"), "utf8");
 const history = html.split('<!-- Compact history:')[1].split('</main>')[0].split('<dialog')[0];
 for (const field of ["amountPaid", "changeGiven", "groomingServicesTotal", "productAddonsTotal", "service_breakdown", "<details"]) {
   assert.ok(!history.includes(field), `${field} must stay out of history rows`);
 }
 assert.ok(html.includes('x-html="window.PaymentInvoice.template"'));
+assert.ok(html.includes('x-html="window.PaymentInvoice.clinicTemplate"'));
+assert.ok(html.includes('x-show="Number(charge.quantity) > 1"'));
+const clinicBreakdown = html.split('id="transaction-clinic-breakdown-title"')[1].split('</section>')[0];
+assert.ok(clinicBreakdown.includes('charge.amount'));
+assert.ok(!clinicBreakdown.includes('unit_price'));
+const filters = ['All Transactions', 'Grooming Payments', 'Clinic Payments', 'Product Sales'];
+assert.deepEqual([...filters].sort((a, b) => html.indexOf(a) - html.indexOf(b)), filters);
 assert.ok(html.includes('selectedTransaction.productAddons.length > 1'));
 assert.ok(!html.split('<!-- Transactions Content -->')[1].includes('data-lucide'));
 (async () => {
@@ -104,5 +140,17 @@ assert.ok(!html.split('<!-- Transactions Content -->')[1].includes('data-lucide'
   await missingId.init();
   assert.equal(missingId.selectedTransaction, null, 'A different payment with the same reference must not be substituted');
   assert.equal(missingId.errorMessage, 'The linked transaction could not be found.');
+  context.API.getTransactions = async query => {request = query; return {transactions: [clinicTx, noProducts]};};
+  const clinicLink = createPage('?clinic=2&reference=CL-20261003-002');
+  await clinicLink.init();
+  assert.equal(request.transaction_type, 'clinic_payment');
+  assert.equal(request.search, clinicTx.reference);
+  assert.equal(request.date, '');
+  assert.equal(clinicLink.selectedTransaction, clinicTx, 'Clinic and grooming IDs may overlap');
+  clinicLink.closeDetails();
+  context.API.getTransactions = async () => ({transactions: [clinicTx]});
+  const groomingLink = createPage('?payment=2&reference=CL-20261003-002');
+  await groomingLink.init();
+  assert.equal(groomingLink.selectedTransaction, null, 'A clinic appointment cannot substitute for a grooming payment');
   console.log('Admin transaction details regression tests passed.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

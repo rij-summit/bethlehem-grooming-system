@@ -28,6 +28,41 @@ class TransactionHistorySearchTest extends TestCase
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
             $table->string('pet_name');
+            $table->unsignedBigInteger('unregistered_customer_id')->nullable();
+        });
+        Schema::create('walkins', function (Blueprint $table) {
+            $table->id();
+            $table->string('fname');
+            $table->string('lname');
+        });
+        Schema::create('unregistered_customers', function (Blueprint $table) {
+            $table->id();
+            $table->string('first_name');
+            $table->string('last_name');
+        });
+        Schema::create('clinic_appointments', function (Blueprint $table) {
+            $table->id();
+            $table->string('appointment_reference');
+            $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
+            $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->string('status');
+            $table->boolean('paid')->default(false);
+            $table->decimal('total_amount');
+            $table->decimal('cash_received')->nullable();
+            $table->string('payment_method')->nullable();
+            $table->unsignedInteger('paid_by_user_id')->nullable();
+            $table->dateTime('paid_at')->nullable();
+            $table->text('chief_complaint')->nullable();
+            $table->text('notes')->nullable();
+        });
+        Schema::create('clinic_charges', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('clinic_appointment_id');
+            $table->string('description');
+            $table->decimal('quantity');
+            $table->decimal('unit_price');
+            $table->decimal('amount');
         });
         Schema::create('booking_pets', function (Blueprint $table) {
             $table->increments('booking_pet_id');
@@ -172,6 +207,103 @@ class TransactionHistorySearchTest extends TestCase
         $this->assertSame('bottle', $line['unit']);
         $this->assertSame('50.00', $line['price_at_sale']);
         $this->assertSame('100.00', $line['subtotal']);
+    }
+
+    public function test_clinic_payments_use_recorded_charges_and_remain_distinct_from_grooming(): void
+    {
+        DB::table('clinic_appointments')->insert([
+            'id' => 1, 'appointment_reference' => 'CL-20261003-001', 'user_id' => 1, 'pet_id' => 1,
+            'status' => 'completed', 'paid' => true, 'total_amount' => 725.50,
+            'cash_received' => 1000, 'payment_method' => 'cash', 'paid_by_user_id' => 1,
+            'paid_at' => '2026-10-03 14:00:00', 'chief_complaint' => 'Private encounter', 'notes' => 'Private notes',
+        ]);
+        DB::table('clinic_charges')->insert([
+            ['clinic_appointment_id' => 1, 'description' => 'Consultation', 'quantity' => 1, 'unit_price' => 500, 'amount' => 500],
+            ['clinic_appointment_id' => 1, 'description' => 'Clinic supplies', 'quantity' => 2, 'unit_price' => 112.75, 'amount' => 225.50],
+        ]);
+        foreach (['for_payment', 'cancelled', 'completed'] as $index => $status) {
+            DB::table('clinic_appointments')->insert([
+                'appointment_reference' => 'CL-EXCLUDED-'.$index, 'status' => $status,
+                'paid' => $status !== 'completed', 'total_amount' => 9000, 'paid_at' => '2026-10-03 14:00:00',
+            ]);
+        }
+        $all = $this->search([]);
+        $this->assertSame(3, $all['total']);
+        $this->assertEquals(2425.50, $all['collection_total']);
+        $this->assertEquals(1575.50, $all['date_totals']['2026-10-03']);
+        $this->assertSame('clinic-1', $all['transactions'][0]['key']);
+        $clinic = $this->search(['transaction_type' => 'clinic_payment']);
+        $this->assertSame(1, $clinic['total']);
+        $this->assertEquals(725.50, $clinic['collection_total']);
+        $tx = $clinic['transactions'][0];
+        $this->assertSame('Clinic Payment', $tx['transactionTypeLabel']);
+        $this->assertSame('Gerald Senining', $tx['ownerName']);
+        $this->assertSame('Hopper', $tx['petName']);
+        $this->assertSame('Gerald Senining', $tx['processedByName']);
+        $this->assertEquals(1000, $tx['amountPaid']);
+        $this->assertEquals(274.50, $tx['changeGiven']);
+        $this->assertSame(['Consultation', 'Clinic supplies'], array_column($tx['charges'], 'description'));
+        $this->assertEquals([500, 225.50], array_column($tx['charges'], 'amount'));
+        $this->assertEquals(2, $tx['charges'][1]['quantity']);
+        foreach (['chief_complaint', 'notes', 'record', 'paymentSummary', 'groomingServicesTotal'] as $field) {
+            $this->assertArrayNotHasKey($field, $tx);
+        }
+        foreach (['cL-20261003-001', 'gErAlD sEnInInG', 'hOpPeR'] as $search) {
+            $this->assertSame(1, $this->search(['transaction_type' => 'clinic_payment', 'search' => $search])['total']);
+        }
+        foreach ([['period' => 'day', 'date' => '2026-10-03'], ['period' => 'month', 'month' => '2026-10'], ['period' => 'week', 'week' => '2026-W40'], ['period' => 'year', 'year' => '2026']] as $filter) {
+            $this->assertSame(1, $this->search(['transaction_type' => 'clinic_payment', ...$filter])['total']);
+        }
+        $this->assertSame(0, $this->search(['transaction_type' => 'clinic_payment', 'date' => '2026-10-04'])['total']);
+        $this->assertSame(2, $this->search(['transaction_type' => 'grooming_payment'])['total']);
+        $this->assertSame(0, $this->search(['transaction_type' => 'product_sale'])['total']);
+    }
+
+    public function test_clinic_walkin_and_unregistered_owner_search_and_missing_payment_metadata(): void
+    {
+        DB::table('walkins')->insert(['id' => 1, 'fname' => 'Erwin', 'lname' => 'Francisco']);
+        DB::table('unregistered_customers')->insert(['id' => 1, 'first_name' => 'Maria', 'last_name' => 'Santos']);
+        DB::table('pets')->insert(['pet_id' => 2, 'pet_name' => 'Mark', 'unregistered_customer_id' => 1]);
+        foreach ([1, 2] as $id) {
+            DB::table('clinic_appointments')->insert([
+                'id' => $id, 'appointment_reference' => 'CL-LEGACY-'.$id, 'walkin_id' => $id === 1 ? 1 : null,
+                'pet_id' => 2, 'status' => 'completed', 'paid' => true, 'total_amount' => 500,
+            ]);
+        }
+        foreach (['eRwIn FrAnCiScO' => 'Erwin Francisco', 'mArIa SaNtOs' => 'Maria Santos'] as $search => $name) {
+            $txs = $this->search(['transaction_type' => 'clinic_payment', 'search' => $search])['transactions'];
+            $this->assertContains($name, array_column($txs, 'ownerName'));
+        }
+        $data = $this->search(['transaction_type' => 'clinic_payment']);
+        $this->assertEquals(1000, $data['date_totals']['unknown']);
+        $this->assertNull($data['transactions'][0]['paidAt']);
+        $this->assertNull($data['transactions'][0]['amountPaid']);
+        $this->assertNull($data['transactions'][0]['changeGiven']);
+        $this->assertEmpty($data['transactions'][0]['charges']);
+    }
+
+    public function test_clinic_totals_and_pagination_cover_all_matching_payments(): void
+    {
+        foreach (range(1, 55) as $id) {
+            DB::table('clinic_appointments')->insert([
+                'id' => $id, 'appointment_reference' => 'CL-'.$id, 'status' => 'completed',
+                'paid' => true, 'total_amount' => 100, 'payment_method' => 'gcash',
+                'paid_at' => '2026-10-03 14:00:00',
+            ]);
+        }
+        $first = $this->search(['transaction_type' => 'clinic_payment']);
+        $second = $this->search(['transaction_type' => 'clinic_payment', 'page' => 2]);
+        $this->assertCount(50, $first['transactions']);
+        $this->assertCount(5, $second['transactions']);
+        foreach ([$first, $second] as $page) {
+            $this->assertSame(55, $page['total']);
+            $this->assertEquals(5500, $page['collection_total']);
+            $this->assertEquals(5500, $page['date_totals']['2026-10-03']);
+            $this->assertSame('GCash', $page['transactions'][0]['paymentMethodLabel']);
+            $this->assertNull($page['transactions'][0]['amountPaid']);
+            $this->assertNull($page['transactions'][0]['changeGiven']);
+        }
+        $this->assertEmpty(array_intersect(array_column($first['transactions'], 'key'), array_column($second['transactions'], 'key')));
     }
 
     private function search(array $query): array

@@ -164,8 +164,8 @@ window.PaymentInvoice = (() => {
       <h2>Payment Details</h2>
       <dl>
         <div><dt>Payment method</dt><dd x-text="receiptModal.paymentMethod"></dd></div>
-        <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Cash received</dt><dd x-text="formatInvoicePeso(receiptModal.amountPaid)"></dd></div>
-        <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Change</dt><dd x-text="formatInvoicePeso(receiptModal.change)"></dd></div>
+        <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Cash received</dt><dd x-text="${clinic ? "receiptModal.amountPaid == null ? '—' : " : ''}formatInvoicePeso(receiptModal.amountPaid)"></dd></div>
+        <div x-show="receiptModal.paymentMethod?.toLowerCase() === 'cash'"><dt>Change</dt><dd x-text="${clinic ? "receiptModal.change == null ? '—' : " : ''}formatInvoicePeso(receiptModal.change)"></dd></div>
         <div><dt>Paid at</dt><dd x-text="${clinic ? 'formatClinicPaidAt(receiptModal.paidAt)' : 'receiptModal.paidAt'}"></dd></div>
         ${clinic ? '<div><dt>Processed by</dt><dd x-text="receiptModal.processedBy"></dd></div>' : ''}
       </dl>

@@ -29,14 +29,17 @@ function adminTransactions() {
       const params = new URLSearchParams(window.location.search);
       const paymentId = params.get("payment");
       const posId = params.get("pos");
+      const clinicId = params.get("clinic");
       const reference = params.get("reference");
       if (posId) this.transactionType = "product_sale";
-      if (paymentId || posId || reference) this.searchQuery = reference || (posId ? 'POS-' + posId.padStart(6, '0') : "");
+      if (clinicId) this.transactionType = "clinic_payment";
+      if (paymentId || posId || clinicId || reference) this.searchQuery = reference || (posId ? 'POS-' + posId.padStart(6, '0') : "");
       await this.loadTransactions();
-      if (paymentId || posId || reference) {
+      if (paymentId || posId || clinicId || reference) {
         const tx = this.transactions.find((record) => posId
           ? this.isProductSale(record) && String(record.id) === posId
-          : paymentId ? !this.isProductSale(record) && String(record.id) === paymentId
+          : clinicId ? this.isClinicPayment(record) && String(record.id) === clinicId
+          : paymentId ? !this.isProductSale(record) && !this.isClinicPayment(record) && String(record.id) === paymentId
           : record.reference === reference);
         if (tx) {
           this.openDetails(tx, null);
@@ -140,7 +143,7 @@ function adminTransactions() {
 
       const todayKey = currentDate;
 
-      const sortedKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+      const sortedKeys = Object.keys(groups).sort((a, b) => a === "unknown" ? 1 : b === "unknown" ? -1 : b.localeCompare(a));
 
       return sortedKeys.map(dateKey => ({
         dateKey,
@@ -188,6 +191,7 @@ function adminTransactions() {
     },
 
     isProductSale(tx) { return tx?.transactionType === "product_sale"; },
+    isClinicPayment(tx) { return tx?.transactionType === "clinic_payment"; },
     transactionName(tx) { return this.isProductSale(tx) ? "Product Sale" : tx.ownerName || "—"; },
     transactionDetails(tx) {
       if (!this.isProductSale(tx)) return this.compactPetNames(tx);
@@ -224,6 +228,21 @@ function adminTransactions() {
         notes: tx.notes,
         paidAt: tx.paidAt,
       };
+      if (this.isClinicPayment(tx)) {
+        this.receiptModal = {
+          caseReference: tx.reference,
+          ownerName: tx.ownerName,
+          patientName: tx.petName,
+          patientInfo: "",
+          charges: tx.charges || [],
+          finalPrice: tx.finalPrice,
+          amountPaid: tx.amountPaid,
+          change: tx.changeGiven,
+          paymentMethod: tx.paymentMethodLabel || tx.paymentMethod,
+          processedBy: tx.processedByName || "—",
+          paidAt: tx.paidAt,
+        };
+      }
       this.detailsTrigger = trigger;
       this.previousBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -248,6 +267,7 @@ function adminTransactions() {
     },
 
     formatTransactionDate(tx) {
+      if (!tx.paidAt) return "—";
       return `${this.formatShortDate(tx.dateKey)} · ${this.formatTime(tx.paidAt)}`;
     },
 
@@ -263,9 +283,20 @@ function adminTransactions() {
       return window.PaymentInvoice.formatProductUnitPrice(line);
     },
 
+    paymentChargeQuantity(charge) {
+      return charge.quantity == null ? "—" : Number(charge.quantity).toLocaleString("en-PH", { maximumFractionDigits: 2 });
+    },
+
+    formatClinicPaidAt(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-PH", {dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila"});
+    },
+
     printInvoice() {
       if (!this.selectedTransaction) return;
       if (this.isProductSale(this.selectedTransaction)) window.ProductSaleInvoice.print();
+      else if (this.isClinicPayment(this.selectedTransaction)) window.PaymentInvoice.print("clinicPaymentInvoice");
       else window.PaymentInvoice.print();
     },
 

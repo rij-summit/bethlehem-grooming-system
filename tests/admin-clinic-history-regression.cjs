@@ -45,6 +45,9 @@ response = {treatments: [{id: 1, state: 'published'}, {id: 2, state: 'draft'}, {
   assert.equal(calls.at(-1)[0], 9, 'Attachment downloads must use the selected encounter');
   assert.equal(calls.at(-1)[1].id, 2);
   assert.equal(ui.clinicHasPayment(visit), true);
+  assert.equal(ui.clinicTransactionUrl({...visit, paid: true, appointment_reference: 'CL-20261015-009'}), './transactions.html?clinic=9&reference=CL-20261015-009');
+  assert.equal(ui.clinicTransactionUrl({...visit, paid: false}), '');
+  assert.equal(ui.clinicTransactionUrl({...visit, paid: true, status: 'for_payment'}), '');
   assert.match(ui.clinicMoney(1950), /1,950\.00/);
   assert.equal(JSON.stringify(visit), original);
   ui.closeClinicRecord();
