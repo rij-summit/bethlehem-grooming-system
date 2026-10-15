@@ -25,7 +25,7 @@ const booking = {
 
 assert.equal(ui.getIncomingPets(booking).length, 3);
 assert.equal(ui.formatIncomingPetBreedType(pets[0]), "American Bully · Dog");
-assert.equal(ui.formatIncomingPetServices(pets[0], booking), "Regular Grooming · Nail Trim");
+assert.equal(ui.formatIncomingPetServices(pets[0], booking), "Regular Grooming + 1 more");
 assert.equal(ui.formatIncomingPetServices(pets[1], booking), "Partial Grooming");
 assert.equal(ui.formatIncomingPetServices(pets[2], booking), "Ear Cleaning");
 

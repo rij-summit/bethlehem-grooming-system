@@ -606,9 +606,7 @@ body.customer-detail-modal-open {
   align-items: center;
   justify-content: flex-end;
   gap: 0.75rem 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f1f5f9;
+  margin-top: 0.75rem;
 }
 
 .admin-incoming-details-action {
@@ -626,7 +624,8 @@ body.customer-detail-modal-open {
 }
 
 .admin-incoming-cancel-action {
-  flex-basis: 100%;
+  min-height: 2.55rem;
+  padding: 0.55rem 0.5rem;
   color: #b91c1c;
   font-size: 0.875rem;
   font-weight: 600;
@@ -1417,18 +1416,6 @@ body.customer-detail-modal-open {
   background-color: #dcfce7;
 }
 
-/* ----- Queued Already Paid Badge ----- */
-.btn-already-paid {
-  background-color: #f0fdf4;
-  border-color: #86efac;
-  color: #15803d;
-}
-
-/* ----- For Payment Empty State Icon ----- */
-.btn-icon-payment {
-  color: #16a34a;
-}
-
 /* ----- Process Payment Button ----- */
 .btn-process-payment {
   background-color: #16a34a;
@@ -1455,19 +1442,6 @@ body.customer-detail-modal-open {
 }
 .btn-confirm-payment:hover {
   background-color: #284b69;
-}
-
-/* ----- Awaiting Payment Badge ----- */
-.badge-awaiting-payment {
-  background-color: #dcfce7;
-  color: #15803d;
-}
-
-/* ----- For Payment Already Paid Badge ----- */
-.badge-already-paid {
-  background-color: #f0fdf4;
-  border: 1px solid #86efac;
-  color: #15803d;
 }
 
 /* ----- Ready For Pickup Popup ----- */
@@ -1641,416 +1615,103 @@ body.customer-detail-modal-open {
   background: #ecfeff;
 }
 
-/* ----- Queued Owner / Per-Pet Cards ----- */
-.admin-queued-booking-card {
-  transition: background-color 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.2s ease, filter 0.2s ease;
+/* ----- Admin Grooming queue board ----- */
+.grooming-booking-card {
+  --grooming-accent: #315b7e;
+  --grooming-tint: #eef5fb;
 }
-
-.admin-queued-booking-card.is-action-required {
-  border-color: #94a3b8;
-  background: #f1f5f9;
-  box-shadow: 0 8px 20px rgba(71, 85, 105, 0.12);
-  filter: grayscale(1);
-}
-
-.admin-queued-booking-card.is-action-required .admin-queued-pet-card {
-  border-color: #aeb8c5;
-  background: #e9edf2;
-}
-
-.admin-queued-booking-card.is-action-required .admin-queued-owner-actions,
-.admin-queued-booking-card.is-action-required .admin-queued-pets-panel {
-  border-color: #cbd5e1;
-}
-
-.admin-queued-action-required-message {
-  margin-top: 0.55rem;
-  color: #475569;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.35rem;
-}
-
-.admin-queued-owner-toggle {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  border: 0;
-  border-radius: 1rem;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.admin-queued-owner-toggle:focus-visible {
-  outline: 3px solid rgba(49, 91, 126, 0.28);
-  outline-offset: 0.35rem;
-}
-
-.admin-queued-owner-summary {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 1.25rem;
-}
-
-.admin-queued-owner-expand-hint {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.5rem;
-  color: #315b7e;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.admin-queued-owner-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  border-top: 1px solid #f1f5f9;
-  margin-top: 1rem;
-  padding-top: 1rem;
-}
-
-.admin-queued-owner-action {
-  display: inline-flex;
-  min-height: 2.35rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  border: 1px solid transparent;
-  border-radius: 0.7rem;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.admin-queued-details-action {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #315b7e;
-}
-
-.admin-queued-details-action:hover {
-  background: #dbeafe;
-}
-
-.admin-queued-pets-panel {
-  border-top: 1px solid #e2e8f0;
-  margin-top: 1rem;
-  padding-top: 1.1rem;
-}
-
-.admin-queued-pets-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.9rem;
-}
-
-.admin-queued-pets-title {
-  color: #1f3850;
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.75rem;
-}
-
-.admin-queued-pets-support {
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-}
-
-.admin-queued-pet-count {
-  display: inline-flex;
-  min-width: 2rem;
-  height: 2rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: #fff8e8;
-  color: #9a6b00;
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1rem;
-}
-
-.admin-in-progress-pet-count {
-  background: #eef5fb;
-  color: #315b7e;
-}
-
-.admin-queued-pets-empty {
-  border: 1px dashed #cbd5e1;
-  border-radius: 0.9rem;
-  padding: 1rem;
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-  text-align: center;
-}
-
-.admin-queued-pet-list {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.admin-queued-pet-card {
-  overflow: hidden;
-  border: 1px solid #d8dee6;
-  border-radius: 0.9rem;
-  background: #fcfcfb;
-}
-
-.admin-queued-pet-main {
-  display: grid;
-  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.admin-queued-pet-queue {
-  color: #315b7e;
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.75rem;
-}
-
-.admin-queued-pet-information h5 {
-  color: #1e293b;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.5rem;
-}
-
-.admin-queued-pet-basic {
-  margin-top: 0.15rem;
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-}
-
-.admin-queued-pet-services {
-  margin-top: 0.3rem;
-  color: #315b7e;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.25rem;
-}
-
-.admin-queued-pet-services strong {
-  font-weight: 600;
-}
-
-.admin-queued-pet-timing {
-  margin-top: 0.125rem;
-  color: #315b7e;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-}
-
-.admin-queued-pet-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.admin-queued-pet-start-wrap {
-  display: inline-flex;
-}
-
-.admin-queued-pet-start-wrap.is-capacity-disabled {
-  cursor: not-allowed;
-}
-
-.admin-queued-pet-start-wrap.is-capacity-disabled .admin-queued-pet-start {
-  pointer-events: none;
-}
-
-.admin-queued-pet-start,
-.admin-queued-pet-print,
-.admin-in-progress-pet-finish,
-.admin-in-progress-pet-queued {
-  display: inline-flex;
-  min-height: 2.5rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  border-radius: 0.7rem;
-  padding: 0.6rem 0.85rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.25rem;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.admin-queued-pet-start {
-  border: 1px solid #e5a800;
-  background: #e5a800;
-  color: #ffffff;
-}
-
-.admin-queued-pet-start:hover:not(:disabled) {
-  border-color: #c48a00;
-  background: #c48a00;
-}
-
-.admin-in-progress-pet-finish {
-  border: 1px solid #315b7e;
-  background: #315b7e;
-  color: #ffffff;
-}
-
-.admin-in-progress-pet-finish:hover:not(:disabled) {
-  background: #284a67;
-}
-
-.admin-queued-pet-start:disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
-}
-
-.admin-queued-pet-start.is-disabled {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #a16207;
-  cursor: not-allowed;
-  opacity: 1;
-}
-
-.admin-in-progress-pet-finish.is-disabled {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #15803d;
-  cursor: not-allowed;
-}
-
-.admin-queued-pet-start.is-finished,
-.admin-in-progress-pet-finish.is-finished {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
-  color: #64748b;
-  cursor: not-allowed;
-}
-
-.admin-in-progress-pet-queued {
-  border: 1px solid #fde68a;
-  background: #fffbeb;
-  color: #a16207;
-  cursor: default;
-  user-select: none;
-}
-
-.admin-queued-pet-print {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
-}
-
-.admin-queued-pet-print:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
-}
-
-.admin-queued-pet-notes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  border-top: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 0.75rem 1rem;
-}
-
-.admin-queued-pet-notes p {
-  min-width: 0;
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-}
-
-.admin-queued-pet-notes span,
-.admin-queued-pet-notes strong {
-  display: block;
-}
-
-.admin-queued-pet-notes span {
-  margin-bottom: 0.2rem;
-  color: #94a3b8;
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.admin-queued-pet-notes strong {
-  overflow-wrap: anywhere;
-  color: #475569;
-  font-weight: 600;
-  line-height: 1.25rem;
-  white-space: pre-line;
-}
-
+:is(.grooming-booking-card, .grooming-status)[data-tone="waiting"] { --grooming-accent: #926600; --grooming-tint: #fff8e8; }
+:is(.grooming-booking-card, .grooming-status)[data-tone="progress"] { --grooming-accent: #315b7e; --grooming-tint: #eef5fb; }
+:is(.grooming-booking-card, .grooming-status)[data-tone="payment"] { --grooming-accent: #15803d; --grooming-tint: #f0fdf4; }
+:is(.grooming-booking-card, .grooming-status)[data-tone="pickup"] { --grooming-accent: #0e7490; --grooming-tint: #ecfeff; }
+.grooming-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.grooming-tabs button { white-space: nowrap; }
+.grooming-tabs button:focus-visible { outline: 2px solid #315b7e; outline-offset: -2px; }
+.grooming-workload { margin-top: 16px; border: 1px solid #d9e6f1; border-radius: 16px; background: white; padding: 12px 16px; font-size: 13px; color: #475569; }
+.grooming-workload-metrics { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 0; }
+.grooming-workload-metrics > span { padding: 0 16px; border-right: 1px solid #d9e6f1; }
+.grooming-workload-metrics > span:first-child { padding-left: 0; }
+.grooming-workload-metrics > span:last-child { border-right: 0; }
+.grooming-workload-metrics strong { margin-left: 4px; color: #1f3850; font-weight: 600; }
+.grooming-workload-warning { margin-top: 8px; color: #92400e; font-weight: 600; }
+.grooming-booking-card { min-width: 0; border: 1px solid #bfd3e3; border-radius: 20px; background: white; padding: 16px 20px; box-shadow: 0 1px 2px rgb(15 23 42 / 4%); }
+.grooming-booking-main { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.grooming-queue-number { flex-shrink: 0; min-width: 40px; color: var(--grooming-accent); font-size: 26px; font-weight: 800; line-height: 32px; }
+.grooming-booking-identity { flex: 1; min-width: 0; }
+.grooming-booking-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.grooming-booking-identity h4 { color: #1f3850; font-size: 20px; font-weight: 600; line-height: 28px; overflow-wrap: anywhere; }
+.grooming-status { display: inline-flex; align-items: center; flex-shrink: 0; border-radius: 999px; background: var(--grooming-tint, #eef5fb); padding: 4px 10px; color: var(--grooming-accent, #315b7e); font-size: 12px; font-weight: 700; line-height: 18px; white-space: nowrap; }
+.grooming-contact { color: #64748b; font-size: 13px; line-height: 20px; }
+.grooming-booking-meta { display: flex; flex-wrap: wrap; align-items: center; margin-top: 6px; color: #475569; font-size: 13px; line-height: 20px; gap: 4px 0; }
+.grooming-booking-meta > span:not(:first-of-type)::before { content: '·'; display: inline-block; margin: 0 8px; color: #94a3b8; }
+.grooming-note-flag { display: inline-flex; align-items: center; gap: 4px; color: #315b7e; font-size: 12px; font-weight: 600; }
+.grooming-booking-actions, .grooming-stage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.grooming-booking-actions { justify-content: flex-end; margin-top: 12px; }
+.grooming-expand-action { color: #315b7e; }
+.grooming-expand-action:hover { background: #eef5fb; }
+.grooming-incoming-pets { flex: 1; min-width: 0; }
+.grooming-service { color: #315b7e; font-size: 13px; line-height: 20px; }
+.grooming-appointment-time { color: #1f3850; font-size: 14px; font-weight: 600; }
+.grooming-empty { border: 1px dashed #bfd3e3; border-radius: 20px; background: white; padding: 32px 16px; color: #2f4b66; font-weight: 600; text-align: center; }
+.admin-queued-owner-action { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: 11px; padding: 8px 14px; font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.admin-queued-owner-action:disabled { cursor: not-allowed; opacity: .5; }
+.admin-queued-details-action { border-color: #bfd3e3; background: white; color: #315b7e; }
+.admin-queued-details-action:hover { background: #eef5fb; }
+.admin-queued-pets-panel { border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 12px; }
+.admin-queued-pet-list { display: grid; gap: 8px; }
+.admin-queued-pet-card { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; }
+.admin-queued-pet-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; }
+.admin-queued-pet-queue { color: var(--grooming-accent); font-size: 16px; font-weight: 700; }
+.admin-queued-pet-information { min-width: 0; }
+.admin-queued-pet-information h5 { color: #1e293b; font-size: 15px; font-weight: 700; line-height: 22px; overflow-wrap: anywhere; }
+.admin-queued-pet-basic, .admin-queued-pet-services, .admin-queued-pet-timing { font-size: 13px; line-height: 20px; }
+.admin-queued-pet-basic { color: #64748b; }
+.admin-queued-pet-services { color: #315b7e; font-weight: 600; }
+.admin-queued-pet-timing { color: #475569; }
+.admin-queued-pet-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-queued-pet-start, .admin-queued-pet-print, .admin-in-progress-pet-finish { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 6px; border: 1px solid #315b7e; border-radius: 11px; background: #315b7e; padding: 8px 14px; color: white; font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.admin-queued-pet-start:hover:not(:disabled), .admin-in-progress-pet-finish:hover:not(:disabled) { background: #284a67; }
+.admin-queued-pet-start:disabled, .admin-in-progress-pet-finish:disabled { cursor: not-allowed; opacity: .5; }
+.admin-queued-pet-print { border-color: #cbd5e1; background: white; color: #334155; }
+.admin-queued-pet-print:hover { background: #f1f5f9; }
+.grooming-pet-flags { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.grooming-details-dialog { display: flex; flex-direction: column; width: 100%; max-width: 768px; max-height: calc(100dvh - 32px); overflow: hidden; }
+.grooming-details-dialog > :first-child { flex-shrink: 0; }
+.grooming-details-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; color: #fff; font-size: 13px; }
+.grooming-details-close { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; }
+.grooming-details-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.grooming-visit-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; font-size: 13px; line-height: 20px; }
+.grooming-visit-summary dt { color: #64748b; }
+.grooming-visit-summary dd { color: #1f3850; font-weight: 600; overflow-wrap: anywhere; }
+.grooming-details-pet { margin-bottom: 12px; border: 1px solid #d9e6f1; border-radius: 14px; background: #f8fafc; }
+.grooming-details-pet summary { padding: 12px 16px; cursor: pointer; }
+.grooming-details-pet summary > .grooming-contact { margin-left: 8px; }
+.grooming-details-pet-body { border-top: 1px solid #e2e8f0; padding: 12px 16px; overflow-wrap: anywhere; }
+.grooming-pet-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px; font-size: 13px; color: #475569; }
+.grooming-pet-timestamps { margin-top: 12px; }
+:is(.grooming-booking-card, .grooming-details-dialog) :is(button, summary, input, textarea):focus-visible { outline: 2px solid #315b7e; outline-offset: 3px; }
+.grooming-details-close:focus-visible { outline-color: white; }
 @media (max-width: 767px) {
-  .admin-queued-owner-toggle,
-  .admin-queued-owner-summary {
-    align-items: flex-start;
-  }
-
-  .admin-queued-owner-expand-hint span {
-    display: none;
-  }
-
-  .admin-queued-owner-actions {
-    justify-content: stretch;
-  }
-
-  .admin-queued-owner-action {
-    flex: 1 1 calc(50% - 0.6rem);
-  }
-
-  .admin-queued-pet-main {
-    grid-template-columns: 3.6rem minmax(0, 1fr);
-  }
-
-  .admin-queued-pet-actions {
-    grid-column: 1 / -1;
-  }
-
-  .admin-queued-pet-start-wrap {
-    flex: 1 1 0;
-  }
-
-  .admin-queued-pet-start-wrap .admin-queued-pet-start {
-    width: 100%;
-  }
-
-  .admin-queued-pet-start,
-  .admin-queued-pet-print,
-  .admin-in-progress-pet-finish,
-  .admin-in-progress-pet-queued {
-    flex: 1 1 0;
-  }
-
-  .admin-queued-pet-notes {
-    grid-template-columns: 1fr;
-  }
-
+  .grooming-tabs { display: flex; overflow-x: auto; }
+  .grooming-tabs button { flex: 1 0 auto; min-width: 125px; }
+  .grooming-booking-card { padding: 16px; }
+  .grooming-booking-main { gap: 12px; }
+  .grooming-incoming-card .grooming-booking-main { flex-wrap: wrap; }
+  .grooming-incoming-card .grooming-booking-identity { flex-basis: calc(100% - 140px); }
+  .grooming-incoming-pets { flex-basis: 100%; order: 3; }
+  .grooming-appointment-time { max-width: 128px; }
+  .grooming-booking-actions { justify-content: flex-start; }
+  .admin-queued-pet-main { grid-template-columns: auto minmax(0, 1fr); }
+  .admin-queued-pet-actions { grid-column: 1 / -1; }
+  .grooming-visit-summary, .grooming-pet-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grooming-details-body { padding: 16px; }
+  .grooming-details-pet summary > .grooming-contact { display: block; margin-left: 0; }
+  .grooming-workload-metrics { gap: 8px 16px; }
+  .grooming-workload-metrics > span { padding: 0; border: 0; }
+}
+@media (max-width: 374px) {
+  .grooming-visit-summary, .grooming-pet-facts { grid-template-columns: minmax(0, 1fr); }
+  .grooming-stage-actions { width: 100%; }
 }
 
 /* ----- Missing Tailwind Utilities ----- */

@@ -596,6 +596,7 @@ function adminDashboard() {
             await this.loadAdminBookings();
           },
           viewDetails: ({ booking }) => {
+            this._detailsReturnFocus = document.activeElement;
             this.detailsBooking   = booking;
             this.cancelNoteEdit();
             this.sedationConsentCapture = {
@@ -604,7 +605,10 @@ function adminDashboard() {
               error: "",
             };
             this.detailsModalOpen = true;
-            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+            this.$nextTick(() => {
+              if (window.lucide) lucide.createIcons();
+              this.$refs.groomingDetailsClose?.focus();
+            });
           },
         },
       });
@@ -1012,7 +1016,7 @@ function adminDashboard() {
     petGroomingStateLabel(pet) {
       return {
         not_started: "Not started",
-        in_progress: "In progress",
+        in_progress: "In Progress",
         finished: "Finished",
       }[this.petGroomingState(pet)] || "Not started";
     },
@@ -1928,15 +1932,15 @@ function adminDashboard() {
     get isGroomerCapacityFull() { return this.activeGroomingPets >= this.activeGroomers; },
 
     get groomingWorkloadMessage() {
+      const finish = this.groomingWorkload?.projected_last_completion;
+      const close = this.groomingWorkload?.closing_time;
+      if (finish && close && new Date(finish) > new Date(close)) {
+        return `Projected completion exceeds grooming hours · ${this.workloadClosingLabel}`;
+      }
       const state = this.groomingWorkload?.state;
       return state === "Needs staff action" ? "Current grooming workload needs attention"
-        : state === "At risk" ? "Today's grooming capacity is nearly full" : "Today's grooming workload is on track";
-    },
-
-    get workloadCompletionLabel() {
-      const finish = this.groomingWorkload?.projected_last_completion;
-      if (!finish) return this.groomingWorkload?.state === "Needs staff action" ? "Confirm missing grooming estimates" : "No grooming work waiting";
-      return `Projected last completion: ${window.GroomingEstimates.formatTimeWindow(new Date(finish).getTime(), new Date(finish).getTime())}`;
+        : state === "At risk" ? "Schedule at risk"
+        : this.isGroomerCapacityFull && this.queueSummary.petsWaiting > 0 ? "Groomer capacity reached" : "";
     },
 
     get workloadClosingLabel() {
@@ -1953,6 +1957,52 @@ function adminDashboard() {
       if (!forecast?.projected_start) return "Awaiting groomer availability";
       const start = new Date(forecast.projected_start).getTime();
       return `Queue wait: ${window.GroomingEstimates.formatDuration(forecast.queue_wait_minutes)} · Est. start: ${window.GroomingEstimates.formatTimeWindow(start, start)}`;
+    },
+
+    get operationalBookings() {
+      return ({ queued: this.queuedList, "in-progress": this.inProgressList,
+        "for-payment": this.forPaymentList, "to-be-picked-up": this.releasedList })[this.activeTab] || [];
+    },
+
+    groomingStatusLabel(booking) {
+      const status = this.normalizeStatus(booking?.status);
+      return ({ incoming: "Incoming", queued: "Waiting", "in-progress": "In Progress",
+        "for-payment": booking?.paid ? "Paid & Ready" : "Awaiting Payment",
+        "for-pickup": booking?.paid ? "Paid & Ready" : "Awaiting Payment",
+        "to-be-picked-up": "Paid & Ready" })[status] || "";
+    },
+
+    groomingCardTone(booking) {
+      return ({ queued: "waiting", "in-progress": "progress", "for-payment": "payment",
+        "for-pickup": "payment", "to-be-picked-up": "pickup" })[this.normalizeStatus(booking?.status)] || "incoming";
+    },
+
+    groomingPetCount(booking) {
+      const count = booking?.pets?.length || booking?.numberOfPets || (booking?.petName ? 1 : 0);
+      return `${count} ${count === 1 ? "pet" : "pets"}`;
+    },
+
+    incomingPetSummary(booking) {
+      const pets = this.getIncomingPets(booking);
+      const name = pets[0]?.petName ?? pets[0]?.pet_name ?? pets[0]?.name ?? "";
+      return pets.length > 1 ? `${this.groomingPetCount(booking)} · ${name} + ${pets.length - 1} more` : name;
+    },
+
+    groomingBookingTiming(booking) {
+      const status = this.normalizeStatus(booking?.status);
+      if (status === "queued") return booking.dropOffTime ? `Dropped off ${booking.dropOffTime}` : "";
+      if (status === "in-progress") return booking.startedAt ? `Started ${booking.startedAt}` : "";
+      return booking.completedAt ? `Finished ${booking.completedAt}` : "";
+    },
+
+    isGroomingBookingExpanded(booking) {
+      return this.normalizeStatus(booking.status) === "queued"
+        ? this.isQueuedBookingExpanded(booking.id) : this.isInProgressBookingExpanded(booking.id);
+    },
+
+    toggleGroomingBooking(booking) {
+      if (this.normalizeStatus(booking.status) === "queued") this.toggleQueuedBooking(booking.id);
+      else this.toggleInProgressBooking(booking.id);
     },
 
     getBookingETA(booking) {
@@ -2528,14 +2578,19 @@ function adminDashboard() {
         .map(({ pet }) => pet);
     },
 
-    // In Progress mirrors the Queued card and retains finished pets as disabled
-    // indicators until every pet in the owner booking is complete.
-    getInProgressPets(booking) {
-      return this.getQueuedPets(booking);
-    },
-
     shouldShowOwnerReschedule(booking) {
       return Boolean(booking?.paid);
+    },
+
+    shouldShowOwnerRevert(booking) {
+      const status = this.normalizeStatus(booking?.status);
+      if (status === "queued") return !this.hasStartedGroomingPets(booking);
+      return status === "in-progress" && this.hasStartedGroomingPets(booking)
+        && !(booking.pets || []).some((pet) => this.isPetGroomingFinished(pet));
+    },
+
+    shouldShowOwnerCancel(booking) {
+      return ["queued", "in-progress"].includes(this.normalizeStatus(booking?.status));
     },
 
     formatPetQueueNumber(pet, petIndex = 0) {
@@ -2569,7 +2624,7 @@ function adminDashboard() {
         .map((service) => service?.name ?? service?.serviceName ?? service?.service_name)
         .filter(Boolean);
       return names.length > 0
-        ? names.join(" · ")
+        ? names[0] + (names.length > 1 ? ` + ${names.length - 1} more` : "")
         : this.getIncomingPets(booking).length === 1
           ? booking?.serviceLabel || "No selected services recorded"
           : "No selected services recorded";
@@ -3890,6 +3945,22 @@ function adminDashboard() {
         busy: false,
         error: "",
       };
+      this._detailsReturnFocus?.focus();
+      this._detailsReturnFocus = null;
+    },
+
+    trapGroomingDetailsFocus(event) {
+      const controls = [...event.currentTarget.querySelectorAll('button, input, textarea, summary, [tabindex="0"]')]
+        .filter((element) => !element.disabled && element.getClientRects().length);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
     },
 
     canEditInternalStaffNote(booking = this.detailsBooking) {

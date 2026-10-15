@@ -7,7 +7,7 @@
     <title>Admin Grooming | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css?v=product-search-stock-20261002" />
-    <link rel="stylesheet" href="../../css/custom.css?v=grooming-cage-slip-20261003&release=20261001" />
+    <link rel="stylesheet" href="../../css/custom.css?v=grooming-board-20261016-5" />
     <link
       rel="stylesheet"
       href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003"
@@ -257,7 +257,7 @@
         </div>
       </div>
       <!-- Main Content -->
-      <div class="flex min-h-screen flex-1 flex-col lg:ml-[280px]">
+      <div class="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-[280px]">
         <!-- Mobile Header -->
         <header
           class="sticky top-0 z-30 flex items-center justify-between border-b border-[#d7e3ef] bg-[#f5f8fb]/90 px-4 py-4 backdrop-blur lg:hidden"
@@ -279,7 +279,7 @@
         <!-- Grooming Body -->
         <main
           x-data="adminDashboard()"
-          class="flex-1 px-4 py-6 lg:px-6 lg:pt-0"
+          class="min-w-0 flex-1 px-4 py-6 lg:px-6 lg:pt-0"
         >
           <!-- Top banner -->
           <section class="lg:sticky lg:top-0 lg:z-30 lg:-mx-6 lg:bg-[#f5f8fb]/95 lg:px-6 lg:py-6 lg:backdrop-blur">
@@ -624,67 +624,26 @@
             </div>
           </section>
 
-          <!-- Queue Overview Panel — visible on Queued and In-Progress tabs -->
-          <section
-            x-show="activeTab === 'queued' || activeTab === 'in-progress'"
-            x-transition
-            class="mt-4"
-          >
-            <div class="rounded-2xl border border-[#d9e6f1] bg-white px-4 py-4 shadow-sm">
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-                <!-- ETA stats -->
-                <div class="flex flex-wrap gap-5">
-                  <div class="flex items-center gap-2">
-                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-50">
-                      <i data-lucide="clock-3" class="h-4 w-4 text-[#e5a800]"></i>
-                    </div>
-                    <div>
-                      <p class="text-xs text-slate-500">Pets waiting</p>
-                      <p class="text-lg font-bold text-slate-800" x-text="queueSummary.petsWaiting"></p>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center gap-2">
-                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
-                      <i data-lucide="timer" class="h-4 w-4 text-[#315b7e]"></i>
-                    </div>
-                    <div>
-                      <p class="text-xs text-slate-500">Avg. service estimate</p>
-                      <p class="text-lg font-bold text-slate-800" x-text="queueSummary.avgWaitLabel"></p>
-                    </div>
-                  </div>
-
-                  <template x-if="queueSummary.lastDoneLabel">
-                    <div class="flex items-center gap-2">
-                      <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-50">
-                        <i data-lucide="flag" class="h-4 w-4 text-green-600"></i>
-                      </div>
-                      <div>
-                        <p class="text-xs text-slate-500">Projected last completion</p>
-                        <p class="text-lg font-bold text-slate-800" x-text="queueSummary.lastDoneLabel"></p>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-
-              </div>
+          <!-- Operational summary -->
+          <section x-show="activeTab === 'queued' || activeTab === 'in-progress'" class="grooming-workload" aria-label="Grooming workload">
+            <div class="grooming-workload-metrics">
+              <span>Waiting <strong x-text="queueSummary.petsWaiting"></strong></span>
+              <span>In Progress <strong x-text="activeGroomingPets"></strong></span>
+              <span x-show="queueSummary.avgWaitLabel !== '—'">Avg. grooming time <strong x-text="queueSummary.avgWaitLabel"></strong></span>
+              <span x-show="queueSummary.lastDoneLabel">Last est. finish <strong x-text="queueSummary.lastDoneLabel"></strong></span>
+              <span x-text="activeGroomers + (activeGroomers === 1 ? ' groomer' : ' groomers')"></span>
             </div>
+            <p x-show="groomingWorkloadMessage" class="grooming-workload-warning" role="status" x-text="groomingWorkloadMessage"></p>
           </section>
 
           <!-- Flow tabs -->
-          <div x-show="groomingWorkload && (activeTab === 'queued' || activeTab === 'in-progress')" class="mt-3 rounded-2xl border border-[#d9e6f1] bg-white px-4 py-3 text-sm" role="status">
-            <p class="font-semibold text-slate-700" x-text="`${activeGroomers} groomer${activeGroomers === 1 ? '' : 's'} on duty · ${groomingWorkload?.waiting || 0} pets waiting · ${groomingWorkload?.in_progress || 0} in progress`"></p>
-            <p class="mt-1 font-semibold" :class="groomingWorkload?.state === 'Needs staff action' ? 'text-red-700' : groomingWorkload?.state === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="groomingWorkloadMessage"></p>
-            <p x-show="!groomingWorkload?.projected_last_completion" class="mt-1 text-slate-500" x-text="workloadCompletionLabel"></p>
-            <p class="text-xs text-slate-500" x-text="workloadClosingLabel"></p>
-          </div>
           <section class="mt-6">
             <div class="rounded-full bg-[#bdd6ec] p-1">
-              <div class="grid grid-cols-2 gap-1 lg:grid-cols-6">
+              <div class="grooming-tabs" aria-label="Grooming stages">
                 <button
                   type="button"
                   @click="setTab('incoming')"
+                  :aria-pressed="activeTab === 'incoming'"
                   class="rounded-full px-3 py-3 text-sm font-bold transition"
                   :class="activeTab === 'incoming' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
@@ -694,6 +653,7 @@
                 <button
                   type="button"
                   @click="setTab('queued')"
+                  :aria-pressed="activeTab === 'queued'"
                   class="rounded-full px-3 py-3 text-sm font-bold transition"
                   :class="activeTab === 'queued' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
@@ -703,15 +663,17 @@
                 <button
                   type="button"
                   @click="setTab('in-progress')"
+                  :aria-pressed="activeTab === 'in-progress'"
                   class="rounded-full px-3 py-3 text-sm font-bold transition"
                   :class="activeTab === 'in-progress' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
-                  In-Progress (<span x-text="inProgressList.length"></span>)
+                  In Progress (<span x-text="inProgressList.length"></span>)
                 </button>
 
                 <button
                   type="button"
                   @click="setTab('for-payment')"
+                  :aria-pressed="activeTab === 'for-payment'"
                   class="rounded-full px-3 py-3 text-sm font-bold transition"
                   :class="activeTab === 'for-payment' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
@@ -721,6 +683,7 @@
                 <button
                   type="button"
                   @click="setTab('to-be-picked-up')"
+                  :aria-pressed="activeTab === 'to-be-picked-up'"
                   class="rounded-full px-3 py-3 text-sm font-bold transition"
                   :class="activeTab === 'to-be-picked-up' ? 'bg-white text-[#1f3850] shadow-sm' : 'text-[#1f3850]'"
                 >
@@ -731,69 +694,8 @@
             </div>
           </section>
 
-          <!-- Optional helper description -->
-          <section class="mt-5">
-            <div
-              class="rounded-2xl border border-[#d9e6f1] bg-white/80 p-4 text-sm text-slate-600"
-            >
-              <template x-if="activeTab === 'incoming' && showFutureAppointments">
-                <p>
-                  Incoming pre-registrations made up to three days in advance.
-                  Same-day pre-registrations should be prioritized first, then sorted by
-                  schedule time from earliest to latest.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'incoming' && !showFutureAppointments">
-                <p>
-                  Incoming displays today's pre-registrations only. Open Grooming to
-                  view upcoming pre-registrations scheduled for future dates.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'queued'">
-                <p>
-                  Queued displays pets already present in the clinic and waiting
-                  for their turn. Clicking <strong>Check-in</strong> should move
-                  pre-register from Incoming to Queued.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'in-progress'">
-                <p>
-                  In-Progress displays pets currently receiving grooming
-                  services. Clicking <strong>Start Grooming</strong> should from Queued to In-Progress.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'for-payment'">
-                <p>
-                  For Payment displays pets whose grooming is complete and are ready for pickup.
-                  The customer has been notified. Click <strong>Process Payment</strong> to collect
-                  payment. If the customer paid early, click <strong>Release</strong> instead.
-                </p>
-              </template>
-
-              <template x-if="activeTab === 'to-be-picked-up'">
-                <p>
-                  To Be Picked Up displays pets that are groomed and paid for, waiting for the customer to collect them.
-                  Click <strong>Picked Up</strong> once the customer has taken their pet home.
-                  The customer is reminded every hour until pickup is confirmed.
-                </p>
-              </template>
-
-            </div>
-          </section>
-
           <!-- Incoming -->
           <section x-show="activeTab === 'incoming'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#315b7e]">
-              <i data-lucide="calendar-clock" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                Incoming
-              </h3>
-            </div>
-
             <!-- EMPTY STATE -->
             <template x-if="incomingList.length === 0">
               <div
@@ -809,48 +711,10 @@
                   No incoming schedules yet
                 </p>
 
-                <p class="mt-2 text-sm text-slate-500">
-                  Customer Arrival that's scheduled up to 3 days will appear here.
-                </p>
+
               </div>
             </template>
 
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders Incoming schedule cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (incomingList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              ownerName: string,
-              contactNumber: string,
-              pets: [{ bookingPetId: number|string, petName: string, species: string, breed: string }],
-              services: [{ bookingPetId: number|string, serviceName: string }],
-              appointmentDate: string,
-              appointmentTime: string,
-              status: "incoming"
-            }
-
-            BUSINESS RULES:
-            - Same-day pre-registrations FIRST
-            - Then sort by schedule time (earliest first)
-            - Then future dates
-
-            NOTES:
-            - queue numbers are assigned after check-in
-            - services are matched to each pet by bookingPetId
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- CARD TEMPLATE (DO NOT DELETE) -->
             <template x-for="group in groupedIncoming()" :key="group.date">
               <div class="space-y-4">
 
@@ -866,30 +730,23 @@
 
                 <!-- Cards for this date -->
                 <template x-for="booking in group.bookings" :key="booking.id">
-                  <article class="rounded-[24px] border border-[#bfd3e3] bg-white px-4 py-5 shadow-sm sm:px-6">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
-                        <div x-show="getIncomingPets(booking).length > 1 || (booking.bookingType !== 'Walk-In' && booking.internalStaffNote)" class="mt-2 flex flex-wrap items-center gap-2">
-                          <span x-show="getIncomingPets(booking).length > 1" class="text-sm font-semibold text-[#315b7e]" x-text="getIncomingPets(booking).length + ' pets'"></span>
-                          <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-[#315b7e]">Staff note</span>
-                        </div>
+                  <article class="grooming-booking-card grooming-incoming-card" data-tone="incoming">
+                    <div class="grooming-booking-main">
+                      <div class="grooming-booking-identity">
+                        <h4 x-text="booking.ownerName"></h4>
+                        <p class="grooming-contact" x-text="formatMobileNumber(booking.contactNumber)"></p>
                       </div>
-                      <p class="shrink-0 text-base font-semibold text-[#1f3850]" x-text="booking.appointmentTime"></p>
+                      <div class="grooming-incoming-pets">
+                        <p class="font-semibold text-[#1f3850]" x-text="incomingPetSummary(booking)"></p>
+                        <template x-if="getIncomingPets(booking).length === 1">
+                          <div>
+                            <p class="grooming-contact" x-text="formatIncomingPetBreedType(getIncomingPets(booking)[0])"></p>
+                            <p class="grooming-service" x-text="formatIncomingPetServices(getIncomingPets(booking)[0], booking)"></p>
+                          </div>
+                        </template>
+                      </div>
+                      <p class="grooming-appointment-time" x-text="booking.appointmentTime"></p>
                     </div>
-
-                    <div class="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                      <template x-for="(pet, petIndex) in getIncomingPets(booking).slice(0, 2)" :key="pet.bookingPetId ?? pet.booking_pet_id ?? pet.id ?? petIndex">
-                        <div class="min-w-0">
-                          <p class="font-semibold text-[#1f3850]" x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></p>
-                          <p class="text-sm text-slate-500" x-text="formatIncomingPetBreedType(pet)"></p>
-                          <p class="mt-1 text-sm font-medium text-[#315b7e]" x-text="formatIncomingPetServices(pet, booking)"></p>
-                        </div>
-                      </template>
-                      <p x-show="getIncomingPets(booking).length > 2" class="text-sm font-semibold text-slate-500" x-text="'+' + (getIncomingPets(booking).length - 2) + ' more pets'"></p>
-                    </div>
-
                     <div class="admin-incoming-actions">
                       <button type="button" @click="viewBookingDetails(booking)" class="admin-incoming-details-action">View Details</button>
                       <button
@@ -911,752 +768,112 @@
             </template>
           </section>
 
-          <!-- Queued -->
-          <section x-show="activeTab === 'queued'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#b98525]">
-              <i data-lucide="clock-3" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                Queued
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="queuedList.length === 0">
-              <div
-                class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10"
-              >
-                <div
-                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fff8e8] text-[#e5a800]"
-                >
-                  <i data-lucide="clock-3" class="h-8 w-8"></i>
-                </div>
-
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No pets are queued right now
-                </p>
-
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets that are already in the clinic and checked in will appear
-                  here.
-                </p>
-              </div>
+          <!-- Shared queue card: the booking keeps the same anatomy through pickup. -->
+          <section x-show="activeTab !== 'incoming'" class="mt-6 space-y-4" aria-label="Grooming bookings">
+            <template x-if="operationalBookings.length === 0">
+              <div class="grooming-empty" x-text="({ queued: 'No pets are queued right now', 'in-progress': 'No ongoing grooming right now', 'for-payment': 'No pending payments', 'to-be-picked-up': 'No pets awaiting pickup' })[activeTab]"></div>
             </template>
-
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders Queued appointment cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (queuedList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              queueNumber: number,
-              ownerName: string,
-              contactNumber: string,
-              petName: string,
-              petType: "Dog" | "Cat",
-              breed: string,
-              serviceLabel: string,
-              dropOffTime: string,
-              status: "queued",
-              pets: [{
-                bookingPetId: number|string,
-                petQueueNumber: number,
-                petName: string,
-                species: string,
-                breed: string,
-                size: string,
-                furType: string,
-                weight: string,
-                medicalConditions: string|null,
-                specialInstructions: string|null,
-                groomingStartedAt: string|null,
-                isGroomingStarted: boolean
-              }],
-              services: [{ bookingPetId: number|string, serviceName: string }]
-            }
-
-            BUSINESS RULE:
-            - A booking enters this tab after admin clicks "Check-in" from the Incoming tab.
-
-            NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - petQueueNumber is the persisted, date-scoped number assigned by the backend
-            - serviceLabel comes from client booking selection
-            - petType must be Dog or Cat
-            - dropOffTime should reflect the actual check-in/drop-off time saved by backend
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- Toggleable owner booking card with one actionable card per pet. -->
-            <template x-for="booking in queuedList" :key="booking.id">
-              <article
-                class="admin-queued-booking-card rounded-[24px] border border-[#bfd3e3] bg-white px-4 py-5 shadow-sm sm:px-6"
-              >
-                <button
-                  type="button"
-                  @click="toggleQueuedBooking(booking.id)"
-                  class="admin-queued-owner-toggle"
-                  :aria-expanded="isQueuedBookingExpanded(booking.id)"
-                >
-                  <div class="admin-queued-owner-summary">
-                    <div
-                      class="text-4xl font-extrabold text-[#b98525]"
-                      x-text="'#' + booking.queueNumber"
-                    ></div>
-
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4
-                          class="text-2xl font-medium text-black lg:text-3xl"
-                          x-text="booking.ownerName"
-                        ></h4>
-                        <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
-                        <!-- Status badge -->
-                        <span
-                          class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
-                        >
-                          <i data-lucide="hourglass" class="h-3 w-3"></i>
-                          <span>Waiting</span>
-                        </span>
-                      </div>
-                      <p
-                        class="text-sm text-slate-500"
-                        x-text="formatMobileNumber(booking.contactNumber)"
-                      ></p>
-                      <p class="mt-2 text-sm text-slate-600">
-                        <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.dropOffTime" x-text="' \u00b7 Dropped off: ' + booking.dropOffTime"></span>
-                      </p>
-                      <!-- Queue ETA badge -->
-                      <template x-if="getBookingETA(booking)">
-                        <p class="mt-1 flex items-center gap-1 text-sm text-[#1f3850]">
-                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0 text-[#b98525]"></i>
-                          Est. ready: <span class="font-semibold" x-text="getBookingETA(booking)"></span>
-                        </p>
+            <template x-for="booking in operationalBookings" :key="booking.id">
+              <article class="grooming-booking-card" :data-tone="groomingCardTone(booking)">
+                <div class="grooming-booking-main">
+                  <span class="grooming-queue-number" x-text="'#' + booking.queueNumber"></span>
+                  <div class="grooming-booking-identity">
+                    <div class="grooming-booking-title">
+                      <h4 x-text="booking.ownerName"></h4>
+                      <span class="grooming-status" x-text="groomingStatusLabel(booking)"></span>
+                    </div>
+                    <p class="grooming-contact" x-text="formatMobileNumber(booking.contactNumber)"></p>
+                    <div class="grooming-booking-meta">
+                      <span x-text="groomingPetCount(booking)"></span>
+                      <span x-show="groomingBookingTiming(booking)" x-text="groomingBookingTiming(booking)"></span>
+                      <template x-if="(activeTab === 'queued' || activeTab === 'in-progress') && getBookingETA(booking)">
+                        <span x-text="'Est. ready ' + getBookingETA(booking)"></span>
                       </template>
+                      <span x-show="booking.internalStaffNote" class="grooming-note-flag">Staff note</span>
+                      <span x-show="booking.pets?.some(pet => pet.medicalConditions)" class="grooming-note-flag">Medical note</span>
+                      <span x-show="booking.specialNotes || booking.pets?.some(pet => pet.specialInstructions)" class="grooming-note-flag">Customer note</span>
                     </div>
                   </div>
-
-                  <div class="admin-queued-owner-expand-hint">
-                    <span x-text="isQueuedBookingExpanded(booking.id) ? 'Hide pets' : 'Show pets'"></span>
-                    <i
-                      data-lucide="chevron-down"
-                      class="h-5 w-5 transition-transform"
-                      :class="isQueuedBookingExpanded(booking.id) ? 'rotate-180' : ''"
-                    ></i>
-                  </div>
-                </button>
-
-                <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
-                    <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
-                      <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
-                      Pay Now
-                    </button>
-                  </template>
-                  <template x-if="booking.paid">
-                    <div class="admin-queued-owner-action btn-already-paid">
-                      <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                      Already Paid
-                    </div>
-                  </template>
-                  <template x-if="shouldShowOwnerReschedule(booking)">
-                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
-                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
-                      Reschedule
-                    </button>
-                  </template>
-                  <template x-if="shouldShowOwnerRevert(booking)">
-                    <button type="button" @click.stop="confirmRevertQueuedBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                      Revert
-                    </button>
-                  </template>
-                  <template x-if="shouldShowOwnerCancel(booking)">
-                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                      Cancel
-                    </button>
-                  </template>
-                  <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
-                    View Details
-                  </button>
                 </div>
-
-                <div
-                  x-show="isQueuedBookingExpanded(booking.id)"
-                  x-transition
-                  class="admin-queued-pets-panel"
-                >
-                  <div class="admin-queued-pets-heading">
-                    <div>
-                      <p class="admin-queued-pets-title">Pets in this booking</p>
-                      <p class="admin-queued-pets-support">Queued pets under this owner.</p>
-                    </div>
-                    <span class="admin-queued-pet-count" x-text="getQueuedPets(booking).length"></span>
-                  </div>
-
-                  <template x-if="!booking.pets || booking.pets.length === 0">
-                    <p class="admin-queued-pets-empty">No pet records are attached to this booking.</p>
-                  </template>
-
-                  <div class="admin-queued-pet-list">
-                    <template x-for="(pet, petIndex) in getQueuedPets(booking)" :key="pet.bookingPetId ?? pet.id ?? petIndex">
-                      <article class="admin-queued-pet-card">
-                        <div class="admin-queued-pet-main">
-                          <div class="admin-queued-pet-queue" x-text="formatPetQueueNumber(pet, petIndex)"></div>
-
-                          <div class="admin-queued-pet-information">
-                            <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
-                            <p class="admin-queued-pet-basic">
-                              <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> &middot; </span>
-                              <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> &middot; </span>
-                              <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
-                              <span aria-hidden="true"> &middot; </span><span>Confirmed</span>
-                            </p>
-                            <p class="admin-queued-pet-services" x-text="pet.weight"></p>
-                            <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
-                            <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
-                            <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
-                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
-                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetQueueWait(pet)"></p>
-                            <p class="mt-1 text-xs font-semibold" :class="getPetWorkloadState(pet) === 'Needs staff action' ? 'text-red-700' : getPetWorkloadState(pet) === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="getPetWorkloadState(pet)"></p>
-                            <p class="admin-queued-pet-services">
-                              Grooming state:
-                              <strong x-text="petGroomingStateLabel(pet)"></strong>
-                            </p>
-                          </div>
-
-                          <div class="admin-queued-pet-actions">
-                            <div
-                              class="admin-queued-pet-start-wrap"
-                              :class="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'is-capacity-disabled' : ''"
-                              :title="isGroomerCapacityFull && petGroomingState(pet) === 'not_started' ? 'Groomer currently busy' : ''"
-                            >
-                              <button
-                                type="button"
-                                @click="confirmStartGroomingPet(booking, pet)"
-                                :disabled="petGroomingState(pet) !== 'not_started' || isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
-                                class="admin-queued-pet-start"
-                                :class="petGroomingState(pet) === 'finished' ? 'is-finished' : (petGroomingState(pet) !== 'not_started' || isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : '')"
-                              >
-                                <span x-text="petGroomingState(pet) !== 'not_started' ? petGroomingStateLabel(pet) : (isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming')"></span>
-                              </button>
-                            </div>
-                            <button
-                              type="button"
-                              @click="printPetCard(booking, pet, petIndex)"
-                              class="admin-queued-pet-print"
-                              :aria-label="'Print grooming card for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'pet')"
-                            >
-                              <i data-lucide="printer" class="h-4 w-4"></i>
-                              Print
+                <div class="grooming-booking-actions">
+                  <button type="button" @click="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">View Details</button>
+                  <template x-if="activeTab === 'queued' || activeTab === 'in-progress'">
+                    <div class="grooming-stage-actions">
+                      <button type="button" @click="toggleGroomingBooking(booking)" :aria-expanded="isGroomingBookingExpanded(booking)" class="admin-queued-owner-action grooming-expand-action">
+                        <span x-text="isGroomingBookingExpanded(booking) ? 'Hide pets' : 'Show pets'"></span>
+                        <i data-lucide="chevron-down" class="h-4 w-4" :class="isGroomingBookingExpanded(booking) ? 'rotate-180' : ''"></i>
+                      </button>
+                      <template x-if="booking.pets?.length === 1 && !isGroomingBookingExpanded(booking)">
+                        <div class="grooming-stage-actions">
+                          <template x-if="petGroomingState(booking.pets[0]) === 'not_started'">
+                            <button type="button" @click="confirmStartGroomingPet(booking, booking.pets[0])" :disabled="isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)" :title="isGroomerCapacityFull ? 'Groomer currently busy' : ''" class="admin-queued-pet-start">
+                              <span x-text="isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'"></span>
                             </button>
-                          </div>
+                          </template>
+                          <template x-if="isPetGroomingInProgress(booking.pets[0])">
+                            <button type="button" @click="confirmMarkPetDone(booking, booking.pets[0])" :disabled="isActionBusy('markPetDone', booking.id)" class="admin-in-progress-pet-finish">
+                              <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
+                            </button>
+                          </template>
                         </div>
-
-                        <div class="admin-queued-pet-notes">
-                          <p>
-                            <span x-text="booking.bookingType === 'Walk-In' ? 'Grooming & Visit Notes' : 'Customer Note'"></span>
-                            <strong x-text="pet.specialInstructions || 'None provided'"></strong>
-                          </p>
-                          <p>
-                            <span>Medical Information</span>
-                            <strong x-text="pet.medicalConditions || 'None provided'"></strong>
-                          </p>
-                        </div>
-                      </article>
-                    </template>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- In Progress -->
-          <section x-show="activeTab === 'in-progress'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#315b7e]">
-              <i data-lucide="scissors" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                In Progress
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="inProgressList.length === 0">
-              <div
-                class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10"
-              >
-                <div
-                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef5fb] text-[#315b7e]"
-                >
-                  <i data-lucide="scissors" class="h-8 w-8"></i>
-                </div>
-
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No ongoing grooming right now
-                </p>
-
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets actively receiving grooming services will appear here.
-                </p>
-              </div>
-            </template>
-
-            <!-- ===================================================================================== -->
-            <!-- ⚠️ BACKEND INTEGRATION AREA - DO NOT REMOVE STRUCTURE -->
-
-            <!--
-            BACKEND DEVELOPER:
-
-            This section renders In-Progress appointment cards.
-
-            DO NOT REMOVE the HTML structure below.
-            Only replace the data source (inProgressList) with real API data.
-
-            EXPECTED OBJECT FORMAT:
-            {
-              id: number|string,
-              queueNumber: number,
-              ownerName: string,
-              contactNumber: string,
-              startedAt: string,
-              status: "in_progress",
-              pets: [{
-                bookingPetId: number|string,
-                petQueueNumber: number,
-                petName: string,
-                species: string,
-                breed: string,
-                size: string,
-                groomingStartedAt: string|null,
-                groomingFinishedAt: string|null,
-                isGroomingStarted: boolean,
-                isGroomingFinished: boolean
-              }]
-            }
-
-            BUSINESS RULE:
-            - A booking enters this tab after at least one pet starts grooming.
-
-            NOTES:
-            - queueNumber (#1, #2, #3...) should come from backend
-            - each Finished action updates one booking_pets.grooming_end_time value
-            - the owner booking stays In Progress until every pet is finished
-            - the completed booking then moves to For Payment or To Be Picked Up
-            -->
-
-            <!-- ===================================================================================== -->
-
-            <!-- Toggleable owner booking card with active and queued pets. -->
-            <template x-for="booking in inProgressList" :key="booking.id">
-              <article
-                class="rounded-[24px] border-2 border-[#315b7e] bg-white px-4 py-5 shadow-sm sm:px-6"
-              >
-                <button
-                  type="button"
-                  @click="toggleInProgressBooking(booking.id)"
-                  class="admin-queued-owner-toggle"
-                  :aria-expanded="isInProgressBookingExpanded(booking.id)"
-                >
-                  <div class="admin-queued-owner-summary">
-                    <div
-                      class="text-4xl font-extrabold text-[#315b7e]"
-                      x-text="'#' + booking.queueNumber"
-                    ></div>
-
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4
-                          class="text-2xl font-medium text-black lg:text-3xl"
-                          x-text="booking.ownerName"
-                        ></h4>
-                        <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
-                        <!-- Status badge -->
-                        <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-                          <i data-lucide="scissors" class="h-3 w-3"></i>
-                          In Progress
-                        </span>
-                      </div>
-                      <p
-                        class="text-sm text-slate-500"
-                        x-text="formatMobileNumber(booking.contactNumber)"
-                      ></p>
-                      <p class="mt-2 text-sm text-slate-600">
-                        <span x-text="(booking.pets?.length || booking.numberOfPets || 0) + ((booking.pets?.length || booking.numberOfPets || 0) === 1 ? ' pet' : ' pets')"></span>
-                        <span x-show="booking.startedAt" x-text="' \u00b7 Started: ' + booking.startedAt"></span>
-                      </p>
-                      <!-- In-progress ETA badge -->
-                      <template x-if="getBookingETA(booking)">
-                        <p class="mt-1 flex items-center gap-1 text-sm font-semibold text-[#315b7e]">
-                          <i data-lucide="alarm-clock" class="h-3.5 w-3.5 shrink-0"></i>
-                          Est. ready: <span x-text="getBookingETA(booking)"></span>
-                        </p>
                       </template>
-                    </div>
-                  </div>
-
-                  <div class="admin-queued-owner-expand-hint">
-                    <span x-text="isInProgressBookingExpanded(booking.id) ? 'Hide pets' : 'Show pets'"></span>
-                    <i
-                      data-lucide="chevron-down"
-                      class="h-5 w-5 transition-transform"
-                      :class="isInProgressBookingExpanded(booking.id) ? 'rotate-180' : ''"
-                    ></i>
-                  </div>
-                </button>
-
-                <div class="admin-queued-owner-actions">
-                  <template x-if="!booking.paid">
-                    <button type="button" @click.stop="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">
-                      <i data-lucide="banknote" class="h-4 w-4" aria-hidden="true"></i>
-                      Pay Now
-                    </button>
-                  </template>
-                  <template x-if="booking.paid">
-                    <div class="admin-queued-owner-action btn-already-paid">
-                      <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                      Already Paid
+                      <button x-show="!booking.paid" type="button" @click="openPaymentModal(booking, true)" class="admin-queued-owner-action btn-pay-now">Pay Now</button>
+                      <span x-show="booking.paid" class="grooming-note-flag">Paid</span>
+                      <button x-show="shouldShowOwnerReschedule(booking)" type="button" class="admin-queued-owner-action admin-queued-reschedule-action">Reschedule</button>
+                      <button x-show="shouldShowOwnerRevert(booking)" type="button" @click="activeTab === 'queued' ? confirmRevertQueuedBooking(booking) : confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">Revert</button>
+                      <button x-show="shouldShowOwnerCancel(booking)" type="button" @click="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">Cancel</button>
                     </div>
                   </template>
-                  <template x-if="shouldShowOwnerReschedule(booking)">
-                    <button type="button" class="admin-queued-owner-action admin-queued-reschedule-action">
-                      <i data-lucide="calendar-clock" class="h-4 w-4" aria-hidden="true"></i>
-                      Reschedule
-                    </button>
-                  </template>
-                  <template x-if="shouldShowOwnerRevert(booking)">
-                    <button type="button" @click.stop="confirmRevertInProgressBooking(booking)" class="admin-queued-owner-action admin-queued-revert-action">
-                      <i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>
-                      Revert
-                    </button>
-                  </template>
-                  <template x-if="shouldShowOwnerCancel(booking)">
-                    <button type="button" @click.stop="confirmCancelBooking(booking)" class="admin-queued-owner-action admin-queued-cancel-action">
-                      <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
-                      Cancel
-                    </button>
-                  </template>
-                  <button type="button" @click.stop="viewBookingDetails(booking)" class="admin-queued-owner-action admin-queued-details-action">
-                    View Details
-                  </button>
-                </div>
-
-                <div
-                  x-show="isInProgressBookingExpanded(booking.id)"
-                  x-transition
-                  class="admin-queued-pets-panel"
-                >
-                  <div class="admin-queued-pets-heading">
-                    <div>
-                      <p class="admin-queued-pets-title">Pets in this booking</p>
-                      <p class="admin-queued-pets-support">Active and queued pets under this owner.</p>
+                  <template x-if="activeTab === 'for-payment'">
+                    <div class="grooming-stage-actions">
+                      <button x-show="booking.paid" type="button" @click="releaseBooking(booking)" class="btn-release admin-queued-owner-action">Move to Pickup</button>
+                      <button x-show="!booking.paid" type="button" @click="openPaymentModal(booking, false)" :disabled="booking.paymentReady === false" class="btn-process-payment admin-queued-owner-action">Process Payment</button>
+                      <p x-show="!booking.paid && booking.paymentReady === false" class="text-xs text-amber-700" x-text="booking.paymentBlockedReason"></p>
                     </div>
-                    <span class="admin-queued-pet-count admin-in-progress-pet-count" x-text="getInProgressPets(booking).length"></span>
-                  </div>
-
-                  <template x-if="!booking.pets || booking.pets.length === 0">
-                    <p class="admin-queued-pets-empty">No pet records are attached to this booking.</p>
                   </template>
-
-                  <div class="admin-queued-pet-list">
-                    <template x-for="(pet, petIndex) in getInProgressPets(booking)" :key="pet.bookingPetId ?? pet.id ?? petIndex">
-                      <article class="admin-queued-pet-card">
-                        <div class="admin-queued-pet-main">
-                          <div class="admin-queued-pet-queue" x-text="formatPetQueueNumber(pet, petIndex)"></div>
-
-                          <div class="admin-queued-pet-information">
-                            <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name ?? ('Pet ' + (petIndex + 1))"></h5>
-                            <p class="admin-queued-pet-basic">
-                              <span x-text="formatPetCardValue(pet.species ?? pet.petType ?? pet.pet_type)"></span>
-                              <span aria-hidden="true"> &middot; </span>
-                              <span x-text="formatPetCardValue(pet.breed)"></span>
-                              <span aria-hidden="true"> &middot; </span>
-                              <span x-text="formatPetCardValue(pet.size ?? pet.petSize ?? pet.pet_size)"></span>
-                              <span aria-hidden="true"> &middot; </span><span>Confirmed</span>
-                              <span x-show="pet.groomingStartedAt" aria-hidden="true"> &middot; </span>
-                              <span x-show="pet.groomingStartedAt" x-text="'Started ' + pet.groomingStartedAt"></span>
-                            </p>
-                            <p class="admin-queued-pet-services" x-text="pet.weight"></p>
-                            <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
-                            <p class="admin-queued-pet-services" x-show="pet.groomingEstimate?.preferenceLabel" x-text="pet.groomingEstimate?.preferenceLabel"></p>
-                            <p class="admin-queued-pet-services">Estimated grooming time: <strong x-text="getPetEstimateLabel(pet)"></strong></p>
-                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
-                            <p x-show="!isPetGroomingStarted(pet)" class="admin-queued-pet-timing" x-text="getPetQueueWait(pet)"></p>
-                            <p class="mt-1 text-xs font-semibold" :class="getPetWorkloadState(pet) === 'Needs staff action' ? 'text-red-700' : getPetWorkloadState(pet) === 'At risk' ? 'text-amber-700' : 'text-slate-600'" x-text="getPetWorkloadState(pet)"></p>
-                            <p class="admin-queued-pet-services">
-                              Grooming state:
-                              <strong x-text="petGroomingStateLabel(pet)"></strong>
-                            </p>
-                            <!-- Per-pet elapsed + ETA -->
-                            <p x-show="isPetGroomingInProgress(pet)" class="admin-queued-pet-timing">
-                              <span x-text="getPetElapsed(pet)"></span>
-                              <template x-if="getPetEstDone(booking, pet)">
-                                <span x-text="(getPetElapsed(pet) ? ' \u00b7 ' : '') + getPetEstDone(booking, pet)"></span>
-                              </template>
-                            </p>
-                          </div>
-
-                          <div class="admin-queued-pet-actions">
-                            <template x-if="isPetGroomingInProgress(pet)">
-                              <button
-                                type="button"
-                                @click="confirmMarkPetDone(booking, pet)"
-                                :disabled="isActionBusy('markPetDone', booking.id)"
-                                class="admin-in-progress-pet-finish"
-                                :class="isActionBusy('markPetDone', booking.id) ? 'is-disabled' : ''"
-                              >
-                                <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
-                              </button>
-                            </template>
-                            <template x-if="petGroomingState(pet) === 'not_started'">
-                              <div
-                                class="admin-queued-pet-start-wrap"
-                                :class="isGroomerCapacityFull ? 'is-capacity-disabled' : ''"
-                                :title="isGroomerCapacityFull ? 'Groomer currently busy' : ''"
-                              >
-                                <button
-                                  type="button"
-                                  @click="confirmStartGroomingPet(booking, pet)"
-                                  :disabled="isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)"
-                                  class="admin-queued-pet-start admin-in-progress-pet-start"
-                                  :class="isActionBusy('startPetGrooming', booking.id) ? 'is-disabled' : ''"
-                                >
-                                  <span x-text="isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'"></span>
-                                </button>
-                              </div>
-                            </template>
-                            <button
-                              type="button"
-                              @click="printPetCard(booking, pet, petIndex)"
-                              class="admin-queued-pet-print"
-                              :aria-label="'Print grooming card for ' + (pet.petName ?? pet.pet_name ?? pet.name ?? 'pet')"
-                            >
-                              <i data-lucide="printer" class="h-4 w-4"></i>
-                              Print
-                            </button>
-                          </div>
-                        </div>
-
-                        <div class="admin-queued-pet-notes">
-                          <p>
-                            <span x-text="booking.bookingType === 'Walk-In' ? 'Grooming & Visit Notes' : 'Customer Note'"></span>
-                            <strong x-text="pet.specialInstructions || 'None provided'"></strong>
-                          </p>
-                          <p>
-                            <span>Medical Information</span>
-                            <strong x-text="pet.medicalConditions || 'None provided'"></strong>
-                          </p>
-                        </div>
-                      </article>
-                    </template>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-
-          <!-- For Payment -->
-          <section x-show="activeTab === 'for-payment'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#16a34a]">
-              <i data-lucide="banknote" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">
-                For Payment
-              </h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="forPaymentList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#dcfce7] btn-icon-payment">
-                  <i data-lucide="banknote" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No pending payments</p>
-                <p class="mt-2 text-sm text-slate-500">
-                  Completed grooming sessions awaiting payment will appear here.
-                </p>
-              </div>
-            </template>
-
-            <!-- FOR PAYMENT CARDS -->
-            <template x-for="booking in forPaymentList" :key="booking.id">
-              <article class="rounded-[24px] border-2 bg-white px-4 py-5 shadow-sm sm:px-6"
-                :class="booking.paid ? 'border-[#86efac]' : 'border-[#16a34a]'">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold" :class="booking.paid ? 'text-[#86efac]' : 'text-[#16a34a]'"
-                      x-text="'#' + booking.queueNumber"></div>
-
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <!-- Badge: already paid vs awaiting payment -->
-                        <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
-                        <template x-if="booking.paid">
-                          <span class="badge-already-paid inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold">
-                            <i data-lucide="check-circle-2" class="h-3 w-3"></i>
-                            Already Paid
-                          </span>
-                        </template>
-                        <template x-if="!booking.paid">
-                          <span class="badge-awaiting-payment inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold">
-                            <i data-lucide="banknote" class="h-3 w-3"></i>
-                            Awaiting Payment
-                          </span>
-                        </template>
-                      </div>
-
-                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
-
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-                        <p class="flex items-center gap-2 text-[#16a34a]">
-                          <i data-lucide="bell-ring" class="h-4 w-4"></i>
-                          <span>Customer notified</span>
-                        </p>
-                        <p x-show="booking.completedAt" class="flex items-center gap-2">
-                          <i data-lucide="check-circle-2" class="h-4 w-4"></i>
-                          <span x-text="'Finished: ' + booking.completedAt"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-
-                    <!-- Already paid → Release button -->
-                    <template x-if="booking.paid">
-                      <button
-                        type="button"
-                        @click="releaseBooking(booking)"
-                        class="btn-release rounded-xl px-6 py-3 text-base font-semibold transition"
-                      >
-                        Move to Pickup
-                      </button>
-                    </template>
-
-                    <!-- Not yet paid → Process Payment button -->
-                    <template x-if="!booking.paid">
-                      <button
-                        type="button"
-                        @click="openPaymentModal(booking, false)"
-                        :disabled="booking.paymentReady === false"
-                        class="btn-process-payment rounded-xl px-6 py-3 text-base font-semibold transition"
-                        :class="booking.paymentReady === false ? 'cursor-not-allowed opacity-50' : ''"
-                      >
-                        Process Payment
-                      </button>
-                    </template>
-                    <p x-show="!booking.paid && booking.paymentReady === false" class="max-w-xs text-right text-xs text-amber-700" x-text="booking.paymentBlockedReason"></p>
-
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              </article>
-            </template>
-          </section>
-          <!-- To Be Picked Up -->
-          <section x-show="activeTab === 'to-be-picked-up'" class="mt-6 space-y-4">
-            <div class="flex items-center gap-2 text-[#0e7490]">
-              <i data-lucide="package-check" class="h-5 w-5"></i>
-              <h3 class="text-2xl font-semibold text-black lg:text-3xl">To Be Picked Up</h3>
-            </div>
-
-            <!-- EMPTY STATE -->
-            <template x-if="releasedList.length === 0">
-              <div class="rounded-[24px] border border-dashed border-[#bfd3e3] bg-white p-8 text-center lg:p-10">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cyan-50 text-cyan-500">
-                  <i data-lucide="package-check" class="h-8 w-8"></i>
-                </div>
-                <p class="mt-4 text-lg font-bold text-[#2f4b66]">No pets awaiting pickup</p>
-                <p class="mt-2 text-sm text-slate-500">
-                  Pets that are groomed and paid for will appear here until the customer collects them.
-                </p>
-              </div>
-            </template>
-
-            <!-- TO BE PICKED UP CARDS -->
-            <template x-for="booking in releasedList" :key="booking.id">
-              <article class="rounded-[24px] border-2 border-cyan-200 bg-white px-4 py-5 shadow-sm sm:px-6">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <!-- LEFT SIDE -->
-                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
-                    <div class="text-4xl font-extrabold text-cyan-300" x-text="'#' + booking.queueNumber"></div>
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="text-2xl font-medium text-black lg:text-3xl" x-text="booking.ownerName"></h4>
-                        <span x-show="booking.bookingType !== 'Walk-In' && booking.internalStaffNote" class="text-xs font-semibold text-slate-500">📝 Staff note</span>
-                        <span class="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-700 border border-cyan-200">
-                          <i data-lucide="check-circle-2" class="h-3 w-3"></i>
-                          Paid &amp; Ready
-                        </span>
-                      </div>
-
-                      <p class="text-sm text-slate-500" x-text="formatMobileNumber(booking.contactNumber)"></p>
-
-                      <div class="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:flex-wrap md:items-center md:gap-5">
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="paw-print" class="h-4 w-4"></i>
-                          <span x-text="booking.petName + ' (' + booking.breed + ')'"></span>
-                        </p>
-                        <p class="flex items-center gap-2">
-                          <i data-lucide="badge-info" class="h-4 w-4"></i>
-                          <span x-text="'Type: ' + booking.petType"></span>
-                        </p>
-                        <p x-show="booking.completedAt" class="flex items-center gap-2">
-                          <i data-lucide="scissors" class="h-4 w-4"></i>
-                          <span x-text="'Finished: ' + booking.completedAt"></span>
-                        </p>
-                      </div>
-                      <p class="mt-2 text-sm font-medium text-[#315b7e]" x-text="booking.serviceLabel"></p>
-                    </div>
-                  </div>
-
-                  <!-- RIGHT SIDE -->
-                  <div class="flex flex-col items-stretch gap-3 sm:items-end">
-                    <button
-                      type="button"
-                      @click="confirmPickedUp(booking)"
-                      :disabled="isActionBusy('pickedUp', booking.id)"
-                      class="btn-pickup"
-                    >
+                  <template x-if="activeTab === 'to-be-picked-up'">
+                    <button type="button" @click="confirmPickedUp(booking)" :disabled="isActionBusy('pickedUp', booking.id)" class="btn-pickup admin-queued-owner-action">
                       <span x-text="isActionBusy('pickedUp', booking.id) ? 'Processing...' : 'Picked Up'"></span>
                     </button>
-                    <button
-                      type="button"
-                      @click="viewBookingDetails(booking)"
-                      class="text-lg font-medium text-black transition hover:text-[#315b7e]"
-                    >
-                      View Details
-                    </button>
-                  </div>
+                  </template>
                 </div>
+                <template x-if="activeTab === 'queued' || activeTab === 'in-progress'">
+                  <div x-show="isGroomingBookingExpanded(booking)" class="admin-queued-pets-panel">
+                    <div class="admin-queued-pet-list">
+                      <template x-for="(pet, petIndex) in getQueuedPets(booking)" :key="pet.bookingPetId ?? pet.id ?? petIndex">
+                        <article class="admin-queued-pet-card">
+                          <div class="admin-queued-pet-main">
+                            <span class="admin-queued-pet-queue" x-text="formatPetQueueNumber(pet, petIndex)"></span>
+                            <div class="admin-queued-pet-information">
+                              <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name"></h5>
+                              <p class="admin-queued-pet-basic" x-text="[pet.breed || pet.species, formatPetCardValue(pet.size, '')].filter(Boolean).join(' · ')"></p>
+                              <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
+                              <p x-show="!isPetGroomingFinished(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
+                              <div class="grooming-pet-flags">
+                                <span x-show="pet.medicalConditions" class="grooming-note-flag">Medical note</span>
+                                <span x-show="pet.specialInstructions" class="grooming-note-flag">Customer note</span>
+                                <span x-show="isPetGroomingFinished(pet)" class="grooming-note-flag">Finished</span>
+                              </div>
+                            </div>
+                            <div class="admin-queued-pet-actions">
+                              <template x-if="petGroomingState(pet) === 'not_started'">
+                                <button type="button" @click="confirmStartGroomingPet(booking, pet)" :disabled="isGroomerCapacityFull || isActionBusy('startPetGrooming', booking.id)" :title="isGroomerCapacityFull ? 'Groomer currently busy' : ''" class="admin-queued-pet-start">
+                                  <span x-text="isActionBusy('startPetGrooming', booking.id) ? getActionLabel('startPetGrooming') : 'Start Grooming'"></span>
+                                </button>
+                              </template>
+                              <template x-if="isPetGroomingInProgress(pet)">
+                                <button type="button" @click="confirmMarkPetDone(booking, pet)" :disabled="isActionBusy('markPetDone', booking.id)" class="admin-in-progress-pet-finish">
+                                  <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
+                                </button>
+                              </template>
+                              <button type="button" @click="printPetCard(booking, pet, petIndex)" class="admin-queued-pet-print" :aria-label="'Print grooming card for ' + pet.petName"><i data-lucide="printer" class="h-4 w-4"></i>Print</button>
+                            </div>
+                          </div>
+                        </article>
+                      </template>
+                    </div>
+                  </div>
+                </template>
               </article>
             </template>
           </section>
@@ -2152,22 +1369,27 @@
             x-transition
             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
             @click.self="closeDetailsModal()"
+            @keydown.escape.window="detailsModalOpen && closeDetailsModal()"
           >
-            <div class="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden">
+            <div class="grooming-details-dialog rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="grooming-details-title" @keydown.tab="trapGroomingDetailsFocus($event)">
 
               <!-- Header -->
               <div class="flex items-center justify-between bg-[#315b7e] px-6 py-4">
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-white/70">PRE-REGISTER DETAILS</p>
-                  <h4 class="text-lg font-bold text-white" x-text="detailsBooking?.bookingReference ?? '—'"></h4>
+                  <h3 id="grooming-details-title" class="text-lg font-bold text-white">Grooming Details</h3>
+                  <div class="grooming-details-reference">
+                    <span x-show="detailsBooking?.bookingReference" x-text="detailsBooking?.bookingReference"></span>
+                    <span x-show="detailsBooking?.queueNumber" x-text="'#' + detailsBooking?.queueNumber"></span>
+                    <span class="grooming-status" :data-tone="groomingCardTone(detailsBooking)" x-text="groomingStatusLabel(detailsBooking)"></span>
+                  </div>
                 </div>
-                <button type="button" @click="closeDetailsModal()" class="text-white/70 hover:text-white">
+                <button type="button" @click="closeDetailsModal()" x-ref="groomingDetailsClose" aria-label="Close Grooming Details" class="grooming-details-close text-white/70 hover:text-white">
                   <i data-lucide="x" class="h-5 w-5"></i>
                 </button>
               </div>
 
               <!-- Body -->
-              <div class="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-5" x-show="detailsBooking">
+              <div class="grooming-details-body px-6 py-5 space-y-5" x-show="detailsBooking">
 
                 <!-- Owner -->
                 <div>
@@ -2176,22 +1398,99 @@
                   <p class="text-sm text-slate-500" x-text="formatMobileNumber(detailsBooking?.contactNumber)"></p>
                 </div>
 
-                <!-- Schedule -->
+                <!-- Visit summary -->
                 <div>
-                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Schedule</p>
-                  <p class="text-sm text-slate-700">
-                    <span x-text="detailsBooking?.appointmentDate ?? '—'"></span>
-                    &nbsp;&middot;&nbsp;
-                    <span x-text="detailsBooking?.appointmentTime ?? '—'"></span>
+                  <h4 class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Visit summary</h4>
+                  <dl class="grooming-visit-summary">
+                    <div x-show="detailsBooking?.appointmentDate || detailsBooking?.appointmentTime"><dt>Appointment</dt><dd x-text="[detailsBooking?.appointmentDate, detailsBooking?.appointmentTime].filter(Boolean).join(' · ')"></dd></div>
+                    <div x-show="detailsBooking?.dropOffTime"><dt>Dropped off</dt><dd x-text="detailsBooking?.dropOffTime"></dd></div>
+                    <div x-show="detailsBooking?.startedAt"><dt>Started</dt><dd x-text="detailsBooking?.startedAt"></dd></div>
+                    <div x-show="detailsBooking?.completedAt"><dt>Finished</dt><dd x-text="detailsBooking?.completedAt"></dd></div>
+                    <div x-show="detailsBooking && getBookingETA(detailsBooking)"><dt>Est. ready</dt><dd x-text="detailsBooking && getBookingETA(detailsBooking)"></dd></div>
+                    <div x-show="detailsBooking?.bookingType"><dt>Booking type</dt><dd x-text="detailsBooking?.bookingType"></dd></div>
+                    <div><dt>Payment</dt><dd x-text="detailsBooking?.paid ? 'Paid' : 'Unpaid'"></dd></div>
+                  </dl>
+                </div>
+
+                <!-- Pets -->
+                <div>
+                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+                    Pets (<span x-text="detailsBooking?.pets?.length ?? detailsBooking?.numberOfPets ?? 0"></span>)
                   </p>
+                  <template x-for="(pet, index) in (detailsBooking?.pets ?? [])" :key="index">
+                    <details class="grooming-details-pet" :open="(detailsBooking?.pets?.length ?? 0) === 1">
+                      <summary>
+                        <span class="font-semibold text-slate-800" x-text="pet.petName"></span>
+                        <span class="grooming-contact" x-text="[pet.species, pet.breed, formatPetCardValue(pet.size, '')].filter(Boolean).join(' · ')"></span>
+                        <span class="grooming-pet-flags">
+                          <span x-show="pet.medicalConditions" class="grooming-note-flag">Medical note</span>
+                          <span x-show="pet.specialInstructions" class="grooming-note-flag">Customer note</span>
+                        </span>
+                      </summary>
+                      <div class="grooming-details-pet-body">
+                      <div class="grooming-pet-facts">
+                        <p x-show="pet.species && pet.species !== '—'"><span class="text-slate-400">Species:</span> <span x-text="pet.species"></span></p>
+                        <p x-show="pet.breed && pet.breed !== '—'"><span class="text-slate-400">Breed:</span> <span x-text="pet.breed"></span></p>
+                        <p x-show="pet.size && pet.size !== '—'"><span class="text-slate-400">Size:</span> <span x-text="pet.size"></span></p>
+                        <p x-show="pet.furType && pet.furType !== '—'"><span class="text-slate-400">Fur:</span> <span x-text="pet.furType"></span></p>
+                        <p x-show="pet.weight && pet.weight !== '—'"><span class="text-slate-400">Weight:</span> <span x-text="pet.weight"></span></p>
+                      </div>
+                      <dl class="grooming-visit-summary grooming-pet-timestamps">
+                        <div x-show="detailsBooking?.status !== 'incoming'"><dt>Status</dt><dd x-text="petGroomingStateLabel(pet)"></dd></div>
+                        <div x-show="pet.groomingEstimate"><dt>Grooming estimate</dt><dd x-text="getPetEstimateLabel(pet)"></dd></div>
+                        <div x-show="pet.groomingEstimate?.preferenceLabel"><dt>Preference</dt><dd x-text="pet.groomingEstimate?.preferenceLabel"></dd></div>
+                        <div x-show="['At risk', 'Needs staff action'].includes(getPetWorkloadState(pet))"><dt>Workload</dt><dd x-text="getPetWorkloadState(pet)"></dd></div>
+                        <div x-show="pet.groomingStartedAt"><dt>Started</dt><dd x-text="pet.groomingStartedAt"></dd></div>
+                        <div x-show="pet.groomingFinishedAt"><dt>Finished</dt><dd x-text="pet.groomingFinishedAt"></dd></div>
+                        <div x-show="!isPetGroomingFinished(pet) && getPetEstDone(detailsBooking, pet)"><dt>Timing</dt><dd x-text="getPetEstDone(detailsBooking, pet)"></dd></div>
+                        <div x-show="isPetGroomingInProgress(pet) && getPetElapsed(pet)"><dt>Elapsed</dt><dd x-text="getPetElapsed(pet)"></dd></div>
+                      </dl>
+                      <p x-show="detailsBooking?.status !== 'incoming' && petGroomingState(pet) === 'not_started' && getPetWorkloadState(pet)" class="mt-2 text-sm text-slate-600" x-text="getPetQueueWait(pet)"></p>
+                      <template x-if="pet.medicalConditions">
+                        <p class="mt-2 text-sm"><span class="text-slate-400">Medical Information:</span> <span class="text-red-600" x-text="pet.medicalConditions"></span></p>
+                      </template>
+                      <div x-show="pet.specialInstructions || canEditGroomingVisitNotes()" class="mt-2 text-sm">
+                        <p class="font-semibold text-slate-500" x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Grooming & Visit Notes' : 'Customer Note'"></p>
+                        <template x-if="noteEditor.kind !== 'pet' || noteEditor.bookingPetId !== pet.bookingPetId">
+                          <div>
+                            <p x-show="pet.specialInstructions" class="whitespace-pre-wrap text-slate-700" x-text="pet.specialInstructions"></p>
+                            <button x-show="canEditGroomingVisitNotes()" type="button" @click="beginNoteEdit('pet', pet)" class="mt-1 font-semibold text-[#315b7e]" x-text="pet.specialInstructions ? 'Edit' : '+ Add note'"></button>
+                          </div>
+                        </template>
+                        <form x-show="noteEditor.kind === 'pet' && noteEditor.bookingPetId === pet.bookingPetId" @submit.prevent="saveNoteEdit()" class="mt-2 space-y-2">
+                          <textarea x-model="noteEditor.value" maxlength="1000" rows="3" placeholder="Add grooming, handling, or owner-specific notes for this visit." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+                          <p x-show="noteEditor.error" x-text="noteEditor.error" class="text-red-600"></p>
+                          <div class="flex gap-3"><button type="button" @click="cancelNoteEdit()" :disabled="noteEditor.busy">Cancel</button><button type="submit" :disabled="noteEditor.busy" class="font-semibold text-[#315b7e]" x-text="noteEditor.busy ? 'Saving...' : 'Save note'"></button></div>
+                        </form>
+                      </div>
+
+                      <template x-if="getPetServicesAvailed(pet, detailsBooking).length > 0">
+                        <div class="mt-3 border-t border-slate-200 pt-3">
+                          <div class="mb-2 flex items-center justify-between gap-3">
+                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
+                            <p class="shrink-0 text-sm font-bold text-[#1f3850]" x-text="formatPetServicesAvailedTotal(pet, detailsBooking)"></p>
+                          </div>
+                          <div class="space-y-2">
+                            <template x-for="(svc, serviceIndex) in getPetServicesAvailed(pet, detailsBooking)" :key="svc.id ?? serviceIndex">
+                              <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                                <p class="text-sm font-medium text-slate-700" x-text="svc.name ?? svc.serviceName ?? svc.service_name"></p>
+                                <p class="shrink-0 text-sm font-bold text-slate-500" x-text="formatServiceAvailedPrice(svc, detailsBooking)"></p>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                      </div>
+                    </details>
+                  </template>
                 </div>
 
                 <!-- Internal Staff Note -->
-                <div x-show="detailsBooking?.bookingType !== 'Walk-In'">
+                <div x-show="detailsBooking?.internalStaffNote || canEditInternalStaffNote()">
                   <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Internal Staff Note</p>
                   <template x-if="noteEditor.kind !== 'staff'">
                     <div>
-                      <p class="whitespace-pre-wrap text-sm text-slate-700" x-text="detailsBooking?.internalStaffNote || 'No staff note added.'"></p>
+                      <p x-show="detailsBooking?.internalStaffNote" class="whitespace-pre-wrap text-sm text-slate-700" x-text="detailsBooking?.internalStaffNote"></p>
                       <button x-show="canEditInternalStaffNote()" type="button" @click="beginNoteEdit('staff')" class="mt-2 text-sm font-semibold text-[#315b7e]" x-text="detailsBooking?.internalStaffNote ? 'Edit' : '+ Add note'"></button>
                     </div>
                   </template>
@@ -2234,59 +1533,6 @@
                       </form>
                     </template>
                   </div>
-                </div>
-
-                <!-- Pets -->
-                <div>
-                  <p class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-                    Pets (<span x-text="detailsBooking?.numberOfPets ?? 0"></span>)
-                  </p>
-                  <template x-for="(pet, index) in (detailsBooking?.pets ?? [])" :key="index">
-                    <div class="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                      <p class="font-semibold text-slate-800" x-text="pet.petName"></p>
-                      <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
-                        <p><span class="text-slate-400">Species:</span> <span x-text="pet.species"></span></p>
-                        <p><span class="text-slate-400">Breed:</span> <span x-text="pet.breed"></span></p>
-                        <p><span class="text-slate-400">Size:</span> <span x-text="pet.size"></span></p>
-                        <p><span class="text-slate-400">Fur:</span> <span x-text="pet.furType"></span></p>
-                        <p><span class="text-slate-400">Weight:</span> <span x-text="pet.weight"></span></p>
-                      </div>
-                      <template x-if="pet.medicalConditions">
-                        <p class="mt-2 text-sm"><span class="text-slate-400">Medical Information:</span> <span class="text-red-600" x-text="pet.medicalConditions"></span></p>
-                      </template>
-                      <div class="mt-2 text-sm">
-                        <p class="font-semibold text-slate-500" x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Grooming & Visit Notes' : 'Customer Note'"></p>
-                        <template x-if="noteEditor.kind !== 'pet' || noteEditor.bookingPetId !== pet.bookingPetId">
-                          <div>
-                            <p class="whitespace-pre-wrap text-slate-700" x-text="pet.specialInstructions || 'None provided'"></p>
-                            <button x-show="canEditGroomingVisitNotes()" type="button" @click="beginNoteEdit('pet', pet)" class="mt-1 font-semibold text-[#315b7e]" x-text="pet.specialInstructions ? 'Edit' : '+ Add note'"></button>
-                          </div>
-                        </template>
-                        <form x-show="noteEditor.kind === 'pet' && noteEditor.bookingPetId === pet.bookingPetId" @submit.prevent="saveNoteEdit()" class="mt-2 space-y-2">
-                          <textarea x-model="noteEditor.value" maxlength="1000" rows="3" placeholder="Add grooming, handling, or owner-specific notes for this visit." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
-                          <p x-show="noteEditor.error" x-text="noteEditor.error" class="text-red-600"></p>
-                          <div class="flex gap-3"><button type="button" @click="cancelNoteEdit()" :disabled="noteEditor.busy">Cancel</button><button type="submit" :disabled="noteEditor.busy" class="font-semibold text-[#315b7e]" x-text="noteEditor.busy ? 'Saving...' : 'Save note'"></button></div>
-                        </form>
-                      </div>
-
-                      <template x-if="getPetServicesAvailed(pet, detailsBooking).length > 0">
-                        <div class="mt-3 border-t border-slate-200 pt-3">
-                          <div class="mb-2 flex items-center justify-between gap-3">
-                            <p class="text-xs font-bold uppercase tracking-widest text-slate-400">Services Availed</p>
-                            <p class="shrink-0 text-sm font-bold text-[#1f3850]" x-text="formatPetServicesAvailedTotal(pet, detailsBooking)"></p>
-                          </div>
-                          <div class="space-y-2">
-                            <template x-for="(svc, serviceIndex) in getPetServicesAvailed(pet, detailsBooking)" :key="svc.id ?? serviceIndex">
-                              <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2">
-                                <p class="text-sm font-medium text-slate-700" x-text="svc.name ?? svc.serviceName ?? svc.service_name"></p>
-                                <p class="shrink-0 text-sm font-bold text-slate-500" x-text="formatServiceAvailedPrice(svc, detailsBooking)"></p>
-                              </div>
-                            </template>
-                          </div>
-                        </div>
-                      </template>
-                    </div>
-                  </template>
                 </div>
 
                 <!-- Customer Note -->
@@ -2381,6 +1627,6 @@
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
     <script src="../../scripts/services/grooming-estimate-engine.js?v=20261009"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-workload-20261009&walk-in=entry-context-20261015"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-board-20261016-5"></script>
   </body>
 </html>
