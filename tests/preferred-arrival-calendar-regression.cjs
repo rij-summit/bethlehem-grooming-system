@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../scripts/components/booking-calendar.js'), 'utf8')
-  .replace(/^import .*;\r?\n/m, '')
+  .replace(/^import\s+[\s\S]*?from\s+"[^"]+";\s*/gm, '')
   .replace(/export async function /g, 'async function ');
 
 async function checkCalendar(service) {
@@ -13,7 +13,7 @@ async function checkCalendar(service) {
     let html = '';
     return {
       children: [], textContent: '', disabled: false,
-      classList: { add() {}, remove() {} },
+      classList: { add() {}, remove() {}, toggle() {} },
       setAttribute() {},
       addEventListener(type, handler) { handlers[type] = handler; },
       appendChild(child) { this.children.push(child); },
@@ -49,7 +49,10 @@ async function checkCalendar(service) {
     API: { getClinicStatus: async () => status, getTimeslots: async () => ({ day_full: true, windows }) },
   });
   vm.runInContext(source, context);
-  await context.initBookingCalendar({ service });
+  await context.initBookingCalendar({
+    service,
+    fetchTimeslots: async () => ({ windows: windows.map((window) => ({ ...window })) }),
+  });
   const date = day => get('calendarGrid').children.find(button => String(button.textContent) === String(day));
   assert.equal(date(8).disabled, true, 'Past dates stay disabled.');
   assert.equal(date(13).disabled, true, 'The existing three-day limit remains.');

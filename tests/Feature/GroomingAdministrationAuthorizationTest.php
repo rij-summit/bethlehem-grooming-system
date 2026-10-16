@@ -268,6 +268,23 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->decimal('subtotal', 10, 2);
         });
 
+        Schema::create('clinic_appointments', function (Blueprint $table) {
+            $table->id();
+            $table->string('appointment_reference');
+            $table->unsignedInteger('user_id')->nullable();
+            $table->unsignedInteger('pet_id')->nullable();
+            $table->unsignedBigInteger('walkin_id')->nullable();
+            $table->string('status');
+            $table->boolean('paid')->default(false);
+            $table->decimal('total_amount')->default(0);
+            $table->decimal('cash_received')->nullable();
+            $table->string('payment_method')->nullable();
+            $table->unsignedInteger('paid_by_user_id')->nullable();
+            $table->dateTime('paid_at')->nullable();
+            $table->text('chief_complaint')->nullable();
+            $table->text('notes')->nullable();
+        });
+
         (require database_path('migrations/2026_07_05_100002_create_pos_transactions_table.php'))->up();
         (require database_path('migrations/2026_07_05_100003_create_pos_transaction_items_table.php'))->up();
         (require database_path('migrations/2026_10_07_100000_add_product_snapshot_to_pos_items.php'))->up();
@@ -315,6 +332,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('grooming_payment_products');
         Schema::dropIfExists('payments');
+        Schema::dropIfExists('clinic_appointments');
         Schema::dropIfExists('booking_services');
         Schema::dropIfExists('services');
         Schema::dropIfExists('booking_pets');
@@ -2495,38 +2513,33 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
     public function test_grooming_multi_pet_intake_respects_on_site_capacity_ignores_clinic_and_preferred_time(): void
     {
-        Schema::create('clinic_appointments', function (Blueprint $table) {
-            $table->id();
-            $table->string('status');
-        });
-        try {
-            foreach (range(1, 19) as $pet) {
-                DB::table('clinic_appointments')->insert(['status' => 'in_consultation']);
-            }
-            $this->seedMultiPetBooking();
-            DB::table('booking_pets')->update(['grooming_estimate_min' => 10, 'grooming_estimate_max' => 15]);
-            DB::table('bookings')->insert(['booking_id' => 99, 'booking_reference' => 'ON-SITE-19',
-                'booking_date' => now()->toDateString(), 'number_of_pets' => 19, 'status' => 'released']);
-            foreach (range(1, 19) as $pet) {
-                DB::table('booking_pets')->insert(['booking_id' => 99, 'grooming_state' => 'finished', 'grooming_end_time' => now()]);
-            }
-            DB::table('bookings')->where('booking_id', 1)->update(['status' => 'waiting_to_arrive', 'queue_number' => null, 'dropped_off_at' => null]);
-            DB::table('booking_pets')->update(['pet_queue_number' => null, 'pet_queue_date' => null]);
-            $this->authenticateAs('staff');
-            $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
-                ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
-            ]])->assertUnprocessable();
-            $this->assertDatabaseHas('bookings', ['booking_id' => 1, 'status' => 'waiting_to_arrive', 'queue_number' => null]);
-            DB::table('bookings')->where('booking_id', 99)->update(['status' => 'archived']);
-            Carbon::setTestNow(now()->setTime(16, 30));
-            $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
-                ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
-            ]])->assertOk()->assertJsonPath('queue_number', 1);
-            $this->getJson('/api/admin/bookings')->assertOk()
-                ->assertJsonPath('capacity.current', 2)->assertJsonPath('summary.waitingNow', 2);
-        } finally {
-            Schema::dropIfExists('clinic_appointments');
+        foreach (range(1, 19) as $pet) {
+            DB::table('clinic_appointments')->insert([
+                'appointment_reference' => 'CV-20260724-'.str_pad($pet, 4, '0', STR_PAD_LEFT),
+                'status' => 'in_consultation',
+            ]);
         }
+        $this->seedMultiPetBooking();
+        DB::table('booking_pets')->update(['grooming_estimate_min' => 10, 'grooming_estimate_max' => 15]);
+        DB::table('bookings')->insert(['booking_id' => 99, 'booking_reference' => 'ON-SITE-19',
+            'booking_date' => now()->toDateString(), 'number_of_pets' => 19, 'status' => 'released']);
+        foreach (range(1, 19) as $pet) {
+            DB::table('booking_pets')->insert(['booking_id' => 99, 'grooming_state' => 'finished', 'grooming_end_time' => now()]);
+        }
+        DB::table('bookings')->where('booking_id', 1)->update(['status' => 'waiting_to_arrive', 'queue_number' => null, 'dropped_off_at' => null]);
+        DB::table('booking_pets')->update(['pet_queue_number' => null, 'pet_queue_date' => null]);
+        $this->authenticateAs('staff');
+        $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
+            ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
+        ]])->assertUnprocessable();
+        $this->assertDatabaseHas('bookings', ['booking_id' => 1, 'status' => 'waiting_to_arrive', 'queue_number' => null]);
+        DB::table('bookings')->where('booking_id', 99)->update(['status' => 'archived']);
+        Carbon::setTestNow(now()->setTime(16, 30));
+        $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
+            ['booking_pet_id' => 1, 'size' => 'small'], ['booking_pet_id' => 2, 'size' => 'small'],
+        ]])->assertOk()->assertJsonPath('queue_number', 1);
+        $this->getJson('/api/admin/bookings')->assertOk()
+            ->assertJsonPath('capacity.current', 2)->assertJsonPath('summary.waitingNow', 2);
     }
 
     #[DataProvider('confirmedEstimateSizes')]

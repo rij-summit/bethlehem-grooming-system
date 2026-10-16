@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class GroomingSinglePageInterfaceTest extends TestCase
@@ -16,7 +17,7 @@ class GroomingSinglePageInterfaceTest extends TestCase
 
         $this->assertSame(1, substr_count($page, 'grooming-pre-registration.js'));
         $this->assertStringContainsString('id="bookingConsentForm"', $page);
-        $this->assertStringContainsString('id="printableConfirmation"', $page);
+        $this->assertStringContainsString('<main id="confirmationRoot" class="confirmation-page"></main>', $page);
 
         preg_match_all('/\bid="([^"]+)"/', $page, $matches);
         $this->assertCount(count(array_unique($matches[1])), $matches[1]);
@@ -45,11 +46,11 @@ class GroomingSinglePageInterfaceTest extends TestCase
         $this->assertStringContainsString('IS_CLINIC_VISIT', $petStep);
     }
 
-    public function test_each_step_has_a_top_link_directly_to_client_home(): void
+    public function test_editable_steps_have_a_top_link_directly_to_client_home(): void
     {
         $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
 
-        foreach (['schedule', 'pets', 'services', 'review', 'consent', 'confirmed'] as $step) {
+        foreach (['schedule', 'pets', 'services', 'review', 'consent'] as $step) {
             $section = explode('data-grooming-step="'.$step.'"', $page, 2)[1];
             $section = explode('data-grooming-step="', $section, 2)[0];
             preg_match('/<a\b[^>]*>.*?<\/a>/s', $section, $matches);
@@ -64,5 +65,63 @@ class GroomingSinglePageInterfaceTest extends TestCase
         foreach (['pets', 'services', 'review'] as $previousStep) {
             $this->assertStringContainsString('data-grooming-target="'.$previousStep.'"', $page);
         }
+    }
+
+    public function test_confirmation_renders_details_dashboard_navigation_and_working_print_controls(): void
+    {
+        $process = new Process(['node', '--input-type=module', '--eval', <<<'JS'
+import { initBookingConfirmedStep } from './scripts/components/booking-confirmed-step.js';
+
+let focused = false;
+let printCallback;
+let afterPrint;
+let printed = 0;
+const root = { innerHTML: '', querySelector(selector) {
+  return selector === '#confirmationHeading'
+    ? { focus() { focused = true; } }
+    : { addEventListener(event, callback) { if (event === 'click') printCallback = callback; } };
+} };
+const confirmation = {
+  booking_reference: 'BAC-20261016-0001', booking_date: '2026-10-16',
+  booking_time: '1:00 PM - 2:00 PM', submitted_at: '2026-10-16T10:00:00+08:00',
+  status: 'waiting_to_arrive', owner: { fullName: 'Maria Santos', phone: '09171234567' },
+  pets: [{ id: 101, petName: 'Coco', petType: 'dog', breed: 'Shih Tzu', size: 'small', weight: 5 }],
+  review: { totalPricing: { minAmount: 250, maxAmount: 250 }, pets: [{ petId: 101,
+    selectedServiceNames: ['Partial Grooming'], pricing: { minAmount: 250, maxAmount: 250 },
+    groomingEstimate: { formatted: '45 min - 1 hr' }, specialInstructions: 'Keep the face tidy',
+  }] },
+  consent: { groomingAgreementAccepted: true, digitalSignature: 'Maria Santos' },
+};
+globalThis.document = { title: '', body: { dataset: {}, classList: { add() {} } },
+  getElementById: (id) => id === 'confirmationRoot' ? root : null };
+globalThis.sessionStorage = { getItem: (key) => key === 'bookingConfirmation' ? JSON.stringify(confirmation) : null };
+globalThis.window = {
+  addEventListener(event, callback) { if (event === 'afterprint') afterPrint = callback; },
+  removeEventListener() {}, print() { printed++; }, setTimeout() {},
+};
+initBookingConfirmedStep();
+printCallback();
+afterPrint();
+console.log(JSON.stringify({ html: root.innerHTML, focused, printed, title: document.title }));
+JS], base_path());
+        $process->mustRun();
+        $rendered = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $html = $rendered['html'];
+
+        foreach ([
+            'Grooming Pre-registration Received', 'BAC-20261016-0001', 'Waiting to Arrive',
+            'Owner Information', 'Maria Santos', 'Coco', 'Partial Grooming',
+            'Planned Arrival', 'Visit date', 'Arrival window', 'Submitted at',
+            'Grooming Consent', 'Keep the face tidy',
+        ] as $detail) {
+            $this->assertStringContainsString($detail, $html);
+        }
+        $this->assertStringContainsString('<article class="confirmation-document" aria-label="Confirmation details">', $html);
+        $this->assertMatchesRegularExpression('/<a[^>]+href="\.\/dashboard\.html">Return to Dashboard<\/a>/', $html);
+        $this->assertMatchesRegularExpression('/<button[^>]+id="printConfirmationButton"[^>]*>Print Confirmation<\/button>/', $html);
+        $this->assertStringNotContainsString('<dt>Queue number</dt>', $html);
+        $this->assertTrue($rendered['focused']);
+        $this->assertSame(1, $rendered['printed']);
+        $this->assertSame('Grooming Pre-registration Received', $rendered['title']);
     }
 }
