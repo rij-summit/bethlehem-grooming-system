@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 class GroomingWorkloadCapacity
 {
     public const AT_RISK_MINUTES = 30;
-    public const UNAVAILABLE = 'Unavailable — not enough grooming time remaining';
+    public const UNAVAILABLE = 'Unavailable — selected services may run past closing.';
     public const REJECTION = 'Insufficient grooming time remaining';
     public const REJECTION_DETAIL = "Based on the current grooming queue, this service is projected to finish after today's grooming hours.";
     public const WINDOW_UNAVAILABLE = 'That arrival time just became unavailable. Please choose another available time.';
@@ -54,7 +54,7 @@ class GroomingWorkloadCapacity
     /** Use the existing estimator and clinic-verified sizes for customer selections. */
     public function selectionJobs(array $selections, int $userId): array
     {
-        // The schedule step precedes service selection; capacity cannot be forecast yet.
+        // Workload forecasts require services for every selected pet.
         if (collect($selections)->contains(fn ($pet) => empty($pet['services']['package']) && empty($pet['services']['ala_carte']))) return [];
         $pets = Pet::where('user_id', $userId)->whereIn('pet_id', array_column($selections, 'pet_id'))->get()->keyBy('pet_id');
         return collect($selections)->sortBy(fn (array $pet) => strtolower($pet['species'] ?? 'dog') === 'dog' ? 0 : 1)

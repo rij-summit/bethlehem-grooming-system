@@ -6,11 +6,14 @@ import {
   getPreRegistrationAccess,
   setPreRegistrationLinkAccess,
 } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
+import { clearGroomingDraft } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 
 if (requireCustomerSession("./sign-in.html")) {
   const groomingOption = document.getElementById("groomingOption");
   const clinicVisitOption = document.getElementById("clinicVisitOption");
   const accessMessage = document.getElementById("preRegistrationAccessMessage");
+
+  groomingOption?.addEventListener("click", clearGroomingDraft);
 
   clinicVisitOption?.addEventListener("click", () => {
     clearClinicVisitDraft();

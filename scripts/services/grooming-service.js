@@ -3,7 +3,7 @@ import {
   BOOKING_STEP_THREE_KEY,
   normalizePetSize,
   normalizePetType,
-} from "./booking-draft-service.js";
+} from "./booking-draft-service.js?flow=grooming-order-20261016";
 
 export const GROOMING_PACKAGES = [
   {
@@ -670,6 +670,12 @@ export function getGroomingPreferences(packageId) {
 export function hasRequiredGroomingPreference(selection) {
   const choices = getGroomingPreferences(selection?.servicePackage);
   return !choices.length || choices.some((choice) => choice.value === selection?.groomingPreference);
+}
+
+export function hasCompletedRequiredServiceSelection(pet, selection) {
+  if (!pet || !hasRequiredGroomingPreference(selection)) return false;
+  if (!getAlaCarteServicesByPetType(pet.petType).length) return Boolean(selection?.servicePackage);
+  return calculatePetSelectionPricing(selection, pet).hasSelection;
 }
 
 export function estimatePetGrooming(selection, pet) {

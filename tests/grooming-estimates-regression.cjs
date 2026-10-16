@@ -169,7 +169,12 @@ async function main() {
   for (const file of ['booking-services-step', 'walk-in-services-step']) {
     const source = fs.readFileSync(path.join(__dirname, `../scripts/components/${file}.js`), 'utf8');
     assert.match(source, /renderEstimateSelection\(pet, selection,/);
-    assert.match(source, /hasRequiredGroomingPreference\(selection\)/);
+    if (file === 'booking-services-step') {
+      assert.match(source, /hasCompletedRequiredServiceSelection\(pet, selection\)/);
+      assert.match(fs.readFileSync(path.join(__dirname, '../scripts/services/grooming-service.js'), 'utf8'), /hasRequiredGroomingPreference\(selection\)/);
+    } else {
+      assert.match(source, /hasRequiredGroomingPreference\(selection\)/);
+    }
   }
   console.log(`Grooming estimate regression tests passed (${cases.length} server/preview comparisons).`);
 }

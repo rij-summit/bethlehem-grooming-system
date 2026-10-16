@@ -6,12 +6,12 @@ import {
   formatPetTypeLabel,
   getBookingDraft,
   readSessionJson,
-} from "../services/booking-draft-service.js";
+} from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 import {
   buildStepThreeDraftPayload,
-  hasRequiredGroomingPreference,
+  hasCompletedRequiredServiceSelection,
   estimatePetGrooming,
   loadGroomingCatalogue,
   selectedPricingSignature,
@@ -25,13 +25,13 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
 
 /**
  * Booking Services Step Controller
  *
  * Purpose:
- * Renders Step 3 service choices for every pet in the active booking draft.
+ * Renders Step 2 service choices for every pet in the active booking draft.
  *
  * Backend developer guide:
  * This step currently reads the active draft from browser storage and saves the
@@ -151,14 +151,14 @@ function populateSummary(data) {
 function renderMissingPetState() {
   elements.petServiceSelections.innerHTML = `
     <div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-      No pet was found in this pre-register draft. Please go back to Step 2 and select at least one pet before continuing.
+      Please return to Pet Information and select at least one pet.
     </div>
   `;
 
   elements.serviceNotice.className =
     "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
   elements.serviceNotice.textContent =
-    "Please complete Step 2 first so each pet can receive its own grooming selection.";
+    "Please complete Pet Information first.";
 
   syncNextButtonState(false);
 }
@@ -407,18 +407,6 @@ function petRequiresPackage(pet) {
   return !petCanUseAlaCarteOnly(pet);
 }
 
-function hasCompletedRequiredServiceSelection(pet, selection) {
-  if (!pet || !hasRequiredGroomingPreference(selection)) {
-    return false;
-  }
-
-  if (petRequiresPackage(pet)) {
-    return Boolean(selection?.servicePackage);
-  }
-
-  return calculatePetSelectionPricing(selection, pet).hasSelection;
-}
-
 function getPetSelectionSummary(selection, petPricing) {
   if (!petPricing.hasSelection) {
     return {
@@ -656,7 +644,7 @@ function handleSubmit(event) {
   }
 
   saveCurrentStepDraft();
-  goToGroomingStep("review");
+  goToGroomingStep("schedule");
 }
 
 function saveCurrentStepDraft() {

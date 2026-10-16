@@ -1,5 +1,5 @@
 import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "../components/pet-weight-size.js?v=pet-weight-size-20261011-v3";
-import { normalizePetSize, readSessionJson } from "./booking-draft-service.js";
+import { normalizePetSize, readSessionJson } from "./booking-draft-service.js?flow=grooming-order-20261016";
 
 export function groomingForecastPets() {
   const pets = readSessionJson("bookingPets") || [];
@@ -21,5 +21,6 @@ export function groomingForecastPets() {
 
 export function forecastGroomingWindows(date) {
   const pets = groomingForecastPets();
-  return pets ? API.forecastGroomingWindows(date, pets) : API.getTimeslots(date);
+  if (!pets) throw new Error("Complete Pet Information and Grooming Services before choosing an arrival window.");
+  return API.forecastGroomingWindows(date, pets);
 }

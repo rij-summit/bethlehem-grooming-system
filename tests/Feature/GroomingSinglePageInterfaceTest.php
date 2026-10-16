@@ -62,7 +62,7 @@ class GroomingSinglePageInterfaceTest extends TestCase
         }
 
         $this->assertStringContainsString('id="backBtn"', $page);
-        foreach (['pets', 'services', 'review'] as $previousStep) {
+        foreach (['pets', 'services', 'schedule', 'review'] as $previousStep) {
             $this->assertStringContainsString('data-grooming-target="'.$previousStep.'"', $page);
         }
     }

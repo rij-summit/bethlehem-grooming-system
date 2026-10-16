@@ -1,10 +1,10 @@
 import { formatBookingSchedule } from "../services/booking-format-service.js";
-import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3&flow=grooming-order-20261016";
 
 /**
  * Booking Calendar Component
  *
- * Handles Step 1 of the booking process:
+ * Handles the arrival step (Grooming Step 3) after pets and services:
  * - Calendar display and date selection
  * - Time slot selection fetched from GET /api/timeslots?date=
  * - PH time validation and clinic closure blocking
@@ -39,7 +39,7 @@ const state = {
     dateOnly: false,
     storageKey: "bookingSchedule",
     dateField: "date",
-    nextPath: "./grooming-pre-registration.html?step=pets",
+    nextPath: "./grooming-pre-registration.html?step=review",
     fetchTimeslots: (dateKey) => forecastGroomingWindows(dateKey),
     saveSelection: null,
     clearSelection: null,
@@ -455,7 +455,7 @@ function renderTimeSlots() {
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
       ${slot.is_cutoff ? '<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>' : ""}
-      ${slot.is_workload_unavailable ? '<span class="block text-xs mt-0.5 text-slate-600">Unavailable — not enough grooming time remaining</span>' : ""}
+      ${slot.is_workload_unavailable ? '<span class="block text-xs mt-0.5 text-slate-600">Unavailable — selected services may run past closing.</span>' : ""}
     `;
 
     button.className = [

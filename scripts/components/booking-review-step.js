@@ -8,10 +8,10 @@ import {
   getBookingDraft,
   normalizePetSize,
   readSessionJson,
-} from "../services/booking-draft-service.js";
+} from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
-import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3";
+import { forecastGroomingWindows } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3&flow=grooming-order-20261016";
 import {
   hasRequiredGroomingPreference,
   loadGroomingCatalogue,
@@ -21,13 +21,13 @@ import {
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
 
 /**
  * Booking Review Step Controller
  *
  * Purpose:
- * Builds the Step 4 review preview from the active booking draft and Step 3
+ * Builds the Step 4 review preview from the active booking draft and Step 2
  * grooming selections.
  *
  * Backend developer guide:
@@ -63,7 +63,7 @@ export async function refreshBookingReviewStep() {
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
     state.reviewPayload = null;
     renderEmptyState(
-      "No pets were found in the current pre-registration draft. Please go back to Step 2 and Step 3 before reviewing.",
+      "Please complete Pet Information and Grooming Services before reviewing.",
     );
     return;
   }
@@ -122,7 +122,7 @@ export async function refreshBookingWorkloadForecast() {
     elements.reviewActionNotice.textContent = state.workloadUnavailable
       ? "This arrival window is unavailable. Choose another arrival window."
       : "Grooming capacity is a forecast. Staff will confirm admission at check-in. Your arrival window is not a grooming start time.";
-    if (window?.is_workload_unavailable) elements.reviewActionNotice.textContent = "Unavailable — not enough grooming time remaining. Choose another arrival window.";
+    if (window?.is_workload_unavailable) elements.reviewActionNotice.textContent = "Unavailable — selected services may run past closing. Choose another arrival window.";
     elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));
     elements.confirmBookingBtn.textContent = state.workloadUnavailable ? "Choose arrival window" : "Next Step";
   } catch {
@@ -416,6 +416,9 @@ async function handleConfirmClick() {
   await refreshBookingWorkloadForecast();
   if (state.workloadUnavailable === null) return;
   if (state.workloadUnavailable) {
+    const schedule = readSessionJson("bookingSchedule");
+    sessionStorage.setItem("bookingSchedule", JSON.stringify({ date: schedule?.date }));
+    sessionStorage.setItem("bookingScheduleArrivalError", "Please choose another available arrival window.");
     goToGroomingStep("schedule");
     return;
   }

@@ -100,7 +100,8 @@ async function main() {
     forecastGroomingWindows: async (date, pets) => { submittedForecast = { date, pets }; return { windows: [] }; },
   };
   const forecastService = await import('../scripts/services/grooming-workload-forecast.js');
-  assert.equal((await forecastService.forecastGroomingWindows('2026-10-09')).pendingSelections, true);
+  assert.throws(() => forecastService.forecastGroomingWindows('2026-10-09'), /Complete Pet Information/);
+  assert.equal(submittedForecast, null, 'No workload forecast runs before pets and services are complete');
   draftStorage.set('bookingPets', JSON.stringify([{ id: 101, petName: 'Mochi', petType: 'Dog', size: 'Extra Large', weight: '55' }]));
   draftStorage.set('bookingStep3', JSON.stringify({ petSelections: [{ petId: 101, servicePackage: 'regular_dog_grooming',
     groomingPreference: 'regular_trim', alaCarteServices: ['facial_trimming'], estimateFactors: ['extra_handling'] }] }));
@@ -115,7 +116,7 @@ async function main() {
 
   const fullGrooming = await calendar('grooming', '19:05:00', '2026-10-09', null, [{ ...slot, is_workload_unavailable: true }]);
   assert.equal(fullGrooming.elements.get('timeSlots').children[0].disabled, true);
-  assert.match(fullGrooming.elements.get('timeSlots').children[0].innerHTML, /Unavailable — not enough grooming time remaining/);
+  assert.match(fullGrooming.elements.get('timeSlots').children[0].innerHTML, /Unavailable — selected services may run past closing\./);
   assert.equal(fullGrooming.storage.has('bookingPets'), true);
   vm.runInContext('state.options.fetchTimeslots = async () => ({ windows: [availableForecastWindow] })',
     Object.assign(fullGrooming.context, { availableForecastWindow: { ...slot, is_workload_unavailable: false } }));
@@ -250,6 +251,7 @@ async function main() {
     { code: 'arrival_window_ended', message: endedMessage },
     { code: 'grooming_forecast_unavailable', message: 'That arrival time just became unavailable. Please choose another available time.' },
     { code: 'grooming_forecast_unavailable', message: 'Grooming capacity is full for this date. Please choose another available date.' },
+    { errors: { window_id: ['This preferred arrival window is unavailable.'] }, message: 'This preferred arrival window is unavailable.' },
   ]) {
     let groomingStep;
     const grooming = harness('booking-consent-step.js', {

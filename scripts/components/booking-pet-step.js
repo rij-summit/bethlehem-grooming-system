@@ -11,7 +11,7 @@ import {
   loadPetsFromApi,
 } from "../services/pet-service.js?v=pet-weight-size-20261011-v3";
 import { formatBookingSchedule } from "../services/booking-format-service.js";
-import { formatPetSizeLabel, normalizePetSize } from "../services/booking-draft-service.js";
+import { formatPetSizeLabel, normalizePetSize } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import {
   CLINIC_VISIT_PETS_KEY,
   normalizeApiPet,
@@ -41,7 +41,7 @@ import {
  * Booking Pet Step Controller
  *
  * Purpose:
- * Handles Step 2 of booking:
+ * Handles pet information (Grooming Step 1, Clinic Step 2):
  * - choose existing pet
  * - add new pet
  * - display selected pets
@@ -725,7 +725,7 @@ async function handleAddPetSubmit(event) {
 
 function handleBack() {
   if (!IS_CLINIC_VISIT && isGroomingSinglePage()) {
-    goToGroomingStep("schedule");
+    window.location.href = "./pre-register.html";
     return;
   }
   window.location.href = IS_CLINIC_VISIT
@@ -744,9 +744,11 @@ function handleNext() {
   }
 
   if (
-    !bookingSchedule?.date ||
-    !bookingSchedule?.time ||
-    (IS_CLINIC_VISIT && !bookingSchedule?.window_id)
+    (IS_CLINIC_VISIT || !isGroomingSinglePage()) && (
+      !bookingSchedule?.date ||
+      !bookingSchedule?.time ||
+      (IS_CLINIC_VISIT && !bookingSchedule?.window_id)
+    )
   ) {
     showStepError(
       IS_CLINIC_VISIT

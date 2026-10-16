@@ -1,6 +1,6 @@
 import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
-import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006";
-import { getBookingDraft } from "../services/booking-draft-service.js";
+import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+import { getBookingDraft } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 
 export function initBookingConsentStep() {
@@ -77,7 +77,8 @@ export function initBookingConsentStep() {
     const reviewData = getStoredData("bookingStep4Review") || getStoredData("bookingReview") || {};
 
     if (!schedule?.window_id) {
-      alert("Visit date and arrival window are missing. Please go back to Step 1 and select a date and time.");
+      sessionStorage.setItem("bookingScheduleArrivalError", "Please choose an available arrival window.");
+      goToGroomingStep("schedule");
       return;
     }
 
@@ -162,7 +163,7 @@ export function initBookingConsentStep() {
       submitBookingButton.disabled = false;
       submitBookingButton.textContent = "Submit Registration";
 
-      if (["arrival_window_ended", "grooming_forecast_unavailable"].includes(error.code)) {
+      if (["arrival_window_ended", "grooming_forecast_unavailable"].includes(error.code) || error.errors?.window_id) {
         // Keep the date visible while invalidating only the selected arrival.
         sessionStorage.setItem("bookingSchedule", JSON.stringify({ date: schedule.date }));
         sessionStorage.setItem("bookingScheduleArrivalError", error.message);

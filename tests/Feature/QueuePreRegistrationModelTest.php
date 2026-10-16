@@ -143,6 +143,22 @@ class QueuePreRegistrationModelTest extends TestCase
         ]);
     }
 
+    public function test_clinic_cases_do_not_change_grooming_arrival_windows(): void
+    {
+        $engine = app(\App\Services\GroomingWorkloadCapacity::class);
+        $settings = ClinicSetting::current();
+        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00']]);
+        $arrivals = [['id' => 'arrival-0', 'minutes' => 60, 'active' => false]];
+        $before = $engine->forecastWindows($windows, now()->toDateString(), $arrivals, $settings)->all();
+        for ($index = 0; $index < 25; $index++) {
+            $this->clinic('checked_in');
+            $this->clinic('in_consultation');
+        }
+        $after = $engine->forecastWindows($windows, now()->toDateString(), $arrivals, $settings)->all();
+        $this->assertSame($before, $after);
+        $this->assertFalse($after[0]['is_workload_unavailable']);
+    }
+
     public function test_grooming_capacity_counts_on_site_pets_until_pickup_and_waiting_stays_combined(): void
     {
         $this->grooming('checked_in', 2);

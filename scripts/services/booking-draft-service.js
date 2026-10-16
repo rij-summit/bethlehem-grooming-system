@@ -2,8 +2,8 @@
  * Booking Draft Service
  *
  * Purpose:
- * Centralizes the temporary browser-storage contract shared by booking Steps 2
- * to 4.
+ * Centralizes the temporary browser-storage contract shared by the pet,
+ * services, arrival, and review steps. Storage keys retain their legacy names.
  *
  * Backend developer guide:
  * Replace these sessionStorage helpers with a real booking-draft source, or map
@@ -20,6 +20,14 @@ import { formatBookingSchedule } from "./booking-format-service.js";
 
 export const BOOKING_STEP_TWO_KEY = "bookingStep2";
 export const BOOKING_STEP_THREE_KEY = "bookingStep3";
+
+export function clearGroomingDraft() {
+  ["bookingSchedule", "bookingScheduleArrivalError", "bookingPets",
+    BOOKING_STEP_TWO_KEY, BOOKING_STEP_THREE_KEY, "bookingStep4Review",
+    "bookingReview", "bookingConsentStep", "bookingConfirmation",
+    "groomingSelectedPricing", "groomingReviewedPricing",
+  ].forEach((key) => sessionStorage.removeItem(key));
+}
 
 export function readSessionJson(key) {
   try {
@@ -147,7 +155,13 @@ export function getBookingDraft() {
   const savedStepTwoDraft = readSessionJson(BOOKING_STEP_TWO_KEY);
 
   if (savedStepTwoDraft) {
-    return normalizeBookingDraft(savedStepTwoDraft);
+    const schedule = readSessionJson("bookingSchedule");
+    return normalizeBookingDraft({
+      ...savedStepTwoDraft,
+      bookingDate: schedule?.date || "",
+      bookingTime: schedule?.time || "",
+      bookingScheduleText: schedule?.scheduleText || formatBookingSchedule(schedule?.date, schedule?.time),
+    });
   }
 
   const legacySchedule = readSessionJson("bookingSchedule");

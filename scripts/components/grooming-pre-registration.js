@@ -1,12 +1,14 @@
-import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
-import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js?v=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
-import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js?v=grooming-pricing-20261006";
-import { initBookingReviewStep, refreshBookingReviewStep, refreshBookingWorkloadForecast } from "./booking-review-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
-import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
+import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&flow=grooming-order-20261016";
+import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js?v=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&flow=grooming-order-20261016";
+import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+import { initBookingReviewStep, refreshBookingReviewStep, refreshBookingWorkloadForecast } from "./booking-review-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&flow=grooming-order-20261016";
+import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&flow=grooming-order-20261016";
 import { initBookingConfirmedStep } from "./booking-confirmed-step.js?copy=grooming-terminology-20261016";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
+import { hasCompletedRequiredServiceSelection, loadGroomingCatalogue } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+import { groomingForecastPets } from "../services/grooming-workload-forecast.js?pet-weight=pet-weight-size-20261011-v3&flow=grooming-order-20261016";
 
-const steps = ["schedule", "pets", "services", "review", "consent", "confirmed"];
+const steps = ["pets", "services", "schedule", "review", "consent", "confirmed"];
 const initialized = new Set();
 let currentStep = null;
 
@@ -24,16 +26,18 @@ function availableStep(requested) {
   const services = stored("bookingStep3");
   const review = stored("bookingStep4Review");
   if (requested === "confirmed" && stored("bookingConfirmation")) return requested;
-  if (requested === "schedule" || !schedule?.date || !schedule?.window_id) return "schedule";
   if (requested === "pets" || !Array.isArray(pets) || !pets.length) return "pets";
-  if (requested === "services" || !services?.petSelections?.length) return "services";
+  if (requested === "services" || !groomingForecastPets() || pets.some((pet) =>
+    !hasCompletedRequiredServiceSelection(pet, services?.petSelections?.find((selection) => String(selection.petId) === String(pet.id)))
+  )) return "services";
+  if (requested === "schedule" || !schedule?.date || !schedule?.window_id) return "schedule";
   if (requested === "review" || !review?.pets?.length) return "review";
-  return requested === "consent" ? "consent" : "schedule";
+  return requested === "consent" ? "consent" : "pets";
 }
 
 function stepUrl(step) {
   const url = new URL(window.location.href);
-  if (step === "schedule") url.searchParams.delete("step");
+  if (step === "pets") url.searchParams.delete("step");
   else url.searchParams.set("step", step);
   return url;
 }
@@ -41,7 +45,7 @@ function stepUrl(step) {
 async function enterStep(step) {
   if (step === "schedule") {
     if (initialized.has(step)) await refreshBookingCalendar();
-    else await initBookingCalendar({ onNext: () => navigate("pets") });
+    else await initBookingCalendar({ onNext: () => navigate("review") });
   } else if (step === "pets") {
     if (initialized.has(step)) await refreshBookingPetStep();
     else await initBookingPetStep();
@@ -60,7 +64,7 @@ async function enterStep(step) {
 }
 
 async function navigate(requested, historyAction = "push") {
-  if (!steps.includes(requested)) requested = "schedule";
+  if (!steps.includes(requested)) requested = "pets";
   if (currentStep === "confirmed" && requested !== "confirmed") requested = "confirmed";
   const step = availableStep(requested);
   if (step === currentStep) {
@@ -85,10 +89,14 @@ async function navigate(requested, historyAction = "push") {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const requested = new URLSearchParams(window.location.search).get("step") || "schedule";
+  let requested = new URLSearchParams(window.location.search).get("step") || "pets";
   if (requested !== "confirmed" || !stored("bookingConfirmation")) {
     const blocked = await initBookingFormAccessGuard({ dashboardPath: "./dashboard.html" });
     if (blocked) return;
+    if (["schedule", "review", "consent"].includes(requested)) {
+      try { await loadGroomingCatalogue(); }
+      catch { requested = "services"; }
+    }
   }
 
   document.addEventListener("grooming:step", (event) => navigate(event.detail.step));
@@ -99,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     navigate(link.dataset.groomingTarget);
   });
   window.addEventListener("popstate", () => {
-    navigate(new URLSearchParams(window.location.search).get("step") || "schedule", "replace");
+    navigate(new URLSearchParams(window.location.search).get("step") || "pets", "replace");
   });
   await navigate(requested, "replace");
   let refreshingForecast = false;

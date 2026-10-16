@@ -4,7 +4,9 @@ namespace Tests\Unit;
 
 use App\Models\ClinicSetting;
 use App\Services\GroomingWorkloadCapacity;
+use App\Services\AvailabilityTimeWindowService;
 use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -110,5 +112,59 @@ class GroomingWorkloadCapacityTest extends TestCase
         $this->assertSame('08:00', Carbon::parse($result['pets'][1]['projected_start'])->format('H:i'));
         $this->assertSame('On track', $result['state']);
         $this->assertTrue($result['fits']);
+    }
+
+    #[DataProvider('arrivalWorkloads')]
+    public function test_arrival_windows_use_selected_duration_existing_work_and_parallel_groomers(
+        array $jobs, array $reservations, int $minutes, int $groomers, bool $available,
+    ): void {
+        $engine = $this->getMockBuilder(GroomingWorkloadCapacity::class)
+            ->setConstructorArgs([app(\App\Services\GroomingTimeEstimate::class), app(\App\Services\OperationalCapacity::class)])
+            ->onlyMethods(['liveJobs', 'reservedJobs'])->getMock();
+        $engine->method('liveJobs')->willReturn(collect($jobs));
+        foreach ($reservations as &$job) $job['arrival_at'] = now()->setTime(16, 0)->timestamp;
+        unset($job);
+        $engine->method('reservedJobs')->willReturn($reservations);
+        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00']]);
+        $result = $engine->forecastWindows($windows, now()->toDateString(),
+            [['id' => 'arrival-0', 'minutes' => $minutes, 'active' => false]], $this->settings($groomers));
+        $this->assertSame(! $available, $result[0]['is_workload_unavailable']);
+        $this->assertSame($available ? null : GroomingWorkloadCapacity::UNAVAILABLE, $result[0]['workload_message']);
+    }
+
+    public static function arrivalWorkloads(): array
+    {
+        $waiting = ['id' => 1, 'minutes' => 90, 'active' => false];
+        $active = ['id' => 1, 'minutes' => 90, 'active' => true, 'started_at' => '2026-10-09 14:30'];
+        $reservation = ['id' => 2, 'minutes' => 60, 'active' => false];
+        return [
+            'empty queue fits at closing' => [[], [], 60, 1, true],
+            'empty queue runs past closing' => [[], [], 61, 1, false],
+            'waiting pet still leaves room' => [[$waiting], [], 30, 1, true],
+            'waiting pet pushes past closing' => [[$waiting], [], 31, 1, false],
+            'active pet still leaves room' => [[$active], [], 60, 1, true],
+            'parallel groomer leaves room' => [[$waiting], [], 60, 2, true],
+            'reservation fills remaining time' => [[], [$reservation], 30, 1, false],
+            'reservation shares parallel groomers' => [[], [$reservation], 60, 2, true],
+        ];
+    }
+
+    public function test_reservation_revalidates_workload_after_a_window_was_available(): void
+    {
+        $engine = $this->getMockBuilder(GroomingWorkloadCapacity::class)
+            ->setConstructorArgs([app(\App\Services\GroomingTimeEstimate::class), app(\App\Services\OperationalCapacity::class)])
+            ->onlyMethods(['liveJobs', 'reservedJobs'])->getMock();
+        $engine->method('liveJobs')->willReturnOnConsecutiveCalls(collect(), collect([$this->job(1, 120)]));
+        $engine->method('reservedJobs')->willReturn([]);
+        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00', 'is_past' => false, 'is_cutoff' => false, 'is_closed' => false]]);
+        $this->mock(AvailabilityTimeWindowService::class)->shouldReceive('preferredWindows')->twice()->andReturn($windows);
+        $arrivals = [['id' => 'arrival-0', 'minutes' => 60, 'active' => false]];
+        $engine->assertCanReserve(now()->toDateString(), 1, $arrivals, $this->settings());
+        try {
+            $engine->assertCanReserve(now()->toDateString(), 1, $arrivals, $this->settings());
+            $this->fail('Submission must reject a window when the workload has changed.');
+        } catch (ValidationException $error) {
+            $this->assertSame('grooming_forecast_unavailable', $error->response->getData(true)['code']);
+        }
     }
 }
