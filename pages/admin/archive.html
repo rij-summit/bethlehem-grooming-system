@@ -73,6 +73,7 @@
       .history-pet-timeline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem 1rem; }
       .history-service-line, .history-product-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.375rem 0; font-size: 0.875rem; }
       .history-service-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.125rem 0.625rem; }
+      .history-preference-chip { display: inline-block; margin-top: 0.25rem; padding: 0.25rem 0.625rem; border-radius: 999px; background: var(--history-soft); color: var(--history-accent); font-size: 0.75rem; font-weight: 500; }
       .history-service-line > span, .history-product-line > span { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
       .history-pet-note, .history-medical, .history-notes p { font-size: 0.875rem; white-space: pre-wrap; }
       .history-payment-totals > div { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.5rem; }
@@ -632,7 +633,15 @@
                           <div x-show="servicesForPet(pet).length" class="history-pet-services">
                             <h6 class="history-pet-subheading">Services</h6>
                             <template x-for="svc in servicesForPet(pet)" :key="svc.id">
-                              <div class="history-service-line"><div class="history-service-name"><span x-text="svc.name"></span><span class="history-label" x-text="svc.serviceKind === 'package' ? 'Main service' : 'À la carte'"></span></div><span x-text="formatServiceAvailedPrice(svc)"></span></div>
+                              <div class="history-service-line">
+                                <div class="min-w-0">
+                                  <div class="history-service-name"><span x-text="svc.name"></span><span class="history-label" x-text="svc.serviceKind === 'package' ? 'Main service' : 'À la carte'"></span></div>
+                                  <template x-if="svc.serviceKind === 'package' && pet.groomingEstimate?.preferenceLabel">
+                                    <span class="history-preference-chip" x-text="pet.groomingEstimate.preferenceLabel"></span>
+                                  </template>
+                                </div>
+                                <span x-text="formatServiceAvailedPrice(svc)"></span>
+                              </div>
                             </template>
                           </div>
                           <p x-show="groomingText(pet.specialInstructions)" class="history-pet-note"><span class="history-note-label" x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Grooming &amp; Visit Notes: ' : 'Pet Instructions: '"></span><span x-text="pet.specialInstructions"></span></p>

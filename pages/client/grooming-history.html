@@ -498,15 +498,19 @@
         };
       }
 
-      function historyServices(booking, pet) {
+      function historyServiceLines(booking, pet) {
         const settled = booking.paid && booking.payment_summary?.status === "paid"
           ? booking.payment_summary.pets?.find((item) => Number(item.booking_pet_id) === Number(pet?.booking_pet_id))
             || (Number(booking.number_of_pets) === 1 ? booking.payment_summary.pets?.[0] : null)
           : null;
         // Final service names describe care provided; billing amounts stay out of History.
         return Array.isArray(settled?.service_breakdown)
-          ? settled.service_breakdown.map((line) => line.label).filter(Boolean)
-          : (pet?.services || []).map((service) => service.service_name).filter(Boolean);
+          ? settled.service_breakdown.filter((line) => line.label)
+          : (pet?.services || []).filter((service) => service.service_name).map((service) => ({ label: service.service_name }));
+      }
+
+      function historyServices(booking, pet) {
+        return historyServiceLines(booking, pet).map((line) => line.label);
       }
 
       function buildHistoryCard(event) {
@@ -583,7 +587,10 @@
         const weight = pet?.weight === null || pet?.weight === undefined || pet?.weight === "" || !Number.isFinite(Number(pet.weight))
           ? "Not recorded"
           : `${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 }).format(Number(pet.weight))} kg`;
-        const services = historyServices(booking, pet);
+        const services = historyServiceLines(booking, pet);
+        const mainServiceIndex = services.some((line) => line.service_kind)
+          ? services.findIndex((line) => line.service_kind === "package") : 0;
+        const preference = pet?.grooming_estimate?.preferenceLabel;
         const arrivalWindow = escapeHistoryHtml(booking.time_window?.window_label || "Not recorded");
 
         return `
@@ -642,7 +649,7 @@
               <svg class="ph-icon h-5 w-5 text-portal-primary" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><use href="../../assets/icons/phosphor.svg#scissors"></use></svg>
               Services
             </h3>
-            ${services.length ? `<ul class="mt-3 space-y-2 text-xs text-portal-text">${services.map((name) => `<li class="break-words">${escapeHistoryHtml(name)}</li>`).join("")}</ul>` : '<p class="mt-3 text-xs text-portal-muted">No services recorded.</p>'}
+            ${services.length ? `<ul class="mt-3 space-y-2 text-xs text-portal-text">${services.map((service, index) => `<li class="break-words">${escapeHistoryHtml(service.label)}${index === mainServiceIndex && preference ? `<div class="mt-1"><span class="inline-flex rounded-full bg-portal-active px-2 py-1 text-xs font-medium text-portal-primary">${escapeHistoryHtml(preference)}</span></div>` : ""}</li>`).join("")}</ul>` : '<p class="mt-3 text-xs text-portal-muted">No services recorded.</p>'}
           </section>`;
       }
 
