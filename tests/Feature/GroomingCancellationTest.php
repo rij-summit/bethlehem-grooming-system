@@ -21,9 +21,12 @@ use Tests\TestCase;
 
 class GroomingCancellationTest extends TestCase
 {
+    use \Tests\Support\CreatesPetGroomers;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->createPetGroomers();
         Schema::create('users', function (Blueprint $t) {
             $t->increments('user_id');
             $t->string('first_name');

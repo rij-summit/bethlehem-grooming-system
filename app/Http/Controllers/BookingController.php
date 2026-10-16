@@ -109,6 +109,7 @@ class BookingController extends Controller
             'pets.*.color' => 'nullable|string|max:50',
             'pets.*.medical_conditions' => 'nullable|string',
             'pets.*.special_instructions' => 'nullable|string',
+            'pets.*.groomer_id' => 'nullable|integer',
             'pets.*.services' => 'nullable|array',
             'pets.*.grooming_preference' => 'nullable|string|max:32',
             'pets.*.estimate_factors' => 'prohibited',
@@ -145,6 +146,7 @@ class BookingController extends Controller
             $date = $request->booking_date;
             $sedationConsent = $request->boolean('sedation_consent');
             $settings = ClinicSetting::current();
+            $request->merge(['pets' => app(\App\Services\PetGroomerSelection::class)->validate($request->pets, false)]);
 
             // ── Load selected time window ───────────────────────
             $window = TimeWindow::query()
@@ -251,6 +253,7 @@ class BookingController extends Controller
                     'booking_id' => $booking->booking_id,
                     'pet_id' => $pet->pet_id,
                     'special_instructions' => $petData['special_instructions'] ?? null,
+                    'groomer_id' => $petData['groomer_id'],
                 ];
                 if (Schema::hasColumn('booking_pets', 'registered_size')) {
                     $bookingPetAttributes['registered_size'] = $pet->groomingSize();
@@ -304,7 +307,7 @@ class BookingController extends Controller
             }
 
             $workload = app(\App\Services\GroomingWorkloadCapacity::class);
-            $booking->load('bookingPets.pet');
+            $booking->load('bookingPets.pet', 'bookingPets.groomer');
             $booking->bookingPets->each(fn ($pet) => $pet->setRelation('booking', $booking));
             $arrivalJobs = array_values(array_filter($workload->admissionJobs($booking->bookingPets), fn ($job) => $job['minutes'] > 0));
             $selectedArrival = $workload->assertCanReserve($date, (int) $window->window_id, $arrivalJobs, $settings, (int) $booking->booking_id);
@@ -344,6 +347,7 @@ class BookingController extends Controller
                     'status' => $booking->status,
                     'number_of_pets' => $booking->number_of_pets,
                     'pets' => $booking->bookingPets->map(fn ($bp) => ['pet_id' => $bp->pet_id,
+                        'groomer_id' => $bp->groomer_id, 'pet_groomer' => $bp->groomer,
                         'grooming_estimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bp)])->values(),
                 ],
             ], 201);
@@ -388,7 +392,7 @@ class BookingController extends Controller
             }
         }
 
-        $relations = ['timeWindow', 'bookingPets.pet', 'bookingServices.service'];
+        $relations = ['timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service'];
         $hasCancellationAuditColumns = Schema::hasColumns('bookings', [
             'cancel_count',
             'cancellation_reason',
@@ -474,6 +478,8 @@ class BookingController extends Controller
                 return [
                     'pet_id' => $bp->pet_id,
                     'booking_pet_id' => $bp->booking_pet_id,
+                    'groomer_id' => $bp->groomer_id,
+                    'pet_groomer' => $bp->groomer,
                     'pet_name' => $bp->pet?->pet_name ?? '—',
                     'breed' => $bp->pet?->breed ?? '—',
                     'species' => $bp->pet?->species,
@@ -635,7 +641,7 @@ class BookingController extends Controller
     {
         $booking = Booking::where('booking_id', $id)
             ->where('user_id', $request->user()->user_id)
-            ->with(['timeWindow', 'bookingPets.pet'])
+            ->with(['timeWindow', 'bookingPets.pet', 'bookingPets.groomer'])
             ->first();
 
         if (! $booking) {

@@ -1653,6 +1653,14 @@ var API = (() => {
     );
   }
 
+  async function getPetGroomers() {
+    return request("GET", "/grooming/pet-groomers", null, isAdminPage() ? getAdminToken() : getCustomerToken());
+  }
+
+  async function adminSavePetGroomer(data, id = null) {
+    return request(id === null ? "POST" : "PATCH", `/admin/pet-groomers${id === null ? "" : `/${id}`}`, data, getAdminToken());
+  }
+
   async function getAvailabilitySettings() {
     return request(
       "GET",
@@ -2215,6 +2223,8 @@ var API = (() => {
     adminStopToday,
     adminReopenToday,
     adminUpdateGroomersOnDuty,
+    getPetGroomers,
+    adminSavePetGroomer,
     getAvailabilitySettings,
     adminUpdateAvailability,
     getAdminSecurityAccounts,

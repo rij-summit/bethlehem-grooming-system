@@ -1472,6 +1472,7 @@
                           </ul>
                         </div>
                         <dl class="grooming-visit-summary">
+                          <div><dt>Pet Groomer</dt><dd x-text="pet.petGroomerName || 'Any available groomer'"></dd></div>
                           <div x-show="detailsBooking?.status !== 'incoming' || petGroomingState(pet) === 'cancelled'"><dt>Status</dt><dd x-text="petGroomingStateLabel(pet)"></dd></div>
                           <div x-show="pet.groomingEstimate"><dt>Grooming estimate</dt><dd x-text="getPetEstimateLabel(pet)"></dd></div>
                           <div x-show="['At risk', 'Needs staff action'].includes(getPetWorkloadState(pet))"><dt>Workload</dt><dd x-text="getPetWorkloadState(pet)"></dd></div>

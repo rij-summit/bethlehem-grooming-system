@@ -20,6 +20,8 @@ use Tests\TestCase;
 
 class ClinicAdministrationAuthorizationTest extends TestCase
 {
+    use \Tests\Support\CreatesPetGroomers;
+
     private const FORBIDDEN_RESPONSE = [
         'success' => false,
         'message' => 'Forbidden. You do not have permission to access this resource.',
@@ -28,6 +30,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->createPetGroomers();
         Carbon::setTestNow(now()->setTime(10, 0));
 
         Schema::create('users', function (Blueprint $table) {
@@ -291,6 +294,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('unregistered_customers');
         Schema::dropIfExists('users');
 
+        Schema::dropIfExists('pet_groomers');
         parent::tearDown();
     }
 

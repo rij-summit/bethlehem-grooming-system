@@ -1,5 +1,6 @@
 import { formatSavedWeight } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 import { renderEstimateReview } from "./grooming-estimate-selection.js";
+import { loadPetGroomers, hasPetGroomerSelection, petGroomerLabel } from "./pet-groomer-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
   escapeHtml,
@@ -21,7 +22,7 @@ import {
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 
 /**
  * Booking Review Step Controller
@@ -77,9 +78,13 @@ export async function refreshBookingReviewStep() {
   elements.confirmBookingBtn.disabled = true;
   elements.reviewSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading current grooming pricing...</p>';
   try {
-    await loadGroomingCatalogue();
+    await Promise.all([loadGroomingCatalogue(), loadPetGroomers()]);
+    if (state.petSelections.some((selection) => !hasPetGroomerSelection(selection))) {
+      renderEmptyState("Pet Groomer availability changed. Return to Grooming Services to choose again.");
+      return;
+    }
   } catch (error) {
-    renderEmptyState("Unable to load current grooming pricing. Please retry.");
+    renderEmptyState("Unable to load grooming services and Pet Groomer availability. Please retry.");
     const retry = document.createElement("button");
     retry.type = "button";
     retry.textContent = "Retry";
@@ -247,6 +252,7 @@ function renderPetReviewCard(item, index) {
         </div>
       </div>
       <p class="mt-2 text-sm text-slate-600">Weight: ${escapeHtml(item.pet.weight ? `${formatSavedWeight(item.pet.weight)} kg` : "Not specified")}</p>
+      <p class="mt-2 text-sm text-slate-600">Pet Groomer: ${escapeHtml(petGroomerLabel(item.selection))}</p>
 
       <div class="mt-6 space-y-4">
         ${packageCard}
@@ -392,6 +398,8 @@ function saveReviewDraft() {
       weight: item.pet.weight,
       servicePackage: item.selection.servicePackage,
       groomingPreference: item.selection.groomingPreference,
+      groomerId: item.selection.groomerId,
+      petGroomerName: petGroomerLabel(item.selection),
       groomingEstimate: item.groomingEstimate,
       alaCarteServices: [...item.selection.alaCarteServices],
       addOns: [...item.selection.addOns],

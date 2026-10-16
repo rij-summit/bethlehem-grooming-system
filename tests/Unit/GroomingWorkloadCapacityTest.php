@@ -26,7 +26,7 @@ class GroomingWorkloadCapacityTest extends TestCase
 
     private function settings(int $count = 1, string $close = '17:00'): ClinicSetting
     {
-        return new ClinicSetting(['groomers_on_duty' => $count, 'grooming_open_time' => '08:00', 'grooming_close_time' => $close]);
+        return (new ClinicSetting(['grooming_open_time' => '08:00', 'grooming_close_time' => $close]))->forceFill(['groomers_on_duty' => $count]);
     }
 
     private function job(int $id, int $minutes, ?string $start = null): array
@@ -48,6 +48,15 @@ class GroomingWorkloadCapacityTest extends TestCase
     }
 
     public static function laneCounts(): array { return [[1], [2], [3], [4], [5]]; }
+
+    public function test_zero_on_duty_has_no_lane_for_waiting_or_arriving_pets(): void
+    {
+        $result = app(GroomingWorkloadCapacity::class)->project([$this->job(1, 60)], [$this->job(2, 45)], $this->settings(0), now());
+        $this->assertSame(0, $result['groomers_on_duty']);
+        $this->assertFalse($result['fits']);
+        $this->assertNull($result['pets'][1]['projected_start']);
+        $this->assertNull($result['pets'][2]['projected_completion']);
+    }
 
     public function test_active_remaining_work_occupies_lanes_before_waiting_and_new_arrivals(): void
     {

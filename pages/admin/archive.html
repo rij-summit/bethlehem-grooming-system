@@ -615,6 +615,7 @@
                         <div class="history-pet-heading"><h6 x-text="pet.petName"></h6><span x-show="groomingText(pet.groomingStateLabel)" class="history-label" x-text="pet.groomingStateLabel"></span></div>
                         <div class="history-pet-body">
                           <dl class="history-pet-profile">
+                            <div><dt>Pet Groomer</dt><dd x-text="pet.petGroomerName || 'Any available groomer'"></dd></div>
                             <div x-show="groomingText(pet.species)"><dt>Species</dt><dd x-text="pet.species"></dd></div>
                             <div x-show="groomingText(pet.breed)"><dt>Breed</dt><dd x-text="pet.breed"></dd></div>
                             <div x-show="[pet.confirmedSize, pet.registeredSize, pet.size].some(value => groomingText(value))"><dt>Size</dt><dd x-text="petSize(pet)"></dd></div>

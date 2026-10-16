@@ -71,6 +71,11 @@ class BookingPet extends Model
         return $this->belongsTo(Pet::class, 'pet_id', 'pet_id');
     }
 
+    public function groomer()
+    {
+        return $this->belongsTo(PetGroomer::class, 'groomer_id');
+    }
+
     public static function isValidGroomingState(string $state): bool
     {
         return in_array($state, self::GROOMING_STATES, true);

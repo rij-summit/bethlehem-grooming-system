@@ -1,5 +1,5 @@
 import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
-import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 import { getBookingDraft } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
 
@@ -112,6 +112,7 @@ export function initBookingConsentStep() {
         medical_conditions: pet.medicalNotes || null,
         special_instructions: reviewPet?.specialInstructions || null,
         grooming_preference: serviceSelection.groomingPreference || null,
+        groomer_id: serviceSelection.groomerId ?? null,
         services: {
           package:   serviceSelection.servicePackage || null,
           ala_carte: serviceSelection.alaCarteServices || [],
@@ -154,6 +155,7 @@ export function initBookingConsentStep() {
         number_of_pets: response.booking.number_of_pets,
         pets: bookingPets,
         review: { ...reviewData, pets: (reviewData.pets || []).map((pet, index) => ({ ...pet,
+          petGroomerName: response.booking.pets?.[index]?.pet_groomer?.first_name || 'Any available groomer',
           groomingEstimate: response.booking.pets?.[index]?.grooming_estimate || pet.groomingEstimate })) },
         consent: consentPayload,
       }));
@@ -171,6 +173,10 @@ export function initBookingConsentStep() {
         return;
       }
 
+      if (Object.keys(error.errors || {}).some((key) => key.endsWith('.groomer_id'))) {
+        goToGroomingStep("services");
+        return;
+      }
       const existingBookingId = error.errors?.existing_booking_id;
       if (existingBookingId) {
         openDuplicateModal(existingBookingId, error.errors.existing_booking_ref, schedule);

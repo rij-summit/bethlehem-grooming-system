@@ -1,6 +1,6 @@
 import { formatBookingDate, formatBookingTimeRange } from "../services/booking-format-service.js";
 import { escapeHtml } from "../services/booking-draft-service.js";
-import { getGroomingPricePresentation } from "../services/grooming-service.js?v=grooming-pricing-20261006";
+import { getGroomingPricePresentation } from "../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016";
 import {
   confirmationFields, confirmationSection, formatConfirmationLabel,
   formatConfirmationTimestamp, formatConfirmationPhone, ownerConfirmationFields,
@@ -31,6 +31,7 @@ export function groomingPetConfirmation(pet, review = {}) {
       ...(weight !== undefined && weight !== null && weight !== "" ? [["Weight", `${weight} kg`]] : []),
     ])}
     <div class="confirmation-pet-services">${confirmationFields([
+      ["Pet Groomer", review.petGroomerName || pet.pet_groomer?.first_name || "Any available groomer"],
       ["Grooming package", services || "None selected"],
       ...(preference ? [["Grooming preference", preference]] : []),
       ["A la Carte", alaCarte || "None selected"],

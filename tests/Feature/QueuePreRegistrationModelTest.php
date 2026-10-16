@@ -20,9 +20,12 @@ use Tests\TestCase;
 
 class QueuePreRegistrationModelTest extends TestCase
 {
+    use \Tests\Support\CreatesPetGroomers;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->createPetGroomers();
         Carbon::setTestNow('2026-10-09 10:00:00');
         Schema::create('clinic_settings', function (Blueprint $table) {
             $table->id();
@@ -115,6 +118,7 @@ class QueuePreRegistrationModelTest extends TestCase
         foreach (['customer_notifications', 'clinic_appointments', 'booking_pets', 'bookings', 'pets', 'users', 'time_windows', 'clinic_closures', 'clinic_settings'] as $table) {
             Schema::dropIfExists($table);
         }
+        Schema::dropIfExists('pet_groomers');
         parent::tearDown();
     }
 

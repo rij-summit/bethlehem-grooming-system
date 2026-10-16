@@ -274,6 +274,7 @@ export function createEmptyPetServiceSelection(pet) {
     petId: pet?.id || "",
     servicePackage: "",
     groomingPreference: "",
+    groomerId: null,
     estimateFactors: [],
     alaCarteServices: [],
     addOns: [],
@@ -286,6 +287,7 @@ export function sanitizePetServiceSelection(selection) {
     petId: selection?.petId || "",
     servicePackage: String(selection?.servicePackage || ""),
     groomingPreference: String(selection?.groomingPreference || ""),
+    groomerId: selection?.groomerId == null ? null : Number(selection.groomerId),
     estimateFactors: [...new Set(selection?.estimateFactors || [])],
     alaCarteServices: Array.from(
       new Set(
@@ -406,6 +408,7 @@ export function buildStepThreeDraftPayload(petSelections) {
         petId: sanitizedSelection.petId,
         servicePackage: sanitizedSelection.servicePackage,
         groomingPreference: sanitizedSelection.groomingPreference,
+        groomerId: sanitizedSelection.groomerId,
         estimateFactors: [...sanitizedSelection.estimateFactors],
         alaCarteServices: [...sanitizedSelection.alaCarteServices],
         addOns: [...sanitizedSelection.addOns],

@@ -11,9 +11,7 @@ class ClinicSetting extends Model
 {
     public const SINGLETON_ID = 1;
 
-    public const DEFAULT_GROOMERS_ON_DUTY = 2;
-
-    public const MIN_GROOMERS_ON_DUTY = 1;
+    public const MIN_GROOMERS_ON_DUTY = 0;
 
     public const MAX_GROOMERS_ON_DUTY = 5;
 
@@ -26,7 +24,6 @@ class ClinicSetting extends Model
     public const DEFAULT_GROOMING_CLOSE_TIME = '17:00:00';
 
     protected $fillable = [
-        'groomers_on_duty',
         'clinic_open_time',
         'clinic_close_time',
         'grooming_open_time',
@@ -39,17 +36,22 @@ class ClinicSetting extends Model
 
     public static function current(bool $lockForUpdate = false): self
     {
-        $query = static::query()->whereKey(self::SINGLETON_ID);
+        $query = static::query()->select('clinic_settings.*')->selectSub(
+            PetGroomer::selectRaw('count(*)')->where('on_duty', true), 'groomers_on_duty',
+        )->whereKey(self::SINGLETON_ID);
 
         if ($lockForUpdate) {
             $query->lockForUpdate();
         }
 
-        return $query->first() ?? static::query()->forceCreate([
+        $settings = $query->first();
+        if ($settings) return $settings;
+
+        static::query()->forceCreate([
             'id' => self::SINGLETON_ID,
-            'groomers_on_duty' => self::DEFAULT_GROOMERS_ON_DUTY,
             ...self::availabilityDefaults(),
         ]);
+        return $query->firstOrFail();
     }
 
     /**

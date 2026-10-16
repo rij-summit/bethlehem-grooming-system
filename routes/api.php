@@ -72,6 +72,7 @@ Route::get('/system/clock', function () {
 // ── PROTECTED ROUTES (token required) ────────────────
 Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::get('/grooming/services', [GroomingPricingController::class, 'index']);
+    Route::get('/grooming/pet-groomers', [\App\Http\Controllers\PetGroomerController::class, 'index']);
     Route::patch('/admin/grooming/services/{service}/pricing', [GroomingPricingController::class, 'update'])->middleware('role:admin');
 
     // Auth
@@ -136,6 +137,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::get('/admin/clinic/settings/availability', [ClinicSettingController::class, 'availability']);
         Route::get('/admin/clinic/blocked-dates', [ClinicClosureController::class, 'blockedDates']);
         Route::patch('/admin/clinic/settings/groomers-on-duty', [ClinicSettingController::class, 'updateGroomersOnDuty'])->middleware('grooming');
+        Route::post('/admin/pet-groomers', [\App\Http\Controllers\PetGroomerController::class, 'store'])->middleware('grooming');
+        Route::patch('/admin/pet-groomers/{id}', [\App\Http\Controllers\PetGroomerController::class, 'update'])->middleware('grooming');
         Route::get('/settings/security/account', [AdminSecurityController::class, 'ownAccount']);
         Route::post('/settings/security/password-change', [AdminSecurityController::class, 'requestStaffPasswordChange'])
             ->middleware(['role:staff', 'throttle:3,10']);

@@ -1,4 +1,5 @@
 import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
+import { loadPetGroomers, normalizePetGroomerSelections, hasPetGroomerSelection, renderPetGroomerSelection } from "./pet-groomer-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
   escapeHtml,
@@ -25,7 +26,7 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 
 /**
  * Booking Services Step Controller
@@ -91,14 +92,15 @@ async function loadServicePricing() {
   syncNextButtonState(false);
   elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
   try {
-    await loadGroomingCatalogue();
+    await Promise.all([loadGroomingCatalogue(), loadPetGroomers()]);
+    normalizePetGroomerSelections(state.petSelections);
     state.catalogueReady = true;
     renderPetServiceSelections();
     updateServiceNotice();
   } catch (error) {
     state.catalogueReady = false;
     elements.petServiceSelections.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700" role="alert">
-      Unable to load current grooming pricing. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
+      Unable to load grooming services and Pet Groomer availability. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
     </div>`;
     syncNextButtonState(false);
   }
@@ -212,6 +214,7 @@ function renderPetSelectionCard(pet, index) {
         ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size may be confirmed by clinic staff at check-in.</p>'}
       </div>
 
+      ${renderPetGroomerSelection(pet, selection)}
       <section>
         <div class="mb-3">
           <h4 class="text-base font-semibold text-[#2f4b66]">
@@ -448,7 +451,7 @@ function getPetSelectionSummary(selection, petPricing) {
 function updateServiceNotice(validationMessage = "") {
   const pets = Array.isArray(state.bookingDraft?.pets) ? state.bookingDraft.pets : [];
   const readyPetCount = pets.filter((pet) =>
-    hasCompletedRequiredServiceSelection(pet, getSelectionByPetId(pet.id)),
+    hasCompletedRequiredServiceSelection(pet, getSelectionByPetId(pet.id)) && hasPetGroomerSelection(getSelectionByPetId(pet.id)),
   ).length;
 
   const allPetsReady = readyPetCount === pets.length && pets.length > 0;
@@ -540,6 +543,7 @@ function handleSelectionChange(event) {
   }
 
   updateEstimateSelection(selection, target);
+  if (target.dataset.role === "pet-groomer") selection.groomerId = target.value ? Number(target.value) : null;
 
   if (target.dataset.role === "service-package") {
     selection.servicePackage = target.value;
@@ -603,6 +607,10 @@ function handleSelectionInput(event) {
 function handleSubmit(event) {
   event.preventDefault();
   if (!state.catalogueReady) return;
+  if (state.petSelections.some((selection) => !hasPetGroomerSelection(selection))) {
+    updateServiceNotice("Select an available Pet Groomer for each pet.");
+    return;
+  }
 
   const incompletePets = state.bookingDraft.pets.filter((pet) => {
     const selection = getSelectionByPetId(pet.id);

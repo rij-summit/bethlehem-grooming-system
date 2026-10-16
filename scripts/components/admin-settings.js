@@ -264,10 +264,11 @@ function adminSettings() {
     availabilitySaving: false,
     availabilityError: "",
     availabilitySuccess: "",
-    groomersOnDuty: 2,
+    groomersOnDuty: 0,
+    petGroomers: [],
+    petGroomerEditor: null,
     groomersOnDutySaving: false,
     groomersOnDutyError: "",
-    groomersOnDutySuccess: "",
     adminAccount: {
       email: "Admin email",
       username: "",
@@ -420,7 +421,8 @@ function adminSettings() {
         const response = await API.getAvailabilitySettings();
         this.availability = this.normalizeAvailability(response.availability);
         this.savedAvailability = clone(this.availability);
-        this.groomersOnDuty = Number(response.groomers_on_duty) || 1;
+        this.groomersOnDuty = Number(response.groomers_on_duty) || 0;
+        this.petGroomers = response.pet_groomers || [];
       } catch (error) {
         this.availabilityError =
           error.message || "Could not load availability settings.";
@@ -453,19 +455,24 @@ function adminSettings() {
       }
     },
 
-    async setGroomersOnDuty(value) {
-      const nextValue = Math.min(5, Math.max(1, Number(value) || 1));
-      if (this.groomersOnDutySaving || nextValue === this.groomersOnDuty) return;
+    editPetGroomer(person = null) {
+      this.petGroomerEditor = { id: person?.id ?? null, first_name: person?.first_name || "" };
+      this.groomersOnDutyError = "";
+      this.$nextTick(() => document.getElementById("petGroomerFirstName")?.focus());
+    },
 
+    async savePetGroomer(data, id = null, toggle = null) {
+      if (this.groomersOnDutySaving) return;
       this.groomersOnDutySaving = true;
       this.groomersOnDutyError = "";
-      this.groomersOnDutySuccess = "";
       try {
-        const response = await API.adminUpdateGroomersOnDuty(nextValue);
-        this.groomersOnDuty = Number(response.groomers_on_duty) || nextValue;
-        this.groomersOnDutySuccess = "Groomers on duty updated.";
+        const response = await API.adminSavePetGroomer(data, id);
+        this.petGroomers = response.pet_groomers;
+        this.groomersOnDuty = response.groomers_on_duty;
+        if (!toggle) this.petGroomerEditor = null;
       } catch (error) {
-        this.groomersOnDutyError = error.message || "Could not update groomers on duty.";
+        this.groomersOnDutyError = error.message || "Could not save Pet Groomer.";
+        if (toggle) toggle.checked = this.petGroomers.find((person) => person.id === id)?.on_duty || false;
       } finally {
         this.groomersOnDutySaving = false;
       }

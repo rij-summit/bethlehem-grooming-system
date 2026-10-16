@@ -4,8 +4,8 @@ const vm = require("node:vm");
 const path = require("node:path");
 
 const read = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
-const consent = vm.createContext({ document: { addEventListener() {} } });
-vm.runInContext(read("scripts/components/walk-in-consent-step.js").replace(/export /g, ""), consent);
+const consent = vm.createContext({ getPetWeightSubmission: (pet) => ({ weight: pet.weight }), document: { addEventListener() {} } });
+vm.runInContext(read("scripts/components/walk-in-consent-step.js").replace(/import[\s\S]*?from\s+"[^"]+";/g, "").replace(/export /g, ""), consent);
 const reviewSource = read("scripts/components/walk-in-review-step.js")
   .replace(/import[\s\S]*?from\s+"[^"]+";/g, "").replace(/export /g, "");
 
@@ -49,6 +49,8 @@ function setup(preview) {
     buildBookingReviewPayload: () => payload,
     hasRequiredGroomingPreference: () => true,
     renderWalkInConsentStep: (options) => consentCalls.push(options),
+    getGroomingPricePresentation: () => ({ label: "Estimated price", amount: "P100" }),
+    petGroomerLabel: () => "Anna",
     renderEstimateReview: () => "Estimated grooming time: 2–4 hrs",
     escapeHtml: (value) => String(value).replace(/</g, "&lt;"),
     formatPetSizeLabel: (value) => value, formatPetTypeLabel: (value) => value,

@@ -60,6 +60,7 @@ async function main() {
       addEventListener(event, handler) { if (event === 'popstate') popstate = handler; },
     },
     initBookingFormAccessGuard: async () => false,
+    loadPetGroomers: async () => [], hasPetGroomerSelection: () => true,
     initBookingPetStep: async () => entered.push('pets'), refreshBookingPetStep: async () => entered.push('pets'),
     initBookingServicesStep: () => entered.push('services'), refreshBookingServicesStep: () => entered.push('services'),
     initBookingCalendar: async ({ onNext }) => { entered.push('schedule'); calendarNext = onNext; },
@@ -81,6 +82,9 @@ async function main() {
   save('bookingStep3', { petSelections: [{ ...selection, groomingPreference: '' }] });
   assert.equal(context.availableStep('schedule'), 'services', 'Required grooming preference must be complete');
   save('bookingStep3', { petSelections: [selection] });
+  context.hasPetGroomerSelection = () => false;
+  assert.equal(context.availableStep('schedule'), 'services', 'Unavailable Pet Groomer blocks later steps');
+  context.hasPetGroomerSelection = () => true;
   await context.navigate('schedule');
   assert.equal(entered.at(-1), 'schedule');
   await context.navigate('review');

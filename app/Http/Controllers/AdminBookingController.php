@@ -92,7 +92,7 @@ class AdminBookingController extends Controller
         ])
             ->where('status', 'waiting_to_arrive');
         $incoming = $incomingQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderByRaw('CASE WHEN booking_date = ? THEN 0 ELSE 1 END', [$rangeStart->toDateString()])
             ->orderBy('booking_date', 'asc')
@@ -108,7 +108,7 @@ class AdminBookingController extends Controller
                 $pet->whereNotNull('grooming_start_time');
             });
         $queued = $queuedQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -129,7 +129,7 @@ class AdminBookingController extends Controller
                 });
         });
         $inProgress = $inProgressQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -143,14 +143,14 @@ class AdminBookingController extends Controller
             });
 
         $forPayment = Booking::where('status', 'for_payment')
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
@@ -704,7 +704,7 @@ class AdminBookingController extends Controller
             if (! $pet->canUndoGroomingStart()) {
                 throw ValidationException::withMessages(['pet' => 'Only an in-progress pet can undo its start.']);
             }
-            $pet->update(['grooming_start_time' => null, 'groomer_id' => null,
+            $pet->update(['grooming_start_time' => null,
                 'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED]);
             $booking->update(['status' => 'checked_in',
                 'grooming_started_at' => $pets->pluck('grooming_start_time')->filter()->sort()->first()]);
@@ -1181,7 +1181,7 @@ class AdminBookingController extends Controller
                 'user',
                 'walkin.unregisteredCustomer',
                 'timeWindow',
-                'bookingPets.pet',
+                'bookingPets.pet', 'bookingPets.groomer',
                 'bookingPets.cancelledBy',
                 'cancelledBy',
                 'bookingServices.service',
@@ -1389,6 +1389,8 @@ class AdminBookingController extends Controller
                     'weight' => $pet?->weight ? $pet->weight.' kg' : '—',
                     'medicalConditions' => $pet?->medical_conditions ?? null,
                     'specialInstructions' => $bp->special_instructions ?? null,
+                    'groomerId' => $bp->groomer_id,
+                    'petGroomerName' => $bp->groomer?->first_name,
                     'petQueueNumber' => $bp->pet_queue_number ?? $petIndex + 1,
                     'groomingStartedAt' => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')

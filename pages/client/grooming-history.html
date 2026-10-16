@@ -627,6 +627,7 @@
               </h3>
               <dl class="mt-4 space-y-3">
                 <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Pet Type</dt><dd class="font-medium text-portal-text">${breed} &middot; ${species}</dd></div>
+                <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs"><dt class="font-medium text-portal-muted">Pet Groomer</dt><dd class="font-medium text-portal-text">${escapeHistoryHtml(pet?.pet_groomer?.first_name || "Any available groomer")}</dd></div>
                 <div class="grid grid-cols-[85px_minmax(0,1fr)] gap-3 text-xs">
                   <dt class="font-medium text-portal-muted">Pet Size</dt>
                   <dd class="font-medium text-portal-text">

@@ -22,9 +22,12 @@ use Tests\TestCase;
 
 class AdminDashboardSummaryTest extends TestCase
 {
+    use \Tests\Support\CreatesPetGroomers;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->createPetGroomers();
 
         Carbon::setTestNow(Carbon::parse('2026-06-24 12:00:00'));
 
@@ -54,6 +57,12 @@ class AdminDashboardSummaryTest extends TestCase
             $table->string('password_hash')->nullable();
         });
 
+        Schema::create('time_windows', function (Blueprint $table) {
+            $table->increments('window_id');
+            $table->time('start_time');
+            $table->time('end_time');
+        });
+
         Schema::create('bookings', function (Blueprint $table) {
             $table->increments('booking_id');
             $table->string('booking_reference')->unique();
@@ -75,6 +84,10 @@ class AdminDashboardSummaryTest extends TestCase
             $table->unsignedInteger('booking_id');
             $table->unsignedInteger('pet_id')->nullable();
             $table->string('confirmed_size')->nullable();
+            $table->string('grooming_preference')->nullable();
+            $table->unsignedInteger('grooming_estimate_min')->nullable();
+            $table->unsignedInteger('grooming_estimate_max')->nullable();
+            $table->json('grooming_estimate_factors')->nullable();
             $table->date('pet_queue_date')->nullable();
             $table->unsignedInteger('pet_queue_number')->nullable();
             $table->text('special_instructions')->nullable();
@@ -96,6 +109,12 @@ class AdminDashboardSummaryTest extends TestCase
             $table->string('fur_type')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->text('medical_conditions')->nullable();
+        });
+
+        Schema::create('services', function (Blueprint $table) {
+            $table->increments('service_id');
+            $table->string('slug');
+            $table->string('service_name');
         });
 
         Schema::create('booking_services', function (Blueprint $table) {
@@ -147,12 +166,15 @@ class AdminDashboardSummaryTest extends TestCase
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
+        Schema::dropIfExists('services');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('users');
         Schema::dropIfExists('clinic_settings');
+        Schema::dropIfExists('time_windows');
 
+        Schema::dropIfExists('pet_groomers');
         parent::tearDown();
     }
 
@@ -319,6 +341,11 @@ class AdminDashboardSummaryTest extends TestCase
 
         DB::table('pets')->insert($pets);
         DB::table('booking_pets')->insert($bookingPets);
+        DB::table('services')->insert(['service_id' => 1, 'slug' => 'partial_grooming', 'service_name' => 'Partial Grooming']);
+        DB::table('booking_services')->insert(array_map(fn ($pet) => [
+            'booking_id' => $pet['booking_id'], 'booking_pet_id' => $pet['booking_pet_id'], 'service_id' => 1,
+        ], $bookingPets));
+
 
         $controller = new AdminBookingController;
         $response = $controller->checkIn(3);
@@ -684,9 +711,7 @@ class AdminDashboardSummaryTest extends TestCase
     #[DataProvider('groomerCapacities')]
     public function test_groomer_capacity_limits_active_pets_and_finishing_frees_a_slot(int $groomersOnDuty): void
     {
-        DB::table('clinic_settings')->where('id', 1)->update([
-            'groomers_on_duty' => $groomersOnDuty,
-        ]);
+        $this->setPetGroomersOnDuty($groomersOnDuty);
 
         for ($index = 1; $index <= $groomersOnDuty + 1; $index++) {
             DB::table('bookings')->insert([
@@ -736,20 +761,17 @@ class AdminDashboardSummaryTest extends TestCase
         ];
     }
 
-    public function test_groomers_on_duty_setting_can_be_updated(): void
+    public function test_groomers_on_duty_count_is_derived_from_named_records(): void
     {
-        $response = (new ClinicSettingController)->updateGroomersOnDuty(new Request([
-            'groomers_on_duty' => 3,
-        ]));
-
-        $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame(3, $response->getData(true)['groomers_on_duty']);
-        $this->assertSame(3, DB::table('clinic_settings')->where('id', 1)->value('groomers_on_duty'));
+        $this->setPetGroomersOnDuty(3);
+        $this->assertSame(3, \App\Models\ClinicSetting::current()->groomers_on_duty);
+        $this->setPetGroomersOnDuty(0);
+        $this->assertSame(0, \App\Models\ClinicSetting::current()->groomers_on_duty);
     }
 
     public function test_booking_level_start_cannot_bypass_pet_capacity(): void
     {
-        DB::table('clinic_settings')->where('id', 1)->update(['groomers_on_duty' => 1]);
+        $this->setPetGroomersOnDuty(1);
         DB::table('bookings')->insert([
             'booking_id' => 1,
             'booking_reference' => 'CAPACITY-WHOLE-BOOKING',

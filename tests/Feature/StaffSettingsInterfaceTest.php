@@ -18,10 +18,10 @@ class StaffSettingsInterfaceTest extends TestCase
             '>Notifications</span>',
             '>Security</span>',
             'These settings are managed by an administrator.',
-            'Most settings on this page are managed by an administrator. You can update the number of groomers currently on duty.',
+            'Most settings on this page are managed by an administrator. You can manage Pet Groomers here.',
             '>Groomers on Duty</h3>',
-            'setGroomersOnDuty(groomersOnDuty - 1)',
-            'setGroomersOnDuty(groomersOnDuty + 1)',
+            'Add Pet Groomer',
+            'person.on_duty',
             'x-show="isStaff"',
             'x-show="isAdmin"',
             "appointmentReminders ? 'Enabled' : 'Disabled'",
@@ -38,8 +38,8 @@ class StaffSettingsInterfaceTest extends TestCase
 
         $this->assertStringContainsString('>Groomers on Duty</h3>', $settings);
         $this->assertStringNotContainsString('>Groomers on duty</span>', $appointments);
-        $this->assertStringContainsString('>Pets waiting</p>', $appointments);
-        $this->assertStringContainsString('>Avg. service estimate</p>', $appointments);
+        $this->assertStringContainsString('Queued (', $appointments);
+        $this->assertStringContainsString('Avg. grooming time', $appointments);
     }
 
     public function test_staff_can_reach_settings_from_the_shared_admin_shell(): void

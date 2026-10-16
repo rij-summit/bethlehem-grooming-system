@@ -337,6 +337,7 @@ export function buildWalkInPets(reviewPayload) {
       medical_conditions:   item.pet.medicalNotes || null,
       special_instructions: item.selection.specialInstructions?.trim() || null,
       grooming_preference: item.selection.groomingPreference || null,
+      groomer_id: item.selection.groomerId ?? null,
       estimate_factors: item.selection.estimateFactors || [],
       services:             item.pricing.lineItems.map((lineItem) => ({
         service_slug: lineItem.serviceId,
@@ -397,6 +398,8 @@ function buildConfirmationPayload(response, reviewPayload) {
           petName:              item.pet.petName,
           servicePackage:       packageLine?.serviceName || null,
           groomingPreference: item.selection.groomingPreference,
+          groomerId: item.selection.groomerId,
+          petGroomerName: response.pets?.[index]?.pet_groomer?.first_name,
           groomingEstimate: response.pets?.[index]?.grooming_estimate || item.groomingEstimate,
           alaCarteServices:     alaCarteLines.map((l) => l.serviceName),
           pricing:              item.pricing.total,

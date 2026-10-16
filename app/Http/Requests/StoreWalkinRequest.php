@@ -67,6 +67,7 @@ class StoreWalkinRequest extends FormRequest
             'pets.*.special_instructions' => ['nullable', 'string', 'max:1000'],
 
             'pets.*.grooming_preference' => ['nullable', 'string', 'max:32'],
+            'pets.*.groomer_id' => ['nullable', 'integer'],
             'pets.*.estimate_factors' => ['nullable', 'array'],
             'pets.*.estimate_factors.*' => ['string', 'in:'.implode(',', array_keys(config('grooming_estimates.factors')))],
 

@@ -1,4 +1,5 @@
 import { renderEstimateReview } from "./grooming-estimate-selection.js";
+import { petGroomerLabel } from "./pet-groomer-selection.js";
 import {
   escapeHtml,
   formatPetSizeLabel,
@@ -11,8 +12,8 @@ import {
   getGroomingPricePresentation,
   formatPriceOption,
   getPackageById,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006";
-import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010&pet-weight=pet-weight-size-20261011-v3";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016";
+import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016";
 
 const state = {
   bookingDraft: null,
@@ -344,6 +345,7 @@ function renderPetReviewCard(item, index) {
       </div>
 
       <div class="mt-6 space-y-4">
+        <p class="text-sm text-slate-600">Pet Groomer: ${escapeHtml(petGroomerLabel(item.selection))}</p>
         ${packageCard}
         ${renderEstimateReview(item.groomingEstimate)}
         ${alaCarteCard}

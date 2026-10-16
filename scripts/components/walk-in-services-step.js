@@ -1,4 +1,5 @@
 import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
+import { loadPetGroomers, normalizePetGroomerSelections, hasPetGroomerSelection, renderPetGroomerSelection } from "./pet-groomer-selection.js";
 import {
   escapeHtml,
   formatPetSizeLabel,
@@ -17,8 +18,8 @@ import {
   getPackageById,
   getPackageAlaCarteRules,
   getPackagesByPetType,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006";
-import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010&pet-weight=pet-weight-size-20261011-v3";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016";
+import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016";
 
 const state = {
   pets: [],
@@ -145,14 +146,15 @@ async function loadServicePricing() {
   syncNextButtonState(false);
   elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
   try {
-    await loadGroomingCatalogue();
+    await Promise.all([loadGroomingCatalogue(), loadPetGroomers()]);
+    normalizePetGroomerSelections(state.petSelections);
     state.catalogueReady = true;
     renderPetServiceSelections();
     updateServiceNotice();
   } catch (error) {
     state.catalogueReady = false;
     elements.petServiceSelections.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700" role="alert">
-      Unable to load current grooming pricing. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
+      Unable to load grooming services and Pet Groomer availability. <button type="button" data-retry-pricing class="font-semibold underline">Retry</button>
     </div>`;
     syncNextButtonState(false);
   }
@@ -227,6 +229,7 @@ function renderPetSelectionCard(pet, index) {
         ${pet.sizeVerified ? "" : '<p class="mt-2 text-xs text-slate-500">Size may be confirmed by clinic staff at check-in.</p>'}
       </div>
 
+      ${renderPetGroomerSelection(pet, selection, true)}
       <section>
         <div class="mb-3">
           <h4 class="text-base font-semibold text-[#2f4b66]">
@@ -403,7 +406,7 @@ function petRequiresPackage(pet) {
 }
 
 function hasCompletedRequiredServiceSelection(pet, selection) {
-  if (!pet || !hasRequiredGroomingPreference(selection)) {
+  if (!pet || !hasRequiredGroomingPreference(selection) || !hasPetGroomerSelection(selection, true)) {
     return false;
   }
 
@@ -536,6 +539,7 @@ function handleSelectionChange(event) {
   }
 
   updateEstimateSelection(selection, target);
+  if (target.dataset.role === "pet-groomer") selection.groomerId = Number(target.value);
 
   if (target.dataset.role === "service-package") {
     selection.servicePackage = target.value;
@@ -598,6 +602,10 @@ function handleSubmit(event) {
   event.preventDefault();
   if (!state.catalogueReady) return;
 
+  if (state.petSelections.some((selection) => !hasPetGroomerSelection(selection, true))) {
+    updateServiceNotice("Select an available Pet Groomer for each pet.");
+    return;
+  }
   const incompletePets = state.pets.filter((pet) => {
     const selection = getSelectionByPetId(pet.id);
     return !hasCompletedRequiredServiceSelection(pet, selection);

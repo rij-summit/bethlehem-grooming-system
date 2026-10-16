@@ -63,6 +63,7 @@ class WalkinController extends Controller
 
         return app(DailyPetQueue::class)->runForDate($queueDate, function () use ($request, $queueDate) {
             $data = $request->validated();
+            $data['pets'] = app(\App\Services\PetGroomerSelection::class)->validate($data['pets'], true);
             app(\App\Services\OperationalCapacity::class)->assertCanAccept('grooming', count($data['pets']));
             $data['pets'] = array_map(
                 fn (array $pet) => PetWeightSize::withComputedSize($pet),
@@ -118,6 +119,7 @@ class WalkinController extends Controller
 
             // For each pet: find or create a pet record, then attach services
             $petsResponse = [];
+            $groomers = \App\Models\PetGroomer::whereIn('id', array_column($data['pets'], 'groomer_id'))->get()->keyBy('id');
             foreach ($resolvedPets as $item) {
                 $pet = $item['pet'];
 
@@ -127,6 +129,7 @@ class WalkinController extends Controller
                     'registered_size' => $item['petData']['size'] ?? null,
                     'confirmed_size' => $item['size'],
                     'special_instructions' => trim($item['petData']['special_instructions'] ?? '') ?: null,
+                    'groomer_id' => $item['petData']['groomer_id'],
                 ]);
 
                 app(\App\Services\GroomingTimeEstimate::class)->snapshot($bookingPet, $item['estimate']);
@@ -144,6 +147,8 @@ class WalkinController extends Controller
 
                 $petsResponse[] = [
                     'booking_pet_id' => $bookingPet->booking_pet_id,
+                    'groomer_id' => $bookingPet->groomer_id,
+                    'pet_groomer' => $groomers->get($bookingPet->groomer_id),
                     'pet_id' => $pet->pet_id,
                     'pet_name' => $item['petData']['pet_name'],
                     'species' => $item['petData']['species'],
