@@ -15,10 +15,12 @@ class GroomingWorkloadCapacity
     public const UNAVAILABLE = 'Unavailable — not enough grooming time remaining';
     public const REJECTION = 'Insufficient grooming time remaining';
     public const REJECTION_DETAIL = "Based on the current grooming queue, this service is projected to finish after today's grooming hours.";
+    public const WINDOW_UNAVAILABLE = 'That arrival time just became unavailable. Please choose another available time.';
+    public const DATE_FULL = 'Grooming capacity is full for this date. Please choose another available date.';
 
     public function __construct(private GroomingTimeEstimate $estimates, private OperationalCapacity $physical) {}
 
-    /** Read once per forecast; pending arrivals and finished pets reserve no lane. */
+    /** Physical workload only; future reservations are read separately. */
     public function liveJobs(): Collection
     {
         return $this->physical->groomingPets()
@@ -75,20 +77,76 @@ class GroomingWorkloadCapacity
         return $this->project($this->liveJobs()->all(), [], $settings ?? ClinicSetting::current(), now());
     }
 
-    public function forecastWindows(Collection $windows, string $date, array $arrivals, ClinicSetting $settings): Collection
+    /** Existing booking estimates reserve work until the selected arrival period ends. */
+    public function reservedJobs(string $date, ?int $excludeBookingId = null): array
+    {
+        if ($date < now()->toDateString()) return [];
+
+        return BookingPet::query()
+            ->whereNull('grooming_end_time')
+            ->where('grooming_state', BookingPet::GROOMING_STATE_NOT_STARTED)
+            ->whereHas('booking', fn ($booking) => $booking
+                ->where('status', 'waiting_to_arrive')->whereNull('dropped_off_at')
+                ->where('booking_date', $date)
+                ->when($excludeBookingId !== null, fn ($query) => $query->where('booking_id', '!=', $excludeBookingId))
+                ->whereHas('timeWindow', fn ($window) => $window
+                    ->when($date === now()->toDateString(), fn ($query) => $query->where('end_time', '>', now()->format('H:i:s')))))
+            ->with(['pet', 'booking.timeWindow', 'booking.bookingServices.service'])
+            ->orderBy('booking_pet_id')->get()
+            ->sortBy(fn (BookingPet $pet) => [$pet->booking_id,
+                match (strtolower((string) $pet->pet?->species)) { 'dog' => 0, 'cat' => 1, default => 2 },
+                $pet->booking_pet_id])
+            ->map(fn (BookingPet $pet) => [...$this->job($pet), 'active' => false,
+                'arrival_at' => Carbon::parse($date.' '.$pet->booking->timeWindow->end_time)->timestamp])
+            ->filter(fn ($job) => $job['minutes'] > 0)->values()->all();
+    }
+
+    public function forecastWindows(Collection $windows, string $date, array $arrivals, ClinicSetting $settings, ?int $excludeBookingId = null): Collection
     {
         $jobs = $date === now()->toDateString() ? $this->liveJobs()->all() : [];
-        return $windows->map(function (array $window) use ($jobs, $date, $arrivals, $settings) {
-            $forecast = $this->project($jobs, $arrivals, $settings, Carbon::parse($date.' '.$settings->serviceAvailability('grooming')['open_time']),
-                Carbon::parse($date.' '.$window['end_time']));
+        $reserved = $this->reservedJobs($date, $excludeBookingId);
+        return $windows->map(function (array $window) use ($jobs, $reserved, $date, $arrivals, $settings) {
+            $arrival = Carbon::parse($date.' '.$window['end_time']);
+            $future = collect([...$reserved, ...array_map(fn ($job) => [...$job, 'arrival_at' => $arrival->timestamp], $arrivals)])
+                ->sortBy('arrival_at')->values()->all();
+            $forecast = $this->project($jobs, $future, $settings,
+                Carbon::parse($date.' '.$settings->serviceAvailability('grooming')['open_time']));
             return [...$window, 'is_workload_unavailable' => $arrivals !== [] && ! $forecast['fits'],
                 'workload_message' => $arrivals !== [] && ! $forecast['fits'] ? self::UNAVAILABLE : null];
         });
     }
 
-    public function assertCanAdmit(array $arrivals, ?Carbon $arrival = null): void
+    /** Called under DailyPetQueue's shared intake lock; throwing rolls back all submission writes. */
+    public function assertCanReserve(string $date, int $windowId, array $arrivals, ClinicSetting $settings, ?int $excludeBookingId = null): void
     {
-        $forecast = $this->project($this->liveJobs()->all(), $arrivals, ClinicSetting::current(), now(), $arrival);
+        $windows = $this->forecastWindows(app(AvailabilityTimeWindowService::class)->preferredWindows($settings, 'grooming', $date),
+            $date, $arrivals, $settings, $excludeBookingId);
+        $selected = $windows->firstWhere('window_id', $windowId);
+        if ($selected && ! $selected['is_past'] && ! $selected['is_cutoff'] && ! $selected['is_closed']
+            && ! $selected['is_workload_unavailable']) return;
+
+        $available = $windows->contains(fn ($window) => ! $window['is_past'] && ! $window['is_cutoff']
+            && ! $window['is_closed'] && ! $window['is_workload_unavailable']);
+        $message = $available ? self::WINDOW_UNAVAILABLE : self::DATE_FULL;
+        $exception = ValidationException::withMessages(['window_id' => $message]);
+        $exception->response = response()->json(['success' => false, 'code' => 'grooming_forecast_unavailable',
+            'message' => $message, 'date_full' => ! $available, 'windows' => $windows, 'errors' => $exception->errors()], 422);
+        throw $exception;
+    }
+
+    public function admissionForecast(array $arrivals, ?Carbon $arrival = null, ?int $excludeBookingId = null): array
+    {
+        $arrival ??= now();
+        $future = [...array_map(fn ($job) => [...$job, 'arrival_at' => $arrival->timestamp], $arrivals),
+            ...$this->reservedJobs($arrival->toDateString(), $excludeBookingId)];
+        return $this->project($this->liveJobs()->all(),
+            collect($future)->sortBy('arrival_at')->values()->all(),
+            ClinicSetting::current(), $arrival);
+    }
+
+    public function assertCanAdmit(array $arrivals, ?Carbon $arrival = null, ?int $excludeBookingId = null): void
+    {
+        $forecast = $this->admissionForecast($arrivals, $arrival, $excludeBookingId);
         if ($forecast['fits']) return;
         $exception = ValidationException::withMessages(['check_in' => self::REJECTION]);
         $exception->response = response()->json(['success' => false, 'code' => 'insufficient_grooming_time',
@@ -128,7 +186,7 @@ class GroomingWorkloadCapacity
         foreach ([...$waiting, ...$arrivals] as $index => $job) {
             $knownLanes = array_filter($lanes, fn ($end) => $end !== null);
             $lane = $knownLanes ? array_search(min($knownLanes), $lanes, true) : null;
-            $earliestArrival = $index >= count($waiting) ? ($arrival?->timestamp ?? $base) : $base;
+            $earliestArrival = $job['arrival_at'] ?? ($index >= count($waiting) ? ($arrival?->timestamp ?? $base) : $base);
             $start = $lane !== null ? max($base, $earliestArrival, $lanes[$lane]) : null;
             $finish = $start !== null && ! empty($job['minutes']) ? $start + $job['minutes'] * 60 : null;
             if ($lane !== null) $lanes[$lane] = $finish;

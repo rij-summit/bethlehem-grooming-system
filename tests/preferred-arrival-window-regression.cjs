@@ -246,33 +246,39 @@ async function main() {
   clinicService.clearClinicVisitArrival('2026-10-10');
   assert.equal(JSON.parse(clinic.storage.get('clinicVisitDraft')).appointmentDate, '2026-10-10');
 
-  let groomingStep;
-  const grooming = harness('booking-consent-step.js', {
-    ...weightTools,
-    loadGroomingCatalogue: async () => {}, getBookingDraft: () => ({}),
-    normalizeStepThreeDraft: () => [], selectedPricingSignature: () => 'reviewed',
-    goToGroomingStep: (step) => { groomingStep = step; },
-    API: { storeBooking: async () => { throw { code: 'arrival_window_ended', message: endedMessage }; } },
-  });
-  for (const [key, value] of Object.entries({
-    bookingSchedule: { date: '2026-10-09', window_id: 1 },
-    bookingPets: [{ id: 101, petName: 'Mochi', petType: 'cat' }],
-    bookingStep3: { petSelections: [{ petId: 101, servicePackage: 'cat_full_grooming' }] },
-    bookingStep4Review: { pets: [{ petId: 101, specialInstructions: 'Keep these notes' }] },
-  })) grooming.storage.set(key, JSON.stringify(value));
-  grooming.storage.set('groomingReviewedPricing', 'reviewed');
-  grooming.context.initBookingConsentStep();
-  grooming.elements.get('mainConsentCheckbox').checked = true;
-  grooming.elements.get('sedationConsentCheckbox').checked = true;
-  grooming.elements.get('digitalSignature').value = 'Customer Name';
-  await grooming.elements.get('bookingConsentForm').listeners.submit({ preventDefault() {} });
-  assert.equal(groomingStep, 'schedule');
-  assert.equal(grooming.storage.has('bookingSchedule'), false);
-  assert.equal(grooming.storage.get('bookingScheduleArrivalError'), endedMessage);
-  for (const key of ['bookingPets', 'bookingStep3', 'bookingStep4Review', 'bookingConsentStep']) {
-    assert.equal(grooming.storage.has(key), true, `preserve ${key}`);
+  for (const failure of [
+    { code: 'arrival_window_ended', message: endedMessage },
+    { code: 'grooming_forecast_unavailable', message: 'That arrival time just became unavailable. Please choose another available time.' },
+    { code: 'grooming_forecast_unavailable', message: 'Grooming capacity is full for this date. Please choose another available date.' },
+  ]) {
+    let groomingStep;
+    const grooming = harness('booking-consent-step.js', {
+      ...weightTools,
+      loadGroomingCatalogue: async () => {}, getBookingDraft: () => ({}),
+      normalizeStepThreeDraft: () => [], selectedPricingSignature: () => 'reviewed',
+      goToGroomingStep: (step) => { groomingStep = step; },
+      API: { storeBooking: async () => { throw failure; } },
+    });
+    for (const [key, value] of Object.entries({
+      bookingSchedule: { date: '2026-10-09', window_id: 1 },
+      bookingPets: [{ id: 101, petName: 'Mochi', petType: 'cat' }],
+      bookingStep3: { petSelections: [{ petId: 101, servicePackage: 'cat_full_grooming' }] },
+      bookingStep4Review: { pets: [{ petId: 101, specialInstructions: 'Keep these notes' }] },
+    })) grooming.storage.set(key, JSON.stringify(value));
+    grooming.storage.set('groomingReviewedPricing', 'reviewed');
+    grooming.context.initBookingConsentStep();
+    grooming.elements.get('mainConsentCheckbox').checked = true;
+    grooming.elements.get('sedationConsentCheckbox').checked = true;
+    grooming.elements.get('digitalSignature').value = 'Customer Name';
+    await grooming.elements.get('bookingConsentForm').listeners.submit({ preventDefault() {} });
+    assert.equal(groomingStep, 'schedule');
+    assert.deepEqual(JSON.parse(grooming.storage.get('bookingSchedule')), { date: '2026-10-09' });
+    assert.equal(grooming.storage.get('bookingScheduleArrivalError'), failure.message);
+    for (const key of ['bookingPets', 'bookingStep3', 'bookingStep4Review', 'bookingConsentStep']) {
+      assert.equal(grooming.storage.has(key), true, `preserve ${key}`);
+    }
+    assert.equal(JSON.parse(grooming.storage.get('bookingConsentStep')).digitalSignature, 'Customer Name');
   }
-  assert.equal(JSON.parse(grooming.storage.get('bookingConsentStep')).digitalSignature, 'Customer Name');
   console.log('Preferred arrival windows: boundaries, restrictions, draft preservation, and expiry recovery passed.');
 }
 

@@ -163,7 +163,8 @@ export function initBookingConsentStep() {
       submitBookingButton.textContent = "Submit Registration";
 
       if (["arrival_window_ended", "grooming_forecast_unavailable"].includes(error.code)) {
-        sessionStorage.removeItem("bookingSchedule");
+        // Keep the date visible while invalidating only the selected arrival.
+        sessionStorage.setItem("bookingSchedule", JSON.stringify({ date: schedule.date }));
         sessionStorage.setItem("bookingScheduleArrivalError", error.message);
         goToGroomingStep("schedule");
         return;

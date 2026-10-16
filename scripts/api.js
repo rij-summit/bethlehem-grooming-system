@@ -1287,9 +1287,10 @@ var API = (() => {
     return request("GET", "/system/clock");
   }
 
-  async function getTimeslots(date) {
-    // GET /api/timeslots?date=YYYY-MM-DD  (public — no token needed)
-    return request("GET", `/timeslots?date=${date}`);
+  async function getTimeslots(date, bookingId = null) {
+    // Public browsing; an owned booking enables authenticated reschedule forecasts.
+    return request("GET", `/timeslots?date=${date}${bookingId ? `&booking_id=${encodeURIComponent(bookingId)}` : ""}`,
+      null, bookingId ? getCustomerToken() : undefined);
   }
 
   async function forecastGroomingWindows(date, pets) {

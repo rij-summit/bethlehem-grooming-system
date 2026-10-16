@@ -28,7 +28,7 @@
 
   function iconFor(notification) {
     const type = String(notification?.type || "").toLowerCase();
-    if (type.includes("cancel")) return "x-circle";
+    if (type.includes("cancel") || type.includes("expired")) return "x-circle";
     if (type.includes("pet_information")) return "paw-print";
     if (type.includes("reminder")) return "clock-counter-clockwise";
     if (type.includes("grooming") || type.includes("pickup") || type === "picked_up") return "check-circle";
@@ -70,6 +70,7 @@
     return `<button type="button" data-client-notification-index="${index}" class="flex w-full items-start gap-3 border-b border-portal-border px-4 py-3 text-left transition hover:bg-portal-surface-soft ${background} ${large ? "sm:px-6 sm:py-4" : ""}">
       ${iconMarkup(notification, large)}
       <span class="min-w-0 flex-1">
+        ${notification.title ? `<span class="block text-sm font-semibold text-portal-text">${escapeHtml(notification.title)}</span>` : ""}
         <span class="block text-sm leading-snug text-portal-text">${formatMessage(notification)}</span>
         <span class="mt-1 block text-xs text-portal-muted">${escapeHtml(timeLabel(notification.created_at, !large))}</span>
       </span>

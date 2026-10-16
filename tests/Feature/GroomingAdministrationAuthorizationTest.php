@@ -61,6 +61,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         parent::setUp();
 
         Carbon::setTestNow(Carbon::parse('2026-07-24 10:00:00'));
+        if (DB::getDriverName() === 'mysql' && str_starts_with(DB::connection()->getDatabaseName(), 'bethlehem_capacity_')) {
+            // This fixture omits inventory tables referenced by the unrelated POS schema.
+            Schema::disableForeignKeyConstraints();
+        }
 
         Schema::create('users', function (Blueprint $table) {
             $table->increments('user_id');
@@ -3009,6 +3013,209 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('booking_pets')->update(['grooming_state' => 'finished', 'grooming_end_time' => now()]);
         $this->postJson('/api/admin/walk-in', $payload)->assertCreated()->assertJsonPath('queue_number', 2)
             ->assertJsonPath('pets.0.pet_queue_number', 3);
+    }
+
+    private function prepareReservationDay(): array
+    {
+        Carbon::setTestNow('2026-10-16 13:00:00');
+        DB::table('clinic_settings')->update(['groomers_on_duty' => 1, 'grooming_prereg_cutoff_time' => '17:00:00']);
+        DB::table('time_windows')->insert([
+            ['window_id' => 1, 'window_label' => '1:00 PM - 2:00 PM', 'start_time' => '13:00:00', 'end_time' => '14:00:00'],
+            ['window_id' => 2, 'window_label' => '3:00 PM - 4:00 PM', 'start_time' => '15:00:00', 'end_time' => '16:00:00'],
+        ]);
+        DB::table('users')->insert([
+            ['user_id' => 101, 'first_name' => 'Maria', 'last_name' => 'Santos', 'role' => 'customer'],
+            ['user_id' => 102, 'first_name' => 'Diego', 'last_name' => 'Reyes', 'role' => 'customer'],
+        ]);
+        return ['booking_date' => now()->toDateString(), 'window_id' => 2, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'services' => ['package' => 'partial_grooming']]]];
+    }
+
+    public function test_reserved_workload_revalidates_stale_windows_without_reserving_physical_space(): void
+    {
+        $payload = $this->prepareReservationDay();
+        $forecast = ['date' => $payload['booking_date'], 'pets' => $payload['pets']];
+        foreach ([101, 102] as $userId) {
+            Sanctum::actingAs(User::findOrFail($userId), ['*']);
+            $this->postJson('/api/booking/workload-forecast', $forecast)->assertOk()
+                ->assertJsonPath('windows.1.is_workload_unavailable', false);
+        }
+        $this->assertDatabaseCount('bookings', 0);
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $this->postJson('/api/booking/store', $payload)->assertCreated();
+        Sanctum::actingAs(User::findOrFail(102), ['*']);
+        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+            ->assertJsonPath('message', \App\Services\GroomingWorkloadCapacity::WINDOW_UNAVAILABLE)
+            ->assertJsonPath('windows.0.is_workload_unavailable', false)
+            ->assertJsonPath('windows.1.is_workload_unavailable', true);
+        $this->assertDatabaseCount('bookings', 1);
+        $this->assertDatabaseCount('pets', 1);
+        $this->assertDatabaseCount('notifications', 1);
+        $this->assertSame(0, DB::table('bookings')->whereNotNull('queue_number')->count());
+        $this->assertSame(0, DB::table('booking_pets')->whereNotNull('pet_queue_number')->count());
+        $this->assertSame(0, app(\App\Services\OperationalCapacity::class)->snapshot()['used']);
+        DB::table('time_windows')->where('window_id', 1)->update(['is_active' => false]);
+        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+            ->assertJsonPath('date_full', true)->assertJsonPath('message', \App\Services\GroomingWorkloadCapacity::DATE_FULL);
+    }
+
+    public function test_reservation_expiry_keeps_today_active_and_late_check_in_revalidates_live_workload(): void
+    {
+        $payload = $this->prepareReservationDay();
+        $payload['window_id'] = 1;
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+        $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
+        Carbon::setTestNow('2026-10-16 14:00:00');
+        $this->assertSame([], $workload->reservedJobs('2026-10-16'));
+        $this->assertSame(0, app(\App\Services\PreRegistrationExpiry::class)->expire());
+        $this->getJson('/api/booking/history')->assertOk()->assertJsonPath('bookings.0.arrival_time_passed', true)
+            ->assertJsonPath('bookings.0.status', 'waiting_to_arrive');
+        $this->getJson('/api/pre-registration/access')->assertOk()->assertJsonPath('allowed', false);
+        $this->assertDatabaseCount('customer_notifications', 0);
+        $this->assertDatabaseHas('bookings', ['booking_id' => $id, 'queue_number' => null, 'status' => 'waiting_to_arrive']);
+        DB::table('bookings')->insert(['booking_id' => 999, 'booking_reference' => 'BAC-20261016-0099',
+            'booking_date' => '2026-10-16', 'status' => 'in_progress', 'queue_number' => 1]);
+        DB::table('booking_pets')->insert(['booking_pet_id' => 999, 'booking_id' => 999, 'grooming_state' => 'in_progress',
+            'grooming_start_time' => now(), 'grooming_estimate_min' => 180, 'grooming_estimate_max' => 180]);
+        $this->authenticateAs('staff');
+        $this->postJson("/api/admin/bookings/{$id}/check-in")->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
+        $this->assertDatabaseHas('bookings', ['booking_id' => $id, 'queue_number' => null, 'status' => 'waiting_to_arrive']);
+        DB::table('booking_pets')->where('booking_pet_id', 999)->update(['grooming_state' => 'finished', 'grooming_end_time' => now()]);
+        $this->postJson("/api/admin/bookings/{$id}/check-in")->assertOk()->assertJsonPath('queue_number', 2);
+        $this->assertSame([], $workload->reservedJobs('2026-10-16'));
+        $this->assertCount(1, $workload->liveJobs());
+    }
+
+    public function test_valid_reservation_transitions_to_live_workload_without_double_counting(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        Carbon::setTestNow('2026-10-16 15:59:00');
+        $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+        $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
+        $this->authenticateAs('staff');
+        $this->postJson("/api/admin/bookings/{$id}/check-in")->assertOk()->assertJsonPath('queue_number', 1);
+        $this->assertSame([], $workload->reservedJobs('2026-10-16'));
+        $this->assertCount(1, $workload->liveJobs());
+        $this->assertSame(1, app(\App\Services\OperationalCapacity::class)->snapshot()['used']);
+    }
+
+    public function test_reservations_protect_other_arrivals_and_exclude_terminal_or_finished_workload(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+        Carbon::setTestNow('2026-10-16 15:59:00');
+        $this->authenticateAs('staff');
+        $walkin = ['pets' => [['pet_name' => 'Luna', 'species' => 'dog', 'size' => 'small',
+            'services' => [['service_slug' => 'partial_grooming']]]]];
+        $this->postJson('/api/admin/walk-in/capacity-preview', $walkin)->assertOk()->assertJsonPath('capacity.fits', false);
+        $this->postJson('/api/admin/walk-in', [...$walkin, 'fname' => 'Ana', 'lname' => 'Cruz', 'phone' => '09171234567',
+            'sedation_consent' => false, 'terms_agreed' => true])->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
+        $this->assertDatabaseCount('bookings', 1);
+        foreach (['cancelled', 'expired', 'completed', 'archived'] as $status) {
+            DB::table('bookings')->where('booking_id', $id)->update(['status' => $status]);
+            $this->assertSame([], $workload->reservedJobs('2026-10-16'), $status);
+        }
+        DB::table('bookings')->where('booking_id', $id)->update(['status' => 'waiting_to_arrive']);
+        foreach (['finished', 'cancelled'] as $state) {
+            DB::table('booking_pets')->where('booking_id', $id)->update(['grooming_state' => $state]);
+            $this->assertSame([], $workload->reservedJobs('2026-10-16'), $state);
+        }
+        DB::table('booking_pets')->where('booking_id', $id)->update(['grooming_state' => 'not_started']);
+        $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
+        $this->assertSame([], $workload->reservedJobs('2026-10-17'));
+    }
+
+    public function test_cancellation_and_atomic_reschedule_release_only_the_old_reservation(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $first = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        Sanctum::actingAs(User::findOrFail(102), ['*']);
+        $payload['window_id'] = 1;
+        $second = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $this->getJson('/api/timeslots?date=2026-10-16&booking_id='.$first)->assertNotFound();
+        $this->getJson('/api/timeslots?date=2026-10-16&booking_id='.$second)->assertOk()
+            ->assertJsonPath('windows.1.is_workload_unavailable', true);
+        $this->postJson('/api/booking/reschedule', ['booking_id' => $second, 'new_date' => '2026-10-16', 'new_window_id' => 2])
+            ->assertUnprocessable()->assertJsonPath('code', 'grooming_forecast_unavailable');
+        $this->assertDatabaseHas('bookings', ['booking_id' => $second, 'window_id' => 1, 'reschedule_count' => 0]);
+        $workload = app(\App\Services\GroomingWorkloadCapacity::class);
+        $this->assertCount(2, $workload->reservedJobs('2026-10-16'));
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $this->postJson('/api/booking/reschedule', ['booking_id' => $first, 'new_date' => '2026-10-17', 'new_window_id' => 2])->assertOk();
+        $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
+        $this->assertCount(1, $workload->reservedJobs('2026-10-17'));
+        Sanctum::actingAs(User::findOrFail(102), ['*']);
+        $this->postJson('/api/booking/reschedule', ['booking_id' => $second, 'new_date' => '2026-10-16', 'new_window_id' => 2])->assertOk();
+        $this->postJson('/api/booking/cancel', ['booking_id' => $second])->assertOk();
+        $this->assertSame([], $workload->reservedJobs('2026-10-16'));
+        $this->assertCount(1, $workload->reservedJobs('2026-10-17'));
+    }
+
+    public function test_date_expiry_notifies_once_through_the_customer_dashboard_notifications(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        Carbon::setTestNow('2026-10-16 23:59:59');
+        $this->assertSame(0, app(\App\Services\PreRegistrationExpiry::class)->expire());
+        Carbon::setTestNow('2026-10-17 00:00:00');
+        $this->getJson('/api/customer/notifications')->assertOk()->assertJsonPath('unread_count', 1)
+            ->assertJsonPath('notifications.0.title', 'Grooming pre-registration expired')
+            ->assertJsonPath('notifications.0.display_message', 'Your grooming pre-registration for Oct 16 was cancelled because the scheduled date passed without check-in.');
+        $this->assertSame(0, app(\App\Services\PreRegistrationExpiry::class)->expire());
+        $this->assertDatabaseCount('customer_notifications', 1);
+        $this->assertDatabaseHas('bookings', ['booking_id' => $id, 'status' => 'expired', 'queue_number' => null]);
+        $this->assertSame([], app(\App\Services\GroomingWorkloadCapacity::class)->reservedJobs('2026-10-16'));
+        $this->getJson('/api/pre-registration/access')->assertOk()->assertJsonPath('allowed', true);
+    }
+
+    public function test_concurrent_grooming_submissions_serialize_the_last_capacity_on_mysql(): void
+    {
+        if (DB::getDriverName() !== 'mysql' || ! str_starts_with(DB::connection()->getDatabaseName(), 'bethlehem_capacity_')) {
+            $this->markTestSkipped('Run tests/grooming-capacity-concurrency.php with its isolated MySQL database.');
+        }
+        $payload = $this->prepareReservationDay();
+        $signal = tempnam(sys_get_temp_dir(), 'grooming-lock-');
+        unlink($signal);
+        $environment = ['DB_CONNECTION' => 'mysql', 'DB_DATABASE' => DB::connection()->getDatabaseName(), 'DB_URL' => '',
+            'APP_ENV' => 'testing', 'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array', 'MAIL_MAILER' => 'array'];
+        $worker = base_path('tests/grooming-capacity-submit.php');
+        $first = new \Symfony\Component\Process\Process([PHP_BINARY, $worker, '101', json_encode($payload), $signal], base_path(), $environment);
+        $second = new \Symfony\Component\Process\Process([PHP_BINARY, $worker, '102', json_encode($payload)], base_path(), $environment);
+        try {
+            $first->start();
+            $deadline = microtime(true) + 10;
+            while (! file_exists($signal) && $first->isRunning() && microtime(true) < $deadline) usleep(10000);
+            $this->assertFileExists($signal, $first->getErrorOutput());
+            $second->start();
+            $first->wait();
+            $second->wait();
+            $this->assertSame(0, $first->getExitCode(), $first->getErrorOutput());
+            $this->assertSame(0, $second->getExitCode(), $second->getErrorOutput());
+            $a = json_decode($first->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+            $b = json_decode($second->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertLessThan($a['finished_at'], $b['started_at'], 'Both submissions must overlap.');
+            $this->assertSame(201, $a['status']);
+            $this->assertSame(422, $b['status']);
+            $this->assertSame(\App\Services\GroomingWorkloadCapacity::WINDOW_UNAVAILABLE, $b['body']['message']);
+            $this->assertTrue($b['body']['windows'][1]['is_workload_unavailable']);
+            $this->assertFalse($b['body']['windows'][0]['is_workload_unavailable']);
+            $this->assertDatabaseCount('bookings', 1);
+            $this->assertDatabaseCount('pets', 1);
+            $this->assertDatabaseCount('notifications', 1);
+            $this->assertSame(0, DB::table('booking_pets')->whereNotNull('pet_queue_number')->count());
+        } finally {
+            $first->stop();
+            $second->stop();
+            if (file_exists($signal)) unlink($signal);
+        }
     }
 
     private function authenticateAs(string $role): void

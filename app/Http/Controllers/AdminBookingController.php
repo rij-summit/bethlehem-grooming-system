@@ -325,7 +325,7 @@ class AdminBookingController extends Controller
             }
 
             $workload = app(\App\Services\GroomingWorkloadCapacity::class);
-            $workload->assertCanAdmit($workload->admissionJobs($booking->bookingPets));
+            $workload->assertCanAdmit($workload->admissionJobs($booking->bookingPets), excludeBookingId: (int) $booking->booking_id);
 
             $queueNumber = ((int) Booking::where('booking_date', $queueDate)
                 ->whereNotNull('queue_number')

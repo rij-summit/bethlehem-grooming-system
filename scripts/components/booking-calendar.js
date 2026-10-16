@@ -271,6 +271,9 @@ function isSlotDisabled(slot) {
 function clearArrivalSelection() {
   state.selectedSlot = null;
   if (state.options.clearSelection) state.options.clearSelection();
+  else if (state.options.storageKey === "bookingSchedule" && state.selectedDateKey) {
+    sessionStorage.setItem(state.options.storageKey, JSON.stringify({ date: state.selectedDateKey }));
+  }
   else sessionStorage.removeItem(state.options.storageKey);
 }
 
@@ -381,6 +384,8 @@ function createDateButton({ day, dateKey, disabled, selected }) {
     button.addEventListener("click", async () => {
       state.selectedDateKey = dateKey;
       state.selectedSlot    = null;
+      sessionStorage.removeItem(`${state.options.storageKey}ArrivalError`);
+      updateArrivalWindowNotice();
 
       if (!state.options.dateOnly && state.options.storageKey === "bookingSchedule") {
         sessionStorage.removeItem(state.options.storageKey);

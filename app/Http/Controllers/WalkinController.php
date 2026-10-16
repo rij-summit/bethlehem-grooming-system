@@ -54,9 +54,7 @@ class WalkinController extends Controller
                 return ['id' => 'walkin-'.$index, 'minutes' => $estimate['maxMinutes'], 'active' => false];
             })->all();
         $arrival = now();
-        return response()->json(['success' => true, 'capacity' => $workload->project(
-            $workload->liveJobs()->all(), $arrivals, ClinicSetting::current(), $arrival, $arrival,
-        )]);
+        return response()->json(['success' => true, 'capacity' => $workload->admissionForecast($arrivals, $arrival)]);
     }
 
     public function store(StoreWalkinRequest $request)

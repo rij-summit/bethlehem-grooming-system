@@ -837,6 +837,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function buildBookingCard(booking) {
     const status = getStatusConfig(booking.status);
+    if (booking.status === "waiting_to_arrive" && booking.arrival_time_passed) status.label = "Arrival time passed";
     const actionable = booking.status === "waiting_to_arrive" && !booking.paid;
     const names = getPetNamesLabel(booking);
     return `<article class="flex flex-wrap items-center gap-4 rounded-[14px] bg-portal-surface-soft p-4 [overflow-wrap:anywhere] mb-3 last:mb-0">
@@ -1138,7 +1139,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
     rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Loading slots...</p>';
     try {
-      const data = await API.getTimeslots(date);
+      const data = await API.getTimeslots(date, activeBookingId);
       if (requestId !== rescheduleLoadId) return;
 
       if (data.cutoff_passed) {
@@ -1181,7 +1182,11 @@ function scheduleCustomerDashboardAfterPaint(task) {
       setTimeout(async () => { closeModal(); await loadAppointments(); }, 1800);
     } catch (error) {
       showRescheduleMessage("error", error.message || "Reschedule failed. Please try again.");
-      submitRescheduleBtn.disabled = false;
+      if (error.code === "grooming_forecast_unavailable") {
+        selectedWindowId = null;
+        renderSlots(error.data);
+        enableSubmitIfReady();
+      } else submitRescheduleBtn.disabled = false;
       submitRescheduleBtn.textContent = "Confirm Reschedule";
     }
   });
@@ -1258,9 +1263,9 @@ function scheduleCustomerDashboardAfterPaint(task) {
     }
 
     rescheduleSlotsContainer.innerHTML = available.map(w => `
-      <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-[#315b7e] has-[:checked]:border-[#315b7e] has-[:checked]:bg-[#eaf4fb]">
-        <input type="radio" name="rescheduleSlot" value="${w.window_id}" class="accent-[#315b7e]" />
-        <span class="text-sm text-portal-text">${escapeRescheduleHtml(w.window_label)}</span>
+      <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 ${w.is_workload_unavailable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-[#315b7e]'} has-[:checked]:border-[#315b7e] has-[:checked]:bg-[#eaf4fb]">
+        <input type="radio" name="rescheduleSlot" value="${w.window_id}" class="accent-[#315b7e]" ${w.is_workload_unavailable ? 'disabled' : ''} />
+        <span class="text-sm text-portal-text">${escapeRescheduleHtml(w.window_label)}${w.is_workload_unavailable ? ' · Unavailable' : ''}</span>
       </label>`).join("");
     rescheduleSlotsContainer.querySelectorAll('input[name="rescheduleSlot"]').forEach(radio => {
       radio.addEventListener("change", () => {
