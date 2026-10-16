@@ -313,6 +313,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     public static function unauthenticatedClinicRoutes(): array
     {
         return [
+            'current clinic case' => ['GET', '/api/admin/pets/1/clinic-case'],
             'appointment listing' => ['GET', '/api/admin/clinic-appointments'],
             'clinic archive listing' => ['GET', '/api/admin/clinic-appointments/archived'],
             'medical record modification' => ['POST', '/api/admin/clinic-appointments/1/record', [
@@ -340,6 +341,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     public static function customerForbiddenClinicRoutes(): array
     {
         return [
+            'current clinic case' => ['GET', '/api/admin/pets/1/clinic-case'],
             'view appointments and detailed records' => ['GET', '/api/admin/clinic-appointments'],
             'view archived clinic records' => ['GET', '/api/admin/clinic-appointments/archived'],
             'create clinic walk-in' => ['POST', '/api/admin/clinic-walk-in'],
@@ -1188,6 +1190,102 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('case.status', 'in_consultation')
             ->assertJsonPath('case.queue_number', 1);
         $this->assertNotNull(DB::table('clinic_appointments')->where('id', 1)->value('checked_in_at'));
+    }
+
+    #[DataProvider('ongoingClinicStatuses')]
+    public function test_clinic_case_lifecycle_keeps_previous_day_cases_visible_and_blocks_duplicate_intake(string $status): void
+    {
+        Carbon::setTestNow('2026-10-16 10:00:00');
+        $this->authenticateAs('staff');
+        DB::table('pets')->insert(['pet_id' => 80, 'user_id' => 1, 'pet_name' => 'Gummy', 'species' => 'Dog']);
+        $this->insertClinicAppointment($status, 56, 'CL-20261016-001');
+        DB::table('clinic_appointments')->where('id', 56)->update([
+            'pet_id' => 80, 'user_id' => 1, 'checked_in_at' => now(),
+        ]);
+        $original = (array) DB::table('clinic_appointments')->where('id', 56)->first();
+
+        Carbon::setTestNow('2026-10-17 10:00:00');
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(1, 'cases')
+            ->assertJsonPath('today', '2026-10-17')->assertJsonPath('cases.0.id', 56)
+            ->assertJsonPath('cases.0.status', $status)->assertJsonPath('cases.0.started_on', '2026-10-16');
+        $this->getJson('/api/admin/pets/80/clinic-case')->assertOk()
+            ->assertJsonPath('case.id', 56)->assertJsonPath('case.status', $status);
+        foreach (range(1, 2) as $attempt) {
+            $this->postJson('/api/admin/clinic-cases', ['pet_id' => 80, 'case_type' => 'consultation'])
+                ->assertStatus(409)->assertJsonPath('code', 'active_case_exists')->assertJsonPath('case.id', 56);
+        }
+        $this->assertDatabaseCount('clinic_appointments', 1);
+        $this->assertSame($original, (array) DB::table('clinic_appointments')->where('id', 56)->first());
+    }
+
+    public static function ongoingClinicStatuses(): array
+    {
+        return array_map(fn ($status) => [$status], ['checked_in', 'in_consultation', 'for_payment']);
+    }
+
+    #[DataProvider('terminalClinicStatuses')]
+    public function test_clinic_case_lifecycle_terminal_cases_allow_one_legitimate_new_visit(string $status): void
+    {
+        Carbon::setTestNow('2026-10-17 10:00:00');
+        $this->authenticateAs('staff');
+        DB::table('pets')->insert(['pet_id' => 80, 'user_id' => 1, 'pet_name' => 'Gummy', 'species' => 'Dog']);
+        $this->insertClinicAppointment($status);
+        DB::table('clinic_appointments')->where('id', 1)->update(['pet_id' => 80, 'appointment_date' => '2026-10-16']);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases');
+        $this->getJson('/api/admin/pets/80/clinic-case')->assertOk()->assertJsonPath('case', null);
+        $id = $this->postJson('/api/admin/clinic-cases', ['pet_id' => 80, 'case_type' => 'consultation'])
+            ->assertCreated()->assertJsonPath('case.status', 'checked_in')->json('case.id');
+        $this->postJson('/api/admin/clinic-cases', ['pet_id' => 80, 'case_type' => 'consultation'])
+            ->assertStatus(409)->assertJsonPath('case.id', $id);
+        $this->assertDatabaseCount('clinic_appointments', 2);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 1, 'status' => $status]);
+    }
+
+    public static function terminalClinicStatuses(): array
+    {
+        return array_map(fn ($status) => [$status], \App\Models\ClinicAppointment::TERMINAL_STATUSES);
+    }
+
+    public function test_clinic_case_lifecycle_midnight_expires_only_unused_pre_registrations(): void
+    {
+        Carbon::setTestNow('2026-10-16 23:59:59');
+        $this->authenticateAs('staff');
+        DB::table('pets')->insert(['pet_id' => 80, 'user_id' => 1, 'pet_name' => 'Gummy', 'species' => 'Dog']);
+        foreach (['checked_in', 'in_consultation', 'for_payment', 'waiting_to_arrive', 'waiting_to_arrive'] as $index => $status) {
+            $this->insertClinicAppointment($status, $index + 1);
+        }
+        DB::table('clinic_appointments')->where('id', 4)->update(['pet_id' => 80, 'checked_in_at' => null, 'queue_number' => null]);
+        DB::table('clinic_appointments')->where('id', 5)->update(['appointment_date' => '2026-10-17', 'checked_in_at' => null]);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(4, 'cases');
+
+        Carbon::setTestNow('2026-10-17 00:00:01');
+        $this->getJson('/api/admin/pets/80/clinic-case')->assertOk()->assertJsonPath('case', null);
+        $response = $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(4, 'cases');
+        $this->assertEqualsCanonicalizing([1, 2, 3, 5], array_column($response->json('cases'), 'id'));
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 4, 'status' => 'expired']);
+        $this->assertDatabaseHas('clinic_appointments', ['id' => 5, 'status' => 'waiting_to_arrive']);
+        Carbon::setTestNow('2026-10-17 10:00:00');
+        $this->postJson('/api/admin/clinic-cases', ['pet_id' => 80, 'case_type' => 'consultation'])->assertCreated();
+    }
+
+    public function test_clinic_case_lifecycle_does_not_silently_truncate_unfinished_cases(): void
+    {
+        Carbon::setTestNow('2026-10-16 10:00:00');
+        $this->authenticateAs('staff');
+        foreach (range(1, 101) as $id) {
+            $this->insertClinicAppointment('in_consultation', $id);
+        }
+        Carbon::setTestNow('2026-10-17 10:00:00');
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(101, 'cases');
+    }
+
+    public function test_clinic_case_lifecycle_lookup_preserves_staff_permissions(): void
+    {
+        DB::table('pets')->insert(['pet_id' => 80, 'pet_name' => 'Gummy', 'species' => 'Dog']);
+        $this->authenticateAs('staff', subrole: 'clinic_receptionist');
+        $this->getJson('/api/admin/pets/80/clinic-case')->assertOk()->assertJsonPath('case', null);
+        $this->authenticateAs('staff', staffType: 'grooming');
+        $this->getJson('/api/admin/pets/80/clinic-case')->assertForbidden();
     }
 
     public function test_clinic_records_are_paginated_newest_first(): void

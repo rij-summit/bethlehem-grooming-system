@@ -191,7 +191,7 @@ function component(permission = true, id = 1) {
   assert.equal(snapshotView.baseRate, '1650.00', 'Discharged view retains the same rate');
   assert.equal(state.cataloguePrice({pricing_method: 'fixed', price: '500.00'}), state.money(500));
   const page = fs.readFileSync(path.join(root, 'pages/admin/clinic.html'), 'utf8');
-  assert.match(page, /Confined \(<span x-text="confinedCount"/);
+  assert.match(page, /Confined <span[^>]+x-text="confinedCount"/);
   assert.match(page, /clinicConfinementWorkspace\(\)/); assert.match(page, /charge\.vaccination_record_id \? 'Treatment'/);
   assert.match(page, />Admission Charges<\/h4>/);
   assert.match(page, />Additional Confinement Charges<\/h4>/);

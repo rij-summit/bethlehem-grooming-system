@@ -101,6 +101,22 @@ class ClinicConfinementTest extends TestCase
         return $payload;
     }
 
+    public function test_carry_over_confined_case_is_discoverable_without_appearing_in_active_cases(): void
+    {
+        $this->admit();
+        Carbon::setTestNow('2026-10-17 10:00:00');
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases')->assertJsonPath('confined_count', 1);
+        $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.id', 1)->assertJsonPath('data.0.status', 'in_consultation');
+        $this->getJson('/api/admin/pets/1/clinic-case')->assertOk()->assertJsonPath('case.id', 1)
+            ->assertJsonPath('case.confinement.discharged_at', null);
+
+        ClinicAppointment::find(1)->update(['status' => 'completed']);
+        $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonCount(0, 'cases')->assertJsonPath('confined_count', 0);
+        $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/admin/pets/1/clinic-case')->assertOk()->assertJsonPath('case', null);
+    }
+
     public function test_admission_links_one_ordered_service_to_the_same_case_and_retries_are_idempotent(): void
     {
         $payload = $this->admit();

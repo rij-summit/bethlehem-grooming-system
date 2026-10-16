@@ -193,6 +193,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::patch('/admin/clinic-services/{clinicService}/status', [ClinicServiceController::class, 'status'])->middleware('clinic:services_manage');
 
         Route::get('/admin/pets/{petId}/cases/{caseId}/details', [AdminPetProfileController::class, 'caseDetails']);
+        Route::get('/admin/pets/{petId}/clinic-case', [AdminClinicController::class, 'currentPetCase']);
         Route::post('/admin/clinic-walk-in', [ClinicWalkinController::class, 'store'])->middleware('clinic:intake');
 
         Route::get('/admin/clinic-records', [AdminClinicController::class, 'records']);

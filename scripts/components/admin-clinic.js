@@ -580,6 +580,7 @@ function adminClinicPage() {
     hasMoreRecords: false,
     activeCases: [],
     activeCasesLoading: false,
+    clinicToday: '',
     confinedCases: [], confinedCount: 0, confinedLoading: false, confinedError: '', confinedPage: 1, confinedLastPage: 1,
     _confinedRequest: 0,
     caseBusyId: null,
@@ -608,6 +609,7 @@ function adminClinicPage() {
     profileScrollPosition: 0,
     profileRecordTrigger: null,
     profileVisit: null,
+    profileVisitLoaded: false,
     profileBusy: false,
     profileActionError: '',
     profileEditing: false,
@@ -646,6 +648,7 @@ function adminClinicPage() {
       this.loadAllRecords();
       window.addEventListener("clinic-case-updated", () => {
         this.loadActiveCases();
+        if (this.profile.open) this.loadProfileVisit();
         if (this.tab === 'confined') this.loadConfinedCases();
       });
       window.addEventListener("clinic-review-payment", (event) => this.reviewPayment(event.detail));
@@ -655,10 +658,9 @@ function adminClinicPage() {
       this.activeCasesLoading = true;
       try {
         const response = await API.getActiveClinicCases();
-        const visitWasListed = this.activeCases.some(item => item.id === this.profileVisit?.id);
         this.activeCases = response.cases || [];
+        this.clinicToday = response.today || '';
         this.confinedCount = response.confined_count || 0;
-        if (visitWasListed && !this.activeCases.some(item => item.id === this.profileVisit?.id)) this.profileVisit = null;
         window.dispatchEvent(new CustomEvent("clinic-cases-loaded", { detail: this.activeCases }));
         return true;
       }
@@ -706,6 +708,13 @@ function adminClinicPage() {
     casePatientLabel(item) {
       return (item.status !== 'waiting_to_arrive' && item.queue_number ? `#${item.queue_number} · ` : '') + (item.pet?.name || 'Patient');
     },
+    caseStartedLabel(item) {
+      const date = item.started_on || item.appointment_date;
+      if (!['checked_in', 'in_consultation'].includes(item.status) || !date || !this.clinicToday || date >= this.clinicToday) return '';
+      return 'Started ' + new Date(date + 'T00:00:00').toLocaleDateString('en-PH', {
+        month: 'short', day: 'numeric', ...(date.slice(0, 4) !== this.clinicToday.slice(0, 4) ? {year: 'numeric'} : {}),
+      });
+    },
     caseActionLabel(item) {
       if (item.status === 'waiting_to_arrive' && this.permissions.intake) return 'Check In';
       if (item.status === 'checked_in' && this.permissions.clinical) return 'Start Consultation';
@@ -725,7 +734,11 @@ function adminClinicPage() {
     async checkInCase(item) {
       if (!this.permissions.intake || this.caseBusyId || item.status !== 'waiting_to_arrive') return;
       this.caseBusyId = item.id;
-      try { await API.clinicCheckIn(item.id); await this.loadActiveCases(); }
+      try {
+        const response = await API.clinicCheckIn(item.id);
+        if (String(item.pet?.id) === String(this.profile.pet?.id)) this.profileVisit = response.appointment;
+        await this.loadActiveCases();
+      }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not check in this patient.", "error"); }
       finally { this.caseBusyId = null; }
     },
@@ -812,6 +825,7 @@ function adminClinicPage() {
         });
         window.dispatchEvent(new CustomEvent('clinic-case-patch', {detail: {id: recorded.id, paid: recorded.paid, status: recorded.status}}));
         this.activeCases = this.activeCases.filter(item => item.id !== recorded.id);
+        if (this.profileVisit?.id === recorded.id) this.profileVisit = null;
         window.dispatchEvent(new CustomEvent("clinic-case-updated"));
       } catch (error) {
         this.payment.error = Object.values(error.errors || {}).flat().join(' ') || error.message || "Could not record payment.";
@@ -834,7 +848,11 @@ function adminClinicPage() {
         danger: true,
       });
       if (!confirmed) return;
-      try { await API.clinicCancel(item.id); await this.loadActiveCases(); }
+      try {
+        await API.clinicCancel(item.id);
+        if (this.profileVisit?.id === item.id) await this.loadProfileVisit();
+        await this.loadActiveCases();
+      }
       catch (error) { this.$store.clinicFeedback.notify(error.message || "Could not cancel this case.", "error"); }
     },
     openCase(item, section) {
@@ -846,6 +864,7 @@ function adminClinicPage() {
       this.caseBusyId = item.id;
       try {
         const response = await API.startClinicCase(item.id);
+        if (String(item.pet?.id) === String(this.profile.pet?.id)) this.profileVisit = response.case;
         await this.loadActiveCases();
         if (this.profile.open) this.openProfileCase(response.case);
         else this.openCase(response.case);
@@ -978,6 +997,7 @@ function adminClinicPage() {
       this._caseDetails = {};
       this._caseObservations = {};
       this.profileVisit = null;
+      this.profileVisitLoaded = false;
       this.profileActionError = '';
       this.profileEditing = false;
       this.historyTab = 'medical';
@@ -997,11 +1017,12 @@ function adminClinicPage() {
         if (window.lucide) window.lucide.createIcons();
       });
       try {
-        const [data, ownerData] = await Promise.all([
+        const [data, ownerData, currentCase] = await Promise.all([
           API.adminGetPetProfile(row.pet.id),
           !row.owner?.id ? Promise.resolve({customer: {pets: [row.pet]}}) : row.owner.recordType === 'unregistered'
             ? API.getUnregisteredCustomerDetails(row.owner.id)
             : API.getCustomerDetails(row.owner.id),
+          API.getCurrentPetClinicCase(row.pet.id),
         ]);
         if (request !== this._profileRequest) return;
         const pet = ownerData.customer?.pets?.find(pet => String(pet.id) === String(row.pet.id));
@@ -1009,6 +1030,8 @@ function adminClinicPage() {
         this.profile.pet = pet;
         this.profile.owner = { ...row.owner, ...ownerData.customer };
         this.profile.records = data.medical_records || [];
+        this.profileVisit = currentCase.case;
+        this.profileVisitLoaded = true;
       } catch (err) {
         if (request !== this._profileRequest) return;
         this.profile.error = err.message || "Failed to load pet profile.";
@@ -1083,9 +1106,28 @@ function adminClinicPage() {
     },
 
     get currentClinicVisit() {
-      return this.activeCases.find(item => String(item.pet?.id) === String(this.profile.pet?.id)) || this.profileVisit;
+      return this.profileVisit;
+    },
+    async loadProfileVisit() {
+      const request = this._profileRequest, petId = this.profile.pet?.id;
+      if (!petId) return false;
+      try {
+        const response = await API.getCurrentPetClinicCase(petId);
+        if (request !== this._profileRequest) return false;
+        this.profileVisit = response.case;
+        this.profileVisitLoaded = true;
+        this.profileActionError = '';
+        return true;
+      } catch (error) {
+        if (request === this._profileRequest) {
+          this.profileVisitLoaded = false;
+          this.profileActionError = error.message || 'Could not verify the current clinic visit. Please reopen the profile.';
+        }
+        return false;
+      }
     },
     get profileActionLabel() {
+      if (!this.profileVisitLoaded || this.profile.loading || this.profile.error) return '';
       const visit = this.currentClinicVisit;
       if (!visit || visit.status === 'waiting_to_arrive') return this.permissions.intake ? 'Check In Patient' : '';
       if (visit.status === 'for_payment') return this.permissions.access ? 'Open Case' : '';
@@ -1107,12 +1149,12 @@ function adminClinicPage() {
       this.$nextTick?.(() => { trigger?.focus(); this.openCase(visit); });
     },
     async checkInPatient() {
-      if (!this.permissions.intake || !this.profile.pet?.id || this.profileBusy) return;
+      if (!this.permissions.intake || !this.profile.pet?.id || this.profileBusy || !this.profileVisitLoaded || this.profile.loading || this.profile.error) return;
       if (this.currentClinicVisit?.status !== 'waiting_to_arrive' && this.currentClinicVisit) return;
       this.profileBusy = true;
       this.profileActionError = '';
       try {
-        if (!await this.loadActiveCases()) throw new Error('Could not verify the current clinic visit. Please try again.');
+        if (!await this.loadProfileVisit()) return;
         let visit = this.currentClinicVisit;
         if (visit && visit.status !== 'waiting_to_arrive') return;
         if (visit) {

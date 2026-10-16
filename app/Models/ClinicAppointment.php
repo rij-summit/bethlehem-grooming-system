@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
 class ClinicAppointment extends Model
 {
+    public const TERMINAL_STATUSES = ['completed', 'cancelled', 'no_show', 'expired', 'archived'];
+
+    public const OPERATIONAL_STATUSES = ['checked_in', 'in_consultation', 'for_payment'];
+
     public const CLINICAL_CONTENT_EDITABLE_STATUSES = [
         'in_consultation',
     ];
@@ -52,6 +57,27 @@ class ClinicAppointment extends Model
         'consultation_finished_at'=> 'datetime',
         'archived_at'             => 'datetime',
     ];
+
+    // Run PreRegistrationExpiry before using this scope for intake or current-case lookup.
+    public function scopeBlocking(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', self::TERMINAL_STATUSES);
+    }
+
+    public function scopeOperational(Builder $query): Builder
+    {
+        return $query->blocking()->where(fn (Builder $cases) => $cases
+            ->whereIn('status', self::OPERATIONAL_STATUSES)
+            ->orWhere(fn (Builder $waiting) => $waiting
+                ->where('status', 'waiting_to_arrive')
+                ->whereDate('appointment_date', now()->toDateString())));
+    }
+
+    public function scopeConfined(Builder $query): Builder
+    {
+        return $query->blocking()
+            ->whereHas('confinement', fn (Builder $episode) => $episode->whereNull('discharged_at'));
+    }
 
     public function user()
     {

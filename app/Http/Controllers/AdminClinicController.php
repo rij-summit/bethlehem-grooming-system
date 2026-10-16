@@ -23,7 +23,6 @@ use Throwable;
 
 class AdminClinicController extends Controller
 {
-    private const TERMINAL_CASE_STATUSES = ['completed', 'cancelled', 'no_show', 'expired'];
     private ?bool $hasClinicCharges = null;
     private ?bool $hasConfinements = null;
 
@@ -137,31 +136,37 @@ class AdminClinicController extends Controller
         app(\App\Services\PreRegistrationExpiry::class)->expire();
         $cases = ClinicAppointment::query()
             ->with($this->appointmentRelations())
-            ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
-            ->where(function ($query) {
-                $query->whereDate('appointment_date', now()->toDateString())->orWhere('status', 'for_payment');
-            })
+            ->operational()
             ->when($this->hasConfinements, fn ($query) => $query
                 ->whereDoesntHave('confinement', fn ($episode) => $episode->whereNull('discharged_at')))
             ->orderByRaw("CASE WHEN status = 'waiting_to_arrive' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
-            ->limit(100)
             ->get()
             ->map(fn (ClinicAppointment $case) => $this->formatAppointment($case))
             ->values();
 
-        return response()->json(['success' => true, 'cases' => $cases, 'confined_count' => Schema::hasTable('clinic_confinements')
-            ? \App\Models\ClinicConfinement::whereNull('discharged_at')->count() : 0]);
+        return response()->json(['success' => true, 'cases' => $cases, 'today' => now()->toDateString(),
+            'confined_count' => $this->hasConfinements ? ClinicAppointment::confined()->count() : 0]);
     }
 
     public function confinedCases(Request $request)
     {
         $request->validate(['page' => 'nullable|integer|min:1']);
         $cases = ClinicAppointment::with($this->appointmentRelations())
-            ->whereHas('confinement', fn ($query) => $query->whereNull('discharged_at'))
+            ->confined()
             ->orderBy('created_at')->orderBy('id')->paginate(20);
         $cases->setCollection($cases->getCollection()->map(fn ($case) => $this->formatAppointment($case)));
         return response()->json($cases);
+    }
+
+    public function currentPetCase(int $petId)
+    {
+        Pet::query()->findOrFail($petId);
+        app(\App\Services\PreRegistrationExpiry::class)->expire();
+        $case = ClinicAppointment::with($this->appointmentRelations())
+            ->blocking()->where('pet_id', $petId)->orderBy('id')->first();
+
+        return response()->json(['case' => $case ? $this->formatAppointment($case) : null]);
     }
 
     public function createCase(Request $request, ClinicAppointmentSequence $sequence)
@@ -177,7 +182,7 @@ class AdminClinicController extends Controller
             $pet = Pet::query()->whereKey($data['pet_id'])->where('is_archived', false)->firstOrFail();
             $existing = ClinicAppointment::query()
                 ->where('pet_id', $pet->pet_id)
-                ->whereNotIn('status', self::TERMINAL_CASE_STATUSES)
+                ->blocking()
                 ->lockForUpdate()
                 ->first();
 
@@ -225,7 +230,7 @@ class AdminClinicController extends Controller
     {
         return DB::transaction(function () use ($id) {
             $case = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
-            if (in_array($case->status, self::TERMINAL_CASE_STATUSES, true)) {
+            if (in_array($case->status, ClinicAppointment::TERMINAL_STATUSES, true)) {
                 throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
             }
             if ($case->status !== 'checked_in') {
@@ -240,7 +245,7 @@ class AdminClinicController extends Controller
     {
         $case = DB::transaction(function () use ($id) {
             $appointment = ClinicAppointment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
-            if (in_array($appointment->status, self::TERMINAL_CASE_STATUSES, true)) {
+            if (in_array($appointment->status, ClinicAppointment::TERMINAL_STATUSES, true)) {
                 throw new HttpResponseException(response()->json(['success' => false, 'message' => 'This case is already closed.'], 409));
             }
             $appointment->prepareForPayment();
@@ -255,7 +260,7 @@ class AdminClinicController extends Controller
         $date = trim((string) $request->query('date', ''));
 
         $query = ClinicAppointment::with($this->appointmentRelations())
-            ->whereIn('status', ['completed', 'cancelled', 'no_show', 'expired']);
+            ->whereIn('status', ClinicAppointment::TERMINAL_STATUSES);
 
         if (Schema::hasTable('vaccination_records')) {
             $query->withCount(['vaccinationRecords as treatment_count' => fn ($query) => $query->published()->notVoided()]);
@@ -816,6 +821,7 @@ class AdminClinicController extends Controller
             'status' => $a->status,
             'queue_number' => $a->queue_number,
             'appointment_date' => $a->appointment_date?->toDateString(),
+            'started_on' => $a->checked_in_at?->toDateString() ?? $a->appointment_date?->toDateString(),
             'time_window' => $timeWindow ? [
                 'window_id' => $timeWindow->window_id,
                 'window_label' => $timeWindow->displayLabel(),

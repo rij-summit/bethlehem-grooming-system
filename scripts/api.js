@@ -1913,6 +1913,10 @@ var API = (() => {
     return request("GET", "/admin/clinic-cases", null, getAdminToken());
   }
 
+  async function getCurrentPetClinicCase(petId) {
+    return request("GET", `/admin/pets/${encodeURIComponent(petId)}/clinic-case`, null, getAdminToken());
+  }
+
   async function createClinicCase(payload) {
     return request("POST", "/admin/clinic-cases", payload, getAdminToken());
   }
@@ -2283,6 +2287,7 @@ var API = (() => {
     submitClinicWalkIn,
     getClinicRecords,
     getActiveClinicCases,
+    getCurrentPetClinicCase,
     getClinicCaseServices,
     clinicCaseServiceOptions,
     clinicCaseServicePricing,

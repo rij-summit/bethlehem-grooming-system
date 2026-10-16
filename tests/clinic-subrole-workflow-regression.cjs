@@ -65,6 +65,8 @@ function permissions(clinical, payment, queue, customers) {
   receptionist.profile = { pet: { id: 7, petName: 'Mochi' }, owner: { fullName: 'Ana Santos' }, open: true };
   let openedPet;
   receptionist.activeCases = [{id: 1, status: 'checked_in', pet: {id: 7}}];
+  sandbox.API.getCurrentPetClinicCase = async () => ({case: receptionist.activeCases[0]});
+  await receptionist.loadProfileVisit();
   receptionist.openCase = appt => {openedPet = appt.pet.id;};
   sandbox.API.createClinicCase = async () => { throw new Error('Viewing must not create a case'); };
   receptionist.openProfileCase();

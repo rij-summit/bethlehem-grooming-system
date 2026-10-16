@@ -22,6 +22,7 @@ function setup() {
     CustomEvent: class {constructor(type, options) {this.type = type; this.detail = options?.detail;}},
     API: {
       adminGetPetProfile: async id => {calls.push(['history', id]); return {medical_records: [record]};},
+      getCurrentPetClinicCase: async () => ({case: null}),
       adminGetPetCaseDetails: async (petId, caseId) => {calls.push(['case', petId, caseId]); return {case: {id: caseId}, medical_record: record};},
       getCustomerDetails: async id => {calls.push(['registered', id]); return {customer: {...owner, pets: [pet]}};},
       getUnregisteredCustomerDetails: async id => {calls.push(['unregistered', id]); return {customer: {...owner, pets: [pet]}};},
@@ -109,6 +110,7 @@ function setup() {
   await workflow.state.openProfile({pet: {id: 7}, owner}, workflow.trigger);
   const transitions = [];
   let ongoing = [];
+  workflow.context.API.getCurrentPetClinicCase = async () => ({case: ongoing[0] || null});
   workflow.context.API.getActiveClinicCases = async () => ({cases: ongoing});
   workflow.context.API.createClinicCase = async payload => {
     transitions.push(['create', payload.pet_id, payload.case_type]);
@@ -128,8 +130,6 @@ function setup() {
   assert.equal(workflow.state.profileActionLabel, 'Start Consultation');
   await workflow.state.checkInPatient();
   assert.equal(transitions.length, 1, 'An ongoing case prevents repeat creation');
-  workflow.state.openProfileCase();
-  assert.equal(workflow.events.some(event => event.type === 'clinic-open-modal'), false, 'Checked-in patients cannot bypass Start Consultation');
   await workflow.state.runProfileAction();
   assert.deepEqual(transitions.at(-1), ['start', 90]);
   assert.equal(workflow.events.at(-1).type, 'clinic-open-modal', 'Starting from the profile opens the returned active case automatically');
@@ -142,17 +142,20 @@ function setup() {
   assert.equal(transitions.length, starts, 'Reopening does not start consultation again');
   ongoing = [{...ongoing[0], status: 'for_payment'}];
   workflow.state.activeCases = ongoing;
-  assert.equal(workflow.state.profileActionLabel, '');
+  await workflow.state.loadProfileVisit();
+  assert.equal(workflow.state.profileActionLabel, 'Open Case');
   const openedEvents = workflow.events.length;
   workflow.state.openProfileCase();
   await workflow.state.runProfileAction();
-  assert.equal(workflow.events.length, openedEvents, 'For Payment has no profile clinical shortcut');
+  assert.equal(workflow.events.length, openedEvents + 2, 'For Payment preserves the existing Open Case action');
+  assert.equal(transitions.length, starts, 'Opening a payment case does not restart consultation');
 
   const waiting = setup();
   await waiting.state.openProfile({pet: {id: 7}, owner}, waiting.trigger);
   let waitingVisit = {id: 2, status: 'waiting_to_arrive', pet: {id: 7}};
   waiting.state.activeCases = [waitingVisit];
   waiting.context.API.getActiveClinicCases = async () => ({cases: [waitingVisit]});
+  waiting.context.API.getCurrentPetClinicCase = async () => ({case: waitingVisit});
   waiting.context.API.createClinicCase = async () => {throw new Error('Waiting arrivals must reuse their case');};
   waiting.context.API.clinicCheckIn = async id => {assert.equal(id, 2); waitingVisit = {...waitingVisit, status: 'checked_in', queue_number: 5}; return {appointment: waitingVisit};};
   waiting.context.API.startClinicCase = async () => {throw new Error('Check-in must stop at checked_in');};
@@ -179,9 +182,10 @@ function setup() {
   await denied.state.checkInPatient();
   assert.equal(denied.state.currentClinicVisit, null);
   assert.equal(denied.state.profileActionLabel, '');
-  denied.state.activeCases = [{id: 1, pet: {id: 7}, status: 'checked_in'}];
+  denied.state.profileVisit = {id: 1, pet: {id: 7}, status: 'checked_in'};
   denied.state.$store.clinicAccess.permissions.clinical = false;
-  assert.equal(denied.state.profileActionLabel, '');
+  assert.equal(denied.state.profileActionLabel, 'Open Case', 'Read access is preserved for non-clinical staff');
+  denied.state.$store.clinicAccess.permissions.access = false;
   await denied.state.runProfileAction();
   denied.state.openProfileCase();
   assert.equal(denied.events.some(event => event.type === 'clinic-open-modal'), false);
@@ -203,8 +207,93 @@ function setup() {
   assert.deepEqual(Array.from(filtering.state.visibleActiveCases, item => item.status), ['checked_in', 'in_consultation']);
   assert.equal(filtering.state.waitingCases.length, 1);
   assert.equal(filtering.state.caseRows.length, 3, 'Waiting arrivals remain visible without being counted Active');
+  assert.equal(filtering.state.activeCount, filtering.state.caseRows.filter(item => item.status !== 'waiting_to_arrive').length);
   filtering.state.tab = 'for-payment';
   assert.deepEqual(Array.from(filtering.state.caseRows, item => item.status), ['for_payment']);
+  assert.equal(filtering.state.forPaymentCount, filtering.state.caseRows.length);
 
-  console.log('Patient Profile read-only browsing, explicit check-in/start, ongoing-case reuse, history and filtering regressions passed');
+  const gummy = setup();
+  let current = {id: 56, appointment_reference: 'CL-20261016-001', appointment_date: '2026-10-16',
+    started_on: '2026-10-16', status: 'in_consultation', pet: {id: 7, name: 'Gummy'}};
+  let creates = 0;
+  gummy.context.API.getCurrentPetClinicCase = async () => ({case: current});
+  gummy.context.API.createClinicCase = async () => {creates++; throw Error('An ongoing case must never be replaced');};
+  gummy.context.API.getActiveClinicCases = async () => ({cases: [current], today: '2026-10-17', confined_count: 0});
+  await gummy.state.openProfile({pet: {id: 7}, owner}, gummy.trigger);
+  assert.equal(gummy.state.profileActionLabel, 'Open Case', 'Gummy resumes the October 16 consultation on October 17');
+  await gummy.state.loadActiveCases();
+  assert.equal(gummy.state.activeCount, 1);
+  assert.equal(gummy.state.caseStartedLabel(current), 'Started Oct 16');
+  assert.equal(gummy.state.caseActionLabel(current), 'Open Case');
+  gummy.state.closeProfile();
+  gummy.state.activeCases = [];
+  await gummy.state.openProfile({pet: {id: 7}, owner}, gummy.trigger);
+  assert.equal(gummy.state.currentClinicVisit.id, 56, 'Reopening resolves the authoritative case independently of any list');
+  assert.equal(gummy.state.profileActionLabel, 'Open Case');
+  await gummy.state.checkInPatient();
+  assert.equal(creates, 0);
+
+  current = {...current, confinement: {admitted_at: '2026-10-16T10:00:00+08:00', discharged_at: null}};
+  gummy.context.API.getActiveClinicCases = async () => ({cases: [], today: '2026-10-17', confined_count: 1});
+  gummy.context.API.getClinicConfinedCases = async () => ({data: [current], total: 1, current_page: 1, last_page: 1});
+  gummy.state.closeProfile();
+  await gummy.state.openProfile({pet: {id: 7}, owner}, gummy.trigger);
+  await gummy.state.loadActiveCases();
+  await gummy.state.loadConfinedCases();
+  assert.equal(gummy.state.activeCount, 0);
+  assert.equal(gummy.state.confinedCount, gummy.state.confinedCases.length);
+  assert.equal(gummy.state.profileActionLabel, 'Open Case', 'Confinement never makes a pet check-in eligible');
+  await gummy.state.runProfileAction();
+  assert.equal(gummy.events.at(-1).detail.appt.id, 56);
+
+  current = null;
+  await gummy.state.openProfile({pet: {id: 7}, owner}, gummy.trigger);
+  assert.equal(gummy.state.profileActionLabel, 'Check In Patient', 'A closed case permits a legitimate later visit');
+
+  const verifying = setup(), verification = deferred();
+  verifying.context.API.getCurrentPetClinicCase = () => verification.promise;
+  const profileOpening = verifying.state.openProfile({pet: {id: 7}, owner}, verifying.trigger);
+  assert.equal(verifying.state.profileActionLabel, '', 'No check-in action appears before the current-case lookup completes');
+  verifying.state.closeProfile();
+  verification.resolve({case: {id: 56, pet: {id: 7}, status: 'in_consultation'}});
+  await profileOpening;
+  assert.equal(verifying.state.profileVisitLoaded, false, 'A response from a closed profile cannot populate case state');
+
+  const unavailable = setup();
+  unavailable.context.API.getCurrentPetClinicCase = async () => {throw Error('Case lookup unavailable');};
+  await unavailable.state.openProfile({pet: {id: 7}, owner}, unavailable.trigger);
+  assert.equal(unavailable.state.profileActionLabel, '');
+  assert.equal(unavailable.state.profile.error, 'Case lookup unavailable');
+
+  const double = setup(), creation = deferred();
+  let doubleCreates = 0, created = null;
+  double.context.API.getCurrentPetClinicCase = async () => ({case: created});
+  double.context.API.getActiveClinicCases = async () => ({cases: created ? [created] : []});
+  double.context.API.createClinicCase = async () => {doubleCreates++; return creation.promise;};
+  await double.state.openProfile({pet: {id: 7}, owner}, double.trigger);
+  const firstCheckIn = double.state.checkInPatient();
+  await double.state.checkInPatient();
+  await Promise.resolve();
+  created = {id: 91, status: 'checked_in', pet: {id: 7}};
+  creation.resolve({case: created});
+  await firstCheckIn;
+  await double.state.checkInPatient();
+  assert.equal(doubleCreates, 1, 'Double clicks and repeat check-in create at most one case');
+
+  const rollover = setup();
+  const carried = ['checked_in', 'in_consultation', 'for_payment'].map((status, id) => ({id,
+    status, appointment_date: '2026-10-16', started_on: '2026-10-16'}));
+  let today = '2026-10-16';
+  rollover.context.API.getActiveClinicCases = async () => ({cases: carried, today});
+  await rollover.state.loadActiveCases();
+  assert.equal(rollover.state.caseStartedLabel(carried[1]), '');
+  today = '2026-10-17';
+  await rollover.state.loadActiveCases();
+  assert.equal(rollover.state.activeCount, 2);
+  assert.equal(rollover.state.forPaymentCount, 1);
+  assert.equal(rollover.state.caseStartedLabel(carried[1]), 'Started Oct 16');
+  assert.equal(rollover.state.caseStartedLabel(carried[2]), '');
+  assert.equal(rollover.state.caseStartedLabel({...carried[0], started_on: '2025-12-31'}), 'Started Dec 31, 2025');
+
+  console.log('Patient Profile browsing, authoritative ongoing cases, carry-over dates, confinement, double check-in, counters and rollover regressions passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

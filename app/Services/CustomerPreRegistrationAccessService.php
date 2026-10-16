@@ -16,14 +16,6 @@ class CustomerPreRegistrationAccessService
         'expired',
     ];
 
-    private const TERMINAL_CLINIC_STATUSES = [
-        'completed',
-        'archived',
-        'cancelled',
-        'no_show',
-        'expired',
-    ];
-
     /**
      * A customer may start either flow only when neither service has an
      * ongoing registration. Historical visit counts are intentionally ignored.
@@ -51,7 +43,7 @@ class CustomerPreRegistrationAccessService
         $clinic = Schema::hasTable('clinic_appointments')
             ? ClinicAppointment::query()
                 ->where('user_id', $userId)
-                ->whereNotIn('status', self::TERMINAL_CLINIC_STATUSES)
+                ->blocking()
                 ->orderByDesc('id')
                 ->first(['id', 'appointment_reference', 'status'])
             : null;
