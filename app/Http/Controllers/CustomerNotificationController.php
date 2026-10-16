@@ -138,6 +138,8 @@ class CustomerNotificationController extends Controller
         }
 
         $petNames = ($notification->booking?->bookingPets ?? collect())
+            ->filter(fn ($pet) => ! in_array($notification->type, ['ready_for_pickup', 'pickup_reminder', 'picked_up'], true)
+                || $pet->grooming_state !== \App\Models\BookingPet::GROOMING_STATE_CANCELLED)
             ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
             ->unique()

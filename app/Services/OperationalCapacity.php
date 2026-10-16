@@ -17,7 +17,8 @@ class OperationalCapacity
     public function onSiteGroomingPets(): Builder
     {
         // Released means paid and ready for pickup. Physical pickup archives the booking.
-        return BookingPet::query()->whereHas('booking', fn (Builder $booking) => $booking
+        return BookingPet::query()->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
+            ->whereHas('booking', fn (Builder $booking) => $booking
             ->where(function (Builder $onSite) {
                 $onSite->whereIn('status', ['checked_in', 'in_progress', 'for_payment', 'released'])
                     ->orWhere(function (Builder $legacyPickup) {
@@ -37,7 +38,7 @@ class OperationalCapacity
     {
         return BookingPet::query()
             ->whereNull('grooming_end_time')
-            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
+            ->whereNotIn('grooming_state', [BookingPet::GROOMING_STATE_FINISHED, BookingPet::GROOMING_STATE_CANCELLED])
             ->whereHas('booking', fn (Builder $booking) => $booking
                 ->whereIn('status', ['checked_in', 'in_progress']));
     }

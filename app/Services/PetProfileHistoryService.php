@@ -8,19 +8,12 @@ use App\Models\ClinicAppointment;
 use App\Models\Pet;
 use App\Models\VaccinationRecord;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 
 class PetProfileHistoryService
 {
     public function groomingRecords(Pet $pet): Collection
     {
-        $hasCancellationAuditColumns = Schema::hasColumns('bookings', [
-            'cancel_count',
-            'cancellation_reason',
-        ]);
-
         return Booking::query()
-            ->neverCancelled($hasCancellationAuditColumns)
             ->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $pet->pet_id))
             ->with([
                 'timeWindow',
@@ -50,6 +43,8 @@ class PetProfileHistoryService
                     'status' => $this->groomingStatus($booking, $bookingPet),
                     'grooming_started_at' => $bookingPet->grooming_start_time?->format('g:i A'),
                     'grooming_finished_at' => $bookingPet->grooming_end_time?->format('g:i A'),
+                    'cancellation_reason' => $bookingPet->cancellation_reason ?? $booking->cancellation_reason,
+                    'cancelled_at' => $bookingPet->cancelled_at?->toIso8601String() ?? $booking->cancelled_at?->toIso8601String(),
                     'services' => $services,
                     'paid' => (bool) $booking->paid,
                 ];
@@ -105,6 +100,7 @@ class PetProfileHistoryService
         }
 
         return match (true) {
+            $bookingPet->grooming_state === BookingPet::GROOMING_STATE_CANCELLED => 'cancelled',
             $bookingPet->grooming_end_time !== null => 'grooming_finished',
             $bookingPet->grooming_start_time !== null => 'in_progress',
             default => $booking->status,

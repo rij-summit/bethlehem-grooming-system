@@ -837,7 +837,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function buildBookingCard(booking) {
     const status = getStatusConfig(booking.status);
-    const actionable = booking.status === "waiting_to_arrive";
+    const actionable = booking.status === "waiting_to_arrive" && !booking.paid;
     const names = getPetNamesLabel(booking);
     return `<article class="flex flex-wrap items-center gap-4 rounded-[14px] bg-portal-surface-soft p-4 [overflow-wrap:anywhere] mb-3 last:mb-0">
       <div class="portal-icon-tile h-11 w-11 rounded-full">${petIcon(booking.pets?.[0])}</div>
@@ -921,7 +921,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   function trackerPets(booking) {
-    return (booking.pets || []).filter((pet) => pet.clinic_referred !== true);
+    return (booking.pets || []).filter((pet) => pet.clinic_referred !== true && pet.grooming_status !== "cancelled");
   }
 
   function getTrackerPetStatus(pet, booking) {

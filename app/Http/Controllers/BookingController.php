@@ -416,8 +416,7 @@ class BookingController extends Controller
             ->get();
 
         $historyQuery = Booking::where('user_id', $userId)
-            ->neverCancelled($hasCancellationAuditColumns)
-            ->whereIn('status', ['archived', 'expired', 'no_show']);
+            ->whereIn('status', ['archived', 'cancelled', 'expired', 'no_show']);
 
         if ($petId !== null) {
             $historyQuery->whereHas('bookingPets', fn ($query) => $query->where('pet_id', $petId));
@@ -468,6 +467,7 @@ class BookingController extends Controller
                     || $bp->grooming_end_time !== null;
                 $groomingStatus = match (true) {
                     in_array($b->status, ['cancelled', 'no_show', 'expired'], true) => $b->status,
+                    $bp->grooming_state === BookingPet::GROOMING_STATE_CANCELLED => 'cancelled',
                     $bp->grooming_end_time !== null => 'grooming_finished',
                     $bp->grooming_start_time !== null => 'in_progress',
                     default => $b->status,
@@ -485,7 +485,9 @@ class BookingController extends Controller
                     'confirmed_size' => $bp->confirmed_size,
                     'grooming_estimate' => app(\App\Services\GroomingTimeEstimate::class)->forVisit($bp),
                     'grooming_status' => $groomingStatus,
-                    'active_in_grooming' => ! $groomingFinished,
+                    'active_in_grooming' => ! $groomingFinished && $bp->grooming_state !== BookingPet::GROOMING_STATE_CANCELLED,
+                    'cancellation_reason' => $bp->cancellation_reason,
+                    'cancelled_at' => $bp->cancelled_at?->toIso8601String(),
                     'grooming_started_at' => $bp->grooming_start_time
                         ? Carbon::parse($bp->grooming_start_time)->format('g:i A')
                         : null,
@@ -538,9 +540,12 @@ class BookingController extends Controller
                 'created_at' => $b->created_at
                     ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
                     : null,
-                'status' => $b->status,
+                'status' => $b->status === 'cancelled' || $b->cancel_count > 0 || trim((string) $b->cancellation_reason) !== ''
+                    ? 'cancelled' : $b->status,
+                'cancellation_reason' => $b->cancellation_reason,
+                'cancelled_at' => $b->cancelled_at?->toIso8601String(),
                 'show_grooming_tracker' => $showGroomingTracker,
-                'paid' => (bool) $b->paid,
+                'paid' => (bool) $b->paid || ($b->relationLoaded('payments') && $b->payments->isNotEmpty()),
                 'payment_summary' => $customerPaymentSummary,
                 'number_of_pets' => $b->number_of_pets,
                 'reschedule_count' => $b->reschedule_count ?? 0,
@@ -653,49 +658,58 @@ class BookingController extends Controller
 
         $user = $request->user();
         app(\App\Services\PreRegistrationExpiry::class)->expire((int) $user->user_id);
-        $booking = Booking::where('booking_id', $request->booking_id)
-            ->where('user_id', $user->user_id)
-            ->first();
+        return DB::transaction(function () use ($request, $user) {
+            $booking = Booking::where('booking_id', $request->booking_id)
+                ->where('user_id', $user->user_id)
+                ->lockForUpdate()->first();
 
-        if (! $booking) {
+            if (! $booking) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Booking not found.',
+                ], 404);
+            }
+
+            if ($booking->hasSuccessfulPayment() || $booking->status !== 'waiting_to_arrive'
+                || $booking->grooming_started_at || $booking->grooming_finished_at
+                || $booking->bookingPets()->where(fn ($pet) => $pet
+                    ->whereNotIn('grooming_state', [BookingPet::GROOMING_STATE_NOT_STARTED, BookingPet::GROOMING_STATE_CANCELLED])
+                    ->orWhereNotNull('grooming_start_time')->orWhereNotNull('grooming_end_time'))->exists()) {
+                return response()->json(['success' => false, 'message' => 'This booking cannot be cancelled.'], 422);
+            }
+
+            if ($booking->cancel_count >= 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have reached the maximum number of cancellations (2) for this booking.',
+                ], 422);
+            }
+
+            $booking->update([
+                'status' => 'cancelled',
+                'cancellation_reason' => $request->reason,
+                'cancelled_at' => now(), 'cancelled_by' => $user->user_id,
+                'cancel_count' => $booking->cancel_count + 1,
+            ]);
+
+            $booking->bookingPets()->where('grooming_state', BookingPet::GROOMING_STATE_NOT_STARTED)->update([
+                'grooming_state' => BookingPet::GROOMING_STATE_CANCELLED, 'cancelled_at' => now(),
+                'cancellation_reason' => $request->reason, 'cancelled_by' => $user->user_id,
+            ]);
+
+            Notification::create([
+                'type' => 'cancelled',
+                'booking_id' => $booking->booking_id,
+                'message' => "Pre-registration {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
+                'is_read' => 0,
+                'created_at' => now(),
+            ]);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Booking not found.',
-            ], 404);
-        }
-
-        if ($booking->status === 'cancelled') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This booking is already cancelled.',
-            ], 422);
-        }
-
-        if ($booking->cancel_count >= 2) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You have reached the maximum number of cancellations (2) for this booking.',
-            ], 422);
-        }
-
-        $booking->update([
-            'status' => 'cancelled',
-            'cancellation_reason' => $request->reason,
-            'cancel_count' => $booking->cancel_count + 1,
-        ]);
-
-        Notification::create([
-            'type' => 'cancelled',
-            'booking_id' => $booking->booking_id,
-            'message' => "Pre-registration {$booking->booking_reference} was cancelled by {$user->first_name} {$user->last_name}.",
-            'is_read' => 0,
-            'created_at' => now(),
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Booking cancelled successfully.',
-        ]);
+                'success' => true,
+                'message' => 'Booking cancelled successfully.',
+            ]);
+        });
     }
 
     // ── RESCHEDULE A BOOKING ──────────────────────────────
@@ -728,7 +742,7 @@ class BookingController extends Controller
             ], 404);
         }
 
-        if ($booking->status !== 'waiting_to_arrive') {
+        if ($booking->status !== 'waiting_to_arrive' || $booking->hasSuccessfulPayment()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only an unused pre-registration can change its planned arrival.',

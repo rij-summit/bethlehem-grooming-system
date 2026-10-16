@@ -154,6 +154,8 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
             Route::post('/admin/bookings/{id}/start-grooming', [AdminBookingController::class, 'startGrooming']);
             Route::post('/admin/bookings/{id}/revert-start-grooming', [AdminBookingController::class, 'revertStartGrooming']);
             Route::post('/admin/bookings/{id}/pets/{bookingPetId}/start-grooming', [AdminBookingController::class, 'startPetGrooming']);
+            Route::post('/admin/bookings/{id}/pets/{bookingPetId}/undo-start', [AdminBookingController::class, 'undoPetStart']);
+            Route::post('/admin/bookings/{id}/pets/{bookingPetId}/cancel', [AdminBookingController::class, 'cancelPet']);
             Route::post('/admin/bookings/{id}/pets/{bookingPetId}/mark-done', [AdminBookingController::class, 'markPetDone']);
             Route::post('/admin/bookings/{id}/mark-done', [AdminBookingController::class, 'markDone']);
             Route::post('/admin/bookings/{id}/cancel', [AdminBookingController::class, 'cancel']);

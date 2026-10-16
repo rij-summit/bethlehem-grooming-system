@@ -69,7 +69,7 @@ class GroomingTimeEstimate
 
     public function recalculate(Booking $booking, BookingPet $pet, ?array $factors = null, ?string $preference = null): void
     {
-        if ($pet->grooming_end_time || $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED) return;
+        if ($pet->grooming_end_time || in_array($pet->grooming_state, [BookingPet::GROOMING_STATE_FINISHED, BookingPet::GROOMING_STATE_CANCELLED], true)) return;
         $estimate = $this->estimateForPet($booking, $pet, $factors, $preference);
         if ($estimate) $this->snapshot($pet, $estimate);
     }

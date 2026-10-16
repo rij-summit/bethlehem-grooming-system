@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>History | Bethlehem Animal Clinic</title>
     <link rel="stylesheet" href="../../css/output.css?v=grooming-record-20260926" />
-    <link rel="stylesheet" href="../../css/custom.css?v=history-typography-20261003&release=20261001" />
+    <link rel="stylesheet" href="../../css/custom.css?grooming-cancellation=20261016&v=history-typography-20261003&release=20261001" />
     <style>
       /* Grooming history follows the existing Bethlehem palette and typography. */
       .grooming-history {
@@ -529,6 +529,7 @@
                       <div class="grooming-owner">
                         <h4 x-text="displayArchiveValue(booking.ownerName, 'Owner not recorded')"></h4>
                         <p class="grooming-reference" x-text="displayArchiveValue(booking.bookingReference, 'Reference not recorded')"></p>
+                        <span x-show="booking.status === 'cancelled'" class="clinic-status" :class="clinicStatusClass('cancelled')">Cancelled</span>
                       </div>
                       <div class="grooming-pets"><p class="history-label">Pets</p><p x-text="petSummary(booking)"></p></div>
                       <div class="grooming-services"><p class="history-label">Services</p><p x-text="serviceSummary(booking)"></p></div>
@@ -580,7 +581,7 @@
                   <h3 id="grooming-record-title" class="grooming-record-type"><i data-lucide="scissors" aria-hidden="true"></i>Grooming Record</h3>
                   <div class="clinic-visit-patient">
                     <h4 x-show="groomingText(detailsBooking?.ownerName)" x-text="detailsBooking?.ownerName"></h4>
-                    <span class="clinic-status" :class="clinicStatusClass('completed')">Completed</span>
+                    <span class="clinic-status" :class="clinicStatusClass(detailsBooking?.status === 'cancelled' ? 'cancelled' : 'completed')" x-text="detailsBooking?.status === 'cancelled' ? 'Cancelled' : 'Completed'"></span>
                     <span x-show="detailsBooking?.ownerAccountDeleted" class="history-label">Account deleted</span>
                   </div>
                   <div class="clinic-visit-meta">
@@ -790,9 +791,9 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/api.js?grooming-cancellation=20261016&v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010&clinic-services=20261013"></script>
     <script src="../../scripts/components/clinic-attachments.js?v=20261015"></script>
-    <script src="../../scripts/components/admin-archive.js?v=grooming-record-20261015"></script>
+    <script src="../../scripts/components/admin-archive.js?v=grooming-record-20261016"></script>
   </body>
 </html>

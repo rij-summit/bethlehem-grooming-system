@@ -1463,13 +1463,13 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/start-grooming`, null, getAdminToken());
   }
 
-  async function adminRevertStartGrooming(bookingId) {
-    return request(
-      "POST",
-      `/admin/bookings/${bookingId}/revert-start-grooming`,
-      null,
-      getAdminToken(),
-    );
+  async function adminUndoPetStart(bookingId, bookingPetId) {
+    return request("POST", `/admin/bookings/${bookingId}/pets/${bookingPetId}/undo-start`, null, getAdminToken());
+  }
+
+  async function adminCancelPet(bookingId, bookingPetId, cancellationReason) {
+    return request("POST", `/admin/bookings/${bookingId}/pets/${bookingPetId}/cancel`,
+      { cancellation_reason: String(cancellationReason ?? "").trim() }, getAdminToken());
   }
 
   async function adminStartPetGrooming(bookingId, bookingPetId, assessment = {}) {
@@ -2177,7 +2177,8 @@ var API = (() => {
     adminRecordSedationConsent,
     adminRevertCheckIn,
     adminStartGrooming,
-    adminRevertStartGrooming,
+    adminUndoPetStart,
+    adminCancelPet,
     adminStartPetGrooming,
     adminMarkDone,
     adminMarkPetDone,

@@ -41,6 +41,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/start-grooming'],
         ['POST', 'api/admin/bookings/{id}/revert-start-grooming'],
         ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/start-grooming'],
+        ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/undo-start'],
+        ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/cancel'],
         ['POST', 'api/admin/bookings/{id}/pets/{bookingPetId}/mark-done'],
         ['POST', 'api/admin/bookings/{id}/mark-done'],
         ['POST', 'api/admin/bookings/{id}/cancel'],
@@ -296,6 +298,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'base_price' => 500,
             'is_active' => true,
         ]);
+        (require database_path('migrations/2026_10_16_000001_add_grooming_cancellation_audit.php'))->up();
     }
 
     protected function tearDown(): void
@@ -342,6 +345,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
+            'undo pet start' => ['POST', '/api/admin/bookings/1/pets/1/undo-start'],
+            'cancel pet' => ['POST', '/api/admin/bookings/1/pets/1/cancel'],
             'start grooming' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
             'finish grooming' => ['POST', '/api/admin/bookings/1/pets/1/mark-done'],
             'create grooming walk-in' => ['POST', '/api/admin/walk-in'],
@@ -381,6 +386,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'start whole booking' => ['POST', '/api/admin/bookings/1/start-grooming'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
+            'undo pet start' => ['POST', '/api/admin/bookings/1/pets/1/undo-start'],
+            'cancel pet' => ['POST', '/api/admin/bookings/1/pets/1/cancel'],
             'start one pet' => ['POST', '/api/admin/bookings/1/pets/1/start-grooming'],
             'finish one pet' => ['POST', '/api/admin/bookings/1/pets/1/mark-done'],
             'finish whole booking' => ['POST', '/api/admin/bookings/1/mark-done'],
@@ -1089,7 +1096,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
     }
 
-    public function test_revert_grooming_start_restores_queue_and_removes_customer_notification(): void
+    public function test_single_pet_legacy_undo_restores_queue_without_deleting_notification_history(): void
     {
         DB::table('users')->insert([
             'user_id' => 110,
@@ -1154,7 +1161,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'grooming_start_time' => null,
             'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
         ]);
-        $this->assertDatabaseMissing('customer_notifications', [
+        $this->assertDatabaseHas('customer_notifications', [
             'booking_id' => 110,
             'type' => 'grooming_started',
         ]);
@@ -1180,7 +1187,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $this->postJson('/api/admin/bookings/110/start-grooming')
             ->assertOk();
-        $this->assertDatabaseCount('customer_notifications', 1);
+        $this->assertDatabaseCount('customer_notifications', 2);
     }
 
     public function test_revert_endpoints_refuse_to_erase_later_grooming_activity(): void
@@ -1201,7 +1208,8 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $this->postJson('/api/admin/bookings/1/revert-start-grooming')
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Grooming cannot be reverted after a later grooming action has occurred.');
+            ->assertJsonPath('message', 'Use Undo Start for a specific pet.');
+        $this->postJson('/api/admin/bookings/1/pets/1/undo-start')->assertUnprocessable();
 
         $this->assertDatabaseHas('booking_pets', [
             'booking_pet_id' => 1,
@@ -1209,15 +1217,16 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
     }
 
-    public function test_revert_buttons_use_persisted_api_handlers(): void
+    public function test_undo_and_pet_cancel_buttons_use_persisted_api_handlers(): void
     {
         $api = file_get_contents(base_path('scripts/api.js'));
         $dashboard = file_get_contents(base_path('scripts/components/admin-dashboard.js'));
 
         $this->assertStringContainsString('async function adminRevertCheckIn(bookingId)', $api);
-        $this->assertStringContainsString('async function adminRevertStartGrooming(bookingId)', $api);
+        $this->assertStringContainsString('async function adminUndoPetStart(bookingId, bookingPetId)', $api);
         $this->assertStringContainsString('await API.adminRevertCheckIn(booking.id)', $dashboard);
-        $this->assertStringContainsString('await API.adminRevertStartGrooming(booking.id)', $dashboard);
+        $this->assertStringContainsString('await API.adminUndoPetStart(booking.id,', $dashboard);
+        $this->assertStringContainsString('await API.adminCancelPet(booking.id,', $dashboard);
         $this->assertStringNotContainsString('revertQueuedBookingFrontendOnly', $dashboard);
         $this->assertStringNotContainsString('revertInProgressBookingFrontendOnly', $dashboard);
         $this->assertStringNotContainsString('booking-reverted-ui-only', $dashboard);
@@ -2000,7 +2009,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseCount('unregistered_customers', 0);
     }
 
-    public function test_admin_cancellation_notifies_the_customer_with_the_optional_or_default_reason(): void
+    public function test_admin_cancellation_notifies_the_customer_with_the_required_reason(): void
     {
         $this->authenticateAs('admin');
 
@@ -2031,7 +2040,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
 
         $customMessage = 'Your grooming pre-registration CANCEL-CUSTOM-50 has been cancelled by the clinic. Reason: Owner requested a different date.';
-        $defaultMessage = 'Your grooming pre-registration CANCEL-DEFAULT-51 has been cancelled by the clinic.';
+        $defaultMessage = 'Your grooming pre-registration CANCEL-DEFAULT-51 has been cancelled by the clinic. Reason: Clinic unavailable.';
 
         $this->postJson('/api/admin/bookings/50/cancel', [
             'cancellation_reason' => '  Owner requested a different date.  ',
@@ -2040,7 +2049,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('customer_notified', true);
 
         $this->postJson('/api/admin/bookings/51/cancel', [
-            'cancellation_reason' => null,
+            'cancellation_reason' => 'Clinic unavailable.',
         ])
             ->assertOk()
             ->assertJsonPath('customer_notified', true);
@@ -2054,7 +2063,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseHas('bookings', [
             'booking_id' => 51,
             'status' => 'cancelled',
-            'cancellation_reason' => 'Cancelled by clinic staff.',
+            'cancellation_reason' => 'Clinic unavailable.',
             'cancel_count' => 1,
         ]);
         $this->assertDatabaseHas('customer_notifications', [
@@ -2184,7 +2193,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertDatabaseCount('customer_notifications', 0);
     }
 
-    public function test_cancelled_pre_registrations_never_appear_in_admin_or_customer_grooming_history(): void
+    public function test_cancelled_pre_registrations_remain_in_admin_and_customer_grooming_history(): void
     {
         DB::table('users')->insert([
             'user_id' => 80,
@@ -2232,20 +2241,20 @@ class GroomingAdministrationAuthorizationTest extends TestCase
 
         $this->getJson('/api/admin/bookings/archived')
             ->assertOk()
-            ->assertJsonPath('total', 1)
-            ->assertJsonPath('archived.0.bookingReference', 'COMPLETED-GROOMING-HISTORY')
-            ->assertJsonMissing(['bookingReference' => 'LEGACY-CANCELLED-ARCHIVE'])
-            ->assertJsonMissing(['bookingReference' => 'CURRENTLY-CANCELLED']);
+            ->assertJsonPath('total', 3)
+            ->assertJsonFragment(['bookingReference' => 'COMPLETED-GROOMING-HISTORY'])
+            ->assertJsonFragment(['bookingReference' => 'LEGACY-CANCELLED-ARCHIVE', 'status' => 'cancelled'])
+            ->assertJsonFragment(['bookingReference' => 'CURRENTLY-CANCELLED', 'status' => 'cancelled']);
 
         Sanctum::actingAs(User::query()->findOrFail(80), ['*']);
 
         $this->getJson('/api/booking/history')
             ->assertOk()
             ->assertJsonCount(0, 'bookings')
-            ->assertJsonPath('history_total', 1)
-            ->assertJsonPath('history.0.booking_reference', 'COMPLETED-GROOMING-HISTORY')
-            ->assertJsonMissing(['booking_reference' => 'LEGACY-CANCELLED-ARCHIVE'])
-            ->assertJsonMissing(['booking_reference' => 'CURRENTLY-CANCELLED']);
+            ->assertJsonPath('history_total', 3)
+            ->assertJsonFragment(['booking_reference' => 'COMPLETED-GROOMING-HISTORY'])
+            ->assertJsonFragment(['booking_reference' => 'LEGACY-CANCELLED-ARCHIVE'])
+            ->assertJsonFragment(['booking_reference' => 'CURRENTLY-CANCELLED']);
     }
 
     public function test_customer_capacity_matches_visible_queued_and_in_progress_pets(): void

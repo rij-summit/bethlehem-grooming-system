@@ -30,6 +30,8 @@ class Booking extends Model
         'sedation_consent_recorded_by',
         'sedation_consent_recorded_at',
         'cancellation_reason',
+        'cancelled_at',
+        'cancelled_by',
         'total_amount',
         'reschedule_count',
         'cancel_count',
@@ -43,12 +45,13 @@ class Booking extends Model
     protected $hidden = ['internal_staff_note'];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'sedation_consent' => 'boolean',
         'sedation_consent_recorded_at' => 'datetime',
     ];
 
     /**
-     * Keep cancelled pre-registrations out of operational and completed history.
+     * Keep cancelled pre-registrations out of operational lists.
      * The cancellation markers remain authoritative even if a legacy record's
      * status was later changed to archived.
      */
@@ -102,6 +105,18 @@ class Booking extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class, 'booking_id', 'booking_id');
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by', 'user_id');
+    }
+
+    public function hasSuccessfulPayment(): bool
+    {
+        return (bool) $this->paid || ($this->relationLoaded('payments')
+            ? $this->payments->contains('payment_status', 'paid')
+            : $this->payments()->where('payment_status', 'paid')->exists());
     }
 
 }

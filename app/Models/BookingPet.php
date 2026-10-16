@@ -12,10 +12,13 @@ class BookingPet extends Model
 
     public const GROOMING_STATE_FINISHED = 'finished';
 
+    public const GROOMING_STATE_CANCELLED = 'cancelled';
+
     public const GROOMING_STATES = [
         self::GROOMING_STATE_NOT_STARTED,
         self::GROOMING_STATE_IN_PROGRESS,
         self::GROOMING_STATE_FINISHED,
+        self::GROOMING_STATE_CANCELLED,
     ];
 
     protected $table = 'booking_pets';
@@ -36,6 +39,9 @@ class BookingPet extends Model
         'grooming_start_time',
         'grooming_end_time',
         'grooming_state',
+        'cancelled_at',
+        'cancellation_reason',
+        'cancelled_by',
         'grooming_preference',
         'grooming_estimate_min',
         'grooming_estimate_max',
@@ -43,6 +49,7 @@ class BookingPet extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'grooming_estimate_min' => 'integer',
         'grooming_estimate_max' => 'integer',
         'grooming_estimate_factors' => 'array',
@@ -67,5 +74,24 @@ class BookingPet extends Model
     public static function isValidGroomingState(string $state): bool
     {
         return in_array($state, self::GROOMING_STATES, true);
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by', 'user_id');
+    }
+
+    public function canCancelGrooming(): bool
+    {
+        return $this->grooming_state === self::GROOMING_STATE_NOT_STARTED
+            && $this->grooming_start_time === null
+            && $this->grooming_end_time === null;
+    }
+
+    public function canUndoGroomingStart(): bool
+    {
+        return $this->grooming_state === self::GROOMING_STATE_IN_PROGRESS
+            && $this->grooming_start_time !== null
+            && $this->grooming_end_time === null;
     }
 }

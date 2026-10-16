@@ -32,13 +32,63 @@ assert.equal(ui.groomingBookingTiming({ ...booking, status: 'queued' }), 'Droppe
 assert.equal(ui.groomingBookingTiming({ ...booking, status: 'in_progress', startedAt: '1:25 AM' }), 'Started 1:25 AM');
 assert.equal(ui.groomingBookingTiming({ ...booking, status: 'for-payment', completedAt: '3:10 AM' }), 'Finished 3:10 AM');
 assert.equal(ui.groomingBookingTiming({ status: 'for-payment' }), '');
-assert.equal(ui.shouldShowOwnerRevert({ ...booking, status: 'queued' }), true);
-assert.equal(ui.shouldShowOwnerRevert({ ...booking, status: 'in-progress', pets: [{ ...pet, groomingState: 'in_progress' }] }), true);
-assert.equal(ui.shouldShowOwnerRevert({ ...booking, status: 'in-progress', pets: [{ ...pet, groomingState: 'finished' }] }), false);
-assert.equal(ui.shouldShowOwnerRevert({ ...booking, status: 'for-payment' }), false);
+assert.equal(ui.shouldShowUndoCheckIn({ ...booking, status: 'queued' }), true);
+assert.equal(ui.shouldShowUndoCheckIn({ ...booking, status: 'in-progress', pets: [{ ...pet, groomingState: 'in_progress' }] }), false);
+assert.equal(ui.shouldShowUndoCheckIn({ ...booking, status: 'in-progress', pets: [{ ...pet, groomingState: 'finished' }] }), false);
+assert.equal(ui.shouldShowUndoCheckIn({ ...booking, status: 'for-payment' }), false);
 assert.equal(ui.shouldShowOwnerCancel({ ...booking, status: 'queued' }), true);
-assert.equal(ui.shouldShowOwnerCancel({ ...booking, status: 'in-progress', paid: true }), true);
+assert.equal(ui.shouldShowOwnerCancel({ ...booking, status: 'in-progress', paid: true }), false);
 assert.equal(ui.shouldShowOwnerCancel({ ...booking, status: 'to-be-picked-up' }), false);
+
+const sibling = { ...pet, bookingPetId: 8, petName: 'Mark' };
+const cancelled = { ...sibling, groomingState: 'cancelled' };
+const started = { ...pet, groomingState: 'in_progress', groomingStartedAtIso: '2026-10-16T09:00:00+08:00' };
+const finished = { ...started, groomingState: 'finished', groomingFinishedAtIso: '2026-10-16T10:00:00+08:00' };
+const pair = { ...booking, status: 'queued', pets: [pet, sibling] };
+assert.equal(ui.canCancelPet(pair, sibling), true);
+assert.equal(ui.canCancelPet({ ...booking, status: 'queued' }, pet), false, 'Single-pet rows use Cancel Booking');
+assert.equal(ui.canCancelPet({ ...pair, pets: [pet, cancelled] }, pet), false, 'One remaining active pet uses Cancel Booking');
+assert.equal(ui.canUndoPetStart({ ...pair, status: 'in-progress', pets: [started, finished] }, started), true);
+assert.equal(ui.shouldShowOwnerCancel({ ...pair, pets: [started, sibling] }), false);
+assert.equal(ui.shouldShowUndoCheckIn({ ...pair, pets: [finished, sibling] }), false);
+for (const record of [{ ...pair, paid: true }, { ...pair, payment: { id: 1 } }]) {
+  assert.equal(ui.shouldShowOwnerCancel(record), false);
+  assert.equal(ui.shouldShowUndoCheckIn(record), false);
+  assert.equal(ui.canCancelPet(record, sibling), false);
+  assert.equal(ui.canUndoPetStart(record, started), false);
+}
+for (const groomingState of ['in_progress', 'finished', 'cancelled', 'medical_concern']) {
+  assert.equal(ui.canCancelPet(pair, { ...pet, groomingState }), false);
+}
+for (const status of ['for-payment', 'to-be-picked-up', 'archived', 'cancelled']) {
+  const record = { ...pair, status };
+  assert.equal(ui.shouldShowOwnerCancel(record), false);
+  assert.equal(ui.shouldShowUndoCheckIn(record), false);
+  assert.equal(ui.canCancelPet(record, sibling), false);
+  assert.equal(ui.canUndoPetStart(record, started), false);
+}
+assert.equal(ui.petGroomingStateLabel(cancelled), 'Cancelled');
+assert.equal(ui.getWaitingGroomingPets({ ...pair, pets: [pet, cancelled] }).length, 1);
+assert.equal(ui.hasUnfinishedQueuedPets({ ...pair, pets: [finished, cancelled] }), false);
+ui.confirmCancelPet(pair, sibling);
+assert.equal(ui.actionConfirmModal.title, 'Cancel Mark');
+assert.equal(ui.actionConfirmModal.message, '', 'Cancellation adds no helper paragraph');
+assert.equal(ui.actionConfirmModal.booking.actionPet.bookingPetId, sibling.bookingPetId);
+ui.closeActionConfirmModal();
+ui.confirmCancelBooking(pair);
+assert.equal(ui.actionConfirmModal.title, 'Cancel Booking');
+assert.equal(ui.actionConfirmModal.confirmLabel, 'Cancel Booking');
+ui.closeActionConfirmModal();
+ui.confirmCheckInBooking({ ...pair, pets: [pet, cancelled] });
+assert.equal(ui.actionConfirmModal.petSizes.length, 1, 'Cancelled pets are excluded when checking in again');
+ui.closeActionConfirmModal();
+const billing = { ...pair, pets: [pet, cancelled], services: [
+  { id: 1, bookingPetId: 7, priceAtBooking: 850, name: 'Grooming' },
+  { id: 2, bookingPetId: 8, priceAtBooking: 650, name: 'Grooming' },
+] };
+assert.equal(ui.buildPaymentBreakdown(billing).length, 1);
+assert.equal(ui.billableGroomingServices(billing).length, 1);
+assert.equal(ui.getPetServicesAvailed(cancelled, billing).length, 1, 'Original services remain available for display');
 
 const multiple = { ...booking, pets: [pet, { ...pet, bookingPetId: 8, petName: 'Mark' }, { ...pet, bookingPetId: 9, petName: 'Milo' }] };
 assert.equal(ui.incomingPetSummary(booking), 'Hopper');

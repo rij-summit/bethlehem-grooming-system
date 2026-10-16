@@ -51,6 +51,7 @@ class DailyPetQueue
     {
         $bookingPets = BookingPet::with('pet')
             ->where('booking_id', $booking->booking_id)
+            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
             ->lockForUpdate()
             ->get()
             ->sort(function (BookingPet $left, BookingPet $right): int {

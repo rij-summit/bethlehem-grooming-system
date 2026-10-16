@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -31,14 +32,13 @@ class GroomingPaymentReadinessService
             $serviceQuery->lockForUpdate();
         }
 
-        $bookingPets = $petQuery->get();
-        $serviceRows = $serviceQuery->get();
-        $serviceNames = $this->lookupLabels(
-            'services',
-            'service_id',
-            'service_name',
-            $serviceRows->pluck('service_id')->filter()->unique()->all(),
-        );
+        $bookingPets = ! $lockForUpdate && $booking->relationLoaded('bookingPets')
+            ? $booking->bookingPets->sortBy('booking_pet_id')->values() : $petQuery->get();
+        $serviceRows = ! $lockForUpdate && $booking->relationLoaded('bookingServices')
+            ? $booking->bookingServices->sortBy('booking_service_id')->values() : $serviceQuery->get();
+        (new EloquentCollection($bookingPets->all()))->loadMissing('pet');
+        (new EloquentCollection($serviceRows->all()))->loadMissing('service');
+        $serviceNames = $serviceRows->mapWithKeys(fn ($line) => [$line->service_id => $line->service?->service_name])->filter()->all();
         $addonNames = $this->lookupLabels(
             'addons',
             'addon_id',
@@ -90,14 +90,15 @@ class GroomingPaymentReadinessService
             );
             $state = (string) ($bookingPet->grooming_state
                 ?: BookingPet::GROOMING_STATE_NOT_STARTED);
-            $paymentReady = $state === BookingPet::GROOMING_STATE_FINISHED
-                && $bookingPet->grooming_end_time !== null;
+            $cancelled = $state === BookingPet::GROOMING_STATE_CANCELLED;
+            $paymentReady = $cancelled || ($state === BookingPet::GROOMING_STATE_FINISHED
+                && $bookingPet->grooming_end_time !== null);
             $blockedReason = $paymentReady
                 ? null
                 : $this->petLabel($bookingPet).' is '.$this->groomingStateLabel($state).'.';
 
             if ($paymentReady) {
-                $bookingTotalCents += $subtotalCents;
+                $bookingTotalCents += $cancelled ? 0 : $subtotalCents;
             } elseif ($firstBlockedReason === null) {
                 $firstBlockedReason = $blockedReason;
             }
@@ -110,13 +111,13 @@ class GroomingPaymentReadinessService
                 'grooming_state' => $state,
                 'grooming_state_label' => $this->groomingStateLabel($state),
                 'grooming_finish_time' => $bookingPet->grooming_end_time?->toIso8601String(),
-                'payment_kind' => $paymentReady ? 'finished' : 'blocked',
+                'payment_kind' => $cancelled ? 'cancelled' : ($paymentReady ? 'finished' : 'blocked'),
                 'payment_ready' => $paymentReady,
                 'payment_blocked_reason' => $blockedReason,
                 'service_breakdown' => $lines->all(),
                 'original_pet_subtotal' => $this->centsToMoney($subtotalCents),
                 'final_pet_charge' => $paymentReady
-                    ? $this->centsToMoney($subtotalCents)
+                    ? $this->centsToMoney($cancelled ? 0 : $subtotalCents)
                     : null,
             ];
         })->values();
@@ -167,6 +168,7 @@ class GroomingPaymentReadinessService
         return match ($state) {
             BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
             BookingPet::GROOMING_STATE_FINISHED => 'Finished',
+            BookingPet::GROOMING_STATE_CANCELLED => 'Cancelled',
             default => 'Not started',
         };
     }

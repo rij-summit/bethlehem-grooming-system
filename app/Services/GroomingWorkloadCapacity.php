@@ -43,7 +43,7 @@ class GroomingWorkloadCapacity
     /** Match DailyPetQueue's dog/cat order before assigning any queue numbers. */
     public function admissionJobs(Collection $pets): array
     {
-        return $pets->sortBy(fn (BookingPet $pet) => [
+        return $pets->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)->sortBy(fn (BookingPet $pet) => [
             match (strtolower((string) $pet->pet?->species)) { 'dog' => 0, 'cat' => 1, default => 2 },
             $pet->booking_pet_id,
         ])->map(fn (BookingPet $pet) => $this->job($pet))->values()->all();

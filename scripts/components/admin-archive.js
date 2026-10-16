@@ -300,8 +300,17 @@ function adminArchive() {
         {label: 'Queue Number', value: booking.queueNumber || ''},
         {label: 'Dropped Off', value: this.groomingText(booking.dropOffAtIso) ? this.formatDateTime(booking.dropOffAtIso, '') : booking.dropOffTime},
         {label: 'Session Grooming Started', value: this.showSessionTime('start') ? (this.groomingText(booking.startedAtIso) ? this.formatDateTime(booking.startedAtIso, '') : booking.startedAt) : ''},
+        ...this.cancellationFields(booking),
         {label: 'Session Finished', value: this.showSessionTime('finish') ? (this.groomingText(booking.completedAtIso) ? this.formatDateTime(booking.completedAtIso, '') : booking.completedAt) : ''},
       ].filter(field => this.groomingText(field.value));
+    },
+
+    cancellationFields(record) {
+      return [
+        { label: 'Reason', value: this.groomingText(record?.cancellationReason) },
+        { label: 'Cancelled', value: record?.cancelledAt ? this.formatDateTime(record.cancelledAt, '') : '' },
+        { label: 'Cancelled by', value: this.groomingText(record?.cancelledBy) },
+      ].filter((field) => field.value);
     },
 
     groomingTimelineFields(pet) {
@@ -309,7 +318,7 @@ function adminArchive() {
         {label: 'Started', iso: pet.groomingStartedAtIso, time: pet.groomingStartedAt},
         {label: 'Finished', iso: pet.groomingFinishedAtIso, time: pet.groomingFinishedAt},
       ].map(field => ({label: field.label, value: this.groomingText(field.iso) ? this.formatDateTime(field.iso, '') : field.time}))
-        .filter(field => this.groomingText(field.value));
+        .filter(field => this.groomingText(field.value)).concat(this.cancellationFields(pet));
     },
 
     petSize(pet) {
@@ -723,7 +732,9 @@ function adminArchive() {
 
       if (Number.isFinite(paymentTotal) && paymentTotal >= 0) return paymentTotal - productTotal;
 
-      const services = Array.isArray(booking?.services) ? booking.services : [];
+      const cancelledIds = new Set((booking?.pets || []).filter((pet) => (pet.groomingState ?? pet.grooming_state) === 'cancelled')
+        .map((pet) => String(pet.bookingPetId ?? pet.booking_pet_id)));
+      const services = (booking?.services || []).filter((service) => !cancelledIds.has(String(service.bookingPetId ?? service.booking_pet_id)));
       const serviceAmounts = services.map((service) => this.getServiceAvailedAmount(service));
 
       return serviceAmounts.length > 0 && serviceAmounts.every((amount) => amount !== null)

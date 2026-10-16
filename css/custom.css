@@ -1581,7 +1581,7 @@ body.customer-detail-modal-open {
 .admin-queued-details-action:hover { background: #eef5fb; }
 .admin-queued-pets-panel { border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 12px; }
 .admin-queued-pet-list { display: grid; gap: 8px; }
-.admin-queued-pet-card { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; }
+.admin-queued-pet-card { overflow: visible; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; }
 .admin-queued-pet-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 12px; }
 .admin-queued-pet-queue { color: var(--grooming-accent); font-size: 16px; font-weight: 700; }
 .admin-queued-pet-information { min-width: 0; }
@@ -1630,6 +1630,7 @@ body.customer-detail-modal-open {
 .grooming-pet-disclosure { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .18s ease, visibility 0s .18s; }
 .grooming-pet-disclosure.is-expanded { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
 .grooming-pet-disclosure-inner { min-height: 0; overflow: hidden; }
+.grooming-pet-disclosure.is-expanded > .grooming-pet-disclosure-inner { overflow: visible; }
 .grooming-pet-service-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .grooming-selection-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; padding: 0; list-style: none; }
 .grooming-selection-chip { display: inline-flex; align-items: center; border: 1px solid #9bb7d2; border-radius: 999px; background: #edf5fc; padding: 5px 10px; color: #2f4b66; font-size: .875rem; font-weight: 600; line-height: 1.4; }

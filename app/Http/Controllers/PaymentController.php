@@ -176,6 +176,7 @@ class PaymentController extends Controller
 
         $bookingPets = BookingPet::query()
             ->where('booking_id', $booking->booking_id)
+            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
             ->with('pet')
             ->lockForUpdate()
             ->get()
@@ -334,6 +335,7 @@ class PaymentController extends Controller
                 }
 
                 $bookingPets = $booking->bookingPets()
+                    ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
                     ->with('pet:pet_id,pet_name')
                     ->lockForUpdate()
                     ->get();
@@ -346,6 +348,7 @@ class PaymentController extends Controller
                 $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
                 $serverTotalCents = BookingService::query()
                     ->where('booking_id', $booking->booking_id)
+                    ->whereIn('booking_pet_id', $bookingPets->pluck('booking_pet_id'))
                     ->lockForUpdate()
                     ->get(['price_at_booking'])
                     ->sum(fn (BookingService $line) => $this->paymentReadiness()

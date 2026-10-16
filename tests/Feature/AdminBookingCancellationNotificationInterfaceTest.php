@@ -6,14 +6,15 @@ use Tests\TestCase;
 
 class AdminBookingCancellationNotificationInterfaceTest extends TestCase
 {
-    public function test_normal_grooming_cancel_modal_has_an_optional_customer_reason(): void
+    public function test_grooming_cancel_modal_requires_a_reason_for_booking_and_pet(): void
     {
         $appointments = file_get_contents(base_path('pages/admin/appointments.html'));
 
         foreach ([
-            'x-show="actionConfirmModal.action === \'cancel\'"',
+            "x-show=\"['cancel', 'cancelPet'].includes(actionConfirmModal.action)\"",
             'for="bookingCancellationReason"',
-            'Reason shared with customer',
+            'Cancellation reason',
+            ':required=',
             'id="bookingCancellationReason"',
             'x-model="actionConfirmModal.cancellationReason"',
             'maxlength="500"',
@@ -31,7 +32,7 @@ class AdminBookingCancellationNotificationInterfaceTest extends TestCase
         );
     }
 
-    public function test_optional_reason_is_forwarded_through_the_shared_api_layer(): void
+    public function test_reason_is_forwarded_through_the_shared_api_layer(): void
     {
         $api = file_get_contents(base_path('scripts/api.js'));
         $dashboard = file_get_contents(base_path('scripts/components/admin-dashboard.js'));

@@ -75,6 +75,13 @@ assert.equal(ui.formatServicesAvailedTotal({ services: [{ paidPrice: 100 }, {}] 
 assert.equal(ui.paymentAmount({ payment: { finalPrice: 0 }, paidAmount: 900 }), '₱0.00');
 assert.equal(ui.paymentAmount({ paidAmount: 123 }), '₱123.00');
 assert.equal(ui.paymentAmount({}), 'Not recorded');
+const partial = { ...session, pets: [session.pets[0], { ...session.pets[1], groomingState: 'cancelled',
+  cancellationReason: 'Customer decided not to proceed.', cancelledAt: '2026-10-16T09:00:00+08:00', cancelledBy: 'Staff Member' }],
+  services: session.services.slice(0, 3), payment: null, paidAmount: null };
+assert.equal(ui.getServicesAvailedTotal(partial), 650, 'Cancelled pet services do not contribute to the billable total');
+assert.equal(ui.servicesForPet(partial.pets[1], partial).length, 1, 'Cancelled pets retain their booked services');
+assert.equal(ui.cancellationFields(partial.pets[1]).map((field) => field.label).join(','), 'Reason,Cancelled,Cancelled by');
+assert.ok(ui.groomingTimelineFields(partial.pets[1]).some((field) => field.value === 'Customer decided not to proceed.'));
 ui.selectedMonth = '2026-10';
 assert.equal(ui.filteredCount, 2);
 ui.sortOrder = 'oldest';

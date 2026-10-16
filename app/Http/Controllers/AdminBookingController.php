@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class AdminBookingController extends Controller
 {
@@ -91,7 +92,8 @@ class AdminBookingController extends Controller
         ])
             ->where('status', 'waiting_to_arrive');
         $incoming = $incomingQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderByRaw('CASE WHEN booking_date = ? THEN 0 ELSE 1 END', [$rangeStart->toDateString()])
             ->orderBy('booking_date', 'asc')
             ->get()
@@ -106,7 +108,8 @@ class AdminBookingController extends Controller
                 $pet->whereNotNull('grooming_start_time');
             });
         $queued = $queuedQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
@@ -121,12 +124,13 @@ class AdminBookingController extends Controller
                         ->whereHas('bookingPets', function ($pet) {
                             // Includes an unstarted queued sibling after a
                             // different pet in this booking has finished.
-                            $pet->whereNull('grooming_end_time');
+                            $pet->whereNull('grooming_end_time')->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED);
                         });
                 });
         });
         $inProgress = $inProgressQuery
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(function ($booking) {
@@ -139,13 +143,15 @@ class AdminBookingController extends Controller
             });
 
         $forPayment = Booking::where('status', 'for_payment')
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
-            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service'])
+            ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
             ->get()
             ->map(fn ($b) => $this->formatBooking($b));
@@ -285,6 +291,7 @@ class AdminBookingController extends Controller
                 return ['error' => ['message' => 'Check-in is only allowed on the pre-registration date.', 'status' => 422]];
             }
 
+            $booking->setRelation('bookingPets', $booking->bookingPets->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)->values());
             app(\App\Services\OperationalCapacity::class)->assertCanAccept('grooming', $booking->bookingPets->count());
 
             $bookingPetIds = $booking->bookingPets->pluck('booking_pet_id')->map(fn ($id) => (int) $id)->all();
@@ -396,6 +403,8 @@ class AdminBookingController extends Controller
                 return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
             }
 
+            $this->assertUnpaidCorrection($booking);
+
             if ($booking->status !== 'checked_in') {
                 return ['error' => [
                     'message' => 'Only a queued booking can be reverted to Incoming.',
@@ -415,7 +424,10 @@ class AdminBookingController extends Controller
                     ], true),
             );
 
-            if ($hasGroomingActivity) {
+            if ($hasGroomingActivity || $booking->grooming_started_at || $booking->grooming_finished_at
+                || $bookingPets->contains(fn ($pet) => ! in_array($pet->grooming_state, [
+                    BookingPet::GROOMING_STATE_NOT_STARTED, BookingPet::GROOMING_STATE_CANCELLED,
+                ], true))) {
                 return ['error' => [
                     'message' => 'Check-in cannot be reverted after grooming activity has started.',
                     'status' => 422,
@@ -446,7 +458,7 @@ class AdminBookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Check-in reverted. The appointment is Incoming again.',
+            'message' => 'Check-in undone. The booking is Incoming again.',
             'booking_id' => $result['booking_id'],
             'status' => 'waiting_to_arrive',
         ]);
@@ -664,87 +676,52 @@ class AdminBookingController extends Controller
         ]);
     }
 
-    // Undo all grooming starts for an owner card and restore its queued state.
+    // Retain the legacy route for single-pet API consumers only.
     public function revertStartGrooming($id)
     {
-        $result = DB::transaction(function () use ($id) {
-            $booking = Booking::whereKey($id)->lockForUpdate()->first();
-
-            if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+        return DB::transaction(function () use ($id) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+            $this->assertUnpaidCorrection($booking);
+            $pets = $booking->bookingPets()->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)->lockForUpdate()->get();
+            if ($pets->count() !== 1) {
+                throw ValidationException::withMessages(['booking' => 'Use Undo Start for a specific pet.']);
             }
-
-            if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
-                return ['error' => [
-                    'message' => 'Only an in-progress booking can be reverted to Queued.',
-                    'status' => 422,
-                ]];
-            }
-
-            $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
-                ->lockForUpdate()
-                ->get();
-            $startedPets = $bookingPets->filter(
-                fn (BookingPet $bookingPet) => $bookingPet->grooming_start_time !== null
-                    || $bookingPet->grooming_state === BookingPet::GROOMING_STATE_IN_PROGRESS,
-            );
-
-            if ($startedPets->isEmpty()) {
-                return ['error' => [
-                    'message' => 'This booking has no grooming start to revert.',
-                    'status' => 422,
-                ]];
-            }
-
-            $hasLaterGroomingActivity = $bookingPets->contains(
-                fn (BookingPet $bookingPet) => $bookingPet->grooming_end_time !== null
-                    || in_array($bookingPet->grooming_state, [
-                        BookingPet::GROOMING_STATE_FINISHED,
-                    ], true),
-            );
-
-            if ($hasLaterGroomingActivity) {
-                return ['error' => [
-                    'message' => 'Grooming cannot be reverted after a later grooming action has occurred.',
-                    'status' => 422,
-                ]];
-            }
-
-            BookingPet::whereIn('booking_pet_id', $startedPets->pluck('booking_pet_id'))
-                ->update([
-                    'grooming_start_time' => null,
-                    'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED,
-                ]);
-
-            $booking->update([
-                'status' => 'checked_in',
-                'grooming_started_at' => null,
-            ]);
-
-            CustomerNotification::where('booking_id', $booking->booking_id)
-                ->where('type', 'grooming_started')
-                ->delete();
-
-            return ['booking_id' => $booking->booking_id];
+            return $this->undoPetStart($id, $pets->first()->booking_pet_id);
         });
-
-        if (isset($result['error'])) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Grooming start reverted. The appointment is Queued again.',
-            'booking_id' => $result['booking_id'],
-            'status' => 'checked_in',
-        ]);
     }
 
-    // ── MARK DONE ─────────────────────────────────────────
-    // in_progress → for_payment  (or archived if already paid early)
+    public function undoPetStart($id, $bookingPetId)
+    {
+        return DB::transaction(function () use ($id, $bookingPetId) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+            $this->assertUnpaidCorrection($booking);
+            if (! in_array($booking->status, ['checked_in', 'in_progress'], true) || $booking->grooming_finished_at) {
+                throw ValidationException::withMessages(['booking' => 'This booking cannot undo grooming.']);
+            }
+            $pets = $booking->bookingPets()->lockForUpdate()->get();
+            $pet = $pets->firstWhere('booking_pet_id', $bookingPetId);
+            abort_unless($pet, 404, 'Pet is not part of this booking.');
+            if (! $pet->canUndoGroomingStart()) {
+                throw ValidationException::withMessages(['pet' => 'Only an in-progress pet can undo its start.']);
+            }
+            $pet->update(['grooming_start_time' => null, 'groomer_id' => null,
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED]);
+            $booking->update(['status' => 'checked_in',
+                'grooming_started_at' => $pets->pluck('grooming_start_time')->filter()->sort()->first()]);
+            return response()->json(['success' => true, 'message' => 'Grooming start undone.',
+                'booking_id' => $booking->booking_id, 'booking_pet_id' => $pet->booking_pet_id,
+                'status' => 'checked_in',
+                'grooming_state' => BookingPet::GROOMING_STATE_NOT_STARTED]);
+        });
+    }
+
+    private function assertUnpaidCorrection(Booking $booking): void
+    {
+        if ($booking->hasSuccessfulPayment()) {
+            throw ValidationException::withMessages(['booking' => 'Paid grooming bookings cannot be cancelled or undone.']);
+        }
+    }
+
     public function markDone($id)
     {
         $result = DB::transaction(function () use ($id) {
@@ -761,11 +738,9 @@ class AdminBookingController extends Controller
             $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
                 ->lockForUpdate()
                 ->get();
-            $unfinishedPets = $bookingPets->where(
-                'grooming_state',
-                '!=',
-                BookingPet::GROOMING_STATE_FINISHED,
-            );
+            $unfinishedPets = $bookingPets->whereNotIn('grooming_state', [
+                BookingPet::GROOMING_STATE_FINISHED, BookingPet::GROOMING_STATE_CANCELLED,
+            ]);
 
             if ($unfinishedPets->isEmpty()) {
                 return ['error' => [
@@ -881,7 +856,7 @@ class AdminBookingController extends Controller
 
             $remainingPets = BookingPet::query()
                 ->where('booking_id', $booking->booking_id)
-                ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_FINISHED)
+                ->whereNotIn('grooming_state', [BookingPet::GROOMING_STATE_FINISHED, BookingPet::GROOMING_STATE_CANCELLED])
                 ->count();
             $allPetsFinished = $remainingPets === 0;
             $petName = $bookingPet->pet()->value('pet_name') ?: 'Pet';
@@ -965,7 +940,7 @@ class AdminBookingController extends Controller
             ]);
         }
 
-        if ($booking->paid) {
+        if ($booking->hasSuccessfulPayment()) {
             $booking->update([
                 'status' => 'released',
                 'grooming_finished_at' => $finishedAt,
@@ -1072,84 +1047,89 @@ class AdminBookingController extends Controller
     // Cancel a booking, remove it from active capacity, and notify its customer.
     public function cancel(Request $request, $id)
     {
-        $validated = $request->validate([
-            'cancellation_reason' => ['nullable', 'string', 'max:500'],
-        ]);
-        $customerReason = trim((string) ($validated['cancellation_reason'] ?? ''));
-
-        $result = DB::transaction(function () use ($id, $customerReason) {
-            $booking = Booking::query()
-                ->whereKey($id)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+        $reason = $this->cancellationReason($request);
+        return DB::transaction(function () use ($request, $id, $reason) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+            $this->assertUnpaidCorrection($booking);
+            $pets = $booking->bookingPets()->lockForUpdate()->get();
+            if (! in_array($booking->status, ['waiting_to_arrive', 'incoming', 'checked_in'], true)
+                || $booking->grooming_started_at || $booking->grooming_finished_at
+                || $pets->contains(fn ($pet) => $pet->grooming_state !== BookingPet::GROOMING_STATE_CANCELLED && ! $pet->canCancelGrooming())) {
+                throw ValidationException::withMessages(['booking' => 'Cancel Booking is only available before any grooming starts.']);
             }
-
-            if (in_array($booking->status, ['cancelled', 'archived', 'no_show', 'expired'], true)) {
-                return ['error' => [
-                    'message' => 'This booking cannot be cancelled.',
-                    'status' => 422,
-                ]];
-            }
-
-            $booking->update([
-                'status' => 'cancelled',
-                'cancellation_reason' => $customerReason !== ''
-                    ? $customerReason
-                    : 'Cancelled by clinic staff.',
-                'cancel_count' => ($booking->cancel_count ?? 0) + 1,
-            ]);
-
-            $booking->loadMissing('user');
-            $customerNotified = false;
-
-            if ($booking->user) {
-                $reference = trim((string) $booking->booking_reference);
-                $subject = $reference !== ''
-                    ? "Your grooming pre-registration {$reference}"
-                    : 'Your grooming pre-registration';
-                $message = "{$subject} has been cancelled by the clinic.";
-
-                if ($customerReason !== '') {
-                    $message .= " Reason: {$customerReason}";
+            $audit = ['cancelled_at' => now(), 'cancellation_reason' => $reason, 'cancelled_by' => $request->user()?->user_id];
+            foreach ($pets as $pet) {
+                if ($pet->grooming_state !== BookingPet::GROOMING_STATE_CANCELLED) {
+                    $pet->update($audit + ['grooming_state' => BookingPet::GROOMING_STATE_CANCELLED]);
                 }
-
-                CustomerNotification::create([
-                    'user_id' => $booking->user->user_id,
-                    'booking_id' => $booking->booking_id,
-                    'type' => CustomerNotification::TYPE_BOOKING_CANCELLED,
-                    'message' => $message,
-                    'is_read' => false,
-                    'created_at' => now(),
-                ]);
-                $customerNotified = true;
             }
-
-            Notification::create([
-                'type' => 'cancelled',
-                'booking_id' => $booking->booking_id,
-                'message' => "Pre-registration {$booking->booking_reference} was cancelled by clinic staff.",
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
-
-            return ['customer_notified' => $customerNotified];
+            $this->cancelGroomingBooking($booking, $audit);
+            $notified = $this->notifyCancellation($booking, $reason);
+            return response()->json(['success' => true, 'message' => 'Booking cancelled successfully.', 'customer_notified' => $notified]);
         });
+    }
 
-        if (isset($result['error'])) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['error']['message'],
-            ], $result['error']['status']);
+    public function cancelPet(Request $request, $id, $bookingPetId)
+    {
+        $reason = $this->cancellationReason($request);
+        return DB::transaction(function () use ($request, $id, $bookingPetId, $reason) {
+            $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
+            $this->assertUnpaidCorrection($booking);
+            if (! in_array($booking->status, ['waiting_to_arrive', 'incoming', 'checked_in', 'in_progress'], true) || $booking->grooming_finished_at) {
+                throw ValidationException::withMessages(['booking' => 'This booking cannot cancel pets.']);
+            }
+            $pets = $booking->bookingPets()->with('pet')->lockForUpdate()->get();
+            $pet = $pets->firstWhere('booking_pet_id', $bookingPetId);
+            abort_unless($pet, 404, 'Pet is not part of this booking.');
+            if (! $pet->canCancelGrooming()) {
+                throw ValidationException::withMessages(['pet' => 'Only a not-started pet can be cancelled.']);
+            }
+            $audit = ['cancelled_at' => now(), 'cancellation_reason' => $reason, 'cancelled_by' => $request->user()?->user_id];
+            $pet->update($audit + ['grooming_state' => BookingPet::GROOMING_STATE_CANCELLED]);
+            $remaining = $pets->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED);
+            if ($remaining->isEmpty()) {
+                $this->cancelGroomingBooking($booking, $audit);
+            } elseif ($remaining->every(fn ($pet) => $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED && $pet->grooming_end_time !== null)) {
+                $this->completeGroomingBooking($booking, $remaining->max('grooming_end_time'));
+            } elseif ($remaining->every(fn ($pet) => $pet->grooming_state !== BookingPet::GROOMING_STATE_NOT_STARTED)) {
+                $booking->update(['status' => 'in_progress']);
+            }
+            $notified = $this->notifyCancellation($booking, $reason, $pet, $remaining->isNotEmpty());
+            return response()->json(['success' => true, 'message' => 'Pet grooming cancelled.',
+                'customer_notified' => $notified, 'booking_status' => $booking->status]);
+        });
+    }
+
+    private function cancellationReason(Request $request): string
+    {
+        $data = $request->validate(['cancellation_reason' => ['required', 'string', 'max:500']]);
+        $reason = trim($data['cancellation_reason']);
+        if ($reason === '') {
+            throw ValidationException::withMessages(['cancellation_reason' => 'Enter a cancellation reason.']);
         }
+        return $reason;
+    }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Booking cancelled successfully.',
-            'customer_notified' => $result['customer_notified'],
-        ]);
+    private function cancelGroomingBooking(Booking $booking, array $audit): void
+    {
+        $booking->update($audit + ['status' => 'cancelled', 'cancel_count' => ($booking->cancel_count ?? 0) + 1]);
+        Notification::create(['type' => 'cancelled', 'booking_id' => $booking->booking_id,
+            'message' => "Grooming booking {$booking->booking_reference} was cancelled by clinic staff.",
+            'is_read' => false, 'created_at' => now()]);
+    }
+
+    private function notifyCancellation(Booking $booking, string $reason, ?BookingPet $pet = null, bool $othersActive = false): bool
+    {
+        $booking->loadMissing('user');
+        if (! $booking->user) return false;
+        $subject = $booking->walkin_id === null ? 'grooming pre-registration' : 'grooming booking';
+        $message = $pet
+            ? ($pet->pet?->pet_name ?? 'Your pet')."'s grooming was cancelled. Reason: {$reason}"
+            : "Your {$subject} {$booking->booking_reference} has been cancelled by the clinic. Reason: {$reason}";
+        if ($pet) $message .= $othersActive ? ' Other pets remain active.' : ' The booking is now cancelled.';
+        CustomerNotification::create(['user_id' => $booking->user_id, 'booking_id' => $booking->booking_id,
+            'type' => CustomerNotification::TYPE_BOOKING_CANCELLED, 'message' => $message, 'is_read' => false, 'created_at' => now()]);
+        return true;
     }
 
     public function archive($id)
@@ -1196,13 +1176,14 @@ class AdminBookingController extends Controller
         $search = $request->query('search', '');
         $date = $request->query('date', '');
 
-        $query = Booking::where('status', 'archived')
-            ->neverCancelled()
+        $query = Booking::whereIn('status', ['archived', 'cancelled'])
             ->with([
                 'user',
                 'walkin.unregisteredCustomer',
                 'timeWindow',
                 'bookingPets.pet',
+                'bookingPets.cancelledBy',
+                'cancelledBy',
                 'bookingServices.service',
                 'payments' => fn ($q) => $q->with('products')
                     ->where('payment_status', 'paid')
@@ -1280,7 +1261,8 @@ class AdminBookingController extends Controller
         $paidServicesTotal = $paidTotal !== null
             ? round($paidTotal - (float) $productLines->sum('subtotal'), 2)
             : null;
-        $bookedServicesTotal = round((float) $bookedServices->sum(
+        $billableServices = $bookedServices->filter(fn ($service) => $bpetsById->get($service->booking_pet_id)?->grooming_state !== BookingPet::GROOMING_STATE_CANCELLED);
+        $bookedServicesTotal = round((float) $billableServices->sum(
             fn ($bs) => (float) ($bs->price_at_booking ?? 0),
         ), 2);
         $canUseSavedServicePrices = ! $paidTotal
@@ -1337,8 +1319,13 @@ class AdminBookingController extends Controller
                 ? Carbon::parse($booking->grooming_finished_at)->format('g:i A')
                 : null,
             'clientNotified' => false,
-            'paid' => (bool) $booking->paid,
-            'status' => $this->mapStatus($booking->status),
+            'paid' => (bool) $booking->paid || $paidPayment !== null,
+            'cancellationReason' => $booking->cancellation_reason,
+            'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
+            'cancelledBy' => $booking->relationLoaded('cancelledBy') && $booking->cancelledBy
+                ? trim($booking->cancelledBy->first_name.' '.$booking->cancelledBy->last_name) : null,
+            'status' => $booking->status === 'cancelled' || $booking->cancel_count > 0 || trim((string) $booking->cancellation_reason) !== ''
+                ? 'cancelled' : $this->mapStatus($booking->status),
             // Extra fields for the View Details modal
             'bookingReference' => $booking->booking_reference,
             'bookingType' => $booking->walkin_id !== null ? 'Walk-In' : 'Pre-Register',
@@ -1413,13 +1400,17 @@ class AdminBookingController extends Controller
                         : null,
                     'groomingFinishedAtIso' => $bp->grooming_end_time,
                     'isGroomingFinished' => (bool) $bp->grooming_end_time,
+                    'cancellationReason' => $bp->cancellation_reason,
+                    'cancelledAt' => $bp->cancelled_at?->toIso8601String(),
+                    'cancelledBy' => $bp->relationLoaded('cancelledBy') && $bp->cancelledBy
+                        ? trim($bp->cancelledBy->first_name.' '.$bp->cancelledBy->last_name) : null,
                     'groomingState' => $groomingState,
                     'grooming_state' => $groomingState,
                     'groomingStateLabel' => $this->groomingStateLabel($groomingState),
                     'grooming_state_label' => $this->groomingStateLabel($groomingState),
                 ];
             })->values(),
-            'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $paidServicesTotal, $canUseSavedServicePrices, $bookedServices) {
+            'services' => $bookedServices->map(function ($bs) use ($bpetsById, $paidTotal, $paidServicesTotal, $canUseSavedServicePrices, $billableServices) {
                 $bookingPet = $bpetsById->get($bs->booking_pet_id);
                 $pet = $bookingPet?->pet;
                 $bs->setRelation('bookingPet', $bookingPet);
@@ -1431,7 +1422,9 @@ class AdminBookingController extends Controller
                 $paidPrice = null;
                 $paidPriceSource = null;
 
-                if ($paidTotal && $bookedServices->count() === 1) {
+                if ($bookingPet?->grooming_state === BookingPet::GROOMING_STATE_CANCELLED) {
+                    $paidPrice = null;
+                } elseif ($paidTotal && $billableServices->count() === 1) {
                     $paidPrice = $paidServicesTotal;
                     $paidPriceSource = 'payment_total';
                 } elseif ($savedPrice > 0 && $canUseSavedServicePrices) {
@@ -1666,10 +1659,6 @@ class AdminBookingController extends Controller
                 ->first();
         }
 
-        if (! (bool) $booking->paid) {
-            return null;
-        }
-
         return $booking->payments()
             ->where('payment_status', 'paid')
             ->orderByDesc('paid_at')
@@ -1712,7 +1701,8 @@ class AdminBookingController extends Controller
                 ];
             });
 
-        $groomingStarted = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service'])
+        $groomingStarted = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->whereNotNull('grooming_started_at')
             ->orderBy('grooming_started_at', 'desc')
             ->limit(6)
@@ -1727,7 +1717,8 @@ class AdminBookingController extends Controller
                 ];
             });
 
-        $completed = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service'])
+        $completed = Booking::with(['user', 'bookingPets.pet', 'bookingServices.service',
+                'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->whereNotNull('grooming_finished_at')
             ->orderBy('grooming_finished_at', 'desc')
             ->limit(6)
@@ -1778,6 +1769,7 @@ class AdminBookingController extends Controller
     private function petNames(Booking $booking): string
     {
         $names = ($booking->bookingPets ?? collect())
+            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
             ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
             ->values();
@@ -1800,6 +1792,7 @@ class AdminBookingController extends Controller
     private function hasMultiplePets(Booking $booking): bool
     {
         return ($booking->bookingPets ?? collect())
+            ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
             ->map(fn ($bookingPet) => $bookingPet->pet?->pet_name)
             ->filter()
             ->unique()
@@ -1841,6 +1834,7 @@ class AdminBookingController extends Controller
         return match ($state) {
             BookingPet::GROOMING_STATE_IN_PROGRESS => 'In progress',
             BookingPet::GROOMING_STATE_FINISHED => 'Finished',
+            BookingPet::GROOMING_STATE_CANCELLED => 'Cancelled',
             default => 'Not started',
         };
     }

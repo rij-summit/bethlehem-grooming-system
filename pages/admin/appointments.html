@@ -7,7 +7,7 @@
     <title>Admin Grooming | Bethlehem Animal Clinic</title>
 
     <link rel="stylesheet" href="../../css/output.css?v=product-search-stock-20261002" />
-    <link rel="stylesheet" href="../../css/custom.css?v=grooming-refinement-20261016-3" />
+    <link rel="stylesheet" href="../../css/custom.css?grooming-cancellation=20261016&v=grooming-cancellation-20261016" />
     <link
       rel="stylesheet"
       href="../../css/components/print-information.css?v=grooming-invoice-clean-print-20261003"
@@ -757,7 +757,7 @@
                       >
                         <span x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"></span>
                       </button>
-                      <button type="button" @click="confirmCancelBooking(booking)" class="admin-incoming-cancel-action">Cancel</button>
+                      <button x-show="shouldShowOwnerCancel(booking)" type="button" @click="confirmCancelBooking(booking)" class="admin-incoming-cancel-action">Cancel</button>
                     </div>
                   </article>
                 </template>
@@ -828,17 +828,17 @@
                       <span x-text="isActionBusy('pickedUp', booking.id) ? 'Processing...' : 'Picked Up'"></span>
                     </button>
                   </template>
-                  <template x-if="shouldShowOwnerRevert(booking) || shouldShowOwnerCancel(booking)">
+                  <template x-if="shouldShowUndoCheckIn(booking) || shouldShowOwnerCancel(booking)">
                     <div class="grooming-overflow" @click.outside="groomingMenuBookingId === booking.id && closeGroomingMenu()" @keydown.escape.window="groomingMenuBookingId === booking.id && closeGroomingMenu(true)">
                       <button type="button" class="grooming-overflow-trigger" :id="'grooming-menu-trigger-' + booking.id" :aria-label="'More actions for ' + booking.ownerName" aria-haspopup="menu" :aria-expanded="groomingMenuBookingId === booking.id" :aria-controls="'grooming-menu-' + booking.id" @click.stop="toggleGroomingMenu(booking, $event)" @keydown.arrow-down.prevent.stop="openGroomingMenu(booking, $event)" @keydown.arrow-up.prevent.stop="openGroomingMenu(booking, $event, true)">
                         <i data-lucide="ellipsis-vertical" class="h-5 w-5" aria-hidden="true"></i>
                       </button>
                       <div x-cloak x-show="groomingMenuBookingId === booking.id" class="grooming-overflow-menu" role="menu" :id="'grooming-menu-' + booking.id" :aria-labelledby="'grooming-menu-trigger-' + booking.id" @keydown.stop="handleGroomingMenuKeydown($event)">
-                        <template x-if="shouldShowOwnerRevert(booking)">
-                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item" @click.stop="closeGroomingMenu(); activeTab === 'queued' ? confirmRevertQueuedBooking(booking) : confirmRevertInProgressBooking(booking)"><i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>Revert</button>
+                        <template x-if="shouldShowUndoCheckIn(booking)">
+                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item" @click.stop="closeGroomingMenu(); confirmUndoCheckIn(booking)"><i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>Undo Check-in</button>
                         </template>
                         <template x-if="shouldShowOwnerCancel(booking)">
-                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item grooming-menu-danger" :class="shouldShowOwnerRevert(booking) ? 'is-separated' : ''" @click.stop="closeGroomingMenu(); confirmCancelBooking(booking)"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Cancel</button>
+                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item grooming-menu-danger" :class="shouldShowUndoCheckIn(booking) ? 'is-separated' : ''" @click.stop="closeGroomingMenu(); confirmCancelBooking(booking)"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Cancel Booking</button>
                         </template>
                       </div>
                     </div>
@@ -861,12 +861,13 @@
                             <span class="admin-queued-pet-queue" x-text="formatPetQueueNumber(pet, petIndex)"></span>
                             <div class="admin-queued-pet-information">
                               <h5 x-text="pet.petName ?? pet.pet_name ?? pet.name"></h5>
+                              <span x-show="petGroomingState(pet) === 'cancelled'" class="grooming-note-flag">Cancelled</span>
                               <p class="admin-queued-pet-basic" x-text="[pet.breed || pet.species, formatPetCardValue(pet.size, '')].filter(Boolean).join(' · ')"></p>
                               <div class="grooming-pet-service-line">
                                 <p class="admin-queued-pet-services" x-text="formatPetCardServiceLabel(pet, booking)"></p>
-                                <span x-show="!isPetGroomingFinished(pet) && pet.groomingEstimate?.preferenceLabel" class="grooming-selection-chip grooming-selection-chip--compact" x-text="pet.groomingEstimate?.preferenceLabel"></span>
+                                <span x-show="!isPetGroomingFinished(pet) && petGroomingState(pet) !== 'cancelled' && pet.groomingEstimate?.preferenceLabel" class="grooming-selection-chip grooming-selection-chip--compact" x-text="pet.groomingEstimate?.preferenceLabel"></span>
                               </div>
-                              <p x-show="!isPetGroomingFinished(pet)" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
+                              <p x-show="!isPetGroomingFinished(pet) && petGroomingState(pet) !== 'cancelled'" class="admin-queued-pet-timing" x-text="getPetEstDone(booking, pet)"></p>
                               <div x-show="pet.medicalConditions || pet.specialInstructions || isPetGroomingFinished(pet)" class="grooming-pet-flags">
                                 <span x-show="pet.medicalConditions" class="grooming-note-flag">Medical note</span>
                                 <span x-show="pet.specialInstructions" class="grooming-note-flag">Customer note</span>
@@ -883,6 +884,16 @@
                                 <button type="button" @click="confirmMarkPetDone(booking, pet)" :disabled="isActionBusy('markPetDone', booking.id)" class="admin-in-progress-pet-finish">
                                   <span x-text="isActionBusy('markPetDone', booking.id) ? getActionLabel('markPetDone') : 'Finish Grooming'"></span>
                                 </button>
+                              </template>
+                              <template x-if="canCancelPet(booking, pet) || canUndoPetStart(booking, pet)">
+                                <div class="grooming-overflow" x-data="{ menuId: 'pet-' + booking.id + '-' + (pet.bookingPetId ?? pet.id) }" @click.outside="groomingMenuBookingId === menuId && closeGroomingMenu()" @keydown.escape.window="groomingMenuBookingId === menuId && closeGroomingMenu(true)">
+                                  <button type="button" class="grooming-overflow-trigger" :id="'grooming-menu-trigger-' + menuId" :aria-label="'More actions for ' + pet.petName" aria-haspopup="menu" :aria-expanded="groomingMenuBookingId === menuId" :aria-controls="'grooming-menu-' + menuId" @click.stop="toggleGroomingMenu({ id: menuId }, $event)" @keydown.arrow-down.prevent.stop="openGroomingMenu({ id: menuId }, $event)" @keydown.arrow-up.prevent.stop="openGroomingMenu({ id: menuId }, $event, true)"><i data-lucide="ellipsis-vertical" class="h-5 w-5" aria-hidden="true"></i></button>
+                                  <div x-cloak x-show="groomingMenuBookingId === menuId" class="grooming-overflow-menu" role="menu" :id="'grooming-menu-' + menuId" :aria-labelledby="'grooming-menu-trigger-' + menuId" @keydown.stop="handleGroomingMenuKeydown($event)">
+                                    <template x-if="canUndoPetStart(booking, pet)"><button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item" @click.stop="closeGroomingMenu(); confirmUndoPetStart(booking, pet)">Undo Start</button></template>
+                                    <template x-if="canCancelPet(booking, pet)"><button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item grooming-menu-danger" @click.stop="closeGroomingMenu(); confirmCancelPet(booking, pet)">Cancel Pet</button></template>
+                                  </div>
+                                </div>
+                                </div>
                               </template>
                               <button type="button" @click="printPetCard(booking, pet, petIndex)" class="admin-queued-pet-print" :aria-label="'Print grooming card for ' + pet.petName"><i data-lucide="printer" class="h-4 w-4"></i>Print</button>
                             </div>
@@ -1277,7 +1288,7 @@
                   <span x-show="actionConfirmModal.icon === 'cancel'">
                     <i data-lucide="calendar-x" class="h-7 w-7"></i>
                   </span>
-                  <span x-show="actionConfirmModal.icon === 'revert'">
+                  <span x-show="actionConfirmModal.icon === 'undo'">
                     <i data-lucide="rotate-ccw" class="h-7 w-7"></i>
                   </span>
                   <span x-show="actionConfirmModal.icon === 'grooming'">
@@ -1291,7 +1302,7 @@
                   </span>
                 </div>
                 <h4 class="text-lg font-bold text-slate-800" x-text="actionConfirmModal.title"></h4>
-                <p class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
+                <p x-show="actionConfirmModal.message" class="mt-2 text-sm text-slate-600" x-text="actionConfirmModal.message"></p>
                 <div x-show="actionConfirmModal.action === 'checkIn'" class="admin-checkin-form mt-4 text-left">
                   <div class="admin-checkin-pets" :class="{ 'admin-checkin-pets-multiple': actionConfirmModal.petSizes.length > 1 }">
                     <template x-for="pet in actionConfirmModal.petSizes" :key="pet.bookingPetId">
@@ -1335,17 +1346,18 @@
                     </div>
                   </template>
                   <div
-                  x-show="actionConfirmModal.action === 'cancel'"
+                  x-show="['cancel', 'cancelPet'].includes(actionConfirmModal.action)"
                   class="mt-4 text-left"
                 >
                   <label
                     for="bookingCancellationReason"
                     class="block text-xs font-bold text-slate-600"
                   >
-                    Reason shared with customer <span class="font-medium text-slate-400">(optional)</span>
+                    Cancellation reason
                   </label>
                   <textarea
                     id="bookingCancellationReason"
+                    :required="['cancel', 'cancelPet'].includes(actionConfirmModal.action)"
                     x-model="actionConfirmModal.cancellationReason"
                     :disabled="actionConfirmModal.busy"
                     maxlength="500"
@@ -1368,7 +1380,7 @@
                   :disabled="actionConfirmModal.busy"
                   class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Cancel
+                  <span x-text="actionConfirmModal.action === 'cancelPet' ? 'Keep Pet' : actionConfirmModal.action === 'cancel' ? 'Keep Booking' : 'Cancel'"></span>
                 </button>
                 <button
                   type="button"
@@ -1448,6 +1460,9 @@
                         </span>
                       </summary>
                       <div class="grooming-details-pet-body">
+                      <template x-if="detailsBooking?.status === 'incoming' && canCancelPet(detailsBooking, pet)">
+                        <button type="button" class="grooming-menu-item grooming-menu-danger" @click="confirmCancelPet(detailsBooking, pet); closeDetailsModal()">Cancel Pet</button>
+                      </template>
                       <section class="grooming-details-section">
                         <h5 x-text="groomingSelectionLabels(pet).length ? 'Grooming selections' : 'Grooming'"></h5>
                         <div x-show="groomingSelectionLabels(pet).length">
@@ -1456,7 +1471,7 @@
                           </ul>
                         </div>
                         <dl class="grooming-visit-summary">
-                          <div x-show="detailsBooking?.status !== 'incoming'"><dt>Status</dt><dd x-text="petGroomingStateLabel(pet)"></dd></div>
+                          <div x-show="detailsBooking?.status !== 'incoming' || petGroomingState(pet) === 'cancelled'"><dt>Status</dt><dd x-text="petGroomingStateLabel(pet)"></dd></div>
                           <div x-show="pet.groomingEstimate"><dt>Grooming estimate</dt><dd x-text="getPetEstimateLabel(pet)"></dd></div>
                           <div x-show="['At risk', 'Needs staff action'].includes(getPetWorkloadState(pet))"><dt>Workload</dt><dd x-text="getPetWorkloadState(pet)"></dd></div>
                         </dl>
@@ -1635,7 +1650,7 @@
     ></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <script src="../../scripts/api.js?v=grooming-notes-20260927&release=grooming-pricing-20261006&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/api.js?grooming-cancellation=20261016&v=grooming-notes-20260927&release=grooming-pricing-20261006&auth=session-scope-20261006&clinic=roles-20261010"></script>
     <script src="../../scripts/services/inventory-service.js?v=grooming-products-20260926"></script>
     <script src="../../scripts/components/product-form.js?v=physical-stock-units-20261012"></script>
     <script src="../../scripts/services/app-clock.js?v=service-prices-20260509"></script>
@@ -1654,6 +1669,6 @@
     <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
     <script src="../../scripts/services/grooming-estimate-engine.js?v=20261009"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-refinement-20261016-3"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-cancellation-20261016"></script>
   </body>
 </html>

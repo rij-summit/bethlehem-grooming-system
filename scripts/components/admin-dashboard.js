@@ -354,7 +354,6 @@ function adminDashboard() {
       error: "",
     },
     pendingActions: {},
-    localCancelledBookingIds: [],
     expandedQueuedBookingIds: {},
     expandedInProgressBookingIds: {},
     groomingMenuBookingId: null,
@@ -528,7 +527,7 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab("queued");
           },
-          revertQueued: async ({ booking }) => {
+          undoCheckIn: async ({ booking }) => {
             await API.adminRevertCheckIn(booking.id);
             await this.loadAdminBookings();
             this.setTab("incoming");
@@ -538,10 +537,15 @@ function adminDashboard() {
             await this.loadAdminBookings();
             this.setTab("in-progress");
           },
-          revertInProgress: async ({ booking }) => {
-            await API.adminRevertStartGrooming(booking.id);
+          undoPetStart: async ({ booking }) => {
+            await API.adminUndoPetStart(booking.id, booking.actionPet.bookingPetId ?? booking.actionPet.booking_pet_id ?? booking.actionPet.id);
             await this.loadAdminBookings();
-            this.setTab("queued");
+            this.setTab(this.inProgressList.some((item) => String(item.id) === String(booking.id)) ? "in-progress" : "queued");
+          },
+          cancelPet: async ({ booking, cancellationReason }) => {
+            const response = await API.adminCancelPet(booking.id, booking.actionPet.bookingPetId ?? booking.actionPet.booking_pet_id ?? booking.actionPet.id, cancellationReason);
+            await this.loadAdminBookings();
+            if (response.booking_status === "for_payment") this.setTab("for-payment");
           },
           startPetGrooming: async ({ booking }) => {
             const pet = booking?.actionPet;
@@ -841,7 +845,7 @@ function adminDashboard() {
         icon: "checkIn",
         variant: "primary",
       });
-      this.actionConfirmModal.petSizes = (booking?.pets || []).map((pet) => ({
+      this.actionConfirmModal.petSizes = (booking?.pets || []).filter((pet) => this.petGroomingState(pet) !== "cancelled").map((pet) => ({
         bookingPetId: pet.bookingPetId ?? pet.booking_pet_id ?? pet.id,
         name: pet.petName ?? pet.pet_name ?? pet.name ?? "Pet",
         weight: pet.weight ?? "—",
@@ -889,7 +893,7 @@ function adminDashboard() {
     // Confirms a per-pet start. The selected pet travels with the cloned booking
     // so the shared confirmation modal can continue using its existing contract.
     confirmStartGroomingPet(booking, pet) {
-      if (pet?.isGroomingStarted || this.isGroomerCapacityFull) {
+      if (this.petGroomingState(pet) !== "not_started" || pet?.isGroomingStarted || this.isGroomerCapacityFull) {
         if (this.isGroomerCapacityFull) {
           this.groomerCapacityError = "Groomer capacity is full. Finish a pet before starting another.";
         }
@@ -986,7 +990,7 @@ function adminDashboard() {
 
     hasUnfinishedQueuedPets(booking) {
       const pets = Array.isArray(booking?.pets) ? booking.pets : [];
-      return pets.some((pet) => !this.isPetGroomingFinished(pet));
+      return pets.some((pet) => !this.isPetGroomingFinished(pet) && this.petGroomingState(pet) !== "cancelled");
     },
 
     getWaitingGroomingPets(booking) {
@@ -998,10 +1002,11 @@ function adminDashboard() {
       const explicit = String(
         pet?.groomingState ?? pet?.grooming_state ?? "",
       ).trim().toLowerCase();
-      if (["not_started", "in_progress", "finished"].includes(explicit)) {
+      if (["not_started", "in_progress", "finished", "cancelled"].includes(explicit)) {
         return explicit;
       }
 
+      if (explicit) return explicit;
       if (pet?.isGroomingFinished === true) return "finished";
       if (pet?.isGroomingStarted === true) return "in_progress";
 
@@ -1021,6 +1026,7 @@ function adminDashboard() {
         not_started: "Not started",
         in_progress: "In Progress",
         finished: "Finished",
+        cancelled: "Cancelled",
       }[this.petGroomingState(pet)] || "Not started";
     },
 
@@ -1095,55 +1101,33 @@ function adminDashboard() {
       });
     },
 
-    // Opens a second confirmation before moving a Queued booking back to Incoming in this UI.
-    confirmRevertQueuedBooking(booking) {
-      const ownerName = String(booking?.ownerName || "").trim();
-      this.openActionConfirmModal({
-        action: "revertQueued",
-        booking,
-        title: "Revert to Incoming",
-        message: ownerName
-          ? `Are you sure you want to move ${ownerName}'s appointment back to Incoming?`
-          : "Are you sure you want to move this appointment back to Incoming?",
-        confirmLabel: "Yes, Revert",
-        busyLabel: "Reverting...",
-        icon: "revert",
-        variant: "primary",
-      });
+    confirmUndoCheckIn(booking) {
+      if (!this.shouldShowUndoCheckIn(booking)) return;
+      this.openActionConfirmModal({ action: "undoCheckIn", booking,
+        title: "Undo Check-in", message: "", confirmLabel: "Undo Check-in",
+        busyLabel: "Undoing...", icon: "undo", variant: "primary" });
     },
 
-    // Opens a second confirmation before moving an In-Progress booking back to Queued in this UI.
-    confirmRevertInProgressBooking(booking) {
-      const ownerName = String(booking?.ownerName || "").trim();
-      this.openActionConfirmModal({
-        action: "revertInProgress",
-        booking,
-        title: "Revert to Queued",
-        message: ownerName
-          ? `Are you sure you want to move ${ownerName}'s appointment back to Queued?`
-          : "Are you sure you want to move this appointment back to Queued?",
-        confirmLabel: "Yes, Revert",
-        busyLabel: "Reverting...",
-        icon: "revert",
-        variant: "primary",
-      });
+    confirmUndoPetStart(booking, pet) {
+      if (!this.canUndoPetStart(booking, pet)) return;
+      this.openActionConfirmModal({ action: "undoPetStart", booking: { ...booking, actionPet: pet },
+        title: "Undo Start", message: "", confirmLabel: "Undo Start",
+        busyLabel: "Undoing...", icon: "undo", variant: "primary" });
     },
 
-    // Opens a second confirmation before hiding a booking as cancelled in this UI.
     confirmCancelBooking(booking) {
-      const ownerName = String(booking?.ownerName || "").trim();
-      this.openActionConfirmModal({
-        action: "cancel",
-        booking,
-        title: "Cancel Appointment",
-        message: ownerName
-          ? `Are you sure you want to cancel ${ownerName}'s appointment?`
-          : "Are you sure you want to cancel this appointment?",
-        confirmLabel: "Yes, Cancel",
-        busyLabel: "Cancelling...",
-        icon: "cancel",
-        variant: "danger",
-      });
+      if (!this.shouldShowOwnerCancel(booking)) return;
+      this.openActionConfirmModal({ action: "cancel", booking,
+        title: "Cancel Booking", message: "", confirmLabel: "Cancel Booking",
+        busyLabel: "Cancelling...", icon: "cancel", variant: "danger" });
+    },
+
+    confirmCancelPet(booking, pet) {
+      if (!this.canCancelPet(booking, pet)) return;
+      const title = `Cancel ${pet.petName ?? pet.pet_name ?? pet.name}`;
+      this.openActionConfirmModal({ action: "cancelPet", booking: { ...booking, actionPet: pet },
+        title, message: "", confirmLabel: title,
+        busyLabel: "Cancelling...", icon: "cancel", variant: "danger" });
     },
 
     openActionConfirmModal({
@@ -1204,6 +1188,10 @@ function adminDashboard() {
         return;
       }
 
+      if (["cancel", "cancelPet"].includes(action) && !this.actionConfirmModal.cancellationReason.trim()) {
+        this.actionConfirmModal.error = "Enter a cancellation reason.";
+        return;
+      }
       this.actionConfirmModal.busy = true;
       this.actionConfirmModal.error = "";
 
@@ -1223,10 +1211,10 @@ function adminDashboard() {
             booking,
             this.actionConfirmModal.cancellationReason,
           );
-        } else if (action === "revertQueued") {
-          await this.runBookingAction("revertQueued", booking);
-        } else if (action === "revertInProgress") {
-          await this.runBookingAction("revertInProgress", booking);
+        } else if (action === "undoCheckIn") {
+          await this.runBookingAction("undoCheckIn", booking);
+        } else if (action === "undoPetStart" || action === "cancelPet") {
+          await this.runBookingAction(action, booking, { cancellationReason: this.actionConfirmModal.cancellationReason });
         }
         this.closeActionConfirmModal(true);
       } catch (error) {
@@ -1246,21 +1234,6 @@ function adminDashboard() {
 
     async cancelBooking(booking, cancellationReason = "") {
       await this.runBookingAction("cancel", booking, { cancellationReason });
-    },
-
-    // Legacy local-only fallback used only if a custom integration calls it directly.
-    cancelBookingFrontendOnly(booking) {
-      if (!booking || booking.id === undefined || booking.id === null) {
-        return;
-      }
-
-      this.rememberLocalCancellation(booking.id);
-      this.removeBookingFromLists(booking.id);
-      this.dispatchDashboardEvent("admin-dashboard:booking-cancelled-ui-only", {
-        booking: this.cloneBooking(booking),
-        state: this.getState(),
-      });
-      this.refreshIcons();
     },
 
     // Starts the Queued -> In-Progress transition for a booking.
@@ -1538,27 +1511,27 @@ function adminDashboard() {
       }
 
       if ("incomingList" in nextPayload) {
-        this.incomingList = this.filterLocalCancelledBookings(nextPayload.incomingList);
+        this.incomingList = nextPayload.incomingList;
       }
 
       if ("queuedList" in nextPayload) {
-        this.queuedList = this.filterLocalCancelledBookings(nextPayload.queuedList);
+        this.queuedList = nextPayload.queuedList;
       }
 
       if ("inProgressList" in nextPayload) {
-        this.inProgressList = this.filterLocalCancelledBookings(nextPayload.inProgressList);
+        this.inProgressList = nextPayload.inProgressList;
       }
 
       if ("forPickupList" in nextPayload) {
-        this.forPickupList = this.filterLocalCancelledBookings(nextPayload.forPickupList);
+        this.forPickupList = nextPayload.forPickupList;
       }
 
       if ("forPaymentList" in nextPayload) {
-        this.forPaymentList = this.filterLocalCancelledBookings(nextPayload.forPaymentList);
+        this.forPaymentList = nextPayload.forPaymentList;
       }
 
       if ("releasedList" in nextPayload) {
-        this.releasedList = this.filterLocalCancelledBookings(nextPayload.releasedList);
+        this.releasedList = nextPayload.releasedList;
       }
 
       if (this.detailsModalOpen && this.detailsBooking) {
@@ -2065,7 +2038,7 @@ function adminDashboard() {
 
     getBookingETA(booking) {
       const map = this.petETAs;
-      const entries = (booking.pets || []).filter((pet) => !this.isPetGroomingFinished(pet)).map((pet) => map[String(pet.bookingPetId ?? pet.id ?? "")]).filter(Boolean);
+      const entries = (booking.pets || []).filter((pet) => !this.isPetGroomingFinished(pet) && this.petGroomingState(pet) !== "cancelled").map((pet) => map[String(pet.bookingPetId ?? pet.id ?? "")]).filter(Boolean);
       if (!entries.length) return null;
       if (entries.some((entry) => entry.overdue)) return "Taking longer than estimated";
       if (entries.some((entry) => entry.unavailable)) return "Awaiting groomer availability";
@@ -2145,31 +2118,13 @@ function adminDashboard() {
       this.releasedList    = this.releasedList.filter((item) => String(item.id) !== id);
     },
 
-    rememberLocalCancellation(bookingId) {
-      const id = String(bookingId);
-      if (!this.localCancelledBookingIds.includes(id)) {
-        this.localCancelledBookingIds = [...this.localCancelledBookingIds, id];
-      }
-    },
-
-    isLocallyCancelled(booking) {
-      return this.localCancelledBookingIds.includes(String(booking?.id));
-    },
-
-    filterLocalCancelledBookings(list) {
-      return Array.isArray(list)
-        ? list.filter((booking) => !this.isLocallyCancelled(booking))
-        : [];
-    },
-
     // Maps a frontend action name to the next booking status.
     getNextStatusForAction(actionName, currentStatus) {
       const normalizedCurrentStatus = this.normalizeStatus(currentStatus);
       const actionStatusMap = {
         checkIn: "queued",
-        revertQueued: "incoming",
+        undoCheckIn: "incoming",
         startGrooming: "in-progress",
-        revertInProgress: "queued",
         markDone: "for-payment",
         cancel: "cancelled",
         archive: "archived",
@@ -2509,6 +2464,12 @@ function adminDashboard() {
       return pricing.displayPrice === "Enter price" ? null : pricing.minAmount;
     },
 
+    billableGroomingServices(booking) {
+      const cancelledIds = new Set((booking?.pets || []).filter((pet) => this.petGroomingState(pet) === "cancelled")
+        .map((pet) => String(pet.bookingPetId ?? pet.booking_pet_id ?? pet.id)));
+      return (booking?.services || []).filter((service) => !cancelledIds.has(String(service.bookingPetId ?? service.booking_pet_id)));
+    },
+
     getServicesAvailedTotal(booking = this.detailsBooking) {
       const paymentTotal = parsePaymentNumber(
         booking?.paidAmount ??
@@ -2521,7 +2482,7 @@ function adminDashboard() {
         return paymentTotal;
       }
 
-      const services = Array.isArray(booking?.services) ? booking.services : [];
+      const services = this.billableGroomingServices(booking);
       if (services.length === 0) {
         return null;
       }
@@ -2539,7 +2500,7 @@ function adminDashboard() {
 
     formatServicesAvailedTotal(booking = this.detailsBooking) {
       if (booking?.paid) return this.formatServiceAvailedBounds({ min: this.getServicesAvailedTotal(booking), max: this.getServicesAvailedTotal(booking) });
-      const services = booking?.services || [];
+      const services = this.billableGroomingServices(booking);
       const bounds = services.map((service) => this.getServiceAvailedBounds(service, booking));
       if (!bounds.length || bounds.some((item) => !item || item.min <= 0)) return "Price unavailable";
       return this.formatServiceAvailedBounds({
@@ -2636,15 +2597,37 @@ function adminDashboard() {
         .map(({ pet }) => pet);
     },
 
-    shouldShowOwnerRevert(booking) {
-      const status = this.normalizeStatus(booking?.status);
-      if (status === "queued") return !this.hasStartedGroomingPets(booking);
-      return status === "in-progress" && this.hasStartedGroomingPets(booking)
-        && !(booking.pets || []).some((pet) => this.isPetGroomingFinished(pet));
+    isGroomingPaid(booking) {
+      return Boolean(booking?.paid || booking?.payment);
+    },
+
+    shouldShowUndoCheckIn(booking) {
+      return this.normalizeStatus(booking?.status) === "queued"
+        && !this.isGroomingPaid(booking) && !this.hasStartedGroomingPets(booking)
+        && (booking?.pets || []).every((pet) => ["not_started", "cancelled"].includes(this.petGroomingState(pet)))
+        && !booking?.startedAt && !booking?.completedAt;
     },
 
     shouldShowOwnerCancel(booking) {
-      return ["queued", "in-progress"].includes(this.normalizeStatus(booking?.status));
+      return ["incoming", "queued"].includes(this.normalizeStatus(booking?.status))
+        && !this.isGroomingPaid(booking) && !this.hasStartedGroomingPets(booking)
+        && (booking?.pets || []).every((pet) => ["not_started", "cancelled"].includes(this.petGroomingState(pet)))
+        && !booking?.startedAt && !booking?.completedAt;
+    },
+
+    canCancelPet(booking, pet) {
+      return ["incoming", "queued", "in-progress"].includes(this.normalizeStatus(booking?.status))
+        && !this.isGroomingPaid(booking) && !booking?.completedAt
+        && ((booking?.pets || []).filter((item) => this.petGroomingState(item) !== "cancelled").length > 1
+          || ((booking?.pets || []).length > 1 && this.hasStartedGroomingPets(booking)))
+        && this.petGroomingState(pet) === "not_started"
+        && !this.isPetGroomingStarted(pet) && !this.isPetGroomingFinished(pet);
+    },
+
+    canUndoPetStart(booking, pet) {
+      return ["queued", "in-progress"].includes(this.normalizeStatus(booking?.status))
+        && !this.isGroomingPaid(booking) && !booking?.completedAt
+        && this.isPetGroomingInProgress(pet) && !this.isPetGroomingFinished(pet);
     },
 
     formatPetQueueNumber(pet, petIndex = 0) {
@@ -3344,7 +3327,7 @@ function adminDashboard() {
     },
 
     buildPaymentBreakdown(booking, paymentOptions = {}) {
-      const pets = this.normalizePaymentPets(booking);
+      const pets = this.normalizePaymentPets(booking).filter((pet) => pet.groomingState !== "cancelled");
       const services = this.normalizePaymentServices(booking?.services);
       /*
        * Backend handoff:
