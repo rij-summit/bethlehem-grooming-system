@@ -25,6 +25,9 @@ class Payment extends Model
         'notes',
         'paid_at',
         'processed_by',
+        'payment_provider',
+        'provider_method',
+        'gateway_payment_id',
     ];
 
     protected $casts = [
@@ -67,6 +70,11 @@ class Payment extends Model
     public function booking()
     {
         return $this->belongsTo(Booking::class, 'booking_id', 'booking_id');
+    }
+
+    public function gatewayPayment()
+    {
+        return $this->belongsTo(GatewayPayment::class);
     }
 
     public function products()

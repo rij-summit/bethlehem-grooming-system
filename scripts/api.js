@@ -1807,6 +1807,18 @@ var API = (() => {
     return request("POST", `/admin/bookings/${bookingId}/pay-now`, payload, getAdminToken());
   }
 
+  function createGroomingOnlinePayment(bookingId, payload) {
+    return request("POST", `/admin/bookings/${bookingId}/online-payment`, payload, getAdminToken());
+  }
+
+  function groomingOnlinePaymentStatus(bookingId) {
+    return request("GET", `/admin/bookings/${bookingId}/online-payment`, null, getAdminToken());
+  }
+
+  function cancelGroomingOnlinePayment(bookingId) {
+    return request("DELETE", `/admin/bookings/${bookingId}/online-payment`, null, getAdminToken());
+  }
+
   async function releaseBooking(bookingId) {
     // POST /api/admin/bookings/{id}/release  (protected — admin token)
     // Moves an already-paid for_payment booking to released (To Be Picked Up)
@@ -2254,6 +2266,9 @@ var API = (() => {
     markAllCustomerNotificationsRead,
     // Payments
     processPayment,
+    createGroomingOnlinePayment,
+    groomingOnlinePaymentStatus,
+    cancelGroomingOnlinePayment,
     payNow,
     releaseBooking,
     markPickedUp,

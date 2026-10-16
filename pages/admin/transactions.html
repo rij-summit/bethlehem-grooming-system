@@ -433,12 +433,14 @@
                     <dl class="transaction-line-items transaction-payment">
                       <div><dt>Payment Method</dt><dd x-text="selectedTransaction.paymentMethodLabel || selectedTransaction.paymentMethod || '—'"></dd></div>
                       <div><dt>Amount Due</dt><dd x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></dd></div>
-                      <div><dt>Cash Received</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.amountPaid == null ? '—' : formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
-                      <div><dt>Change</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.changeGiven == null ? '—' : formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
+                      <div x-show="selectedTransaction.paymentMethod !== 'online'"><dt>Cash Received</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.amountPaid == null ? '—' : formatInvoicePeso(selectedTransaction.amountPaid)"></dd></div>
+                      <div x-show="selectedTransaction.paymentMethod !== 'online'"><dt>Change</dt><dd x-text="isClinicPayment(selectedTransaction) && selectedTransaction.changeGiven == null ? '—' : formatInvoicePeso(selectedTransaction.changeGiven)"></dd></div>
+                      <div x-show="selectedTransaction.paymentMethod === 'online' && selectedTransaction.providerMethod"><dt>Provider Method</dt><dd x-text="selectedTransaction.providerMethod"></dd></div>
                       <div x-show="isClinicPayment(selectedTransaction) || selectedTransaction.processedByName"><dt>Processed By</dt><dd x-text="selectedTransaction.processedByName || '—'"></dd></div>
                       <div><dt>Paid At</dt><dd x-text="formatTransactionDate(selectedTransaction)"></dd></div>
                     </dl>
                     <div class="transaction-paid-total"><span>Total Paid</span><strong x-text="formatInvoicePeso(selectedTransaction.finalPrice)"></strong></div>
+                    <p x-show="selectedTransaction.reconciliationReason" x-text="selectedTransaction.reconciliationReason === 'product_stock_conflict' ? 'Payment received. Product stock needs reconciliation. Contact an administrator.' : 'Payment received for an already-paid visit. Contact an administrator.'" class="text-sm text-red-600" role="status"></p>
                     <div x-show="selectedTransaction.notes" class="transaction-notes"><h4>Notes</h4><p x-text="selectedTransaction.notes"></p></div>
                   </section>
                 </div>

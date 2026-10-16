@@ -759,6 +759,7 @@ function adminArchive() {
 
     paymentMethod(booking = this.detailsBooking) {
       const method = booking?.payment?.paymentMethod ?? booking?.payment?.payment_method;
+      if (method === 'online') return 'Online Payment';
       return method ? method.charAt(0).toUpperCase() + method.slice(1) : 'Not recorded';
     },
 

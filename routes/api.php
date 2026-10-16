@@ -31,6 +31,8 @@ use App\Http\Controllers\WalkinController;
 use App\Http\Controllers\GroomingPricingController;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/paymongo/webhook', \App\Http\Controllers\PayMongoWebhookController::class);
+
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::put('/register/pending', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/sign-in', [AuthController::class, 'signIn']);
@@ -169,6 +171,9 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
 
             Route::post('/admin/bookings/{id}/pay', [PaymentController::class, 'store']);
             Route::post('/admin/bookings/{id}/pay-now', [PaymentController::class, 'payNow']);
+            Route::post('/admin/bookings/{id}/online-payment', [PaymentController::class, 'createOnlineCheckout']);
+            Route::get('/admin/bookings/{id}/online-payment', [PaymentController::class, 'onlinePaymentStatus']);
+            Route::delete('/admin/bookings/{id}/online-payment', [PaymentController::class, 'cancelOnlineCheckout']);
             Route::post('/admin/bookings/{id}/release', [PaymentController::class, 'release']);
 
             Route::post('/admin/walk-in/capacity-preview', [WalkinController::class, 'previewCapacity']);

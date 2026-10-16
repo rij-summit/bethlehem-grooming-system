@@ -7,29 +7,31 @@ use App\Models\Booking;
 use App\Models\BookingPet;
 use App\Models\BookingService;
 use App\Models\ClinicAppointment;
-use App\Models\Notification;
+use App\Models\GatewayPayment;
 use App\Models\Payment;
 use App\Models\PosTransaction;
 use App\Services\GroomingPaymentReadinessService;
 use App\Services\GroomingServicePriceResolver;
 use App\Services\GroomingPaymentSettlementService;
 use App\Services\GroomingProductSaleService;
+use App\Services\PayMongoService;
 use App\Support\PaymentAmountLimit;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
 {
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, bool $online = false): array
     {
         $data = $request->validate([
-            'final_price' => 'required|numeric|decimal:0,2|min:0',
-            'amount_paid' => 'nullable|numeric|decimal:0,2|min:0',
-            'payment_method' => 'nullable|in:cash',
+            'final_price' => $online ? 'exclude' : 'required|numeric|decimal:0,2|min:0',
+            'amount_paid' => $online ? 'exclude' : 'nullable|numeric|decimal:0,2|min:0',
+            'payment_method' => $online ? 'nullable|in:online' : 'nullable|in:cash',
             'notes' => 'nullable|string|max:500',
             'service_prices' => 'nullable|array',
             'service_prices.*.booking_service_id' => 'required_with:service_prices|integer',
@@ -42,7 +44,7 @@ class PaymentController extends Controller
             'products.*.quantity' => 'required|integer|min:1|max:99999999',
         ]);
 
-        if ((float) $data['final_price'] > PaymentLimitExceededException::MAX_VALUE) {
+        if ((float) ($data['final_price'] ?? 0) > PaymentLimitExceededException::MAX_VALUE) {
             throw new PaymentLimitExceededException('final price');
         }
 
@@ -205,6 +207,69 @@ class PaymentController extends Controller
         }
     }
 
+    private function prepareGroomingPayment(Booking $booking, array $data, bool $early): array
+    {
+        $summary = null;
+        if ($early) {
+            $bookingPets = $booking->bookingPets()
+                ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
+                ->with('pet:pet_id,pet_name')
+                ->lockForUpdate()
+                ->get();
+            $servicePriceWarnings = $this->updateBookingServicePrices(
+                $booking,
+                $data['service_prices'] ?? [],
+                $bookingPets->pluck('booking_pet_id')->all(),
+                $data['pet_sizes'] ?? [],
+            );
+            $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
+            $serverTotalCents = BookingService::query()
+                ->where('booking_id', $booking->booking_id)
+                ->whereIn('booking_pet_id', $bookingPets->pluck('booking_pet_id'))
+                ->lockForUpdate()
+                ->get(['price_at_booking'])
+                ->sum(fn (BookingService $line) => $this->paymentReadiness()
+                    ->moneyToCents($line->price_at_booking));
+
+            if ($serverTotalCents <= 0) {
+                throw ValidationException::withMessages(['payment' => 'Pay Now requires a positive visit total.']);
+            }
+
+            [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
+            $serverTotal = $this->paymentReadiness()->centsToMoney($serverTotalCents + $productCents);
+        } else {
+            $summary = $this->paymentReadiness()->summarize($booking, true);
+            if (! $summary['payment_ready']) {
+                throw ValidationException::withMessages(['payment' => 'Final payment is unavailable. '.$summary['payment_blocked_reason']]);
+            }
+
+            $finishedBookingPetIds = collect($summary['pets'])
+                ->where('payment_kind', 'finished')
+                ->pluck('booking_pet_id')
+                ->all();
+            $servicePriceWarnings = $this->updateBookingServicePrices(
+                $booking,
+                $data['service_prices'] ?? [],
+                $finishedBookingPetIds,
+                $data['pet_sizes'] ?? [],
+            );
+            $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
+
+            $summary = $this->paymentReadiness()->summarize($booking, true);
+            [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
+            $serverTotal = $this->paymentReadiness()->centsToMoney(
+                $this->paymentReadiness()->moneyToCents($summary['final_booking_total']) + $productCents,
+            );
+        }
+        if ((float) $serverTotal > PaymentLimitExceededException::MAX_VALUE) {
+            throw new PaymentLimitExceededException('final price');
+        }
+        if ($this->paymentReadiness()->moneyToCents($serverTotal) <= 0) {
+            throw ValidationException::withMessages(['payment' => 'A grooming payment requires a positive total.']);
+        }
+        return compact('serverTotal', 'summary', 'productLines', 'servicePriceWarnings');
+    }
+
     public function store(Request $request, $bookingId)
     {
         $data = $this->validatePayload($request);
@@ -224,62 +289,19 @@ class PaymentController extends Controller
                     return $this->transactionError('This visit has already been paid.', 409);
                 }
 
-                $summary = $this->paymentReadiness()->summarize($booking, true);
-                if (! $summary['payment_ready']) {
-                    return $this->transactionError(
-                        'Final payment is unavailable. '.$summary['payment_blocked_reason'],
-                        422,
-                    );
-                }
-
-                $finishedBookingPetIds = collect($summary['pets'])
-                    ->where('payment_kind', 'finished')
-                    ->pluck('booking_pet_id')
-                    ->all();
-                $servicePriceWarnings = $this->updateBookingServicePrices(
-                    $booking,
-                    $data['service_prices'] ?? [],
-                    $finishedBookingPetIds,
-                    $data['pet_sizes'] ?? [],
-                );
-                $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
-
-                $summary = $this->paymentReadiness()->summarize($booking, true);
-                [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
-                $serverTotal = $this->paymentReadiness()->centsToMoney(
-                    $this->paymentReadiness()->moneyToCents($summary['final_booking_total']) + $productCents,
-                );
+                GatewayPayment::assertGroomingUnlocked($booking);
+                ['serverTotal' => $serverTotal, 'summary' => $summary, 'productLines' => $productLines,
+                    'servicePriceWarnings' => $servicePriceWarnings] = $this->prepareGroomingPayment($booking, $data, false);
                 $this->validateSubmittedTotal($data['final_price'], $serverTotal);
                 [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
                     $data,
                     $serverTotal,
                 );
-                $payment = $this->paymentSettlement()->recordPaidPayment(
-                    $booking,
-                    $serverTotal,
-                    $amountTendered,
-                    $paymentMethod,
-                    $notes,
-                    $request->user()?->user_id,
+                $settled = $this->paymentSettlement()->settle(
+                    $booking, $serverTotal, $amountTendered, $paymentMethod, $notes,
+                    $request->user(), false, $productLines,
                 );
-                if ($productLines !== []) {
-                    $this->productSales()->record($payment, $request->user(), $productLines);
-                }
-
-                $booking->update([
-                    'status' => 'released',
-                    'paid' => true,
-                    'total_amount' => $serverTotal,
-                    'archived_at' => null,
-                ]);
-
-                Notification::create([
-                    'type' => 'payment_confirmed',
-                    'booking_id' => $booking->booking_id,
-                    'message' => "Payment received for visit {$booking->booking_reference}.",
-                    'is_read' => false,
-                    'created_at' => $payment->paid_at ?? now(),
-                ]);
+                $payment = $settled['payment'];
 
                 return compact('booking', 'payment', 'summary', 'productLines', 'servicePriceWarnings');
             });
@@ -304,7 +326,7 @@ class PaymentController extends Controller
             'final_price' => $payment->total_amount,
             'amount_paid' => $payment->amount_tendered,
             'payment_method' => $payment->payment_method,
-            'payment_method_label' => ucfirst((string) $payment->payment_method),
+            'payment_method_label' => $payment->payment_method === 'online' ? 'Online Payment' : ucfirst((string) $payment->payment_method),
             'paid_at' => Carbon::parse($payment->paid_at)->format('M j, Y g:i A'),
             'payment_summary' => $result['summary'],
             'product_addons' => $this->formatProductLines($result['productLines']),
@@ -334,70 +356,19 @@ class PaymentController extends Controller
                     return $this->transactionError('This visit has already been paid.', 409);
                 }
 
-                $bookingPets = $booking->bookingPets()
-                    ->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED)
-                    ->with('pet:pet_id,pet_name')
-                    ->lockForUpdate()
-                    ->get();
-                $servicePriceWarnings = $this->updateBookingServicePrices(
-                    $booking,
-                    $data['service_prices'] ?? [],
-                    $bookingPets->pluck('booking_pet_id')->all(),
-                    $data['pet_sizes'] ?? [],
-                );
-                $this->updateBookingPetConfirmedSizes($booking, $data['pet_sizes'] ?? []);
-                $serverTotalCents = BookingService::query()
-                    ->where('booking_id', $booking->booking_id)
-                    ->whereIn('booking_pet_id', $bookingPets->pluck('booking_pet_id'))
-                    ->lockForUpdate()
-                    ->get(['price_at_booking'])
-                    ->sum(fn (BookingService $line) => $this->paymentReadiness()
-                        ->moneyToCents($line->price_at_booking));
-
-                if ($serverTotalCents <= 0) {
-                    return $this->transactionError('Pay Now requires a positive visit total.', 422);
-                }
-
-                [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
-                $serverTotal = $this->paymentReadiness()->centsToMoney($serverTotalCents + $productCents);
+                GatewayPayment::assertGroomingUnlocked($booking);
+                ['serverTotal' => $serverTotal, 'productLines' => $productLines,
+                    'servicePriceWarnings' => $servicePriceWarnings] = $this->prepareGroomingPayment($booking, $data, true);
                 $this->validateSubmittedTotal($data['final_price'], $serverTotal);
                 [$amountTendered, $paymentMethod, $notes] = $this->resolvePaymentInput(
                     $data,
                     $serverTotal,
                 );
-                $payment = $this->paymentSettlement()->recordPaidPayment(
-                    $booking,
-                    $serverTotal,
-                    $amountTendered,
-                    $paymentMethod,
-                    $notes,
-                    $request->user()?->user_id,
+                $settled = $this->paymentSettlement()->settle(
+                    $booking, $serverTotal, $amountTendered, $paymentMethod, $notes,
+                    $request->user(), true, $productLines,
                 );
-                if ($productLines !== []) {
-                    $this->productSales()->record($payment, $request->user(), $productLines);
-                }
-                $allPetsFinished = $bookingPets->isNotEmpty()
-                    && $bookingPets->every(fn (BookingPet $pet) => $pet->grooming_state === BookingPet::GROOMING_STATE_FINISHED
-                        && $pet->grooming_end_time !== null
-                    );
-                $remainingPets = $bookingPets->count()
-                    - $bookingPets->where('grooming_state', BookingPet::GROOMING_STATE_FINISHED)->count();
-                $updates = ['paid' => true, 'total_amount' => $serverTotal];
-
-                if ($allPetsFinished) {
-                    $updates['status'] = 'released';
-                    $updates['grooming_finished_at'] = $booking->grooming_finished_at ?? now();
-                }
-
-                $booking->update($updates);
-
-                Notification::create([
-                    'type' => 'payment_confirmed',
-                    'booking_id' => $booking->booking_id,
-                    'message' => "Payment received for visit {$booking->booking_reference}.",
-                    'is_read' => false,
-                    'created_at' => $payment->paid_at ?? now(),
-                ]);
+                ['payment' => $payment, 'allPetsFinished' => $allPetsFinished, 'remainingPets' => $remainingPets] = $settled;
 
                 return compact('booking', 'payment', 'allPetsFinished', 'remainingPets', 'productLines', 'servicePriceWarnings');
             });
@@ -430,6 +401,157 @@ class PaymentController extends Controller
             'product_addons' => $this->formatProductLines($result['productLines']),
             'service_price_warnings' => $result['servicePriceWarnings'],
         ]);
+    }
+
+    public function createOnlineCheckout(Request $request, $bookingId)
+    {
+        $provider = app(PayMongoService::class);
+        $provider->assertConfigured();
+        $data = $this->validatePayload($request, true);
+        $flow = $request->validate(['flow' => 'required|in:early,final'])['flow'];
+        // Commit the frozen attempt BEFORE contacting PayMongo. An interrupted/ambiguous
+        // create must remain locked rather than silently creating another chargeable session.
+        $attempt = DB::transaction(function () use ($request, $bookingId, $data, $flow, $provider) {
+            $booking = Booking::whereKey($bookingId)->lockForUpdate()->firstOrFail();
+            if ($this->alreadyPaid($booking)) abort(409, 'This payment has already been completed.');
+            $active = GatewayPayment::forGrooming($booking)->where('status', 'pending')->lockForUpdate()->first();
+            if ($active) return $active;
+            $allowed = $flow === 'early' ? ['checked_in', 'in_progress'] : ['for_payment'];
+            if (! in_array($booking->status, $allowed, true)) {
+                throw ValidationException::withMessages(['payment' => 'This visit is not awaiting this payment.']);
+            }
+            $prepared = $this->prepareGroomingPayment($booking, $data, $flow === 'early');
+            $receiptSummary = $prepared['summary'] ?? $this->paymentReadiness()->summarize($booking, true);
+            if ($flow === 'early') {
+                foreach ($receiptSummary['pets'] as &$pet) {
+                    $pet['final_pet_charge'] = $pet['payment_kind'] === 'cancelled' ? '0.00' : $pet['original_pet_subtotal'];
+                }
+                unset($pet);
+            }
+            $pets = $booking->bookingPets()->orderBy('booking_pet_id')->get(['booking_pet_id', 'confirmed_size', 'registered_size']);
+            foreach ($receiptSummary['pets'] as &$pet) {
+                $size = $pets->firstWhere('booking_pet_id', $pet['booking_pet_id']);
+                $pet['confirmed_size'] = $size?->confirmed_size ?? $size?->registered_size;
+            }
+            unset($pet);
+            $services = $booking->bookingServices()->with(['service', 'bookingPet.pet'])
+                ->whereHas('bookingPet', fn ($q) => $q->where('grooming_state', '!=', BookingPet::GROOMING_STATE_CANCELLED))->get();
+            $products = collect($prepared['productLines'])->map(fn ($line) => [
+                'item_id' => $line['item']->item_id, 'name' => $line['item']->item_name,
+                'quantity' => $line['quantity'], 'priceCents' => $line['priceCents'], 'subtotalCents' => $line['subtotalCents'],
+            ])->all();
+            $lineItems = $services->map(fn ($line) => [
+                'name' => ($line->bookingPet?->pet?->pet_name ?? 'Pet').' · '.($line->service?->service_name ?? 'Grooming add-on'),
+                'amount' => $this->paymentReadiness()->moneyToCents($line->price_at_booking), 'currency' => 'PHP', 'quantity' => 1,
+            ])->all();
+            foreach ($products as $product) $lineItems[] = [
+                'name' => $product['name'], 'amount' => $product['priceCents'], 'currency' => 'PHP', 'quantity' => $product['quantity'],
+            ];
+            $lineItems = array_values(array_filter($lineItems, fn ($line) => $line['amount'] > 0));
+            $totalCents = $this->paymentReadiness()->moneyToCents($prepared['serverTotal']);
+            if (collect($lineItems)->sum(fn ($line) => $line['amount'] * $line['quantity']) !== $totalCents) {
+                throw ValidationException::withMessages(['payment' => 'Refresh the visit prices and try again.']);
+            }
+            return GatewayPayment::create([
+                'provider' => 'paymongo', 'payable_type' => $booking->getMorphClass(), 'payable_id' => $booking->getKey(),
+                'context' => 'grooming', 'flow' => $flow, 'reference' => 'BTH-'.Str::uuid(),
+                'amount' => $prepared['serverTotal'], 'currency' => 'PHP', 'status' => 'pending',
+                'livemode' => $provider->livemode(), 'initiated_by' => $request->user()?->user_id,
+                'snapshot' => [
+                    'services' => $services->map->only(['booking_service_id', 'booking_pet_id', 'service_id', 'addon_id', 'price_at_booking'])->all(),
+                    'pet_sizes' => $pets->toArray(), 'products' => $products, 'line_items' => $lineItems,
+                    'total' => $prepared['serverTotal'], 'summary' => $receiptSummary, 'notes' => $data['notes'] ?? null,
+                ],
+                'reconciliation_reason' => 'checkout_creation_unconfirmed',
+            ]);
+        });
+
+        // Only the request that created the attempt may submit it to PayMongo.
+        if ($attempt->wasRecentlyCreated) {
+            DB::transaction(function () use ($attempt, $provider) {
+                $attempt = GatewayPayment::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+                $response = $provider->createCheckout([
+                    'line_items' => $attempt->snapshot['line_items'],
+                    'payment_method_types' => array_values(array_filter(array_map('trim', config('services.paymongo.payment_methods')))),
+                    'reference_number' => $attempt->reference, 'pass_on_fees' => false,
+                    'success_url' => config('services.paymongo.return_url'), 'cancel_url' => config('services.paymongo.return_url'),
+                    'show_line_items' => true,
+                    'metadata' => ['gateway_payment_id' => (string) $attempt->id, 'booking_id' => (string) $attempt->payable_id, 'context' => 'grooming'],
+                ]);
+                $session = $response['data'] ?? [];
+                $url = data_get($session, 'attributes.checkout_url');
+                if ($response['ok'] && ! empty($session['id']) && is_string($url)
+                    && parse_url($url, PHP_URL_SCHEME) === 'https' && parse_url($url, PHP_URL_HOST) === 'checkout.paymongo.com'
+                    && data_get($session, 'attributes.livemode') === $attempt->livemode) {
+                    $attempt->update(['checkout_session_id' => $session['id'], 'checkout_url' => $url, 'reconciliation_reason' => null]);
+                } elseif (! $response['ok'] && ! $response['uncertain']) {
+                    $attempt->update(['status' => 'failed', 'reconciliation_reason' => null]);
+                } elseif (! empty($session['id'])) {
+                    $attempt->update(['checkout_session_id' => $session['id']]);
+                }
+            });
+        }
+        $attempt->refresh();
+        if (! $attempt->checkout_url) {
+            return response()->json(['success' => false, 'message' => 'Unable to create online payment. Try again.'], 502);
+        }
+        return response()->json($this->onlinePaymentResponse($attempt));
+    }
+
+    public function onlinePaymentStatus($bookingId)
+    {
+        $booking = Booking::findOrFail($bookingId);
+        $attempt = GatewayPayment::forGrooming($booking)->latest('id')->first();
+        return response()->json($attempt ? $this->onlinePaymentResponse($attempt) : ['success' => true, 'online_payment' => null]);
+    }
+
+    public function cancelOnlineCheckout($bookingId)
+    {
+        return DB::transaction(function () use ($bookingId) {
+            $booking = Booking::whereKey($bookingId)->lockForUpdate()->firstOrFail();
+            $attempt = GatewayPayment::forGrooming($booking)->latest('id')->lockForUpdate()->first();
+            if (! $attempt) return response()->json(['success' => true, 'online_payment' => null]);
+            if ($attempt->status === 'paid' || $this->alreadyPaid($booking)) abort(409, 'This payment has already been completed.');
+            if ($attempt->status !== 'pending') return response()->json($this->onlinePaymentResponse($attempt));
+            if (! $attempt->checkout_session_id) {
+                throw ValidationException::withMessages(['payment' => 'Checkout creation needs reconciliation. Contact an administrator.']);
+            }
+            $provider = app(PayMongoService::class);
+            $result = $provider->expireCheckout($attempt->checkout_session_id);
+            if (! $result['ok']) $result = $provider->retrieveCheckout($attempt->checkout_session_id);
+            $session = $result['data'] ?? [];
+            $hasPayment = collect(data_get($session, 'attributes.payments', []))->contains(fn ($p) =>
+                in_array(data_get($p, 'attributes.status'), ['paid', 'pending', 'processing'], true));
+            if (! $result['ok'] || ($session['id'] ?? null) !== $attempt->checkout_session_id
+                || data_get($session, 'attributes.status') !== 'expired' || $hasPayment) {
+                throw ValidationException::withMessages(['payment' => 'Online payment is still pending.']);
+            }
+            $attempt->update(['status' => 'cancelled', 'reconciliation_reason' => null]);
+            return response()->json($this->onlinePaymentResponse($attempt));
+        });
+    }
+
+    private function onlinePaymentResponse(GatewayPayment $attempt): array
+    {
+        $response = ['success' => true, 'online_payment' => [
+            'id' => $attempt->id, 'status' => $attempt->status, 'amount' => $attempt->amount,
+            'checkout_url' => $attempt->checkout_url, 'flow' => $attempt->flow,
+            'reconciliation_reason' => $attempt->reconciliation_reason,
+        ]];
+        if ($attempt->status === 'paid') {
+            $booking = Booking::findOrFail($attempt->payable_id);
+            $response['payment'] = [
+                'final_price' => $attempt->amount, 'amount_paid' => null, 'change' => null,
+                'payment_method' => 'online', 'payment_method_label' => 'Online Payment',
+                'paid_at' => $attempt->paid_at?->format('M j, Y g:i A'), 'booking_status' => $booking->status,
+                'all_pets_finished' => $booking->status === 'released', 'payment_summary' => $attempt->snapshot['summary'],
+                'notes' => $attempt->snapshot['notes'],
+                'product_addons' => collect($attempt->snapshot['products'])->map(fn ($line) => [
+                    'itemName' => $line['name'], 'quantity' => $line['quantity'], 'subtotal' => $line['subtotalCents'] / 100,
+                ])->all(),
+            ];
+        }
+        return $response;
     }
 
     /** Move an already-paid legacy For Payment booking into To Be Picked Up. */
@@ -570,7 +692,7 @@ class PaymentController extends Controller
         $dateTotals = (clone $combined)->whereIn(DB::raw($dateGroup), $rows->pluck('paid_at')->map(fn ($at) => $at ? substr($at, 0, 10) : 'unknown')->unique())
             ->selectRaw("{$dateGroup} as date_key, SUM(total_amount) as total")
             ->groupByRaw($dateGroup)->pluck('total', 'date_key');
-        $payments = Payment::with(['booking.user', 'products', 'processedBy'])
+        $payments = Payment::with(['booking.user', 'products', 'processedBy', 'gatewayPayment'])
             ->whereKey($rows->where('transaction_type', 'grooming_payment')->pluck('transaction_id'))->get()->keyBy($paymentKey);
         $sales = PosTransaction::with(['items.item', 'cashier'])
             ->whereKey($rows->where('transaction_type', 'product_sale')->pluck('transaction_id'))->get()->keyBy('pos_id');
@@ -640,14 +762,24 @@ class PaymentController extends Controller
     private function formatTransaction(Payment $payment): array
     {
         $booking = $payment->booking;
-        $summary = $booking
+        $gateway = $payment->gatewayPayment;
+        $summary = $gateway?->snapshot['summary'] ?? ($booking
             ? $this->paymentReadiness()->summarize($booking)
-            : ['pets' => []];
+            : ['pets' => []]);
         $pets = collect($summary['pets'] ?? []);
         $petName = $pets->pluck('pet_name')->filter()->implode(', ') ?: '—';
         $serviceLabel = $pets->flatMap(fn (array $pet) => $pet['service_breakdown'] ?? [])
             ->pluck('label')->filter()->unique()->implode(', ') ?: 'Grooming';
-        $productTotal = (float) $payment->products->sum('subtotal');
+        $productAddons = $gateway
+            ? collect($gateway->snapshot['products'])->map(fn ($line) => [
+                'itemName' => $line['name'], 'quantity' => $line['quantity'],
+                'priceAtSale' => $line['priceCents'] / 100, 'subtotal' => $line['subtotalCents'] / 100,
+            ])->values()
+            : $payment->products->map(fn ($line) => [
+                'itemName' => $line->item_name, 'quantity' => $line->quantity,
+                'priceAtSale' => (float) $line->price_at_sale, 'subtotal' => (float) $line->subtotal,
+            ])->values();
+        $productTotal = (float) $productAddons->sum('subtotal');
 
         return [
             'id' => $payment->getKey(),
@@ -663,10 +795,13 @@ class PaymentController extends Controller
             'petName' => $petName,
             'serviceLabel' => $serviceLabel,
             'finalPrice' => (float) $payment->total_amount,
-            'amountPaid' => (float) $payment->amount_tendered,
-            'changeGiven' => (float) $payment->change_amount,
+            'amountPaid' => $gateway ? null : (float) $payment->amount_tendered,
+            'changeGiven' => $gateway ? null : (float) $payment->change_amount,
             'paymentMethod' => $payment->payment_method,
-            'paymentMethodLabel' => ucfirst((string) $payment->payment_method),
+            'paymentProvider' => $payment->payment_provider,
+            'providerMethod' => $payment->provider_method,
+            'reconciliationReason' => $gateway?->reconciliation_reason,
+            'paymentMethodLabel' => $payment->payment_method === 'online' ? 'Online Payment' : ucfirst((string) $payment->payment_method),
             'notes' => $payment->notes,
             'paidAt' => $payment->paid_at?->format('Y-m-d H:i:s'),
             'paidAtFormatted' => $payment->paid_at?->format('g:i A') ?? '—',
@@ -674,12 +809,7 @@ class PaymentController extends Controller
             'paymentSummary' => $summary,
             'groomingServicesTotal' => round((float) $payment->total_amount - $productTotal, 2),
             'productAddonsTotal' => $productTotal,
-            'productAddons' => $payment->products->map(fn ($line) => [
-                'itemName' => $line->item_name,
-                'quantity' => $line->quantity,
-                'priceAtSale' => (float) $line->price_at_sale,
-                'subtotal' => (float) $line->subtotal,
-            ])->values(),
+            'productAddons' => $productAddons,
         ];
     }
 

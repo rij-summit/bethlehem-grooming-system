@@ -734,6 +734,7 @@ class AdminBookingController extends Controller
 
     private function assertUnpaidCorrection(Booking $booking): void
     {
+        \App\Models\GatewayPayment::assertGroomingUnlocked($booking);
         if ($booking->hasSuccessfulPayment()) {
             throw ValidationException::withMessages(['booking' => 'Paid grooming visits cannot be cancelled or undone.']);
         }
