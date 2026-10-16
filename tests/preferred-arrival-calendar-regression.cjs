@@ -69,7 +69,7 @@ async function checkCalendar(service) {
   assert.equal(get('timeSlots').children[1].disabled, false);
   windows[1].is_cutoff = true;
   await context.refreshBookingCalendar();
-  assert.equal(get('timeSlots').children[1].disabled, true, 'API cutoff restrictions remain.');
+  assert.equal(get('timeSlots').children[1].disabled, false, 'Legacy cutoff flags no longer restrict arrival windows.');
   status.blocked_dates = [{ start_date: '2026-10-10', end_date: '2026-10-10' }];
   await context.refreshBookingCalendar();
   assert.equal(date(10).disabled, true, 'Closure dates remain disabled.');
@@ -79,7 +79,7 @@ async function checkCalendar(service) {
   status.stopped_today = false;
   currentTime = new Date('2026-10-09T06:01:00Z');
   await context.refreshBookingCalendar();
-  assert.equal(date(9).disabled, true, 'Same-day cutoff remains.');
+  assert.equal(date(9).disabled, false, 'Legacy same-day cutoff no longer disables the date.');
 }
 
 (async () => {

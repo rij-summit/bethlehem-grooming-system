@@ -213,6 +213,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->string('booking_reference');
             $table->unsignedInteger('user_id');
             $table->unsignedInteger('window_id')->nullable();
+            $table->time('arrival_end_time')->nullable();
             $table->date('booking_date');
             $table->unsignedTinyInteger('number_of_pets')->default(1);
             $table->string('status');
@@ -233,6 +234,12 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             $table->text('message');
             $table->boolean('is_read')->default(false);
             $table->dateTime('created_at')->nullable();
+        });
+
+        Schema::create('payments', function (Blueprint $table) {
+            $table->increments('payment_id');
+            $table->unsignedInteger('booking_id');
+            $table->string('payment_status');
         });
 
         Schema::create('booking_pets', function (Blueprint $table) {
@@ -268,6 +275,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('services');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('notifications');
+        Schema::dropIfExists('payments');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('time_windows');
         Schema::dropIfExists('clinic_settings');
@@ -1759,9 +1767,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->getJson('/api/clinic/status')
             ->assertOk()
             ->assertJsonPath('availability.clinic.operating_hours_label', '9:00 AM – 6:00 PM')
-            ->assertJsonPath('availability.clinic.pre_registration_cutoff_label', '3:00 PM')
+            ->assertJsonMissingPath('availability.clinic.pre_registration_cutoff_label')
             ->assertJsonPath('availability.grooming.operating_hours_label', '8:00 AM – 4:00 PM')
-            ->assertJsonPath('availability.grooming.pre_registration_cutoff_label', '1:00 PM');
+            ->assertJsonMissingPath('availability.grooming.pre_registration_cutoff_label');
     }
 
     public function test_admin_can_add_list_and_remove_blocked_dates(): void
@@ -1803,25 +1811,24 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('availability.clinic.open_time', '08:00')
             ->assertJsonPath('availability.clinic.close_time', '17:00')
-            ->assertJsonPath('availability.clinic.pre_registration_cutoff_time', '14:00')
+            ->assertJsonMissingPath('availability.clinic.pre_registration_cutoff_time')
             ->assertJsonPath('availability.grooming.operating_hours_label', '8:00 AM – 5:00 PM');
 
         $this->patchJson('/api/admin/clinic/settings/availability', [
             'service' => 'clinic',
             'open_time' => '09:00',
             'close_time' => '18:00',
-            'pre_registration_cutoff_time' => '15:30',
         ])
             ->assertOk()
             ->assertJsonPath('message', 'Clinic availability updated.')
             ->assertJsonPath('availability.clinic.operating_hours_label', '9:00 AM – 6:00 PM')
-            ->assertJsonPath('availability.clinic.pre_registration_cutoff_label', '3:30 PM')
+            ->assertJsonMissingPath('availability.clinic.pre_registration_cutoff_label')
             ->assertJsonPath('availability.grooming.open_time', '08:00');
 
         $storedSettings = DB::table('clinic_settings')->where('id', 1)->first();
         $this->assertSame('09:00', substr($storedSettings->clinic_open_time, 0, 5));
         $this->assertSame('18:00', substr($storedSettings->clinic_close_time, 0, 5));
-        $this->assertSame('15:30', substr($storedSettings->clinic_prereg_cutoff_time, 0, 5));
+        $this->assertSame('14:00', substr($storedSettings->clinic_prereg_cutoff_time, 0, 5));
         $this->assertSame('08:00', substr($storedSettings->grooming_open_time, 0, 5));
     }
 
@@ -1841,11 +1848,10 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->patchJson('/api/admin/clinic/settings/availability', [
             'service' => 'grooming',
             'open_time' => '08:00',
-            'close_time' => '17:00',
-            'pre_registration_cutoff_time' => '18:00',
+            'close_time' => 'invalid',
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('pre_registration_cutoff_time');
+            ->assertJsonValidationErrors('close_time');
     }
 
     public function test_extending_availability_generates_hourly_windows_and_skips_lunch_break(): void
@@ -1887,16 +1893,16 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $groomingResponse = $this->getJson("/api/timeslots?date={$appointmentDate}");
         $groomingResponse
             ->assertOk()
-            ->assertJsonCount(5, 'windows')
-            ->assertJsonPath('windows.4.window_label', '1:00 PM - 2:00 PM');
+            ->assertJsonCount(8, 'windows')
+            ->assertJsonPath('windows.7.window_label', '4:00 PM - 5:00 PM');
 
         $groomingLabels = collect($groomingResponse->json('windows'))
             ->pluck('window_label');
-        $this->assertFalse($groomingLabels->contains('2:00 PM - 3:00 PM'));
-        $this->assertFalse($groomingLabels->contains('3:00 PM - 4:00 PM'));
+        $this->assertTrue($groomingLabels->contains('2:00 PM - 3:00 PM'));
+        $this->assertTrue($groomingLabels->contains('3:00 PM - 4:00 PM'));
     }
 
-    public function test_clinic_timeslots_follow_configured_hours_and_same_day_cutoff(): void
+    public function test_clinic_timeslots_follow_configured_hours_without_same_day_cutoff(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 13:59:00'));
         DB::table('clinic_settings')->insert([
@@ -1922,15 +1928,15 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'windows')
             ->assertJsonPath('windows.0.window_id', 2)
-            ->assertJsonPath('windows.0.is_cutoff', false)
+            ->assertJsonMissingPath('windows.0.is_cutoff')
             ->assertJsonPath('availability.operating_hours_label', '9:00 AM – 11:00 AM');
 
         Carbon::setTestNow(Carbon::parse('2026-07-23 14:01:00'));
 
         $this->getJson('/api/clinic/timeslots?date=2026-07-23')
             ->assertOk()
-            ->assertJsonPath('cutoff_passed', true)
-            ->assertJsonPath('windows.0.is_cutoff', true);
+            ->assertJsonMissingPath('cutoff_passed')
+            ->assertJsonPath('windows.0.is_past', true);
     }
 
     #[DataProvider('clinicArrivalWindowCases')]
@@ -1953,12 +1959,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         }
 
         $availability = $this->getJson('/api/clinic/timeslots?date='.$date)->assertOk();
-        if ($restriction === 'cutoff') {
-            $availability->assertJsonPath('cutoff_passed', true)->assertJsonCount(0, 'windows');
-        } else {
-            $availability->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
-                ->assertJsonPath('windows.0.is_closed', $restriction !== null);
-        }
+        $availability->assertJsonMissingPath('cutoff_passed')
+            ->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
+            ->assertJsonPath('windows.0.is_closed', in_array($restriction, ['blocked_date', 'stop_today'], true));
         $response = $this->postJson('/api/clinic/pre-register', [
             'appointment_date' => $date, 'window_id' => 1, 'pet_id' => 101, 'common_concerns' => ['Routine check-up'],
         ]);
@@ -1986,14 +1989,14 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'inside window' => ['19:05:00', '2026-10-09', null, true],
             'before end' => ['19:59:00', '2026-10-09', null, true],
             'at end' => ['20:00:00', '2026-10-09', null, false],
-            'cutoff during window' => ['19:05:00', '2026-10-09', 'cutoff', false],
+            'legacy cutoff is ignored' => ['19:05:00', '2026-10-09', 'cutoff', true],
             'blocked date' => ['19:05:00', '2026-10-09', 'blocked_date', false],
             'stopped today' => ['19:05:00', '2026-10-09', 'stop_today', false],
             'future date after cutoff' => ['23:00:00', '2026-10-10', null, true],
         ];
     }
 
-    public function test_customer_cannot_submit_same_day_clinic_pre_registration_after_cutoff(): void
+    public function test_customer_can_submit_same_day_clinic_pre_registration_after_legacy_cutoff(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 14:01:00'));
         $this->authenticateAs('customer', 10);
@@ -2005,6 +2008,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'is_archived' => false,
         ]);
 
+        DB::table('time_windows')->where('window_id', 1)->update([
+            'start_time' => '15:00:00', 'end_time' => '16:00:00', 'window_label' => '3:00 PM - 4:00 PM',
+        ]);
         $this->postJson('/api/clinic/pre-register', [
             'common_concerns' => ['Routine check-up'],
             'appointment_date' => '2026-07-23',
@@ -2012,13 +2018,9 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'pet_id' => 101,
             'chief_complaint' => 'Routine wellness consultation',
         ])
-            ->assertUnprocessable()
-            ->assertJsonPath(
-                'message',
-                'Same-day clinic pre-registration closes at 2:00 PM. Please choose another date.',
-            );
+            ->assertCreated();
 
-        $this->assertDatabaseCount('clinic_appointments', 0);
+        $this->assertDatabaseCount('clinic_appointments', 1);
     }
 
     public function test_grooming_timeslots_and_submission_use_grooming_availability(): void
@@ -2048,8 +2050,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertJsonCount(1, 'windows')
             ->assertJsonPath('windows.0.window_id', 2)
             ->assertJsonPath('windows.0.is_past', true)
-            ->assertJsonPath('windows.0.is_cutoff', true)
-            ->assertJsonPath('availability.pre_registration_cutoff_label', '12:00 PM');
+            ->assertJsonMissingPath('windows.0.is_cutoff')
+            ->assertJsonMissingPath('availability.pre_registration_cutoff_label');
 
         $this->authenticateAs('customer', 10);
         DB::table('pets')->insert([
@@ -2073,7 +2075,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'Same-day grooming pre-registration closes at 12:00 PM. Please choose another date.',
+                'That arrival window just ended. Please choose the next available time.',
             );
     }
 

@@ -547,7 +547,7 @@
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#5c7690]">Availability</p>
                       <h3 class="mt-1 text-2xl font-bold text-[#1f3850]">Service Hours &amp; Pre-registration</h3>
-                      <p class="mt-1 text-sm text-slate-500">Configure operating hours and the same-day customer cutoff for each service.</p>
+                      <p class="mt-1 text-sm text-slate-500">Configure operating hours for each service.</p>
                     </div>
 
                     <div class="inline-flex w-full rounded-2xl border border-[#cfe0ee] bg-[#eef5fb] p-1 sm:w-auto" role="group" aria-label="Availability service">
@@ -586,18 +586,17 @@
                         <i :data-lucide="availabilityService === 'clinic' ? 'stethoscope' : 'scissors'" class="h-5 w-5"></i>
                       </div>
                       <div>
-                        <h4 class="font-bold text-[#1f3850]" x-text="`${activeAvailabilityLabel} Availability`"></h4>
-                        <p class="mt-0.5 text-sm text-slate-500" x-text="availabilityService === 'clinic' ? 'Used for clinic visits, walk-ins, and clinic time rules.' : 'Used for grooming schedules and grooming time rules.'"></p>
+                        <h4 class="font-bold text-[#1f3850]" x-text="`${activeAvailabilityLabel} Hours`"></h4>
+                        <p class="mt-0.5 text-sm text-slate-500" x-text="availabilityService === 'clinic' ? 'Used for clinic visits, walk-ins, and clinic time rules.' : 'Same-day availability adjusts automatically based on grooming duration and current workload.'"></p>
                       </div>
                     </div>
 
-                    <dl x-show="isStaff" class="grid gap-4 lg:grid-cols-3">
+                    <dl x-show="isStaff" class="grid gap-4 sm:grid-cols-2">
                       <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Opening Time`"></dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.open_time"></dd></div>
                       <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Closing Time`"></dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.close_time"></dd></div>
-                      <div class="rounded-2xl border border-[#d7e3ef] bg-[#f8fbfe] px-4 py-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Same-day Pre-registration Cutoff</dt><dd class="mt-1 font-bold text-[#1f3850]" x-text="activeAvailability.pre_registration_cutoff_time"></dd></div>
                     </dl>
 
-                    <div x-show="isAdmin" class="grid gap-4 lg:grid-cols-3">
+                    <div x-show="isAdmin" class="grid gap-4 sm:grid-cols-2">
                       <label class="block">
                         <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="`${activeAvailabilityLabel} Opening Time`"></span>
                         <input
@@ -614,19 +613,10 @@
                           class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
                         />
                       </label>
-                      <label class="block">
-                        <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Same-day Pre-registration Cutoff</span>
-                        <input
-                          type="time"
-                          x-model="activeAvailability.pre_registration_cutoff_time"
-                          class="w-full rounded-xl border border-slate-200 bg-[#f8fbfe] px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#315b7e] focus:ring-4 focus:ring-[#315b7e]/10"
-                        />
-                        <span class="mt-1.5 block text-xs text-slate-400">This is the same-day submission deadline and the latest selectable window end.</span>
-                      </label>
                     </div>
 
                     <div class="mt-4 rounded-2xl border border-[#cfe0ee] bg-[#f8fbfe] px-4 py-3 text-sm text-slate-600">
-                      Complete one-hour windows are generated automatically. The 12:00 PM to 1:00 PM break remains unavailable.
+                      The 12:00 PM to 1:00 PM break remains unavailable.
                     </div>
 
                     <p x-show="availabilityError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600" x-text="availabilityError"></p>
@@ -648,7 +638,7 @@
                         class="flex items-center justify-center gap-2 rounded-xl bg-[#315b7e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#284a67] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <i data-lucide="save" class="h-4 w-4"></i>
-                        <span x-text="availabilitySaving ? 'Saving...' : `Save ${activeAvailabilityLabel} Availability`"></span>
+                        <span x-text="availabilitySaving ? 'Saving...' : `Save ${activeAvailabilityLabel} Hours`"></span>
                       </button>
                     </div>
                   </div>
@@ -670,7 +660,7 @@
                 </div>
 
                 <div class="px-5 py-5 lg:px-6">
-                  <div x-show="isAdmin" class="grid gap-4 lg:grid-cols-3">
+                  <div x-show="isAdmin" class="grid gap-4 sm:grid-cols-2">
                     <label class="block">
                       <span class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Start Date</span>
                       <input

@@ -41,15 +41,10 @@ class ClinicWalkinController extends Controller
         $appointmentDate = $data['date'];
         $settings = ClinicSetting::current();
         $availability = $settings->serviceAvailability('clinic');
-        $cutoffPassed = $settings->isSameDayPreRegistrationCutoffPassed(
-            'clinic',
-            $appointmentDate,
-        );
 
         return response()->json([
             'success' => true,
             'date' => $appointmentDate,
-            'cutoff_passed' => $cutoffPassed,
             'availability' => $availability,
             'windows' => $timeWindows->preferredWindows($settings, 'clinic', $appointmentDate),
         ]);
@@ -81,16 +76,6 @@ class ClinicWalkinController extends Controller
 
             $appointmentDate = $data['appointment_date'];
             $settings = ClinicSetting::current();
-
-            if ($settings->isSameDayPreRegistrationCutoffPassed('clinic', $appointmentDate)) {
-                $cutoffLabel = $settings
-                    ->serviceAvailability('clinic')['pre_registration_cutoff_label'];
-
-                return response()->json([
-                    'success' => false,
-                    'message' => "Same-day clinic pre-registration closes at {$cutoffLabel}. Please choose another date.",
-                ], 422);
-            }
 
             $closure = ClinicClosure::query()
                 ->where('is_active', true)
@@ -127,7 +112,7 @@ class ClinicWalkinController extends Controller
             )) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'The selected clinic visit time is not available under the current operating hours and cutoff.',
+                    'message' => 'The selected clinic visit time is not available under the current operating hours.',
                 ], 422);
             }
 

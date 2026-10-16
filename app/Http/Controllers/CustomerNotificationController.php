@@ -209,7 +209,7 @@ class CustomerNotificationController extends Controller
 
         $subject = $this->formatNameList($petNames);
         $isPlural = count($petNames) > 1;
-        $timeLabel = $notification->booking?->timeWindow?->window_label;
+        $timeLabel = $notification->booking?->preferredArrivalWindow()?->window_label;
 
         return match ($notification->type) {
             'grooming_started' => "Great news! {$subject} ".($isPlural ? 'have' : 'has')." Started Grooming. We'll let you know as soon as they're ready for pickup!",

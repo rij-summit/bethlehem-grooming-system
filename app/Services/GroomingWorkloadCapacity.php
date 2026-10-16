@@ -97,35 +97,57 @@ class GroomingWorkloadCapacity
                 match (strtolower((string) $pet->pet?->species)) { 'dog' => 0, 'cat' => 1, default => 2 },
                 $pet->booking_pet_id])
             ->map(fn (BookingPet $pet) => [...$this->job($pet), 'active' => false,
-                'arrival_at' => Carbon::parse($date.' '.$pet->booking->timeWindow->end_time)->timestamp])
+                'arrival_at' => Carbon::parse($date.' '.$pet->booking->preferredArrivalWindow()->end_time)->timestamp,
+                'inclusive_end' => $pet->booking->arrival_end_time !== null])
+            ->filter(fn ($job) => $job['inclusive_end'] ? $job['arrival_at'] >= now()->timestamp : $job['arrival_at'] > now()->timestamp)
             ->filter(fn ($job) => $job['minutes'] > 0)->values()->all();
     }
 
     public function forecastWindows(Collection $windows, string $date, array $arrivals, ClinicSetting $settings, ?int $excludeBookingId = null): Collection
     {
-        $jobs = $date === now()->toDateString() ? $this->liveJobs()->all() : [];
+        $current = now();
+        $jobs = $date === $current->toDateString() ? $this->liveJobs()->all() : [];
         $reserved = $this->reservedJobs($date, $excludeBookingId);
-        return $windows->map(function (array $window) use ($jobs, $reserved, $date, $arrivals, $settings) {
-            $arrival = Carbon::parse($date.' '.$window['end_time']);
-            $future = collect([...$reserved, ...array_map(fn ($job) => [...$job, 'arrival_at' => $arrival->timestamp], $arrivals)])
-                ->sortBy('arrival_at')->values()->all();
-            $forecast = $this->project($jobs, $future, $settings,
-                Carbon::parse($date.' '.$settings->serviceAvailability('grooming')['open_time']));
-            return [...$window, 'is_workload_unavailable' => $arrivals !== [] && ! $forecast['fits'],
-                'workload_message' => $arrivals !== [] && ! $forecast['fits'] ? self::UNAVAILABLE : null];
+        $day = Carbon::parse($date.' '.$settings->serviceAvailability('grooming')['open_time']);
+        return $windows->map(function (array $window) use ($jobs, $reserved, $date, $arrivals, $settings, $current, $day) {
+            $start = Carbon::parse($date.' '.$window['start_time']);
+            $end = Carbon::parse($date.' '.$window['end_time']);
+            $arrival = $current->betweenIncluded($start, $end) ? $current : $start;
+            $fitsAt = function (Carbon $time) use ($jobs, $reserved, $arrivals, $settings, $day): bool {
+                $future = collect([...$reserved, ...array_map(fn ($job) => [...$job, 'arrival_at' => $time->timestamp], $arrivals)])
+                    ->sortBy('arrival_at')->values()->all();
+                return $this->project($jobs, $future, $settings, $day)['fits'];
+            };
+            $unavailable = $arrivals !== [] && ! $fitsAt($arrival);
+            $window['latest_arrival_time'] = null;
+            if ($arrivals !== [] && ! $unavailable && ! $window['is_past'] && ! $window['is_closed']) {
+                // A window has at most 60 minute choices. Reuse the workload snapshot;
+                // scanning also handles lane-order changes around other reservations.
+                $latest = $end->copy();
+                while ($latest->greaterThan($arrival) && ! $fitsAt($latest)) $latest->subMinute();
+                if ($latest->lessThan($arrival)) $latest = $arrival->copy();
+                if ($latest->lessThan($end)) {
+                    $window['end_time'] = $latest->format('H:i:s');
+                    $window['latest_arrival_time'] = $window['end_time'];
+                    $window['window_label'] = $start->equalTo($latest) ? $start->format('g:i A')
+                        : $start->format('g:i A').' - '.$latest->format('g:i A');
+                }
+            }
+            return [...$window, 'is_workload_unavailable' => $unavailable,
+                'workload_message' => $unavailable ? self::UNAVAILABLE : null];
         });
     }
 
     /** Called under DailyPetQueue's shared intake lock; throwing rolls back all submission writes. */
-    public function assertCanReserve(string $date, int $windowId, array $arrivals, ClinicSetting $settings, ?int $excludeBookingId = null): void
+    public function assertCanReserve(string $date, int $windowId, array $arrivals, ClinicSetting $settings, ?int $excludeBookingId = null): array
     {
         $windows = $this->forecastWindows(app(AvailabilityTimeWindowService::class)->preferredWindows($settings, 'grooming', $date),
             $date, $arrivals, $settings, $excludeBookingId);
         $selected = $windows->firstWhere('window_id', $windowId);
-        if ($selected && ! $selected['is_past'] && ! $selected['is_cutoff'] && ! $selected['is_closed']
-            && ! $selected['is_workload_unavailable']) return;
+        if ($selected && ! $selected['is_past'] && ! $selected['is_closed']
+            && ! $selected['is_workload_unavailable']) return $selected;
 
-        $available = $windows->contains(fn ($window) => ! $window['is_past'] && ! $window['is_cutoff']
+        $available = $windows->contains(fn ($window) => ! $window['is_past']
             && ! $window['is_closed'] && ! $window['is_workload_unavailable']);
         $message = $available ? self::WINDOW_UNAVAILABLE : self::DATE_FULL;
         $exception = ValidationException::withMessages(['window_id' => $message]);

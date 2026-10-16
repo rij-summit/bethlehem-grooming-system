@@ -585,7 +585,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
   let rescheduleClinicStatus = {
     stoppedToday: false,
     blockedDates: [],
-    groomingAvailability: null,
   };
 
   const UPCOMING_APPOINTMENT_STATUSES = new Set(["waiting_to_arrive", "waiting"]);
@@ -1142,13 +1141,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
       const data = await API.getTimeslots(date, activeBookingId);
       if (requestId !== rescheduleLoadId) return;
 
-      if (data.cutoff_passed) {
-        const cutoffLabel = data.availability?.pre_registration_cutoff_label || "the configured cutoff time";
-        rescheduleSlotsContainer.innerHTML = '<p class="text-sm text-portal-muted">Choose another date to see available slots.</p>';
-        showRescheduleMessage("error", `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`);
-        return;
-      }
-
       renderSlots(data);
     } catch (error) {
       if (requestId !== rescheduleLoadId) return;
@@ -1219,7 +1211,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
       rescheduleClinicStatus = {
         stoppedToday: Boolean(data.stopped_today),
         blockedDates: Array.isArray(data.blocked_dates) ? data.blocked_dates : [],
-        groomingAvailability: data.availability?.grooming || null,
       };
       rescheduleDate.disabled = false;
     } catch {
@@ -1248,7 +1239,6 @@ function scheduleCustomerDashboardAfterPaint(task) {
     const sameDate = selectedDate === bookingDate;
     const available = windows.filter((window) =>
       !window.is_closed
-      && !window.is_cutoff
       && !isRescheduleSlotPast(window, selectedDate)
       && !isCurrentRescheduleSelection(selectedDate, window.window_id, window.window_label)
     );
@@ -1324,36 +1314,25 @@ function scheduleCustomerDashboardAfterPaint(task) {
       return closure.reason || "The clinic is not accepting grooming pre-registrations on this date.";
     }
 
-    const cutoff = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_time;
-    if (dateKey === today && cutoff && isRescheduleCutoffPassed(cutoff)) {
-      const cutoffLabel = rescheduleClinicStatus.groomingAvailability?.pre_registration_cutoff_label
-        || "the configured cutoff time";
-      return `Same-day grooming pre-registration closed at ${cutoffLabel}. Please choose another date.`;
-    }
-
     return "";
-  }
-
-  function isRescheduleCutoffPassed(cutoff) {
-    const [hours, minutes] = String(cutoff).split(":").map(Number);
-    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
-
-    const currentMinutes = window.AppClock?.currentMinutes?.();
-    if (!Number.isFinite(currentMinutes)) return false;
-
-    return currentMinutes > (hours * 60 + minutes);
   }
 
   function isRescheduleSlotPast(windowData, dateKey) {
     if (windowData.is_past) return true;
     if (dateKey !== getRescheduleTodayKey()) return false;
 
-    const [hours, minutes] = String(windowData.start_time || "").split(":").map(Number);
+    const currentTime = window.AppClock?.now?.();
+    if (currentTime && windowData.end_time) {
+      const end = new Date(`${dateKey}T${windowData.end_time}+08:00`);
+      return windowData.latest_arrival_time ? currentTime > end : currentTime >= end;
+    }
+
+    const [hours, minutes] = String(windowData.end_time || "").split(":").map(Number);
     if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
 
     const currentMinutes = window.AppClock?.currentMinutes?.();
     return Number.isFinite(currentMinutes)
-      && currentMinutes >= (hours * 60 + minutes);
+      && (windowData.latest_arrival_time ? currentMinutes > (hours * 60 + minutes) : currentMinutes >= (hours * 60 + minutes));
   }
 
   function isCurrentRescheduleSelection(dateKey, windowId, windowLabel = null) {

@@ -134,6 +134,7 @@ async function main() {
     readSessionJson: (key) => key === 'bookingSchedule' ? { date: '2026-10-09', window_id: 1 } : null,
     hasRequiredGroomingPreference: () => true,
     goToGroomingStep: (step) => { destination = step; },
+    getBookingDraft: () => ({}),
   });
   vm.runInContext('state.reviewPayload = { items: [] }', review.context);
   await review.context.refreshBookingWorkloadForecast();
@@ -149,6 +150,19 @@ async function main() {
   await review.context.handleConfirmClick();
   assert.equal(destination, null, 'A failed refresh cannot bypass capacity revalidation');
   assert.equal(review.elements.get('confirmBookingBtn').textContent, 'Retry capacity forecast');
+
+  const shortened = { ...slot, window_label: '3:00 PM - 3:30 PM', start_time: '15:00:00',
+    end_time: '15:30:00', latest_arrival_time: '15:30:00' };
+  const partial = await calendar('grooming', '14:33:00', '2026-10-09', null, [shortened]);
+  assert.match(partial.elements.get('timeSlots').children[0].innerHTML, /3:00 PM - 3:30 PM/);
+  assert.equal(JSON.parse(partial.storage.get(partial.key)).end_time, '15:30:00', 'Restoring a selection saves the refreshed range');
+  partial.setTime('15:30:00');
+  await partial.context.refreshBookingCalendar();
+  assert.equal(partial.elements.get('nextStepBtn').disabled, false, 'An arrival completing exactly at closing is allowed');
+  partial.setTime('15:30:01');
+  partial.elements.get('nextStepBtn').listeners.click();
+  assert.equal(partial.elements.get('nextStepBtn').disabled, true, 'One second past the shortened range is too late');
+  assert.equal(partial.storage.has('bookingPets'), true);
 
   for (const service of ['clinic', 'grooming']) {
     for (const [time, available] of [['18:59:00', true], ['19:00:00', true], ['19:05:00', true], ['19:59:00', true], ['20:00:00', false]]) {
@@ -182,13 +196,15 @@ async function main() {
     mixedButtons.forEach((button) => assert.doesNotMatch(button.innerHTML, /Available now/));
     mixedButtons[2].listeners.click();
     assert.equal(JSON.parse(mixed.storage.get(mixed.key))[service === 'clinic' ? 'windowId' : 'window_id'], 3);
-    for (const restriction of ['cutoff', 'closure', 'stop_today']) {
+    for (const restriction of ['closure', 'stop_today']) {
       const run = await calendar(service, '19:05:00', '2026-10-09', restriction);
       assert.equal(run.elements.get('nextStepBtn').disabled, true, `${service}/${restriction}`);
       assert.equal(run.elements.get('timeSlots').children.length, 0);
       assert.equal(run.storage.has('bookingPets'), true);
       if (service === 'clinic') assert.equal(JSON.parse(run.storage.get(run.key)).chiefComplaint, 'Keep these notes');
     }
+    const afterLegacyCutoff = await calendar(service, '19:05:00', '2026-10-09', 'cutoff');
+    assert.equal(afterLegacyCutoff.elements.get('nextStepBtn').disabled, false, `${service} ignores legacy fixed cutoffs`);
     const future = await calendar(service, '23:00:00', '2026-10-10');
     assert.equal(future.elements.get('nextStepBtn').disabled, false);
     assert.doesNotMatch(future.elements.get('timeSlots').children[0].innerHTML, /Available now/);

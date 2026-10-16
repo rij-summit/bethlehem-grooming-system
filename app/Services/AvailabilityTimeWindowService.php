@@ -104,7 +104,6 @@ class AvailabilityTimeWindowService
     public function preferredWindows(ClinicSetting $settings, string $service, string $date): Collection
     {
         $closed = $this->isClosed($date);
-        $cutoff = $settings->isSameDayPreRegistrationCutoffPassed($service, $date);
 
         return $this->availableWindows($settings, $service)->map(fn (TimeWindow $window) => [
             'window_id' => $window->window_id,
@@ -112,7 +111,6 @@ class AvailabilityTimeWindowService
             'start_time' => $window->start_time,
             'end_time' => $window->end_time,
             'is_past' => $this->windowHasEnded($date, $window),
-            'is_cutoff' => $cutoff,
             'is_closed' => $closed,
         ]);
     }
@@ -121,8 +119,7 @@ class AvailabilityTimeWindowService
     {
         if ($this->isClosed($date)
             || ! $window->is_active
-            || ! $settings->isWindowWithinOperatingHours($service, $window->start_time, $window->end_time)
-            || $settings->isSameDayPreRegistrationCutoffPassed($service, $date)) {
+            || ! $settings->isWindowWithinOperatingHours($service, $window->start_time, $window->end_time)) {
             throw ValidationException::withMessages([
                 'window_id' => 'This preferred arrival window is unavailable. Please choose another date or time.',
             ]);

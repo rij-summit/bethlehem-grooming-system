@@ -39,7 +39,7 @@ class PetProfileHistoryService
                 return [
                     'booking_reference' => $booking->booking_reference,
                     'booking_date' => $booking->booking_date,
-                    'arrival_window' => $booking->timeWindow?->window_label,
+                    'arrival_window' => $booking->preferredArrivalWindow()?->window_label,
                     'status' => $this->groomingStatus($booking, $bookingPet),
                     'grooming_started_at' => $bookingPet->grooming_start_time?->format('g:i A'),
                     'grooming_finished_at' => $bookingPet->grooming_end_time?->format('g:i A'),

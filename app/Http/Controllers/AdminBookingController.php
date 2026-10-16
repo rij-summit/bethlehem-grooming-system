@@ -1223,7 +1223,7 @@ class AdminBookingController extends Controller
     {
         $user = $booking->user;
         $walkin = $booking->walkin;
-        $window = $booking->timeWindow;
+        $window = $booking->preferredArrivalWindow();
         $bpets = ($booking->bookingPets ?? collect())
             ->sortBy('booking_pet_id')
             ->values();

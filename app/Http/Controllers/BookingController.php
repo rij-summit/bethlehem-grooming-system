@@ -39,7 +39,6 @@ class BookingController extends Controller
         $date = $request->query('date', Carbon::today()->toDateString());
         $settings = ClinicSetting::current();
         $availability = $settings->serviceAvailability('grooming');
-        $cutoffPassed = $settings->isSameDayPreRegistrationCutoffPassed('grooming', $date);
         $windows = $timeWindows->preferredWindows($settings, 'grooming', $date);
         if ($request->filled('booking_id')) {
             $user = auth('sanctum')->user();
@@ -57,7 +56,6 @@ class BookingController extends Controller
         return response()->json([
             'success' => true,
             'date' => $date,
-            'cutoff_passed' => $cutoffPassed,
             'availability' => $availability,
             'windows' => $windows,
         ]);
@@ -148,16 +146,6 @@ class BookingController extends Controller
             $sedationConsent = $request->boolean('sedation_consent');
             $settings = ClinicSetting::current();
 
-            if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $date)) {
-                $cutoffLabel = $settings
-                    ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
-
-                return response()->json([
-                    'success' => false,
-                    'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
-                ], 422);
-            }
-
             // ── Load selected time window ───────────────────────
             $window = TimeWindow::query()
                 ->whereKey($request->window_id)
@@ -174,7 +162,8 @@ class BookingController extends Controller
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+                    'code' => 'grooming_forecast_unavailable',
+                    'message' => 'This arrival window is unavailable. Please choose another time.',
                 ], 422);
             }
 
@@ -318,7 +307,11 @@ class BookingController extends Controller
             $booking->load('bookingPets.pet');
             $booking->bookingPets->each(fn ($pet) => $pet->setRelation('booking', $booking));
             $arrivalJobs = array_values(array_filter($workload->admissionJobs($booking->bookingPets), fn ($job) => $job['minutes'] > 0));
-            $workload->assertCanReserve($date, (int) $window->window_id, $arrivalJobs, $settings, (int) $booking->booking_id);
+            $selectedArrival = $workload->assertCanReserve($date, (int) $window->window_id, $arrivalJobs, $settings, (int) $booking->booking_id);
+
+            $booking->update(['arrival_end_time' => $selectedArrival['latest_arrival_time']]);
+            $booking->setRelation('timeWindow', $window);
+            $window = $booking->preferredArrivalWindow();
 
             // ── Create notification for admin ─────────────────
             $schedule = $this->notificationScheduleLabel($date, $window);
@@ -544,7 +537,9 @@ class BookingController extends Controller
                 'booking_date' => $b->booking_date,
                 'arrival_time_passed' => $b->status === 'waiting_to_arrive' && ! $b->dropped_off_at
                     && $b->booking_date === now()->toDateString() && $b->timeWindow
-                    && Carbon::parse($b->booking_date.' '.$b->timeWindow->end_time)->lte(now()),
+                    && ($b->arrival_end_time
+                        ? Carbon::parse($b->booking_date.' '.$b->arrival_end_time)->lt(now())
+                        : Carbon::parse($b->booking_date.' '.$b->timeWindow->end_time)->lte(now())),
                 'created_at' => $b->created_at
                     ? Carbon::parse($b->created_at, config('app.timezone'))->toIso8601String()
                     : null,
@@ -561,7 +556,7 @@ class BookingController extends Controller
                 'special_notes' => $b->special_notes,
                 'time_window' => $b->timeWindow ? [
                     'window_id' => $b->timeWindow->window_id,
-                    'window_label' => $b->timeWindow->window_label,
+                    'window_label' => $b->preferredArrivalWindow()->window_label,
                 ] : null,
                 'dropped_off_at' => $b->dropped_off_at
                     ? Carbon::parse($b->dropped_off_at)->format('g:i A')
@@ -649,6 +644,8 @@ class BookingController extends Controller
                 'message' => 'Visit not found.',
             ], 404);
         }
+
+        $booking->setRelation('timeWindow', $booking->preferredArrivalWindow());
 
         return response()->json([
             'success' => true,
@@ -783,16 +780,6 @@ class BookingController extends Controller
                 ], 422);
             }
 
-            if ($settings->isSameDayPreRegistrationCutoffPassed('grooming', $newDate)) {
-                $cutoffLabel = $settings
-                    ->serviceAvailability('grooming')['pre_registration_cutoff_label'];
-
-                return response()->json([
-                    'success' => false,
-                    'message' => "Same-day grooming pre-registration closes at {$cutoffLabel}. Please choose another date.",
-                ], 422);
-            }
-
             $closure = ClinicClosure::query()
                 ->where('is_active', true)
                 ->whereDate('start_date', '<=', $newDate)
@@ -826,7 +813,8 @@ class BookingController extends Controller
             ) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'The selected grooming time is not available under the current operating hours and cutoff.',
+                    'code' => 'grooming_forecast_unavailable',
+                    'message' => 'This arrival window is unavailable. Please choose another time.',
                 ], 422);
             }
 
@@ -835,19 +823,23 @@ class BookingController extends Controller
             $booking->load(['bookingPets.pet', 'bookingServices.service']);
             $booking->bookingPets->each(fn ($pet) => $pet->setRelation('booking', $booking));
             $workload = app(\App\Services\GroomingWorkloadCapacity::class);
-            $workload->assertCanReserve($newDate, (int) $newWindow->window_id,
+            $selectedArrival = $workload->assertCanReserve($newDate, (int) $newWindow->window_id,
                 array_values(array_filter($workload->admissionJobs($booking->bookingPets), fn ($job) => $job['minutes'] > 0)),
                 $settings, (int) $booking->booking_id);
 
             $previousSchedule = $this->notificationScheduleLabel(
                 (string) $booking->booking_date,
-                TimeWindow::query()->find($booking->window_id),
+                $booking->preferredArrivalWindow(),
             );
+            $newWindow = clone $newWindow;
+            $newWindow->end_time = $selectedArrival['end_time'];
+            $newWindow->window_label = $selectedArrival['window_label'];
             $newSchedule = $this->notificationScheduleLabel($newDate, $newWindow);
 
             $booking->update([
                 'booking_date' => $newDate,
                 'window_id' => $request->new_window_id,
+                'arrival_end_time' => $selectedArrival['latest_arrival_time'],
                 'reschedule_count' => $booking->reschedule_count + 1,
                 'status' => 'waiting_to_arrive',
             ]);

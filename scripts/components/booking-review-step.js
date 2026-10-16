@@ -117,7 +117,15 @@ export async function refreshBookingWorkloadForecast() {
   try {
     const forecast = await forecastGroomingWindows(schedule.date);
     const window = forecast.windows.find((item) => String(item.window_id) === String(schedule.window_id));
-    state.workloadUnavailable = Boolean(!window || window.is_workload_unavailable || window.is_closed || window.is_past || window.is_cutoff);
+    state.workloadUnavailable = Boolean(!window || window.is_workload_unavailable || window.is_closed || window.is_past);
+    if (!state.workloadUnavailable && window.window_label) {
+      const scheduleText = formatBookingSchedule(schedule.date, window.window_label);
+      sessionStorage.setItem("bookingSchedule", JSON.stringify({ ...schedule,
+        time: window.window_label, scheduleText, start_time: window.start_time, end_time: window.end_time }));
+      state.bookingDraft = getBookingDraft();
+      renderSummary();
+      saveReviewDraft();
+    }
     elements.reviewActionNotice.classList.remove("hidden");
     elements.reviewActionNotice.textContent = state.workloadUnavailable
       ? "This arrival window is unavailable. Choose another arrival window."

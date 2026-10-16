@@ -55,6 +55,7 @@ class QueuePreRegistrationModelTest extends TestCase
             $table->integer('queue_number')->nullable();
             $table->integer('number_of_pets')->default(1);
             $table->unsignedInteger('window_id')->nullable();
+            $table->time('arrival_end_time')->nullable();
         });
         Schema::create('booking_pets', function (Blueprint $table) {
             $table->increments('booking_pet_id');
@@ -147,7 +148,7 @@ class QueuePreRegistrationModelTest extends TestCase
     {
         $engine = app(\App\Services\GroomingWorkloadCapacity::class);
         $settings = ClinicSetting::current();
-        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00']]);
+        $windows = collect([['window_id' => 1, 'start_time' => '15:00:00', 'end_time' => '16:00:00', 'is_past' => false, 'is_closed' => false]]);
         $arrivals = [['id' => 'arrival-0', 'minutes' => 60, 'active' => false]];
         $before = $engine->forecastWindows($windows, now()->toDateString(), $arrivals, $settings)->all();
         for ($index = 0; $index < 25; $index++) {
@@ -296,7 +297,7 @@ class QueuePreRegistrationModelTest extends TestCase
         $service = app(AvailabilityTimeWindowService::class);
         foreach (['clinic', 'grooming'] as $flow) {
             $windows = $service->preferredWindows(ClinicSetting::current(), $flow, now()->toDateString());
-            $this->assertSame(['08:00:00', '11:00:00', '13:00:00'], $windows->pluck('start_time')->all());
+            $this->assertSame(['08:00:00', '11:00:00', '13:00:00', '16:00:00'], $windows->pluck('start_time')->all());
             $this->assertTrue($windows[0]['is_past']);
             $this->assertFalse($windows[1]['is_past']);
             $this->assertArrayNotHasKey('is_full', $windows[1]);
@@ -306,7 +307,26 @@ class QueuePreRegistrationModelTest extends TestCase
         $this->assertTrue($service->preferredWindows(ClinicSetting::current(), 'clinic', now()->toDateString())[1]['is_closed']);
         $this->assertFalse($service->preferredWindows(ClinicSetting::current(), 'grooming', now()->addDay()->toDateString())[1]['is_closed']);
         Carbon::setTestNow('2026-10-09 14:01:00');
-        $this->assertTrue($service->preferredWindows(ClinicSetting::current(), 'grooming', now()->toDateString())[1]['is_cutoff']);
+        $this->assertFalse($service->preferredWindows(ClinicSetting::current(), 'grooming', now()->toDateString())[3]['is_past']);
+    }
+
+    public function test_cutoff_removal_migration_regenerates_later_windows_and_preserves_the_break(): void
+    {
+        Schema::table('bookings', fn (Blueprint $table) => $table->dropColumn('arrival_end_time'));
+        $migration = require database_path('migrations/2026_10_16_000003_remove_pre_registration_cutoffs.php');
+        $migration->up();
+        $this->assertFalse(Schema::hasColumn('clinic_settings', 'clinic_prereg_cutoff_time'));
+        $this->assertFalse(Schema::hasColumn('clinic_settings', 'grooming_prereg_cutoff_time'));
+        $this->assertTrue(Schema::hasColumn('bookings', 'arrival_end_time'));
+        foreach (['clinic', 'grooming'] as $flow) {
+            $windows = app(AvailabilityTimeWindowService::class)->preferredWindows(ClinicSetting::current(), $flow, now()->toDateString());
+            $this->assertCount(8, $windows);
+            $this->assertSame('16:00:00', $windows->last()['start_time']);
+            $this->assertNotContains('12:00:00', $windows->pluck('start_time')->all());
+        }
+        $migration->down();
+        $this->assertTrue(Schema::hasColumn('clinic_settings', 'clinic_prereg_cutoff_time'));
+        $this->assertFalse(Schema::hasColumn('bookings', 'arrival_end_time'));
     }
 
     #[DataProvider('preferredArrivalBoundaries')]
@@ -341,7 +361,7 @@ class QueuePreRegistrationModelTest extends TestCase
         Carbon::setTestNow('2026-10-09 23:00:00');
         $future = $service->preferredWindows($settings, $flow, '2026-10-10')[0];
         $this->assertFalse($future['is_past']);
-        $this->assertFalse($future['is_cutoff']);
+        $this->assertArrayNotHasKey('is_cutoff', $future);
         $service->assertPreferredArrival($settings, $flow, '2026-10-10', $window);
     }
 
@@ -356,7 +376,7 @@ class QueuePreRegistrationModelTest extends TestCase
         return $cases;
     }
 
-    public function test_cutoff_closures_and_operating_hours_still_override_active_arrival_windows(): void
+    public function test_closures_and_operating_hours_still_override_active_arrival_windows(): void
     {
         Carbon::setTestNow('2026-10-09 19:05:00');
         $service = app(AvailabilityTimeWindowService::class);
@@ -365,7 +385,7 @@ class QueuePreRegistrationModelTest extends TestCase
             'start_time' => '19:00:00', 'end_time' => '20:00:00', 'is_active' => true,
         ]);
         foreach (['clinic', 'grooming'] as $flow) {
-            foreach (['cutoff', 'blocked_date', 'stop_today', 'operating_hours'] as $restriction) {
+            foreach (['blocked_date', 'stop_today', 'operating_hours'] as $restriction) {
                 $settings = ClinicSetting::current();
                 $settings->update([
                     "{$flow}_open_time" => '18:00:00',

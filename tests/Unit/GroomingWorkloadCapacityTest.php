@@ -69,7 +69,7 @@ class GroomingWorkloadCapacityTest extends TestCase
         $this->assertSame('17:00', Carbon::parse($result['projected_last_completion'])->format('H:i'));
     }
 
-    public function test_late_arrival_uses_window_end_and_configured_closing_not_window_start(): void
+    public function test_explicit_late_arrival_uses_configured_closing(): void
     {
         $engine = app(GroomingWorkloadCapacity::class);
         $result = $engine->project([], [$this->job(1, 60)], $this->settings(3), now(), now()->setTime(16, 30));
@@ -125,7 +125,7 @@ class GroomingWorkloadCapacityTest extends TestCase
         foreach ($reservations as &$job) $job['arrival_at'] = now()->setTime(16, 0)->timestamp;
         unset($job);
         $engine->method('reservedJobs')->willReturn($reservations);
-        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00']]);
+        $windows = collect([['window_id' => 1, 'start_time' => '15:00:00', 'end_time' => '16:00:00', 'is_past' => false, 'is_closed' => false]]);
         $result = $engine->forecastWindows($windows, now()->toDateString(),
             [['id' => 'arrival-0', 'minutes' => $minutes, 'active' => false]], $this->settings($groomers));
         $this->assertSame(! $available, $result[0]['is_workload_unavailable']);
@@ -138,13 +138,13 @@ class GroomingWorkloadCapacityTest extends TestCase
         $active = ['id' => 1, 'minutes' => 90, 'active' => true, 'started_at' => '2026-10-09 14:30'];
         $reservation = ['id' => 2, 'minutes' => 60, 'active' => false];
         return [
-            'empty queue fits at closing' => [[], [], 60, 1, true],
-            'empty queue runs past closing' => [[], [], 61, 1, false],
+            'empty queue fits at closing' => [[], [], 120, 1, true],
+            'empty queue runs past closing' => [[], [], 121, 1, false],
             'waiting pet still leaves room' => [[$waiting], [], 30, 1, true],
             'waiting pet pushes past closing' => [[$waiting], [], 31, 1, false],
             'active pet still leaves room' => [[$active], [], 60, 1, true],
             'parallel groomer leaves room' => [[$waiting], [], 60, 2, true],
-            'reservation fills remaining time' => [[], [$reservation], 30, 1, false],
+            'reservation fills remaining time' => [[], [$reservation], 61, 1, false],
             'reservation shares parallel groomers' => [[], [$reservation], 60, 2, true],
         ];
     }
@@ -156,7 +156,7 @@ class GroomingWorkloadCapacityTest extends TestCase
             ->onlyMethods(['liveJobs', 'reservedJobs'])->getMock();
         $engine->method('liveJobs')->willReturnOnConsecutiveCalls(collect(), collect([$this->job(1, 120)]));
         $engine->method('reservedJobs')->willReturn([]);
-        $windows = collect([['window_id' => 1, 'end_time' => '16:00:00', 'is_past' => false, 'is_cutoff' => false, 'is_closed' => false]]);
+        $windows = collect([['window_id' => 1, 'start_time' => '15:00:00', 'end_time' => '16:00:00', 'is_past' => false, 'is_closed' => false, 'is_past' => false, 'is_cutoff' => false, 'is_closed' => false]]);
         $this->mock(AvailabilityTimeWindowService::class)->shouldReceive('preferredWindows')->twice()->andReturn($windows);
         $arrivals = [['id' => 'arrival-0', 'minutes' => 60, 'active' => false]];
         $engine->assertCanReserve(now()->toDateString(), 1, $arrivals, $this->settings());
@@ -166,5 +166,51 @@ class GroomingWorkloadCapacityTest extends TestCase
         } catch (ValidationException $error) {
             $this->assertSame('grooming_forecast_unavailable', $error->response->getData(true)['code']);
         }
+    }
+
+    #[DataProvider('effectiveArrivals')]
+    public function test_windows_project_from_now_or_the_future_start_and_shorten_the_safe_range(
+        string $time, string $date, string $start, string $end, string $close,
+        array $jobs, int $groomers, bool $fits, string $completion, ?string $latest,
+    ): void {
+        Carbon::setTestNow('2026-10-09 '.$time);
+        $projector = app(GroomingWorkloadCapacity::class);
+        $engine = $this->getMockBuilder(GroomingWorkloadCapacity::class)
+            ->setConstructorArgs([app(\App\Services\GroomingTimeEstimate::class), app(\App\Services\OperationalCapacity::class)])
+            ->onlyMethods(['liveJobs', 'reservedJobs', 'project'])->getMock();
+        $engine->method('liveJobs')->willReturn(collect($jobs));
+        $engine->method('reservedJobs')->willReturn([]);
+        $firstProjection = null;
+        $engine->method('project')->willReturnCallback(function (...$arguments) use ($projector, &$firstProjection) {
+            $result = $projector->project(...$arguments);
+            $firstProjection ??= $result;
+            return $result;
+        });
+        $window = ['window_id' => 1, 'start_time' => $start, 'end_time' => $end,
+            'window_label' => 'original', 'is_past' => false, 'is_closed' => false];
+        $result = $engine->forecastWindows(collect([$window]), $date,
+            [['id' => 'arrival-0', 'minutes' => 90, 'active' => false]], $this->settings($groomers, $close))[0];
+        $this->assertSame(! $fits, $result['is_workload_unavailable']);
+        $this->assertSame($completion, Carbon::parse($firstProjection['pets']['arrival-0']['projected_completion'])->format('H:i:s'));
+        $this->assertSame($latest, $result['latest_arrival_time']);
+        if ($latest !== null) $this->assertSame($latest, $result['end_time']);
+        if ($latest === '15:30:00') $this->assertSame('3:00 PM - 3:30 PM', $result['window_label']);
+    }
+
+    public static function effectiveArrivals(): array
+    {
+        $active = ['id' => 1, 'minutes' => 90, 'active' => true, 'started_at' => '2026-10-09 14:00:00'];
+        $waiting = ['id' => 2, 'minutes' => 30, 'active' => false];
+        return [
+            '9:47 uses actual current time' => ['09:47:00', '2026-10-09', '09:00:00', '10:00:00', '17:00', [], 1, true, '11:17:00', null],
+            'later today starts at 3pm' => ['14:33:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [], 1, true, '16:30:00', '15:30:00'],
+            'future day ignores todays clock' => ['23:00:00', '2026-10-10', '15:00:00', '16:00:00', '17:00', [], 1, true, '16:30:00', '15:30:00'],
+            'active window finishes exactly at closing' => ['15:30:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [], 1, true, '17:00:00', '15:30:00'],
+            'one second after safe arrival is rejected' => ['15:30:01', '2026-10-09', '15:00:00', '16:00:00', '17:00', [], 1, false, '17:00:01', null],
+            'current window start cannot hide overtime' => ['15:47:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [], 1, false, '17:17:00', null],
+            'in progress workload finishes at closing' => ['14:33:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [$active], 1, true, '17:00:00', '15:30:00'],
+            'queued and active workload exceeds closing' => ['14:33:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [$active, $waiting], 1, false, '17:30:00', null],
+            'parallel capacity preserves a safe window' => ['14:33:00', '2026-10-09', '15:00:00', '16:00:00', '17:00', [$active, $waiting], 2, true, '16:33:00', '15:30:00'],
+        ];
     }
 }

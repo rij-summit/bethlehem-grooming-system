@@ -27,6 +27,20 @@ async function main() {
   ui.$refs = { pricingDialog: { closest: () => overlay, querySelector: () => controls[1],
     querySelectorAll: () => ui.pricingModal.busy ? [] : controls, focus() { document.activeElement = this; } } };
   ui.showStaffActionToast = (message) => { ui.toast = message; };
+  for (const service of ['clinic', 'grooming']) {
+    ui.selectAvailabilityService(service);
+    assert.equal(Object.hasOwn(ui.activeAvailability, 'pre_registration_cutoff_time'), false);
+    let savedHours;
+    context.API.adminUpdateAvailability = async (payload) => {
+      savedHours = JSON.parse(JSON.stringify(payload));
+      return { availability: { clinic: { open_time: '08:00', close_time: '17:00' },
+        grooming: { open_time: '09:00', close_time: '18:00' } } };
+    };
+    await ui.saveAvailability();
+    assert.deepEqual(Object.keys(savedHours).sort(), ['close_time', 'open_time', 'service']);
+    assert.equal(savedHours.service, service);
+    assert.equal(ui.availabilityError, '');
+  }
   await ui.loadGroomingPrices();
   assert.equal(ui.groomingPrices.length, 10);
   assert.equal(ui.groomingPriceLimits, catalogueResponse.priceLimits);

@@ -151,6 +151,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->unsignedInteger('user_id')->nullable();
             $table->unsignedBigInteger('walkin_id')->nullable();
             $table->unsignedInteger('window_id')->nullable();
+            $table->time('arrival_end_time')->nullable();
             $table->date('booking_date');
             $table->unsignedTinyInteger('number_of_pets')->default(1);
             $table->string('booking_type')->default('online');
@@ -2784,12 +2785,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         }
 
         $availability = $this->getJson('/api/timeslots?date='.$date)->assertOk();
-        if ($restriction === 'cutoff') {
-            $availability->assertJsonPath('cutoff_passed', true)->assertJsonCount(0, 'windows');
-        } else {
-            $availability->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
-                ->assertJsonPath('windows.0.is_closed', $restriction !== null);
-        }
+        $availability->assertJsonMissingPath('cutoff_passed')
+            ->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
+            ->assertJsonPath('windows.0.is_closed', in_array($restriction, ['blocked_date', 'stop_today'], true));
         $response = $this->postJson('/api/booking/store', [
             'booking_date' => $date, 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Mochi', 'species' => 'cat']],
@@ -2818,7 +2816,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'inside window' => ['19:05:00', '2026-10-09', null, true],
             'before end' => ['19:59:00', '2026-10-09', null, true],
             'at end' => ['20:00:00', '2026-10-09', null, false],
-            'cutoff during window' => ['19:05:00', '2026-10-09', 'cutoff', false],
+            'legacy cutoff is ignored' => ['19:05:00', '2026-10-09', 'cutoff', true],
             'blocked date' => ['19:05:00', '2026-10-09', 'blocked_date', false],
             'stopped today' => ['19:05:00', '2026-10-09', 'stop_today', false],
             'future date after cutoff' => ['23:00:00', '2026-10-10', null, true],
@@ -2860,7 +2858,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $payload = ['date' => now()->toDateString(), 'pets' => [['species' => 'dog', 'size' => 'small', 'services' => ['package' => 'partial_grooming']]]];
         $this->postJson('/api/booking/workload-forecast', $payload)->assertOk()
             ->assertJsonPath('windows.0.is_workload_unavailable', true)
-            ->assertJsonPath('windows.0.workload_message', 'Unavailable — not enough grooming time remaining');
+            ->assertJsonPath('windows.0.workload_message', \App\Services\GroomingWorkloadCapacity::UNAVAILABLE);
         $this->authenticateAs('staff');
         $this->patchJson('/api/admin/clinic/settings/groomers-on-duty', ['groomers_on_duty' => 2])->assertOk();
         $this->authenticateAs('customer');
@@ -3041,7 +3039,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ['user_id' => 102, 'first_name' => 'Diego', 'last_name' => 'Reyes', 'role' => 'customer'],
         ]);
         return ['booking_date' => now()->toDateString(), 'window_id' => 2, 'number_of_pets' => 1,
-            'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'services' => ['package' => 'partial_grooming']]]];
+            'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'large', 'services' => ['package' => 'partial_grooming']]]];
     }
 
     public function test_reserved_workload_revalidates_stale_windows_without_reserving_physical_space(): void
@@ -3070,6 +3068,81 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('time_windows')->where('window_id', 1)->update(['is_active' => false]);
         $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
             ->assertJsonPath('date_full', true)->assertJsonPath('message', \App\Services\GroomingWorkloadCapacity::DATE_FULL);
+    }
+
+    #[DataProvider('closingArrivalTimes')]
+    public function test_grooming_submission_uses_server_time_and_maximum_duration(string $time, bool $accepted): void
+    {
+        $payload = $this->prepareReservationDay();
+        DB::table('clinic_settings')->update(['grooming_prereg_cutoff_time' => '08:00:00']);
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $this->postJson('/api/booking/workload-forecast', ['date' => $payload['booking_date'], 'pets' => $payload['pets']])
+            ->assertOk()->assertJsonPath('windows.1.is_workload_unavailable', false)
+            ->assertJsonPath('windows.1.end_time', '15:30:00')
+            ->assertJsonPath('windows.1.window_label', '3:00 PM - 3:30 PM');
+        Carbon::setTestNow('2026-10-16 '.$time);
+        $response = $this->postJson('/api/booking/store', $payload);
+        if (! $accepted) {
+            $response->assertUnprocessable()->assertJsonPath('code', 'grooming_forecast_unavailable');
+            $this->assertDatabaseCount('bookings', 0);
+            $this->assertDatabaseCount('pets', 0);
+            $this->assertDatabaseCount('booking_pets', 0);
+            $this->assertDatabaseCount('notifications', 0);
+            return;
+        }
+        $response->assertCreated()->assertJsonPath('booking.window', '3:00 PM - 3:30 PM');
+        $this->assertDatabaseHas('bookings', ['arrival_end_time' => '15:30:00', 'queue_number' => null]);
+        $this->assertDatabaseHas('booking_pets', ['grooming_estimate_min' => 75, 'grooming_estimate_max' => 90]);
+        $this->getJson('/api/booking/history')->assertOk()->assertJsonPath('bookings.0.time_window.window_label', '3:00 PM - 3:30 PM');
+        $jobs = app(\App\Services\GroomingWorkloadCapacity::class)->reservedJobs('2026-10-16');
+        $this->assertCount(1, $jobs);
+        $this->assertSame('15:30:00', Carbon::createFromTimestamp($jobs[0]['arrival_at'], config('app.timezone'))->format('H:i:s'));
+        Carbon::setTestNow('2026-10-16 15:30:01');
+        $this->assertSame([], app(\App\Services\GroomingWorkloadCapacity::class)->reservedJobs('2026-10-16'));
+    }
+
+    public static function closingArrivalTimes(): array
+    {
+        return ['later today' => ['14:33:00', true], 'inside window' => ['15:20:00', true],
+            'exact closing completion' => ['15:30:00', true], 'one second too late' => ['15:30:01', false]];
+    }
+
+    public function test_submission_revalidates_new_in_progress_and_queued_workload(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Carbon::setTestNow('2026-10-16 14:33:00');
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $this->postJson('/api/booking/workload-forecast', ['date' => $payload['booking_date'], 'pets' => $payload['pets']])
+            ->assertOk()->assertJsonPath('windows.1.is_workload_unavailable', false);
+        DB::table('bookings')->insert(['booking_id' => 999, 'booking_reference' => 'LIVE-999',
+            'booking_date' => '2026-10-16', 'status' => 'in_progress', 'queue_number' => 1]);
+        DB::table('booking_pets')->insert([
+            ['booking_pet_id' => 998, 'booking_id' => 999, 'grooming_state' => 'in_progress',
+                'grooming_start_time' => '2026-10-16 14:00:00', 'grooming_estimate_min' => 75, 'grooming_estimate_max' => 90],
+            ['booking_pet_id' => 999, 'booking_id' => 999, 'grooming_state' => 'not_started',
+                'grooming_start_time' => null, 'grooming_estimate_min' => 15, 'grooming_estimate_max' => 30],
+        ]);
+        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+            ->assertJsonPath('code', 'grooming_forecast_unavailable')->assertJsonValidationErrors('window_id');
+        $this->assertDatabaseCount('bookings', 1);
+        $this->assertDatabaseCount('booking_pets', 2);
+        $this->assertDatabaseCount('pets', 0);
+        $this->assertDatabaseCount('notifications', 0);
+        DB::table('clinic_settings')->update(['groomers_on_duty' => 2]);
+        $this->postJson('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.window', '3:00 PM - 3:30 PM');
+    }
+
+    public function test_submission_returns_to_scheduling_when_operating_hours_change(): void
+    {
+        $payload = $this->prepareReservationDay();
+        Sanctum::actingAs(User::findOrFail(101), ['*']);
+        $this->postJson('/api/booking/workload-forecast', ['date' => $payload['booking_date'], 'pets' => $payload['pets']])
+            ->assertOk()->assertJsonPath('windows.1.is_workload_unavailable', false);
+        DB::table('clinic_settings')->update(['grooming_close_time' => '15:00:00']);
+        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+            ->assertJsonPath('code', 'grooming_forecast_unavailable');
+        $this->assertDatabaseCount('bookings', 0);
+        $this->assertDatabaseCount('pets', 0);
     }
 
     public function test_reservation_expiry_keeps_today_active_and_late_check_in_revalidates_live_workload(): void
@@ -3106,7 +3179,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $payload = $this->prepareReservationDay();
         Sanctum::actingAs(User::findOrFail(101), ['*']);
         $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
-        Carbon::setTestNow('2026-10-16 15:59:00');
+        Carbon::setTestNow('2026-10-16 15:29:00');
         $workload = app(\App\Services\GroomingWorkloadCapacity::class);
         $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
         $this->authenticateAs('staff');
@@ -3122,7 +3195,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         Sanctum::actingAs(User::findOrFail(101), ['*']);
         $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         $workload = app(\App\Services\GroomingWorkloadCapacity::class);
-        Carbon::setTestNow('2026-10-16 15:59:00');
+        Carbon::setTestNow('2026-10-16 15:29:00');
         $this->authenticateAs('staff');
         $walkin = ['pets' => [['pet_name' => 'Luna', 'species' => 'dog', 'size' => 'small',
             'services' => [['service_slug' => 'partial_grooming']]]]];

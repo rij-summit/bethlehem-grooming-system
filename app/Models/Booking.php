@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class Booking extends Model
 {
@@ -18,6 +19,7 @@ class Booking extends Model
         'user_id',
         'walkin_id',
         'window_id',
+        'arrival_end_time',
         'booking_date',
         'number_of_pets',
         'booking_type',
@@ -88,6 +90,20 @@ class Booking extends Model
     public function timeWindow()
     {
         return $this->belongsTo(TimeWindow::class, 'window_id', 'window_id');
+    }
+
+    public function preferredArrivalWindow(): ?TimeWindow
+    {
+        $window = $this->timeWindow;
+        if (! $window || ! $this->arrival_end_time) return $window;
+
+        $window = clone $window;
+        $window->end_time = $this->arrival_end_time;
+        $start = Carbon::parse($window->start_time);
+        $end = Carbon::parse($window->end_time);
+        $window->window_label = $start->equalTo($end) ? $start->format('g:i A')
+            : $start->format('g:i A').' - '.$end->format('g:i A');
+        return $window;
     }
 
     // Booking has many pets

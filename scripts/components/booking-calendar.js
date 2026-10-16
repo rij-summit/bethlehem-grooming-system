@@ -78,6 +78,7 @@ function getManilaNowParts() {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   }).formatToParts(currentDate);
 
@@ -92,6 +93,7 @@ function getManilaNowParts() {
     day: Number(result.day),
     hour: Number(result.hour),
     minute: Number(result.minute),
+    second: Number(result.second),
   };
 }
 
@@ -102,7 +104,7 @@ function getTodayKeyInManila() {
 
 function getCurrentMinutesInManila() {
   const now = getManilaNowParts();
-  return now.hour * 60 + now.minute;
+  return now.hour * 60 + now.minute + now.second / 60;
 }
 
 // =========================
@@ -193,14 +195,6 @@ function updateClinicNotice() {
     elements.clinicNotice.textContent =
       "The clinic is not accepting pre-registrations for today.";
     elements.clinicNotice.classList.remove("hidden");
-  } else if (isSameDayPreRegistrationCutoffPassed(getTodayKeyInManila())) {
-    const availability = getActiveAvailability();
-    const serviceLabel = state.options.service === "clinic" ? "clinic" : "grooming";
-    const cutoffLabel =
-      availability?.pre_registration_cutoff_label || "the configured cutoff time";
-    elements.clinicNotice.textContent =
-      `Same-day ${serviceLabel} pre-registration closed at ${cutoffLabel}. Please choose another date.`;
-    elements.clinicNotice.classList.remove("hidden");
   } else {
     elements.clinicNotice.classList.add("hidden");
   }
@@ -210,8 +204,7 @@ function isDateDisabled(dateKey) {
   return (
     isPastDate(dateKey) ||
     isBeyondBookingWindow(dateKey) ||
-    getClinicBlock(dateKey) !== null ||
-    isSameDayPreRegistrationCutoffPassed(dateKey)
+    getClinicBlock(dateKey) !== null
   );
 }
 
@@ -223,21 +216,12 @@ function isDateDisabled(dateKey) {
  * Parse "HH:MM:SS" time string and return total minutes since midnight.
  */
 function timeStringToMinutes(timeStr) {
-  const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + m;
+  const [h, m, s = 0] = timeStr.split(":").map(Number);
+  return h * 60 + m + s / 60;
 }
 
 function getActiveAvailability() {
   return state.clinicStatus.availability?.[state.options.service] || null;
-}
-
-function isSameDayPreRegistrationCutoffPassed(dateKey) {
-  if (!isToday(dateKey)) return false;
-
-  const cutoff = getActiveAvailability()?.pre_registration_cutoff_time;
-  if (!cutoff) return false;
-
-  return getCurrentMinutesInManila() > timeStringToMinutes(cutoff);
 }
 
 function updateOperatingHoursText() {
@@ -257,12 +241,12 @@ function updateOperatingHoursText() {
  * For today, a preferred arrival window remains available until its end time.
  */
 function isSlotDisabled(slot) {
-  if (slot.is_closed || slot.is_past || slot.is_cutoff || slot.is_workload_unavailable || isDateDisabled(state.selectedDateKey)) return true;
+  if (slot.is_closed || slot.is_past || slot.is_workload_unavailable || isDateDisabled(state.selectedDateKey)) return true;
 
   if (isToday(state.selectedDateKey)) {
     const currentMinutes = getCurrentMinutesInManila();
     const slotEndMinutes = timeStringToMinutes(slot.end_time);
-    if (currentMinutes >= slotEndMinutes) return true;
+    if (slot.latest_arrival_time ? currentMinutes > slotEndMinutes : currentMinutes >= slotEndMinutes) return true;
   }
 
   return false;
@@ -454,7 +438,6 @@ function renderTimeSlots() {
     button.type = "button";
     button.innerHTML = `
       <span class="block font-semibold">${slot.window_label}</span>
-      ${slot.is_cutoff ? '<span class="block text-xs mt-0.5 font-semibold text-amber-600">Cutoff passed</span>' : ""}
       ${slot.is_workload_unavailable ? '<span class="block text-xs mt-0.5 text-slate-600">Unavailable — selected services may run past closing.</span>' : ""}
     `;
 
@@ -478,26 +461,7 @@ function renderTimeSlots() {
           return;
         }
         state.selectedSlot = slot;
-        const scheduleText = formatBookingSchedule(
-          state.selectedDateKey,
-          slot.window_label,
-        );
-
-        const selection = {
-          date: state.selectedDateKey,
-          time: slot.window_label,
-          scheduleText,
-          window_id: slot.window_id,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-        };
-
-        if (typeof state.options.saveSelection === "function") {
-          state.options.saveSelection(selection, slot);
-        } else {
-          // Store schedule including window_id for grooming submission.
-          sessionStorage.setItem("bookingSchedule", JSON.stringify(selection));
-        }
+        saveArrivalSelection(slot);
 
         sessionStorage.removeItem(`${state.options.storageKey}ArrivalError`);
         updateArrivalWindowNotice();
@@ -509,6 +473,22 @@ function renderTimeSlots() {
 
     elements.timeSlots.appendChild(button);
   });
+}
+
+function saveArrivalSelection(slot) {
+  const selection = {
+    date: state.selectedDateKey,
+    time: slot.window_label,
+    scheduleText: formatBookingSchedule(state.selectedDateKey, slot.window_label),
+    window_id: slot.window_id,
+    start_time: slot.start_time,
+    end_time: slot.end_time,
+  };
+  if (typeof state.options.saveSelection === "function") {
+    state.options.saveSelection(selection, slot);
+  } else {
+    sessionStorage.setItem(state.options.storageKey, JSON.stringify(selection));
+  }
 }
 
 function updateSelectedSchedule() {
@@ -644,6 +624,7 @@ export async function refreshBookingCalendar() {
         slot.window_id === (saved?.window_id ?? saved?.windowId) && !isSlotDisabled(slot)
       ) || null;
       if (!state.selectedSlot) clearArrivalSelection();
+      else saveArrivalSelection(state.selectedSlot);
       renderTimeSlots();
     }
   } else if (!state.options.dateOnly) {

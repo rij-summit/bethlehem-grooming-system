@@ -507,7 +507,7 @@ class NotificationController extends Controller
         }
 
         $date = $this->notificationDateLabel($booking->booking_date);
-        $window = $booking->timeWindow?->displayLabel();
+        $window = $booking->preferredArrivalWindow()?->displayLabel();
 
         return $window ? "{$date} at {$window}" : $date;
     }

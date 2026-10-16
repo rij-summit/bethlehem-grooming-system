@@ -6,12 +6,10 @@ function adminSettings() {
     clinic: {
       open_time: "08:00",
       close_time: "17:00",
-      pre_registration_cutoff_time: "14:00",
     },
     grooming: {
       open_time: "08:00",
       close_time: "17:00",
-      pre_registration_cutoff_time: "14:00",
     },
   };
 
@@ -408,9 +406,6 @@ function adminSettings() {
         normalized[service] = {
           open_time: settings.open_time || normalized[service].open_time,
           close_time: settings.close_time || normalized[service].close_time,
-          pre_registration_cutoff_time:
-            settings.pre_registration_cutoff_time ||
-            normalized[service].pre_registration_cutoff_time,
         };
       }
 
@@ -537,8 +532,7 @@ function adminSettings() {
 
       if (
         !settings.open_time ||
-        !settings.close_time ||
-        !settings.pre_registration_cutoff_time
+        !settings.close_time
       ) {
         this.availabilityError = "Complete all availability time fields.";
         return;
@@ -551,8 +545,6 @@ function adminSettings() {
           service: this.availabilityService,
           open_time: settings.open_time,
           close_time: settings.close_time,
-          pre_registration_cutoff_time:
-            settings.pre_registration_cutoff_time,
         });
 
         this.availability = this.normalizeAvailability(response.availability);
