@@ -4144,13 +4144,20 @@ function adminDashboard() {
     },
 
     sedationConsentStatusLabel(booking = this.detailsBooking) {
-      if (!booking?.sedationConsent) return "Not provided";
-      if (booking.sedationConsentSource === "customer_online") return "Agreed online";
-      if (["staff_in_person", "staff_walk_in"].includes(booking.sedationConsentSource)) {
-        return "Agreed in person";
-      }
+      if (booking?.sedationConsent) return "Sedation authorized";
+      return booking?.sedationConsentRecorded ? "Sedation not authorized" : "Sedation not recorded";
+    },
 
-      return "Agreed";
+    sedationConsentStatusClass(booking) {
+      return booking?.sedationConsent
+        ? "bg-green-100 text-green-800"
+        : "bg-amber-100 text-amber-900";
+    },
+
+    sedationConsentSourceLabel(booking) {
+      if (!booking?.sedationConsent) return "";
+      if (booking.sedationConsentSource === "customer_online") return "Online";
+      return ["staff_in_person", "staff_walk_in"].includes(booking.sedationConsentSource) ? "In person" : "";
     },
 
     async recordDetailsSedationConsent() {
@@ -4172,6 +4179,7 @@ function adminDashboard() {
           ...this.detailsBooking,
           sedationConsent: true,
           sedation_consent: true,
+          sedationConsentRecorded: true,
           sedationConsentSource: response.sedation_consent?.source || "staff_in_person",
           sedationConsentRecordedAt: response.sedation_consent?.recorded_at || null,
           canRecordSedationConsent: false,

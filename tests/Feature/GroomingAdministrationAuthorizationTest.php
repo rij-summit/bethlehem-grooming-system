@@ -878,6 +878,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->getJson('/api/admin/bookings')
             ->assertOk()
             ->assertJsonPath('incomingList.0.sedationConsent', false)
+            ->assertJsonPath('incomingList.0.sedationConsentRecorded', false)
             ->assertJsonPath('incomingList.0.canRecordSedationConsent', true);
 
         $this->postJson('/api/admin/bookings/1/sedation-consent', [
@@ -898,6 +899,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'sedation_consent_recorded_by' => 2,
         ]);
         $this->assertNotNull(DB::table('bookings')->value('sedation_consent_recorded_at'));
+        $this->getJson('/api/admin/bookings')->assertOk()
+            ->assertJsonPath('incomingList.0.sedationConsent', true)
+            ->assertJsonPath('incomingList.0.sedationConsentRecorded', true);
 
         DB::table('bookings')->insert([
             'booking_id' => 2,
@@ -3455,10 +3459,17 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $snapshot = $stored->toArray();
 
         $this->authenticateAs('staff');
+        $list = $walkIn ? 'queuedList' : 'incomingList';
+        $this->getJson('/api/admin/bookings')->assertOk()
+            ->assertJsonPath($list.'.0.sedationConsent', $sedation)
+            ->assertJsonPath($list.'.0.sedationConsentRecorded', true);
         if (! $walkIn) $this->postJson("/api/admin/bookings/{$id}/check-in")->assertOk();
         $petId = DB::table('booking_pets')->where('booking_id', $id)->value('booking_pet_id');
         $serviceId = DB::table('booking_services')->where('booking_id', $id)->value('booking_service_id');
         $this->postJson("/api/admin/bookings/{$id}/pets/{$petId}/start-grooming")->assertOk();
+        $this->getJson('/api/admin/bookings')->assertOk()
+            ->assertJsonPath('inProgressList.0.sedationConsent', $sedation)
+            ->assertJsonPath('inProgressList.0.sedationConsentRecorded', true);
         Carbon::setTestNow(now()->addHour());
         $this->postJson("/api/admin/bookings/{$id}/pets/{$petId}/mark-done")->assertOk();
         $this->postJson("/api/admin/bookings/{$id}/pay", ['final_price' => 250, 'amount_paid' => 250,

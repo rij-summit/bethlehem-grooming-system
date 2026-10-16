@@ -1,4 +1,4 @@
-import { initGroomingConsent } from "./grooming-consent.js?v=20261016";
+import { initGroomingConsent } from "./grooming-consent.js?v=20261017";
 import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 const state = {
   reviewPayload: null,
@@ -31,7 +31,7 @@ function getConsentMainMarkup() {
         <div class="mt-6">
           <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Step 5 of 5</span>
-            <span>100% Complete</span>
+            <span>Final step</span>
           </div>
           <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div class="h-full w-full rounded-full bg-[#315b7e]"></div>
@@ -154,11 +154,13 @@ async function handleSubmit(event) {
   event.preventDefault();
 
   if (!consent.valid) {
+    consent.validate(true);
     validateConsentForm();
     return;
   }
 
   const consentPayload = consent.payload();
+  if (!await consent.confirmSubmission() || !consent.valid) return;
   consent.setBusy(true);
 
   elements.submitBookingButton.disabled = true;
@@ -447,6 +449,7 @@ function initSignature() {
   const owner = getStoredData(WALK_IN_OWNER_STORAGE_KEY);
   consent = initGroomingConsent({
     storageKey: WALK_IN_CONSENT_STORAGE_KEY,
+    staff: true,
     signerName: [owner?.firstName, owner?.lastName].filter(Boolean).join(" "),
     onChange: validateConsentForm,
   });

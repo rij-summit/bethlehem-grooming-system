@@ -8,6 +8,14 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/a
 const ui = context.adminDashboard();
 ui.$nextTick = () => {};
 ui.dispatchDashboardEvent = () => {};
+assert.equal(ui.sedationConsentStatusLabel({ sedationConsent: true }), 'Sedation authorized');
+assert.equal(ui.sedationConsentStatusLabel({ sedationConsent: false, sedationConsentRecorded: true }), 'Sedation not authorized');
+assert.equal(ui.sedationConsentStatusLabel({ sedationConsent: false }), 'Sedation not recorded');
+assert.match(ui.sedationConsentStatusClass({ sedationConsent: false }), /amber/);
+assert.match(ui.sedationConsentStatusClass({ sedationConsent: true }), /green/);
+assert.equal(ui.sedationConsentSourceLabel({ sedationConsent: true, sedationConsentSource: 'customer_online' }), 'Online');
+assert.equal(ui.sedationConsentSourceLabel({ sedationConsent: true, sedationConsentSource: 'staff_in_person' }), 'In person');
+assert.equal(ui.sedationConsentSourceLabel({ sedationConsent: false }), '');
 const pet = { bookingPetId: 7, petQueueNumber: 12, petName: 'Hopper', species: 'Dog', breed: 'Dachshund', groomingState: 'not_started' };
 const booking = { id: 42, queueNumber: 3, ownerName: 'Erwin Francisco', pets: [pet], dropOffTime: '1:22 AM' };
 

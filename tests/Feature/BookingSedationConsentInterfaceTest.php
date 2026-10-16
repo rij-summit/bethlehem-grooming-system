@@ -18,18 +18,22 @@ class BookingSedationConsentInterfaceTest extends TestCase
         $this->assertStringNotContainsString('id="sedationConsentHelp"', $page);
         $this->assertStringNotContainsString('sedationConsentHelp', $component);
         $shared = file_get_contents(base_path('scripts/components/grooming-consent.js'));
-        $this->assertStringContainsString('sedation_consent: sedation.checked', $shared);
+        $this->assertStringContainsString('id="sedationConsentYes"', $shared);
+        $this->assertStringContainsString('id="sedationConsentNo"', $shared);
         $this->assertStringContainsString('...consentPayload', $component);
     }
 
-    public function test_unchecked_sedation_does_not_require_an_extra_confirmation(): void
+    public function test_both_consent_flows_share_the_decline_confirmation_and_exact_official_text(): void
     {
-        $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
-        $component = file_get_contents(base_path('scripts/components/booking-consent-step.js'));
-        $this->assertStringNotContainsString('sedationWarningModal', $page);
-        $this->assertStringNotContainsString('sedationWarningAcknowledged', $component);
+        $shared = file_get_contents(base_path('scripts/components/grooming-consent.js'));
+        $this->assertStringContainsString('Continue without sedation authorization?', $shared);
+        $this->assertStringContainsString('Consent choices', $shared);
+        foreach (['booking-consent-step', 'walk-in-consent-step'] as $flow) {
+            $component = file_get_contents(base_path('scripts/components/'.$flow.'.js'));
+            $this->assertStringContainsString('await consent.confirmSubmission()', $component);
+        }
         $terms = \App\Services\GroomingConsentCapture::agreement();
-        $this->assertSame('I authorize sedation if deemed necessary for grooming.', $terms['sedation_action']);
+        $this->assertSame('I hereby authorize the clinic and its staff to proceed with the sedation as it is deemed necessary for my pet for grooming. I confirm that the procedure was explained and my pet had undergone necessary test / screening prior to sedation and grooming.', $terms['sedation_paragraph']);
     }
 
     public function test_staff_booking_details_reuses_the_existing_modal_for_consent_capture(): void

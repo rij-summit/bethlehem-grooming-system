@@ -145,7 +145,7 @@ async function main() {
   for (let index = 0; index < 5; index++) {
     const section = page.split(`data-grooming-step="${sections[index].dataset.groomingStep}"`)[1].split('data-grooming-step="')[0];
     assert.ok(section.includes(`Step ${index + 1} of 5`));
-    assert.ok(section.includes(`${(index + 1) * 20}% Complete`));
+    assert.ok(section.includes(index === 4 ? 'Final step' : `${(index + 1) * 20}% Complete`));
   }
   assert.match(read('scripts/components/booking-services-step.js'), /saveCurrentStepDraft\(\);\s+goToGroomingStep\("schedule"\)/);
   console.log('Grooming flow: step order, complete-selection guards, new-draft reset, current arrival, and Back preservation passed.');

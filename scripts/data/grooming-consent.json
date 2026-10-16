@@ -11,5 +11,6 @@
     "That I agree and am responsible for the payment of grooming for my pet."
   ],
   "grooming_action": "I have read and agree to the grooming agreement.",
-  "sedation_action": "I authorize sedation if deemed necessary for grooming."
+  "sedation_action": "I authorize sedation if deemed necessary for grooming.",
+  "sedation_paragraph": "I hereby authorize the clinic and its staff to proceed with the sedation as it is deemed necessary for my pet for grooming. I confirm that the procedure was explained and my pet had undergone necessary test / screening prior to sedation and grooming."
 }

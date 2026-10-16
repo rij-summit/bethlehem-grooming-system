@@ -109,6 +109,7 @@ class AdminBookingController extends Controller
         ])
             ->where('status', 'waiting_to_arrive');
         $incoming = $incomingQuery
+            ->withExists('groomingConsent')
             ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderByRaw('CASE WHEN booking_date = ? THEN 0 ELSE 1 END', [$rangeStart->toDateString()])
@@ -125,6 +126,7 @@ class AdminBookingController extends Controller
                 $pet->whereNotNull('grooming_start_time');
             });
         $queued = $queuedQuery
+            ->withExists('groomingConsent')
             ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
@@ -146,6 +148,7 @@ class AdminBookingController extends Controller
                 });
         });
         $inProgress = $inProgressQuery
+            ->withExists('groomingConsent')
             ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
@@ -160,6 +163,7 @@ class AdminBookingController extends Controller
             });
 
         $forPayment = Booking::where('status', 'for_payment')
+            ->withExists('groomingConsent')
             ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
@@ -167,6 +171,7 @@ class AdminBookingController extends Controller
             ->map(fn ($b) => $this->formatBooking($b));
 
         $released = Booking::where('status', 'released')
+            ->withExists('groomingConsent')
             ->with(['user', 'walkin.unregisteredCustomer', 'timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
                 'payments' => fn ($query) => $query->where('payment_status', 'paid')->with('products')])
             ->orderBy('queue_number', 'asc')
@@ -1195,6 +1200,7 @@ class AdminBookingController extends Controller
         $date = $request->query('date', '');
 
         $query = Booking::whereIn('status', ['archived', 'cancelled'])
+            ->withExists('groomingConsent')
             ->with([
                 'user',
                 'walkin.unregisteredCustomer',
@@ -1301,6 +1307,8 @@ class AdminBookingController extends Controller
                 : ($user?->phone ?? $walkin?->phone ?? '—'),
             'ownerAccountDeleted' => $ownerAccountDeleted,
             'owner_account_deleted' => $ownerAccountDeleted,
+            'sedationConsentRecorded' => (bool) $booking->grooming_consent_exists
+                || ($walkin ? (bool) $walkin->sedation_consent : (bool) $booking->sedation_consent),
             'sedationConsent' => $walkin
                 ? (bool) $walkin->sedation_consent
                 : (bool) $booking->sedation_consent,

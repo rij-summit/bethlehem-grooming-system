@@ -87,6 +87,11 @@ class Booking extends Model
         return $this->belongsTo(Walkin::class, 'walkin_id', 'id');
     }
 
+    public function groomingConsent()
+    {
+        return $this->hasOne(GroomingConsent::class, 'booking_id', 'booking_id');
+    }
+
     public function timeWindow()
     {
         return $this->belongsTo(TimeWindow::class, 'window_id', 'window_id');
