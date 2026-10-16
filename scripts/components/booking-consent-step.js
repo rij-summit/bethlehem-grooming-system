@@ -77,7 +77,7 @@ export function initBookingConsentStep() {
     const reviewData = getStoredData("bookingStep4Review") || getStoredData("bookingReview") || {};
 
     if (!schedule?.window_id) {
-      alert("Booking schedule is missing. Please go back to Step 1 and select a date and time.");
+      alert("Visit date and arrival window are missing. Please go back to Step 1 and select a date and time.");
       return;
     }
 
@@ -173,7 +173,7 @@ export function initBookingConsentStep() {
       if (existingBookingId) {
         openDuplicateModal(existingBookingId, error.errors.existing_booking_ref, schedule);
       } else {
-        showSubmitError(error.message || "Booking submission failed. Please try again.");
+        showSubmitError(error.message || "Pre-registration submission failed. Please try again.");
       }
     }
   });
@@ -197,7 +197,7 @@ export function initBookingConsentStep() {
       submitBookingButton.className =
         "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
       consentStatusMessage.textContent =
-        "All required fields are complete. You can now submit your booking.";
+        "All required fields are complete. You can now submit your pre-registration.";
       consentStatusMessage.className =
         "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
     } else {
@@ -296,7 +296,7 @@ export function initBookingConsentStep() {
     const successDiv  = document.getElementById("duplicateModalSuccess");
     const successText = document.getElementById("duplicateSuccessText");
 
-    refSpan.textContent = existingBookingRef || "existing booking";
+    refSpan.textContent = existingBookingRef || "existing visit";
     errorMsg.textContent = "";
     errorMsg.classList.add("hidden");
     modalBody.classList.remove("hidden");
@@ -321,7 +321,7 @@ export function initBookingConsentStep() {
         modalBody.classList.add("hidden");
         successDiv.classList.remove("hidden");
         successText.textContent =
-          `Booking ${data.booking.booking_reference} has been moved to ${formatScheduleLabel(data.booking.booking_date, data.booking.window)}.`;
+          `Visit ${data.booking.booking_reference} has been moved to ${formatScheduleLabel(data.booking.booking_date, data.booking.window)}.`;
 
         setTimeout(() => {
           window.location.href = "./dashboard.html";

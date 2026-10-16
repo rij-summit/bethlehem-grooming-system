@@ -98,7 +98,7 @@ class PaymentController extends Controller
 
         if ($submittedPrices->keys()->diff($allServiceIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'service_prices' => 'One or more service prices do not belong to this booking.',
+                'service_prices' => 'One or more service prices do not belong to this visit.',
             ]);
         }
 
@@ -188,7 +188,7 @@ class PaymentController extends Controller
         if ($submitted->count() !== count($petSizes)
             || $submitted->keys()->diff($bookingPets->keys())->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'pet_sizes' => 'One or more confirmed pet sizes do not belong to this booking.',
+                'pet_sizes' => 'One or more confirmed pet sizes do not belong to this visit.',
             ]);
         }
 
@@ -213,15 +213,15 @@ class PaymentController extends Controller
             $result = DB::transaction(function () use ($request, $bookingId, $data) {
                 $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
                 if (! $booking) {
-                    return $this->transactionError('Booking not found.', 404);
+                    return $this->transactionError('Visit not found.', 404);
                 }
 
                 if ($booking->status !== 'for_payment') {
-                    return $this->transactionError('Booking is not awaiting payment.', 422);
+                    return $this->transactionError('Visit is not awaiting payment.', 422);
                 }
 
                 if ($this->alreadyPaid($booking)) {
-                    return $this->transactionError('This booking has already been paid.', 409);
+                    return $this->transactionError('This visit has already been paid.', 409);
                 }
 
                 $summary = $this->paymentReadiness()->summarize($booking, true);
@@ -276,7 +276,7 @@ class PaymentController extends Controller
                 Notification::create([
                     'type' => 'payment_confirmed',
                     'booking_id' => $booking->booking_id,
-                    'message' => "Payment received for booking {$booking->booking_reference}.",
+                    'message' => "Payment received for visit {$booking->booking_reference}.",
                     'is_read' => false,
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
@@ -286,7 +286,7 @@ class PaymentController extends Controller
         } catch (UniqueConstraintViolationException) {
             return response()->json([
                 'success' => false,
-                'message' => 'This booking was paid by another request. Refresh to view the completed payment.',
+                'message' => 'This visit was paid by another request. Refresh to view the completed payment.',
             ], 409);
         }
 
@@ -298,7 +298,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Payment processed. Booking is ready for pickup.',
+            'message' => 'Payment processed. Visit is ready for pickup.',
             'booking_status' => $result['booking']->status,
             'change' => $payment->change_amount,
             'final_price' => $payment->total_amount,
@@ -320,18 +320,18 @@ class PaymentController extends Controller
             $result = DB::transaction(function () use ($request, $bookingId, $data) {
                 $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
                 if (! $booking) {
-                    return $this->transactionError('Booking not found.', 404);
+                    return $this->transactionError('Visit not found.', 404);
                 }
 
                 if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
                     return $this->transactionError(
-                        'Early payment is only available for checked-in or in-progress bookings.',
+                        'Early payment is only available for checked-in or in-progress visits.',
                         422,
                     );
                 }
 
                 if ($this->alreadyPaid($booking)) {
-                    return $this->transactionError('This booking has already been paid.', 409);
+                    return $this->transactionError('This visit has already been paid.', 409);
                 }
 
                 $bookingPets = $booking->bookingPets()
@@ -355,7 +355,7 @@ class PaymentController extends Controller
                         ->moneyToCents($line->price_at_booking));
 
                 if ($serverTotalCents <= 0) {
-                    return $this->transactionError('Pay Now requires a positive booking total.', 422);
+                    return $this->transactionError('Pay Now requires a positive visit total.', 422);
                 }
 
                 [$productLines, $productCents] = $this->productSales()->prepare($data['products'] ?? []);
@@ -394,7 +394,7 @@ class PaymentController extends Controller
                 Notification::create([
                     'type' => 'payment_confirmed',
                     'booking_id' => $booking->booking_id,
-                    'message' => "Payment received for booking {$booking->booking_reference}.",
+                    'message' => "Payment received for visit {$booking->booking_reference}.",
                     'is_read' => false,
                     'created_at' => $payment->paid_at ?? now(),
                 ]);
@@ -404,7 +404,7 @@ class PaymentController extends Controller
         } catch (UniqueConstraintViolationException) {
             return response()->json([
                 'success' => false,
-                'message' => 'This booking was paid by another request. Refresh to view the completed payment.',
+                'message' => 'This visit was paid by another request. Refresh to view the completed payment.',
             ], 409);
         }
 
@@ -417,8 +417,8 @@ class PaymentController extends Controller
         return response()->json([
             'success' => true,
             'message' => $result['allPetsFinished']
-                ? 'Payment recorded. Booking is ready for pickup.'
-                : 'Early payment recorded. Booking will remain in its current schedule until every pet is finished.',
+                ? 'Payment recorded. Visit is ready for pickup.'
+                : 'Early payment recorded. Visit will remain in its current schedule until every pet is finished.',
             'change' => $payment->change_amount,
             'final_price' => $payment->total_amount,
             'amount_paid' => $payment->amount_tendered,
@@ -438,15 +438,15 @@ class PaymentController extends Controller
         $result = DB::transaction(function () use ($bookingId) {
             $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
             if (! $booking) {
-                return $this->transactionError('Booking not found.', 404);
+                return $this->transactionError('Visit not found.', 404);
             }
 
             if ($booking->status !== 'for_payment') {
-                return $this->transactionError('Booking is not in For Payment status.', 422);
+                return $this->transactionError('Visit is not in For Payment status.', 422);
             }
 
             if (! $booking->paid) {
-                return $this->transactionError('Booking has not been paid yet.', 422);
+                return $this->transactionError('Visit has not been paid yet.', 422);
             }
 
             $booking->update(['status' => 'released', 'archived_at' => null]);
@@ -460,7 +460,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Booking is ready for physical pickup.',
+            'message' => 'Visit is ready for physical pickup.',
             'booking_status' => 'released',
         ]);
     }
@@ -756,7 +756,7 @@ class PaymentController extends Controller
         if ($this->paymentReadiness()->moneyToCents($submitted)
             !== $this->paymentReadiness()->moneyToCents($serverTotal)) {
             throw ValidationException::withMessages([
-                'final_price' => 'The submitted total does not match the server-calculated booking total.',
+                'final_price' => 'The submitted total does not match the server-calculated visit total.',
             ]);
         }
     }

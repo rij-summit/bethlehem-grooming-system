@@ -80,7 +80,7 @@ const partial = { ...session, pets: [session.pets[0], { ...session.pets[1], groo
   services: session.services.slice(0, 3), payment: null, paidAmount: null };
 assert.equal(ui.getServicesAvailedTotal(partial), 650, 'Cancelled pet services do not contribute to the billable total');
 assert.equal(ui.servicesForPet(partial.pets[1], partial).length, 1, 'Cancelled pets retain their booked services');
-assert.equal(ui.cancellationFields(partial.pets[1]).map((field) => field.label).join(','), 'Reason,Cancelled,Cancelled by');
+assert.equal(ui.cancellationFields(partial.pets[1]).map((field) => field.label).join(','), 'Cancellation reason,Cancelled,Cancelled by');
 assert.ok(ui.groomingTimelineFields(partial.pets[1]).some((field) => field.value === 'Customer decided not to proceed.'));
 ui.selectedMonth = '2026-10';
 assert.equal(ui.filteredCount, 2);
@@ -101,11 +101,13 @@ assert.equal(ui.groomingTimelineFields({ groomingStartedAt: '—', groomingFinis
 assert.equal(ui.groomingTimelineFields({ groomingStartedAt: '9:15 AM' })[0].value, '9:15 AM');
 assert.equal(ui.groomingTimelineFields({ groomingFinishedAtIso: '2026-10-03T09:45:00+08:00' })[0].label, 'Finished');
 ui.detailsBooking = { bookingType: 'Walk-In', appointmentTime: '8:00 AM - 9:00 AM', queueNumber: 0 };
-assert.equal(ui.groomingSessionFields.length, 0, 'Walk-ins keep the existing arrival-window rule; absent queue and date are omitted');
+assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Entry source', 'Walk-ins omit arrival windows; absent queue and date are omitted');
+assert.equal(ui.groomingSessionFields[0].value, 'Walk-in');
 ui.detailsBooking = session;
-assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Pre-Register Date,Arrival Window,Session Grooming Started,Session Finished');
+assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Visit date,Entry source,Arrival window,Grooming started,Finished');
+assert.equal(ui.groomingSessionFields.find(field => field.label === 'Entry source').value, 'Pre-registration');
 ui.detailsBooking = repeat;
-assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Walk-In Date');
+assert.equal(ui.groomingSessionFields.map(field => field.label).join(','), 'Visit date,Entry source');
 
 const single = {
   startedAtIso: '2026-10-03T08:00:00+08:00', completedAtIso: '2026-10-03T09:00:00+08:00',

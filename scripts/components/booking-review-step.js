@@ -63,7 +63,7 @@ export async function refreshBookingReviewStep() {
   if (!Array.isArray(state.bookingDraft?.pets) || state.bookingDraft.pets.length === 0) {
     state.reviewPayload = null;
     renderEmptyState(
-      "No pets were found in the current pre-register draft. Please go back to Step 2 and Step 3 before reviewing.",
+      "No pets were found in the current pre-registration draft. Please go back to Step 2 and Step 3 before reviewing.",
     );
     return;
   }
@@ -120,7 +120,7 @@ export async function refreshBookingWorkloadForecast() {
     state.workloadUnavailable = Boolean(!window || window.is_workload_unavailable || window.is_closed || window.is_past || window.is_cutoff);
     elements.reviewActionNotice.classList.remove("hidden");
     elements.reviewActionNotice.textContent = state.workloadUnavailable
-      ? "This preferred arrival window is unavailable. Choose another arrival window."
+      ? "This arrival window is unavailable. Choose another arrival window."
       : "Grooming capacity is a forecast. Staff will confirm admission at check-in. Your arrival window is not a grooming start time.";
     if (window?.is_workload_unavailable) elements.reviewActionNotice.textContent = "Unavailable — not enough grooming time remaining. Choose another arrival window.";
     elements.confirmBookingBtn.disabled = state.reviewPayload.items.some((item) => !hasRequiredGroomingPreference(item.selection));

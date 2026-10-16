@@ -1,9 +1,9 @@
-import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3";
-import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js?v=pet-weight-size-20261011-v3";
+import { initBookingCalendar, refreshBookingCalendar } from "./booking-calendar.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
+import { initBookingPetStep, refreshBookingPetStep } from "./booking-pet-step.js?v=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
 import { initBookingServicesStep, refreshBookingServicesStep } from "./booking-services-step.js?v=grooming-pricing-20261006";
-import { initBookingReviewStep, refreshBookingReviewStep, refreshBookingWorkloadForecast } from "./booking-review-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3";
-import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3";
-import { initBookingConfirmedStep } from "./booking-confirmed-step.js";
+import { initBookingReviewStep, refreshBookingReviewStep, refreshBookingWorkloadForecast } from "./booking-review-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
+import { initBookingConsentStep } from "./booking-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016";
+import { initBookingConfirmedStep } from "./booking-confirmed-step.js?copy=grooming-terminology-20261016";
 import { initBookingFormAccessGuard } from "../services/booking-form-access-guard.js?v=customer-cache-20261005-v1";
 
 const steps = ["schedule", "pets", "services", "review", "consent", "confirmed"];

@@ -230,7 +230,7 @@ function adminArchive() {
       if (this.hasActiveFilters) return "Try adjusting your search or clearing the filters.";
       return this.archiveType === "clinic"
         ? "Completed, cancelled, and expired clinic visits will appear here."
-        : "Completed grooming sessions will appear here after staff add them to history.";
+        : "Completed and cancelled grooming visits will appear here.";
     },
 
     viewDetails(booking, trigger = null, scrollTop = 0) {
@@ -295,19 +295,20 @@ function adminArchive() {
       const booking = this.detailsBooking;
       if (!booking) return [];
       return [
-        {label: `${booking.bookingType ?? 'Pre-Register'} Date`, value: this.groomingText(booking.appointmentDate) ? this.formatAppointmentDate(booking.appointmentDate, '') : ''},
-        {label: 'Arrival Window', value: booking.bookingType !== 'Walk-In' ? booking.appointmentTime : ''},
-        {label: 'Queue Number', value: booking.queueNumber || ''},
-        {label: 'Dropped Off', value: this.groomingText(booking.dropOffAtIso) ? this.formatDateTime(booking.dropOffAtIso, '') : booking.dropOffTime},
-        {label: 'Session Grooming Started', value: this.showSessionTime('start') ? (this.groomingText(booking.startedAtIso) ? this.formatDateTime(booking.startedAtIso, '') : booking.startedAt) : ''},
+        {label: 'Visit date', value: this.groomingText(booking.appointmentDate) ? this.formatAppointmentDate(booking.appointmentDate, '') : ''},
+        {label: 'Entry source', value: booking.bookingType === 'Walk-In' ? 'Walk-in' : 'Pre-registration'},
+        {label: 'Arrival window', value: booking.bookingType !== 'Walk-In' ? booking.appointmentTime : ''},
+        {label: 'Queue number', value: booking.queueNumber || ''},
+        {label: 'Dropped off', value: this.groomingText(booking.dropOffAtIso) ? this.formatDateTime(booking.dropOffAtIso, '') : booking.dropOffTime},
+        {label: 'Grooming started', value: this.showSessionTime('start') ? (this.groomingText(booking.startedAtIso) ? this.formatDateTime(booking.startedAtIso, '') : booking.startedAt) : ''},
         ...this.cancellationFields(booking),
-        {label: 'Session Finished', value: this.showSessionTime('finish') ? (this.groomingText(booking.completedAtIso) ? this.formatDateTime(booking.completedAtIso, '') : booking.completedAt) : ''},
+        {label: 'Finished', value: this.showSessionTime('finish') ? (this.groomingText(booking.completedAtIso) ? this.formatDateTime(booking.completedAtIso, '') : booking.completedAt) : ''},
       ].filter(field => this.groomingText(field.value));
     },
 
     cancellationFields(record) {
       return [
-        { label: 'Reason', value: this.groomingText(record?.cancellationReason) },
+        { label: 'Cancellation reason', value: this.groomingText(record?.cancellationReason) },
         { label: 'Cancelled', value: record?.cancelledAt ? this.formatDateTime(record.cancelledAt, '') : '' },
         { label: 'Cancelled by', value: this.groomingText(record?.cancelledBy) },
       ].filter((field) => field.value);
@@ -315,7 +316,7 @@ function adminArchive() {
 
     groomingTimelineFields(pet) {
       return [
-        {label: 'Started', iso: pet.groomingStartedAtIso, time: pet.groomingStartedAt},
+        {label: 'Grooming started', iso: pet.groomingStartedAtIso, time: pet.groomingStartedAt},
         {label: 'Finished', iso: pet.groomingFinishedAtIso, time: pet.groomingFinishedAt},
       ].map(field => ({label: field.label, value: this.groomingText(field.iso) ? this.formatDateTime(field.iso, '') : field.time}))
         .filter(field => this.groomingText(field.value)).concat(this.cancellationFields(pet));

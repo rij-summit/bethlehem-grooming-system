@@ -206,12 +206,12 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if ($booking->walkin_id !== null) {
                 return ['error' => [
-                    'message' => 'Use the walk-in consent record for this booking.',
+                    'message' => 'Use the walk-in consent record for this visit.',
                     'status' => 422,
                 ]];
             }
@@ -280,11 +280,11 @@ class AdminBookingController extends Controller
                 ->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if ($booking->status !== 'waiting_to_arrive') {
-                return ['error' => ['message' => 'Booking is not in waiting status.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit is not in waiting status.', 'status' => 422]];
             }
 
             if ($booking->booking_date !== $queueDate) {
@@ -298,13 +298,13 @@ class AdminBookingController extends Controller
             if ($selectedSizes->isNotEmpty() &&
                 (count($bookingPetIds) !== $selectedSizes->count()
                     || array_diff($bookingPetIds, $selectedSizes->keys()->map(fn ($id) => (int) $id)->all()))) {
-                return ['error' => ['message' => 'Confirm a size for every pet in this booking.', 'status' => 422]];
+                return ['error' => ['message' => 'Confirm a size for every pet in this visit.', 'status' => 422]];
             }
 
             foreach ($booking->bookingPets as $bookingPet) {
                 $pet = $bookingPet->pet;
                 if (! $pet) {
-                    return ['error' => ['message' => 'A pet in this booking could not be found.', 'status' => 422]];
+                    return ['error' => ['message' => 'A pet in this visit could not be found.', 'status' => 422]];
                 }
                 $size = $selectedSizes->get($bookingPet->booking_pet_id) ?? $pet->groomingSize();
                 if (! PetWeightSize::isValidSize($pet->species, $size)) {
@@ -367,7 +367,7 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
 
             if ($booking->walkin_id !== null || ! in_array($booking->status, ['waiting_to_arrive', 'checked_in', 'in_progress'], true)) {
-                return response()->json(['message' => 'Internal Staff Note is read-only for this booking.'], 422);
+                return response()->json(['message' => 'Internal Staff Note is read-only for this visit.'], 422);
             }
 
             $booking->update(['internal_staff_note' => trim($data['internal_staff_note'] ?? '') ?: null]);
@@ -383,7 +383,7 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
 
             if ($booking->walkin_id === null || ! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
-                return response()->json(['message' => 'Grooming & Visit Notes are read-only for this booking.'], 422);
+                return response()->json(['message' => 'Grooming & Visit Notes are read-only for this visit.'], 422);
             }
 
             $bookingPet = BookingPet::where('booking_id', $booking->booking_id)->findOrFail($bookingPetId);
@@ -400,14 +400,14 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             $this->assertUnpaidCorrection($booking);
 
             if ($booking->status !== 'checked_in') {
                 return ['error' => [
-                    'message' => 'Only a queued booking can be reverted to Incoming.',
+                    'message' => 'Only a queued visit can be reverted to Incoming.',
                     'status' => 422,
                 ]];
             }
@@ -458,7 +458,7 @@ class AdminBookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Check-in undone. The booking is Incoming again.',
+            'message' => 'Check-in undone. The visit is Incoming again.',
             'booking_id' => $result['booking_id'],
             'status' => 'waiting_to_arrive',
         ]);
@@ -473,11 +473,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if ($booking->status !== 'checked_in') {
-                return ['error' => ['message' => 'Booking must be checked in first.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit must be checked in first.', 'status' => 422]];
             }
 
             $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
@@ -573,11 +573,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if ($booking->status !== 'checked_in') {
-                return ['error' => ['message' => 'Booking must be queued before a pet can start grooming.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit must be queued before a pet can start grooming.', 'status' => 422]];
             }
 
             $bookingPet = BookingPet::where('booking_id', $booking->booking_id)
@@ -586,7 +586,7 @@ class AdminBookingController extends Controller
                 ->first();
 
             if (! $bookingPet) {
-                return ['error' => ['message' => 'Pet is not part of this booking.', 'status' => 404]];
+                return ['error' => ['message' => 'Pet is not part of this visit.', 'status' => 404]];
             }
 
             if (
@@ -696,11 +696,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
             $this->assertUnpaidCorrection($booking);
             if (! in_array($booking->status, ['checked_in', 'in_progress'], true) || $booking->grooming_finished_at) {
-                throw ValidationException::withMessages(['booking' => 'This booking cannot undo grooming.']);
+                throw ValidationException::withMessages(['booking' => 'This visit cannot undo grooming.']);
             }
             $pets = $booking->bookingPets()->lockForUpdate()->get();
             $pet = $pets->firstWhere('booking_pet_id', $bookingPetId);
-            abort_unless($pet, 404, 'Pet is not part of this booking.');
+            abort_unless($pet, 404, 'Pet is not part of this visit.');
             if (! $pet->canUndoGroomingStart()) {
                 throw ValidationException::withMessages(['pet' => 'Only an in-progress pet can undo its start.']);
             }
@@ -718,7 +718,7 @@ class AdminBookingController extends Controller
     private function assertUnpaidCorrection(Booking $booking): void
     {
         if ($booking->hasSuccessfulPayment()) {
-            throw ValidationException::withMessages(['booking' => 'Paid grooming bookings cannot be cancelled or undone.']);
+            throw ValidationException::withMessages(['booking' => 'Paid grooming visits cannot be cancelled or undone.']);
         }
     }
 
@@ -728,11 +728,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if ($booking->status !== 'in_progress') {
-                return ['error' => ['message' => 'Booking must be in progress first.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit must be in progress first.', 'status' => 422]];
             }
 
             $bookingPets = BookingPet::where('booking_id', $booking->booking_id)
@@ -744,7 +744,7 @@ class AdminBookingController extends Controller
 
             if ($unfinishedPets->isEmpty()) {
                 return ['error' => [
-                    'message' => 'Every pet in this booking is already marked as finished.',
+                    'message' => 'Every pet in this visit is already marked as finished.',
                     'status' => 422,
                 ]];
             }
@@ -762,7 +762,7 @@ class AdminBookingController extends Controller
 
             if ($hasIneligiblePet) {
                 return ['error' => [
-                    'message' => 'All unfinished pets must be in progress before the booking can be completed.',
+                    'message' => 'All unfinished pets must be in progress before the visit can be completed.',
                     'status' => 422,
                 ]];
             }
@@ -821,11 +821,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->first();
 
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
 
             if (! in_array($booking->status, ['checked_in', 'in_progress'], true)) {
-                return ['error' => ['message' => 'Booking must be queued or in progress first.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit must be queued or in progress first.', 'status' => 422]];
             }
 
             $bookingPet = BookingPet::where('booking_id', $booking->booking_id)
@@ -834,7 +834,7 @@ class AdminBookingController extends Controller
                 ->first();
 
             if (! $bookingPet) {
-                return ['error' => ['message' => 'Pet is not part of this booking.', 'status' => 404]];
+                return ['error' => ['message' => 'Pet is not part of this visit.', 'status' => 404]];
             }
 
             if (
@@ -872,7 +872,7 @@ class AdminBookingController extends Controller
                         'user_id' => $booking->user->user_id,
                         'booking_id' => $booking->booking_id,
                         'type' => 'grooming_finished',
-                        'message' => "{$petName} is Finished with grooming. We'll keep you updated on the rest of the appointment.",
+                        'message' => "{$petName} is Finished with grooming. We'll keep you updated on the rest of the visit.",
                         'is_read' => false,
                         'created_at' => $finishedAt,
                     ]);
@@ -997,10 +997,10 @@ class AdminBookingController extends Controller
         $result = DB::transaction(function () use ($id, $createdByUserId) {
             $booking = Booking::query()->whereKey($id)->lockForUpdate()->first();
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
             if ($booking->status !== 'released') {
-                return ['error' => ['message' => 'Booking must be in Released status.', 'status' => 422]];
+                return ['error' => ['message' => 'Visit must be in Released status.', 'status' => 422]];
             }
             if (! (bool) $booking->paid) {
                 return ['error' => ['message' => 'Payment must be completed before physical pickup.', 'status' => 422]];
@@ -1038,7 +1038,7 @@ class AdminBookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Booking marked as picked up and archived.',
+            'message' => 'Visit marked as picked up and archived.',
         ]);
     }
 
@@ -1055,7 +1055,7 @@ class AdminBookingController extends Controller
             if (! in_array($booking->status, ['waiting_to_arrive', 'incoming', 'checked_in'], true)
                 || $booking->grooming_started_at || $booking->grooming_finished_at
                 || $pets->contains(fn ($pet) => $pet->grooming_state !== BookingPet::GROOMING_STATE_CANCELLED && ! $pet->canCancelGrooming())) {
-                throw ValidationException::withMessages(['booking' => 'Cancel Booking is only available before any grooming starts.']);
+                throw ValidationException::withMessages(['booking' => 'Cancellation is only available before any grooming starts.']);
             }
             $audit = ['cancelled_at' => now(), 'cancellation_reason' => $reason, 'cancelled_by' => $request->user()?->user_id];
             foreach ($pets as $pet) {
@@ -1065,7 +1065,7 @@ class AdminBookingController extends Controller
             }
             $this->cancelGroomingBooking($booking, $audit);
             $notified = $this->notifyCancellation($booking, $reason);
-            return response()->json(['success' => true, 'message' => 'Booking cancelled successfully.', 'customer_notified' => $notified]);
+            return response()->json(['success' => true, 'message' => 'Visit cancelled successfully.', 'customer_notified' => $notified]);
         });
     }
 
@@ -1076,11 +1076,11 @@ class AdminBookingController extends Controller
             $booking = Booking::whereKey($id)->lockForUpdate()->firstOrFail();
             $this->assertUnpaidCorrection($booking);
             if (! in_array($booking->status, ['waiting_to_arrive', 'incoming', 'checked_in', 'in_progress'], true) || $booking->grooming_finished_at) {
-                throw ValidationException::withMessages(['booking' => 'This booking cannot cancel pets.']);
+                throw ValidationException::withMessages(['booking' => 'This visit cannot cancel pets.']);
             }
             $pets = $booking->bookingPets()->with('pet')->lockForUpdate()->get();
             $pet = $pets->firstWhere('booking_pet_id', $bookingPetId);
-            abort_unless($pet, 404, 'Pet is not part of this booking.');
+            abort_unless($pet, 404, 'Pet is not part of this visit.');
             if (! $pet->canCancelGrooming()) {
                 throw ValidationException::withMessages(['pet' => 'Only a not-started pet can be cancelled.']);
             }
@@ -1114,7 +1114,7 @@ class AdminBookingController extends Controller
     {
         $booking->update($audit + ['status' => 'cancelled', 'cancel_count' => ($booking->cancel_count ?? 0) + 1]);
         Notification::create(['type' => 'cancelled', 'booking_id' => $booking->booking_id,
-            'message' => "Grooming booking {$booking->booking_reference} was cancelled by clinic staff.",
+            'message' => "Grooming visit {$booking->booking_reference} was cancelled by clinic staff.",
             'is_read' => false, 'created_at' => now()]);
     }
 
@@ -1122,11 +1122,11 @@ class AdminBookingController extends Controller
     {
         $booking->loadMissing('user');
         if (! $booking->user) return false;
-        $subject = $booking->walkin_id === null ? 'grooming pre-registration' : 'grooming booking';
+        $subject = $booking->walkin_id === null ? 'grooming pre-registration' : 'grooming visit';
         $message = $pet
             ? ($pet->pet?->pet_name ?? 'Your pet')."'s grooming was cancelled. Reason: {$reason}"
             : "Your {$subject} {$booking->booking_reference} has been cancelled by the clinic. Reason: {$reason}";
-        if ($pet) $message .= $othersActive ? ' Other pets remain active.' : ' The booking is now cancelled.';
+        if ($pet) $message .= $othersActive ? ' Other pets remain active.' : ' The visit is now cancelled.';
         CustomerNotification::create(['user_id' => $booking->user_id, 'booking_id' => $booking->booking_id,
             'type' => CustomerNotification::TYPE_BOOKING_CANCELLED, 'message' => $message, 'is_read' => false, 'created_at' => now()]);
         return true;
@@ -1137,17 +1137,17 @@ class AdminBookingController extends Controller
         $result = DB::transaction(function () use ($id) {
             $booking = Booking::query()->whereKey($id)->lockForUpdate()->first();
             if (! $booking) {
-                return ['error' => ['message' => 'Booking not found.', 'status' => 404]];
+                return ['error' => ['message' => 'Visit not found.', 'status' => 404]];
             }
             if (! in_array($booking->status, ['for_pickup', 'released'], true)) {
                 return ['error' => [
-                    'message' => 'Only For Pickup or Released bookings can be archived here.',
+                    'message' => 'Only For Pickup or Released visits can be archived here.',
                     'status' => 422,
                 ]];
             }
             if (! (bool) $booking->paid) {
                 return ['error' => [
-                    'message' => 'Payment must be completed before the booking can be archived.',
+                    'message' => 'Payment must be completed before the visit can be archived.',
                     'status' => 422,
                 ]];
             }
@@ -1166,7 +1166,7 @@ class AdminBookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Booking archived successfully.',
+            'message' => 'Visit archived successfully.',
         ]);
     }
 

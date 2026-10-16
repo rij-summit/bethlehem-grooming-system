@@ -702,7 +702,7 @@ function initWalkInPetStep() {
   loadExistingOwnerPets();
   elements.petSelectionLimitText.textContent = MAX_PETS_PER_BOOKING === 1
     ? "One pet per clinic walk-in visit."
-    : "Maximum of 10 pets per walk-in schedule.";
+    : "Maximum of 10 pets per walk-in visit.";
   elements.petSelectionTabs.classList.toggle("hidden", !isExistingCustomer());
   if (isExistingCustomer()) showExistingPetSection();
   else showAddPetSection();

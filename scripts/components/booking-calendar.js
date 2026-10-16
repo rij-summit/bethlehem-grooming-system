@@ -522,7 +522,7 @@ function updateSelectedSchedule() {
   }
 
   if (!state.selectedDateKey || !state.selectedSlot) {
-    elements.selectedScheduleText.textContent = "Please select a date and preferred arrival window.";
+    elements.selectedScheduleText.textContent = "Please select a date and arrival window.";
     elements.nextStepBtn.disabled = true;
     elements.nextStepBtn.classList.add("opacity-50", "cursor-not-allowed");
     return;
@@ -607,7 +607,7 @@ function bindEvents() {
     if (!state.options.dateOnly && isSlotDisabled(state.selectedSlot)) {
       clearArrivalSelection();
       sessionStorage.setItem(`${state.options.storageKey}ArrivalError`,
-        "Your preferred arrival window is no longer available. Please choose another date or time.");
+        "Your arrival window is no longer available. Please choose another date or time.");
       updateArrivalWindowNotice();
       renderTimeSlots();
       updateSelectedSchedule();

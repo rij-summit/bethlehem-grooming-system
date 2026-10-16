@@ -50,7 +50,7 @@ function getConsentMainMarkup() {
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Schedule Type
             </p>
-            <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
+            <p class="mt-2 text-sm text-slate-600">Walk-in visit</p>
           </div>
 
           <div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -58,7 +58,7 @@ function getConsentMainMarkup() {
               Schedule Summary
             </p>
             <p id="bookingSummaryText" class="mt-2 text-sm text-slate-600">
-              No schedule details available yet.
+              No visit details available yet.
             </p>
           </div>
         </div>
@@ -152,7 +152,7 @@ function getConsentMainMarkup() {
               disabled
               class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white"
             >
-              Submit Schedule
+              Check In
             </button>
           </div>
         </form>
@@ -209,7 +209,7 @@ function populateSummary() {
     return;
   }
 
-  elements.bookingSummaryText.textContent = "No schedule details available yet.";
+  elements.bookingSummaryText.textContent = "No visit details available yet.";
 }
 
 function getSelectedServiceSummary(item) {
@@ -241,7 +241,7 @@ function validateConsentForm() {
     elements.submitBookingButton.className =
       "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
     elements.consentStatusMessage.textContent =
-      "All required fields are complete. You can now submit this walk-in schedule.";
+      "All required fields are complete. You can now check in this visit.";
     elements.consentStatusMessage.className =
       "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
     return;
@@ -417,7 +417,7 @@ function showSubmitError(message) {
 function resetSubmitButton() {
   const valid = isFormValid();
   elements.submitBookingButton.disabled = !valid;
-  elements.submitBookingButton.textContent = "Submit Schedule";
+  elements.submitBookingButton.textContent = "Check In";
   elements.submitBookingButton.className = valid
     ? "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
     : "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
@@ -600,7 +600,7 @@ function initConsentState({ reviewPayload = null, onBack = null } = {}) {
 }
 
 export function renderWalkInConsentStep(options = {}) {
-  document.title = "Walk-in Schedule - Consent & Agreement";
+  document.title = "Walk-in - Consent & Agreement";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getConsentMainMarkup();
 

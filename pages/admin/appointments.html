@@ -706,7 +706,7 @@
                 </div>
 
                 <p class="mt-4 text-lg font-bold text-[#2f4b66]">
-                  No incoming schedules yet
+                  No incoming visits yet
                 </p>
 
 
@@ -753,7 +753,7 @@
                         :disabled="isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate"
                         class="admin-appointment-action admin-appointment-checkin-action rounded-xl text-base font-semibold transition"
                         :class="(isActionBusy('checkIn', booking.id) || booking.appointmentDate !== todayDate) ? 'cursor-not-allowed opacity-40' : ''"
-                        :title="booking.appointmentDate !== todayDate ? 'Check-in is only allowed on the day of the appointment' : ''"
+                        :title="booking.appointmentDate !== todayDate ? 'Check-in is available only on the selected visit date.' : ''"
                       >
                         <span x-text="isActionBusy('checkIn', booking.id) ? getActionLabel('checkIn') : 'Check In'"></span>
                       </button>
@@ -767,7 +767,7 @@
           </section>
 
           <!-- Shared queue card: the booking keeps the same anatomy through pickup. -->
-          <section x-show="activeTab !== 'incoming'" class="mt-6 space-y-4" aria-label="Grooming bookings">
+          <section x-show="activeTab !== 'incoming'" class="mt-6 space-y-4" aria-label="Grooming visits">
             <template x-if="operationalBookings.length === 0">
               <div class="grooming-empty" x-text="({ queued: 'No pets are queued right now', 'in-progress': 'No ongoing grooming right now', 'for-payment': 'No pending payments', 'to-be-picked-up': 'No pets awaiting pickup' })[activeTab]"></div>
             </template>
@@ -838,7 +838,7 @@
                           <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item" @click.stop="closeGroomingMenu(); confirmUndoCheckIn(booking)"><i data-lucide="undo-2" class="h-4 w-4" aria-hidden="true"></i>Undo Check-in</button>
                         </template>
                         <template x-if="shouldShowOwnerCancel(booking)">
-                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item grooming-menu-danger" :class="shouldShowUndoCheckIn(booking) ? 'is-separated' : ''" @click.stop="closeGroomingMenu(); confirmCancelBooking(booking)"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Cancel Booking</button>
+                          <button type="button" role="menuitem" tabindex="-1" class="grooming-menu-item grooming-menu-danger" :class="shouldShowUndoCheckIn(booking) ? 'is-separated' : ''" @click.stop="closeGroomingMenu(); confirmCancelBooking(booking)"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Cancel</button>
                         </template>
                       </div>
                     </div>
@@ -1372,7 +1372,7 @@
                   x-text="actionConfirmModal.error"
                 ></p>
               </div>
-              <div class="admin-action-confirm-footer flex gap-3 px-6">
+              <div class="admin-action-confirm-footer flex flex-col gap-3 px-6 sm:flex-row">
                 <button
                   type="button"
                   @click="closeActionConfirmModal()"
@@ -1380,13 +1380,13 @@
                   :disabled="actionConfirmModal.busy"
                   class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <span x-text="actionConfirmModal.action === 'cancelPet' ? 'Keep Pet' : actionConfirmModal.action === 'cancel' ? 'Keep Booking' : 'Cancel'"></span>
+                  <span x-text="['cancelPet', 'cancel'].includes(actionConfirmModal.action) ? 'Go Back' : 'Cancel'"></span>
                 </button>
                 <button
                   type="button"
                   @click="executeConfirmedBookingAction()"
                   :disabled="actionConfirmModal.busy"
-                  class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition"
+                  class="flex-1 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition"
                   :class="actionConfirmModal.variant === 'danger' ? 'admin-confirm-cancel-button' : (actionConfirmModal.variant === 'warning' ? 'admin-confirm-warning-button' : 'admin-confirm-checkin-button')"
                 >
                   <span x-text="actionConfirmModal.busy ? actionConfirmModal.busyLabel : actionConfirmModal.confirmLabel"></span>
@@ -1435,11 +1435,12 @@
                 <div>
                   <h4 class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Visit summary</h4>
                   <dl class="grooming-visit-summary">
-                    <div x-show="detailsBooking?.appointmentDate || detailsBooking?.appointmentTime"><dt>Appointment</dt><dd x-text="[detailsBooking?.appointmentDate, detailsBooking?.appointmentTime].filter(Boolean).join(' · ')"></dd></div>
-                    <div x-show="detailsBooking?.dropOffTime"><dt>Dropped off</dt><dd x-text="detailsBooking?.dropOffTime"></dd></div>
-                    <div x-show="detailsBooking?.startedAt && !(detailsBooking?.pets || []).some(pet => pet.groomingStartedAt)"><dt>Started</dt><dd x-text="detailsBooking?.startedAt"></dd></div>
+                    <div x-show="detailsBooking?.appointmentDate"><dt>Visit date</dt><dd x-text="detailsBooking?.appointmentDate"></dd></div>
+                    <div x-show="detailsBooking?.bookingType !== 'Walk-In' && detailsBooking?.appointmentTime"><dt>Arrival window</dt><dd x-text="detailsBooking?.appointmentTime"></dd></div>
+                    <div x-show="detailsBooking?.dropOffTime"><dt x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Checked in' : 'Dropped off'"></dt><dd x-text="detailsBooking?.dropOffTime"></dd></div>
+                    <div x-show="detailsBooking?.startedAt && !(detailsBooking?.pets || []).some(pet => pet.groomingStartedAt)"><dt>Grooming started</dt><dd x-text="detailsBooking?.startedAt"></dd></div>
                     <div x-show="detailsBooking?.completedAt && !(detailsBooking?.pets || []).some(pet => pet.groomingFinishedAt)"><dt>Finished</dt><dd x-text="detailsBooking?.completedAt"></dd></div>
-                    <div x-show="detailsBooking?.bookingType"><dt>Booking type</dt><dd x-text="detailsBooking?.bookingType"></dd></div>
+                    <div x-show="detailsBooking?.bookingType"><dt>Entry source</dt><dd x-text="detailsBooking?.bookingType === 'Walk-In' ? 'Walk-in' : 'Pre-registration'"></dd></div>
                     <div><dt>Payment</dt><dd x-text="detailsBooking?.paid ? 'Paid' : 'Unpaid'"></dd></div>
                   </dl>
                 </div>
@@ -1616,7 +1617,7 @@
                   collected
                   <span style="font-weight:600;color:#334155" x-text="pickupModal.booking?.petName"></span>?
                 </p>
-                <p style="margin-top:0.25rem;font-size:0.75rem;color:#94a3b8">This will archive the booking and notify the customer.</p>
+                <p style="margin-top:0.25rem;font-size:0.75rem;color:#94a3b8">This will archive the visit and notify the customer.</p>
               </div>
               <div style="display:flex;gap:0.75rem;border-top:0;padding:0.25rem 1.5rem 1.25rem">
                 <button
@@ -1666,9 +1667,9 @@
     </script>
 
     <!-- Shared dashboard content script -->
-    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003"></script>
+    <script src="../../scripts/components/payment-invoice.js?v=shared-invoice-20261003&copy=grooming-terminology-20261016"></script>
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
     <script src="../../scripts/services/grooming-estimate-engine.js?v=20261009"></script>
-    <script src="../../scripts/components/admin-dashboard.js?v=grooming-cancellation-20261016"></script>
+    <script src="../../scripts/components/admin-dashboard.js?v=grooming-cancellation-20261016&copy=grooming-terminology-20261016"></script>
   </body>
 </html>

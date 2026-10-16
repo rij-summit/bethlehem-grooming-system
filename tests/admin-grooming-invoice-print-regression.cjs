@@ -29,6 +29,8 @@ assert.equal(JSON.stringify(product), originalProduct, "Unit price formatting mu
 const html = fs.readFileSync(path.join(__dirname, "../pages/admin/appointments.html"), "utf8");
 assert.ok(html.includes('x-html="window.PaymentInvoice.template"'), "Grooming uses the shared invoice template");
 const invoice = context.window.PaymentInvoice.template;
+assert.ok(invoice.includes('Grooming reference'));
+assert.doesNotMatch(invoice, /Booking reference|Appointment/i);
 const settledPayment = { finalPrice: 850, amountPaid: 1000, change: 150 };
 for (const [label, expected] of [
   ["Invoice total", "₱850.00"],

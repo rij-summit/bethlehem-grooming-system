@@ -76,8 +76,13 @@ assert.equal(ui.actionConfirmModal.message, '', 'Cancellation adds no helper par
 assert.equal(ui.actionConfirmModal.booking.actionPet.bookingPetId, sibling.bookingPetId);
 ui.closeActionConfirmModal();
 ui.confirmCancelBooking(pair);
-assert.equal(ui.actionConfirmModal.title, 'Cancel Booking');
-assert.equal(ui.actionConfirmModal.confirmLabel, 'Cancel Booking');
+assert.equal(ui.actionConfirmModal.title, 'Cancel pre-registration?');
+assert.equal(ui.actionConfirmModal.confirmLabel, 'Confirm cancellation');
+assert.equal(ui.actionConfirmModal.message, '');
+ui.closeActionConfirmModal();
+ui.confirmCancelBooking({ ...pair, bookingType: 'Walk-In' });
+assert.equal(ui.actionConfirmModal.title, 'Cancel walk-in?');
+assert.equal(ui.actionConfirmModal.confirmLabel, 'Confirm cancellation');
 ui.closeActionConfirmModal();
 ui.confirmCheckInBooking({ ...pair, pets: [pet, cancelled] });
 assert.equal(ui.actionConfirmModal.petSizes.length, 1, 'Cancelled pets are excluded when checking in again');

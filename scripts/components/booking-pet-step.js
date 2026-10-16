@@ -442,7 +442,7 @@ function handleSelectAllExistingPets() {
   }
 
   if (remainingSlots <= 0) {
-    showStepError(`Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`);
+    showStepError(`Only ${MAX_PETS_PER_BOOKING} pets are allowed per visit.`);
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
@@ -644,7 +644,7 @@ function validatePetForm(values) {
   }
 
   if (getBookingPets().length >= MAX_PETS_PER_BOOKING) {
-    return `Only ${MAX_PETS_PER_BOOKING} pets are allowed per booking.`;
+    return `Only ${MAX_PETS_PER_BOOKING} pets are allowed per visit.`;
   }
 
   return "";

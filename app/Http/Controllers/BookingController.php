@@ -176,7 +176,7 @@ class BookingController extends Controller
             if ($duplicate) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'You already have a booking on this date.',
+                    'message' => 'You already have a visit on this date.',
                     'errors' => [
                         'existing_booking_id' => $duplicate->booking_id,
                         'existing_booking_ref' => $duplicate->booking_reference,
@@ -638,7 +638,7 @@ class BookingController extends Controller
         if (! $booking) {
             return response()->json([
                 'success' => false,
-                'message' => 'Booking not found.',
+                'message' => 'Visit not found.',
             ], 404);
         }
 
@@ -666,7 +666,7 @@ class BookingController extends Controller
             if (! $booking) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Booking not found.',
+                    'message' => 'Visit not found.',
                 ], 404);
             }
 
@@ -675,13 +675,13 @@ class BookingController extends Controller
                 || $booking->bookingPets()->where(fn ($pet) => $pet
                     ->whereNotIn('grooming_state', [BookingPet::GROOMING_STATE_NOT_STARTED, BookingPet::GROOMING_STATE_CANCELLED])
                     ->orWhereNotNull('grooming_start_time')->orWhereNotNull('grooming_end_time'))->exists()) {
-                return response()->json(['success' => false, 'message' => 'This booking cannot be cancelled.'], 422);
+                return response()->json(['success' => false, 'message' => 'This visit cannot be cancelled.'], 422);
             }
 
             if ($booking->cancel_count >= 2) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'You have reached the maximum number of cancellations (2) for this booking.',
+                    'message' => 'You have reached the maximum number of cancellations (2) for this visit.',
                 ], 422);
             }
 
@@ -707,7 +707,7 @@ class BookingController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Booking cancelled successfully.',
+                'message' => 'Visit cancelled successfully.',
             ]);
         });
     }
@@ -738,7 +738,7 @@ class BookingController extends Controller
         if (! $booking) {
             return response()->json([
                 'success' => false,
-                'message' => 'Booking not found.',
+                'message' => 'Visit not found.',
             ], 404);
         }
 
@@ -752,7 +752,7 @@ class BookingController extends Controller
         if ($booking->reschedule_count >= 2) {
             return response()->json([
                 'success' => false,
-                'message' => 'You have reached the maximum number of reschedules (2) for this booking.',
+                'message' => 'You have reached the maximum number of reschedules (2) for this visit.',
             ], 422);
         }
 
@@ -846,7 +846,7 @@ class BookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Booking rescheduled successfully.',
+            'message' => 'Visit rescheduled successfully.',
             'booking' => [
                 'booking_reference' => $booking->booking_reference,
                 'booking_date' => $booking->booking_date,

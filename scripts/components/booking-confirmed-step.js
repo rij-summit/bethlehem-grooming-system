@@ -82,13 +82,13 @@ export function initBookingConfirmedStep() {
         ["Checked in at", formatConfirmationTimestamp(confirmation.checked_in_at || confirmation.submitted_at || confirmation.created_at) || "Not available", "submittedAt"],
         ["Current status", currentStatus],
       ] : [
-        ["Drop-off date", formatBookingDate(confirmation.booking_date) || "Not available"],
-        ["Preferred arrival time", formatBookingTimeRange(confirmation.booking_time) || "Not available"],
+        ["Visit date", formatBookingDate(confirmation.booking_date) || "Not available"],
+        ["Arrival window", formatBookingTimeRange(confirmation.booking_time) || "Not available"],
         ["Submitted at", formatConfirmationTimestamp(confirmation.submitted_at || confirmation.created_at) || "Not available", "submittedAt"],
       ],
     )),
     consentFields.length ? confirmationSection("Grooming Consent", confirmationFields(consentFields)) : "",
-    !isWalkInConfirmation ? confirmationSection("What Happens Next", "<p>Present your reference number to staff on arrival. Your preferred arrival time does not guarantee an immediate service start.</p>") : "",
+    !isWalkInConfirmation ? confirmationSection("What Happens Next", "<p>Present your reference number to staff on arrival. Your arrival window does not guarantee an immediate service start.</p>") : "",
   ].join("");
 
   renderConfirmation(root, {

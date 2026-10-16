@@ -1174,7 +1174,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
       const data = await API.rescheduleBooking(activeBookingId, rescheduleDate.value, selectedWindowId);
       showRescheduleMessage(
         "success",
-        `Booking rescheduled to ${formatDate(data.booking.booking_date)} at ${data.booking.window}.`,
+        `Visit rescheduled to ${formatDate(data.booking.booking_date)} at ${data.booking.window}.`,
       );
       submitRescheduleBtn.textContent = "Confirm Reschedule";
       submitRescheduleBtn.disabled = true;
@@ -1383,7 +1383,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
     cancelBookingRefEl.textContent = booking.booking_reference;
     hideCancelMessage();
     confirmCancelBtn.disabled = false;
-    confirmCancelBtn.textContent = "Cancel";
+    confirmCancelBtn.textContent = "Confirm cancellation";
     cancelModal.classList.remove("hidden");
     cancelModal.classList.add("flex");
   }
@@ -1421,7 +1421,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
     } catch (error) {
       showCancelMessage("error", error.message || "Cancellation failed. Please try again.");
       confirmCancelBtn.disabled = false;
-      confirmCancelBtn.textContent = "Cancel";
+      confirmCancelBtn.textContent = "Confirm cancellation";
     }
   });
 

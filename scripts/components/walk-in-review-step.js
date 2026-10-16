@@ -47,7 +47,7 @@ function getReviewMainMarkup() {
       </button>
 
       <section class="mt-4">
-        <h1 class="text-3xl font-bold text-[#2f4b66]">Review your selected drop-off Schedule</h1>
+        <h1 class="text-3xl font-bold text-[#2f4b66]">Review your grooming visit</h1>
 
         <div class="mt-6">
           <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
@@ -62,7 +62,7 @@ function getReviewMainMarkup() {
 
       <section class="mt-6 rounded-[28px] border border-slate-200 bg-[#d9e8f4] p-5 shadow-sm md:p-8">
         <div class="mb-6">
-          <h2 class="text-2xl font-bold text-[#2f4b66]">Schedule Review</h2>
+          <h2 class="text-2xl font-bold text-[#2f4b66]">Visit review</h2>
         </div>
 
         <div class="mb-6">
@@ -70,7 +70,7 @@ function getReviewMainMarkup() {
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Schedule Summary
             </p>
-            <p class="mt-2 text-sm text-slate-600">Walk-in schedule</p>
+            <p class="mt-2 text-sm text-slate-600">Walk-in visit</p>
           </div>
         </div>
 
@@ -275,7 +275,7 @@ function renderEmptyState(message) {
   elements.totalPriceHeading.textContent = "Total Price";
   elements.totalPriceText.textContent = "P0";
   elements.totalPriceSubtext.textContent =
-    "Review data is unavailable until the earlier walk-in schedule steps are completed.";
+    "Review data is unavailable until the earlier walk-in steps are completed.";
   elements.confirmBookingBtn.disabled = true;
   elements.confirmBookingBtn.classList.add("opacity-50", "cursor-not-allowed");
 }
@@ -491,7 +491,7 @@ function initReviewState({ pets = [], petSelections = [], onBack = null } = {}) 
 }
 
 export function renderWalkInReviewStep(options = {}) {
-  document.title = "Walk-in Schedule - Review";
+  document.title = "Walk-in - Review";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getReviewMainMarkup();
 

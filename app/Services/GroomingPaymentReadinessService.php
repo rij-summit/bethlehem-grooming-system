@@ -123,9 +123,9 @@ class GroomingPaymentReadinessService
         })->values();
 
         if ($bookingPets->isEmpty()) {
-            $firstBlockedReason = 'This booking has no pets to prepare for payment.';
+            $firstBlockedReason = 'This visit has no pets to prepare for payment.';
         } elseif ($firstBlockedReason === null && $bookingTotalCents <= 0) {
-            $firstBlockedReason = 'This booking has no chargeable grooming services.';
+            $firstBlockedReason = 'This visit has no chargeable grooming services.';
         }
 
         return [
@@ -160,7 +160,7 @@ class GroomingPaymentReadinessService
 
     private function petLabel(BookingPet $bookingPet): string
     {
-        return $bookingPet->pet?->pet_name ?? "Booking pet #{$bookingPet->booking_pet_id}";
+        return $bookingPet->pet?->pet_name ?? "Pet #{$bookingPet->booking_pet_id}";
     }
 
     private function groomingStateLabel(string $state): string

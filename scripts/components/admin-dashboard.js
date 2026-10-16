@@ -552,7 +552,7 @@ function adminDashboard() {
             const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
 
             if (!bookingPetId) {
-              throw new Error("Cannot start grooming: missing booking pet id.");
+              throw new Error("Cannot start grooming: pet record is missing.");
             }
 
             const response = await API.adminStartPetGrooming(booking.id, bookingPetId, { estimate_factors: pet.estimateFactors || [], grooming_preference: pet.groomingPreference || null });
@@ -573,7 +573,7 @@ function adminDashboard() {
             const bookingPetId = pet?.bookingPetId ?? pet?.booking_pet_id ?? pet?.id;
 
             if (!bookingPetId) {
-              throw new Error("Cannot finish grooming: missing booking pet id.");
+              throw new Error("Cannot finish grooming: pet record is missing.");
             }
 
             const response = await API.adminMarkPetDone(booking.id, bookingPetId);
@@ -832,14 +832,11 @@ function adminDashboard() {
 
     // Opens a second confirmation before moving an Incoming booking into Queued.
     confirmCheckInBooking(booking) {
-      const ownerName = String(booking?.ownerName || "").trim();
       this.openActionConfirmModal({
         action: "checkIn",
         booking,
         title: "Confirm Check In",
-        message: ownerName
-          ? `Are you sure you want to check in ${ownerName}?`
-          : "Are you sure you want to check in this appointment?",
+        message: "Are you sure you want to check in this visit?",
         confirmLabel: "Yes, Check In",
         busyLabel: "Checking in...",
         icon: "checkIn",
@@ -875,14 +872,11 @@ function adminDashboard() {
         return;
       }
 
-      const ownerName = String(booking?.ownerName || "").trim();
       this.openActionConfirmModal({
         action: "startGrooming",
         booking,
         title: "Confirm Start Grooming",
-        message: ownerName
-          ? `Are you sure you want to start grooming for ${ownerName}?`
-          : "Are you sure you want to start grooming this appointment?",
+        message: "Are you sure you want to start grooming this visit?",
         confirmLabel: "Yes, Start",
         busyLabel: "Starting...",
         icon: "grooming",
@@ -1064,14 +1058,11 @@ function adminDashboard() {
 
     // Opens a second confirmation before finishing an In-Progress booking.
     confirmMarkBookingDone(booking) {
-      const ownerName = String(booking?.ownerName || "").trim();
       this.openActionConfirmModal({
         action: "markDone",
         booking,
         title: "Confirm Finished",
-        message: ownerName
-          ? `Are you sure you want to mark ${ownerName}'s appointment as finished?`
-          : "Are you sure you want to mark this appointment as finished?",
+        message: "Are you sure you want to mark this grooming visit as finished?",
         confirmLabel: "Yes, Finished",
         busyLabel: "Finishing...",
         icon: "finished",
@@ -1118,7 +1109,7 @@ function adminDashboard() {
     confirmCancelBooking(booking) {
       if (!this.shouldShowOwnerCancel(booking)) return;
       this.openActionConfirmModal({ action: "cancel", booking,
-        title: "Cancel Booking", message: "", confirmLabel: "Cancel Booking",
+        title: booking.bookingType === "Walk-In" ? "Cancel walk-in?" : "Cancel pre-registration?", message: "", confirmLabel: "Confirm cancellation",
         busyLabel: "Cancelling...", icon: "cancel", variant: "danger" });
     },
 
@@ -1126,7 +1117,7 @@ function adminDashboard() {
       if (!this.canCancelPet(booking, pet)) return;
       const title = `Cancel ${pet.petName ?? pet.pet_name ?? pet.name}`;
       this.openActionConfirmModal({ action: "cancelPet", booking: { ...booking, actionPet: pet },
-        title, message: "", confirmLabel: title,
+        title, message: "", confirmLabel: "Confirm cancellation",
         busyLabel: "Cancelling...", icon: "cancel", variant: "danger" });
     },
 
@@ -3166,7 +3157,7 @@ function adminDashboard() {
 
     async openPaymentModal(booking, isEarlyPayment = false) {
       if (!isEarlyPayment && booking?.paymentReady === false) {
-        alert(booking?.paymentBlockedReason || "This booking is not ready for final payment.");
+        alert(booking?.paymentBlockedReason || "This visit is not ready for final payment.");
         return;
       }
 

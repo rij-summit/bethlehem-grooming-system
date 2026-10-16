@@ -65,7 +65,7 @@ window.PaymentInvoice = (() => {
   </header>
 
   <dl class="payment-invoice-meta">
-    <div><dt>${clinic ? 'Case reference' : 'Booking reference'}</dt><dd x-text="receiptModal.${clinic ? 'caseReference' : 'bookingReference'}"></dd></div>
+    <div><dt>${clinic ? 'Case reference' : 'Grooming reference'}</dt><dd x-text="receiptModal.${clinic ? 'caseReference' : 'bookingReference'}"></dd></div>
     <div><dt>Invoice date</dt><dd x-text="formatInvoiceDate(receiptModal.paidAt)"></dd></div>
   </dl>
 

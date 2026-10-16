@@ -678,7 +678,7 @@ function initServicesState(pets, petSelections = []) {
 }
 
 export function renderWalkInServicesStep({ pets = [], petSelections = [] } = {}) {
-  document.title = "Walk-in Booking - Grooming Services";
+  document.title = "Walk-in - Grooming Services";
   document.body.className = "min-h-screen bg-slate-50 text-slate-800";
   document.body.innerHTML = getServicesMainMarkup();
 
