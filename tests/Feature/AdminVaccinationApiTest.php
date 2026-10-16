@@ -286,6 +286,15 @@ class AdminVaccinationApiTest extends TestCase
         );
     }
 
+    public function test_treatment_response_preserves_missing_and_unknown_types(): void
+    {
+        $controller = app(AdminVaccinationController::class);
+        foreach (['vaccine', 'medicine', null, '', 'unknown'] as $type) {
+            $record = new \App\Models\VaccinationRecord(['treatment_type' => $type]);
+            $this->assertSame($type, $controller->formatRecord($record)['treatment_type']);
+        }
+    }
+
     public function test_current_visit_treatments_exclude_other_cases_and_unlinked_history(): void
     {
         $this->authenticateAs('staff', 2);

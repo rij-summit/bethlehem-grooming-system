@@ -530,7 +530,7 @@ class AdminVaccinationController extends Controller
     {
         return [
             'id' => $record->id,
-            'treatment_type' => $record->treatment_type ?? 'vaccine',
+            'treatment_type' => $record->treatment_type,
             'treatment_name' => $record->vaccine_name,
             'record_source' => $record->inventory_item_id ? 'inventory' : 'historical',
             'inventory_quantity' => $record->inventory_quantity,

@@ -87,6 +87,58 @@ function setup() {
   assert.equal(app.state.patientConditions, '');
   app.state.closeProfile();
 
+  const treatment = setup();
+  const treatmentRows = [
+    {id: 1, treatment_type: 'vaccine', treatment_name: 'Rabies'},
+    {id: 2, treatment_type: 'medicine', treatment_name: 'Amoxicillin'},
+    {id: 3, treatment_type: null, vaccine_name: 'Legacy treatment'},
+    {id: 4, treatment_type: 'unknown'},
+    {id: 5},
+  ];
+  const originalTreatments = JSON.stringify(treatmentRows);
+  let treatmentReads = 0;
+  treatment.context.API.getAdminPetVaccinations = async () => {
+    treatmentReads++;
+    return {vaccinations: treatmentRows, current_page: 1, last_page: 2};
+  };
+  await treatment.state.openProfile({pet: {id: 7}, owner});
+  assert.equal(treatment.state.treatmentTypeFilter, 'all');
+  await treatment.state.loadHistory('treatment');
+  const treatmentIds = () => Array.from(treatment.state.filteredTreatmentRows, row => row.id);
+  assert.deepEqual(treatmentIds(), [1, 2, 3, 4, 5], 'All types includes legacy records');
+  assert.deepEqual(treatmentRows.map(row => treatment.state.treatmentTypeLabel(row)), ['Vaccine', 'Medicine', '—', '—', '—']);
+  treatment.state.treatmentTypeFilter = 'vaccine';
+  assert.deepEqual(treatmentIds(), [1]);
+  treatment.state.treatmentTypeFilter = 'medicine';
+  assert.deepEqual(treatmentIds(), [2]);
+  await treatment.state.viewDetail(treatment.state.filteredTreatmentRows[0], null, 'treatment');
+  assert.equal(treatment.state.detail.record, treatmentRows[1], 'View opens the selected filtered record');
+  treatment.state.backToProfile();
+  assert.equal(treatment.state.treatmentTypeFilter, 'medicine', 'Returning from details preserves the filter');
+  treatment.state.selectHistory('medical');
+  treatment.state.selectHistory('treatment');
+  assert.equal(treatmentReads, 1, 'Filtering and revisiting the tab never fetch history');
+  assert.equal(JSON.stringify(treatmentRows), originalTreatments, 'Filtering leaves loaded records intact');
+  const nextTreatments = deferred();
+  treatment.context.API.getAdminPetVaccinations = () => nextTreatments.promise;
+  const loadingTreatments = treatment.state.loadHistory('treatment', 2);
+  assert.equal(treatment.state.histories.treatment.loading, true);
+  nextTreatments.resolve({vaccinations: [{id: 6, treatment_type: 'medicine'}], current_page: 2, last_page: 2});
+  await loadingTreatments;
+  assert.deepEqual(treatmentIds(), [2, 6], 'Newly loaded matching rows honor the active filter');
+  assert.equal(treatment.state.histories.treatment.page, 2);
+  assert.equal(treatment.state.histories.treatment.lastPage, 2);
+  treatment.state.histories.treatment.rows = [treatmentRows[0]];
+  assert.deepEqual(treatmentIds(), [], 'Medicine filter can have no matching records');
+  treatment.state.histories.treatment.rows = [treatmentRows[1]];
+  treatment.state.treatmentTypeFilter = 'vaccine';
+  assert.deepEqual(treatmentIds(), [], 'Vaccine filter can have no matching records');
+  treatment.context.API.getCustomerDetails = async () => ({customer: {...owner, pets: [{...pet, id: 9}]}});
+  await treatment.state.openProfile({pet: {id: 9}, owner});
+  assert.equal(treatment.state.treatmentTypeFilter, 'all', 'Opening a different patient resets the filter');
+  assert.deepEqual(treatmentIds(), []);
+  treatment.state.closeProfile();
+
   const delayed = setup(), history = deferred();
   delayed.context.API.adminGetPetProfile = () => history.promise;
   const opening = delayed.state.openProfile({pet: {id: 7}, owner}, delayed.trigger);

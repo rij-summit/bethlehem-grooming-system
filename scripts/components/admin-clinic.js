@@ -602,6 +602,7 @@ function adminClinicPage() {
     },
     _profileRequest: 0,
     historyTab: 'medical',
+    treatmentTypeFilter: 'all',
     historyTabs: [{id: 'medical', label: 'Medical Records'}, {id: 'treatment', label: 'Treatment'}, {id: 'services', label: 'Services'}, {id: 'confinement', label: 'Confinement'}],
     histories: {},
     profileReturnFocus: null,
@@ -1001,6 +1002,7 @@ function adminClinicPage() {
       this.profileActionError = '';
       this.profileEditing = false;
       this.historyTab = 'medical';
+      this.treatmentTypeFilter = 'all';
       this.histories = Object.fromEntries(['treatment', 'services', 'confinement'].map(tab =>
         [tab, {rows: [], loaded: false, loading: false, error: '', page: 0, lastPage: 1}]));
       this.profile = {
@@ -1250,6 +1252,13 @@ function adminClinicPage() {
         state.loaded = true;
       } catch (error) { if (request === this._profileRequest) state.error = error.message || 'Could not load patient history.'; }
       finally { if (request === this._profileRequest) { state.loading = false; this.$nextTick?.(() => window.lucide?.createIcons()); } }
+    },
+    get filteredTreatmentRows() {
+      const rows = this.histories.treatment?.rows || [];
+      return this.treatmentTypeFilter === 'all' ? rows : rows.filter(record => record.treatment_type === this.treatmentTypeFilter);
+    },
+    treatmentTypeLabel(record) {
+      return record.treatment_type === 'vaccine' ? 'Vaccine' : record.treatment_type === 'medicine' ? 'Medicine' : '—';
     },
     treatmentSummary: record => clinicTreatmentSummary(record),
     treatmentDetails: record => clinicTreatmentDetails(record),
