@@ -190,6 +190,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $table->string('pet_name');
             $table->string('species')->nullable();
             $table->string('breed')->nullable();
+            $table->date('birthdate')->nullable();
             $table->decimal('weight', 5, 2)->nullable();
             $table->string('color')->nullable();
             $table->string('size')->nullable();
@@ -3507,6 +3508,60 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('bookings')->where('booking_id', 1)->update(['sedation_consent' => true]);
         $this->getJson('/api/admin/bookings/1/signed-consent')->assertOk()->assertJsonPath('legacy_sedation_consent', true);
         $this->getJson('/api/admin/bookings/999/signed-consent')->assertNotFound();
+    }
+
+    #[DataProvider('groomingMinimumAgeCases')]
+    public function test_customer_grooming_enforces_calendar_month_minimum_age(?string $birthdate, string $today, bool $eligible, bool $saved): void
+    {
+        Carbon::setTestNow($today.' 10:00:00');
+        $this->authenticateAs('customer');
+        DB::table('time_windows')->insert([
+            'window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00',
+            'max_slots' => 4, 'is_active' => true,
+        ]);
+        $pet = ['pet_name' => 'Mochi', 'species' => 'cat', 'birthdate' => $birthdate];
+        if ($saved) {
+            DB::table('pets')->insert(['pet_id' => 42, 'user_id' => 3, ...$pet]);
+            // A stale or tampered payload must not override the saved birthdate.
+            $pet['pet_id'] = 42;
+            $pet['birthdate'] = null;
+        }
+        $response = $this->submitSignedGrooming('/api/booking/store', [
+            'booking_date' => $today, 'window_id' => 1, 'number_of_pets' => 1, 'pets' => [$pet],
+        ]);
+        if ($eligible) {
+            $response->assertCreated();
+            $this->assertDatabaseHas('pets', ['birthdate' => $birthdate, 'pet_name' => 'Mochi']);
+        } else {
+            $response->assertUnprocessable()->assertJsonValidationErrors('pets.0.birthdate');
+            $this->assertSame(['Pet must be at least 6 months old for grooming.'], $response->json('errors')['pets.0.birthdate']);
+            $this->assertDatabaseCount('bookings', 0);
+            $this->assertDatabaseCount('booking_pets', 0);
+        }
+    }
+
+    public static function groomingMinimumAgeCases(): array
+    {
+        $cases = [];
+        foreach ([false, true] as $saved) {
+            foreach ([
+                [null, '2026-10-16', true],
+                ['2026-06-16', '2026-10-16', false],
+                ['2026-04-17', '2026-10-16', false],
+                ['2026-04-16', '2026-10-16', true],
+                ['2024-10-16', '2026-10-16', true],
+                ['2025-08-31', '2026-02-27', false],
+                ['2025-08-31', '2026-02-28', true],
+                ['2023-08-31', '2024-02-28', false],
+                ['2023-08-31', '2024-02-29', true],
+                ['2026-04-30', '2026-10-27', false],
+            ] as [$birthdate, $today, $eligible]) {
+                $cases[] = [$birthdate, $today, $eligible, $saved];
+            }
+        }
+
+        return $cases;
     }
 
     private function authenticateAs(string $role): void

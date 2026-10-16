@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { initGroomingConsent } from '../scripts/components/grooming-consent.js';
+import { isEligibleForGrooming } from '../scripts/services/grooming-age.js';
 
 const terms = JSON.parse(fs.readFileSync(new URL('../scripts/data/grooming-consent.json', import.meta.url)));
 const values = new Map();
@@ -122,6 +123,7 @@ for (const walkIn of [false, true]) {
       initGroomingConsent, getPetWeightSubmission: () => ({ weight: 4 }), getPetWeightSubmissionValidationMessage: () => '',
       loadGroomingCatalogue: async () => {}, getBookingDraft: () => ({}), normalizeStepThreeDraft: () => [],
       selectedPricingSignature: () => null, goToGroomingStep: step => { navigated = step; },
+      isEligibleForGrooming,
     });
     vm.runInContext(source(walkIn ? 'walk-in-consent-step' : 'booking-consent-step'), context);
     if (walkIn) ready(); else context.initBookingConsentStep();
@@ -142,6 +144,14 @@ for (const walkIn of [false, true]) {
     get('consentSignerName').value = 'Customer Representative';
     await get('consentSignerName').emit('input');
     assert.equal(get('submitBookingButton').disabled, false);
+    if (!walkIn) {
+      const originalPets = sessionStorage.getItem('bookingPets');
+      save('bookingPets', [{ id: 1, birthdate: '2999-06-16' }]);
+      await form.emit('submit');
+      assert.equal(submitted, undefined, 'Submission rechecks stale underage selections');
+      assert.equal(navigated, 'pets');
+      sessionStorage.setItem('bookingPets', originalPets);
+    }
     await form.emit('submit');
     assert.equal(submitted.terms_agreed, true);
     assert.equal(submitted.sedation_consent, sedation);

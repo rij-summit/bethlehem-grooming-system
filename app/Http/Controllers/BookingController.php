@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class BookingController extends Controller
 {
@@ -103,6 +104,7 @@ class BookingController extends Controller
             'pets.*.pet_name' => 'required|string|max:100',
             'pets.*.species' => 'nullable|string|max:50',
             'pets.*.breed' => 'nullable|string|max:100',
+            'pets.*.birthdate' => 'nullable|date',
             'pets.*.size' => ['nullable', 'in:small,medium,large,extra_large', new ValidPetSize],
             'pets.*.fur_type' => ['nullable', 'string', 'max:100', new ValidBreedCoat],
             'pets.*.weight' => ['nullable', new ValidPetWeight],
@@ -144,6 +146,18 @@ class BookingController extends Controller
             }
 
             $date = $request->booking_date;
+            $savedPets = Pet::where('user_id', $user->user_id)
+                ->whereIn('pet_id', array_column($request->pets, 'pet_id'))
+                ->get()->keyBy('pet_id');
+            foreach ($request->pets as $index => $petData) {
+                $savedPet = $savedPets->get($petData['pet_id'] ?? null);
+                $birthdate = $savedPet ? $savedPet->birthdate : ($petData['birthdate'] ?? null);
+                if ($birthdate && Carbon::parse($birthdate)->startOfDay()->addMonthsNoOverflow(6)->isAfter(Carbon::today())) {
+                    throw ValidationException::withMessages([
+                        "pets.{$index}.birthdate" => 'Pet must be at least 6 months old for grooming.',
+                    ]);
+                }
+            }
             $sedationConsent = $request->boolean('sedation_consent');
             $settings = ClinicSetting::current();
             $request->merge(['pets' => app(\App\Services\PetGroomerSelection::class)->validate($request->pets, false)]);
@@ -217,14 +231,7 @@ class BookingController extends Controller
 
             // ── Save pets ─────────────────────────────────────
             foreach ($request->pets as $petData) {
-                $pet = null;
-
-                // Reuse existing pet if pet_id is provided and belongs to this user
-                if (! empty($petData['pet_id'])) {
-                    $pet = Pet::where('pet_id', $petData['pet_id'])
-                        ->where('user_id', $user->user_id)
-                        ->first();
-                }
+                $pet = $savedPets->get($petData['pet_id'] ?? null);
 
                 if ($pet) {
                     $pet->update([
@@ -243,6 +250,7 @@ class BookingController extends Controller
                         'pet_name' => $petData['pet_name'],
                         'species' => $petData['species'] ?? 'Dog',
                         'breed' => $petData['breed'] ?? null,
+                        'birthdate' => $petData['birthdate'] ?? null,
                         'weight' => $petData['weight'] ?? null,
                         'color' => $petData['color'] ?? null,
                         'size' => PetWeightSize::sizeFor($petData['species'] ?? 'Dog', $petData['weight'] ?? null)

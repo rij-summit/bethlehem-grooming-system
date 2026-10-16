@@ -24,6 +24,7 @@ import { createBreedCoatCombobox } from "./breed-coat-combobox.js";
 import { createFixedOptionCombobox } from "./fixed-option-combobox.js";
 import { canSelectAllSavedPets, showPetSelectionSection } from "./pet-selection-tabs.js";
 import { goToGroomingStep, isGroomingSinglePage } from "./grooming-flow-navigation.js";
+import { formatPetAge, isEligibleForGrooming, GROOMING_MINIMUM_AGE_MESSAGE } from "../services/grooming-age.js";
 import {
   formatSavedWeight,
   getPetWeightSubmissionValidationMessage,
@@ -87,6 +88,9 @@ function getBookingSchedule() {
 }
 
 function addPetToBooking(pet) {
+  if (!IS_CLINIC_VISIT && !isEligibleForGrooming(pet)) {
+    throw new Error(GROOMING_MINIMUM_AGE_MESSAGE);
+  }
   return addStoredPet(pet, {
     storageKey: SELECTED_PETS_STORAGE_KEY,
     maxPets: MAX_PETS_PER_BOOKING,
@@ -225,6 +229,9 @@ function renderScheduleSummary() {
 
 function showStepError(message) {
   elements.petStepError.textContent = message;
+  elements.petStepError.className = message === GROOMING_MINIMUM_AGE_MESSAGE
+    ? "mb-6 text-sm text-slate-600"
+    : "mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700";
   elements.petStepError.classList.remove("hidden");
 }
 
@@ -308,8 +315,10 @@ function formatWeightLabel(weight) {
 }
 
 function buildPetSummaryHtml(pet) {
+  const age = !IS_CLINIC_VISIT ? formatPetAge(pet) : "";
   return `
     <div class="grid gap-2 text-sm text-slate-600">
+      ${age ? `<p><span class="font-semibold text-slate-700">Age:</span> ${escapeHtml(age)}</p>` : ""}
       <p><span class="font-semibold text-slate-700">Type:</span> ${escapeHtml(
         pet.petType || "Not specified",
       )}</p>
@@ -358,10 +367,11 @@ function renderExistingPets() {
       (selectedPet) => selectedPet.id === pet.id,
     );
     const bookingIsFull = bookingPets.length >= MAX_PETS_PER_BOOKING;
+    const underage = !IS_CLINIC_VISIT && !isEligibleForGrooming(pet);
 
     const wrapper = document.createElement("article");
     wrapper.className =
-      "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+      `rounded-2xl border border-slate-200 p-4 shadow-sm ${underage ? "bg-slate-50 opacity-80" : "bg-white"}`;
 
     wrapper.innerHTML = `
       <div class="mb-3 flex items-start justify-between gap-3">
@@ -373,20 +383,22 @@ function renderExistingPets() {
         <button
           type="button"
           data-pet-id="${escapeHtml(pet.id)}"
-          class="select-existing-pet-btn rounded-xl px-4 py-2 text-xs font-semibold transition ${
-            isSelected
+          class="select-existing-pet-btn rounded-xl px-4 py-2 text-xs font-semibold transition ${underage ? "whitespace-nowrap" : ""} ${
+            underage || isSelected
               ? "cursor-not-allowed bg-slate-300 text-slate-500"
               : bookingIsFull
                 ? "cursor-not-allowed bg-slate-300 text-slate-500"
                 : "bg-[#315b7e] text-white hover:bg-[#274864]"
           }"
-          ${isSelected || bookingIsFull ? "disabled" : ""}
+          ${underage || isSelected || bookingIsFull ? "disabled" : ""}
         >
-          ${isSelected ? "Already Selected" : bookingIsFull ? "Limit Reached" : "Select Pet"}
+          ${underage ? "Not eligible" : isSelected ? "Already Selected" : bookingIsFull ? "Limit Reached" : "Select Pet"}
         </button>
       </div>
 
+      ${underage ? '<span class="mb-3 inline-block rounded-full bg-slate-200 px-2 py-1 text-xs font-medium text-slate-600">Under 6 months</span>' : ""}
       ${buildPetSummaryHtml(pet)}
+      ${underage ? '<p class="mt-3 text-xs text-slate-600">Grooming is for pets 6 months and older.</p>' : ""}
     `;
 
     elements.existingPetList.appendChild(wrapper);
@@ -399,8 +411,11 @@ function syncSelectAllButtonState(
   savedPets = getSavedPets(),
   bookingPets = getBookingPets(),
 ) {
+  const eligiblePets = IS_CLINIC_VISIT ? savedPets : savedPets.filter((pet) => isEligibleForGrooming(pet));
   const canSelectAll = !IS_CLINIC_VISIT
-    && canSelectAllSavedPets(savedPets, bookingPets, MAX_PETS_PER_BOOKING);
+    && canSelectAllSavedPets(eligiblePets, bookingPets, MAX_PETS_PER_BOOKING);
+  elements.selectAllExistingPetsBtn.textContent = eligiblePets.length < savedPets.length
+    ? "Select All Eligible" : "Select All";
   elements.selectAllExistingPetsBtn.classList.toggle("hidden", !canSelectAll);
   elements.selectAllExistingPetsBtn.disabled = !canSelectAll;
 }
@@ -433,6 +448,7 @@ function bindExistingPetButtons() {
 
 function handleSelectAllExistingPets() {
   const savedPets = getSavedPets();
+  const eligiblePets = savedPets.filter((pet) => IS_CLINIC_VISIT || isEligibleForGrooming(pet));
   const bookingPets = getBookingPets();
   const remainingSlots = MAX_PETS_PER_BOOKING - bookingPets.length;
 
@@ -448,10 +464,10 @@ function handleSelectAllExistingPets() {
   }
 
   const selectedPetIds = new Set(bookingPets.map((pet) => pet.id));
-  const unselectedSavedPets = savedPets.filter(
+  const unselectedSavedPets = eligiblePets.filter(
     (pet) => !selectedPetIds.has(pet.id),
   );
-  if (!canSelectAllSavedPets(savedPets, bookingPets, MAX_PETS_PER_BOOKING)) {
+  if (!canSelectAllSavedPets(eligiblePets, bookingPets, MAX_PETS_PER_BOOKING)) {
     syncSelectAllButtonState(savedPets, bookingPets);
     return;
   }
@@ -491,8 +507,10 @@ function renderSelectedPets() {
   }
 
   elements.selectedPetsEmptyState.classList.add("hidden");
-  elements.nextBtn.disabled = false;
-  elements.nextBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  const blocked = !IS_CLINIC_VISIT && (savedPetsLoading || bookingPets.some((pet) => !isEligibleForGrooming(pet)));
+  elements.nextBtn.disabled = blocked;
+  elements.nextBtn.classList.toggle("opacity-50", blocked);
+  elements.nextBtn.classList.toggle("cursor-not-allowed", blocked);
 
   bookingPets.forEach((pet) => {
     const card = document.createElement("article");
@@ -622,6 +640,10 @@ function validatePetForm(values) {
     return "Pet name is required.";
   }
 
+  if (!IS_CLINIC_VISIT && !isEligibleForGrooming(values)) {
+    return GROOMING_MINIMUM_AGE_MESSAGE;
+  }
+
   const breedValidationMessage = breedCombobox.getValidationMessage();
   if (breedValidationMessage) {
     return breedValidationMessage;
@@ -737,6 +759,12 @@ function handleNext() {
   const bookingSchedule = getBookingSchedule();
   const bookingPets = getBookingPets();
 
+  if (!IS_CLINIC_VISIT && bookingPets.some((pet) => !isEligibleForGrooming(pet))) {
+    showStepError(GROOMING_MINIMUM_AGE_MESSAGE);
+    return;
+  }
+  if (!IS_CLINIC_VISIT && savedPetsLoading) return;
+
   const weightMessage = bookingPets.map(getPetWeightSubmissionValidationMessage).find(Boolean);
   if (weightMessage) {
     showStepError(weightMessage);
@@ -833,6 +861,7 @@ function bindEvents() {
 }
 
 async function initStepState() {
+  if (!IS_CLINIC_VISIT) await globalThis.AppClock?.load();
   renderScheduleSummary();
   initializeWeightField(elements.weight);
   syncWeightAndSize();
@@ -859,10 +888,12 @@ async function syncSavedPets() {
   const savedPetsById = new Map(getSavedPets().map((pet) => [pet.id, pet]));
   const currentPets = getBookingPets();
   const refreshedPets = currentPets.map((pet) => savedPetsById.get(pet.id) || pet);
-  if (refreshedPets.some((pet, index) => pet !== currentPets[index])) {
-    saveBookingPets(refreshedPets);
-    renderSelectedPets();
+  const eligiblePets = IS_CLINIC_VISIT ? refreshedPets : refreshedPets.filter((pet) => isEligibleForGrooming(pet));
+  if (eligiblePets.length !== currentPets.length || eligiblePets.some((pet, index) => pet !== currentPets[index])) {
+    saveBookingPets(eligiblePets);
   }
+  if (eligiblePets.length < refreshedPets.length) showStepError(GROOMING_MINIMUM_AGE_MESSAGE);
+  renderSelectedPets();
 
   renderExistingPets();
 }
@@ -893,8 +924,8 @@ export async function initBookingPetStep() {
 
 export async function refreshBookingPetStep() {
   renderScheduleSummary();
-  renderSelectedPets();
   savedPetsLoading = true;
+  renderSelectedPets();
   renderExistingPets();
   await syncSavedPets();
 }

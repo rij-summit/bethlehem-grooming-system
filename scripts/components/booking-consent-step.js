@@ -3,6 +3,7 @@ import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from 
 import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 import { getBookingDraft } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
 import { goToGroomingStep } from "./grooming-flow-navigation.js";
+import { isEligibleForGrooming } from "../services/grooming-age.js";
 
 export function initBookingConsentStep() {
   const form = document.getElementById("bookingConsentForm");
@@ -25,6 +26,11 @@ export function initBookingConsentStep() {
     const schedule = getStoredData("bookingSchedule");
     const bookingPets = getStoredData("bookingPets") || [];
     const reviewData = getStoredData("bookingStep4Review") || getStoredData("bookingReview") || {};
+
+    if (bookingPets.some((pet) => !isEligibleForGrooming(pet))) {
+      goToGroomingStep("pets");
+      return;
+    }
 
     if (!schedule?.window_id) {
       sessionStorage.setItem("bookingScheduleArrivalError", "Please choose an available arrival window.");
@@ -56,6 +62,7 @@ export function initBookingConsentStep() {
         pet_name: pet.petName,
         species: pet.petType,
         breed: pet.breed || null,
+        birthdate: pet.birthdate || null,
         size: normalizeSizeForApi(pet.size),
         fur_type: pet.furType?.trim() || null,
         ...getPetWeightSubmission(pet),
@@ -126,6 +133,10 @@ export function initBookingConsentStep() {
 
       if (Object.keys(error.errors || {}).some((key) => key.endsWith('.groomer_id'))) {
         goToGroomingStep("services");
+        return;
+      }
+      if (Object.keys(error.errors || {}).some((key) => key.endsWith('.birthdate'))) {
+        goToGroomingStep("pets");
         return;
       }
       const existingBookingId = error.errors?.existing_booking_id;

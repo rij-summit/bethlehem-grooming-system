@@ -16,6 +16,7 @@ async function main() {
   global.sessionStorage = storage;
   const draft = await import('../scripts/services/booking-draft-service.js');
   const grooming = await import('../scripts/services/grooming-service.js?v=grooming-pricing-20261006');
+  const groomingAge = await import('../scripts/services/grooming-age.js');
   const forecast = await import('../scripts/services/grooming-workload-forecast.js');
   global.GroomingEstimates.configure({ preferences: { regular_dog_grooming: { regular_trim: 'Regular Trim' } } });
   const catalogue = JSON.parse(read('tests/grooming-catalogue-fixture.json'));
@@ -50,7 +51,7 @@ async function main() {
   const entered = [];
   const location = { href: 'http://localhost/pages/client/grooming-pre-registration.html', search: '' };
   const context = vm.createContext({
-    console, URL, URLSearchParams, sessionStorage: storage, ...grooming, ...forecast,
+    console, URL, URLSearchParams, sessionStorage: storage, ...grooming, ...forecast, ...groomingAge,
     document: {
       body: { classList: { toggle() {} } }, querySelectorAll: () => sections,
       addEventListener(event, handler) { if (event === 'DOMContentLoaded') ready = handler; },
@@ -73,6 +74,10 @@ async function main() {
   assert.equal(entered.at(-1), 'pets', 'A new registration starts with Pet Information');
   await context.navigate('consent');
   assert.equal(entered.at(-1), 'pets');
+  save('bookingPets', [{ ...pet, birthdate: '2999-06-16' }]);
+  for (const step of ['services', 'schedule', 'review', 'consent']) {
+    assert.equal(context.availableStep(step), 'pets', 'Deep links cannot bypass the grooming minimum age');
+  }
   save('bookingPets', [pet]);
   save('bookingStep2', { pets: [pet], bookingDate: 'old date', bookingTime: 'old time' });
   await context.navigate('schedule');
@@ -122,6 +127,7 @@ async function main() {
   const handlers = petSource.slice(petSource.indexOf('function handleBack()'), petSource.indexOf('function setFieldError('));
   let target, saved = false, error;
   const petContext = vm.createContext({ IS_CLINIC_VISIT: false, isGroomingSinglePage: () => true,
+    ...groomingAge, savedPetsLoading: false,
     getBookingSchedule: () => null, getBookingPets: () => [pet], getPetWeightSubmissionValidationMessage: () => '',
     showStepError: (message) => { error = message; }, clearStepError() {},
     saveStepTwoDraft: () => { saved = true; }, goToGroomingStep: (step) => { target = step; }, window: { location: {} },

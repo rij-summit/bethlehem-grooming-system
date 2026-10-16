@@ -3879,6 +3879,10 @@ video {
   opacity: 0.6;
 }
 
+.opacity-80 {
+  opacity: 0.8;
+}
+
 .\!shadow-portal-dropdown {
   --tw-shadow: 0 12px 36px rgb(44 62 80 / 14%) !important;
   --tw-shadow-colored: 0 12px 36px var(--tw-shadow-color) !important;
