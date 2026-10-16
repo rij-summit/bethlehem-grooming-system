@@ -313,15 +313,16 @@ async function testInitialAndReturningSessionGreetings() {
   assert.equal(await greeting(initialCookie, 8), "Welcome back, Gerald", "The marker belongs only to the registered customer.");
 }
 
-function testExpiredRegistrationsHaveNeutralHistoryLabels() {
+async function testExpiredRegistrationsHaveNeutralHistoryLabels() {
   const historySource = fs.readFileSync(path.resolve(__dirname, '../pages/client/grooming-history.html'), 'utf8');
   const helpers = historySource.slice(historySource.indexOf('function escapeHistoryHtml'), historySource.indexOf('function closeHistoryModal'));
-  const context = vm.createContext({ Intl, Date, document: { getElementById: () => null } });
+  const { healthDate } = await import("../scripts/components/customer-health-records.js");
+  const context = vm.createContext({ Intl, Date, healthDate, document: { getElementById: () => null } });
   vm.runInContext(helpers, context);
   for (const status of ['expired', 'no_show']) {
     const booking = { status, number_of_pets: 1, pets: [] };
     assert.equal(context.groomingOutcome(status)[0], 'Expired');
-    assert.match(context.buildHistoryCard(booking, null), />Expired<\/span>/);
+    assert.match(context.buildHistoryCard({ type: "grooming", booking, pet: null }), />Expired<\/span>/);
     assert.match(context.buildHistoryModalContent(booking, null), />Expired<\/span>/);
     assert.doesNotMatch(context.groomingOutcome(status)[1], /amber|red|rose/);
   }
@@ -443,7 +444,7 @@ async function testTrackerDisclosureAndPrioritySurviveRefresh() {
 (async () => {
   await testTrackerOverallStateAndIndividualCards();
   await testTrackerDisclosureAndPrioritySurviveRefresh();
-  testExpiredRegistrationsHaveNeutralHistoryLabels();
+  await testExpiredRegistrationsHaveNeutralHistoryLabels();
   await testPerPetGroomingEstimatesAndOverdueTracker();
   await testInitialAndReturningSessionGreetings();
   await testStateHierarchyAndLiveTransitions();

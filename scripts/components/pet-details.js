@@ -3,6 +3,7 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
   const { formatSavedWeight } = await import("./pet-weight-size.js?v=pet-weight-size-20261011-v3");
+  const { clinicVisitFields, healthDate } = await import("./customer-health-records.js?v=20261016");
   if (!API.hasAuthenticatedSession("customer")) {
     API.redirectToSignIn();
     return;
@@ -27,7 +28,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const profileParams = new URLSearchParams(window.location.search);
   const petIdParam = profileParams.get("pet_id");
   const petId = Number(petIdParam);
-  const requestedTab = profileParams.get("tab");
+  const tabParam = profileParams.get("tab");
+  const requestedTab = ["medical", "vaccinations"].includes(tabParam) ? "health" : tabParam;
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -294,76 +296,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   const renderMedicalRecord = (record) => {
-    const summaryItems = [
-      ["Reason for Visit", displayValue(record.chief_complaint)],
-      ["Final Diagnosis", displayValue(record.diagnosis)],
-      ["Treatment", displayValue(record.treatment_given)],
-    ];
-    const vitalItems = [
-      ["Weight", isMissing(record.vitals?.weight_kg) ? null : `${formatSavedWeight(record.vitals.weight_kg)} kg`],
-      ["Temperature", isMissing(record.vitals?.temperature_c) ? null : `${record.vitals.temperature_c} °C`],
-      ["Heart Rate", isMissing(record.vitals?.heart_rate_bpm) ? null : `${record.vitals.heart_rate_bpm} bpm`],
-      ["Respiratory Rate", isMissing(record.vitals?.respiratory_rate_bpm) ? null : `${record.vitals.respiratory_rate_bpm} breaths/min`],
-      ["Body Condition Score", isMissing(record.vitals?.body_condition_score) ? null : `${record.vitals.body_condition_score} / 9`],
-    ].filter(([, value]) => !isMissing(value));
-    const hasFollowUp = !isMissing(record.follow_up_date) || !isMissing(record.follow_up_notes);
-
+    const fields = clinicVisitFields(record);
+    if (!isMissing(record.vitals?.weight_kg)) fields.push(["Weight", formatWeight(record.vitals.weight_kg)]);
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div class="border-b border-slate-200 bg-white px-5 py-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p class="text-xs font-medium text-slate-500">Appointment Reference</p>
-              <h4 class="mt-1 text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.appointment_reference))}</h4>
-              <p class="mt-1 text-xs text-slate-500">
-                <span>${escapeHtml(formatDate(record.appointment_date))}</span>
-              </p>
-            </div>
-            <span class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">${escapeHtml(titleCase(record.status))}</span>
+      <article class="border-t border-portal-border py-5 first:border-t-0 first:pt-0 last:pb-0">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h4 class="text-sm font-bold text-portal-text">${escapeHtml(healthDate(record.appointment_date))}</h4>
+            ${isMissing(record.appointment_reference) ? "" : `<p class="mt-1 break-words text-xs text-portal-muted">${escapeHtml(record.appointment_reference)}</p>`}
           </div>
+          <span class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">${escapeHtml(titleCase(record.status))}</span>
         </div>
-
-        <div class="space-y-5 p-5">
-          <dl class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            ${summaryItems.map(([label, value]) => `
-              <div>
-                <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-                <dd class="mt-1 whitespace-pre-line break-words text-xs leading-5 text-slate-700">${escapeHtml(value)}</dd>
-              </div>
-            `).join("")}
-          </dl>
-
-          ${hasFollowUp ? `
-            <section class="border-t border-slate-200 pt-4">
-              <div>
-                <div>
-                  <h5 class="text-sm font-bold text-[#2f4b66]">Follow-up</h5>
-                  <p class="mt-1 text-xs text-slate-600"><span class="font-semibold">Date:</span> ${escapeHtml(formatDate(record.follow_up_date))}</p>
-                  <p class="mt-1 whitespace-pre-line text-xs leading-5 text-slate-600">${escapeHtml(displayValue(record.follow_up_notes))}</p>
-                </div>
-              </div>
-            </section>
-          ` : ""}
-
-          ${vitalItems.length ? `
-            <section>
-              <h5 class="text-sm font-bold text-[#2f4b66]">
-                Vital Signs
-              </h5>
-              <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                ${vitalItems.map(([label, value]) => `
-                  <div class="min-w-0">
-                    <dt class="text-xs font-semibold text-slate-400">${escapeHtml(label)}</dt>
-                    <dd class="mt-1 text-xs font-bold text-slate-700">${escapeHtml(value)}</dd>
-                  </div>
-                `).join("")}
-              </dl>
-            </section>
-          ` : ""}
-
-        </div>
-      </article>
-    `;
+        ${fields.length ? `<dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          ${fields.map(([label, value]) => `
+            <div class="min-w-0">
+              <dt class="text-xs font-medium text-portal-muted">${escapeHtml(label)}</dt>
+              <dd class="mt-1 whitespace-pre-line break-words text-xs leading-5 text-portal-text">${escapeHtml(value)}</dd>
+            </div>
+          `).join("")}
+        </dl>` : ""}
+      </article>`;
   };
 
   const loadMedicalRecords = async () => {
@@ -372,7 +324,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     medicalLoadState = "loading";
     medicalRecords.innerHTML = `
       <div class="py-12 text-center">
-        <p class="text-xs text-slate-500">Loading completed medical records...</p>
+        <p class="text-xs text-slate-500">Loading clinic visits...</p>
       </div>
     `;
     try {
@@ -382,12 +334,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!records.length) {
         medicalRecords.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <h4 class="text-sm font-bold text-slate-700">No completed medical records</h4>
-            <p class="mt-1 text-xs text-slate-500">No completed medical records are available for this pet yet.</p>
+            <h4 class="text-sm font-bold text-slate-700">No clinic visits recorded</h4>
           </div>
         `;
       } else {
-        medicalRecords.innerHTML = `<div class="space-y-4">${records.map(renderMedicalRecord).join("")}</div>`;
+        medicalRecords.innerHTML = `<div>${records.map(renderMedicalRecord).join("")}</div>`;
       }
 
       medicalLoadState = "loaded";
@@ -404,7 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         medicalRecords.innerHTML = `
           <div class="rounded-2xl border border-red-100 bg-red-50 px-6 py-10 text-center" role="alert">
-            <h4 class="text-sm font-bold text-red-800">Medical records could not be loaded</h4>
+            <h4 class="text-sm font-bold text-red-800">Clinic visits could not be loaded</h4>
             <p class="mt-1 text-xs text-red-600">${escapeHtml(error?.message || "Please try again later.")}</p>
           </div>
         `;
@@ -418,93 +369,44 @@ document.addEventListener("DOMContentLoaded", async () => {
       current: {
         label: "Current",
         classes: "border-emerald-200 bg-emerald-50 text-emerald-700",
-        message: "",
       },
       due_soon: {
         label: "Due soon",
         classes: "border-amber-200 bg-amber-50 text-amber-800",
-        message: "",
       },
       overdue: {
         label: "Overdue",
         classes: "border-red-200 bg-red-50 text-red-700",
-        message: "The recorded next-due date has passed. Contact the clinic for guidance.",
       },
       unknown: {
         label: "Unknown",
         classes: "border-slate-200 bg-slate-50 text-slate-600",
-        message: "The clinic did not provide a next-due date for this vaccination.",
       },
     };
 
     return statuses[status] || statuses.unknown;
   };
 
-  const vaccinationDose = (record) => {
-    if (isMissing(record.dose_amount)) return null;
-    return `${record.dose_amount}${isMissing(record.dose_unit) ? "" : ` ${record.dose_unit}`}`;
-  };
-
   const renderVaccinationRecord = (record) => {
     const status = vaccinationStatusDetails(record.due_status);
-    const optionalDetails = [
-      ["Product Name", record.product_name],
-      ["Manufacturer", record.manufacturer],
-      ["Dose", vaccinationDose(record)],
-      ["Route", isMissing(record.route) ? null : titleCase(record.route)],
-      ["Batch Number", record.batch_number],
-      ["Administration Site", record.administration_site],
-      ["Appointment Reference", record.appointment_reference],
-      ["Vaccine Product / Batch Expiration Date", isMissing(record.product_expiry_date) ? null : formatDate(record.product_expiry_date)],
-    ].filter(([, value]) => !isMissing(value));
-
     return `
-      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div class="border-b border-slate-200 bg-white px-5 py-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p class="text-xs font-medium text-slate-500">Vaccine</p>
-              <h4 class="mt-1 break-words text-sm font-bold text-[#2f4b66]">${escapeHtml(displayValue(record.vaccine_name))}</h4>
-            </div>
-            <span
-              class="w-fit rounded-full border px-3 py-1 text-xs font-bold ${status.classes}"
-              aria-label="Vaccination due status: ${escapeHtml(status.label)}"
-            >${escapeHtml(status.label)}</span>
+      <article class="rounded-2xl border border-portal-border bg-white p-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <h4 class="min-w-0 break-words text-sm font-bold text-portal-text">${escapeHtml(displayValue(record.vaccine_name))}</h4>
+          <span class="w-fit rounded-full border px-3 py-1 text-xs font-semibold ${status.classes}"
+            aria-label="Vaccination due status: ${escapeHtml(status.label)}">${escapeHtml(status.label)}</span>
+        </div>
+        <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-medium text-portal-muted">Administered</dt>
+            <dd class="mt-1 text-xs text-portal-text">${escapeHtml(healthDate(record.administered_date))}</dd>
           </div>
-          ${status.message ? `
-            <p class="mt-3 text-xs leading-5 text-slate-600">
-              ${escapeHtml(status.message)}
-            </p>
-          ` : ""}
-        </div>
-
-        <div class="space-y-5 p-5">
-          <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <dt class="text-xs font-medium text-slate-500">Administration Date</dt>
-              <dd class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatDate(record.administered_date))}</dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-slate-500">Next Due Date</dt>
-              <dd class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatDate(record.next_due_date))}</dd>
-            </div>
-          </dl>
-
-          ${optionalDetails.length ? `
-            <div class="border-t border-slate-200 pt-4">
-              <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                ${optionalDetails.map(([label, value]) => `
-                  <div>
-                    <dt class="text-xs font-medium text-slate-500">${escapeHtml(label)}</dt>
-                    <dd class="mt-1 break-words text-xs leading-5 text-slate-700">${escapeHtml(value)}</dd>
-                  </div>
-                `).join("")}
-              </dl>
-            </div>
-          ` : ""}
-        </div>
-      </article>
-    `;
+          <div>
+            <dt class="text-xs font-medium text-portal-muted">Next due</dt>
+            <dd class="mt-1 text-xs text-portal-text">${escapeHtml(healthDate(record.next_due_date))}</dd>
+          </div>
+        </dl>
+      </article>`;
   };
 
   const loadVaccinations = async ({ retry = false } = {}) => {
@@ -529,8 +431,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!records.length) {
         vaccinationRecords.innerHTML = `
           <div class="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
-            <h4 class="text-sm font-bold text-slate-700">No published vaccination records</h4>
-            <p class="mt-1 text-xs text-slate-500">No published vaccination records are available for this pet yet.</p>
+            <h4 class="text-sm font-bold text-slate-700">No vaccinations recorded</h4>
           </div>
         `;
       } else {
@@ -572,8 +473,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const petTabLoaders = {
     grooming: loadGrooming,
-    medical: loadMedicalRecords,
-    vaccinations: loadVaccinations,
+    health: () => Promise.allSettled([loadMedicalRecords(), loadVaccinations()]),
   };
 
   const loadPetTabData = (tabName) => {
@@ -596,8 +496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const remainingTabs = [
       "grooming",
-      "medical",
-      "vaccinations",
+      "health",
     ].filter((tabName) => tabName !== activePetTab);
 
     const prefetchNextTab = () => {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicAppointment;
 use App\Models\Pet;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class PetMedicalRecordController extends Controller
@@ -22,24 +23,8 @@ class PetMedicalRecordController extends Controller
             ], 404);
         }
 
-        $medicalRecords = ClinicAppointment::query()
-            ->select([
-                'id',
-                'appointment_reference',
-                'appointment_date',
-                'status',
-                'pet_id',
-                'chief_complaint',
-            ])
+        $medicalRecords = $this->completedRecords()
             ->where('pet_id', $pet->pet_id)
-            ->where('status', 'completed')
-            ->whereHas('record')
-            ->with([
-                'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',
-                'record:id,clinic_appointment_id,chief_complaint,diagnosis,treatment_given,follow_up_date,follow_up_notes',
-            ])
-            ->orderByDesc('appointment_date')
-            ->orderByDesc('id')
             ->get()
             ->map(fn (ClinicAppointment $appointment) => $this->formatMedicalRecord($appointment))
             ->values();
@@ -48,6 +33,42 @@ class PetMedicalRecordController extends Controller
             'success' => true,
             'medical_records' => $medicalRecords,
         ]);
+    }
+
+    public function history(Request $request)
+    {
+        $records = $this->completedRecords()
+            ->whereHas('pet', fn (Builder $query) => $query->where('user_id', $request->user()->user_id))
+            ->with('pet:pet_id,pet_name,species')
+            ->get()
+            ->map(fn (ClinicAppointment $appointment) => [
+                ...$this->formatMedicalRecord($appointment),
+                'pet' => $appointment->pet->only(['pet_id', 'pet_name', 'species']),
+            ])
+            ->values();
+
+        return response()->json(['success' => true, 'medical_records' => $records]);
+    }
+
+    private function completedRecords(): Builder
+    {
+        return ClinicAppointment::query()
+            ->select([
+                'id',
+                'appointment_reference',
+                'appointment_date',
+                'status',
+                'pet_id',
+                'chief_complaint',
+            ])
+            ->where('status', 'completed')
+            ->whereHas('record')
+            ->with([
+                'vitals:id,clinic_appointment_id,weight_kg,temperature_c,heart_rate_bpm,respiratory_rate_bpm,body_condition_score',
+                'record:id,clinic_appointment_id,chief_complaint,diagnosis,working_diagnosis,treatment_given,follow_up_date,follow_up_notes,prescriptions',
+            ])
+            ->orderByDesc('appointment_date')
+            ->orderByDesc('id');
     }
 
     private function formatMedicalRecord(ClinicAppointment $appointment): array
@@ -60,10 +81,14 @@ class PetMedicalRecordController extends Controller
             'appointment_date' => $appointment->appointment_date?->toDateString(),
             'status' => $appointment->status,
             'chief_complaint' => $record->chief_complaint ?? $appointment->chief_complaint,
-            'diagnosis' => $record->diagnosis,
+            'diagnosis' => $record->working_diagnosis ?? $record->diagnosis,
             'treatment_given' => $record->treatment_given,
             'follow_up_date' => $record->follow_up_date?->toDateString(),
             'follow_up_notes' => $record->follow_up_notes,
+            'prescriptions' => collect($record->prescriptions ?? [])
+                ->map(fn (array $prescription) => \Illuminate\Support\Arr::only($prescription, [
+                    'medicine', 'strength_concentration', 'dose', 'route', 'frequency', 'duration', 'instructions',
+                ]))->values()->all(),
             'vitals' => $vitals ? [
                 'weight_kg' => $vitals->weight_kg,
                 'temperature_c' => $vitals->temperature_c,

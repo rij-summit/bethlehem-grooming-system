@@ -17,7 +17,7 @@ class ClientPetMedicalRecordsTest extends TestCase
 
         Schema::create('pets', function (Blueprint $table) {
             $table->increments('pet_id');
-            $table->unsignedInteger('user_id');
+            $table->unsignedInteger('user_id')->nullable();
             $table->string('pet_name');
             $table->string('species')->nullable();
         });
@@ -42,11 +42,13 @@ class ClientPetMedicalRecordsTest extends TestCase
             $table->unsignedBigInteger('clinic_appointment_id');
             $table->text('chief_complaint')->nullable();
             $table->text('diagnosis')->nullable();
+            $table->text('working_diagnosis')->nullable();
             $table->text('findings')->nullable();
             $table->text('treatment_given')->nullable();
             $table->date('follow_up_date')->nullable();
             $table->text('follow_up_notes')->nullable();
             $table->text('vet_notes')->nullable();
+            $table->json('prescriptions')->nullable();
         });
 
         Schema::create('clinic_vitals', function (Blueprint $table) {
@@ -96,6 +98,63 @@ class ClientPetMedicalRecordsTest extends TestCase
     public function test_medical_records_require_authentication(): void
     {
         $this->getJson('/api/pets/101/medical-records')->assertUnauthorized();
+        $this->getJson('/api/clinic/history')->assertUnauthorized();
+    }
+
+    public function test_clinic_history_uses_pet_ownership_and_the_same_completed_clinic_records(): void
+    {
+        $this->authenticateCustomer(10);
+        $this->insertPet(101, 10, 'Mochi');
+        $this->insertPet(102, 10, 'Bruno');
+        $this->insertPet(202, 20, 'Luna');
+        $this->insertPet(303, null, 'Coco');
+        $this->insertAppointment(1, 101, 'completed', 'CL-MOCHI', '2026-07-20');
+        $this->insertAppointment(2, 102, 'completed', 'CL-BRUNO', '2026-07-22');
+        $this->insertAppointment(3, 202, 'completed', 'CL-LUNA', '2026-07-23');
+        $this->insertAppointment(4, 303, 'completed', 'CL-COCO', '2026-07-23');
+        $this->insertAppointment(5, 101, 'in_consultation', 'CL-ACTIVE', '2026-07-24');
+        $this->insertAppointment(6, 101, 'completed', 'CL-NO-RECORD', '2026-07-25', false);
+
+        $response = $this->getJson('/api/clinic/history')->assertOk()
+            ->assertJsonCount(2, 'medical_records')
+            ->assertJsonPath('medical_records.0.pet.pet_name', 'Bruno')
+            ->assertJsonPath('medical_records.1.pet.pet_name', 'Mochi');
+        $petRecord = $this->getJson('/api/pets/102/medical-records')->assertOk()->json('medical_records.0');
+        $this->assertSame($petRecord, \Illuminate\Support\Arr::except($response->json('medical_records.0'), ['pet']));
+        $this->assertSame(['pet_id', 'pet_name', 'species'], array_keys($response->json('medical_records.0.pet')));
+        $this->assertStringNotContainsString('PRIVATE', $response->getContent());
+        $this->assertDatabaseHas('clinic_records', ['clinic_appointment_id' => 4]);
+
+        DB::enableQueryLog();
+        $this->getJson('/api/clinic/history')->assertOk();
+        $initialQueries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        for ($id = 7; $id < 12; $id++) {
+            $this->insertAppointment($id, 101, 'completed', 'CL-'.$id, '2026-07-26');
+        }
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->getJson('/api/clinic/history')->assertOk()->assertJsonCount(7, 'medical_records');
+        $this->assertSame($initialQueries, count(DB::getQueryLog()));
+        DB::disableQueryLog();
+    }
+
+    public function test_current_prescriptions_are_whitelisted_for_both_owner_views(): void
+    {
+        $this->authenticateCustomer(10);
+        $this->insertPet(101, 10, 'Mochi');
+        $id = $this->insertAppointment(1, 101, 'completed', 'CL-MOCHI', '2026-07-20');
+        $prescription = ['medicine' => 'Amoxicillin', 'dose' => '1 tablet', 'frequency' => 'Twice daily', 'duration' => '7 days', 'instructions' => 'Give with food.'];
+        DB::table('clinic_records')->where('id', $id)->update([
+            'prescriptions' => json_encode([$prescription + ['inventory_item_id' => 12, 'notes' => 'PRIVATE']]),
+            'working_diagnosis' => 'Bacterial skin infection',
+        ]);
+        foreach (['/api/clinic/history', '/api/pets/101/medical-records'] as $url) {
+            $this->getJson($url)->assertOk()->assertJsonPath('medical_records.0.prescriptions', [$prescription])
+                ->assertJsonPath('medical_records.0.diagnosis', 'Bacterial skin infection')
+                ->assertJsonMissingPath('medical_records.0.prescriptions.0.inventory_item_id')
+                ->assertJsonMissingPath('medical_records.0.prescriptions.0.notes');
+        }
     }
 
     public function test_customer_can_retrieve_only_their_own_pet_and_foreign_and_missing_pets_are_indistinguishable(): void
@@ -242,6 +301,7 @@ class ClientPetMedicalRecordsTest extends TestCase
             'treatment_given',
             'follow_up_date',
             'follow_up_notes',
+            'prescriptions',
             'vitals',
         ], array_keys($visit));
         $this->assertSame([
@@ -304,7 +364,7 @@ class ClientPetMedicalRecordsTest extends TestCase
         Sanctum::actingAs($user, ['*']);
     }
 
-    private function insertPet(int $petId, int $userId, string $petName): void
+    private function insertPet(int $petId, ?int $userId, string $petName): void
     {
         DB::table('pets')->insert([
             'pet_id' => $petId,

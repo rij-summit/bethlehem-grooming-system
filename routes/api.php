@@ -84,6 +84,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::get('/pets/{id}', [PetController::class, 'show']);
     Route::get('/pets/{petId}/medical-records', [PetMedicalRecordController::class, 'index']);
     Route::get('/pets/{petId}/vaccinations', [PetVaccinationController::class, 'index']);
+    Route::get('/clinic/history', [PetMedicalRecordController::class, 'history']);
     Route::post('/pets', [PetController::class, 'store']);
     Route::put('/pets/{id}', [PetController::class, 'update']);
     Route::post('/pets/{id}/archive', [PetController::class, 'archive']);

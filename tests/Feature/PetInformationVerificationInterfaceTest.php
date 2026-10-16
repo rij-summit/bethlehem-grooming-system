@@ -199,8 +199,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'if (petProfileReady) void loadPetTabData(selected);',
             'const petTabLoaders = {',
             'grooming: loadGrooming,',
-            'medical: loadMedicalRecords,',
-            'vaccinations: loadVaccinations,',
+            'health: () => Promise.allSettled([loadMedicalRecords(), loadVaccinations()]),',
             'window.requestIdleCallback(task, { timeout: 1200 });',
             'window.requestAnimationFrame(scheduleCustomerTabPrefetch);',
         ] as $customerTabOptimization) {
@@ -219,11 +218,11 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'Basic Information',
             'Medical Conditions / Special Needs',
             'Grooming Records',
-            'Clinic Medical Records',
-            'Vaccination History',
+            'Clinic Visits',
+            'Vaccinations',
         ] as $sectionTitle) {
             $this->assertStringContainsString(
-                'class="text-sm font-bold leading-5 text-portal-text">'.$sectionTitle,
+                'text-sm font-bold leading-5 text-portal-text">'.$sectionTitle,
                 $this->petProfilePage,
             );
         }
@@ -242,8 +241,8 @@ class PetInformationVerificationInterfaceTest extends TestCase
         foreach ([
             'break-words text-xs font-semibold text-portal-text',
             'break-words text-xs font-medium leading-5 text-slate-700',
-            'whitespace-pre-line break-words text-xs leading-5 text-slate-700',
-            'break-words text-xs leading-5 text-slate-700',
+            'whitespace-pre-line break-words text-xs leading-5 text-portal-text',
+            'mt-1 text-xs text-portal-text',
         ] as $compactInformationText) {
             $this->assertStringContainsString(
                 $compactInformationText,

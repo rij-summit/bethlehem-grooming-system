@@ -46,21 +46,21 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         );
     }
 
-    public function test_vaccination_tab_is_read_only_and_uses_the_cached_customer_tab_loader(): void
+    public function test_health_panel_is_read_only_and_uses_the_cached_customer_tab_loader(): void
     {
         $panel = $this->sourceBetween(
             $this->clientPage,
-            '<section data-pet-panel="vaccinations"',
+            '<section data-pet-panel="health"',
             '<script src="../../scripts/api.js',
         );
 
-        $this->assertStringContainsString('Vaccination History', $panel);
+        $this->assertStringContainsString('Vaccinations', $panel);
         $this->assertStringContainsString('id="petVaccinationRecords"', $panel);
         $this->assertStringContainsString(
             'if (petProfileReady) void loadPetTabData(selected);',
             $this->clientComponent,
         );
-        $this->assertStringContainsString('vaccinations: loadVaccinations,', $this->clientComponent);
+        $this->assertStringContainsString('health: () => Promise.allSettled([loadMedicalRecords(), loadVaccinations()]),', $this->clientComponent);
         $this->assertStringContainsString(
             '(!retry && vaccinationLoadState === "loaded")',
             $this->clientComponent,
@@ -98,29 +98,16 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             $this->assertStringContainsString("label: \"{$status}\"", $this->clientComponent);
         }
 
-        $this->assertStringContainsString(
-            'The clinic did not provide a next-due date for this vaccination.',
-            $this->clientComponent,
-        );
-        $this->assertStringContainsString(
-            'The recorded next-due date has passed. Contact the clinic for guidance.',
-            $this->clientComponent,
-        );
-        $this->assertStringNotContainsString(
-            'reminder will be sent',
-            $this->clientComponent,
-        );
-        $this->assertStringContainsString(
-            'Vaccine Product / Batch Expiration Date',
-            $this->clientComponent,
-        );
+        foreach (['The clinic did not provide', 'Contact the clinic for guidance.', 'Vaccine Product / Batch Expiration Date'] as $clutter) {
+            $this->assertStringNotContainsString($clutter, $this->clientComponent);
+        }
     }
 
     public function test_loading_empty_not_found_error_and_retry_states_are_present(): void
     {
         foreach ([
             'Loading vaccination history...',
-            'No published vaccination records are available for this pet yet.',
+            'No vaccinations recorded',
             'Vaccination history could not be loaded',
             'This pet does not exist or is not available for your account.',
             'data-retry-vaccinations',
@@ -129,7 +116,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             $this->assertStringContainsString($stateContract, $this->clientComponent.$this->clientPage);
         }
 
-        $this->assertStringContainsString('sm:grid-cols-3', $this->clientComponent);
+        $this->assertStringContainsString('sm:grid-cols-2', $this->clientComponent);
         $this->assertStringContainsString('xl:grid-cols-3', $this->clientComponent);
         $this->assertStringContainsString('flex-col', $this->clientComponent);
     }
@@ -141,6 +128,11 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             'record.administered_date',
             'record.next_due_date',
             'record.due_status',
+        ] as $safeField) {
+            $this->assertStringContainsString($safeField, $this->clientComponent);
+        }
+
+        foreach ([
             'record.product_name',
             'record.manufacturer',
             'record.dose_amount',
@@ -148,13 +140,7 @@ class ClientPetVaccinationInterfaceTest extends TestCase
             'record.route',
             'record.batch_number',
             'record.administration_site',
-            'record.appointment_reference',
             'record.product_expiry_date',
-        ] as $safeField) {
-            $this->assertStringContainsString($safeField, $this->clientComponent);
-        }
-
-        foreach ([
             'record.id',
             'record.pet_id',
             'record.inventory_item_id',
@@ -174,13 +160,16 @@ class ClientPetVaccinationInterfaceTest extends TestCase
         foreach ([
             'data-pet-panel="overview"',
             'data-pet-panel="grooming"',
-            'data-pet-panel="medical"',
-            'data-pet-panel="vaccinations"',
+            'data-pet-panel="health"',
         ] as $existingContent) {
             $this->assertStringContainsString($existingContent, $this->clientPage);
         }
 
-        $this->assertStringNotContainsString('data-pet-panel="notifications"', $this->clientPage);
+        foreach (['medical', 'vaccinations', 'notifications'] as $removedTab) {
+            $this->assertStringNotContainsString('data-pet-panel="'.$removedTab.'"', $this->clientPage);
+        }
+        $this->assertStringContainsString('Clinic Visits', $this->clientPage);
+        $this->assertStringContainsString('Medical Conditions / Special Needs', $this->clientPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

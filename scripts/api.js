@@ -1324,6 +1324,10 @@ var API = (() => {
     return request("GET", `/pets/${petId}/vaccinations`, null, getCustomerToken());
   }
 
+  async function getCustomerClinicHistory() {
+    return request("GET", "/clinic/history", null, getCustomerToken());
+  }
+
   async function addPet(payload) {
     // POST /api/pets  (protected)
     return request("POST", "/pets", payload, getCustomerToken());
@@ -2156,6 +2160,7 @@ var API = (() => {
     getPet,
     getPetMedicalRecords,
     getPetVaccinations,
+    getCustomerClinicHistory,
     addPet,
     updatePet,
     adminUpdatePet,
