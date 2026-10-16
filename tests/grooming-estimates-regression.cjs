@@ -27,7 +27,8 @@ async function main() {
     assert.doesNotMatch(component.renderEstimateSelection({ id: 1, size }, selection), /data-role="grooming-preference"|<legend>Grooming preference/);
     for (const factor of engine.factors()) {
       const extended = engine.calculate({ ...selection, estimateFactors: [factor.value] }, size);
-      assert.deepEqual([extended.minMinutes, extended.maxMinutes], [120, 240]);
+      const minutesAdded = rules.factor_minutes[factor.value];
+      assert.deepEqual([extended.minMinutes, extended.maxMinutes], [minutes + minutesAdded[0], minutes + minutesAdded[1]]);
     }
   }
   const regular = component.renderEstimateSelection({ id: 1, size: 'small' }, { servicePackage: 'regular_dog_grooming' });
@@ -92,6 +93,15 @@ async function main() {
   assert.equal(grooming.estimatePetGrooming(summer, small).formatted, '1 hr 15 min');
 
   const now = Date.parse('2026-10-09T13:15:00+08:00');
+  const thickBath = engine.calculate({ servicePackage: 'bath_and_go', estimateFactors: ['thick_coat'] }, 'small');
+  assert.deepEqual([thickBath.minMinutes, thickBath.maxMinutes, thickBath.formatted], [65, 75, '1 hr 5 min–1 hr 15 min']);
+  const combinedBath = engine.calculate({ servicePackage: 'bath_and_go',
+    alaCarteServices: ['nail_clipping', 'facial_trimming', 'facial_trimming'],
+    estimateFactors: ['thick_coat', 'matted_tangled', 'extra_handling', 'detailed_styling', 'thick_coat'] }, 'small');
+  assert.deepEqual([combinedBath.minMinutes, combinedBath.maxMinutes], [160, 270]);
+  assert.equal(engine.calculate({ servicePackage: 'bath_and_go', estimateFactors: ['unknown'] }, 'small'), null);
+  const additiveQueue = engine.queueETAs([{ key: 'first', estimate: thickBath }, { key: 'second', estimate: thickBath }], [], 1, now);
+  assert.equal(additiveQueue.second.estDoneMax, now + 150 * 60000);
   const estimate = { minMinutes: 60, maxMinutes: 90 };
   const ready = engine.readyWindow(estimate, new Date(now).toISOString(), now);
   assert.equal(ready.label, '2:15–2:45 PM');
@@ -117,6 +127,15 @@ async function main() {
   const context = { window: { GroomingEstimates: { ...engine, queueETAs: (waiting, active, capacity) => engine.queueETAs(waiting, active, capacity, queueNow) } }, Date: QueueDate, Intl, console };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/admin-dashboard.js'), 'utf8'), context);
   const ui = context.adminDashboard();
+  const assessmentPet = { bookingPetId: 42, size: 'small', groomingEstimate: thickBath, estimateFactors: ['thick_coat'] };
+  ui.actionConfirmModal.booking = { pets: [{ ...assessmentPet }], services: [{ bookingPetId: 42, slug: 'bath_and_go' }] };
+  assert.equal(ui.assessmentPreview(assessmentPet), thickBath.formatted);
+  assessmentPet.size = 'medium';
+  assert.equal(ui.assessmentPreview(assessmentPet), '1 hr 20 min–1 hr 30 min');
+  assessmentPet.estimateFactors = ['thick_coat', 'extra_handling'];
+  assert.equal(ui.assessmentPreview(assessmentPet), '1 hr 40 min–2 hrs 15 min');
+  assessmentPet.estimateFactors = [];
+  assert.equal(ui.assessmentPreview(assessmentPet), '1 hr');
   ui.activeGroomers = 1;
   const first = { id: 1, bookingPetId: 1, groomingEstimate: estimate };
   const second = { id: 2, bookingPetId: 2, groomingEstimate: { minMinutes: 120, maxMinutes: 120 } };

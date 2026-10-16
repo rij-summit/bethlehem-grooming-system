@@ -37,8 +37,12 @@
       if (!range) return null;
       min += range[0]; max += range[1];
     }
-    const assessment = [...new Set(selection.estimateFactors || [])].filter((factor) => Object.hasOwn(rules.factors, factor));
-    if (assessment.length) { min = Math.max(min, rules.extended[0]); max = Math.max(max, rules.extended[1]); }
+    const assessment = [...new Set(selection.estimateFactors || [])];
+    for (const factor of assessment) {
+      const range = rules.factor_minutes[factor];
+      if (!range) return null;
+      min += range[0]; max += range[1];
+    }
     return min ? { minMinutes: min, maxMinutes: max, formatted: formatRange(min, max), preference: choices.length ? preference : null,
       preferenceLabel: choices.find((choice) => choice.value === preference)?.label || null, factors: assessment } : null;
   }

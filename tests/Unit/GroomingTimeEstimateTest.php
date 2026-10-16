@@ -16,10 +16,10 @@ class GroomingTimeEstimateTest extends TestCase
         $estimate = $engine->calculate($package, $preference, $size);
         $this->assertSame($range, [$estimate['minMinutes'], $estimate['maxMinutes']]);
         $this->assertSame($preference, $estimate['preference']);
-        foreach (array_keys(config('grooming_estimates.factors')) as $factor) {
+        foreach (config('grooming_estimates.factor_minutes') as $factor => $minutes) {
             $extended = $engine->calculate($package, $preference, $size, [], [$factor]);
-            $this->assertGreaterThanOrEqual($range[0], $extended['minMinutes']);
-            $this->assertGreaterThanOrEqual($range[1], $extended['maxMinutes']);
+            $this->assertSame($range[0] + $minutes[0], $extended['minMinutes']);
+            $this->assertSame($range[1] + $minutes[1], $extended['maxMinutes']);
         }
     }
 
@@ -67,14 +67,32 @@ class GroomingTimeEstimateTest extends TestCase
         $this->assertSame([90, 95], [$additional['minMinutes'], $additional['maxMinutes']]);
         $alaCarte = $engine->calculate(null, null, 'small', ['nail_clipping', 'ear_cleaning', 'nail_clipping']);
         $this->assertSame([20, 30], [$alaCarte['minMinutes'], $alaCarte['maxMinutes']]);
-        foreach (array_keys(config('grooming_estimates.factors')) as $factor) {
+        foreach (config('grooming_estimates.factor_minutes') as $factor => $minutes) {
             $extended = $engine->calculate('regular_dog_grooming', 'summer_cut', 'small', [], [$factor]);
-            $this->assertSame([120, 240], [$extended['minMinutes'], $extended['maxMinutes']]);
+            $this->assertSame([75 + $minutes[0], 75 + $minutes[1]], [$extended['minMinutes'], $extended['maxMinutes']]);
         }
         $custom = $engine->calculate('deluxe_dog_grooming', 'custom_hairstyle', 'medium');
         $this->assertSame([135, 180], [$custom['minMinutes'], $custom['maxMinutes']]);
         $long = $engine->calculate('deluxe_dog_grooming', 'custom_hairstyle', 'extra_large', ['facial_trimming'], ['detailed_styling']);
-        $this->assertSame([195, 270], [$long['minMinutes'], $long['maxMinutes']]);
+        $this->assertSame([225, 330], [$long['minMinutes'], $long['maxMinutes']]);
+    }
+
+    public function test_factors_accumulate_once_on_top_of_package_and_additional_services(): void
+    {
+        $engine = app(GroomingTimeEstimate::class);
+        $this->assertSame([20, 30], config('grooming_estimates.factor_minutes.thick_coat'));
+        $this->assertSame([30, 60], config('grooming_estimates.factor_minutes.matted_tangled'));
+        $this->assertSame([20, 45], config('grooming_estimates.factor_minutes.extra_handling'));
+        $this->assertSame([30, 60], config('grooming_estimates.factor_minutes.detailed_styling'));
+        $bath = $engine->calculate('bath_and_go', null, 'small', [], ['thick_coat']);
+        $this->assertSame([65, 75, '1 hr 5 min–1 hr 15 min'], [$bath['minMinutes'], $bath['maxMinutes'], $bath['formatted']]);
+        $combined = $engine->calculate('bath_and_go', null, 'small',
+            ['nail_clipping', 'ear_cleaning', 'tooth_brushing', 'facial_trimming', 'facial_trimming'],
+            ['thick_coat', 'matted_tangled', 'extra_handling', 'detailed_styling', 'thick_coat']);
+        $this->assertSame([160, 270], [$combined['minMinutes'], $combined['maxMinutes']]);
+        $this->assertSame(array_keys(config('grooming_estimates.factors')), $combined['factors']);
+        $alaCarte = $engine->calculate(null, null, 'small', ['nail_clipping'], ['extra_handling']);
+        $this->assertSame([30, 60], [$alaCarte['minMinutes'], $alaCarte['maxMinutes']]);
     }
 
     public function test_new_haircut_visits_require_a_valid_preference(): void
@@ -110,9 +128,9 @@ class GroomingTimeEstimateTest extends TestCase
             $estimate = $engine->calculate('cat_full_grooming', null, $size);
             $this->assertSame($formatted, $estimate['formatted']);
             $this->assertNull($estimate['preference']);
-            foreach (array_keys(config('grooming_estimates.factors')) as $factor) {
+            foreach (config('grooming_estimates.factor_minutes') as $factor => $minutes) {
                 $extended = $engine->calculate('cat_full_grooming', null, $size, [], [$factor]);
-                $this->assertSame([120, 240], [$extended['minMinutes'], $extended['maxMinutes']]);
+                $this->assertSame([$estimate['minMinutes'] + $minutes[0], $estimate['maxMinutes'] + $minutes[1]], [$extended['minMinutes'], $extended['maxMinutes']]);
             }
         }
     }

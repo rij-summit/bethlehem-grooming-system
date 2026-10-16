@@ -41,9 +41,9 @@ class GroomingTimeEstimate
             $min += $rules['ala_carte'][$slug][0];
             $max += $rules['ala_carte'][$slug][1];
         }
-        if ($factors) {
-            $min = max($min, $rules['extended'][0]);
-            $max = max($max, $rules['extended'][1]);
+        foreach (array_unique($factors) as $factor) {
+            $min += $rules['factor_minutes'][$factor][0];
+            $max += $rules['factor_minutes'][$factor][1];
         }
         return ['minMinutes' => $min, 'maxMinutes' => $max, 'formatted' => $min ? $this->format($min, $max) : null,
             'preference' => $choices ? $preference : null, 'preferenceLabel' => $choices[$preference] ?? null, 'factors' => array_values(array_unique($factors))];

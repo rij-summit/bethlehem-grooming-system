@@ -6,7 +6,7 @@ return [
         'deluxe_dog_grooming' => ['puppy_cut' => 'Puppy Cut', 'custom_hairstyle' => 'Custom Hairstyle'],
     ],
     'factors' => ['thick_coat' => 'Thick coat', 'matted_tangled' => 'Matted / tangled', 'extra_handling' => 'Extra handling', 'detailed_styling' => 'Detailed styling'],
-    'extended' => [120, 240],
+    'factor_minutes' => ['thick_coat' => [20, 30], 'matted_tangled' => [30, 60], 'extra_handling' => [20, 45], 'detailed_styling' => [30, 60]],
     'packages' => [
         'partial_grooming' => ['sizes' => ['small' => [45, 60], 'medium' => [60, 75], 'large' => [75, 90], 'extra_large' => [90, 105]], 'included' => ['nail_clipping', 'ear_cleaning']],
         'regular_dog_grooming' => ['cuts' => [

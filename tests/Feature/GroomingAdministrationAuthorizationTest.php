@@ -2559,10 +2559,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->authenticateAs('admin');
         $this->postJson('/api/admin/bookings/1/pets/1/start-grooming', ['estimate_factors' => ['thick_coat', 'extra_handling']])->assertOk();
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1,
-            'grooming_start_time' => now()->toDateTimeString(), 'grooming_estimate_min' => 120, 'grooming_estimate_max' => 240]);
+            'grooming_start_time' => now()->toDateTimeString(), 'grooming_estimate_min' => $minutes + 40, 'grooming_estimate_max' => $minutes + 75]);
         $this->authenticateAs('customer');
         $this->getJson('/api/booking/history')->assertOk()
-            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.formatted', '2–4 hrs')
+            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.formatted', app(\App\Services\GroomingTimeEstimate::class)->format($minutes + 40, $minutes + 75))
             ->assertJsonPath('bookings.0.pets.0.grooming_estimate.preferenceLabel', 'Regular Trim')
             ->assertJsonPath('bookings.0.pets.1.grooming_estimate.minMinutes', 90);
     }
@@ -2671,6 +2671,83 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $migration->up();
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => 45, 'grooming_estimate_max' => 60]);
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => null, 'grooming_estimate_max' => null]);
+    }
+
+    #[DataProvider('additiveCheckInFactors')]
+    public function test_check_in_saves_additive_assessment_for_queue_workload_and_customer_history(array $factors, array $range): void
+    {
+        $this->authenticateAs('admin');
+        $this->seedMultiPetBooking();
+        DB::table('booking_services')->update(['service_id' => 90]);
+        DB::table('bookings')->update(['status' => 'waiting_to_arrive', 'user_id' => 3]);
+        DB::table('booking_pets')->update(['registered_size' => 'small', 'grooming_estimate_min' => 120,
+            'grooming_estimate_max' => 240, 'grooming_estimate_factors' => '["thick_coat"]']);
+        DB::table('clinic_settings')->update(['groomers_on_duty' => 1]);
+        $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
+            ['booking_pet_id' => 1, 'size' => 'medium', 'estimate_factors' => $factors],
+            ['booking_pet_id' => 2, 'size' => 'small', 'estimate_factors' => []],
+        ]])->assertOk();
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'confirmed_size' => 'medium',
+            'grooming_estimate_min' => $range[0], 'grooming_estimate_max' => $range[1]]);
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 2, 'grooming_estimate_min' => 45, 'grooming_estimate_max' => 60]);
+        $this->getJson('/api/admin/bookings')->assertOk()
+            ->assertJsonPath('queuedList.0.pets.0.groomingEstimate.minMinutes', $range[0])
+            ->assertJsonPath('queuedList.0.pets.0.groomingEstimate.maxMinutes', $range[1])
+            ->assertJsonPath('queuedList.0.pets.0.groomingEstimate.factors', $factors)
+            ->assertJsonPath('groomingWorkload.pets.1.projected_completion', now()->addMinutes($range[1])->toIso8601String())
+            ->assertJsonPath('groomingWorkload.pets.2.queue_wait_minutes', $range[1]);
+        $this->authenticateAs('customer');
+        $this->getJson('/api/booking/history')->assertOk()
+            ->assertJsonPath('bookings.0.pets.0.grooming_estimate.maxMinutes', $range[1]);
+    }
+
+    public static function additiveCheckInFactors(): array
+    {
+        return [
+            [[], [60, 75]],
+            [['thick_coat'], [80, 105]],
+            [['matted_tangled'], [90, 135]],
+            [['extra_handling'], [80, 120]],
+            [['detailed_styling'], [90, 135]],
+            [['thick_coat', 'matted_tangled', 'extra_handling', 'detailed_styling'], [160, 270]],
+        ];
+    }
+
+    public function test_additive_migration_refreshes_current_workload_and_windows_without_altering_completed_history(): void
+    {
+        $this->seedMultiPetBooking();
+        DB::table('services')->insert(['service_id' => 91, 'service_name' => 'Bath and Go', 'slug' => 'bath_and_go', 'base_price' => 450]);
+        DB::table('booking_services')->where('booking_pet_id', 1)->update(['service_id' => 91]);
+        DB::table('bookings')->update(['user_id' => 3]);
+        DB::table('booking_pets')->update(['registered_size' => 'small', 'grooming_estimate_min' => 120,
+            'grooming_estimate_max' => 240, 'grooming_estimate_factors' => '["thick_coat"]']);
+        DB::table('booking_pets')->where('booking_pet_id', 2)->update(['grooming_state' => 'finished', 'grooming_end_time' => now()]);
+        DB::table('bookings')->insert(['booking_id' => 2, 'booking_reference' => 'COMPLETED-2', 'user_id' => 3,
+            'booking_date' => now()->subDay()->toDateString(), 'status' => 'completed']);
+        DB::table('booking_pets')->insert(['booking_pet_id' => 3, 'booking_id' => 2, 'pet_id' => 1,
+            'registered_size' => 'small', 'grooming_estimate_min' => 120, 'grooming_estimate_max' => 240,
+            'grooming_estimate_factors' => '["thick_coat"]']);
+        DB::table('booking_services')->insert(['booking_id' => 2, 'booking_pet_id' => 3, 'service_id' => 91, 'price_at_booking' => 450]);
+        $completed = DB::table('booking_pets')->whereIn('booking_pet_id', [2, 3])->get()->toArray();
+        Carbon::setTestNow(now()->setTime(14, 30));
+        DB::table('clinic_settings')->update(['groomers_on_duty' => 1, 'grooming_prereg_cutoff_time' => '17:00:00']);
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '3:00 PM - 4:00 PM', 'start_time' => '15:00:00', 'end_time' => '16:00:00']);
+        $this->authenticateAs('customer');
+        $payload = ['date' => now()->toDateString(), 'pets' => [['species' => 'dog', 'weight' => 8, 'services' => ['package' => 'partial_grooming']]]];
+        $this->postJson('/api/booking/workload-forecast', $payload)->assertOk()->assertJsonPath('windows.0.is_workload_unavailable', true);
+        $migration = require base_path('database/migrations/2026_10_16_000002_refresh_unfinished_grooming_estimates.php');
+        $migration->up();
+        $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'grooming_estimate_min' => 65, 'grooming_estimate_max' => 75]);
+        $this->assertEquals($completed, DB::table('booking_pets')->whereIn('booking_pet_id', [2, 3])->get()->toArray());
+        $this->postJson('/api/booking/workload-forecast', $payload)->assertOk()->assertJsonPath('windows.0.is_workload_unavailable', false);
+        $history = $this->getJson('/api/booking/history')->assertOk()->json('bookings');
+        $completedVisit = collect($history)->firstWhere('booking_id', 2);
+        $this->assertSame([120, 240, '2–4 hrs'], [
+            $completedVisit['pets'][0]['grooming_estimate']['minMinutes'],
+            $completedVisit['pets'][0]['grooming_estimate']['maxMinutes'],
+            $completedVisit['pets'][0]['grooming_estimate']['formatted'],
+        ]);
+        $this->assertDatabaseCount('bookings', 2);
     }
 
     #[DataProvider('groomingArrivalWindowCases')]
@@ -2809,7 +2886,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('booking_pets')->update(['registered_size' => 'small', 'grooming_estimate_min' => 45,
             'grooming_estimate_max' => 60, 'pet_queue_number' => null, 'pet_queue_date' => null]);
         DB::table('bookings')->update(['status' => 'waiting_to_arrive', 'queue_number' => null]);
-        Carbon::setTestNow(now()->setTime(15, 0));
+        Carbon::setTestNow(now()->setTime(15, 30));
         $this->postJson('/api/admin/bookings/1/check-in', ['pet_sizes' => [
             ['booking_pet_id' => 1, 'size' => 'small', 'estimate_factors' => ['matted_tangled']],
             ['booking_pet_id' => 2, 'size' => 'small'],
@@ -2903,7 +2980,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('capacity.projected_last_completion', now()->setTime(17, 30)->toIso8601String());
         $payload['pets'][0]['estimate_factors'] = ['matted_tangled'];
         $this->postJson('/api/admin/walk-in/capacity-preview', $payload)->assertOk()
-            ->assertJsonPath('capacity.projected_last_completion', now()->setTime(19, 45)->toIso8601String());
+            ->assertJsonPath('capacity.projected_last_completion', now()->setTime(18, 30)->toIso8601String());
         $this->assertDatabaseHas('pets', ['pet_id' => 1, 'size' => 'extra_large', 'weight' => null]);
         $this->assertDatabaseCount('bookings', 0);
         $this->assertDatabaseCount('customer_notifications', 0);
