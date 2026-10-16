@@ -57,6 +57,14 @@
       .grooming-record-type, .history-record-type { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.625rem; border-radius: 6px; background: var(--history-soft); color: var(--history-accent); }
       .grooming-record-type svg, .history-record-type svg { width: 16px; height: 16px; flex-shrink: 0; }
       .history-record-body { display: flex; flex-direction: column; gap: 1.25rem; }
+      .history-signature { display: block; width: 230px; max-width: 100%; height: 72px; object-fit: contain; border: 1px solid var(--history-border); border-radius: 8px; background: var(--history-paper); }
+      .history-signature-label { margin: 0.75rem 0 0.375rem; }
+      .history-signed-agreement { margin-top: 0.75rem; font-size: 0.875rem; line-height: 1.6; }
+      .history-signed-agreement summary { width: fit-content; cursor: pointer; color: var(--history-accent); }
+      .history-signed-agreement summary:focus-visible { outline: 2px solid var(--history-accent); outline-offset: 3px; }
+      .history-signed-agreement p, .history-signed-agreement ul { margin-top: 0.75rem; }
+      .history-signed-agreement ul { padding-left: 1.25rem; list-style: disc; }
+      .history-signed-agreement li + li { margin-top: 0.5rem; }
       .history-record-section, .clinic-visit-section { flex-shrink: 0; }
       .history-record-section:not([style*="display: none"]) ~ .history-record-section, .clinic-visit-section:not([style*="display: none"]) ~ .clinic-visit-section { border-top: 1px solid var(--history-border); padding-top: 1.25rem; }
       .history-record-section h5, .clinic-visit-section h5 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; }
@@ -607,6 +615,32 @@
                   </dl>
                 </section>
 
+                <section class="history-record-section" aria-labelledby="history-consent-title">
+                  <h5 id="history-consent-title">Consent &amp; Signature</h5>
+                  <p x-show="consentLoading" class="history-label">Loading consent…</p>
+                  <p x-show="consentError" x-text="consentError" role="alert" class="text-sm text-red-600"></p>
+                  <button x-show="consentError" type="button" class="text-sm text-[#315b7e] hover:underline" @click="loadSignedConsent(detailsBooking.id)">Retry</button>
+                  <div x-show="!consentLoading && !consentError">
+                    <dl class="history-record-fields">
+                      <div><dt>Grooming consent</dt><dd><span class="history-record-type" x-text="consentLabel('grooming')"></span></dd></div>
+                      <div><dt>Sedation consent</dt><dd><span class="history-record-type" x-text="consentLabel('sedation')"></span></dd></div>
+                      <div><dt>Signed by</dt><dd x-text="signedConsent?.signer_name || 'Not recorded'"></dd></div>
+                      <div><dt>Signed at</dt><dd x-text="consentSignedAt()"></dd></div>
+                    </dl>
+                    <template x-if="signedConsent?.signature_image">
+                      <div><p class="history-label history-signature-label">Signature</p><img class="history-signature" :src="signedConsent.signature_image" alt="Customer signature" width="230" height="72" /></div>
+                    </template>
+                    <details x-ref="signedAgreement" x-show="signedConsent?.agreement_snapshot" class="history-signed-agreement">
+                      <summary>View signed agreement</summary>
+                      <p class="history-label" x-text="'Version ' + (signedConsent?.consent_version || '')"></p>
+                      <p x-text="signedConsent?.agreement_snapshot?.grooming_intro"></p>
+                      <ul><template x-for="(condition, index) in (signedConsent?.agreement_snapshot?.grooming_conditions || [])" :key="index"><li x-text="condition"></li></template></ul>
+                      <p x-text="signedConsent?.agreement_snapshot?.grooming_action"></p>
+                      <p x-text="signedConsent?.agreement_snapshot?.sedation_action"></p>
+                    </details>
+                  </div>
+                </section>
+
                 <section x-show="detailsBooking?.pets?.length" class="history-record-section" aria-labelledby="history-pets-title">
                   <h5 id="history-pets-title">Pets &amp; Grooming</h5>
                   <div>
@@ -801,9 +835,9 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="../../scripts/api.js?grooming-cancellation=20261016&v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010"></script>
+    <script src="../../scripts/api.js?grooming-cancellation=20261016&v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010&consent=20261016"></script>
     <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=roles-20261010&clinic-services=20261013"></script>
     <script src="../../scripts/components/clinic-attachments.js?v=20261015"></script>
-    <script src="../../scripts/components/admin-archive.js?v=grooming-record-20261016&copy=grooming-terminology-20261016"></script>
+    <script src="../../scripts/components/admin-archive.js?v=grooming-record-20261016&copy=grooming-terminology-20261016&consent=20261016"></script>
   </body>
 </html>

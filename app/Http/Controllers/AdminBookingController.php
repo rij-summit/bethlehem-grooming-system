@@ -22,6 +22,23 @@ use Illuminate\Validation\ValidationException;
 
 class AdminBookingController extends Controller
 {
+    public function signedConsent(int $id)
+    {
+        $booking = Booking::with('walkin')->findOrFail($id);
+        $consent = \App\Models\GroomingConsent::where('booking_id', $id)->first();
+
+        // Legacy false defaults cannot prove a customer declined consent.
+        $legacySedation = $booking->walkin
+            ? (bool) $booking->walkin->sedation_consent
+            : (bool) $booking->sedation_consent;
+
+        return response()->json([
+            'consent' => $consent,
+            'legacy_grooming_consent' => $booking->walkin?->terms_agreed ? true : null,
+            'legacy_sedation_consent' => $legacySedation ? true : null,
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
     private function activeGroomingPetCount(): int
     {
         return BookingPet::where(

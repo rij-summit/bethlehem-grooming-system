@@ -21,6 +21,7 @@ use Tests\TestCase;
 class ClinicAdministrationAuthorizationTest extends TestCase
 {
     use \Tests\Support\CreatesPetGroomers;
+    use \Tests\Support\SubmitsSignedGrooming;
 
     private const FORBIDDEN_RESPONSE = [
         'success' => false,
@@ -1547,7 +1548,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/booking/store', [
+        $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->addDay()->toDateString(),
             'window_id' => 1,
             'number_of_pets' => 1,
@@ -2066,7 +2067,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             'is_archived' => false,
         ]);
 
-        $this->postJson('/api/booking/store', [
+        $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => '2026-07-23',
             'window_id' => 2,
             'number_of_pets' => 1,

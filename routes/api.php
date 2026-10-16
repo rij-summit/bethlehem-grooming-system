@@ -150,6 +150,7 @@ Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
         Route::middleware('grooming')->group(function () {
             Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
             Route::get('/admin/bookings/archived', [AdminBookingController::class, 'archivedIndex']);
+            Route::get('/admin/bookings/{id}/signed-consent', [AdminBookingController::class, 'signedConsent']);
             Route::post('/admin/bookings/{id}/check-in', [AdminBookingController::class, 'checkIn']);
             Route::patch('/admin/bookings/{id}/internal-staff-note', [AdminBookingController::class, 'updateInternalStaffNote']);
             Route::patch('/admin/bookings/{id}/pets/{bookingPetId}/grooming-visit-notes', [AdminBookingController::class, 'updateGroomingVisitNotes']);

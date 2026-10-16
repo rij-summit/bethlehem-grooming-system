@@ -117,6 +117,8 @@ class WalkinController extends Controller
                 'dropped_off_at' => now(),
             ]);
 
+            $signedConsent = \App\Services\GroomingConsentCapture::capture($booking, $data);
+
             // For each pet: find or create a pet record, then attach services
             $petsResponse = [];
             $groomers = \App\Models\PetGroomer::whereIn('id', array_column($data['pets'], 'groomer_id'))->get()->keyBy('id');
@@ -174,6 +176,7 @@ class WalkinController extends Controller
                 'booking_reference' => $bookingReference,
                 'queue_number' => $queueNumber,
                 'booking_id' => $booking->booking_id,
+                'consent' => $signedConsent->only(['grooming_consent', 'sedation_consent', 'signer_name', 'signed_at', 'consent_version']),
                 'booking_date' => $booking->booking_date,
                 'status' => $booking->status,
                 'owner' => [

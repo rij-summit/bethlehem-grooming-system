@@ -17,40 +17,19 @@ class BookingSedationConsentInterfaceTest extends TestCase
         );
         $this->assertStringNotContainsString('id="sedationConsentHelp"', $page);
         $this->assertStringNotContainsString('sedationConsentHelp', $component);
-        $this->assertStringContainsString(
-            'sedation_consent: sedationConsentCheckbox.checked',
-            $component,
-        );
-        $this->assertStringContainsString(
-            'sedationConsentCheckbox.checked',
-            $component,
-        );
+        $shared = file_get_contents(base_path('scripts/components/grooming-consent.js'));
+        $this->assertStringContainsString('sedation_consent: sedation.checked', $shared);
+        $this->assertStringContainsString('...consentPayload', $component);
     }
 
-    public function test_unchecked_customer_sedation_consent_requires_a_warning_acknowledgment(): void
+    public function test_unchecked_sedation_does_not_require_an_extra_confirmation(): void
     {
         $page = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $component = file_get_contents(base_path('scripts/components/booking-consent-step.js'));
-
-        foreach ([
-            'id="sedationWarningModal"',
-            'Sedation Consent Not Selected',
-            'it will only be given with <strong>your approval</strong>',
-            '<strong>stop grooming</strong> and notify you',
-            'id="sedationWarningBackButton"',
-            'id="sedationWarningUnderstandButton"',
-            'I Understand',
-        ] as $interface) {
-            $this->assertStringContainsString($interface, $page);
-        }
-
-        $this->assertStringContainsString(
-            'if (!sedationConsentCheckbox.checked && !sedationWarningAcknowledged)',
-            $component,
-        );
-        $this->assertStringContainsString('sedationWarningAcknowledged = true;', $component);
-        $this->assertStringContainsString('form.requestSubmit();', $component);
-        $this->assertStringNotContainsString('sedationConsentCheckbox.checked = true', $component);
+        $this->assertStringNotContainsString('sedationWarningModal', $page);
+        $this->assertStringNotContainsString('sedationWarningAcknowledged', $component);
+        $terms = \App\Services\GroomingConsentCapture::agreement();
+        $this->assertSame('I authorize sedation if deemed necessary for grooming.', $terms['sedation_action']);
     }
 
     public function test_staff_booking_details_reuses_the_existing_modal_for_consent_capture(): void

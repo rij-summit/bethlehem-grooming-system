@@ -97,7 +97,7 @@ class BookingController extends Controller
             'window_id' => 'required|exists:time_windows,window_id',
             'number_of_pets' => 'required|integer|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'special_notes' => 'nullable|string',
-            'sedation_consent' => 'sometimes|boolean',
+            ...\App\Services\GroomingConsentCapture::rules(),
             'pets' => 'required|array|min:1|max:'.self::MAX_PETS_PER_BOOKING,
             'pets.*.pet_id' => 'nullable|integer|exists:pets,pet_id',
             'pets.*.pet_name' => 'required|string|max:100',
@@ -210,6 +210,10 @@ class BookingController extends Controller
                 'sedation_consent_recorded_at' => $sedationConsent ? now() : null,
                 'total_amount' => 0,
             ]);
+
+            $signedConsent = \App\Services\GroomingConsentCapture::capture($booking, $request->only([
+                'sedation_consent', 'signer_name', 'signature_strokes',
+            ]));
 
             // ── Save pets ─────────────────────────────────────
             foreach ($request->pets as $petData) {
@@ -338,6 +342,7 @@ class BookingController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Your pre-registration has been received. Your queue position will be assigned when you check in at the clinic.',
+                'consent' => $signedConsent->only(['grooming_consent', 'sedation_consent', 'signer_name', 'signed_at', 'consent_version']),
                 'booking' => [
                     'booking_id' => $booking->booking_id,
                     'booking_reference' => $booking->booking_reference,

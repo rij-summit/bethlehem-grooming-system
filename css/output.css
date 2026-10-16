@@ -4547,6 +4547,10 @@ video {
   background-color: rgb(234 244 251 / var(--tw-bg-opacity, 1));
 }
 
+.focus-visible\:underline:focus-visible {
+  text-decoration-line: underline;
+}
+
 .focus-visible\:\!outline-none:focus-visible {
   outline: 2px solid transparent !important;
   outline-offset: 2px !important;

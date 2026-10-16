@@ -22,6 +22,7 @@ use Tests\TestCase;
 class GroomingAdministrationAuthorizationTest extends TestCase
 {
     use \Tests\Support\CreatesPetGroomers;
+    use \Tests\Support\SubmitsSignedGrooming;
 
     private const FORBIDDEN_RESPONSE = [
         'success' => false,
@@ -35,6 +36,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['GET', 'api/admin/bookings'],
         ['GET', 'api/admin/bookings/archived'],
         ['POST', 'api/admin/bookings/{id}/sedation-consent'],
+        ['GET', 'api/admin/bookings/{id}/signed-consent'],
         ['PATCH', 'api/admin/clinic/settings/groomers-on-duty'],
         ['POST', 'api/admin/pet-groomers'],
         ['PATCH', 'api/admin/pet-groomers/{id}'],
@@ -326,6 +328,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'is_active' => true,
         ]);
         (require database_path('migrations/2026_10_16_000001_add_grooming_cancellation_audit.php'))->up();
+        (require database_path('migrations/2026_10_16_000005_create_grooming_consents.php'))->up();
     }
 
     protected function tearDown(): void
@@ -343,6 +346,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         Schema::dropIfExists('services');
         Schema::dropIfExists('booking_pets');
         Schema::dropIfExists('pets');
+        Schema::dropIfExists('grooming_consents');
         Schema::dropIfExists('bookings');
         Schema::dropIfExists('walkins');
         Schema::dropIfExists('unregistered_customers');
@@ -374,6 +378,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'edit internal staff note' => ['PATCH', '/api/admin/bookings/1/internal-staff-note', ['internal_staff_note' => 'private']],
             'edit grooming visit notes' => ['PATCH', '/api/admin/bookings/1/pets/1/grooming-visit-notes', ['grooming_visit_notes' => 'private']],
             'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
+            'signed agreement' => ['GET', '/api/admin/bookings/1/signed-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
             'undo pet start' => ['POST', '/api/admin/bookings/1/pets/1/undo-start'],
@@ -414,6 +419,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'edit internal staff note' => ['PATCH', '/api/admin/bookings/1/internal-staff-note', ['internal_staff_note' => 'private']],
             'edit grooming visit notes' => ['PATCH', '/api/admin/bookings/1/pets/1/grooming-visit-notes', ['grooming_visit_notes' => 'private']],
             'record sedation consent' => ['POST', '/api/admin/bookings/1/sedation-consent'],
+            'signed agreement' => ['GET', '/api/admin/bookings/1/signed-consent'],
             'revert check in' => ['POST', '/api/admin/bookings/1/revert-check-in'],
             'start whole booking' => ['POST', '/api/admin/bookings/1/start-grooming'],
             'revert grooming start' => ['POST', '/api/admin/bookings/1/revert-start-grooming'],
@@ -450,7 +456,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson('/api/booking/store', [
+        $response = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(),
             'window_id' => 1,
             'number_of_pets' => 1,
@@ -510,7 +516,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'base_price' => 0,
         ]);
 
-        $this->postJson('/api/booking/store', [
+        $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(),
             'window_id' => 1,
             'number_of_pets' => 1,
@@ -539,14 +545,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $pet = ['pet_name' => 'Decimal pet', 'species' => $species, 'weight' => $weight,
             'size' => $size === 'small' ? 'medium' : 'small'];
         $this->authenticateAs('customer');
-        $bookingId = $this->postJson('/api/booking/store', [
+        $bookingId = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [[...$pet, 'services' => ['ala_carte' => ['nail_clipping']]]],
         ])->assertCreated()->json('booking.booking_id');
         $this->assertDatabaseHas('pets', ['pet_name' => 'Decimal pet', 'weight' => $weight, 'size' => $size]);
         $this->assertDatabaseHas('booking_services', ['booking_id' => $bookingId, 'service_id' => 900, 'price_at_booking' => 0]);
         $this->authenticateAs('staff');
-        $walkinId = $this->postJson('/api/admin/walk-in', [
+        $walkinId = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'pets' => [[...$pet, 'pet_name' => 'Walkin decimal', 'groomer_id' => 1, 'services' => [['service_slug' => 'nail_clipping']]]],
             'sedation_consent' => false, 'terms_agreed' => true,
@@ -568,13 +574,13 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         foreach ($invalid as $weight) {
             $pet = ['pet_name' => 'Invalid decimal', 'species' => 'Dog', 'weight' => $weight];
             $this->authenticateAs('customer');
-            $this->postJson('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
+            $this->submitSignedGrooming('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
                 'number_of_pets' => 1, 'pets' => [$pet]])->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
             $this->postJson('/api/booking/workload-forecast', ['date' => now()->toDateString(), 'pets' => [$pet]])
                 ->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
             foreach (['admin', 'staff'] as $role) {
                 $this->authenticateAs($role);
-                $this->postJson('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+                $this->submitSignedGrooming('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
                     'pets' => [[...$pet, 'groomer_id' => 1, 'services' => [['service_slug' => 'partial_grooming']]]], 'sedation_consent' => false, 'terms_agreed' => true])
                     ->assertUnprocessable()->assertJsonValidationErrors('pets.0.weight');
             }
@@ -594,7 +600,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'services' => ['ala_carte' => ['nail_clipping']]];
         $this->authenticateAs('customer');
         $this->postJson('/api/booking/workload-forecast', ['date' => now()->toDateString(), 'pets' => [$pet]])->assertOk();
-        $this->postJson('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
+        $this->submitSignedGrooming('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
             'number_of_pets' => 1, 'pets' => [$pet]])->assertCreated();
         $this->assertDatabaseHas('pets', ['pet_id' => 101, 'weight' => 4.999, 'size' => 'small']);
     }
@@ -607,7 +613,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'species' => 'Cat', 'weight' => 4.999, 'size' => 'small', 'is_archived' => false]);
         DB::table('services')->insert(['service_id' => 900, 'service_name' => 'Nail Clipping', 'slug' => 'nail_clipping', 'base_price' => 75]);
         $this->authenticateAs('staff');
-        $this->postJson('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+        $this->submitSignedGrooming('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'owner_record_type' => 'registered', 'customer_user_id' => 10,
             'pets' => [['pet_id' => 101, 'pet_name' => 'Historical cat', 'species' => 'Cat', 'size' => 'small',
                 'groomer_id' => 1, 'services' => [['service_slug' => 'nail_clipping']]]], 'sedation_consent' => false, 'terms_agreed' => true])->assertCreated();
@@ -634,7 +640,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ]);
 
         $this->authenticateAs('customer');
-        $customerBookingId = $this->postJson('/api/booking/store', [
+        $customerBookingId = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(),
             'window_id' => 1,
             'number_of_pets' => 1,
@@ -647,7 +653,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ])->assertCreated()->json('booking.booking_id');
 
         $this->authenticateAs('staff');
-        $walkinBookingId = $this->postJson('/api/admin/walk-in', [
+        $walkinBookingId = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria',
             'lname' => 'Santos',
             'phone' => '09171234567',
@@ -740,13 +746,13 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'pricing_type' => $type, 'amount' => (string) $amount, 'maximum' => $maximum,
         ])->assertOk();
         $this->authenticateAs('customer');
-        $customerId = $this->postJson('/api/booking/store', [
+        $customerId = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Mochi', 'species' => 'cat', 'weight' => 4,
                 'services' => ['ala_carte' => ['nail_clipping']]]],
         ])->assertCreated()->json('booking.booking_id');
         $this->authenticateAs('staff');
-        $walkinId = $this->postJson('/api/admin/walk-in', [
+        $walkinId = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'pets' => [['pet_name' => 'Bantay', 'species' => 'dog', 'weight' => 8,
                 'groomer_id' => 1, 'services' => [['service_slug' => 'nail_clipping', 'price' => 1]]]],
@@ -797,14 +803,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         if ($type === 'range') $sizes[$size]['maximum'] = (string) $maximum;
         $this->patchJson('/api/admin/grooming/services/4/pricing', ['sizes' => $sizes])->assertOk();
         $this->authenticateAs('customer');
-        $customerId = $this->postJson('/api/booking/store', [
+        $customerId = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Rigby', 'species' => 'dog', 'weight' => $weight,
                 'grooming_preference' => 'regular_trim',
                 'services' => ['package' => 'regular_dog_grooming']]],
         ])->assertCreated()->json('booking.booking_id');
         $this->authenticateAs('staff');
-        $walkinId = $this->postJson('/api/admin/walk-in', [
+        $walkinId = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'pets' => [['pet_name' => 'Bantay', 'species' => 'dog', 'weight' => $weight,
                 'grooming_preference' => 'regular_trim',
@@ -1750,7 +1756,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'status' => 'released',
         ]);
 
-        $this->postJson('/api/admin/walk-in', [
+        $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria',
             'lname' => 'Santos',
             'phone' => '09171234567',
@@ -1833,7 +1839,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'base_price' => 0,
         ]);
 
-        $registeredResponse = $this->postJson('/api/admin/walk-in', [
+        $registeredResponse = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Ignored',
             'lname' => 'Name',
             'phone' => '09171111111',
@@ -1888,7 +1894,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/admin/walk-in', [
+        $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Ignored',
             'lname' => 'Again',
             'phone' => '09172222222',
@@ -1918,7 +1924,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $this->authenticateAs('staff');
 
-        $response = $this->postJson('/api/admin/walk-in', [
+        $response = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria',
             'lname' => 'Santos',
             'mname' => 'A',
@@ -2017,7 +2023,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'terms_agreed' => true,
         ];
 
-        $this->postJson('/api/admin/walk-in', $payload)
+        $this->submitSignedGrooming('/api/admin/walk-in', $payload)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['phone']);
 
@@ -2028,11 +2034,11 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'phone' => '09170000051',
         ];
 
-        $this->postJson('/api/admin/walk-in', $similarPayload)
+        $this->submitSignedGrooming('/api/admin/walk-in', $similarPayload)
             ->assertStatus(409)
             ->assertJsonPath('code', 'similar_customer_name');
 
-        $this->postJson('/api/admin/walk-in', [
+        $this->submitSignedGrooming('/api/admin/walk-in', [
             ...$similarPayload,
             'confirm_similar_name' => true,
         ])->assertCreated();
@@ -2490,7 +2496,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         foreach (range(1, 6) as $customer) {
             DB::table('users')->insert(['user_id' => 100 + $customer, 'role' => 'customer']);
             Sanctum::actingAs(User::findOrFail(100 + $customer), ['*']);
-            $this->postJson('/api/booking/store', [
+            $this->submitSignedGrooming('/api/booking/store', [
                 'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 4,
                 'pets' => array_fill(0, 4, ['pet_name' => 'Test pet', 'species' => 'cat']),
             ])->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
@@ -2509,7 +2515,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         }
         DB::table('users')->insert(['user_id' => 107, 'role' => 'customer']);
         Sanctum::actingAs(User::findOrFail(107), ['*']);
-        $this->postJson('/api/booking/store', [
+        $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Another pet', 'species' => 'cat']],
         ])->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
@@ -2608,13 +2614,13 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
         $pet = ['pet_name' => 'Coco', 'species' => $species, 'weight' => $weight, 'grooming_preference' => $preference];
         $this->authenticateAs('customer');
-        $customer = $this->postJson('/api/booking/store', [
+        $customer = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [array_merge($pet, ['groomer_id' => 1, 'services' => ['package' => $package, 'ala_carte' => ['facial_trimming']]])],
         ])->assertCreated()->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', $range[0])
             ->assertJsonPath('booking.pets.0.grooming_estimate.maxMinutes', $range[1]);
         $this->authenticateAs('staff');
-        $walkin = $this->postJson('/api/admin/walk-in', [
+        $walkin = $this->submitSignedGrooming('/api/admin/walk-in', [
             'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'pets' => [array_merge($pet, ['groomer_id' => 1, 'services' => [
                 ['service_slug' => $package, 'price' => 1], ['service_slug' => 'facial_trimming', 'price' => 1],
@@ -2647,14 +2653,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('services')->insert(['service_id' => 91, 'service_name' => 'Regular Dog Grooming', 'slug' => 'regular_dog_grooming', 'base_price' => 650]);
         $pet = ['pet_name' => 'Coco', 'species' => 'dog', 'weight' => 8, 'services' => ['package' => 'regular_dog_grooming']];
         $payload = ['booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1, 'pets' => [$pet]];
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()->assertJsonValidationErrors('grooming_preference');
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()->assertJsonValidationErrors('grooming_preference');
         $payload['pets'][0]['grooming_preference'] = 'regular_trim';
         $payload['pets'][0]['estimate_factors'] = ['extra_handling'];
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()->assertJsonValidationErrors('pets.0.estimate_factors');
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()->assertJsonValidationErrors('pets.0.estimate_factors');
         unset($payload['pets'][0]['estimate_factors']);
         $payload['pets'][0]['grooming_estimate_min'] = 1;
         $payload['pets'][0]['grooming_estimate_max'] = 1;
-        $this->postJson('/api/booking/store', $payload)->assertCreated()
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()
             ->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', 90)
             ->assertJsonPath('booking.pets.0.grooming_estimate.maxMinutes', 90);
         $this->assertDatabaseHas('booking_pets', ['grooming_preference' => 'regular_trim', 'grooming_estimate_min' => 90, 'grooming_estimate_max' => 90]);
@@ -2795,7 +2801,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $availability->assertJsonMissingPath('cutoff_passed')
             ->assertJsonPath('windows.0.is_past', $date === '2026-10-09' && $time >= '20:00:00')
             ->assertJsonPath('windows.0.is_closed', in_array($restriction, ['blocked_date', 'stop_today'], true));
-        $response = $this->postJson('/api/booking/store', [
+        $response = $this->submitSignedGrooming('/api/booking/store', [
             'booking_date' => $date, 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Mochi', 'species' => 'cat']],
         ]);
@@ -2886,7 +2892,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $pet = ['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'services' => ['package' => 'partial_grooming']];
         $this->postJson('/api/booking/workload-forecast', ['date' => now()->toDateString(), 'pets' => [$pet]])
             ->assertOk()->assertJsonPath('windows.0.is_workload_unavailable', false);
-        $booking = $this->postJson('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
+        $booking = $this->submitSignedGrooming('/api/booking/store', ['booking_date' => now()->toDateString(), 'window_id' => 1,
             'number_of_pets' => 1, 'pets' => [$pet]])->assertCreated()->json('booking.booking_id');
         $this->assertDatabaseHas('bookings', ['booking_id' => $booking, 'queue_number' => null, 'status' => 'waiting_to_arrive']);
         $this->assertSame(0, DB::table('booking_pets')->whereNotNull('pet_queue_number')->count());
@@ -2939,7 +2945,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $this->authenticateAs('staff');
         Carbon::setTestNow(now()->setTime(16, 30));
-        $this->postJson('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+        $this->submitSignedGrooming('/api/admin/walk-in', ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
             'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'groomer_id' => 1, 'services' => [['service_slug' => 'partial_grooming']]]],
             'sedation_consent' => false, 'terms_agreed' => true])->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
         foreach (['bookings', 'booking_pets', 'walkins', 'pets', 'unregistered_customers'] as $table) $this->assertDatabaseCount($table, 0);
@@ -2955,12 +2961,12 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->authenticateAs('customer');
         $payload = ['booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
             'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'size' => 'small', 'services' => ['package' => 'partial_grooming']]]];
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()->assertJsonPath('code', 'grooming_forecast_unavailable');
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()->assertJsonPath('code', 'grooming_forecast_unavailable');
         $this->assertDatabaseCount('bookings', 1);
         $this->assertDatabaseCount('pets', 2);
         $this->assertDatabaseCount('notifications', 0);
         $payload['booking_date'] = now()->addDay()->toDateString();
-        $this->postJson('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.status', 'waiting_to_arrive');
     }
 
     #[DataProvider('authorizedGroomingRoles')]
@@ -3025,13 +3031,13 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         DB::table('booking_pets')->update(['grooming_estimate_min' => 60, 'grooming_estimate_max' => 60]);
         $payload = ['fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567', 'pets' => [$pet],
             'sedation_consent' => false, 'terms_agreed' => true];
-        $this->postJson('/api/admin/walk-in', $payload)->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
+        $this->submitSignedGrooming('/api/admin/walk-in', $payload)->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
         $this->assertDatabaseCount('bookings', 1);
         $this->assertDatabaseCount('walkins', 0);
         $this->assertDatabaseCount('pets', 2);
         $this->assertSame([1, 2], DB::table('booking_pets')->pluck('pet_queue_number')->all());
         DB::table('booking_pets')->update(['grooming_state' => 'finished', 'grooming_end_time' => now()]);
-        $this->postJson('/api/admin/walk-in', $payload)->assertCreated()->assertJsonPath('queue_number', 2)
+        $this->submitSignedGrooming('/api/admin/walk-in', $payload)->assertCreated()->assertJsonPath('queue_number', 2)
             ->assertJsonPath('pets.0.pet_queue_number', 3);
     }
 
@@ -3063,9 +3069,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         }
         $this->assertDatabaseCount('bookings', 0);
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $this->postJson('/api/booking/store', $payload)->assertCreated();
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated();
         Sanctum::actingAs(User::findOrFail(102), ['*']);
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()
             ->assertJsonPath('message', \App\Services\GroomingWorkloadCapacity::WINDOW_UNAVAILABLE)
             ->assertJsonPath('windows.0.is_workload_unavailable', false)
             ->assertJsonPath('windows.1.is_workload_unavailable', true);
@@ -3076,7 +3082,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->assertSame(0, DB::table('booking_pets')->whereNotNull('pet_queue_number')->count());
         $this->assertSame(0, app(\App\Services\OperationalCapacity::class)->snapshot()['used']);
         DB::table('time_windows')->where('window_id', 1)->update(['is_active' => false]);
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()
             ->assertJsonPath('date_full', true)->assertJsonPath('message', \App\Services\GroomingWorkloadCapacity::DATE_FULL);
     }
 
@@ -3091,7 +3097,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ->assertJsonPath('windows.1.end_time', '15:30:00')
             ->assertJsonPath('windows.1.window_label', '3:00 PM - 3:30 PM');
         Carbon::setTestNow('2026-10-16 '.$time);
-        $response = $this->postJson('/api/booking/store', $payload);
+        $response = $this->submitSignedGrooming('/api/booking/store', $payload);
         if (! $accepted) {
             $response->assertUnprocessable()->assertJsonPath('code', 'grooming_forecast_unavailable');
             $this->assertDatabaseCount('bookings', 0);
@@ -3132,14 +3138,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             ['booking_pet_id' => 999, 'booking_id' => 999, 'grooming_state' => 'not_started',
                 'grooming_start_time' => null, 'grooming_estimate_min' => 15, 'grooming_estimate_max' => 30],
         ]);
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()
             ->assertJsonPath('code', 'grooming_forecast_unavailable')->assertJsonValidationErrors('window_id');
         $this->assertDatabaseCount('bookings', 1);
         $this->assertDatabaseCount('booking_pets', 2);
         $this->assertDatabaseCount('pets', 0);
         $this->assertDatabaseCount('notifications', 0);
         $this->setPetGroomersOnDuty(2);
-        $this->postJson('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.window', '3:00 PM - 3:30 PM');
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->assertJsonPath('booking.window', '3:00 PM - 3:30 PM');
     }
 
     public function test_submission_returns_to_scheduling_when_operating_hours_change(): void
@@ -3149,7 +3155,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/booking/workload-forecast', ['date' => $payload['booking_date'], 'pets' => $payload['pets']])
             ->assertOk()->assertJsonPath('windows.1.is_workload_unavailable', false);
         DB::table('clinic_settings')->update(['grooming_close_time' => '15:00:00']);
-        $this->postJson('/api/booking/store', $payload)->assertUnprocessable()
+        $this->submitSignedGrooming('/api/booking/store', $payload)->assertUnprocessable()
             ->assertJsonPath('code', 'grooming_forecast_unavailable');
         $this->assertDatabaseCount('bookings', 0);
         $this->assertDatabaseCount('pets', 0);
@@ -3160,7 +3166,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $payload = $this->prepareReservationDay();
         $payload['window_id'] = 1;
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $id = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         $workload = app(\App\Services\GroomingWorkloadCapacity::class);
         $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
         Carbon::setTestNow('2026-10-16 14:00:00');
@@ -3188,7 +3194,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $payload = $this->prepareReservationDay();
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $id = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         Carbon::setTestNow('2026-10-16 15:29:00');
         $workload = app(\App\Services\GroomingWorkloadCapacity::class);
         $this->assertCount(1, $workload->reservedJobs('2026-10-16'));
@@ -3203,14 +3209,14 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $payload = $this->prepareReservationDay();
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $id = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         $workload = app(\App\Services\GroomingWorkloadCapacity::class);
         Carbon::setTestNow('2026-10-16 15:29:00');
         $this->authenticateAs('staff');
         $walkin = ['pets' => [['pet_name' => 'Luna', 'species' => 'dog', 'size' => 'small',
             'groomer_id' => 1, 'services' => [['service_slug' => 'partial_grooming']]]]];
         $this->postJson('/api/admin/walk-in/capacity-preview', $walkin)->assertOk()->assertJsonPath('capacity.fits', false);
-        $this->postJson('/api/admin/walk-in', [...$walkin, 'fname' => 'Ana', 'lname' => 'Cruz', 'phone' => '09171234567',
+        $this->submitSignedGrooming('/api/admin/walk-in', [...$walkin, 'fname' => 'Ana', 'lname' => 'Cruz', 'phone' => '09171234567',
             'sedation_consent' => false, 'terms_agreed' => true])->assertUnprocessable()->assertJsonPath('code', 'insufficient_grooming_time');
         $this->assertDatabaseCount('bookings', 1);
         foreach (['cancelled', 'expired', 'completed', 'archived'] as $status) {
@@ -3231,10 +3237,10 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $payload = $this->prepareReservationDay();
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $first = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $first = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         Sanctum::actingAs(User::findOrFail(102), ['*']);
         $payload['window_id'] = 1;
-        $second = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $second = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         $this->getJson('/api/timeslots?date=2026-10-16&booking_id='.$first)->assertNotFound();
         $this->getJson('/api/timeslots?date=2026-10-16&booking_id='.$second)->assertOk()
             ->assertJsonPath('windows.1.is_workload_unavailable', true);
@@ -3258,7 +3264,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
     {
         $payload = $this->prepareReservationDay();
         Sanctum::actingAs(User::findOrFail(101), ['*']);
-        $id = $this->postJson('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
+        $id = $this->submitSignedGrooming('/api/booking/store', $payload)->assertCreated()->json('booking.booking_id');
         Carbon::setTestNow('2026-10-16 23:59:59');
         $this->assertSame(0, app(\App\Services\PreRegistrationExpiry::class)->expire());
         Carbon::setTestNow('2026-10-17 00:00:00');
@@ -3353,7 +3359,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             Sanctum::actingAs(User::findOrFail(101), ['*']);
             $payload = [...$payload, 'window_id' => 1, 'pets' => $pets, 'number_of_pets' => count($pets)];
         }
-        $response = $this->postJson($walkIn ? '/api/admin/walk-in' : '/api/booking/store', $payload);
+        $response = $this->submitSignedGrooming($walkIn ? '/api/admin/walk-in' : '/api/booking/store', $payload);
         if (! $accepted) {
             $response->assertUnprocessable()->assertJsonValidationErrors('pets.0.groomer_id');
             foreach (['bookings', 'booking_pets', 'pets', 'walkins'] as $table) $this->assertDatabaseCount($table, 0);
@@ -3408,6 +3414,99 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/bookings/1/pets/1/undo-start')->assertOk();
         $this->assertDatabaseHas('booking_pets', ['booking_pet_id' => 1, 'groomer_id' => 1,
             'grooming_state' => 'not_started', 'grooming_start_time' => null]);
+    }
+
+    private function signedGroomingPayload(bool $walkIn): array
+    {
+        $pet = ['pet_name' => 'Signed Visit', 'species' => 'cat', 'weight' => 4, 'groomer_id' => 1];
+        if ($walkIn) {
+            return [...$this->groomingConsentFixture(), 'fname' => 'Ana', 'lname' => 'Cruz', 'phone' => '09171234567',
+                'pets' => [[...$pet, 'services' => [['service_slug' => 'partial_grooming']]]]];
+        }
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        return [...$this->groomingConsentFixture(), 'booking_date' => now()->toDateString(), 'window_id' => 1,
+            'number_of_pets' => 1, 'pets' => [[...$pet, 'services' => ['package' => 'partial_grooming']]]];
+    }
+
+    public static function signedConsentFlows(): array
+    {
+        return [[false, false], [false, true], [true, false], [true, true]];
+    }
+
+    #[DataProvider('signedConsentFlows')]
+    public function test_signed_consent_survives_the_complete_grooming_flow(bool $walkIn, bool $sedation): void
+    {
+        $this->authenticateAs($walkIn ? 'staff' : 'customer');
+        $payload = $this->signedGroomingPayload($walkIn);
+        $payload['sedation_consent'] = $sedation;
+        $payload['signed_at'] = '2000-01-01T00:00:00Z'; // Never trust the browser's clock.
+        $response = $this->postJson($walkIn ? '/api/admin/walk-in' : '/api/booking/store', $payload)->assertCreated();
+        $id = $response->json($walkIn ? 'booking_id' : 'booking.booking_id');
+        $stored = \App\Models\GroomingConsent::where('booking_id', $id)->firstOrFail();
+        $this->assertSame($sedation, $stored->sedation_consent);
+        $this->assertTrue($stored->grooming_consent);
+        $this->assertSame('Customer Representative', $stored->signer_name);
+        $this->assertTrue($stored->signed_at->equalTo(now()));
+        $this->assertSame($payload['signature_strokes'], $stored->signature_strokes);
+        $this->assertSame(\App\Services\GroomingConsentCapture::agreement(), $stored->agreement_snapshot);
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $stored->signature_image);
+        $snapshot = $stored->toArray();
+
+        $this->authenticateAs('staff');
+        if (! $walkIn) $this->postJson("/api/admin/bookings/{$id}/check-in")->assertOk();
+        $petId = DB::table('booking_pets')->where('booking_id', $id)->value('booking_pet_id');
+        $serviceId = DB::table('booking_services')->where('booking_id', $id)->value('booking_service_id');
+        $this->postJson("/api/admin/bookings/{$id}/pets/{$petId}/start-grooming")->assertOk();
+        Carbon::setTestNow(now()->addHour());
+        $this->postJson("/api/admin/bookings/{$id}/pets/{$petId}/mark-done")->assertOk();
+        $this->postJson("/api/admin/bookings/{$id}/pay", ['final_price' => 250, 'amount_paid' => 250,
+            'payment_method' => 'cash', 'service_prices' => [['booking_service_id' => $serviceId, 'amount' => 250]]])->assertOk();
+        $this->postJson("/api/admin/bookings/{$id}/picked-up")->assertOk();
+        $this->getJson('/api/admin/bookings/archived')->assertOk()->assertJsonPath('archived.0.id', $id)
+            ->assertJsonMissingPath('archived.0.signature_image');
+        $this->getJson("/api/admin/bookings/{$id}/signed-consent")->assertOk()
+            ->assertJsonPath('consent.booking_id', $id)->assertJsonPath('consent.sedation_consent', $sedation)
+            ->assertJsonPath('consent.signature_image', $stored->signature_image)
+            ->assertJsonPath('consent.agreement_snapshot', $stored->agreement_snapshot);
+        $this->assertSame($snapshot, $stored->fresh()->toArray(), 'Completion must preserve the accepted consent unchanged.');
+        $this->assertDatabaseCount('grooming_consents', 1);
+    }
+
+    public static function invalidSignedConsents(): array
+    {
+        $cases = [];
+        foreach ([false, true] as $walkIn) {
+            foreach ([['signature_strokes', null], ['signature_strokes', []], ['signature_strokes', [[[30, 30], [30, 30]]]],
+                ['signer_name', ''], ['signer_name', '   '], ['terms_agreed', false], ['consent_version', 'old']] as [$field, $value]) {
+                $cases[] = [$walkIn, $field, $value];
+            }
+        }
+        return $cases;
+    }
+
+    #[DataProvider('invalidSignedConsents')]
+    public function test_signed_consent_rejects_incomplete_submissions(bool $walkIn, string $field, mixed $value): void
+    {
+        $this->authenticateAs($walkIn ? 'staff' : 'customer');
+        $payload = $this->signedGroomingPayload($walkIn);
+        $payload[$field] = $value;
+        $this->postJson($walkIn ? '/api/admin/walk-in' : '/api/booking/store', $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors($field);
+        $this->assertDatabaseCount('bookings', 0);
+        $this->assertDatabaseCount('grooming_consents', 0);
+    }
+
+    public function test_signed_consent_legacy_records_preserve_unknown_values(): void
+    {
+        $this->authenticateAs('staff');
+        $this->seedMultiPetBooking();
+        $this->getJson('/api/admin/bookings/1/signed-consent')->assertOk()
+            ->assertJsonPath('consent', null)->assertJsonPath('legacy_grooming_consent', null)
+            ->assertJsonPath('legacy_sedation_consent', null);
+        DB::table('bookings')->where('booking_id', 1)->update(['sedation_consent' => true]);
+        $this->getJson('/api/admin/bookings/1/signed-consent')->assertOk()->assertJsonPath('legacy_sedation_consent', true);
+        $this->getJson('/api/admin/bookings/999/signed-consent')->assertNotFound();
     }
 
     private function authenticateAs(string $role): void

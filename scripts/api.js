@@ -1615,6 +1615,10 @@ var API = (() => {
     return request("GET", `/admin/bookings/archived${query}`, null, getAdminToken());
   }
 
+  async function getGroomingSignedConsent(bookingId) {
+    return request("GET", `/admin/bookings/${bookingId}/signed-consent`, null, getAdminToken());
+  }
+
   async function getArchivedClinicAppointments({ search = "", date = "" } = {}) {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
@@ -2212,6 +2216,7 @@ var API = (() => {
     unarchiveCustomer,
     // Admin archive
     adminArchiveBooking,
+    getGroomingSignedConsent,
     getArchivedBookings,
     getArchivedClinicAppointments,
     // Admin notifications

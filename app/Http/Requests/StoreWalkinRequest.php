@@ -76,8 +76,7 @@ class StoreWalkinRequest extends FormRequest
             'pets.*.services.*.service_slug' => ['required', 'string', 'exists:services,slug'],
 
             // Consent
-            'sedation_consent' => ['required', 'boolean'],
-            'terms_agreed' => ['required', 'boolean', 'accepted'],
+            ...\App\Services\GroomingConsentCapture::rules(),
         ];
     }
 

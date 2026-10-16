@@ -61,11 +61,13 @@ export function initBookingConfirmedStep() {
     const review = reviewPets.find((item) => item.petId != null && String(item.petId) === String(pet.id ?? pet.petId)) || reviewPets[index] || {};
     return groomingPetConfirmation(pet, review);
   }).join("");
+  const groomingConsent = bookingConsentStep?.grooming_consent ?? bookingConsentStep?.groomingAgreementAccepted;
+  const sedationConsent = bookingConsentStep?.sedation_consent ?? bookingConsentStep?.sedationConsentAccepted;
   const consentFields = bookingConsentStep ? [
-    ...(typeof bookingConsentStep.groomingAgreementAccepted === "boolean" ? [["Grooming consent", bookingConsentStep.groomingAgreementAccepted ? "Agreed" : "Not agreed"]] : []),
-    ...(typeof bookingConsentStep.sedationConsentAccepted === "boolean" ? [["Sedation consent", bookingConsentStep.sedationConsentAccepted ? "Agreed" : "Not agreed"]] : []),
-    ...(bookingConsentStep.digitalSignature ? [["Digital signature", bookingConsentStep.digitalSignature]] : []),
-    ...(bookingConsentStep.consentDate ? [["Consent date", formatBookingDate(bookingConsentStep.consentDate)]] : []),
+    ...(typeof groomingConsent === "boolean" ? [["Grooming consent", groomingConsent ? "Agreed" : "Not agreed"]] : []),
+    ...(typeof sedationConsent === "boolean" ? [["Sedation consent", sedationConsent ? "Authorized" : "Not authorized"]] : []),
+    ...(bookingConsentStep.signer_name ? [["Signed by", bookingConsentStep.signer_name]] : []),
+    ...(bookingConsentStep.signed_at ? [["Signed at", new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(bookingConsentStep.signed_at))]] : []),
   ] : [];
   const currentStatus = formatConfirmationLabel(confirmation.status) || "Not available";
   const totalPrice = getGroomingPricePresentation(confirmation.review?.totalPricing);

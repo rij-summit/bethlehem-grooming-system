@@ -1,3 +1,4 @@
+import { initGroomingConsent } from "./grooming-consent.js?v=20261016";
 import { getPetWeightSubmission, getPetWeightSubmissionValidationMessage } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
 import { loadGroomingCatalogue, selectedPricingSignature, normalizeStepThreeDraft } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 import { getBookingDraft } from "../services/booking-draft-service.js?flow=grooming-order-20261016";
@@ -5,71 +6,20 @@ import { goToGroomingStep } from "./grooming-flow-navigation.js";
 
 export function initBookingConsentStep() {
   const form = document.getElementById("bookingConsentForm");
-  const mainConsentCheckbox = document.getElementById("mainConsentCheckbox");
-  const sedationConsentCheckbox = document.getElementById(
-    "sedationConsentCheckbox",
-  );
-  const digitalSignatureInput = document.getElementById("digitalSignature");
-  const consentDateInput = document.getElementById("consentDate");
   const submitBookingButton = document.getElementById("submitBookingButton");
   const consentStatusMessage = document.getElementById("consentStatusMessage");
-  const sedationWarningModal = document.getElementById("sedationWarningModal");
-  const sedationWarningBackButton = document.getElementById(
-    "sedationWarningBackButton",
-  );
-  const sedationWarningUnderstandButton = document.getElementById(
-    "sedationWarningUnderstandButton",
-  );
-  let sedationWarningAcknowledged = false;
-  /*
-    BACKEND NOTE:
-    This page currently uses sessionStorage as a temporary front-end placeholder
-    for step-to-step data persistence.
-
-    Your backend developer can replace this with:
-    - authenticated user session
-    - database draft booking record
-    - API fetch for booking draft
-  */
-
-  setCurrentDate();
-  restoreConsentDraft();
-  validateConsentForm();
-
-  mainConsentCheckbox.addEventListener("change", handleFormStateChange);
-  sedationConsentCheckbox.addEventListener("change", () => {
-    sedationWarningAcknowledged = false;
-    handleFormStateChange();
-  });
-  digitalSignatureInput.addEventListener("input", handleFormStateChange);
-  sedationWarningBackButton.addEventListener("click", closeSedationWarning);
-  sedationWarningUnderstandButton.addEventListener("click", () => {
-    sedationWarningAcknowledged = true;
-    closeSedationWarning();
-    form.requestSubmit();
-  });
+  const consent = initGroomingConsent({ storageKey: "bookingConsentStep", onChange: validateConsentForm });
+  API.getMe().then(({ user }) => consent.prefill([user?.first_name, user?.last_name].filter(Boolean).join(" "))).catch(() => {});
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!isFormValid()) {
+    if (!consent.valid) {
       validateConsentForm();
       return;
     }
 
-    if (!sedationConsentCheckbox.checked && !sedationWarningAcknowledged) {
-      openSedationWarning();
-      return;
-    }
-
-    const consentPayload = {
-      groomingAgreementAccepted: mainConsentCheckbox.checked,
-      sedationConsentAccepted: sedationConsentCheckbox.checked,
-      digitalSignature: digitalSignatureInput.value.trim(),
-      consentDate: consentDateInput.value,
-    };
-
-    sessionStorage.setItem("bookingConsentStep", JSON.stringify(consentPayload));
+    const consentPayload = consent.payload();
 
     // ── Build and submit the booking payload to the backend ──
     const schedule = getStoredData("bookingSchedule");
@@ -120,6 +70,7 @@ export function initBookingConsentStep() {
       };
     });
 
+    consent.setBusy(true);
     submitBookingButton.disabled = true;
     submitBookingButton.textContent = "Submitting...";
     const submittedAt = new Date().toISOString();
@@ -129,7 +80,7 @@ export function initBookingConsentStep() {
       const draft = getBookingDraft();
       const selections = normalizeStepThreeDraft(getStoredData("bookingStep3"), draft);
       if (sessionStorage.getItem("groomingReviewedPricing") !== selectedPricingSignature(draft, selections)) {
-        submitBookingButton.disabled = false;
+        consent.setBusy(false);
         submitBookingButton.textContent = "Submit Registration";
         goToGroomingStep("review");
         return;
@@ -139,7 +90,7 @@ export function initBookingConsentStep() {
         window_id: schedule.window_id,
         number_of_pets: bookingPets.length,
         special_notes: null,
-        sedation_consent: sedationConsentCheckbox.checked,
+        ...consentPayload,
         pets: petsPayload,
       });
 
@@ -157,12 +108,12 @@ export function initBookingConsentStep() {
         review: { ...reviewData, pets: (reviewData.pets || []).map((pet, index) => ({ ...pet,
           petGroomerName: response.booking.pets?.[index]?.pet_groomer?.first_name || 'Any available groomer',
           groomingEstimate: response.booking.pets?.[index]?.grooming_estimate || pet.groomingEstimate })) },
-        consent: consentPayload,
+        consent: response.consent,
       }));
 
       goToGroomingStep("confirmed");
     } catch (error) {
-      submitBookingButton.disabled = false;
+      consent.setBusy(false);
       submitBookingButton.textContent = "Submit Registration";
 
       if (["arrival_window_ended", "grooming_forecast_unavailable"].includes(error.code) || error.errors?.window_id) {
@@ -192,73 +143,11 @@ export function initBookingConsentStep() {
     return size.toLowerCase().replace(/\s+/g, "_");
   }
 
-  function handleFormStateChange() {
-    saveConsentDraft();
-    validateConsentForm();
-  }
-
-  function validateConsentForm() {
-    const valid = isFormValid();
-
-    if (valid) {
-      submitBookingButton.disabled = false;
-      submitBookingButton.className =
-        "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]";
-      consentStatusMessage.textContent =
-        "All required fields are complete. You can now submit your pre-registration.";
-      consentStatusMessage.className =
-        "mb-6 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700";
-    } else {
-      submitBookingButton.disabled = true;
-      submitBookingButton.className =
-        "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
-      consentStatusMessage.textContent =
-        "Please check the grooming consent and enter your digital signature before submitting.";
-      consentStatusMessage.className =
-        "mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600";
-    }
-  }
-
-  function isFormValid() {
-    const signatureValue = digitalSignatureInput.value.trim();
-
-    return (
-      mainConsentCheckbox.checked &&
-      signatureValue.length > 0
-    );
-  }
-
-  function saveConsentDraft() {
-    const consentDraft = {
-      groomingAgreementAccepted: mainConsentCheckbox.checked,
-      sedationConsentAccepted: sedationConsentCheckbox.checked,
-      digitalSignature: digitalSignatureInput.value.trim(),
-      consentDate: consentDateInput.value,
-    };
-
-    sessionStorage.setItem("bookingConsentStep", JSON.stringify(consentDraft));
-  }
-
-  function restoreConsentDraft() {
-    const savedDraft = getStoredData("bookingConsentStep");
-    if (!savedDraft) return;
-
-    mainConsentCheckbox.checked = Boolean(savedDraft.groomingAgreementAccepted);
-    sedationConsentCheckbox.checked = Boolean(
-      savedDraft.sedationConsentAccepted,
-    );
-    digitalSignatureInput.value = savedDraft.digitalSignature || "";
-  }
-
-  function setCurrentDate() {
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    consentDateInput.value = formattedDate;
+  function validateConsentForm(valid = false) {
+    submitBookingButton.disabled = !valid;
+    submitBookingButton.className = valid
+      ? "inline-flex items-center justify-center rounded-xl bg-[#315b7e] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#274a67]"
+      : "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
   }
 
   function getStoredData(key) {
@@ -271,22 +160,9 @@ export function initBookingConsentStep() {
     }
   }
 
-  function openSedationWarning() {
-    sedationWarningModal.classList.remove("hidden");
-    sedationWarningModal.classList.add("flex");
-    document.body.classList.add("overflow-hidden");
-    sedationWarningUnderstandButton.focus();
-  }
-
-  function closeSedationWarning() {
-    sedationWarningModal.classList.add("hidden");
-    sedationWarningModal.classList.remove("flex");
-    document.body.classList.remove("overflow-hidden");
-    submitBookingButton.focus();
-  }
-
   // ── Inline error banner (replaces alert for non-duplicate errors) ────────
   function showSubmitError(message) {
+    consentStatusMessage.hidden = false;
     consentStatusMessage.textContent = message;
     consentStatusMessage.className =
       "mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";

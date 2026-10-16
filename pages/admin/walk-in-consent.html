@@ -61,90 +61,10 @@
           </div>
         </div>
 
-        <div
-          id="consentStatusMessage"
-          class="mb-6 rounded-2xl border border-[#9bb9d3] bg-white px-4 py-3 text-sm text-slate-600"
-        >
-          Please review the agreement, complete the digital signature, and
-          accept all required checkboxes.
-        </div>
+        <p id="consentStatusMessage" role="alert" class="mb-4 text-sm text-red-600" hidden></p>
 
-        <!--
-          BACKEND TEAMMATE + CLAUDE CODE:
-          Consent values are currently stored only for frontend confirmation.
-          Save the signed consent snapshot with the final walk-in booking when
-          the backend submit endpoint is wired.
-        -->
         <form id="walkInConsentForm" class="space-y-6" novalidate>
-          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
-            <div class="mb-4">
-              <h3 class="text-lg font-semibold text-[#2f4b66]">
-                Grooming Agreement
-              </h3>
-            </div>
-
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p class="text-sm leading-7 text-slate-700">
-                I hereby agree and consent to have my pet groomed at Bethlehem
-                Animal Clinic subject to the following conditions:
-              </p>
-
-              <ul class="mt-4 space-y-3 text-sm leading-7 text-slate-700">
-                <li>&bull; That I confirm that my pet for grooming is at least / above six (6) months of age, apparently healthy, vaccinations up to date, no ongoing medication and/or is fit for grooming.</li>
-                <li>&bull; That I understand that my pet will be bathed, clipped, trimmed and given a basic health check.</li>
-                <li>&bull; That I agree that the clinic shall not be held responsible for irritations, abrasion, patchiness or hair loss due to pre-existing skin condition or as a result of dematting, thinning, stripping or shaving or any mishap caused by nondisclosure of my pet&rsquo;s medical condition or behavior.</li>
-                <li>&bull; That if my pet bites or attempts to bite any person or pets, a muzzle may be used or other restrictions at the discretion of the groomer.</li>
-                <li>&bull; That if my pet harbours parasites or has health concern, I understand that the grooming will cease and I will be advised for treatment, collection, or return home.</li>
-                <li>&bull; That if in my absence, my representative is informed of my grooming request.</li>
-                <li>&bull; That I agree and am responsible for the payment of grooming for my pet.</li>
-              </ul>
-            </div>
-
-            <label
-              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-            >
-              <input
-                id="mainConsentCheckbox"
-                type="checkbox"
-                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
-              />
-              <span class="text-sm text-slate-700">
-                I have read and agree to the grooming agreement.
-                <span class="text-red-500">*</span>
-              </span>
-            </label>
-          </section>
-
-          <section class="rounded-2xl border border-[#91aeca] bg-white p-5">
-            <div class="mb-4">
-              <h3 class="text-lg font-semibold text-[#2f4b66]">
-                Consent for Sedation
-              </h3>
-            </div>
-
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p class="text-sm leading-7 text-slate-700">
-                I hereby authorize the clinic and its staff to proceed with the
-                sedation as it is deemed necessary for my pet for grooming. I
-                confirm that the procedure was explained and my pet had
-                undergone necessary test / screening prior to sedation and
-                grooming.
-              </p>
-            </div>
-
-            <label
-              class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-            >
-              <input
-                id="sedationConsentCheckbox"
-                type="checkbox"
-                class="mt-1 h-4 w-4 shrink-0 accent-[#315b7e]"
-              />
-              <span class="text-sm text-slate-700">
-                I have read and agree to the sedation consent.
-              </span>
-            </label>
-          </section>
+          <div id="groomingConsentFields" class="space-y-6"></div>
 
           <div
             class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
@@ -170,10 +90,10 @@
       </section>
     </main>
 
-    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010&groomers=named-20261016"></script>
+    <script src="../../scripts/api.js?v=session-inactivity-20260828&release=20261001&auth=session-scope-20261006&clinic=roles-20261010&groomers=named-20261016&consent=20261016"></script>
     <script
       type="module"
-      src="../../scripts/components/walk-in-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&groomers=named-20261016"
+      src="../../scripts/components/walk-in-consent-step.js?v=grooming-workload-20261009&pet-weight=pet-weight-size-20261011-v3&copy=grooming-terminology-20261016&groomers=named-20261016&consent=20261016"
     ></script>
   </body>
 </html>

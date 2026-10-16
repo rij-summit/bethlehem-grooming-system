@@ -16,6 +16,12 @@ function adminArchive() {
     errorMessage: "",
     detailsModalOpen: false,
     detailsBooking: null,
+    signedConsent: null,
+    consentLoading: false,
+    consentError: '',
+    legacyGroomingConsent: null,
+    legacySedationConsent: null,
+    _consentRequest: 0,
     clinicDetailsModalOpen: false,
     detailsClinicRecord: null,
     clinicCare: null,
@@ -241,6 +247,7 @@ function adminArchive() {
       this._detailsTrigger = trigger;
       this.detailsBooking = booking;
       this.detailsModalOpen = true;
+      this.loadSignedConsent(booking.id);
       this.$nextTick(() => {
         // Resolve the rendered dialog after startup/Back, as well as a row click.
         const dialog = document.querySelector('[aria-labelledby="grooming-record-title"]');
@@ -254,13 +261,15 @@ function adminArchive() {
       if (!this.detailsModalOpen) return;
       this.detailsModalOpen = false;
       this.detailsBooking = null;
+      this._consentRequest++;
+      this.signedConsent = null;
       document.body.style.overflow = this._detailsBodyOverflow;
       this._detailsTrigger?.focus();
       this._detailsTrigger = null;
     },
 
     trapDetailsFocus(event) {
-      const targets = [...this.$refs.groomingRecordDialog.querySelectorAll('button, a[href], [tabindex="0"]')]
+      const targets = [...this.$refs.groomingRecordDialog.querySelectorAll('button, a[href], summary, [tabindex="0"]')]
         .filter((element) => !element.disabled && element.getClientRects().length);
       const first = targets[0];
       const last = targets[targets.length - 1];
@@ -284,6 +293,44 @@ function adminArchive() {
         if (iso && petIso) return Number.isFinite(Date.parse(iso)) && Date.parse(iso) === Date.parse(petIso);
         return !iso && !petIso && !this.isArchiveValueMissing(time) && time === petTime;
       });
+    },
+
+    async loadSignedConsent(bookingId) {
+      const request = ++this._consentRequest;
+      this.signedConsent = null;
+      this.legacyGroomingConsent = null;
+      this.legacySedationConsent = null;
+      this.consentError = '';
+      this.consentLoading = true;
+      if (this.$refs.signedAgreement) this.$refs.signedAgreement.open = false;
+      try {
+        const data = await API.getGroomingSignedConsent(bookingId);
+        if (request !== this._consentRequest) return;
+        this.signedConsent = data.consent;
+        this.legacyGroomingConsent = data.legacy_grooming_consent;
+        this.legacySedationConsent = data.legacy_sedation_consent;
+      } catch {
+        if (request === this._consentRequest) this.consentError = 'Unable to load consent.';
+      } finally {
+        if (request === this._consentRequest) this.consentLoading = false;
+      }
+    },
+
+    consentLabel(kind) {
+      const value = this.signedConsent?.[kind + '_consent']
+        ?? (kind === 'grooming' ? this.legacyGroomingConsent : this.legacySedationConsent);
+      if (value === true) return kind === 'grooming' ? 'Agreed' : 'Authorized';
+      if (value === false) return kind === 'grooming' ? 'Not agreed' : 'Not authorized';
+      return 'Not recorded';
+    },
+
+    consentSignedAt() {
+      const value = this.signedConsent?.signed_at;
+      if (!value || !Number.isFinite(Date.parse(value))) return 'Not recorded';
+      const date = new Date(value);
+      const options = { timeZone: 'Asia/Manila' };
+      return new Intl.DateTimeFormat('en-US', { ...options, month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+        + ' · ' + new Intl.DateTimeFormat('en-US', { ...options, hour: 'numeric', minute: '2-digit' }).format(date);
     },
 
     groomingText(value) {

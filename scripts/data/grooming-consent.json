@@ -1,0 +1,15 @@
+{
+  "version": "2026-10-16",
+  "grooming_intro": "I hereby agree and consent to have my pet groomed at Bethlehem Animal Clinic subject to the following conditions:",
+  "grooming_conditions": [
+    "That I confirm that my pet for grooming is at least / above six (6) months of age, apparently healthy, vaccinations up to date, no ongoing medication and/or is fit for grooming.",
+    "That I understand that my pet will be bathed, clipped, trimmed and given a basic health check.",
+    "That I agree that the clinic shall not be held responsible for irritations, abrasion, patchiness or hair loss due to pre-existing skin condition or as a result of dematting, thinning, stripping or shaving or any mishap caused by nondisclosure of my pet’s medical condition or behavior.",
+    "That if my pet bites or attempts to bite any person or pets, a muzzle may be used or other restrictions at the discretion of the groomer.",
+    "That if my pet harbours parasites or has health concern, I understand that the grooming will cease and I will be advised for treatment, collection, or return home.",
+    "That if in my absence, my representative is informed of my grooming request.",
+    "That I agree and am responsible for the payment of grooming for my pet."
+  ],
+  "grooming_action": "I have read and agree to the grooming agreement.",
+  "sedation_action": "I authorize sedation if deemed necessary for grooming."
+}

@@ -147,6 +147,33 @@ ui.trapDetailsFocus({ target: body, shiftKey: false, preventDefault: () => preve
 assert.equal(prevented, 2, 'Tab can reach the transaction link normally');
 
 (async () => {
+  const consentUi = context.adminArchive();
+  consentUi.$refs = { signedAgreement: { open: true } };
+  let resolveFirst;
+  context.API = { getGroomingSignedConsent: id => id === 1
+    ? new Promise(resolve => { resolveFirst = resolve; })
+    : Promise.resolve({ consent: { booking_id: 2, grooming_consent: true, sedation_consent: false,
+      signer_name: 'Representative', signed_at: '2026-10-16T08:06:00Z' } }) };
+  const firstRequest = consentUi.loadSignedConsent(1);
+  assert.equal(consentUi.$refs.signedAgreement.open, false, 'Agreement starts collapsed for every record');
+  await consentUi.loadSignedConsent(2);
+  resolveFirst({ consent: { booking_id: 1, sedation_consent: true } });
+  await firstRequest;
+  assert.equal(consentUi.signedConsent.booking_id, 2, 'A slow previous request cannot show a different booking’s signature');
+  assert.equal(consentUi.consentLabel('grooming'), 'Agreed');
+  assert.equal(consentUi.consentLabel('sedation'), 'Not authorized');
+  assert.equal(consentUi.consentSignedAt(), 'Oct 16, 2026 · 4:06 PM');
+  consentUi.signedConsent.sedation_consent = true;
+  assert.equal(consentUi.consentLabel('sedation'), 'Authorized');
+  consentUi.signedConsent = null;
+  assert.equal(consentUi.consentLabel('sedation'), 'Not recorded');
+  assert.equal(consentUi.consentLabel('grooming'), 'Not recorded');
+  assert.equal(consentUi.consentSignedAt(), 'Not recorded');
+  context.API.getGroomingSignedConsent = async () => { throw new Error('Offline'); };
+  await consentUi.loadSignedConsent(2);
+  assert.equal(consentUi.consentError, 'Unable to load consent.');
+  assert.equal(consentUi.consentLoading, false);
+
   let saved, restoredScroll, focused = 0;
   context.window.history = { state: { otherState: 'preserved' }, replaceState: (state) => { saved = state; context.window.history.state = state; } };
   context.window.scrollY = 420;
