@@ -20,7 +20,7 @@ function adminServices() {
       const host = this.$refs[tab];
       if (host.firstElementChild) return host.firstElementChild;
       return pending[tab] ??= (async () => {
-        const response = await fetch(tab === 'clinic' ? './clinic/sections/services.html?v=services-20261017' : './services/sections/grooming.html?v=services-20261017-2');
+        const response = await fetch(tab === 'clinic' ? './clinic/sections/services.html?v=services-20261017' : './services/sections/grooming.html?v=services-20261017-followup');
         if (!response.ok) throw new Error('Unable to load Services. Please retry.');
         const panel = document.createElement('section');
         panel.setAttribute('x-data', tab === 'clinic' ? 'adminClinicServices()' : 'adminGroomingServices()');

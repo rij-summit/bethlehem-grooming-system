@@ -42,7 +42,7 @@ function adminGroomingServices() {
         descriptionItems: (service?.descriptionItems?.length ? service.descriptionItems : ['']).map((text, index) => ({key: index, text})),
         nextDescriptionKey: service?.descriptionItems?.length || 1,
         includedServiceIds: [...(service?.includedServiceIds || [])],
-        isActive: service?.isActive ?? true, displayOrder: service?.displayOrder ?? this.rows.length,
+        isActive: service?.isActive ?? true,
         priceRows, defaultPrices: service?.defaultPriceOptions || []};
       this.$refs.editor.showModal();
       this.$nextTick(() => this.$refs.serviceName.focus());
@@ -72,35 +72,49 @@ function adminGroomingServices() {
       this.formError = '';
       this.fieldErrors = {};
     },
-    validatePricing() {
+    priceKey(row, field) { return (this.form.kind === 'package' ? `sizes.${row.sizeKey}.` : '') + field; },
+    pricingErrors() {
       const limits = this.priceLimits?.[this.form.kind];
       const valid = value => limits && /^\d+(?:\.\d{1,2})?$/.test(String(value))
         && Number(value) >= limits.minimum && Number(value) <= limits.maximum;
-      this.fieldErrors = {};
+      const errors = {};
       const rows = this.form.priceRows.filter(row => row.enabled);
-      if (!rows.length) this.fieldErrors.sizes = 'Enter size pricing.';
+      if (!rows.length) errors.sizes = 'Enable a size.';
       let previous = 0;
       for (const row of rows) {
         const key = this.form.kind === 'package' ? `sizes.${row.sizeKey}.` : '';
-        if (!valid(row.amount)) this.fieldErrors[key + 'amount'] = 'Enter a reasonable price amount.';
-        else if (Number(row.amount) < previous) this.fieldErrors[key + 'amount'] = 'Price must not be lower than the preceding size.';
+        if (!valid(row.amount)) errors[key + 'amount'] = 'Enter a reasonable price amount.';
+        else if (Number(row.amount) < previous) errors[key + 'amount'] = 'Must not be lower than the preceding size.';
         previous = Number(row.amount);
-        if (!['fixed', 'range', 'starting_at'].includes(row.pricingType)) this.fieldErrors[key + 'pricing_type'] = 'Choose a supported pricing type.';
+        if (!['fixed', 'range', 'starting_at'].includes(row.pricingType)) errors[key + 'pricing_type'] = 'Choose a pricing type.';
         if (row.pricingType === 'range') {
-          if (!valid(row.maximum)) this.fieldErrors[key + 'maximum'] = 'Enter a reasonable price amount.';
-          else if (Number(row.maximum) <= Number(row.amount)) this.fieldErrors[key + 'maximum'] = 'Maximum price must be greater than minimum price.';
+          if (!valid(row.maximum)) errors[key + 'maximum'] = 'Enter a reasonable price amount.';
+          else if (Number(row.maximum) <= Number(row.amount)) errors[key + 'maximum'] = 'Must be greater than the minimum.';
         }
       }
-      this.formError = Object.values(this.fieldErrors).join(' ');
-      return !this.formError;
+      return errors;
+    },
+    validatePricing() {
+      this.fieldErrors = this.pricingErrors();
+      return Object.keys(this.fieldErrors).length === 0;
+    },
+    priceInput() {
+      const errors = this.pricingErrors();
+      for (const key of Object.keys(this.fieldErrors)) this.fieldErrors[key] = errors[key] || '';
+    },
+    validatePrice(row, field) {
+      const key = this.priceKey(row, field);
+      this.fieldErrors[key] = this.pricingErrors()[key] || '';
+      this.priceInput();
+      return !this.fieldErrors[key];
     },
     async save() {
       if (this.saving || !this.$refs.form.reportValidity()) return;
-      if (!this.validatePricing()) { this.$nextTick(() => this.$refs.formError.focus()); return; }
+      if (!this.validatePricing()) { this.$nextTick(() => this.$refs.form.querySelector?.('[aria-invalid="true"]')?.focus()); return; }
       const f = this.form;
       const price = row => ({pricing_type: row.pricingType, amount: row.amount,
         ...(row.pricingType === 'range' ? {maximum: row.maximum} : {})});
-      const payload = {name: f.name.trim(), kind: f.kind, isActive: f.isActive, displayOrder: f.displayOrder,
+      const payload = {name: f.name.trim(), kind: f.kind, isActive: f.isActive,
         ...(f.kind === 'package' ? {petType: f.petType, descriptionItems: f.descriptionItems.map(item => item.text.trim()),
           includedServiceIds: f.includedServiceIds, sizes: Object.fromEntries(f.priceRows.filter(row => row.enabled).map(row => [row.sizeKey, price(row)]))}
           : price(f.priceRows[0]))};
@@ -108,12 +122,11 @@ function adminGroomingServices() {
       this.formError = '';
       this.fieldErrors = {};
       try {
-        const response = await API.adminRequest(this.editingId ? 'PUT' : 'POST',
+        await API.adminRequest(this.editingId ? 'PUT' : 'POST',
           `/admin/grooming/services${this.editingId ? '/' + this.editingId : ''}`, payload);
-        this.rows = this.rows.filter(row => row.serviceId !== response.data.serviceId).concat(response.data)
-          .sort((a, b) => a.displayOrder - b.displayOrder || a.serviceId - b.serviceId);
         this.saving = false;
         this.closeEditor();
+        await this.load();
         this.$store.clinicFeedback.notify(this.editingId ? 'Service updated.' : 'Service added.');
       } catch (error) {
         this.fieldErrors = Object.fromEntries(Object.entries(error.errors || {}).map(([key, values]) => [key, values[0]]));

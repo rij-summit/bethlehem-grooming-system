@@ -28,10 +28,11 @@ async function main() {
   assert.equal(typeof ui.loadGroomingPrices, 'undefined', 'Grooming prices are managed in Services');
   const calls = [];
   let reject = false;
+  let serverRows = catalogue;
   context.API.adminRequest = async (method, url, payload) => {
     calls.push({method, url, payload});
     if (reject) throw {message: 'Unable to save.', errors: {amount: ['Enter a reasonable price amount.']}};
-    return method === 'GET' ? catalogueResponse : {data: {...catalogue[5], name: payload.name, isActive: payload.isActive}};
+    return method === 'GET' ? {...catalogueResponse, data: serverRows} : {data: {...catalogue[5], name: payload.name, isActive: payload.isActive}};
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../scripts/components/admin-grooming-services.js'), 'utf8'), context);
   const services = context.adminGroomingServices();
@@ -48,6 +49,7 @@ async function main() {
     const service = catalogue.find(item => item.kind === kind);
     services.openEditor(kind, service);
     assert.equal(opened, true);
+    assert.equal(Object.hasOwn(services.form, 'displayOrder'), false);
     assert.equal(services.form.priceRows.filter(row => row.enabled).length, service.priceOptions.length);
     const row = services.form.priceRows.filter(row => row.enabled).at(-1);
     for (const type of ['fixed', 'starting_at', 'range']) {
@@ -58,7 +60,7 @@ async function main() {
         await services.save();
         assert.equal(calls.length, before, 'Invalid price must not submit');
         assert.equal(row.amount, invalid, 'Validation must never clamp input');
-        assert.match(services.formError, /reasonable price/);
+        assert.match(Object.values(services.fieldErrors).join(' '), /reasonable price/);
       }
       row.amount = '1200';
       row.maximum = '1300';
@@ -80,16 +82,34 @@ async function main() {
   services.form.priceRows[0].amount = '600';
   services.restorePrices();
   assert.equal(services.form.priceRows[0].amount, '550');
+  const first = services.form.priceRows[0], second = services.form.priceRows[1];
+  first.amount = '550.001';
+  services.priceInput();
+  assert.equal(services.fieldErrors['sizes.small.amount'], undefined, 'Untouched fields stay neutral');
+  services.validatePrice(first, 'amount');
+  assert.match(services.fieldErrors['sizes.small.amount'], /reasonable price/);
+  first.amount = '550';
+  services.priceInput();
+  assert.equal(services.fieldErrors['sizes.small.amount'], '');
+  second.amount = '549';
+  services.validatePrice(second, 'amount');
+  assert.match(services.fieldErrors['sizes.medium.amount'], /preceding size/);
+  first.enabled = false;
+  services.priceInput();
+  assert.equal(services.fieldErrors['sizes.medium.amount'], '', 'Disabled sizes do not constrain the next enabled size');
   services.closeEditor();
   services.openEditor('ala_carte', catalogue[5]);
   services.form.name = 'Nail Care';
   services.form.priceRows[0].pricingType = 'fixed';
   services.form.priceRows[0].amount = '180';
+  serverRows = [...catalogue].reverse();
   await services.save();
-  assert.equal(calls.at(-1).method, 'PUT');
-  assert.equal(calls.at(-1).payload.name, 'Nail Care');
-  assert.equal(Object.hasOwn(calls.at(-1).payload, 'sizes'), false);
-  assert.equal(Object.hasOwn(calls.at(-1).payload, 'descriptionItems'), false);
+  const saved = calls.findLast(call => call.method === 'PUT');
+  assert.equal(saved.payload.name, 'Nail Care');
+  assert.equal(Object.hasOwn(saved.payload, 'sizes'), false);
+  assert.equal(Object.hasOwn(saved.payload, 'descriptionItems'), false);
+  assert.equal(Object.hasOwn(saved.payload, 'displayOrder'), false);
+  assert.equal(services.rows.map(row => row.id).join(','), serverRows.map(row => row.id).join(','), 'Save reloads authoritative API ordering');
   assert.equal(opened, false);
   services.openEditor('ala_carte', catalogue[5]);
   reject = true;

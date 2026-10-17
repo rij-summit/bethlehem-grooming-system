@@ -24,10 +24,19 @@ class GroomingPricingController extends Controller
 
     private function catalogue(bool $all, GroomingServicePriceResolver $resolver)
     {
-        $services = Service::whereIn('kind', ['package', 'ala_carte'])->orderBy('display_order')->orderBy('service_id')->get();
+        $services = Service::whereIn('kind', ['package', 'ala_carte'])->orderBy('service_id')->get();
         $ids = $services->pluck('slug', 'service_id')->all();
         $visible = $all ? $services : $services->where('is_active', true)->values();
-        return response()->json(['data' => $visible->map(fn ($service) => $this->normalize($service, $resolver, $ids)),
+        $catalogue = $visible->map(fn ($service) => $this->normalize($service, $resolver, $ids));
+        $prices = $catalogue->mapWithKeys(fn ($service) => [$service['serviceId'] => [
+            min(array_column($service['priceOptions'], 'minAmount')),
+            max(array_map(fn ($option) => $option['maxAmount'] ?? $option['minAmount'], $service['priceOptions'])),
+        ]]);
+        $catalogue = $catalogue->sort(function ($a, $b) use ($prices) {
+            if ($a['kind'] !== $b['kind']) return $a['kind'] === 'package' ? -1 : 1;
+            return ($prices[$a['serviceId']] <=> $prices[$b['serviceId']]) ?: strcasecmp($a['name'], $b['name']);
+        })->values();
+        return response()->json(['data' => $catalogue,
             'priceLimits' => config('grooming_services.price_limits'),
             'estimateRules' => app(\App\Services\GroomingTimeEstimate::class)->rules($services)])->header('Cache-Control', 'no-store');
     }
@@ -56,7 +65,6 @@ class GroomingPricingController extends Controller
             'includedServiceIds' => ['sometimes', 'array', 'max:100'],
             'includedServiceIds.*' => ['integer', 'distinct', \Illuminate\Validation\Rule::exists('services', 'service_id')->where('kind', 'ala_carte')],
             'isActive' => ['required', 'boolean'],
-            'displayOrder' => ['required', 'integer', 'min:0', 'max:10000'],
         ]);
         if (! $created && $service->kind !== $data['kind']) {
             throw \Illuminate\Validation\ValidationException::withMessages(['kind' => 'Service type cannot be changed.']);
@@ -75,7 +83,7 @@ class GroomingPricingController extends Controller
                 'description_items' => $package ? $data['descriptionItems'] : [],
                 'description' => $package ? implode("\n", $data['descriptionItems']) : null,
                 'included_ala_carte_ids' => $package ? ($data['includedServiceIds'] ?? []) : [],
-                'is_active' => $data['isActive'], 'display_order' => $data['displayOrder'],
+                'is_active' => $data['isActive'],
             ]);
             // New services use the existing duration field for operational estimates.
             if ($created) $service->duration_minutes = $package ? 60 : 15;

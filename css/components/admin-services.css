@@ -1,7 +1,3 @@
-.services-tabs { display: flex; gap: 8px; padding: 6px; width: fit-content; max-width: 100%; border: 1px solid #cfe0ee; border-radius: 16px; background: #eef5fb; }
-.services-tabs button { min-height: 44px; padding: 10px 24px; border-radius: 12px; color: #2f4b66; font-weight: 600; white-space: nowrap; }
-.services-tabs button[aria-selected="true"] { background: #315b7e; color: white; box-shadow: 0 1px 2px #1f38501a; }
-.services-tabs button:hover:not([aria-selected="true"]) { background: white; }
 .services-group + .services-group { margin-top: 32px; }
 .services-group-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .services-size-prices { display: grid; grid-template-columns: repeat(4, minmax(76px, 1fr)); gap: 12px; }
@@ -25,7 +21,7 @@
 .services-price-row > label:first-child { align-self: center; font-size: 13px; }
 .services-price-row--single { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .services-price-row--single > label:first-child { display: none; }
-.services-form-columns, .services-inclusions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.services-inclusions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .services-inclusions label { min-height: 32px; }
 .services-page :is(button, input, select, [tabindex="0"]):focus-visible { outline: 2px solid #315b7e; outline-offset: 2px; }
 .services-page button:disabled { cursor: not-allowed; opacity: .5; }

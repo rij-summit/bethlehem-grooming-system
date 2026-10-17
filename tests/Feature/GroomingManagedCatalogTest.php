@@ -155,4 +155,49 @@ class GroomingManagedCatalogTest extends TestCase
         $this->assertGreaterThan(0, $estimate['minMinutes']);
         $this->assertSame(90, app(GroomingTimeEstimate::class)->calculate($service->slug, null, 'small')['minMinutes']);
     }
+
+    public function test_catalog_order_uses_lowest_then_highest_price_then_name_for_every_consumer(): void
+    {
+        Service::query()->delete();
+        foreach ([
+            ['A High', 400, 700, 900, false], ['B High', 400, 800, 850, false],
+            ['Z Low', 300, null, null, false], ['Basic Groom', 400, 700, null, false],
+            ['Apple Groom', 400, 700, null, false], ['C Starting', 400, 700, null, true],
+        ] as $index => [$name, $medium, $large, $maximum, $starting]) {
+            Service::create(['slug' => 'ordered_package_'.$index, 'service_name' => $name, 'kind' => 'package',
+                'pet_type' => 'dog', 'description_items' => ['Bath and coat care'], 'duration_minutes' => 60,
+                'base_price' => $medium, 'price_medium' => $medium, 'price_large' => $large,
+                'starting_price_sizes' => $starting ? ['medium'] : [],
+                'range_price_maximums' => $maximum ? ['medium' => $maximum] : [],
+                'is_active' => true, 'display_order' => $index]);
+        }
+        foreach ([['B Lower', 300, null, false], ['A Higher', 400, null, false],
+            ['B Range', 400, 850, false], ['A Range', 400, 700, false],
+            ['Basic Care', 400, null, false], ['Apple Care', 400, null, false], ['C Starting', 400, null, true],
+        ] as $index => [$name, $amount, $maximum, $starting]) {
+            Service::create(['slug' => 'ordered_ala_'.$index, 'service_name' => $name, 'kind' => 'ala_carte',
+                'pet_type' => 'all', 'base_price' => $amount, 'price_min' => $maximum || $starting ? $amount : null,
+                'price_max' => $maximum, 'is_starting_price' => $starting, 'starting_price_sizes' => [],
+                'is_active' => true, 'display_order' => $index, 'duration_minutes' => 15]);
+        }
+        foreach (['admin', 'staff', 'customer'] as $role) {
+            Sanctum::actingAs(new User(['role' => $role]));
+            $endpoints = $role === 'admin' ? ['/api/grooming/services', '/api/admin/grooming/services'] : ['/api/grooming/services'];
+            foreach ($endpoints as $endpoint) {
+                $rows = collect($this->getJson($endpoint)->assertOk()->json('data'));
+                $this->assertSame(['Z Low', 'Apple Groom', 'Basic Groom', 'C Starting', 'B High', 'A High'],
+                    $rows->where('kind', 'package')->pluck('name')->all());
+                $this->assertSame(['B Lower', 'A Higher', 'Apple Care', 'Basic Care', 'C Starting', 'A Range', 'B Range'],
+                    $rows->where('kind', 'ala_carte')->pluck('name')->all());
+            }
+        }
+    }
+
+    public function test_services_can_be_added_and_edited_without_manual_display_order(): void
+    {
+        $created = $this->postJson('/api/admin/grooming/services', ['name' => 'Paw Care', 'kind' => 'ala_carte',
+            'pricing_type' => 'fixed', 'amount' => '180', 'isActive' => true])->assertCreated()->json('data');
+        $this->putJson('/api/admin/grooming/services/'.$created['serviceId'], ['name' => 'Paw Care', 'kind' => 'ala_carte',
+            'pricing_type' => 'fixed', 'amount' => '200', 'isActive' => true])->assertOk()->assertJsonPath('data.priceOptions.0.minAmount', 200);
+    }
 }
