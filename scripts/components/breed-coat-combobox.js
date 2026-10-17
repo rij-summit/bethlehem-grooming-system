@@ -18,6 +18,9 @@ export function createBreedCoatCombobox({
 
   let isOpen = false;
   let shouldShowValidation = false;
+  let previousBreed = breedInput.value;
+  let previousPetType = petTypeInput.value;
+  let recalculateOnCatalogueLoad = false;
 
   function getOptions() {
     return getCoatOptions(breedInput.value, petTypeInput.value);
@@ -113,12 +116,19 @@ export function createBreedCoatCombobox({
     notifyValueChange();
   }
 
-  function update() {
+  function update({ preserveValue = false, autoSelect = true } = {}) {
     const previousValue = input.value;
     const breed = breedInput.value.trim();
     const options = getOptions();
+    const speciesChanged = petTypeInput.value !== previousPetType;
 
-    input.value = options.includes(previousValue) ? previousValue : "";
+    previousBreed = breedInput.value;
+    previousPetType = petTypeInput.value;
+    recalculateOnCatalogueLoad = !preserveValue && autoSelect;
+    if (!preserveValue) {
+      input.value = !speciesChanged && options.includes(previousValue) ? previousValue
+        : autoSelect && options.length === 1 ? options[0] : "";
+    }
     input.placeholder = !breed
       ? "Select breed first"
       : options.length > 0
@@ -126,6 +136,8 @@ export function createBreedCoatCombobox({
         : "No coat options for this breed";
     input.disabled = options.length === 0;
     toggleButton.disabled = options.length === 0;
+    input.setAttribute("aria-disabled", String(input.disabled));
+    toggleButton.setAttribute("aria-disabled", String(toggleButton.disabled));
 
     if (options.length === 0) {
       setOpen(false);
@@ -138,13 +150,20 @@ export function createBreedCoatCombobox({
     } else {
       clearValidation();
     }
+
+    if (input.value !== previousValue) notifyValueChange();
+  }
+
+  function handleDependencyChange() {
+    if (breedInput.value === previousBreed && petTypeInput.value === previousPetType) return;
+    update();
   }
 
   function reset() {
     input.value = "";
     clearValidation();
     setOpen(false);
-    update();
+    update({ autoSelect: false });
   }
 
   function focusOption(offset) {
@@ -215,14 +234,17 @@ export function createBreedCoatCombobox({
     }
   });
 
-  breedInput.addEventListener("input", update);
-  breedInput.addEventListener("change", update);
-  petTypeInput.addEventListener("input", update);
-  petTypeInput.addEventListener("change", update);
+  breedInput.addEventListener("input", handleDependencyChange);
+  breedInput.addEventListener("change", handleDependencyChange);
+  petTypeInput.addEventListener("input", handleDependencyChange);
+  petTypeInput.addEventListener("change", handleDependencyChange);
   input.form?.addEventListener("reset", () => window.setTimeout(reset));
-  breedCoatCatalogueReady.then(update);
+  breedCoatCatalogueReady.then(() => update({
+    preserveValue: !recalculateOnCatalogueLoad,
+    autoSelect: recalculateOnCatalogueLoad,
+  }));
 
-  update();
+  update({ preserveValue: true, autoSelect: false });
 
   return {
     getValidationMessage,

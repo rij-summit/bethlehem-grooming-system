@@ -549,6 +549,7 @@ function adminCustomers() {
             listbox: document.getElementById("adminPetBreedOptions"),
             toggleButton: document.getElementById("adminPetBreedDropdownButton"),
             errorElement: document.getElementById("adminPetBreedError"),
+            petTypeInput: elements.species,
             getPetType: () => elements.species.value,
           }),
           furType: tools.createBreedCoatCombobox({
@@ -628,18 +629,16 @@ function adminCustomers() {
 
       controls.species.setValue(species);
       controls.gender.setValue(String(p.gender || "").toLowerCase());
-      controls.breed.reset();
-      controls.furType.reset();
-      elements.breed.value = p.breed || "";
+      controls.breed.setValue(p.breed || "");
+      elements.furType.value = p.furType || "";
+      controls.furType.update({ preserveValue: true, autoSelect: false });
       tools.initializeWeightField(elements.weight);
       elements.weight.value = tools.formatSavedWeight(p.weight);
       this.syncPetWeightAndSize({ clearManualSize: true });
       if (!tools.getSizeForWeight(species, elements.weight.value)) this.setStoredPetSize(p.size);
 
       await tools.breedCoatCatalogueReady;
-      controls.furType.update();
-      elements.furType.value = p.furType || "";
-      controls.furType.update();
+      controls.furType.update({ preserveValue: true, autoSelect: false });
 
       this.petModal.editing   = true;
       this.petModal.saveError = "";

@@ -83,33 +83,14 @@ export function getMatchingBreeds(query, petType, limit = 4) {
 }
 
 export function getCoatOptions(breed, petType) {
+  const breeds = BREED_COAT_OPTIONS[petType];
+  if (!breeds || !hasLetter(breed) || normalize(breed) === normalize(OTHER_BREED)) {
+    return [];
+  }
+
   const effectiveBreed = petType === "Cat" && normalize(breed) === normalize(MIXED_BREED)
     ? MIXED_BREED_CAT
     : breed;
-  const normalizedBreed = normalize(effectiveBreed);
-
-  if (!normalizedBreed) {
-    return [];
-  }
-
-  if (
-    [...SPECIAL_BREEDS].some((specialBreed) => normalize(specialBreed) === normalizedBreed)
-    && !BREED_COAT_OPTIONS[petType]
-  ) {
-    return [];
-  }
-
-  const typesToSearch = BREED_COAT_OPTIONS[petType]
-    ? [petType]
-    : Object.keys(BREED_COAT_OPTIONS);
-
-  for (const type of typesToSearch) {
-    const matchingBreed = findMatchingKey(BREED_COAT_OPTIONS[type], effectiveBreed);
-
-    if (matchingBreed) {
-      return [...BREED_COAT_OPTIONS[type][matchingBreed]];
-    }
-  }
-
-  return [];
+  const matchingBreed = findMatchingKey(breeds, effectiveBreed);
+  return [...(breeds[matchingBreed] || breeds[UNKNOWN_BREED] || [])];
 }

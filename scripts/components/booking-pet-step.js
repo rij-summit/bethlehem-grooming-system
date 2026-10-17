@@ -173,6 +173,7 @@ const breedCombobox = createBreedCombobox({
   listbox: document.getElementById("breedOptions"),
   toggleButton: document.getElementById("breedDropdownButton"),
   errorElement: document.getElementById("breedError"),
+  petTypeInput: elements.petType,
   getPetType: () => elements.petType.value,
 });
 
@@ -607,21 +608,18 @@ function restoreAddPetFormDraft() {
   const values = draft?.newPetForm || {};
 
   petTypeCombobox.setValue(values.petType || "");
-  breedCombobox.setDisabled(!values.petType);
   elements.petName.value = values.petName || "";
   genderCombobox.setValue(values.gender || "");
   elements.birthdate.value = values.birthdate || "";
-  elements.breed.value = values.petType ? values.breed || "" : "";
+  breedCombobox.setValue(values.petType ? values.breed || "" : "");
   elements.color.value = values.color || "";
 
   if (values.weight) {
     elements.weight.value = values.weight;
   }
 
-  breedCoatCombobox.update();
-  if (values.furType && !elements.furType.disabled) {
-    elements.furType.value = values.furType;
-  }
+  elements.furType.value = values.petType ? values.furType || "" : "";
+  breedCoatCombobox.update({ preserveValue: true, autoSelect: false });
 
   syncWeightAndSize({ clearManualSize: true });
   if (values.size && !getSizeForWeight(elements.petType.value, elements.weight.value)) {
@@ -677,7 +675,6 @@ function resetAddPetForm() {
   petTypeCombobox.reset();
   genderCombobox.reset();
   breedCombobox.reset();
-  breedCombobox.setDisabled(true);
   breedCoatCombobox.reset();
   sizeCombobox.reset();
   initializeWeightField(elements.weight);
@@ -849,9 +846,6 @@ function bindEvents() {
   elements.nextBtn.addEventListener("click", handleNext);
 
   elements.petType.addEventListener("change", () => {
-    breedCombobox.reset();
-    breedCombobox.setDisabled(!elements.petType.value);
-    breedCoatCombobox.update();
     syncWeightAndSize({ clearManualSize: true });
     validateWeightOnCommit();
   });

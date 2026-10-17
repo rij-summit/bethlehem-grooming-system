@@ -14,7 +14,8 @@ export function createBreedCombobox({
   listbox,
   toggleButton,
   errorElement,
-  getPetType = () => "",
+  petTypeInput,
+  getPetType = () => petTypeInput?.value || "",
 }) {
   if (!root || !input || !listbox || !toggleButton) {
     throw new Error("Breed combobox elements are incomplete.");
@@ -24,6 +25,7 @@ export function createBreedCombobox({
   let isOpen = false;
   let isDisabled = input.disabled || toggleButton.disabled;
   let shouldShowValidation = false;
+  let previousPetType = getPetType();
 
   function getValidationMessage() {
     if (isCustomEntry && !hasLetter(input.value.trim())) {
@@ -158,13 +160,24 @@ export function createBreedCombobox({
     notifyValueChange();
   }
 
-  function reset() {
-    isCustomEntry = false;
-    input.value = "";
-    input.readOnly = true;
-    input.placeholder = isDisabled ? "Select pet type first" : "Select breed";
+  function setValue(value) {
+    previousPetType = getPetType();
+    input.value = value || "";
+    isCustomEntry = Boolean(input.value && !isMixedBreed(input.value) && input.value !== UNKNOWN_BREED);
+    input.readOnly = !isCustomEntry;
+    setDisabled(!previousPetType);
     clearValidation();
     setOpen(false);
+  }
+
+  function reset() {
+    setValue("");
+  }
+
+  function handleSpeciesChange() {
+    if (getPetType() === previousPetType) return;
+    reset();
+    notifyValueChange();
   }
 
   function setDisabled(disabled) {
@@ -259,18 +272,20 @@ export function createBreedCombobox({
   });
 
   input.form?.addEventListener("reset", () => window.setTimeout(reset));
+  petTypeInput?.addEventListener("input", handleSpeciesChange);
+  petTypeInput?.addEventListener("change", handleSpeciesChange);
   breedCoatCatalogueReady.then(() => {
     if (isOpen) {
       renderOptions();
     }
   });
-  reset();
-  setDisabled(isDisabled);
+  setValue(input.value);
 
   return {
     getValidationMessage,
     reset,
     setDisabled,
+    setValue,
     showValidation,
   };
 }

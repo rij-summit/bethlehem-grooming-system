@@ -124,6 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
     input: petBreed,
     listbox: document.getElementById("petBreedOptions"),
     toggleButton: document.getElementById("petBreedDropdownButton"),
+    petTypeInput: petSpecies,
     getPetType: () => petSpecies.value,
   });
 
@@ -600,7 +601,9 @@ document.addEventListener("DOMContentLoaded", () => {
     petTypeCombobox.setValue(normalizeSpecies(pet.species));
     genderCombobox.setValue(String(pet.gender || "").toLowerCase());
     petBirthdate.value = pet.birthdate || "";
-    petBreed.value = pet.breed || "";
+    breedCombobox.setValue(pet.breed || "");
+    petFurType.value = pet.fur_type || "";
+    breedCoatCombobox.update({ preserveValue: true, autoSelect: false });
     document.getElementById("petColor").value = pet.color || "";
     document.getElementById("petMedical").value = pet.medical_conditions || "";
 
@@ -610,9 +613,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!getSizeForWeight(petSpecies.value, petWeight.value)) setStoredSize(pet.size);
 
     await breedCoatCatalogueReady;
-    breedCoatCombobox.update();
-    petFurType.value = pet.fur_type || "";
-    breedCoatCombobox.update();
+    breedCoatCombobox.update({ preserveValue: true, autoSelect: false });
 
     hideFormError();
     showModal();
